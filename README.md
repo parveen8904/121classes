@@ -1,10 +1,10 @@
-# 121 Classes
+# 121 Coaching
 
 A platform for **personalized 1-to-1 (1:1) classes**, **coaching**, and **AI-generated courses** — bringing together live human guidance and on-demand, AI-built learning content.
 
-## What is 121 Classes?
+## What is 121 Coaching?
 
-121 Classes connects learners with expert instructors for tailored, one-on-one learning, while using AI to generate structured course material that adapts to each learner's goals, pace, and skill level.
+121 Coaching connects learners with expert instructors for tailored, one-on-one learning, while using AI to generate structured course material that adapts to each learner's goals, pace, and skill level.
 
 ## Core Offerings
 

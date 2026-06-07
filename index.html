@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>121 Classes — 1:1 Learning, Coaching & AI Courses</title>
+  <meta name="description" content="Personalized 1-to-1 classes, expert coaching, and AI-generated courses that adapt to you." />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bg-soft: #1e293b;
+      --accent: #6366f1;
+      --accent-2: #8b5cf6;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --card: #1e293b;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    a { color: inherit; text-decoration: none; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .logo { font-weight: 800; font-size: 1.4rem; }
+    .logo span { color: var(--accent); }
+    nav a { color: var(--muted); margin-left: 24px; transition: color .2s; }
+    nav a:hover { color: var(--text); }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 90px 24px 70px;
+      background: radial-gradient(1200px 500px at 50% -10%, rgba(99,102,241,.25), transparent);
+    }
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 3.6rem);
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 20px;
+    }
+    .hero h1 .grad {
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      color: var(--muted);
+      font-size: 1.15rem;
+      max-width: 620px;
+      margin: 0 auto 32px;
+    }
+    .btn {
+      display: inline-block;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      color: #fff;
+      padding: 14px 30px;
+      border-radius: 10px;
+      font-weight: 600;
+      transition: transform .15s, opacity .2s;
+    }
+    .btn:hover { transform: translateY(-2px); opacity: .95; }
+    .btn.secondary {
+      background: transparent;
+      border: 1px solid var(--bg-soft);
+      margin-left: 12px;
+      color: var(--text);
+    }
+
+    /* Features */
+    .features { padding: 70px 0; }
+    .section-title { text-align: center; font-size: 2rem; margin-bottom: 12px; }
+    .section-sub { text-align: center; color: var(--muted); margin-bottom: 48px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(148,163,184,.1);
+      border-radius: 16px;
+      padding: 32px;
+      transition: transform .2s, border-color .2s;
+    }
+    .card:hover { transform: translateY(-4px); border-color: var(--accent); }
+    .card .icon { font-size: 2.2rem; margin-bottom: 16px; }
+    .card h3 { font-size: 1.3rem; margin-bottom: 10px; }
+    .card p { color: var(--muted); }
+
+    /* CTA */
+    .cta {
+      text-align: center;
+      padding: 80px 24px;
+      margin: 40px auto;
+      max-width: 900px;
+      background: linear-gradient(135deg, rgba(99,102,241,.15), rgba(139,92,246,.15));
+      border: 1px solid rgba(148,163,184,.15);
+      border-radius: 24px;
+    }
+    .cta h2 { font-size: 2rem; margin-bottom: 14px; }
+    .cta p { color: var(--muted); margin-bottom: 28px; }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      padding: 40px 24px;
+      border-top: 1px solid rgba(148,163,184,.1);
+      font-size: .9rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">121<span>Classes</span></div>
+    <nav>
+      <a href="#features">Offerings</a>
+      <a href="#get-started">Get Started</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <h1>Learn 1-on-1. Grow with <span class="grad">coaching</span>.<br />Powered by <span class="grad">AI courses</span>.</h1>
+    <p>121 Classes pairs personalized live instruction with AI-generated courses that adapt to your goals, pace, and skill level.</p>
+    <div>
+      <a href="#get-started" class="btn">Start Learning</a>
+      <a href="#features" class="btn secondary">Explore Offerings</a>
+    </div>
+  </section>
+
+  <section class="features container" id="features">
+    <h2 class="section-title">Everything you need to learn faster</h2>
+    <p class="section-sub">Live human guidance and on-demand AI content, in one place.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="icon">🎯</div>
+        <h3>1:1 Classes</h3>
+        <p>Private, live sessions matched to your level — personalized lesson plans, flexible scheduling, and focused attention from an expert instructor.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🧭</div>
+        <h3>Coaching</h3>
+        <p>Ongoing mentorship that goes beyond a single lesson — goal setting, accountability, and regular check-ins across your learning journey.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🤖</div>
+        <h3>AI-Generated Courses</h3>
+        <p>Self-paced courses built by AI — auto-generated lessons, exercises, and quizzes that adapt to your interests and ability on demand.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta" id="get-started">
+    <h2>Ready to start learning?</h2>
+    <p>Join 121 Classes and get a learning experience tailored just for you.</p>
+    <a href="mailto:ps.smay@gmail.com?subject=I'm%20interested%20in%20121%20Classes" class="btn">Get Started</a>
+  </section>
+
+  <footer>
+    <p>&copy; 2026 121 Classes — 1:1 Learning, Coaching &amp; AI Courses.</p>
+  </footer>
+</body>
+</html>

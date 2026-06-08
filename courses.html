@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Courses — 121 Coaching</title>
+  <meta name="description" content="Courses, subjects, and topic-wise revision videos from 121 Coaching." />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bg-soft: #1e293b;
+      --accent: #6366f1;
+      --accent-2: #8b5cf6;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --card: #1e293b;
+      --border: rgba(148,163,184,.1);
+    }
+    :root[data-theme="light"] {
+      --bg: #f8fafc;
+      --bg-soft: #e2e8f0;
+      --accent: #6366f1;
+      --accent-2: #8b5cf6;
+      --text: #0f172a;
+      --muted: #475569;
+      --card: #ffffff;
+      --border: rgba(15,23,42,.1);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      transition: background .3s, color .3s;
+    }
+    a { color: inherit; text-decoration: none; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .logo { font-weight: 800; font-size: 1.4rem; }
+    .logo span { color: var(--accent); }
+    nav { display: flex; align-items: center; }
+    nav a { color: var(--muted); margin-left: 24px; transition: color .2s; }
+    nav a:hover { color: var(--text); }
+    .theme-toggle {
+      margin-left: 24px;
+      background: var(--bg-soft);
+      border: 1px solid var(--border);
+      color: var(--text);
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform .15s, border-color .2s, background .3s;
+    }
+    .theme-toggle:hover { transform: translateY(-2px); border-color: var(--accent); }
+
+    /* Courses */
+    .page-head { padding: 60px 0 24px; }
+    .breadcrumb { color: var(--muted); font-size: .9rem; margin-bottom: 16px; }
+    .breadcrumb a:hover { color: var(--text); }
+    .breadcrumb span { margin: 0 8px; opacity: .6; }
+    .page-head h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin-bottom: 8px; }
+    .page-head p { color: var(--muted); max-width: 640px; }
+
+    .course-block { padding: 24px 0 60px; }
+    .subject {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+    .subject > h2 { font-size: 1.5rem; margin-bottom: 4px; }
+    .subject > .meta { color: var(--muted); font-size: .95rem; margin-bottom: 20px; }
+
+    .topic {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px;
+      background: var(--bg-soft);
+    }
+    .topic-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .topic-head h3 { font-size: 1.2rem; }
+    .badge {
+      display: inline-block;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      color: #fff;
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+    .video-wrap {
+      position: relative;
+      width: 100%;
+      padding-bottom: 56.25%; /* 16:9 */
+      height: 0;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+    }
+    .video-wrap iframe {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+    .video-caption { color: var(--muted); font-size: .9rem; margin-top: 12px; }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      padding: 40px 24px;
+      border-top: 1px solid var(--border);
+      font-size: .9rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo"><a href="index.html">121<span>Coaching</span></a></div>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="courses.html">Courses</a>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light and dark mode">🌙</button>
+    </nav>
+  </header>
+
+  <section class="page-head container">
+    <div class="breadcrumb">
+      <a href="index.html">Home</a><span>/</span>
+      <a href="courses.html">Courses</a><span>/</span>
+      CA Intermediate Accounting<span>/</span>
+      Accounting Standard 24
+    </div>
+    <h1>Courses</h1>
+    <p>Subject- and topic-wise lessons with revision videos to help you master each concept.</p>
+  </section>
+
+  <section class="course-block container">
+    <div class="subject">
+      <h2>CA Intermediate &mdash; Accounting</h2>
+      <p class="meta">Subject &middot; CA Intermediate Accounting</p>
+
+      <div class="topic">
+        <div class="topic-head">
+          <h3>Accounting Standard 24 &mdash; Discontinuing Operations</h3>
+          <span class="badge">Revision Video</span>
+        </div>
+        <div class="video-wrap">
+          <iframe
+            src="https://app.heygen.com/embeds/c2bcd7138f2c42b6b607fe6588910b89"
+            title="AS 24 Discontinuing Operations — Revision"
+            allow="encrypted-media; fullscreen"
+            allowfullscreen>
+          </iframe>
+        </div>
+        <p class="video-caption">Quick revision of AS 24 (Discontinuing Operations) for CA Intermediate Accounting.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>&copy; 2026 121 Coaching — 1:1 Learning, Coaching &amp; AI Courses.</p>
+    <p>Copyright held by Parveen Sharma. All rights reserved.</p>
+    <p>Office: W 6/30, DLF, Gurugram</p>
+  </footer>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var toggle = document.getElementById('theme-toggle');
+
+      function apply(theme) {
+        root.setAttribute('data-theme', theme);
+        toggle.textContent = theme === 'light' ? '☀️' : '🌙';
+        toggle.setAttribute('aria-pressed', theme === 'light');
+      }
+
+      var saved = localStorage.getItem('theme');
+      var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+      apply(saved || (prefersLight ? 'light' : 'dark'));
+
+      toggle.addEventListener('click', function () {
+        var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        apply(next);
+        localStorage.setItem('theme', next);
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 **Status:** Draft for review
 **Date:** 2026-06-08
 **Owner:** Parveen Sharma
-**Decisions locked so far:** Build a full portal (spec-first); payments via **Razorpay**.
+**Decisions locked so far:** Build a full portal (spec-first); payments via **Razorpay**; host on **our own new AWS account** (Mumbai / `ap-south-1`), discontinuing the old AWS; videos on **YouTube (unlisted)** for zero playback cost.
 
 ---
 
@@ -112,29 +112,45 @@ otherwise show the upgrade prompt.
 
 ## 6. Tech Stack & Architecture
 
-| Layer | Choice | Why |
-|---|---|---|
-| App framework | **Next.js (App Router)** | Pages + API routes in one codebase; great DX; deploys to Vercel. |
-| Hosting | **Vercel** | First-class Next.js hosting; GitHub Pages cannot run a backend. |
-| Auth | **Supabase Auth** | Email/password + OTP/social; integrates with the DB. |
-| Database | **Supabase Postgres** | Relational data fits the Course→Subject→Topic→Section model. |
-| File storage | **Supabase Storage** | Store/serve PDFs and any uploaded videos; signed URLs for paid files. |
-| Access control | **Postgres Row-Level Security (RLS)** | Enforces free/paid + attempt filtering at the database, not just UI. |
-| Payments | **Razorpay** | UPI/cards/netbanking; built for India. |
-| AI | Provider API via **server-side route** | Ask Doubts + subjective grading; keys in env vars only. |
-| Video | HeyGen embeds now; uploaded video via Storage later | Reuse existing HeyGen embeds. |
+**Decision:** the portal runs entirely on **our own AWS account** (Mumbai /
+`ap-south-1`), replacing the old AWS and avoiding a separate hosting vendor.
+See `docs/AWS_COST_AND_SETUP.md` for sizing, monthly cost, and setup steps.
 
-> Note: the existing static `index.html` / `courses.html` can remain as the
-> **public marketing site**, while the portal lives under an app route (e.g.
-> `/app` or `app.121coaching...`). Or the whole thing moves into Next.js.
+| Layer | Choice (AWS) | Why |
+|---|---|---|
+| App framework | **Next.js (App Router)** | Pages + API routes in one codebase. |
+| Hosting | **AWS Lightsail** (2 GB instance) — or EC2/Amplify later | Fixed, predictable price; runs the Next.js server + API. |
+| Database | **Amazon RDS for PostgreSQL** (db.t4g.micro) — or Lightsail managed DB | Relational data fits the Course→Subject→Topic→Section model. |
+| File storage | **Amazon S3** | Store PDFs (slides, question banks); private buckets + signed URLs for paid files. |
+| CDN / delivery | **Amazon CloudFront** | Serves PDFs/static assets; first 1 TB/mo egress free. |
+| Auth | **Amazon Cognito** | Student/admin login; first 10,000 monthly active users free. |
+| Email | **Amazon SES** | OTP, receipts, notifications (~$0.10 / 1,000 emails). |
+| DNS / domain | **Amazon Route 53** | Domain + DNS for the portal. |
+| Access control | **App-layer authorization** (middleware/API guards) + DB constraints | Enforces free/paid + attempt filtering on every request (replaces Supabase RLS). |
+| Payments | **Razorpay** | UPI/cards/netbanking; built for India. |
+| AI | Claude API via **server-side route** | Ask Doubts + subjective grading; keys in env vars only (option: Amazon Bedrock). |
+| Video | **YouTube (unlisted)** embeds; HeyGen for creation | Zero playback cost — see §12. Do **not** self-host video on S3/CloudFront. |
+
+> Notes:
+> - **Auth/access control change:** without Supabase's built-in row-level
+>   security, free/paid gating and exam-attempt filtering are enforced in the
+>   **application layer** (Next.js middleware + API route guards) against the
+>   RDS database. Every protected request checks the logged-in student's
+>   `target_attempt` and `entitlements` before serving content.
+> - The existing static `index.html` / `courses.html` can remain as the
+>   **public marketing site** (served via S3 + CloudFront or by the Next.js
+>   app), while the portal lives under an app route (e.g. `/app` or
+>   `app.121coaching...`).
+> - **Simplest start:** Lightsail instance + Lightsail managed Postgres is the
+>   most cost-predictable launch setup; graduate to EC2 + RDS when needed.
 
 ---
 
 ## 7. Database Schema (first draft)
 
 ```sql
-profiles        (id ⇄ auth.users, full_name, role: 'student'|'admin',
-                 target_attempt, created_at)
+profiles        (id, cognito_sub ⇄ Cognito user, full_name,
+                 role: 'student'|'admin', target_attempt, created_at)
 
 courses         (id, title, slug, order_index, is_published)
 subjects        (id, course_id→courses, title, slug, order_index)
@@ -169,9 +185,12 @@ doubts          (id, student_id, section_id, question, ai_answer,
                  status, created_at)
 ```
 
-RLS policies enforce: students read only published content valid for their
-attempt; paid sections require a matching active entitlement; students see only
-their own attempts/submissions; admins manage everything.
+**Authorization (app-layer, since we're on RDS not Supabase):** Next.js
+middleware + API route guards enforce — students read only published content
+valid for their `target_attempt`; paid sections require a matching active
+entitlement; students see only their own attempts/submissions; admins manage
+everything. Cognito issues the login token; the API verifies it and looks up the
+matching `profiles` row on every request.
 
 ---
 
@@ -210,18 +229,23 @@ their own attempts/submissions; admins manage everything.
 
 ## 10. Hosting, Accounts & Secrets You'll Need
 
-All have free tiers to start:
+Everything runs in **your own AWS account** (set up fresh; close the old AWS
+after migrating — see `docs/AWS_COST_AND_SETUP.md`). Plus Razorpay and the AI
+provider.
 
-| Service | Purpose | You provide |
+| Service | Purpose | You provide / configure |
 |---|---|---|
-| **Supabase** | Auth + DB + Storage | Project URL, anon key, service-role key |
-| **Vercel** | App hosting | Connect the GitHub repo |
+| **AWS account** (new) | Lightsail/EC2, RDS, S3, CloudFront, Cognito, SES, Route 53 | Root account + IAM admin user; region `ap-south-1` |
+| **Amazon Cognito** | Auth | User pool ID, app client ID |
+| **Amazon RDS** | Database | Endpoint, DB name, user/password (in Secrets Manager) |
+| **Amazon S3 + CloudFront** | PDF storage + delivery | Bucket name, CloudFront distribution |
 | **Razorpay** | Payments | Key ID, Key Secret, Webhook secret |
-| **AI provider** | Doubts + grading | API key (later) |
+| **AI provider** (Claude API) | Doubts + grading | API key (later); or use Amazon Bedrock |
 
-Secrets live in environment variables (Vercel project settings) — **never** in
-the repo or client code. I'll scaffold the code and tell you exactly where each
-key goes; I cannot create these accounts for you.
+Secrets live in **AWS Secrets Manager** / environment variables on the server —
+**never** in the repo or client code. I'll scaffold the code and tell you
+exactly where each value goes; I cannot create the AWS account or these
+credentials for you.
 
 ---
 
@@ -230,7 +254,8 @@ key goes; I cannot create these accounts for you.
 | Phase | Deliverable |
 |---|---|
 | **0. This spec** | Approve scope & model (you are here). |
-| **1. Foundation** | Next.js app on Vercel, Supabase connected, auth (student/admin), DB schema + RLS. |
+| **0b. AWS setup** | Create the new AWS account, provision Lightsail/RDS/S3/CloudFront/Cognito, migrate off old AWS. |
+| **1. Foundation** | Next.js app on Lightsail/EC2, RDS connected, Cognito auth (student/admin), DB schema + app-layer authorization. |
 | **2. Admin content** | Admin panel to create Course→Subject→Topic→Section, upload PDFs, add video embeds. |
 | **3. Student portal** | Dashboard + topic rendering + **attempt filtering**; migrate AS 24 content off the hardcoded page into the DB. |
 | **4. Tests** | MCQ engine (auto-grade) + subjective submission flow. |
@@ -242,11 +267,17 @@ key goes; I cannot create these accounts for you.
 
 ## 12. Indicative Costs (early stage)
 
-- Supabase, Vercel, Razorpay all have **free/low tiers** suitable for launch.
-- Real costs scale with usage: storage/bandwidth for videos & PDFs, AI API usage
-  (per doubt / per evaluation), and Razorpay's per-transaction fee on paid sales.
-- Hosting uploaded **video** is the most bandwidth-heavy item — keeping videos on
-  HeyGen/YouTube/Vimeo embeds (vs self-hosting) keeps costs low early on.
+Full breakdown in **`docs/AWS_COST_AND_SETUP.md`**. Summary:
+
+- **AWS fixed cost** ≈ **₹2,500–3,400/month** at small scale (Lightsail app +
+  RDS Postgres + S3 + CloudFront + Cognito/SES/Route 53). **Year-1 free tier**
+  can bring this near ₹0 while building/piloting.
+- **AI (Claude)** — pay-per-use; ~₹4.5k–14k/month at ~10k actions, far less with
+  prompt caching and using Haiku for simple doubts. ₹0 when idle.
+- **Razorpay** — ~2% per **successful** transaction only; no monthly fee.
+- **Video** — keep on **YouTube (unlisted)** for **₹0 playback cost**. Do **not**
+  self-host video on S3/CloudFront — egress (~₹9–14/GB) is the one real per-view
+  cost. Create on HeyGen → download → upload to YouTube → embed.
 
 ---
 
@@ -261,12 +292,13 @@ key goes; I cannot create these accounts for you.
 
 ## 14. Open Questions for You
 
-1. **Auth method:** email + password, email OTP, Google sign-in, or phone OTP?
+1. **Auth method (via Cognito):** email + password, email OTP, Google sign-in, or phone OTP?
 2. **Pricing unit:** sell **per-topic**, **per-subject**, or a **full-attempt pass** (or a mix)? Rough price points?
 3. **Free trial / previews:** should locked sections show a short free preview?
-4. **Video hosting:** keep using HeyGen/embeds, or do you want to upload video files into the portal?
-5. **Single app vs split:** keep the marketing site separate and put the portal at `app.` , or move everything into the Next.js app?
-6. **Domain:** what domain will this run on (for Vercel + Razorpay setup)?
-7. **AI provider:** any preference for the doubt-solving / grading model?
+4. **Single app vs split:** keep the marketing site separate and put the portal at `app.`, or move everything into the Next.js app?
+5. **Domain:** what domain will this run on (for Route 53 + Razorpay setup)?
+6. **AI provider:** Claude API directly, or via Amazon Bedrock (keeps it inside AWS billing)?
+
+*(Resolved: hosting = own AWS account; payments = Razorpay; video = YouTube unlisted.)*
 
 Once you confirm these, Phase 1 (foundation) can begin.

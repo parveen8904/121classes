@@ -3,7 +3,7 @@
 **Status:** Draft for review
 **Date:** 2026-06-08
 **Owner:** Parveen Sharma
-**Decisions locked so far:** Build a full portal (spec-first); payments via **Razorpay**; host on **our own new AWS account** (Mumbai / `ap-south-1`), discontinuing the old AWS; videos on **YouTube (unlisted)** for zero playback cost.
+**Decisions locked so far:** Build a full portal (spec-first); payments via **Razorpay**; host on **our own new AWS account** (Mumbai / `ap-south-1`), discontinuing the old AWS; videos on **YouTube (unlisted)** for zero playback cost; ship **native iOS + Android apps** (React Native / Expo) alongside the web app.
 
 ---
 
@@ -130,6 +130,7 @@ See `docs/AWS_COST_AND_SETUP.md` for sizing, monthly cost, and setup steps.
 | Payments | **Razorpay** | UPI/cards/netbanking; built for India. |
 | AI | Claude API via **server-side route** | Ask Doubts + subjective grading; keys in env vars only (option: Amazon Bedrock). |
 | Video | **YouTube (unlisted)** embeds; HeyGen for creation | Zero playback cost — see §12. Do **not** self-host video on S3/CloudFront. |
+| Mobile apps | **React Native (Expo)** for iOS + Android | Native App Store / Play Store apps on the same backend — see §6A. |
 
 > Notes:
 > - **Auth/access control change:** without Supabase's built-in row-level
@@ -143,6 +144,58 @@ See `docs/AWS_COST_AND_SETUP.md` for sizing, monthly cost, and setup steps.
 >   `app.121coaching...`).
 > - **Simplest start:** Lightsail instance + Lightsail managed Postgres is the
 >   most cost-predictable launch setup; graduate to EC2 + RDS when needed.
+
+---
+
+## 6A. Mobile Apps (iOS & Android)
+
+The portal ships as **native iOS and Android apps** in addition to the web app.
+All three (web + iOS + Android) talk to the **same AWS backend** (Next.js API +
+RDS + Cognito + S3/CloudFront), so there is one source of truth and no duplicate
+business logic.
+
+### Approach
+| Option | What it is | Verdict |
+|---|---|---|
+| **React Native (Expo)** ✅ | One codebase → real native iOS + Android apps, hitting the same API | **Recommended** — true App Store / Play Store presence, push notifications, smooth UX, shared logic |
+| **PWA (installable web app)** | The responsive web app, installable from the browser | Cheapest/fastest, **no store fees** — but no real store listing, weaker push/offline. Good as a **day-1 stopgap**. |
+| **Capacitor (web wrapper)** | Wrap the web app in a native shell | Middle ground; fine if we want minimal extra code |
+
+**Plan:** make the web app **fully responsive from day one** (works in mobile
+browsers immediately), then build the **Expo (React Native) apps** for the
+App Store and Play Store as a dedicated phase.
+
+### What the apps do
+Same features as the web portal — Cognito login, attempt-filtered content,
+revision videos (YouTube player), PDF viewing, MCQ & subjective tests, Ask-Doubt
+(AI), performance summary, and upgrades — plus **push notifications** (new
+revision videos, test results, exam reminders) via Expo Push / FCM + APNs.
+
+### ⚠️ Critical: in-app payments rule
+Apple and Google generally **require their own in-app purchase (IAP) systems for
+digital goods sold inside the app**, taking **15–30% commission**, and
+**disallow external payment links (Razorpay) for digital content in-app.** This
+directly affects our paid upgrades. Three workable patterns:
+
+1. **"Reader" model (recommended to start):** sell upgrades on the **web** via
+   Razorpay; the apps only **unlock** content for logged-in students who already
+   paid. Avoids store commission; users just can't purchase *inside* the app.
+2. **Store IAP in-app:** use Apple/Google billing and absorb the cut (Apple/
+   Google both offer **15%** under $1M/year; 30% above).
+3. **Hybrid:** web for purchases, apps for consumption.
+
+> India's rules here are in flux (CCI rulings, Google Play billing policy) —
+> confirm the current position before finalizing the in-app purchase approach.
+
+### Store accounts & costs (one-time / annual)
+| Item | Cost |
+|---|---|
+| **Apple Developer Program** | **$99/year** (~₹8,300/yr) — required to publish on the App Store |
+| **Google Play Developer** | **$25 one-time** (~₹2,100) |
+| Build/release (Expo EAS) | Free tier to start; paid tiers optional |
+
+These are **separate from AWS** and only the store fees + development effort —
+the backend is unchanged.
 
 ---
 
@@ -262,6 +315,7 @@ credentials for you.
 | **5. Payments** | Razorpay orders, signature + webhook verification, entitlements, free/paid gating live. |
 | **6. AI** | Connect Ask-Doubt and subjective grading to the LLM API. |
 | **7. Polish** | Performance summary, invoices, emails, analytics. |
+| **8. Mobile apps** | React Native (Expo) iOS + Android apps on the same backend; push notifications; App Store + Play Store release. |
 
 ---
 
@@ -278,6 +332,9 @@ Full breakdown in **`docs/AWS_COST_AND_SETUP.md`**. Summary:
 - **Video** — keep on **YouTube (unlisted)** for **₹0 playback cost**. Do **not**
   self-host video on S3/CloudFront — egress (~₹9–14/GB) is the one real per-view
   cost. Create on HeyGen → download → upload to YouTube → embed.
+- **Mobile apps** — store fees only: **Apple $99/year**, **Google $25 one-time**;
+  plus dev effort. If selling upgrades **inside** the apps, Apple/Google take
+  **15–30%** — see §6A for the "sell on web, unlock in app" workaround.
 
 ---
 
@@ -298,7 +355,9 @@ Full breakdown in **`docs/AWS_COST_AND_SETUP.md`**. Summary:
 4. **Single app vs split:** keep the marketing site separate and put the portal at `app.`, or move everything into the Next.js app?
 5. **Domain:** what domain will this run on (for Route 53 + Razorpay setup)?
 6. **AI provider:** Claude API directly, or via Amazon Bedrock (keeps it inside AWS billing)?
+7. **Mobile timing:** build the iOS/Android apps in v1 alongside web, or ship responsive web first and add the apps in a later phase?
+8. **In-app purchases:** for the apps, use the **"sell on web, unlock in app"** model (avoids Apple/Google's 15–30% cut) or use store in-app purchases?
 
-*(Resolved: hosting = own AWS account; payments = Razorpay; video = YouTube unlisted.)*
+*(Resolved: hosting = own AWS account; payments = Razorpay; video = YouTube unlisted; native iOS + Android apps in scope.)*
 
 Once you confirm these, Phase 1 (foundation) can begin.

@@ -24,8 +24,16 @@ export default function LoginForm() {
   const [phoneStep, setPhoneStep] = useState<Step>("enter");
   const [phoneCode, setPhoneCode] = useState("");
 
+  const [remember, setRemember] = useState(true);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const rememberRow = (
+    <label className="remember">
+      <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+      Keep me logged in on this device
+    </label>
+  );
 
   function go() {
     router.push("/dashboard");
@@ -122,6 +130,7 @@ export default function LoginForm() {
               <label htmlFor="email">Email address</label>
               <input id="email" type="email" required value={email}
                 onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+              {rememberRow}
               <button className="btn block" disabled={loading} type="submit">
                 {loading ? "Sending…" : "Email me a code"}
               </button>
@@ -157,6 +166,7 @@ export default function LoginForm() {
               <label htmlFor="pw">Password</label>
               <input id="pw" type="password" required value={password}
                 onChange={(e) => setPassword(e.target.value)} placeholder="Your password" />
+              {rememberRow}
               <button className="btn block" disabled={loading} type="submit">
                 {loading ? "Please wait…" : "Log in"}
               </button>

@@ -125,9 +125,23 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 
 /* brand mark + visuals */
 .brand { display: inline-flex; align-items: center; gap: 10px; }
-.brand .word { font-weight: 800; font-size: 1.25rem; letter-spacing: -.01em; }
-.brand .word span { color: var(--accent); }
+.brand .word { font-weight: 800; font-size: 1.4rem; letter-spacing: -.02em; }
+.brand .word span {
+  color: #fff; background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  padding: 1px 8px; border-radius: 8px; margin-right: 2px;
+}
 .brand .tld { color: var(--muted); font-weight: 700; }
+
+/* readable highlighter for key names (no low-contrast gradient text) */
+.namehl {
+  font-weight: 800; color: var(--text); white-space: nowrap;
+  background: linear-gradient(transparent 60%, rgba(99,102,241,.45) 0);
+  padding: 0 .12em; border-radius: 3px;
+}
+
+/* remember-me row on login */
+.remember { display: flex; align-items: center; gap: 8px; margin: 2px 0 14px; font-size: .85rem; color: var(--muted); }
+.remember input { width: auto; margin: 0; }
 
 .imgph {
   position: relative; border-radius: 16px; border: 1px solid var(--border); overflow: hidden;
@@ -173,7 +187,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 }
 .ribbon {
   display: inline-block; background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  color: #fff; font-weight: 700; font-size: .82rem; padding: 6px 14px; border-radius: 999px; margin-bottom: 18px;
+  color: #fff; font-weight: 700; font-size: .92rem; padding: 8px 18px; border-radius: 999px; margin-bottom: 18px;
 }
 .lp-nav-inner {
   max-width: 1140px; margin: 0 auto; padding: 14px 24px;
@@ -187,7 +201,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 /* hero */
 .hero {
   text-align: center; padding: 90px 24px 60px;
-  background: radial-gradient(1200px 520px at 50% -10%, rgba(99,102,241,.28), transparent);
+  background: radial-gradient(1200px 520px at 50% -10%, rgba(99,102,241,.16), transparent);
 }
 .hero h1 { font-size: clamp(2.2rem, 5.5vw, 3.8rem); font-weight: 800; line-height: 1.12; margin-bottom: 18px; }
 .hero .sub { color: var(--muted); font-size: 1.15rem; max-width: 660px; margin: 0 auto 30px; }

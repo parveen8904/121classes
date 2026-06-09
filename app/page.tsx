@@ -54,7 +54,7 @@ export default function Home() {
       <section className="hero">
         <span className="ribbon">A venture by CA Parveen Sharma</span>
         <h1>
-          Learn CA from <span className="grad">CA Parveen Sharma</span> — one of
+          Learn CA from <span className="namehl">CA Parveen Sharma</span> — one of
           India&apos;s most renowned faculty.
         </h1>
         <p className="sub">

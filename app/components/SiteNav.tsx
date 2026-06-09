@@ -1,11 +1,13 @@
 import Link from "next/link";
+import Logo from "./Logo";
+import ThemeToggle from "./ThemeToggle";
 
 export default function SiteNav() {
   return (
     <nav className="lp-nav">
       <div className="lp-nav-inner">
-        <Link className="logo" href="/">
-          121<span>Coaching</span>
+        <Link href="/" aria-label="121 Coaching home">
+          <Logo />
         </Link>
         <div className="lp-nav-links">
           <Link className="hide-sm" href="/#courses">Courses</Link>
@@ -13,6 +15,7 @@ export default function SiteNav() {
           <Link className="hide-sm" href="/#resources">Resources</Link>
           <Link className="hide-sm" href="/#about">About</Link>
           <Link className="hide-sm" href="/#contact">Contact</Link>
+          <ThemeToggle />
           <Link className="btn" href="/login">Log in</Link>
         </div>
       </div>

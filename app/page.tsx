@@ -60,21 +60,59 @@ export default function Home() {
           <Link className="btn" href="/login">Get started — it&apos;s free to join</Link>
           <Link className="btn secondary" href="/#courses">Explore courses</Link>
         </div>
+
+        {/* Learn-from-anywhere imagery (replace placeholders with real photos) */}
+        <div className="device-collage">
+          <div className="imgph">
+            <span className="tag">Add photo</span>
+            <span className="em">💻</span>
+            <span className="cap">1-to-1 on your laptop</span>
+          </div>
+          <div className="imgph">
+            <span className="tag">Add photo</span>
+            <span className="em">📲</span>
+            <span className="cap">Learn on your iPad</span>
+          </div>
+          <div className="imgph">
+            <span className="tag">Add photo</span>
+            <span className="em">📱</span>
+            <span className="cap">Study on your phone</span>
+          </div>
+        </div>
       </section>
 
-      {/* INTRO VIDEO */}
-      <section className="section" style={{ paddingTop: 10 }}>
-        <div className="video-frame">
-          <iframe
-            src="https://app.heygen.com/embeds/c2bcd7138f2c42b6b607fe6588910b89"
-            title="121 Coaching intro"
-            allow="encrypted-media; fullscreen"
-            allowFullScreen
-          />
+      {/* STUDIO + INTRO VIDEO */}
+      <section className="section alt">
+        <div className="studio">
+          <div className="imgph">
+            <span className="tag">Add photo</span>
+            <span className="em">🎬</span>
+            <span className="cap">Faculty teaching live from our studio</span>
+          </div>
+          <div>
+            <div className="eyebrow" style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".8rem", letterSpacing: ".08em", textTransform: "uppercase" }}>
+              Studio-quality teaching
+            </div>
+            <h2 style={{ fontSize: "clamp(1.6rem,3.2vw,2.2rem)", margin: "8px 0 12px" }}>
+              Recorded in a real studio. Watched <span className="grad">ad-free</span>.
+            </h2>
+            <p className="muted" style={{ marginBottom: 18 }}>
+              Crisp, professionally recorded lectures by faculty — streamed without ads,
+              with an English option, and available on any device.
+            </p>
+            <div className="video-frame" style={{ paddingBottom: "56.25%" }}>
+              <iframe
+                src="https://app.heygen.com/embeds/c2bcd7138f2c42b6b607fe6588910b89"
+                title="121 Coaching intro"
+                allow="encrypted-media; fullscreen"
+                allowFullScreen
+              />
+            </div>
+            <p className="muted" style={{ marginTop: 10, fontSize: ".8rem" }}>
+              Sample intro video — replace with your own anytime.
+            </p>
+          </div>
         </div>
-        <p className="muted" style={{ textAlign: "center", marginTop: 12, fontSize: ".82rem" }}>
-          Sample intro video — replace with your own anytime.
-        </p>
       </section>
 
       {/* COURSES */}

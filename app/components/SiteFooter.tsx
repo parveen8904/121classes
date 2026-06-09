@@ -1,11 +1,12 @@
 import Link from "next/link";
+import Logo from "./Logo";
 
 export default function SiteFooter() {
   return (
     <footer className="lp-footer">
       <div className="lp-footer-inner">
         <div>
-          <div className="logo">121<span>Coaching</span></div>
+          <Logo />
           <p className="muted" style={{ marginTop: 10, fontSize: ".9rem", maxWidth: 320 }}>
             1-to-1 classes, live coaching, ad-free recorded lectures and AI-assisted
             learning for CA students.

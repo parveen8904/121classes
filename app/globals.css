@@ -1,15 +1,18 @@
 :root {
-  --bg: #0f172a;
-  --bg-soft: #1e293b;
+  /* Shared accent combo (looks good in both themes) */
   --accent: #0d9488;
   --accent-2: #10b981;
-  --text: #e2e8f0;
-  --muted: #94a3b8;
-  --card: #1e293b;
-  --border: rgba(148, 163, 184, 0.15);
-  --nav-bg: rgba(15, 23, 42, 0.85);
   --ok: #22c55e;
   --bad: #ef4444;
+
+  /* Dark theme — teal-charcoal base that pairs with the green accents */
+  --bg: #0c1413;
+  --bg-soft: #15201e;
+  --text: #e8f0ee;
+  --muted: #9bb0ab;
+  --card: #15201e;
+  --border: rgba(255, 255, 255, 0.09);
+  --nav-bg: rgba(12, 20, 19, 0.85);
 }
 
 :root[data-theme="light"] {

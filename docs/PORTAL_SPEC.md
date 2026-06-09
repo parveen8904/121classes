@@ -14,7 +14,7 @@
 - **Videos:** self-recorded by faculty (natural voice/accent), streamed **ad-free via Bunny.net** with English audio/dub track; optional public YouTube copy for marketing.
 - **Commerce:** **sell physical books** (~10 titles, **free shipping**, **guest checkout**) on the landing page; warehouse gets an **end-of-day dispatch email**.
 - **Reporting:** finance reports; automated **emails to students** and **emails to warehouse**.
-- **Domain:** `121coaching.ai`. **WhatsApp BSP:** **Interakt**.
+- **Domain:** primary `121caclasses.com`; `121coaching.ai` is a live **alias** for the same site. **WhatsApp BSP:** **Interakt**.
 
 ---
 

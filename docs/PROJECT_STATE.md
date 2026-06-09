@@ -8,7 +8,7 @@
 ---
 
 ## 1. Project at a glance
-- **Brand (display):** **1:1 CA Classes** · **Domain:** `121caclasses.com`
+- **Brand (display):** **1:1 CA Classes** · **Primary domain:** `121caclasses.com` (`121coaching.ai` is a live **alias** for the same site — still resolves, not abandoned)
 - **Founder / face of brand:** **CA Parveen Sharma** (renowned CA faculty). The whole venture is his; the landing page is founder-centric.
 - **Positioning:** highly personalized · AI-enabled (AI *assists* only) · clears the clutter · top-notch · result-oriented.
 - **AI stance:** Teaching is 100% CA Parveen Sharma & team. **AI only assists** with **paper checking** and **doubt-solving**, under his guidance.
@@ -142,7 +142,7 @@ RLS is **enabled on every table**. The script is transactional and re-runnable (
 ## 8. Outstanding / TODO
 - [ ] Upload founder/student/studio **photos** to `public/brand/` → wire `<img>` into the slots.
 - [ ] Provide a **YouTube link** for the homepage intro video (replace sample embed).
-- [ ] Connect **`121caclasses.com`** as the Vercel custom domain (+ DNS); update Supabase Site URL/redirects.
+- [ ] Connect **`121caclasses.com`** (primary) as the Vercel custom domain (+ DNS); add **`121coaching.ai`** as an alias to the same deployment; update Supabase Site URL/redirects.
 - [ ] (Optional) Mailgun: verify `121caclasses.com` so email comes from `@121caclasses.com`.
 - [ ] (Optional) Enable **single session per user** (Supabase → Authentication → Sessions; may need Pro).
 - [ ] Replace placeholder copy (testimonials, stats, course/book details, announcement text, legal pages) with real content.

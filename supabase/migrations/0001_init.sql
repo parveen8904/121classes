@@ -1,8 +1,26 @@
 -- =====================================================================
 -- 121 Coaching — initial schema (Phase 1 Foundation)
--- Run in Supabase: SQL Editor → paste → Run (or via the Supabase CLI).
+-- Run in Supabase: SQL Editor → paste → Run.
+-- Safe to re-run: it cleans up its own objects first, inside one transaction.
 -- Mirrors docs/PORTAL_SPEC.md §7. RLS is enabled on every table.
 -- =====================================================================
+
+begin;
+
+-- ---------- Clean slate (so this script can be re-run) ----------
+drop table if exists
+  doubts, announcements, notifications, live_sessions,
+  book_orders, books, orders, subscriptions, plans,
+  subjective_submissions, subjective_questions, mcq_attempts, mcq_questions,
+  sections, topics, subject_faculty, faculties, subjects, courses, profiles
+  cascade;
+drop function if exists public.is_admin() cascade;
+drop function if exists public.handle_new_user() cascade;
+-- dropping the types cascades to plan_rank() and has_course_access()
+drop type if exists
+  user_role, plan_tier, section_type, sub_status, sub_channel,
+  order_kind, book_order_status, announcement_kind, notif_channel
+  cascade;
 
 -- ---------- Enums ----------
 create type user_role          as enum ('student', 'admin', 'faculty');
@@ -43,7 +61,7 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- ---------- Helper functions ----------
+-- ---------- Helpers that don't depend on later tables ----------
 create function public.is_admin()
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from profiles where id = auth.uid() and role = 'admin');
@@ -52,22 +70,6 @@ $$;
 create function public.plan_rank(t plan_tier)
 returns int language sql immutable as $$
   select case t when 'bronze' then 1 when 'silver' then 2 when 'gold' then 3 end;
-$$;
-
--- True if the current user has an active subscription to `course`
--- at or above the `needed` tier (or `needed` is null = free content).
-create function public.has_course_access(course uuid, needed plan_tier)
-returns boolean language sql stable security definer set search_path = public as $$
-  select needed is null or exists (
-    select 1
-    from subscriptions s
-    join plans p on p.id = s.plan_id
-    where s.student_id = auth.uid()
-      and s.course_id  = course
-      and s.status     = 'active'
-      and now() between s.starts_at and s.ends_at
-      and plan_rank(p.tier) >= plan_rank(needed)
-  );
 $$;
 
 -- ---------- Content hierarchy ----------
@@ -197,6 +199,23 @@ create table orders (
   status           text not null default 'created',
   created_at       timestamptz not null default now()
 );
+
+-- Access helper: needs subscriptions + plans, so it's defined AFTER them.
+-- True if the current user has an active subscription to `course`
+-- at or above the `needed` tier (or `needed` is null = free content).
+create function public.has_course_access(course uuid, needed plan_tier)
+returns boolean language sql stable security definer set search_path = public as $$
+  select needed is null or exists (
+    select 1
+    from subscriptions s
+    join plans p on p.id = s.plan_id
+    where s.student_id = auth.uid()
+      and s.course_id  = course
+      and s.status     = 'active'
+      and now() between s.starts_at and s.ends_at
+      and plan_rank(p.tier) >= plan_rank(needed)
+  );
+$$;
 
 -- ---------- Commerce: books ----------
 create table books (
@@ -359,9 +378,11 @@ create policy doubts_own on doubts for all using (student_id = auth.uid() or is_
   with check (student_id = auth.uid());
 
 -- =====================================================================
--- Seed: a starter set of plans (prices are placeholders — edit in admin).
+-- Seed: starter plans (prices are placeholders — edit in admin later).
 -- =====================================================================
 insert into plans (tier, name, rank, web_price_inr, app_price_inr, features) values
   ('bronze', 'Bronze', 1,  499,  699, '{"revision_video":true,"full_class_video":false,"pdf":true,"ask_doubt":false,"subjective_test":false}'),
   ('silver', 'Silver', 2,  999, 1399, '{"revision_video":true,"full_class_video":false,"pdf":true,"ask_doubt":true,"subjective_test":true}'),
   ('gold',   'Gold',   3, 1499, 2099, '{"revision_video":true,"full_class_video":true,"pdf":true,"ask_doubt":true,"subjective_test":true,"live_class":true}');
+
+commit;

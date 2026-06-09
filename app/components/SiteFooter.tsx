@@ -11,7 +11,10 @@ export default function SiteFooter() {
             1-to-1 classes, live coaching, ad-free recorded lectures and AI-assisted
             learning for CA students.
           </p>
-          <p className="muted" style={{ marginTop: 14, fontSize: ".82rem" }}>
+          <p className="muted" style={{ marginTop: 12, fontSize: ".85rem" }}>
+            A venture by <strong>CA Parveen Sharma</strong>.
+          </p>
+          <p className="muted" style={{ marginTop: 8, fontSize: ".82rem" }}>
             Office: W 6/30, DLF, Gurugram
           </p>
         </div>

@@ -2,6 +2,18 @@ import Link from "next/link";
 import SiteNav from "./components/SiteNav";
 import SiteFooter from "./components/SiteFooter";
 
+const stats = [
+  { num: "20+", lbl: "Years teaching CA" },
+  { num: "50,000+", lbl: "Students mentored" },
+  { num: "1:1", lbl: "Personalized focus" },
+];
+
+const aiPoints = [
+  { icon: "👨‍🏫", title: "Taught by CA Parveen Sharma", desc: "Every concept, strategy and class is delivered by Parveen Sharma himself — not by a machine." },
+  { icon: "📝", title: "AI-assisted paper checking", desc: "Your subjective answers are evaluated by AI for fast feedback — designed and overseen under his guidance." },
+  { icon: "💬", title: "AI doubt-solving", desc: "Instant answers to your doubts from an AI built on his teaching approach — always under his guidance." },
+];
+
 const courses = [
   { icon: "📘", title: "CA Intermediate — Accounting", desc: "Concept classes, revisions, AS-wise coverage and full question practice." },
   { icon: "📗", title: "CA Intermediate — Law", desc: "Section-wise lectures, amendment updates and exam-focused revision." },
@@ -17,7 +29,7 @@ const books = [
 const whatsNew = [
   { tag: "Amendments", title: "May 2026 amendments updated", desc: "All applicable amendments till the May 2026 attempt are now live across topics." },
   { tag: "New videos", title: "AS 24 revision videos added", desc: "First and second revision videos for Discontinuing Operations are up." },
-  { tag: "Live class", title: "Weekly doubt-solving webinar", desc: "Join the live Zoom session every weekend — recordings posted after." },
+  { tag: "Live class", title: "Weekly doubt-solving webinar", desc: "Join the live session every weekend with CA Parveen Sharma — recordings posted after." },
 ];
 
 const resources = [
@@ -28,15 +40,9 @@ const resources = [
 ];
 
 const testimonials = [
-  { who: "A. Sharma", role: "CA Inter student", quote: "The revision videos and doubt-solving made all the difference in my prep." },
-  { who: "R. Mehta", role: "CA Foundation", quote: "Clear teaching in a natural style, and the notes are exam-ready." },
-  { who: "S. Iyer", role: "CA Inter student", quote: "Loved the live classes and the option to watch recordings ad-free." },
-];
-
-const team = [
-  { initials: "PS", name: "Parveen Sharma", role: "Founder & Faculty" },
-  { initials: "FA", name: "Faculty A", role: "Accounting" },
-  { initials: "FL", name: "Faculty B", role: "Law" },
+  { who: "A. Sharma", role: "CA Inter student", quote: "Parveen Sir&apos;s teaching and the personalized attention made all the difference." },
+  { who: "R. Mehta", role: "CA Foundation", quote: "Clear, no-nonsense classes and the AI checking gave me feedback fast." },
+  { who: "S. Iyer", role: "CA Inter student", quote: "Felt like true 1-to-1 mentoring — exactly what I needed to clear my paper." },
 ];
 
 export default function Home() {
@@ -46,48 +52,87 @@ export default function Home() {
 
       {/* HERO */}
       <section className="hero">
-        <span className="badge">121caclasses.com</span>
+        <span className="ribbon">A venture by CA Parveen Sharma</span>
         <h1>
-          Crack CA with <span className="grad">highly personalized,
-          AI-enabled</span> coaching.
+          Learn CA from <span className="grad">CA Parveen Sharma</span> — one of
+          India&apos;s most renowned faculty.
         </h1>
         <p className="sub">
-          Result-oriented 1-to-1 teaching that <strong>clears the clutter</strong> —
-          top-notch faculty, live classes, ad-free lectures and an AI tutor, focused
-          only on what gets you through your exam.
+          Highly personalized, result-oriented 1-to-1 coaching led by Parveen Sharma —
+          with AI-assisted paper checking and doubt-solving <strong>under his
+          guidance</strong>. Top-notch teaching that clears the clutter.
         </p>
         <div className="cta-row">
           <Link className="btn" href="/login">Get started — it&apos;s free to join</Link>
-          <Link className="btn secondary" href="/#courses">Explore courses</Link>
+          <Link className="btn secondary" href="/#mentor">Meet CA Parveen Sharma</Link>
         </div>
+      </section>
 
-        {/* Learn-from-anywhere imagery (replace placeholders with real photos) */}
-        <div className="device-collage">
+      {/* MENTOR — CA Parveen Sharma */}
+      <section className="section" id="mentor">
+        <div className="mentor">
           <div className="imgph">
             <span className="tag">Add photo</span>
-            <span className="em">💻</span>
-            <span className="cap">1-to-1 on your laptop</span>
+            <span className="em">👨‍🏫</span>
+            <span className="cap">CA Parveen Sharma</span>
           </div>
-          <div className="imgph">
-            <span className="tag">Add photo</span>
-            <span className="em">📲</span>
-            <span className="cap">Learn on your iPad</span>
-          </div>
-          <div className="imgph">
-            <span className="tag">Add photo</span>
-            <span className="em">📱</span>
-            <span className="cap">Study on your phone</span>
+          <div>
+            <div className="ribbon">Your mentor</div>
+            <h2>CA Parveen Sharma</h2>
+            <div className="role">Founder &amp; Lead Faculty · 1:1 CA Classes</div>
+            <p className="muted">
+              A renowned CA faculty known for clear, exam-focused teaching, CA Parveen
+              Sharma personally leads every course. His mission is simple: highly
+              personalized, result-oriented preparation that cuts the clutter and gets
+              students through their exams. The entire venture — the teaching, the
+              method, and the technology around it — is built and guided by him.
+            </p>
+            <div className="stats">
+              {stats.map((s) => (
+                <div key={s.lbl}>
+                  <div className="stat-num grad">{s.num}</div>
+                  <div className="stat-lbl">{s.lbl}</div>
+                </div>
+              ))}
+            </div>
+            <div className="gallery">
+              <div className="imgph"><span className="tag">Add photo</span><span className="em">🎓</span><span className="cap">With students</span></div>
+              <div className="imgph"><span className="tag">Add photo</span><span className="em">🏫</span><span className="cap">In class</span></div>
+              <div className="imgph"><span className="tag">Add photo</span><span className="em">🏆</span><span className="cap">Recognition</span></div>
+            </div>
           </div>
         </div>
       </section>
 
+      {/* HOW AI HELPS — faculty-led */}
+      <section className="section alt" id="how-it-works">
+        <div className="section-head">
+          <div className="eyebrow">Faculty-led, AI-assisted</div>
+          <h2>Taught by Parveen Sharma. Powered by AI.</h2>
+          <p>To be clear: your teacher is CA Parveen Sharma. AI only assists — it checks papers and answers doubts, under his guidance.</p>
+        </div>
+        <div className="grid grid-3">
+          {aiPoints.map((p) => (
+            <div className="tile" key={p.title}>
+              <div className="ic">{p.icon}</div>
+              <h3>{p.title}</h3>
+              <p>{p.desc}</p>
+            </div>
+          ))}
+        </div>
+        <p className="leadline">
+          🎓 Teaching is 100% CA Parveen Sharma. AI only assists with paper checking and
+          doubt-solving — always under his guidance.
+        </p>
+      </section>
+
       {/* STUDIO + INTRO VIDEO */}
-      <section className="section alt">
+      <section className="section">
         <div className="studio">
           <div className="imgph">
             <span className="tag">Add photo</span>
             <span className="em">🎬</span>
-            <span className="cap">Faculty teaching live from our studio</span>
+            <span className="cap">CA Parveen Sharma teaching live from the studio</span>
           </div>
           <div>
             <div className="eyebrow" style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".8rem", letterSpacing: ".08em", textTransform: "uppercase" }}>
@@ -97,8 +142,8 @@ export default function Home() {
               Recorded in a real studio. Watched <span className="grad">ad-free</span>.
             </h2>
             <p className="muted" style={{ marginBottom: 18 }}>
-              Crisp, professionally recorded lectures by faculty — streamed without ads,
-              with an English option, and available on any device.
+              Crisp, professionally recorded lectures by CA Parveen Sharma — streamed
+              without ads, with an English option, and available on any device.
             </p>
             <div className="video-frame" style={{ paddingBottom: "56.25%" }}>
               <iframe
@@ -116,11 +161,11 @@ export default function Home() {
       </section>
 
       {/* COURSES */}
-      <section className="section" id="courses">
+      <section className="section alt" id="courses">
         <div className="section-head">
           <div className="eyebrow">Courses</div>
-          <h2>Courses built for results</h2>
-          <p>Structured, attempt-wise content across subjects — each headed by expert faculty.</p>
+          <h2>Courses by CA Parveen Sharma</h2>
+          <p>Structured, attempt-wise content — personally taught and curated by Parveen Sharma.</p>
         </div>
         <div className="grid grid-3">
           {courses.map((c) => (
@@ -137,7 +182,7 @@ export default function Home() {
       </section>
 
       {/* BOOKS */}
-      <section className="section alt" id="books">
+      <section className="section" id="books">
         <div className="section-head">
           <div className="eyebrow">Book Store</div>
           <h2>Books &amp; study material</h2>
@@ -158,7 +203,7 @@ export default function Home() {
       </section>
 
       {/* WHAT'S NEW */}
-      <section className="section" id="whats-new">
+      <section className="section alt" id="whats-new">
         <div className="section-head">
           <div className="eyebrow">Updates</div>
           <h2>What&apos;s new</h2>
@@ -176,7 +221,7 @@ export default function Home() {
       </section>
 
       {/* RESOURCES */}
-      <section className="section alt" id="resources">
+      <section className="section" id="resources">
         <div className="section-head">
           <div className="eyebrow">Resources</div>
           <h2>Free resources</h2>
@@ -194,7 +239,7 @@ export default function Home() {
       </section>
 
       {/* TESTIMONIALS */}
-      <section className="section" id="testimonials">
+      <section className="section alt" id="testimonials">
         <div className="section-head">
           <div className="eyebrow">Testimonials</div>
           <h2>What students say</h2>
@@ -217,37 +262,18 @@ export default function Home() {
       </section>
 
       {/* ABOUT */}
-      <section className="section alt" id="about">
+      <section className="section" id="about">
         <div className="section-head">
           <div className="eyebrow">About Us</div>
           <h2>About 1:1 CA Classes</h2>
         </div>
         <p className="muted" style={{ maxWidth: 760, margin: "0 auto", textAlign: "center" }}>
-          1:1 CA Classes is built around one idea — <strong>highly personalized,
-          result-oriented</strong> preparation. We pair <strong>top-notch faculty</strong>
-          with an <strong>AI tutor</strong> and attempt-wise content to <strong>clear the
-          clutter</strong>, so you study only what matters for your exam, at your own pace.
+          1:1 CA Classes is a venture by <strong>CA Parveen Sharma</strong>, built around one
+          idea — highly personalized, result-oriented preparation. Top-notch teaching by
+          Parveen Sharma is paired with AI-assisted paper checking and doubt-solving
+          (under his guidance) and attempt-wise content, so you study only what matters,
+          at your own pace.
         </p>
-      </section>
-
-      {/* TEAM */}
-      <section className="section" id="team">
-        <div className="section-head">
-          <div className="eyebrow">Team</div>
-          <h2>Meet the faculty</h2>
-          <p>The people guiding your preparation.</p>
-        </div>
-        <div className="grid grid-3">
-          {team.map((m) => (
-            <div className="tile" key={m.name} style={{ textAlign: "center" }}>
-              <div className="avatar" style={{ width: 64, height: 64, margin: "0 auto 14px", fontSize: "1.3rem" }}>
-                {m.initials}
-              </div>
-              <h3>{m.name}</h3>
-              <p>{m.role}</p>
-            </div>
-          ))}
-        </div>
       </section>
 
       {/* VISION */}
@@ -257,9 +283,9 @@ export default function Home() {
           <h2>Our vision</h2>
         </div>
         <p className="muted" style={{ maxWidth: 760, margin: "0 auto", textAlign: "center", fontSize: "1.1rem" }}>
-          To make <span className="grad">highly personalized, AI-enabled</span> CA
-          coaching accessible to every aspirant in India — clearing the clutter with
-          top-notch, result-oriented teaching that adapts to each student.
+          To bring <span className="grad">CA Parveen Sharma&apos;s</span> highly personalized,
+          result-oriented teaching to every aspirant in India — clearing the clutter with
+          top-notch coaching, helped (not replaced) by AI.
         </p>
       </section>
 

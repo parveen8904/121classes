@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SignOutButton from "./sign-out";
+import SetPassword from "./set-password";
 
 export default async function Dashboard() {
   const supabase = createClient();
@@ -48,6 +49,10 @@ export default async function Dashboard() {
           {user.email ?? user.phone} · Target attempt:{" "}
           {profile?.target_attempt ?? "not set"}
         </p>
+
+        <div style={{ marginTop: 20 }}>
+          <SetPassword />
+        </div>
 
         <h2 style={{ margin: "32px 0 16px", fontSize: "1.2rem" }}>Your courses</h2>
         {courses && courses.length > 0 ? (

@@ -52,7 +52,7 @@ export default function Home() {
 
       {/* HERO */}
       <section className="hero">
-        <span className="ribbon">A venture by CA Parveen Sharma</span>
+        <span className="ribbon flash">A venture by CA Parveen Sharma</span>
         <h1>
           Learn CA from <span className="namehl">CA Parveen Sharma</span> — one of
           India&apos;s most renowned faculty.
@@ -164,8 +164,8 @@ export default function Home() {
       <section className="section alt" id="courses">
         <div className="section-head">
           <div className="eyebrow">Courses</div>
-          <h2>Courses by CA Parveen Sharma</h2>
-          <p>Structured, attempt-wise content — personally taught and curated by Parveen Sharma.</p>
+          <h2>Courses by CA Parveen Sharma &amp; his team</h2>
+          <p>Taught by <strong>CA Parveen Sharma &amp; his team</strong> — structured, attempt-wise content.</p>
         </div>
         <div className="grid grid-3">
           {courses.map((c) => (
@@ -173,7 +173,10 @@ export default function Home() {
               <div className="ic">{c.icon}</div>
               <h3>{c.title}</h3>
               <p>{c.desc}</p>
-              <p style={{ marginTop: 14 }}>
+              <p className="muted" style={{ marginTop: 10, fontSize: ".82rem" }}>
+                👨‍🏫 Taught by CA Parveen Sharma &amp; team
+              </p>
+              <p style={{ marginTop: 12 }}>
                 <Link className="btn secondary small" href="/login">View course</Link>
               </p>
             </div>

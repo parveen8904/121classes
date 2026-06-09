@@ -27,6 +27,18 @@ const TYPE_LABEL: Record<string, string> = {
   subjective_test: "Subjective test",
   custom: "Section",
 };
+const TYPE_ICON: Record<string, string> = {
+  revision_video: "🎬",
+  full_class_video: "🎥",
+  pdf: "📑",
+  rich_text: "📝",
+  past_papers: "🗂️",
+  live_class: "📡",
+  ask_doubt: "💬",
+  mcq_test: "🧠",
+  subjective_test: "✍️",
+  custom: "📦",
+};
 
 function SectionBody({ type, config }: { type: string; config: Record<string, unknown> | null }) {
   const c = (config ?? {}) as Record<string, string>;
@@ -40,7 +52,7 @@ function SectionBody({ type, config }: { type: string; config: Record<string, un
             <iframe src={src} allow="encrypted-media; fullscreen" allowFullScreen title="Video" />
           </div>
         ) : (
-          <p className="muted" style={{ marginTop: 10 }}>
+          <p className="muted" style={{ marginTop: 12 }}>
             Video coming soon.
           </p>
         )}
@@ -51,7 +63,7 @@ function SectionBody({ type, config }: { type: string; config: Record<string, un
 
   if (type === "pdf" || type === "past_papers") {
     return (
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 14 }}>
         {c.pdf_url ? (
           <a className="btn small" href={c.pdf_url} target="_blank" rel="noopener noreferrer">
             View / Download PDF
@@ -66,9 +78,9 @@ function SectionBody({ type, config }: { type: string; config: Record<string, un
 
   if (type === "rich_text") {
     return c.body ? (
-      <p style={{ marginTop: 12, whiteSpace: "pre-wrap" }}>{c.body}</p>
+      <p style={{ marginTop: 14, whiteSpace: "pre-wrap" }}>{c.body}</p>
     ) : (
-      <p className="muted" style={{ marginTop: 12 }}>
+      <p className="muted" style={{ marginTop: 14 }}>
         Notes coming soon.
       </p>
     );
@@ -76,14 +88,14 @@ function SectionBody({ type, config }: { type: string; config: Record<string, un
 
   if (type === "live_class") {
     return (
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 14 }}>
         {c.starts_at && <p className="muted">Starts: {c.starts_at}</p>}
         {c.join_url ? (
           <a className="btn small" href={c.join_url} target="_blank" rel="noopener noreferrer">
             Join live class
           </a>
         ) : (
-          <p className="muted">Join link will appear here before the session.</p>
+          <p className="muted">The join link appears here before the session.</p>
         )}
       </div>
     );
@@ -91,10 +103,10 @@ function SectionBody({ type, config }: { type: string; config: Record<string, un
 
   if (type === "ask_doubt") {
     return (
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 14 }}>
         <textarea rows={3} placeholder="Type your doubt…" disabled />
         <p className="muted" style={{ fontSize: ".85rem" }}>
-          AI doubt-solving is being wired up (Phase 7). Your tutor reviews answers under CA Parveen
+          AI doubt-solving is being wired up. Your answers are reviewed under CA Parveen
           Sharma&apos;s guidance.
         </p>
       </div>
@@ -103,8 +115,8 @@ function SectionBody({ type, config }: { type: string; config: Record<string, un
 
   if (type === "mcq_test" || type === "subjective_test") {
     return (
-      <p className="muted" style={{ marginTop: 12 }}>
-        Test will be available here (Phase 7).
+      <p className="muted" style={{ marginTop: 14 }}>
+        This test will open here soon.
       </p>
     );
   }
@@ -126,10 +138,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     .single();
   if (!topic) notFound();
 
-  // Metadata for ALL published sections (incl. locked) + unlocked flag.
   const { data: metas } = await supabase.rpc("list_topic_sections", { p_topic: topic.id });
-
-  // Full rows (with config) for sections the RLS lets this user read = unlocked ones.
   const { data: accessRows } = await supabase
     .from("sections")
     .select("id, config")
@@ -140,6 +149,8 @@ export default async function LearnTopic({ params }: { params: { topicId: string
 
   const sections = (metas ?? []) as SectionMeta[];
   const subject = (topic as { subjects?: { title?: string; course_id?: string } | null }).subjects;
+  const courseId = subject?.course_id;
+  const plansHref = courseId ? `/learn/${courseId}/plans` : "/dashboard";
 
   return (
     <main>
@@ -152,42 +163,54 @@ export default async function LearnTopic({ params }: { params: { topicId: string
         </Link>
       </header>
 
-      <section className="container" style={{ paddingTop: 40, paddingBottom: 60 }}>
-        <p className="muted" style={{ marginBottom: 8 }}>
-          {subject?.course_id ? (
-            <Link className="muted" href={`/learn/${subject.course_id}`}>
-              ← {subject?.title ?? "Subject"}
-            </Link>
+      <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
+        <p className="crumb">
+          {courseId ? (
+            <Link href={`/learn/${courseId}`}>← {subject?.title ?? "Subject"}</Link>
           ) : (
-            <Link className="muted" href="/dashboard">
-              ← Dashboard
-            </Link>
+            <Link href="/dashboard">← Dashboard</Link>
           )}
         </p>
-        <h1 style={{ marginBottom: 18 }}>{topic.title}</h1>
+
+        <div className="learn-hero">
+          <span className="badge">Topic</span>
+          <h1>{topic.title}</h1>
+          <p className="meta">
+            {sections.length} section{sections.length === 1 ? "" : "s"} · revision, notes, tests &amp;
+            doubt-solving
+          </p>
+        </div>
 
         {sections.length > 0 ? (
-          <div style={{ display: "grid", gap: 16 }}>
+          <div className="sec-list" style={{ marginTop: 22 }}>
             {sections.map((s) => {
               const locked = !s.unlocked;
+              const planName = s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "a paid";
               return (
-                <div className="card" key={s.id} style={{ opacity: locked ? 0.85 : 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <h3 style={{ fontSize: "1.1rem" }}>{s.title}</h3>
-                    <span className="badge">{TYPE_LABEL[s.type] ?? s.type}</span>
+                <div className={`sec-card${locked ? " lock-card" : ""}`} key={s.id}>
+                  <div className="sec-head">
+                    <span className="sec-ic">{TYPE_ICON[s.type] ?? "📦"}</span>
+                    <div>
+                      <div className="sec-title">{s.title}</div>
+                      <div className="sec-type">{TYPE_LABEL[s.type] ?? s.type}</div>
+                    </div>
                     {locked && (
-                      <span className="badge" style={{ background: "var(--bg-soft)" }}>
-                        🔒 {s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "Locked"}
+                      <span className="lock-badge" style={{ marginLeft: "auto" }}>
+                        🔒 {s.min_plan ? PLAN_LABEL[s.min_plan] : "Locked"}
                       </span>
                     )}
                   </div>
 
                   {locked ? (
-                    <p className="muted" style={{ marginTop: 10 }}>
-                      Unlock this with a{" "}
-                      <strong>{s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "paid"}</strong> plan
-                      for this course.
-                    </p>
+                    <div className="lock-row">
+                      <span className="txt">
+                        This is part of the <strong>{planName}</strong> plan. Upgrade to unlock it for
+                        every topic in this course.
+                      </span>
+                      <Link className="btn small" href={plansHref}>
+                        Upgrade →
+                      </Link>
+                    </div>
                   ) : (
                     <SectionBody type={s.type} config={configById.get(s.id) ?? null} />
                   )}
@@ -196,7 +219,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
             })}
           </div>
         ) : (
-          <div className="card">
+          <div className="card" style={{ marginTop: 22 }}>
             <p className="muted">No sections published in this topic yet.</p>
           </div>
         )}

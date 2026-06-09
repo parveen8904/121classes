@@ -312,3 +312,92 @@ textarea {
 .legal h2 { font-size: 1.2rem; margin: 28px 0 8px; }
 .legal p, .legal li { color: var(--muted); margin-bottom: 10px; }
 .legal ul { padding-left: 20px; }
+
+/* ===================== Student portal ===================== */
+.crumb { color: var(--muted); font-size: .9rem; margin-bottom: 10px; display: inline-flex; gap: 6px; }
+.crumb a { color: var(--muted); }
+.crumb a:hover { color: var(--accent); }
+
+.learn-hero {
+  border: 1px solid var(--border); border-radius: 20px; padding: 30px 32px; margin-top: 6px;
+  background: radial-gradient(900px 320px at 0% -40%, rgba(13,148,136,.18), transparent), var(--card);
+}
+.learn-hero h1 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); margin: 10px 0 6px; }
+.learn-hero .meta { color: var(--muted); font-size: .92rem; }
+
+/* access banner */
+.access-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap;
+  border: 1px solid var(--border); border-radius: 16px; padding: 20px 24px; margin-top: 22px;
+  background: linear-gradient(120deg, rgba(13,148,136,.14), rgba(16,185,129,.10));
+}
+.access-banner .lead { font-weight: 700; font-size: 1.05rem; }
+.access-banner .sub { color: var(--muted); font-size: .88rem; margin-top: 2px; }
+.access-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* subject + topic listing */
+.subj-block { margin-top: 38px; }
+.subj-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.subj-head h2 { font-size: 1.3rem; }
+.subj-faculty { color: var(--accent); font-weight: 600; font-size: .85rem; }
+.topic-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 16px; }
+.topic-card {
+  display: flex; flex-direction: column; gap: 8px; background: var(--card);
+  border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px;
+  transition: transform .2s, border-color .2s; height: 100%;
+}
+.topic-card:hover { transform: translateY(-3px); border-color: var(--accent); }
+.topic-card .go { color: var(--accent); font-weight: 700; font-size: .85rem; margin-top: auto; }
+
+/* section cards (topic page) */
+.sec-list { display: grid; gap: 16px; margin-top: 6px; }
+.sec-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px; }
+.sec-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.sec-ic {
+  width: 46px; height: 46px; border-radius: 13px; flex: none; display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; background: linear-gradient(135deg, rgba(13,148,136,.20), rgba(16,185,129,.18));
+}
+.sec-title { font-size: 1.12rem; font-weight: 700; line-height: 1.2; }
+.sec-type { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
+
+/* locked section */
+.lock-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 14px;
+  padding: 14px 16px; border: 1px dashed var(--border); border-radius: 12px; background: var(--bg-soft); }
+.lock-row .txt { color: var(--muted); font-size: .9rem; }
+.lock-badge {
+  display: inline-flex; align-items: center; gap: 6px; font-size: .72rem; font-weight: 700; letter-spacing: .04em;
+  color: var(--accent); background: rgba(13,148,136,.12); border: 1px solid var(--accent);
+  padding: 4px 10px; border-radius: 999px; text-transform: uppercase;
+}
+
+/* pricing */
+.plans-grid { display: grid; gap: 20px; grid-template-columns: repeat(3, 1fr); margin-top: 26px; }
+@media (max-width: 920px) { .plans-grid { grid-template-columns: 1fr; } }
+.plan-card {
+  position: relative; background: var(--card); border: 1px solid var(--border); border-radius: 18px;
+  padding: 30px 26px; display: flex; flex-direction: column; transition: transform .2s, border-color .2s;
+}
+.plan-card:hover { transform: translateY(-4px); border-color: var(--accent); }
+.plan-card.featured { border-color: var(--accent); box-shadow: 0 20px 56px rgba(13,148,136,.20); }
+.plan-pop {
+  position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+  background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: #fff;
+  font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  padding: 5px 14px; border-radius: 999px;
+}
+.plan-card .tier-name { font-size: 1.45rem; font-weight: 800; }
+.plan-card .tagline { color: var(--muted); font-size: .9rem; margin: 4px 0 18px; min-height: 40px; }
+.plan-price { font-size: 2.1rem; font-weight: 800; line-height: 1.1; }
+.plan-price small { font-size: .8rem; color: var(--muted); font-weight: 600; }
+.plan-permonth { color: var(--muted); font-size: .82rem; margin-top: 3px; }
+.feat-list { list-style: none; padding: 0; margin: 20px 0; display: grid; gap: 11px; }
+.feat-list li { display: flex; gap: 10px; align-items: flex-start; font-size: .92rem; }
+.feat-list li::before { content: "✓"; color: var(--accent); font-weight: 800; flex: none; }
+.plan-card .btn, .plan-card .plan-current { margin-top: auto; }
+.plan-current {
+  text-align: center; padding: 12px; border: 1px dashed var(--accent); border-radius: 10px;
+  color: var(--accent); font-weight: 700; font-size: .88rem;
+}
+.seg { display: inline-flex; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 999px; padding: 4px; gap: 4px; }
+.seg button { border: 0; background: transparent; color: var(--muted); padding: 9px 18px; border-radius: 999px; cursor: pointer; font-size: .88rem; font-weight: 600; transition: color .15s; }
+.seg button.active { background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: #fff; }

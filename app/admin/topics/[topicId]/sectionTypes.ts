@@ -44,6 +44,13 @@ export const SECTION_TYPES: {
 }[] = [
   { value: "revision_video", label: "Revision video", fields: ["revision_round", "bunny_video_id", "youtube_url", "embed_url"] },
   { value: "full_class_video", label: "Full class video", fields: ["bunny_video_id", "youtube_url", "embed_url"] },
+  { value: "discussion_video", label: "Discussion / walkthrough video", fields: ["bunny_video_id", "youtube_url", "embed_url"] },
+  {
+    value: "discussion",
+    label: "Discussion board (Q&A)",
+    fields: ["body"],
+    note: "Students post questions; you and others reply with text, a PDF, or a video reference (e.g. 'Video 7 @ 12:30'). Use the body for instructions/homework.",
+  },
   { value: "pdf", label: "PDF / notes", fields: ["pdf_url"] },
   { value: "rich_text", label: "Rich text / notes", fields: ["body"] },
   { value: "past_papers", label: "Past papers", fields: ["pdf_url", "body"] },

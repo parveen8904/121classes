@@ -18,6 +18,8 @@ const PLAN_LABEL: Record<string, string> = { bronze: "Bronze", silver: "Silver",
 const TYPE_LABEL: Record<string, string> = {
   revision_video: "Revision video",
   full_class_video: "Full class video",
+  discussion_video: "Discussion video",
+  discussion: "Discussion board",
   pdf: "PDF",
   rich_text: "Notes",
   past_papers: "Past papers",
@@ -30,6 +32,8 @@ const TYPE_LABEL: Record<string, string> = {
 const TYPE_ICON: Record<string, string> = {
   revision_video: "🎬",
   full_class_video: "🎥",
+  discussion_video: "🎞️",
+  discussion: "🗣️",
   pdf: "📑",
   rich_text: "📝",
   past_papers: "🗂️",
@@ -40,10 +44,34 @@ const TYPE_ICON: Record<string, string> = {
   custom: "📦",
 };
 
-function SectionBody({ type, config }: { type: string; config: Record<string, unknown> | null }) {
+function SectionBody({
+  id,
+  type,
+  config,
+}: {
+  id: string;
+  type: string;
+  config: Record<string, unknown> | null;
+}) {
   const c = (config ?? {}) as Record<string, string>;
 
-  if (type === "revision_video" || type === "full_class_video" || type === "custom") {
+  if (type === "discussion") {
+    return (
+      <div style={{ marginTop: 14 }}>
+        {c.body && <p style={{ marginBottom: 12, whiteSpace: "pre-wrap" }}>{c.body}</p>}
+        <Link className="btn small" href={`/learn/section/${id}`}>
+          Open discussion board →
+        </Link>
+      </div>
+    );
+  }
+
+  if (
+    type === "revision_video" ||
+    type === "full_class_video" ||
+    type === "discussion_video" ||
+    type === "custom"
+  ) {
     const src = videoEmbedSrc(config);
     return (
       <>
@@ -233,7 +261,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
                       </Link>
                     </div>
                   ) : (
-                    <SectionBody type={s.type} config={configById.get(s.id) ?? null} />
+                    <SectionBody id={s.id} type={s.type} config={configById.get(s.id) ?? null} />
                   )}
                 </div>
               );

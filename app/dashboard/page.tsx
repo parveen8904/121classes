@@ -31,6 +31,9 @@ export default async function Dashboard() {
           1:1 <span>CA Classes</span>
         </Link>
         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          <Link className="muted" href="/dashboard/profile">
+            Profile
+          </Link>
           {profile?.role === "admin" && (
             <Link className="muted" href="/admin">
               Admin

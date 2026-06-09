@@ -204,6 +204,16 @@ No payment yet (that's Phase 5) — access is granted by admins, and this is wha
 
 ---
 
+## 14. Discussion boards, profile, new section types (built)
+**Requires `supabase/migrations/0004_discussion_profile.sql` (run once).** Adds enum values, profile columns, and the discussion tables.
+- **Resilience fix:** `/learn/topic/[topicId]` now falls back to a direct RLS-filtered `sections` query when `list_topic_sections()` isn't deployed — so published sections always render (was the cause of "published sections not showing").
+- **Topic form simplified:** only an optional **"Applies from attempt"** (`valid_from_attempt`); end is always open-ended. `valid_to_attempt`/`amendments_upto` no longer asked (kept nullable in DB).
+- **New section types:** `discussion_video` (plays like a video) and `discussion` (a Q&A board — config `body` for instructions/homework).
+- **Discussion board** `/learn/section/[sectionId]`: students post **threads**; staff + students **reply**; staff replies can attach a **solution PDF URL** and a **video reference** (free text like "Video 7 @ 12:30"); admin can **mark solution**, **mark resolved**, and **delete** (moderation). Tables `discussion_threads` / `discussion_posts` with RLS (read = any signed-in; write = author; moderate = author or admin). Reached from a `discussion` section's "Open discussion board →".
+- **Student profile** `/dashboard/profile`: full name, phone, target attempt, **shipping address** (line1/2, city, state, pincode) and optional **GST** (GSTIN + business name) — for book delivery & GST invoices. Saved via `profiles_self_update` RLS. Linked from the dashboard header.
+
+---
+
 ## 11. Working conventions
 - Develop on branch `claude/landing-page-text-fix-C0lDT`, then fast-forward merge to `main`.
 - Vercel auto-deploys on push to `main`.

@@ -1,10 +1,14 @@
 # 121 Coaching — AWS Cost & Setup Guide
 
-**Status:** Draft for review
+> ⚠️ **SUPERSEDED (2026-06-09).** We are **not using AWS**. The stack is now
+> **Supabase + Vercel + Bunny.net + Zoom** — see **`docs/INFRA_AND_COST.md`** and
+> **`docs/PORTAL_SPEC.md`**. This file is kept for historical reference only.
+
+**Status:** Superseded — historical reference
 **Date:** 2026-06-08
 **Owner:** Parveen Sharma
-**Decision:** Host the portal on **our own new AWS account**, region
-**Mumbai (`ap-south-1`)**, and **discontinue the old AWS** after migrating.
+**Decision:** ~~Host the portal on our own new AWS account, region Mumbai
+(`ap-south-1`), and discontinue the old AWS after migrating.~~ **Reversed — no AWS.**
 
 > All prices are **indicative** — confirm live rates in the AWS Pricing
 > Calculator for `ap-south-1` before committing. Conversion used: **₹84 ≈ $1**.

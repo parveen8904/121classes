@@ -1,7 +1,7 @@
 import SiteNav from "../components/SiteNav";
 import SiteFooter from "../components/SiteFooter";
 
-export const metadata = { title: "Privacy Policy — 121 CA Classes" };
+export const metadata = { title: "Privacy Policy — 1:1 CA Classes" };
 
 export default function Privacy() {
   return (

@@ -49,7 +49,7 @@ export default async function AdminHome() {
     <main>
       <header className="topbar">
         <Link className="logo" href="/">
-          121 <span>CA Classes</span>
+          1:1 <span>CA Classes</span>
         </Link>
         <Link className="muted" href="/dashboard">
           Student view

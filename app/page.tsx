@@ -48,13 +48,13 @@ export default function Home() {
       <section className="hero">
         <span className="badge">121caclasses.com</span>
         <h1>
-          Learn 1-on-1. Grow with <span className="grad">coaching</span>.
-          <br />
-          Powered by <span className="grad">live &amp; AI</span> learning.
+          Crack CA with <span className="grad">highly personalized,
+          AI-enabled</span> coaching.
         </h1>
         <p className="sub">
-          Personalized classes, live sessions, ad-free recorded lectures, notes,
-          tests and AI doubt-solving — tailored to your exam attempt.
+          Result-oriented 1-to-1 teaching that <strong>clears the clutter</strong> —
+          top-notch faculty, live classes, ad-free lectures and an AI tutor, focused
+          only on what gets you through your exam.
         </p>
         <div className="cta-row">
           <Link className="btn" href="/login">Get started — it&apos;s free to join</Link>
@@ -103,7 +103,7 @@ export default function Home() {
             <div className="video-frame" style={{ paddingBottom: "56.25%" }}>
               <iframe
                 src="https://app.heygen.com/embeds/c2bcd7138f2c42b6b607fe6588910b89"
-                title="121 CA Classes intro"
+                title="1:1 CA Classes intro"
                 allow="encrypted-media; fullscreen"
                 allowFullScreen
               />
@@ -220,13 +220,13 @@ export default function Home() {
       <section className="section alt" id="about">
         <div className="section-head">
           <div className="eyebrow">About Us</div>
-          <h2>About 121 CA Classes</h2>
+          <h2>About 1:1 CA Classes</h2>
         </div>
         <p className="muted" style={{ maxWidth: 760, margin: "0 auto", textAlign: "center" }}>
-          121 CA Classes brings together personalized 1-to-1 teaching, live classes and
-          on-demand, ad-free recorded lectures, backed by AI doubt-solving and
-          attempt-wise content. Our goal is simple: clear, exam-focused learning that
-          adapts to each student&apos;s pace and target attempt.
+          1:1 CA Classes is built around one idea — <strong>highly personalized,
+          result-oriented</strong> preparation. We pair <strong>top-notch faculty</strong>
+          with an <strong>AI tutor</strong> and attempt-wise content to <strong>clear the
+          clutter</strong>, so you study only what matters for your exam, at your own pace.
         </p>
       </section>
 
@@ -257,9 +257,9 @@ export default function Home() {
           <h2>Our vision</h2>
         </div>
         <p className="muted" style={{ maxWidth: 760, margin: "0 auto", textAlign: "center", fontSize: "1.1rem" }}>
-          To make high-quality, personalized commerce education affordable and
-          accessible to every aspirant in India — combining the warmth of a real
-          teacher with the reach of technology.
+          To make <span className="grad">highly personalized, AI-enabled</span> CA
+          coaching accessible to every aspirant in India — clearing the clutter with
+          top-notch, result-oriented teaching that adapts to each student.
         </p>
       </section>
 

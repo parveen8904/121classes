@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "121 CA Classes — 1-to-1 Classes, Live Coaching & AI Learning",
+  title: "1:1 CA Classes — Highly Personalized, AI-Enabled CA Coaching",
   description:
-    "Personalized 1-to-1 classes, live coaching, ad-free recorded lectures and AI-assisted learning for CA students in India.",
+    "Highly personalized, AI-enabled CA coaching that clears the clutter — top-notch, result-oriented 1-to-1 teaching, live classes and ad-free lectures for CA students in India.",
 };
 
 // Applies the saved/system theme before paint to avoid a flash of the wrong theme.

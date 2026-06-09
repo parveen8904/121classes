@@ -18,7 +18,7 @@ export default function Logo({ size = 34 }: { size?: number }) {
         </text>
       </svg>
       <span className="word">
-        121 <span>CA Classes</span>
+        CA <span>Classes</span>
       </span>
     </span>
   );

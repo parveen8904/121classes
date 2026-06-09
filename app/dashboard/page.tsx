@@ -28,7 +28,7 @@ export default async function Dashboard() {
     <main>
       <header className="topbar">
         <Link className="logo" href="/">
-          121 <span>CA Classes</span>
+          1:1 <span>CA Classes</span>
         </Link>
         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
           {profile?.role === "admin" && (

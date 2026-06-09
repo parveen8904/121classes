@@ -6,7 +6,7 @@ export default function SiteNav() {
   return (
     <nav className="lp-nav">
       <div className="lp-nav-inner">
-        <Link href="/" aria-label="121 CA Classes home">
+        <Link href="/" aria-label="1:1 CA Classes home">
           <Logo />
         </Link>
         <div className="lp-nav-links">

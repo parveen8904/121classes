@@ -1,6 +1,7 @@
 import Link from "next/link";
 import SiteNav from "./components/SiteNav";
 import SiteFooter from "./components/SiteFooter";
+import AnnouncementSplash from "./components/AnnouncementSplash";
 
 const stats = [
   { num: "20+", lbl: "Years teaching CA" },
@@ -48,6 +49,7 @@ const testimonials = [
 export default function Home() {
   return (
     <main>
+      <AnnouncementSplash />
       <SiteNav />
 
       {/* HERO */}

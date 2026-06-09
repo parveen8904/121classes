@@ -134,10 +134,32 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 
 /* readable highlighter for key names (no low-contrast gradient text) */
 .namehl {
-  font-weight: 800; color: var(--text); white-space: nowrap;
-  background: linear-gradient(transparent 60%, rgba(13,148,136,.45) 0);
-  padding: 0 .12em; border-radius: 3px;
+  font-weight: 800; color: #fff;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  padding: .04em .32em; border-radius: 10px;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
+
+/* announcement splash on landing */
+.splash-overlay {
+  position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
+  background: rgba(2, 6, 23, .72); padding: 20px; animation: splashIn .35s ease; transition: opacity .4s ease;
+}
+.splash-overlay.leaving { opacity: 0; }
+.splash-card {
+  position: relative; max-width: 460px; width: 100%; background: var(--card);
+  border: 1px solid var(--border); border-radius: 18px; overflow: hidden; text-align: center;
+  box-shadow: 0 24px 70px rgba(0,0,0,.45); animation: splashPop .35s ease;
+}
+.splash-head { background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: #fff; padding: 26px 20px; font-size: 1.4rem; font-weight: 800; }
+.splash-body { padding: 22px; }
+.splash-body p { color: var(--muted); margin-bottom: 18px; }
+.splash-close {
+  position: absolute; top: 10px; right: 12px; background: rgba(255,255,255,.25); color: #fff;
+  border: 0; width: 30px; height: 30px; border-radius: 999px; cursor: pointer; font-size: 1.1rem; line-height: 1;
+}
+@keyframes splashIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes splashPop { from { opacity: 0; transform: translateY(12px) scale(.96); } to { opacity: 1; transform: none; } }
 
 /* remember-me row on login */
 .remember { display: flex; align-items: center; gap: 8px; margin: 2px 0 14px; font-size: .85rem; color: var(--muted); }

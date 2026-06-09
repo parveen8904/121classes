@@ -63,6 +63,21 @@ export default function LoginForm() {
     );
   }
 
+  async function forgotPassword() {
+    if (!email) return setMsg({ kind: "err", text: "Enter your email above first, then tap Forgot password." });
+    setLoading(true);
+    setMsg(null);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset`,
+    });
+    setLoading(false);
+    setMsg(
+      error
+        ? { kind: "err", text: error.message }
+        : { kind: "ok", text: "Password reset link sent — check your email." },
+    );
+  }
+
   async function sendPhoneOtp(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -154,15 +169,26 @@ export default function LoginForm() {
                 >
                   {signup ? "Log in" : "Create an account"}
                 </button>
-                {" · "}
-                <button
-                  type="button"
-                  onClick={magicLink}
-                  style={{ background: "none", border: 0, color: "var(--muted)", cursor: "pointer", padding: 0, font: "inherit", textDecoration: "underline" }}
-                >
-                  Email me a link instead
-                </button>
               </p>
+              {!signup && (
+                <p className="muted" style={{ textAlign: "center", marginTop: 8, fontSize: ".85rem" }}>
+                  <button
+                    type="button"
+                    onClick={forgotPassword}
+                    style={{ background: "none", border: 0, color: "var(--accent)", cursor: "pointer", padding: 0, font: "inherit" }}
+                  >
+                    Forgot password?
+                  </button>
+                  {" · "}
+                  <button
+                    type="button"
+                    onClick={magicLink}
+                    style={{ background: "none", border: 0, color: "var(--muted)", cursor: "pointer", padding: 0, font: "inherit", textDecoration: "underline" }}
+                  >
+                    Email me a link instead
+                  </button>
+                </p>
+              )}
             </form>
           )}
 

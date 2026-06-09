@@ -151,7 +151,7 @@ RLS is **enabled on every table**. The script is transactional and re-runnable (
 
 ## 9. Phased roadmap (remaining)
 1. ✅ **Phase 1 — Foundation** (auth, schema, dashboards) — DONE.
-2. **Phase 2 — Admin content manager:** create Course→Subject→Topic→Section, faculty, custom sections, upload PDFs / video ids, edit announcements.
+2. ✅ **Phase 2 — Admin content manager** — DONE. Full CRUD admin UI (see §11): Course→Subject→Topic→Section (type-aware section config incl. custom sections), faculty + subject assignment, announcements. RLS-driven (admin cookie passes `is_admin()`; no service-role key used).
 3. **Phase 3 — Student portal:** render topics/sections + attempt filtering + plan gating; migrate the AS 24 sample into the DB.
 4. **Phase 4 — Subscriptions & admin enrolment** (per-course, durations, bulk CSV grants).
 5. **Phase 5 — Payments** (Razorpay for plans + books; book store + warehouse email).
@@ -163,7 +163,22 @@ RLS is **enabled on every table**. The script is transactional and re-runnable (
 
 ---
 
-## 10. Working conventions
+## 10. Admin content manager (Phase 2 — built)
+Role-gated under `/admin` (layout guards `profiles.role = 'admin'`). All writes are
+**Server Actions** using the cookie-based Supabase client; RLS `is_admin()` authorises them.
+- `/admin` — hub linking to the live managers (Plans/Enrolment/Live/Books/Reporting still phase-tagged).
+- `/admin/courses` — list + create courses; publish toggle + delete.
+- `/admin/courses/[courseId]` — edit course; add/delete **subjects**.
+- `/admin/subjects/[subjectId]` — edit subject; assign **faculty** (many-to-many); add/publish/delete **topics** (incl. attempt-validity fields).
+- `/admin/topics/[topicId]` — add/edit/publish/delete **sections** via a **type-aware form** (`SectionForm`); config stored in `sections.config` jsonb. Section types + their fields live in `app/admin/topics/[topicId]/sectionTypes.ts`.
+- `/admin/faculty` — CRUD faculty (name, photo URL, bio).
+- `/admin/announcements` — CRUD announcements (kind, title, body, link, published).
+- Shared bits: `app/admin/_lib/util.ts` (slugify/str/num/nullable), `app/admin/_components/` (DeleteButton, PublishToggle).
+- Section config conventions: videos → `bunny_video_id` (+ optional `youtube_url`); revision_video adds `revision_round` (First/Second); pdf/past_papers → `pdf_url`; rich_text → `body`; live_class → `zoom_webinar_id`/`join_url`/`starts_at`; ask_doubt/mcq_test/subjective_test → no config (questions added in Phase 7).
+
+---
+
+## 11. Working conventions
 - Develop on branch `claude/landing-page-text-fix-C0lDT`, then fast-forward merge to `main`.
 - Vercel auto-deploys on push to `main`.
 - Always run `npm run build` before pushing (catches lint/type errors; JSX text must escape `'` `"` as entities).

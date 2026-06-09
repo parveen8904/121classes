@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Env (never commit real keys)
+.env
+.env.local
+.env*.local
+
+# Misc
+.DS_Store
+*.log
+.vercel

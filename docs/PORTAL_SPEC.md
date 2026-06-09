@@ -9,11 +9,12 @@
 - **No AWS.** Stack = **Supabase** (Postgres + Auth + Storage + RLS), **Vercel** (app hosting), **Bunny.net** (video streaming + storage), **Zoom Webinar** (live classes), **Razorpay** (payments), **WhatsApp Business API** (enrolment messaging), transactional **email**.
 - **Auth:** email **and** phone-number (OTP) authentication.
 - **Content model:** multiple **courses → subjects (one or more faculty each) → topics → sections**, including **admin-created custom sections**.
-- **Access:** sold as **per-course, time-bound subscriptions** (e.g., 1 month) with feature tiers **Bronze / Silver / Gold**; **admin can also manually enrol users (incl. bulk upload) and grant any course for any duration**.
-- **Pricing:** web via Razorpay; **app prices ≈ 130–140% of web** via store billing, clearly disclosed.
+- **Access:** **per-course subscriptions** in **1 / 3 / 6 / 12-month** durations — the student **builds their own plan** (course × tier × duration); feature tiers **Bronze / Silver / Gold**; **auto-renew until cancelled**. **Admin can also manually enrol users (incl. bulk CSV) and grant any course/tier for any duration** (free).
+- **Pricing:** **scales with duration** (longer = discounted), fully **admin-configurable**; web via **Razorpay** (recurring); **app prices ≈ 130–140% of web** via store billing, clearly disclosed.
 - **Videos:** self-recorded by faculty (natural voice/accent), streamed **ad-free via Bunny.net** with English audio/dub track; optional public YouTube copy for marketing.
-- **Commerce:** **sell physical books** on the landing page; book orders email the **warehouse** for dispatch.
+- **Commerce:** **sell physical books** (~10 titles, **free shipping**, **guest checkout**) on the landing page; warehouse gets an **end-of-day dispatch email**.
 - **Reporting:** finance reports; automated **emails to students** and **emails to warehouse**.
+- **Domain:** `121coaching.ai`. **WhatsApp BSP:** **Interakt**.
 
 ---
 
@@ -98,11 +99,18 @@ set which **plan** unlocks it, order it). Pure admin action — no code change.
 
 ## 5. Subscriptions, Plans & Pricing
 
-### Per-course, time-bound subscriptions
-- Access is granted **per course for a defined duration** (e.g., **1 month**,
-  3 months, until-attempt). A student can hold subscriptions to several courses,
-  each with its own start/end date.
-- Within a course, the **plan tier** controls which features unlock:
+### Per-course subscriptions (student builds their own plan)
+- A student **builds their own plan**: pick a **course**, a **tier**
+  (Bronze/Silver/Gold), and a **duration** of **1 / 3 / 6 / 12 months**.
+- Pricing **scales with duration** with a **discount for longer plans** (e.g. a
+  per-month base price × months, less a longer-term discount). All numbers are
+  **admin-configurable**, so you set/adjust them in the panel.
+- Subscriptions **auto-renew** at period end **until the student cancels**
+  (recurring via **Razorpay Subscriptions / UPI Autopay** on web; the store's
+  auto-renewable subscriptions in-app). Cancelling stops future renewals; access
+  runs to the end of the paid period.
+- A student can hold multiple course subscriptions, each with its own dates.
+- Within a course, the **tier** controls which features unlock:
 
 | Plan | Unlocks |
 |---|---|
@@ -128,7 +136,14 @@ set which **plan** unlocks it, order it). Pure admin action — no code change.
 ### Razorpay flow (web)
 Order created server-side → Razorpay Checkout (UPI/cards/netbanking) → **signature
 verified server-side** → subscription granted/extended → **webhook** is the source
-of truth (renewals, failures, refunds). Same flow powers **book purchases** (§9).
+of truth. **Auto-renewing subscriptions use Razorpay Subscriptions (e-mandate /
+UPI Autopay)**; the webhook handles renewals, failures, cancellations and refunds.
+Same Razorpay account powers **book purchases** (§9).
+
+> **Razorpay account note:** your existing Razorpay is registered to a *different*
+> business/domain. For `121coaching.ai` you'll likely open a **separate Razorpay
+> account** (or add this domain/entity under the existing one if it's the same
+> legal entity). Decided at the payments phase — not a blocker for Phase 1.
 
 ### Downloads
 - **PDFs/notes are downloadable** for entitled students.
@@ -218,10 +233,10 @@ AI/agent avatars**. They are **stored and streamed via Bunny.net Stream**.
 
 ## 6D. Notifications — WhatsApp + Email
 
-- **WhatsApp Business API** (via a BSP such as Interakt / Gupshup / AiSensy /
-  Wati): on **enrolment** (and key events — payment success, new live class,
-  subscription expiry) the student receives a **WhatsApp message** with the
-  relevant info. Uses **approved message templates** (Meta requirement).
+- **WhatsApp Business API** via **Interakt** (BSP): on **enrolment** (and key
+  events — payment success, new live class, subscription expiry/renewal) the
+  student receives a **WhatsApp message** with the relevant info. Uses **approved
+  message templates** (Meta requirement).
 - **Transactional email** for receipts, enrolment confirmations, **student
   notifications**, and **warehouse dispatch emails** for book orders (§9).
 
@@ -307,13 +322,15 @@ All are editable from the admin panel (no code change to publish a new item).
 
 ## 9. Book Store & Warehouse Fulfilment
 
-- **Sell physical books** on the landing page (`books` catalogue with cover,
-  price, stock).
+- **Sell physical books** on the landing page — **~10 titles** to start
+  (`books` catalogue: cover, price, stock). **Free shipping** (no fee), pan-India.
+- **Guest checkout allowed** — buyers can purchase **without an account** (we
+  capture name, phone, email, shipping address).
 - Checkout via **Razorpay**; on payment success a **`book_order`** is created.
-- The system **emails the warehouse** automatically with the order + shipping
-  address so they can **dispatch the book**; status moves `paid → dispatched →
+- The warehouse gets an **end-of-day email** listing that day's paid orders
+  (book + buyer + address) for **dispatch**; status moves `paid → dispatched →
   delivered`.
-- The student gets a **WhatsApp + email** confirmation.
+- The buyer gets a **WhatsApp + email** confirmation.
 
 ---
 
@@ -347,7 +364,7 @@ All are editable from the admin panel (no code change to publish a new item).
 | **Bunny.net** | Video streaming + storage | API key, Stream library + CDN zone |
 | **Zoom** | Live webinars | 1 Webinar license; API/JWT or OAuth app creds |
 | **Razorpay** | Payments (plans + books) | Key ID, Key Secret, Webhook secret |
-| **WhatsApp BSP** | WhatsApp Business API | BSP account + approved templates + API token |
+| **Interakt** (WhatsApp BSP) | WhatsApp Business API | Interakt account + approved templates + API token |
 | **Email** (Resend/SendGrid) | Transactional + warehouse emails | API key, verified domain |
 | **AI** (Claude API) | Doubts + grading | API key (later) |
 
@@ -385,7 +402,7 @@ Full breakdown in **`docs/INFRA_AND_COST.md`**. Summary (₹84 ≈ $1):
   (India). Modest, scales with watch-time; **ad-free + secure**.
 - **Zoom Webinar** — ~**$90–100/mo (~₹7,500–8,400)** for one Pro + Webinar-500
   license (annual billing).
-- **WhatsApp Business API** — BSP plan ~**₹1,000–3,000/mo** + per-message
+- **WhatsApp Business API (Interakt)** — plan ~**₹1,000–3,000/mo** + per-message
   (Meta) conversation charges; verify current India rates.
 - **Email** (Resend/SendGrid) — free tier → ~$20/mo at volume.
 - **Razorpay** — ~2% per successful transaction (plans + books); no monthly fee.
@@ -406,23 +423,32 @@ Full breakdown in **`docs/INFRA_AND_COST.md`**. Summary (₹84 ≈ $1):
 
 ---
 
-## 16. Open Questions for You
+## 16. Decisions — Locked & Remaining
 
-1. **Course durations:** which durations to offer (1 month / 3 months /
-   till-attempt)? Auto-renew or one-time?
-2. **Plan prices:** rough **web** prices for Bronze/Silver/Gold per course (app
-   auto-set at ~130–140%).
-3. **WhatsApp BSP:** any preferred provider (Interakt / Gupshup / AiSensy / Wati),
-   or shall I recommend one?
-4. **Books:** rough catalogue size + do you ship pan-India? Flat shipping or
-   per-order? Guest checkout (no login) for book buyers?
-5. **Warehouse:** is it one email address, or a system/API we should integrate?
-6. **Domain:** what domain will this run on (for Supabase/Vercel/Razorpay/WhatsApp)?
-7. **Mobile timing:** apps in v1, or responsive web first then apps?
+**Locked:**
+- Stack = **Supabase + Vercel + Bunny.net + Zoom** (no AWS).
+- Auth = **email + phone (OTP)**.
+- Subscriptions = **per-course**, durations **1 / 3 / 6 / 12 months**, **student
+  builds own plan**, pricing **scales with duration (longer = discount)**,
+  **auto-renew until cancelled**; **admin manual + bulk grants**.
+- Tiers = **Bronze / Silver / Gold** (admin-configurable).
+- Payments = **Razorpay** (recurring); **app prices ≈ 130–140% of web**.
+- Video = **Bunny.net** (ad-free, secure); English audio track; optional public
+  YouTube marketing copy.
+- Live classes = **Zoom Webinar**.
+- Notifications = **Interakt (WhatsApp)** + email.
+- Books = **~10 titles, free shipping, guest checkout**; **warehouse end-of-day
+  dispatch email**.
+- Mobile = **responsive web first, native apps later**.
+- Domain = **`121coaching.ai`**.
 
-*(Resolved: stack = Supabase + Vercel + Bunny.net + Zoom (no AWS); auth = email +
-phone; payments = Razorpay; video = Bunny.net ad-free; subscriptions = per-course
-time-bound + admin grants; books + warehouse email; WhatsApp + email
-notifications; native iOS + Android apps.)*
+**Remaining (not blocking Phase 1 — resolve at the noted phase):**
+1. **Actual plan price numbers** — set in the admin panel; start with placeholders.
+   *(Phase 5)*
+2. **Razorpay account** — reuse existing (same legal entity) or open a new one for
+   `121coaching.ai`. *(Phase 5)*
+3. **Domain spelling** — confirm exact registered domain (`121coaching.ai`).
+4. **Account creation** — Supabase + Vercel (Phase 1); Bunny/Zoom/Interakt/Razorpay
+   at their phases. I'll guide you; I can scaffold with placeholders meanwhile.
 
-Once you confirm the open questions, Phase 1 (foundation) can begin.
+**Phase 1 (Foundation) is unblocked and ready to start.**

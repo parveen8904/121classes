@@ -17,8 +17,16 @@ const PANELS: { title: string; desc: string; href?: string; phase?: string }[] =
     desc: "Amendments, what's new, student corner, industry & macro updates.",
     href: "/admin/announcements",
   },
-  { title: "Plans & pricing", desc: "Bronze/Silver/Gold, durations, web vs app prices.", phase: "Phase 5" },
-  { title: "Enrolment", desc: "Manual + bulk CSV grants for any course/duration.", phase: "Phase 4" },
+  {
+    title: "Enrolment",
+    desc: "Grant course access (single or bulk) for any tier/duration; revoke & extend.",
+    href: "/admin/enrolment",
+  },
+  {
+    title: "Plans & pricing",
+    desc: "Bronze/Silver/Gold per-month prices; duration discounts; web vs app.",
+    href: "/admin/plans",
+  },
   { title: "Live classes", desc: "Schedule Zoom webinars.", phase: "Phase 6" },
   { title: "Books & warehouse", desc: "Catalogue + end-of-day dispatch email.", phase: "Phase 5" },
   { title: "Reporting", desc: "Finance, student & warehouse emails.", phase: "Phase 8" },

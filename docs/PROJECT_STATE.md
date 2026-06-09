@@ -153,8 +153,8 @@ RLS is **enabled on every table**. The script is transactional and re-runnable (
 1. ✅ **Phase 1 — Foundation** (auth, schema, dashboards) — DONE.
 2. ✅ **Phase 2 — Admin content manager** — DONE. Full CRUD admin UI (see §11): Course→Subject→Topic→Section (type-aware section config incl. custom sections), faculty + subject assignment, announcements. RLS-driven (admin cookie passes `is_admin()`; no service-role key used).
 3. ✅ **Phase 3 — Student portal** — DONE (see §12). Renders subjects → attempt-filtered topics → gated sections at `/learn`. AS 24 sample migrated to DB seed. **Requires running `supabase/migrations/0002_phase3.sql` once in Supabase.**
-4. **Phase 4 — Subscriptions & admin enrolment** (per-course, durations, bulk CSV grants).
-5. **Phase 5 — Payments** (Razorpay for plans + books; book store + warehouse email).
+4. ✅ **Phase 4 — Subscriptions & admin enrolment** — DONE (see §13). Admin single/bulk grants, revoke/extend; plan price editor; student access status + cancel auto-renew. **Requires `supabase/migrations/0003_phase4.sql`.**
+5. **Phase 5 — Payments** (Razorpay for plans + books; book store + warehouse email). *Online checkout for plans plugs into the Phase 4 model.*
 6. **Phase 6 — Live + messaging** (Zoom; WhatsApp/Interakt + email).
 7. **Phase 7 — Tests + AI** (MCQ auto-grade; subjective; Claude paper-checking + doubt-solving).
 8. **Phase 8 — Reporting** (finance, student emails, warehouse).
@@ -187,6 +187,18 @@ Logged-in students browse content under `/learn` (middleware guards it; redirect
   - Per-type rendering (`SectionBody`): video (`embed_url` → YouTube via `app/learn/_lib/media.ts`; Bunny later), pdf/past_papers (download button), rich_text, live_class, ask_doubt (disabled box, AI in Phase 7), mcq/subjective (placeholder, Phase 7).
 - **DB migration `supabase/migrations/0002_phase3.sql`** adds `list_topic_sections()` and seeds the **AS 24** sample (CA Intermediate → Accounting → AS 24 → 9 sections; Main Revision is free, others Bronze/Silver). **Run it once in Supabase SQL Editor.**
 - Admin section editor gained an **`embed_url`** config field (used by the HeyGen sample).
+
+---
+
+## 13. Subscriptions & enrolment (Phase 4 — built)
+No payment yet (that's Phase 5) — access is granted by admins, and this is what unlocks the Phase 3 gated sections.
+- **Pricing model** `lib/pricing.ts`: `web_price_inr` is a **per-month base**; total = base × months × (1 − duration discount). Discounts: 3mo −5%, 6mo −10%, 12mo −20%. Durations 1/3/6/12. `formatINR`, `durationLabel` helpers.
+- **`/admin/enrolment`** — grant a subscription **free** (channel `admin_grant`): single (by email) or **bulk** (paste CSV/list of emails; reports which had no account). Lists recent subscriptions with **Extend** (+1/3/6/12mo) and **Revoke** (status→cancelled). Looks up students via `profiles` (admin RLS); resolves tier→plan row; computes `ends_at`.
+- **`/admin/plans`** — edit each tier's name, **per-month web & app price**, active flag; shows a live duration-total preview.
+- **Student access** (on `/learn/[courseId]`): a **Your access** card (active plan + expiry + auto-renew, with a **cancel/enable auto-renew** button) and a **Plans** card (tier × duration price grid; “checkout opens Phase 5”).
+- **Student self-service RPC** `set_my_auto_renew(sub, on)` (SECURITY DEFINER, ownership-checked) — avoids a broad student UPDATE policy on `subscriptions` (which would let them tamper with `ends_at`/`plan_id`). Admin grants/revoke/extend use the existing `subsr_admin` RLS.
+- **DB migration `supabase/migrations/0003_phase4.sql`** — adds the RPC. **Run once in Supabase SQL Editor.**
+- Admin hub now links **Enrolment** and **Plans** (live); Live/Books/Reporting still phase-tagged.
 
 ---
 

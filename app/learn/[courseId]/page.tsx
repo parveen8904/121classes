@@ -1,11 +1,18 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { DURATIONS, computePrice, durationLabel, formatINR } from "@/lib/pricing";
 import { topicVisible } from "../_lib/attempt";
+import { setAutoRenew } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 type SubjectFacultyRow = { faculties: { full_name: string } | null };
+
+function fmtDate(s: string | null): string {
+  if (!s) return "—";
+  return new Date(s).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" });
+}
 
 export default async function LearnCourse({ params }: { params: { courseId: string } }) {
   const supabase = createClient();
@@ -27,12 +34,28 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
     .single();
   if (!course) notFound();
 
-  const { data: subjects } = await supabase
-    .from("subjects")
-    .select("id, title, order_index, subject_faculty(faculties(full_name))")
-    .eq("course_id", course.id)
-    .order("order_index")
-    .order("title");
+  const [{ data: subjects }, { data: subscription }, { data: plans }] = await Promise.all([
+    supabase
+      .from("subjects")
+      .select("id, title, order_index, subject_faculty(faculties(full_name))")
+      .eq("course_id", course.id)
+      .order("order_index")
+      .order("title"),
+    supabase
+      .from("subscriptions")
+      .select("id, ends_at, status, auto_renew, plans(tier, name)")
+      .eq("student_id", user.id)
+      .eq("course_id", course.id)
+      .eq("status", "active")
+      .order("ends_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("plans")
+      .select("id, tier, name, rank, web_price_inr")
+      .eq("is_active", true)
+      .order("rank"),
+  ]);
 
   const subjectIds = (subjects ?? []).map((s) => s.id);
   const { data: topics } = subjectIds.length
@@ -45,6 +68,9 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
     : { data: [] as never[] };
 
   const target = profile?.target_attempt ?? null;
+  const sub = subscription as
+    | { id: string; ends_at: string | null; auto_renew: boolean; plans: { tier: string; name: string } | null }
+    | null;
 
   return (
     <main>
@@ -69,6 +95,58 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
           Target attempt: {target ?? "not set"}
           {target ? " · topics are filtered to your attempt" : " · showing all topics (set your attempt to filter)"}
         </p>
+
+        {/* Your access */}
+        <div className="card" style={{ marginTop: 20 }}>
+          <h3 style={{ marginBottom: 8 }}>Your access</h3>
+          {sub ? (
+            <>
+              <p>
+                Active plan: <strong>{sub.plans?.name ?? sub.plans?.tier ?? "Plan"}</strong> · expires{" "}
+                {fmtDate(sub.ends_at)} · auto-renew {sub.auto_renew ? "on" : "off"}
+              </p>
+              <form action={setAutoRenew} style={{ marginTop: 10 }}>
+                <input type="hidden" name="sub_id" value={sub.id} />
+                <input type="hidden" name="course_id" value={course.id} />
+                <input type="hidden" name="on" value={sub.auto_renew ? "false" : "true"} />
+                <button className="btn small secondary" type="submit">
+                  {sub.auto_renew ? "Cancel auto-renew" : "Turn on auto-renew"}
+                </button>
+              </form>
+            </>
+          ) : (
+            <p className="muted">
+              No active plan for this course yet — free sections are open; paid sections are locked.
+            </p>
+          )}
+        </div>
+
+        {/* Plans */}
+        {plans && plans.length > 0 && (
+          <div className="card" style={{ marginTop: 16 }}>
+            <h3 style={{ marginBottom: 4 }}>Plans</h3>
+            <p className="muted" style={{ fontSize: ".85rem", marginBottom: 14 }}>
+              Online checkout opens with payments (Phase 5). For now, ask us to enrol you.
+            </p>
+            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
+              {plans.map((p) => (
+                <div key={p.id} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <span className="badge">{p.tier}</span>
+                    <strong>{p.name}</strong>
+                  </div>
+                  <ul className="muted" style={{ fontSize: ".85rem", listStyle: "none", padding: 0 }}>
+                    {DURATIONS.map((m) => (
+                      <li key={m}>
+                        {durationLabel(m)}: <strong>{formatINR(computePrice(p.web_price_inr, m))}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {subjects && subjects.length > 0 ? (
           subjects.map((s) => {

@@ -158,9 +158,9 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                       <Link key={t.id} href={`/learn/topic/${t.id}`} style={{ display: "block" }}>
                         <div className="topic-card">
                           <h3 style={{ fontSize: "1.08rem" }}>{t.title}</h3>
-                          {t.amendments_upto && (
+                          {t.valid_from_attempt && (
                             <p className="muted" style={{ fontSize: ".78rem" }}>
-                              Amendments upto {t.amendments_upto}
+                              From {t.valid_from_attempt}
                             </p>
                           )}
                           <span className="go">Open topic →</span>

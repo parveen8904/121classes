@@ -15,9 +15,10 @@ export async function createTopic(formData: FormData) {
     title,
     slug: str(formData.get("slug")) || slugify(title),
     order_index: num(formData.get("order_index")),
+    // Applies from this attempt onward; end is always open (infinite).
     valid_from_attempt: nullable(formData.get("valid_from_attempt")),
-    valid_to_attempt: nullable(formData.get("valid_to_attempt")),
-    amendments_upto: nullable(formData.get("amendments_upto")),
+    valid_to_attempt: null,
+    amendments_upto: null,
     is_published: formData.get("is_published") === "on",
   });
   revalidatePath(`/admin/subjects/${subjectId}`);

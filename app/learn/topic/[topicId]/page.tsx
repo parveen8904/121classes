@@ -138,16 +138,37 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     .single();
   if (!topic) notFound();
 
-  const { data: metas } = await supabase.rpc("list_topic_sections", { p_topic: topic.id });
+  // Primary path: list_topic_sections() returns metadata for ALL published
+  // sections (incl. locked) so we can show upgrade teasers.
+  const { data: metas, error: metaErr } = await supabase.rpc("list_topic_sections", {
+    p_topic: topic.id,
+  });
+
+  // Rows the RLS lets this user read (admins: all published; students: free +
+  // subscribed) — gives us `config` for unlocked sections, and doubles as a
+  // fallback list if the RPC isn't deployed yet.
   const { data: accessRows } = await supabase
     .from("sections")
-    .select("id, config")
-    .eq("topic_id", topic.id);
+    .select("id, type, title, order_index, min_plan, is_published, config")
+    .eq("topic_id", topic.id)
+    .eq("is_published", true)
+    .order("order_index")
+    .order("title");
   const configById = new Map<string, Record<string, unknown> | null>(
     (accessRows ?? []).map((r) => [r.id, r.config as Record<string, unknown> | null]),
   );
 
-  const sections = (metas ?? []) as SectionMeta[];
+  const sections: SectionMeta[] =
+    !metaErr && metas
+      ? (metas as SectionMeta[])
+      : (accessRows ?? []).map((r) => ({
+          id: r.id,
+          type: r.type,
+          title: r.title,
+          order_index: r.order_index,
+          min_plan: r.min_plan,
+          unlocked: true, // RLS already filtered to what this user may read
+        }));
   const subject = (topic as { subjects?: { title?: string; course_id?: string } | null }).subjects;
   const courseId = subject?.course_id;
   const plansHref = courseId ? `/learn/${courseId}/plans` : "/dashboard";

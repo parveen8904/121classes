@@ -105,7 +105,8 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
       {/* Topics */}
       <h2 style={{ margin: "36px 0 6px", fontSize: "1.2rem" }}>Topics</h2>
       <p className="muted" style={{ fontSize: ".9rem" }}>
-        Attempt validity is optional — set it to filter a topic to specific exam attempts.
+        Optionally set the exam attempt a topic applies <strong>from</strong> — it then keeps applying
+        to every later attempt. Leave it blank to show the topic to everyone.
       </p>
 
       <div className="card" style={{ marginTop: 16 }}>
@@ -126,19 +127,9 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
               <input id="t-order" name="order_index" type="number" defaultValue={0} />
             </div>
           </div>
-          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr 1fr" }}>
-            <div>
-              <label htmlFor="t-from">Valid from attempt</label>
-              <input id="t-from" name="valid_from_attempt" placeholder="e.g. MAY_2026" />
-            </div>
-            <div>
-              <label htmlFor="t-to">Valid to attempt</label>
-              <input id="t-to" name="valid_to_attempt" placeholder="e.g. NOV_2026" />
-            </div>
-            <div>
-              <label htmlFor="t-amend">Amendments upto</label>
-              <input id="t-amend" name="amendments_upto" placeholder="e.g. 31 Oct 2025" />
-            </div>
+          <div style={{ maxWidth: 320 }}>
+            <label htmlFor="t-from">Applies from attempt (optional)</label>
+            <input id="t-from" name="valid_from_attempt" placeholder="e.g. MAY_2026 — blank = all attempts" />
           </div>
           <label className="remember" style={{ marginTop: 0 }}>
             <input type="checkbox" name="is_published" /> Published
@@ -164,7 +155,6 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                 <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
                   order {t.order_index} · {t.is_published ? "published" : "draft"}
                   {t.valid_from_attempt ? ` · from ${t.valid_from_attempt}` : ""}
-                  {t.valid_to_attempt ? ` · to ${t.valid_to_attempt}` : ""}
                 </p>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>

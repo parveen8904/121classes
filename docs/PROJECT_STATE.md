@@ -152,7 +152,7 @@ RLS is **enabled on every table**. The script is transactional and re-runnable (
 ## 9. Phased roadmap (remaining)
 1. ✅ **Phase 1 — Foundation** (auth, schema, dashboards) — DONE.
 2. ✅ **Phase 2 — Admin content manager** — DONE. Full CRUD admin UI (see §11): Course→Subject→Topic→Section (type-aware section config incl. custom sections), faculty + subject assignment, announcements. RLS-driven (admin cookie passes `is_admin()`; no service-role key used).
-3. **Phase 3 — Student portal:** render topics/sections + attempt filtering + plan gating; migrate the AS 24 sample into the DB.
+3. ✅ **Phase 3 — Student portal** — DONE (see §12). Renders subjects → attempt-filtered topics → gated sections at `/learn`. AS 24 sample migrated to DB seed. **Requires running `supabase/migrations/0002_phase3.sql` once in Supabase.**
 4. **Phase 4 — Subscriptions & admin enrolment** (per-course, durations, bulk CSV grants).
 5. **Phase 5 — Payments** (Razorpay for plans + books; book store + warehouse email).
 6. **Phase 6 — Live + messaging** (Zoom; WhatsApp/Interakt + email).
@@ -175,6 +175,18 @@ Role-gated under `/admin` (layout guards `profiles.role = 'admin'`). All writes 
 - `/admin/announcements` — CRUD announcements (kind, title, body, link, published).
 - Shared bits: `app/admin/_lib/util.ts` (slugify/str/num/nullable), `app/admin/_components/` (DeleteButton, PublishToggle).
 - Section config conventions: videos → `bunny_video_id` (+ optional `youtube_url`); revision_video adds `revision_round` (First/Second); pdf/past_papers → `pdf_url`; rich_text → `body`; live_class → `zoom_webinar_id`/`join_url`/`starts_at`; ask_doubt/mcq_test/subjective_test → no config (questions added in Phase 7).
+
+---
+
+## 12. Student portal (Phase 3 — built)
+Logged-in students browse content under `/learn` (middleware guards it; redirects to `/login`).
+- `/learn/[courseId]` — subjects (with assigned faculty) → topics, **filtered by the student's `target_attempt`** (helper `app/learn/_lib/attempt.ts`; unset target shows all; unparseable bounds are permissive). Reached from dashboard course cards.
+- `/learn/topic/[topicId]` — renders sections **in order with plan gating**:
+  - Metadata for *all* published sections (incl. locked) comes from RPC **`list_topic_sections(topic)`** (SECURITY DEFINER, returns no `config`, computes an `unlocked` flag via `has_course_access`).
+  - The protected `config` (video ids / pdf urls) is fetched from the `sections` table under normal RLS — so it only returns for **unlocked** sections. Locked ones show a 🔒 + “Unlock with <plan>” prompt; no content leaks.
+  - Per-type rendering (`SectionBody`): video (`embed_url` → YouTube via `app/learn/_lib/media.ts`; Bunny later), pdf/past_papers (download button), rich_text, live_class, ask_doubt (disabled box, AI in Phase 7), mcq/subjective (placeholder, Phase 7).
+- **DB migration `supabase/migrations/0002_phase3.sql`** adds `list_topic_sections()` and seeds the **AS 24** sample (CA Intermediate → Accounting → AS 24 → 9 sections; Main Revision is free, others Bronze/Silver). **Run it once in Supabase SQL Editor.**
+- Admin section editor gained an **`embed_url`** config field (used by the HeyGen sample).
 
 ---
 

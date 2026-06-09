@@ -58,12 +58,14 @@ export default async function Dashboard() {
         {courses && courses.length > 0 ? (
           <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))" }}>
             {courses.map((c) => (
-              <div className="card" key={c.id}>
-                <h3>{c.title}</h3>
-                <p className="muted" style={{ fontSize: ".85rem", marginTop: 8 }}>
-                  Topics & sections load here once content is added (Phase 2–3).
-                </p>
-              </div>
+              <Link key={c.id} href={`/learn/${c.id}`} style={{ display: "block" }}>
+                <div className="card" style={{ height: "100%" }}>
+                  <h3>{c.title}</h3>
+                  <p className="muted" style={{ fontSize: ".85rem", marginTop: 8 }}>
+                    Open course → subjects, topics &amp; sections.
+                  </p>
+                </div>
+              </Link>
             ))}
           </div>
         ) : (

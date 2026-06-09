@@ -90,21 +90,12 @@ export default async function DiscussionBoard({ params }: { params: { sectionId:
 
   return (
     <main>
-      <header className="topbar">
-        <Link className="logo" href="/">
-          1:1 <span>CA Classes</span>
-        </Link>
-        <Link className="muted" href="/dashboard">
-          Dashboard
-        </Link>
-      </header>
-
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 860 }}>
         <p className="crumb">
           <Link href={`/learn/topic/${section.topic_id}`}>← Back to topic</Link>
         </p>
         <div className="learn-hero">
-          <span className="badge">Discussion</span>
+          <span className="badge">🗣️ Discussion</span>
           <h1>{section.title}</h1>
           <p className="meta">
             Ask anything from the resources. Staff and fellow students reply — solutions can include a

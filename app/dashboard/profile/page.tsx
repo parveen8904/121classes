@@ -22,21 +22,12 @@ export default async function ProfilePage({ searchParams }: { searchParams: { sa
 
   return (
     <main>
-      <header className="topbar">
-        <Link className="logo" href="/">
-          1:1 <span>CA Classes</span>
-        </Link>
-        <Link className="muted" href="/dashboard">
-          Dashboard
-        </Link>
-      </header>
-
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
         <p className="crumb">
           <Link href="/dashboard">← Dashboard</Link>
         </p>
         <div className="learn-hero">
-          <span className="badge">Your profile</span>
+          <span className="badge">👤 Your profile</span>
           <h1>Profile &amp; delivery details</h1>
           <p className="meta">
             We use this for your exam attempt, book deliveries and GST invoices. Email is your login

@@ -69,22 +69,13 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
 
   return (
     <main>
-      <header className="topbar">
-        <Link className="logo" href="/">
-          1:1 <span>CA Classes</span>
-        </Link>
-        <Link className="muted" href="/dashboard">
-          Dashboard
-        </Link>
-      </header>
-
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
         <p className="crumb">
           <Link href="/dashboard">← Dashboard</Link>
         </p>
 
         <div className="learn-hero">
-          <span className="badge">Course</span>
+          <span className="badge">📘 Course</span>
           <h1>{course.title}</h1>
           <p className="meta">
             {(subjects ?? []).length} subject{(subjects ?? []).length === 1 ? "" : "s"} · {topicCount}{" "}

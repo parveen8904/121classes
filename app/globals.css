@@ -401,3 +401,30 @@ textarea {
 .seg { display: inline-flex; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 999px; padding: 4px; gap: 4px; }
 .seg button { border: 0; background: transparent; color: var(--muted); padding: 9px 18px; border-radius: 999px; cursor: pointer; font-size: .88rem; font-weight: 600; transition: color .15s; }
 .seg button.active { background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: #fff; }
+
+/* ===================== Portal header / footer ===================== */
+.portal-strip { height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.portal-header {
+  position: sticky; top: 0; z-index: 60;
+  background: var(--nav-bg); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border);
+}
+.portal-header-inner {
+  max-width: 1140px; margin: 0 auto; padding: 12px 24px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+}
+.portal-brand { display: flex; align-items: center; gap: 12px; }
+.portal-tagline { font-size: .8rem; color: var(--muted); border-left: 1px solid var(--border); padding-left: 12px; }
+@media (max-width: 820px) { .portal-tagline { display: none; } }
+.portal-nav { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.portal-nav a { color: var(--muted); font-size: .9rem; transition: color .2s; }
+.portal-nav a:hover { color: var(--accent); }
+
+.portal-subnav { border-bottom: 1px solid var(--border); background: var(--bg-soft); }
+.portal-subnav-inner { max-width: 1140px; margin: 0 auto; padding: 10px 24px; display: flex; gap: 18px; flex-wrap: wrap; }
+.portal-subnav a { color: var(--muted); font-size: .88rem; }
+.portal-subnav a:hover { color: var(--accent); }
+
+.portal-footer { border-top: 1px solid var(--border); background: var(--bg-soft); margin-top: 50px; }
+.portal-footer-inner { max-width: 1140px; margin: 0 auto; padding: 30px 24px; text-align: center; }
+.portal-footer .line { font-weight: 600; }
+.portal-footer .sub { color: var(--muted); font-size: .82rem; margin-top: 8px; }

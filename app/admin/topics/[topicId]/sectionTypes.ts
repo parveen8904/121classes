@@ -53,6 +53,12 @@ export const SECTION_TYPES: {
   },
   { value: "pdf", label: "PDF / notes", fields: ["pdf_url"] },
   { value: "rich_text", label: "Rich text / notes", fields: ["body"] },
+  {
+    value: "homework",
+    label: "📚 Homework",
+    fields: ["body", "pdf_url"],
+    note: "Post the homework questions in the body and/or attach a PDF. Pair it with a Discussion board section for Q&A.",
+  },
   { value: "past_papers", label: "Past papers", fields: ["pdf_url", "body"] },
   { value: "live_class", label: "Live class (Zoom)", fields: ["zoom_webinar_id", "join_url", "starts_at"] },
   { value: "ask_doubt", label: "Ask a doubt (AI)", fields: [], note: "No config — renders the AI doubt box for students." },

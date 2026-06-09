@@ -41,15 +41,6 @@ export default async function CoursePlans({ params }: { params: { courseId: stri
 
   return (
     <main>
-      <header className="topbar">
-        <Link className="logo" href="/">
-          1:1 <span>CA Classes</span>
-        </Link>
-        <Link className="muted" href="/dashboard">
-          Dashboard
-        </Link>
-      </header>
-
       <section className="container" style={{ paddingTop: 40, paddingBottom: 70 }}>
         <p className="crumb">
           <Link href={`/learn/${course.id}`}>← {course.title}</Link>

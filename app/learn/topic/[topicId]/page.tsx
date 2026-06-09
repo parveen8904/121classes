@@ -20,6 +20,7 @@ const TYPE_LABEL: Record<string, string> = {
   full_class_video: "Full class video",
   discussion_video: "Discussion video",
   discussion: "Discussion board",
+  homework: "Homework",
   pdf: "PDF",
   rich_text: "Notes",
   past_papers: "Past papers",
@@ -34,6 +35,7 @@ const TYPE_ICON: Record<string, string> = {
   full_class_video: "🎥",
   discussion_video: "🎞️",
   discussion: "🗣️",
+  homework: "📚",
   pdf: "📑",
   rich_text: "📝",
   past_papers: "🗂️",
@@ -86,6 +88,28 @@ function SectionBody({
         )}
         {c.body && <p style={{ marginTop: 12, whiteSpace: "pre-wrap" }}>{c.body}</p>}
       </>
+    );
+  }
+
+  if (type === "homework") {
+    return (
+      <div style={{ marginTop: 14 }}>
+        {c.body && <p style={{ whiteSpace: "pre-wrap" }}>{c.body}</p>}
+        {c.pdf_url && (
+          <a
+            className="btn small"
+            href={c.pdf_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ marginTop: c.body ? 12 : 0 }}
+          >
+            📄 Homework PDF
+          </a>
+        )}
+        {!c.body && !c.pdf_url && (
+          <p className="muted">📝 Homework will be posted here soon.</p>
+        )}
+      </div>
     );
   }
 
@@ -203,15 +227,6 @@ export default async function LearnTopic({ params }: { params: { topicId: string
 
   return (
     <main>
-      <header className="topbar">
-        <Link className="logo" href="/">
-          1:1 <span>CA Classes</span>
-        </Link>
-        <Link className="muted" href="/dashboard">
-          Dashboard
-        </Link>
-      </header>
-
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
         <p className="crumb">
           {courseId ? (
@@ -222,7 +237,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
         </p>
 
         <div className="learn-hero">
-          <span className="badge">Topic</span>
+          <span className="badge">📖 Topic</span>
           <h1>{topic.title}</h1>
           <p className="meta">
             {sections.length} section{sections.length === 1 ? "" : "s"} · revision, notes, tests &amp;

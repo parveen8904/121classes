@@ -37,6 +37,8 @@ export default function SiteFooter() {
       </div>
       <div className="copy">
         &copy; 2026 1:1 CA Classes · 121caclasses.com · All rights reserved.
+        <br />
+        Site built by Dmeter Inc, Texas.
       </div>
     </footer>
   );

@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DURATIONS, durationLabel } from "@/lib/pricing";
+import AdminHero from "../_components/AdminHero";
 import { grantSubscription, bulkGrant, revokeSubscription, extendSubscription } from "./actions";
 
 const TIERS = [
@@ -79,16 +79,13 @@ export default async function EnrolmentPage({
   );
 
   return (
-    <section className="container" style={{ paddingTop: 40, paddingBottom: 60 }}>
-      <p className="muted" style={{ marginBottom: 8 }}>
-        <Link className="muted" href="/admin">
-          ← Admin
-        </Link>
-      </p>
-      <h1 style={{ marginBottom: 6 }}>Enrolment</h1>
-      <p className="muted">
-        Grant course access for free (no payment). Online checkout arrives with payments (Phase 5).
-      </p>
+    <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
+      <AdminHero
+        badge="🎟️ Enrolment"
+        title="Enrolment"
+        subtitle="Grant course access for free (no payment). Online checkout arrives with payments (Phase 5). 🚀"
+        back={{ href: "/admin", label: "Admin" }}
+      />
 
       {granted !== null && (
         <div className="notice ok" style={{ marginTop: 16 }}>

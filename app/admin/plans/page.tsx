@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DURATIONS, computePrice, durationLabel, formatINR } from "@/lib/pricing";
+import AdminHero from "../_components/AdminHero";
 import { updatePlan } from "./actions";
 
 export default async function PlansPage() {
@@ -11,17 +11,13 @@ export default async function PlansPage() {
     .order("rank");
 
   return (
-    <section className="container" style={{ paddingTop: 40, paddingBottom: 60 }}>
-      <p className="muted" style={{ marginBottom: 8 }}>
-        <Link className="muted" href="/admin">
-          ← Admin
-        </Link>
-      </p>
-      <h1 style={{ marginBottom: 6 }}>Plans &amp; pricing</h1>
-      <p className="muted">
-        Prices are a <strong>per-month base</strong>. Longer durations get an automatic discount
-        (3mo −5%, 6mo −10%, 12mo −20%). App prices should be ~130–140% of web.
-      </p>
+    <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
+      <AdminHero
+        badge="💳 Plans & pricing"
+        title="Plans & pricing"
+        subtitle="Set per-month prices — longer durations auto-discount (3mo −5%, 6mo −10%, 12mo −20%). App ≈ 130–140% of web. 💰"
+        back={{ href: "/admin", label: "Admin" }}
+      />
 
       <div style={{ marginTop: 24, display: "grid", gap: 16 }}>
         {(plans ?? []).map((p) => (

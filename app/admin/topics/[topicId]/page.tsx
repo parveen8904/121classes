@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../../_components/DeleteButton";
+import AdminHero from "../../_components/AdminHero";
 import SectionForm from "./SectionForm";
 import { SECTION_TYPES } from "./sectionTypes";
 import { createSection, updateSection, deleteSection, toggleSectionPublish } from "./actions";
@@ -31,21 +31,20 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
   const subjectTitle = (topic as { subjects?: { title?: string } | null }).subjects?.title;
 
   return (
-    <section className="container" style={{ paddingTop: 40, paddingBottom: 60 }}>
-      <p className="muted" style={{ marginBottom: 8 }}>
-        <Link className="muted" href={`/admin/subjects/${topic.subject_id}`}>
-          ← {subjectTitle ?? "Subject"}
-        </Link>
-      </p>
-      <h1 style={{ marginBottom: 6 }}>{topic.title}</h1>
-      <p className="muted">{topic.is_published ? "Published topic" : "Draft topic"}</p>
+    <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
+      <AdminHero
+        badge={topic.is_published ? "🟢 Published topic" : "⚪ Draft topic"}
+        title={`📖 ${topic.title}`}
+        subtitle="Add the sections students will see — videos, PDFs, homework, discussion and tests. 🎬📑"
+        back={{ href: `/admin/subjects/${topic.subject_id}`, label: subjectTitle ?? "Subject" }}
+      />
 
-      <div className="card" style={{ marginTop: 24 }}>
-        <h3 style={{ marginBottom: 14 }}>Add a section</h3>
+      <div className="form-card" style={{ marginTop: 24 }}>
+        <h3>➕ Add a section</h3>
         <SectionForm action={createSection} topicId={topic.id} submitLabel="Add section" />
       </div>
 
-      <h2 style={{ margin: "36px 0 6px", fontSize: "1.2rem" }}>Sections</h2>
+      <h2 className="admin-section-title">🧩 Sections</h2>
       <p className="muted" style={{ fontSize: ".9rem" }}>
         Sections render in order for students. Expand one to edit it.
       </p>

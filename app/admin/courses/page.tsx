@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../_components/DeleteButton";
 import PublishToggle from "../_components/PublishToggle";
+import AdminHero from "../_components/AdminHero";
 import { createCourse, deleteCourse, toggleCoursePublish } from "./actions";
 
 export default async function CoursesPage() {
@@ -13,17 +14,16 @@ export default async function CoursesPage() {
     .order("title");
 
   return (
-    <section className="container" style={{ paddingTop: 40, paddingBottom: 60 }}>
-      <p className="muted" style={{ marginBottom: 8 }}>
-        <Link className="muted" href="/admin">
-          ← Admin
-        </Link>
-      </p>
-      <h1 style={{ marginBottom: 6 }}>Courses</h1>
-      <p className="muted">A course holds subjects → topics → sections. Click a course to manage it.</p>
+    <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
+      <AdminHero
+        badge="📘 Courses"
+        title="Courses"
+        subtitle="A course holds subjects → topics → sections. Click a course to manage it. 🗂️"
+        back={{ href: "/admin", label: "Admin" }}
+      />
 
-      <div className="card" style={{ marginTop: 24 }}>
-        <h3 style={{ marginBottom: 14 }}>Add a course</h3>
+      <div className="form-card" style={{ marginTop: 24 }}>
+        <h3>➕ Add a course</h3>
         <form action={createCourse}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
             <div>
@@ -48,26 +48,23 @@ export default async function CoursesPage() {
         </form>
       </div>
 
-      <div style={{ marginTop: 24, display: "grid", gap: 12 }}>
+      <h2 className="admin-section-title">📚 All courses</h2>
+      <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
         {courses && courses.length > 0 ? (
           courses.map((c) => (
-            <div
-              className="card"
-              key={c.id}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
-            >
+            <div className="list-row" key={c.id}>
               <div>
-                <Link href={`/admin/courses/${c.id}`} style={{ fontWeight: 700 }}>
-                  {c.title}
+                <Link href={`/admin/courses/${c.id}`} className="row-title">
+                  📘 {c.title}
                 </Link>
-                <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
+                <p className="row-sub">
                   /{c.slug ?? "—"} · order {c.order_index} ·{" "}
-                  {c.is_published ? "published" : "draft"}
+                  {c.is_published ? "🟢 published" : "⚪ draft"}
                 </p>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div className="row-actions">
                 <Link className="btn small secondary" href={`/admin/courses/${c.id}`}>
-                  Manage
+                  Manage →
                 </Link>
                 <PublishToggle action={toggleCoursePublish} id={c.id} published={c.is_published} />
                 <DeleteButton
@@ -80,7 +77,9 @@ export default async function CoursesPage() {
             </div>
           ))
         ) : (
-          <p className="muted">No courses yet. Add your first one above.</p>
+          <div className="card">
+            <p className="muted">📭 No courses yet — add your first one above. ✨</p>
+          </div>
         )}
       </div>
     </section>

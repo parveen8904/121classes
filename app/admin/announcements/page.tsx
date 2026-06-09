@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../_components/DeleteButton";
+import AdminHero from "../_components/AdminHero";
 import { createAnnouncement, updateAnnouncement, deleteAnnouncement } from "./actions";
 
 const KINDS = [
@@ -31,17 +31,16 @@ export default async function AnnouncementsPage() {
     .order("published_at", { ascending: false });
 
   return (
-    <section className="container" style={{ paddingTop: 40, paddingBottom: 60 }}>
-      <p className="muted" style={{ marginBottom: 8 }}>
-        <Link className="muted" href="/admin">
-          ← Admin
-        </Link>
-      </p>
-      <h1 style={{ marginBottom: 6 }}>Announcements</h1>
-      <p className="muted">Amendments, what&apos;s new, student corner, industry &amp; macro updates.</p>
+    <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
+      <AdminHero
+        badge="📣 Announcements"
+        title="Announcements"
+        subtitle="Amendments, what's new, student corner, industry & macro updates. 📰"
+        back={{ href: "/admin", label: "Admin" }}
+      />
 
-      <div className="card" style={{ marginTop: 24 }}>
-        <h3 style={{ marginBottom: 14 }}>Add an announcement</h3>
+      <div className="form-card" style={{ marginTop: 24 }}>
+        <h3>➕ Add an announcement</h3>
         <form action={createAnnouncement}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 2fr" }}>
             <div>

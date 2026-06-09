@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../_components/DeleteButton";
+import AdminHero from "../_components/AdminHero";
 import { createFaculty, updateFaculty, deleteFaculty } from "./actions";
 
 export default async function FacultyPage() {
@@ -11,17 +11,16 @@ export default async function FacultyPage() {
     .order("full_name");
 
   return (
-    <section className="container" style={{ paddingTop: 40, paddingBottom: 60 }}>
-      <p className="muted" style={{ marginBottom: 8 }}>
-        <Link className="muted" href="/admin">
-          ← Admin
-        </Link>
-      </p>
-      <h1 style={{ marginBottom: 6 }}>Faculty</h1>
-      <p className="muted">Add faculty here, then assign them to subjects from each subject page.</p>
+    <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
+      <AdminHero
+        badge="👩‍🏫 Faculty"
+        title="Faculty"
+        subtitle="Add faculty here, then assign them to subjects from each subject page. 🎓"
+        back={{ href: "/admin", label: "Admin" }}
+      />
 
-      <div className="card" style={{ marginTop: 24 }}>
-        <h3 style={{ marginBottom: 14 }}>Add faculty</h3>
+      <div className="form-card" style={{ marginTop: 24 }}>
+        <h3>➕ Add faculty</h3>
         <form action={createFaculty}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
             <div>

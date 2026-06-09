@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../../_components/DeleteButton";
+import AdminHero from "../../_components/AdminHero";
 import { updateCourse } from "../actions";
 import { createSubject, deleteSubject } from "./actions";
 
@@ -25,17 +26,16 @@ export default async function CourseDetail({ params }: { params: { courseId: str
     .order("title");
 
   return (
-    <section className="container" style={{ paddingTop: 40, paddingBottom: 60 }}>
-      <p className="muted" style={{ marginBottom: 8 }}>
-        <Link className="muted" href="/admin/courses">
-          ← Courses
-        </Link>
-      </p>
-      <h1 style={{ marginBottom: 6 }}>{course.title}</h1>
-      <p className="muted">{course.is_published ? "Published" : "Draft"}</p>
+    <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
+      <AdminHero
+        badge={course.is_published ? "🟢 Published course" : "⚪ Draft course"}
+        title={`📘 ${course.title}`}
+        subtitle="Edit the course details, then add the subjects that sit inside it."
+        back={{ href: "/admin/courses", label: "Courses" }}
+      />
 
-      <div className="card" style={{ marginTop: 24 }}>
-        <h3 style={{ marginBottom: 14 }}>Edit course</h3>
+      <div className="form-card" style={{ marginTop: 24 }}>
+        <h3>✏️ Edit course</h3>
         <form action={updateCourse}>
           <input type="hidden" name="id" value={course.id} />
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
@@ -61,13 +61,13 @@ export default async function CourseDetail({ params }: { params: { courseId: str
         </form>
       </div>
 
-      <h2 style={{ margin: "36px 0 6px", fontSize: "1.2rem" }}>Subjects</h2>
+      <h2 className="admin-section-title">📂 Subjects</h2>
       <p className="muted" style={{ fontSize: ".9rem" }}>
         Each subject is led by one or more faculty and holds topics. Click a subject to manage topics.
       </p>
 
-      <div className="card" style={{ marginTop: 16 }}>
-        <h3 style={{ marginBottom: 14 }}>Add a subject</h3>
+      <div className="form-card" style={{ marginTop: 16 }}>
+        <h3>➕ Add a subject</h3>
         <form action={createSubject}>
           <input type="hidden" name="courseId" value={course.id} />
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
@@ -93,22 +93,16 @@ export default async function CourseDetail({ params }: { params: { courseId: str
       <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
         {subjects && subjects.length > 0 ? (
           subjects.map((s) => (
-            <div
-              className="card"
-              key={s.id}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
-            >
+            <div className="list-row" key={s.id}>
               <div>
-                <Link href={`/admin/subjects/${s.id}`} style={{ fontWeight: 700 }}>
-                  {s.title}
+                <Link href={`/admin/subjects/${s.id}`} className="row-title">
+                  📂 {s.title}
                 </Link>
-                <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
-                  /{s.slug ?? "—"} · order {s.order_index}
-                </p>
+                <p className="row-sub">/{s.slug ?? "—"} · order {s.order_index}</p>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div className="row-actions">
                 <Link className="btn small secondary" href={`/admin/subjects/${s.id}`}>
-                  Manage
+                  Manage →
                 </Link>
                 <DeleteButton
                   action={deleteSubject}
@@ -120,7 +114,9 @@ export default async function CourseDetail({ params }: { params: { courseId: str
             </div>
           ))
         ) : (
-          <p className="muted">No subjects yet. Add the first one above.</p>
+          <div className="card">
+            <p className="muted">📭 No subjects yet — add the first one above.</p>
+          </div>
         )}
       </div>
     </section>

@@ -428,3 +428,36 @@ textarea {
 .portal-footer-inner { max-width: 1140px; margin: 0 auto; padding: 30px 24px; text-align: center; }
 .portal-footer .line { font-weight: 600; }
 .portal-footer .sub { color: var(--muted); font-size: .82rem; margin-top: 8px; }
+
+/* ===================== Admin polish ===================== */
+.admin-cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 28px; }
+.admin-tile {
+  position: relative; height: 100%; background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 24px; transition: transform .2s, border-color .2s;
+  overflow: hidden;
+}
+.admin-tile::before {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: 4px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+}
+.admin-tile:hover { transform: translateY(-4px); border-color: var(--accent); }
+.admin-tile.soon { opacity: .55; }
+.admin-tile .tile-ic { font-size: 1.8rem; }
+.admin-tile h3 { margin: 10px 0 6px; font-size: 1.12rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.admin-tile p { color: var(--muted); font-size: .85rem; }
+
+/* consistent list rows for admin lists */
+.list-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px 20px;
+  transition: border-color .2s, transform .15s;
+}
+.list-row:hover { border-color: var(--accent); transform: translateY(-2px); }
+.list-row .row-title { font-weight: 700; display: inline-flex; align-items: center; gap: 8px; }
+.list-row .row-sub { color: var(--muted); font-size: .8rem; margin-top: 3px; }
+.row-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* admin form card heading */
+.form-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px 26px; }
+.form-card > h3 { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.admin-section-title { margin: 38px 0 6px; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; }

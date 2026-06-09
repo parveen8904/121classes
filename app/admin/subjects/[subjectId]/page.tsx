@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../../_components/DeleteButton";
+import AdminHero from "../../_components/AdminHero";
 import {
   createTopic,
   deleteTopic,
@@ -37,18 +38,17 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
   const courseTitle = (subject as { courses?: { title?: string } | null }).courses?.title;
 
   return (
-    <section className="container" style={{ paddingTop: 40, paddingBottom: 60 }}>
-      <p className="muted" style={{ marginBottom: 8 }}>
-        <Link className="muted" href={`/admin/courses/${subject.course_id}`}>
-          ← {courseTitle ?? "Course"}
-        </Link>
-      </p>
-      <h1 style={{ marginBottom: 6 }}>{subject.title}</h1>
-      <p className="muted">Subject in {courseTitle ?? "this course"}.</p>
+    <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
+      <AdminHero
+        badge="📂 Subject"
+        title={subject.title}
+        subtitle={`Part of ${courseTitle ?? "this course"} · assign faculty and add topics below. 👩‍🏫`}
+        back={{ href: `/admin/courses/${subject.course_id}`, label: courseTitle ?? "Course" }}
+      />
 
       {/* Edit subject */}
-      <div className="card" style={{ marginTop: 24 }}>
-        <h3 style={{ marginBottom: 14 }}>Edit subject</h3>
+      <div className="form-card" style={{ marginTop: 24 }}>
+        <h3>✏️ Edit subject</h3>
         <form action={updateSubjectInline}>
           <input type="hidden" name="id" value={subject.id} />
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
@@ -72,8 +72,8 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
       </div>
 
       {/* Faculty assignment */}
-      <div className="card" style={{ marginTop: 16 }}>
-        <h3 style={{ marginBottom: 6 }}>Faculty for this subject</h3>
+      <div className="form-card" style={{ marginTop: 16 }}>
+        <h3>👩‍🏫 Faculty for this subject</h3>
         {faculties && faculties.length > 0 ? (
           <form action={setSubjectFaculty}>
             <input type="hidden" name="subjectId" value={subject.id} />
@@ -103,14 +103,14 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
       </div>
 
       {/* Topics */}
-      <h2 style={{ margin: "36px 0 6px", fontSize: "1.2rem" }}>Topics</h2>
+      <h2 className="admin-section-title">📖 Topics</h2>
       <p className="muted" style={{ fontSize: ".9rem" }}>
         Optionally set the exam attempt a topic applies <strong>from</strong> — it then keeps applying
         to every later attempt. Leave it blank to show the topic to everyone.
       </p>
 
-      <div className="card" style={{ marginTop: 16 }}>
-        <h3 style={{ marginBottom: 14 }}>Add a topic</h3>
+      <div className="form-card" style={{ marginTop: 16 }}>
+        <h3>➕ Add a topic</h3>
         <form action={createTopic}>
           <input type="hidden" name="subjectId" value={subject.id} />
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
@@ -143,23 +143,19 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
       <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
         {topics && topics.length > 0 ? (
           topics.map((t) => (
-            <div
-              className="card"
-              key={t.id}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
-            >
+            <div className="list-row" key={t.id}>
               <div>
-                <Link href={`/admin/topics/${t.id}`} style={{ fontWeight: 700 }}>
-                  {t.title}
+                <Link href={`/admin/topics/${t.id}`} className="row-title">
+                  📖 {t.title}
                 </Link>
-                <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
-                  order {t.order_index} · {t.is_published ? "published" : "draft"}
+                <p className="row-sub">
+                  order {t.order_index} · {t.is_published ? "🟢 published" : "⚪ draft"}
                   {t.valid_from_attempt ? ` · from ${t.valid_from_attempt}` : ""}
                 </p>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div className="row-actions">
                 <Link className="btn small secondary" href={`/admin/topics/${t.id}`}>
-                  Sections
+                  Sections →
                 </Link>
                 <form action={toggleTopicPublish} style={{ display: "inline" }}>
                   <input type="hidden" name="id" value={t.id} />
@@ -179,7 +175,9 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
             </div>
           ))
         ) : (
-          <p className="muted">No topics yet. Add the first one above.</p>
+          <div className="card">
+            <p className="muted">📭 No topics yet — add the first one above.</p>
+          </div>
         )}
       </div>
     </section>

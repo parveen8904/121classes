@@ -4,12 +4,23 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 export default function AnnouncementSplash() {
-  const [show, setShow] = useState(true);
+  const [show, setShow] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
-    const t1 = setTimeout(() => setLeaving(true), 4600);
-    const t2 = setTimeout(() => setShow(false), 5000);
+    // Show only once per visit (per browser session/tab).
+    let seen = false;
+    try {
+      seen = sessionStorage.getItem("splashSeen") === "1";
+    } catch {}
+    if (seen) return;
+    try {
+      sessionStorage.setItem("splashSeen", "1");
+    } catch {}
+
+    setShow(true);
+    const t1 = setTimeout(() => setLeaving(true), 9600);
+    const t2 = setTimeout(() => setShow(false), 10000);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);

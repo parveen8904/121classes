@@ -33,7 +33,7 @@ export default function SiteFooter() {
         </div>
       </div>
       <div className="copy">
-        &copy; 2026 121 Coaching · 121coaching.ai · All rights reserved.
+        &copy; 2026 121 CA Classes · 121caclasses.com · All rights reserved.
       </div>
     </footer>
   );

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "121 Coaching — 1-to-1 Classes, Live Coaching & AI Learning",
+  title: "121 CA Classes — 1-to-1 Classes, Live Coaching & AI Learning",
   description:
     "Personalized 1-to-1 classes, live coaching, ad-free recorded lectures and AI-assisted learning for CA students in India.",
 };

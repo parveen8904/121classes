@@ -46,7 +46,7 @@ export default function Home() {
 
       {/* HERO */}
       <section className="hero">
-        <span className="badge">121coaching.ai</span>
+        <span className="badge">121caclasses.com</span>
         <h1>
           Learn 1-on-1. Grow with <span className="grad">coaching</span>.
           <br />
@@ -103,7 +103,7 @@ export default function Home() {
             <div className="video-frame" style={{ paddingBottom: "56.25%" }}>
               <iframe
                 src="https://app.heygen.com/embeds/c2bcd7138f2c42b6b607fe6588910b89"
-                title="121 Coaching intro"
+                title="121 CA Classes intro"
                 allow="encrypted-media; fullscreen"
                 allowFullScreen
               />
@@ -220,10 +220,10 @@ export default function Home() {
       <section className="section alt" id="about">
         <div className="section-head">
           <div className="eyebrow">About Us</div>
-          <h2>About 121 Coaching</h2>
+          <h2>About 121 CA Classes</h2>
         </div>
         <p className="muted" style={{ maxWidth: 760, margin: "0 auto", textAlign: "center" }}>
-          121 Coaching brings together personalized 1-to-1 teaching, live classes and
+          121 CA Classes brings together personalized 1-to-1 teaching, live classes and
           on-demand, ad-free recorded lectures, backed by AI doubt-solving and
           attempt-wise content. Our goal is simple: clear, exam-focused learning that
           adapts to each student&apos;s pace and target attempt.
@@ -275,9 +275,9 @@ export default function Home() {
             <h3>Reach us</h3>
             <p style={{ marginTop: 10 }}>📧 <a className="grad" href="mailto:ps.smay@gmail.com">ps.smay@gmail.com</a></p>
             <p style={{ marginTop: 8 }}>📍 W 6/30, DLF, Gurugram</p>
-            <p style={{ marginTop: 8 }}>🌐 121coaching.ai</p>
+            <p style={{ marginTop: 8 }}>🌐 121caclasses.com</p>
             <p style={{ marginTop: 16 }}>
-              <a className="btn" href="mailto:ps.smay@gmail.com?subject=Enquiry%20from%20121coaching.ai">Email us</a>
+              <a className="btn" href="mailto:ps.smay@gmail.com?subject=Enquiry%20from%20121caclasses.com">Email us</a>
             </p>
           </div>
           <div className="tile">

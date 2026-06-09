@@ -1,7 +1,7 @@
 import SiteNav from "../components/SiteNav";
 import SiteFooter from "../components/SiteFooter";
 
-export const metadata = { title: "Refund Policy — 121 Coaching" };
+export const metadata = { title: "Refund Policy — 121 CA Classes" };
 
 export default function Refund() {
   return (

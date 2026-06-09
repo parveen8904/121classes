@@ -33,8 +33,19 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     desc: "Bronze/Silver/Gold per-month prices; duration discounts; web vs app.",
     href: "/admin/plans",
   },
+  {
+    icon: "📦",
+    title: "Books",
+    desc: "Manage the book catalogue, prices and stock for the store.",
+    href: "/admin/books",
+  },
+  {
+    icon: "🚚",
+    title: "Book orders",
+    desc: "Fulfil paid orders — view delivery details and mark dispatched.",
+    href: "/admin/orders",
+  },
   { icon: "📡", title: "Live classes", desc: "Schedule Zoom webinars.", phase: "Phase 6" },
-  { icon: "📦", title: "Books & warehouse", desc: "Catalogue + end-of-day dispatch email.", phase: "Phase 5" },
   { icon: "📊", title: "Reporting", desc: "Finance, student & warehouse emails.", phase: "Phase 8" },
 ];
 

@@ -30,6 +30,7 @@ export default async function PortalHeader() {
         </div>
         <nav className="portal-nav">
           <Link href="/dashboard">🏠 Dashboard</Link>
+          <Link href="/books">📦 Books</Link>
           <Link href="/dashboard/profile">👤 Profile</Link>
           {isAdmin && <Link href="/admin">🛠️ Admin</Link>}
           <ThemeToggle />

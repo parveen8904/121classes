@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { razorpayConfigured } from "@/lib/razorpay";
 import PricingCards from "./PricingCards";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +59,13 @@ export default async function CoursePlans({ params }: { params: { courseId: stri
         </div>
 
         {plans && plans.length > 0 ? (
-          <PricingCards plans={plans} currentTier={currentTier} contactHref="/#contact" />
+          <PricingCards
+            plans={plans}
+            currentTier={currentTier}
+            courseId={course.id}
+            configured={razorpayConfigured()}
+            contactHref="/#contact"
+          />
         ) : (
           <p className="muted" style={{ textAlign: "center", marginTop: 30 }}>
             Plans are being set up. Please check back shortly.

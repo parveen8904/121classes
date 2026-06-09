@@ -154,7 +154,7 @@ RLS is **enabled on every table**. The script is transactional and re-runnable (
 2. ✅ **Phase 2 — Admin content manager** — DONE. Full CRUD admin UI (see §11): Course→Subject→Topic→Section (type-aware section config incl. custom sections), faculty + subject assignment, announcements. RLS-driven (admin cookie passes `is_admin()`; no service-role key used).
 3. ✅ **Phase 3 — Student portal** — DONE (see §12). Renders subjects → attempt-filtered topics → gated sections at `/learn`. AS 24 sample migrated to DB seed. **Requires running `supabase/migrations/0002_phase3.sql` once in Supabase.**
 4. ✅ **Phase 4 — Subscriptions & admin enrolment** — DONE (see §13). Admin single/bulk grants, revoke/extend; plan price editor; student access status + cancel auto-renew. **Requires `supabase/migrations/0003_phase4.sql`.**
-5. **Phase 5 — Payments** (Razorpay for plans + books; book store + warehouse email). *Online checkout for plans plugs into the Phase 4 model.*
+5. 🟡 **Phase 5 — Payments & book store** — built (see §15). Razorpay checkout for **plans** and **books** (guest checkout), admin book catalogue + order fulfilment. **Activates when Razorpay keys are added to Vercel env** (degrades to "contact us" until then). Remaining: automated end-of-day warehouse email.
 6. **Phase 6 — Live + messaging** (Zoom; WhatsApp/Interakt + email).
 7. **Phase 7 — Tests + AI** (MCQ auto-grade; subjective; Claude paper-checking + doubt-solving).
 8. **Phase 8 — Reporting** (finance, student emails, warehouse).
@@ -212,6 +212,17 @@ No payment yet (that's Phase 5) — access is granted by admins, and this is wha
 - **Shared portal chrome:** every signed-in page (student + admin) now uses `app/components/PortalHeader.tsx` + `PortalFooter.tsx` via route layouts (`app/dashboard/layout.tsx`, `app/learn/layout.tsx`, and the admin layout). Two-colour brand strip, an inspirational line, emoji nav, theme toggle, sign-out; admin layout adds an emoji sub-nav. Inline `.topbar` headers were removed from the individual pages. Emoji sprinkled across headings/empty states for a friendlier feel.
 - **Discussion board** `/learn/section/[sectionId]`: students post **threads**; staff + students **reply**; staff replies can attach a **solution PDF URL** and a **video reference** (free text like "Video 7 @ 12:30"); admin can **mark solution**, **mark resolved**, and **delete** (moderation). Tables `discussion_threads` / `discussion_posts` with RLS (read = any signed-in; write = author; moderate = author or admin). Reached from a `discussion` section's "Open discussion board →".
 - **Student profile** `/dashboard/profile`: full name, phone, target attempt, **shipping address** (line1/2, city, state, pincode) and optional **GST** (GSTIN + business name) — for book delivery & GST invoices. Saved via `profiles_self_update` RLS. Linked from the dashboard header.
+
+---
+
+## 15. Payments & book store (Phase 5 — built, needs keys)
+**No DB migration.** Everything degrades gracefully when Razorpay isn't configured (`razorpayConfigured()` false → UI shows "contact us / coming soon"; manual enrolment unaffected).
+- **Env vars (add in Vercel to activate):** `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `NEXT_PUBLIC_RAZORPAY_KEY_ID` (id == public id). Test keys (`rzp_test_…`) first. `SUPABASE_SERVICE_ROLE_KEY` already set (used for guest book orders).
+- **`lib/razorpay.ts`:** server-only create order / fetch order / HMAC signature verify. Source of truth for a purchase is the **Razorpay order `notes`** (set at create, re-read at verify) — the client can't tamper with course/tier/amount.
+- **Plan checkout:** `app/learn/[courseId]/plans/PricingCards.tsx` opens Razorpay (loads checkout.js) → `payActions.ts` `createPlanOrder` / `verifyPlanPayment` → on success inserts a `web` subscription (auto_renew on) + marks the `orders` row paid. Falls back to `/#contact` when unconfigured.
+- **Book store:** public `/books` (active catalogue) + `/books/[id]` detail with **guest checkout** (`BookCheckout.tsx` + `payActions.ts`). Verified payment inserts a `book_orders` row via the **service-role client** (`lib/supabase/service.ts`, bypasses RLS since guests have no cookie) and decrements stock.
+- **Admin:** `/admin/books` (catalogue CRUD: price, stock, cover, active) and `/admin/orders` (paid book orders with delivery details → mark dispatched/delivered). Hub + sub-nav updated; landing "Books" and portal header link to `/books`.
+- **TODO:** automated end-of-day warehouse dispatch email (needs Mailgun API key + a Vercel cron hitting a protected route); Razorpay webhook for out-of-band capture reconciliation.
 
 ---
 

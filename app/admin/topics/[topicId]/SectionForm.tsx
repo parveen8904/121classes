@@ -82,6 +82,11 @@ export default function SectionForm({
                 <label>{FIELD_LABELS[f]}</label>
                 <textarea name={f} rows={4} defaultValue={cfg[f] ?? ""} />
               </div>
+            ) : f === "starts_at" ? (
+              <div key={f}>
+                <label>{FIELD_LABELS[f]}</label>
+                <input type="datetime-local" name={f} defaultValue={cfg[f] ?? ""} />
+              </div>
             ) : (
               <div key={f}>
                 <label>{FIELD_LABELS[f]}</label>

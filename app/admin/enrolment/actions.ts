@@ -4,8 +4,21 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../_lib/util";
+import { notifyByEmail, emailShell } from "@/lib/notify";
 
 const TIERS = ["bronze", "silver", "gold"];
+
+function enrolledEmail(name: string | null, courseTitle: string, tier: string, months: number) {
+  return {
+    subject: `🎉 You're enrolled in ${courseTitle}`,
+    html: emailShell(
+      "You're enrolled! 🎉",
+      `<p>Hi ${name || "there"},</p>
+       <p>You now have <strong>${tier}</strong> access to <strong>${courseTitle}</strong> for ${months} month${months === 1 ? "" : "s"}.</p>
+       <p>Log in to start learning. 📚 Good luck with your prep! 💪</p>`,
+    ),
+  };
+}
 
 function endsAtFromNow(months: number): string {
   const d = new Date();
@@ -45,7 +58,7 @@ export async function grantSubscription(formData: FormData) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id")
+    .select("id, email, full_name")
     .ilike("email", email)
     .maybeSingle();
   if (!profile) redirect(`/admin/enrolment?missing=${encodeURIComponent(email)}`);
@@ -62,6 +75,17 @@ export async function grantSubscription(formData: FormData) {
     status: "active",
     auto_renew: false,
     granted_by_admin_id: user?.id ?? null,
+  });
+
+  const { data: course } = await supabase.from("courses").select("title").eq("id", courseId).maybeSingle();
+  const msg = enrolledEmail(profile.full_name, course?.title ?? "your course", tier, months);
+  await notifyByEmail({
+    studentId: profile.id,
+    email: profile.email,
+    subject: msg.subject,
+    html: msg.html,
+    template: "enrolment_granted",
+    payload: { courseId, tier, months },
   });
 
   revalidatePath("/admin/enrolment");
@@ -95,7 +119,7 @@ export async function bulkGrant(formData: FormData) {
 
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, email")
+    .select("id, email, full_name")
     .in("email", emails);
 
   const found = profiles ?? [];
@@ -115,6 +139,22 @@ export async function bulkGrant(formData: FormData) {
         auto_renew: false,
         granted_by_admin_id: user?.id ?? null,
       })),
+    );
+
+    const { data: course } = await supabase.from("courses").select("title").eq("id", courseId).maybeSingle();
+    const title = course?.title ?? "your course";
+    await Promise.all(
+      found.map((p) => {
+        const msg = enrolledEmail(p.full_name, title, tier, months);
+        return notifyByEmail({
+          studentId: p.id,
+          email: p.email,
+          subject: msg.subject,
+          html: msg.html,
+          template: "enrolment_granted",
+          payload: { courseId, tier, months },
+        });
+      }),
     );
   }
 

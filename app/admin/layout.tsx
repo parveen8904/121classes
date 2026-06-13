@@ -15,6 +15,7 @@ const ADMIN_LINKS: [string, string][] = [
   ["💳 Plans", "/admin/plans"],
   ["📦 Books", "/admin/books"],
   ["🚚 Orders", "/admin/orders"],
+  ["📡 Live", "/admin/live"],
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

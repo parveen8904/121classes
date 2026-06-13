@@ -8,6 +8,7 @@ import {
   verifyRazorpaySignature,
 } from "@/lib/razorpay";
 import { computePrice } from "@/lib/pricing";
+import { notifyByEmail, emailShell } from "@/lib/notify";
 
 const TIERS = ["bronze", "silver", "gold"];
 
@@ -132,6 +133,20 @@ export async function verifyPlanPayment(input: {
     .from("orders")
     .update({ status: "paid", store_txn_id: input.razorpay_payment_id })
     .eq("razorpay_order_id", input.razorpay_order_id);
+
+  const { data: course } = await supabase.from("courses").select("title").eq("id", n.courseId).maybeSingle();
+  await notifyByEmail({
+    studentId: user.id,
+    email: user.email ?? null,
+    subject: `✅ Payment received — ${course?.title ?? "your course"}`,
+    html: emailShell(
+      "Payment successful 🎉",
+      `<p>Thank you! Your <strong>${n.tier}</strong> access to <strong>${course?.title ?? "your course"}</strong> is now active for ${months} month${months === 1 ? "" : "s"}.</p>
+       <p>Jump back in and keep learning. 📚💪</p>`,
+    ),
+    template: "plan_purchased",
+    payload: { courseId: n.courseId, tier: n.tier, months },
+  });
 
   return { ok: true, courseId: n.courseId };
 }

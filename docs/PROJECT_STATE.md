@@ -155,7 +155,7 @@ RLS is **enabled on every table**. The script is transactional and re-runnable (
 3. ✅ **Phase 3 — Student portal** — DONE (see §12). Renders subjects → attempt-filtered topics → gated sections at `/learn`. AS 24 sample migrated to DB seed. **Requires running `supabase/migrations/0002_phase3.sql` once in Supabase.**
 4. ✅ **Phase 4 — Subscriptions & admin enrolment** — DONE (see §13). Admin single/bulk grants, revoke/extend; plan price editor; student access status + cancel auto-renew. **Requires `supabase/migrations/0003_phase4.sql`.**
 5. 🟡 **Phase 5 — Payments & book store** — built (see §15). Razorpay checkout for **plans** and **books** (guest checkout), admin book catalogue + order fulfilment. **Activates when Razorpay keys are added to Vercel env** (degrades to "contact us" until then). Remaining: automated end-of-day warehouse email.
-6. **Phase 6 — Live + messaging** (Zoom; WhatsApp/Interakt + email).
+6. 🟡 **Phase 6 — Live classes + messaging** — built (see §16). Live-class scheduling + student/admin live views work now (manual links). Email/WhatsApp notifications **activate when keys are added** (Mailgun API / Interakt).
 7. **Phase 7 — Tests + AI** (MCQ auto-grade; subjective; Claude paper-checking + doubt-solving).
 8. **Phase 8 — Reporting** (finance, student emails, warehouse).
 9. **Phase 9 — Landing sections from DB** (amendments / what's new / resources editable).
@@ -223,6 +223,16 @@ No payment yet (that's Phase 5) — access is granted by admins, and this is wha
 - **Book store:** public `/books` (active catalogue) + `/books/[id]` detail with **guest checkout** (`BookCheckout.tsx` + `payActions.ts`). Verified payment inserts a `book_orders` row via the **service-role client** (`lib/supabase/service.ts`, bypasses RLS since guests have no cookie) and decrements stock.
 - **Admin:** `/admin/books` (catalogue CRUD: price, stock, cover, active) and `/admin/orders` (paid book orders with delivery details → mark dispatched/delivered). Hub + sub-nav updated; landing "Books" and portal header link to `/books`.
 - **TODO:** automated end-of-day warehouse dispatch email (needs Mailgun API key + a Vercel cron hitting a protected route); Razorpay webhook for out-of-band capture reconciliation.
+
+---
+
+## 16. Live classes & messaging (Phase 6 — built)
+**No DB migration.** Live classes ride on the existing `live_class` section type + config; notifications use the existing `notifications` table.
+- **Live classes (works now, no external account):** the `live_class` section config gained `recording_url`, and `starts_at` is now a datetime picker. Admin **`/admin/live`** lists every live-class section across all courses with inline scheduling (start time, Zoom/Meet join link, recording link). Student **`/live`** shows upcoming (with Join) and past (with Watch recording) sessions across their accessible courses (RLS-gated). Topic page renders join + recording + formatted time. Linked from portal header (📡 Live) and admin sub-nav/hub.
+- **Messaging (`lib/notify.ts`, graceful):** `sendEmail` via **Mailgun HTTP API**, `sendWhatsApp` via **Interakt** (both no-op + logged "skipped" when unconfigured). `notifyByEmail` logs to `notifications` via the service client. Branded `emailShell` wrapper.
+- **Wired events (send confirmation email + log):** admin enrolment **grant** (single + bulk), **plan purchase** (verifyPlanPayment), **book order** (verifyBookPayment).
+- **Env to activate email:** `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `NOTIFY_FROM_EMAIL`. WhatsApp: `INTERAKT_API_KEY` (needs approved templates).
+- **Not yet:** auto-create Zoom webinars via API (manual link entry only), end-of-day warehouse email, scheduled reminders.
 
 ---
 

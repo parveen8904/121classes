@@ -139,14 +139,27 @@ function SectionBody({
   }
 
   if (type === "live_class") {
+    const when = c.starts_at ? new Date(c.starts_at) : null;
+    const whenLabel =
+      when && !isNaN(when.getTime())
+        ? when.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+        : c.starts_at;
     return (
       <div style={{ marginTop: 14 }}>
-        {c.starts_at && <p className="muted">Starts: {c.starts_at}</p>}
-        {c.join_url ? (
-          <a className="btn small" href={c.join_url} target="_blank" rel="noopener noreferrer">
-            Join live class
-          </a>
-        ) : (
+        {whenLabel && <p className="muted">🗓️ {whenLabel}</p>}
+        <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+          {c.join_url && (
+            <a className="btn small" href={c.join_url} target="_blank" rel="noopener noreferrer">
+              📡 Join live class
+            </a>
+          )}
+          {c.recording_url && (
+            <a className="btn small secondary" href={c.recording_url} target="_blank" rel="noopener noreferrer">
+              ▶️ Watch recording
+            </a>
+          )}
+        </div>
+        {!c.join_url && !c.recording_url && (
           <p className="muted">The join link appears here before the session.</p>
         )}
       </div>

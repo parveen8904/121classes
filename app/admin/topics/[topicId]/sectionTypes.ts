@@ -10,7 +10,8 @@ export type ConfigField =
   | "body"
   | "zoom_webinar_id"
   | "join_url"
-  | "starts_at";
+  | "starts_at"
+  | "recording_url";
 
 export const ALL_CONFIG_FIELDS: ConfigField[] = [
   "revision_round",
@@ -22,6 +23,7 @@ export const ALL_CONFIG_FIELDS: ConfigField[] = [
   "zoom_webinar_id",
   "join_url",
   "starts_at",
+  "recording_url",
 ];
 
 export const FIELD_LABELS: Record<ConfigField, string> = {
@@ -31,9 +33,10 @@ export const FIELD_LABELS: Record<ConfigField, string> = {
   embed_url: "Embed URL (HeyGen / other iframe src)",
   pdf_url: "PDF URL / storage path",
   body: "Body text / notes",
-  zoom_webinar_id: "Zoom webinar ID",
-  join_url: "Join URL",
-  starts_at: "Starts at (e.g. 2026-07-01 18:00)",
+  zoom_webinar_id: "Zoom/Meet webinar ID (optional)",
+  join_url: "Join link (Zoom / Google Meet / any)",
+  starts_at: "Starts at",
+  recording_url: "Recording link (after the class — YouTube/embed)",
 };
 
 export const SECTION_TYPES: {
@@ -60,7 +63,7 @@ export const SECTION_TYPES: {
     note: "Post the homework questions in the body and/or attach a PDF. Pair it with a Discussion board section for Q&A.",
   },
   { value: "past_papers", label: "Past papers", fields: ["pdf_url", "body"] },
-  { value: "live_class", label: "Live class (Zoom)", fields: ["zoom_webinar_id", "join_url", "starts_at"] },
+  { value: "live_class", label: "Live class (Zoom/Meet)", fields: ["join_url", "starts_at", "zoom_webinar_id", "recording_url"] },
   { value: "ask_doubt", label: "Ask a doubt (AI)", fields: [], note: "No config — renders the AI doubt box for students." },
   { value: "mcq_test", label: "MCQ test", fields: [], note: "Questions are added later (Phase 7)." },
   { value: "subjective_test", label: "Subjective test", fields: [], note: "Questions are added later (Phase 7)." },

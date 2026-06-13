@@ -8,6 +8,7 @@ import {
   fetchRazorpayOrder,
   verifyRazorpaySignature,
 } from "@/lib/razorpay";
+import { notifyByEmail, emailShell } from "@/lib/notify";
 
 type Buyer = {
   name: string;
@@ -133,13 +134,31 @@ export async function verifyBookPayment(input: {
   });
 
   // Decrement stock (best-effort).
-  const { data: book } = await svc.from("books").select("stock_qty").eq("id", n.bookId).maybeSingle();
+  const { data: book } = await svc
+    .from("books")
+    .select("stock_qty, title")
+    .eq("id", n.bookId)
+    .maybeSingle();
   if (book) {
     await svc
       .from("books")
       .update({ stock_qty: Math.max(0, book.stock_qty - qty) })
       .eq("id", n.bookId);
   }
+
+  await notifyByEmail({
+    studentId: n.userId || null,
+    email: n.email || null,
+    subject: "📦 Your book order is confirmed",
+    html: emailShell(
+      "Order confirmed! 🎉",
+      `<p>Hi ${n.name || "there"},</p>
+       <p>We've received your order for <strong>${book?.title ?? "your book"} × ${qty}</strong>.</p>
+       <p>It ships soon with free delivery 🚚. Thank you for shopping with us! 📚</p>`,
+    ),
+    template: "book_ordered",
+    payload: { bookId: n.bookId, qty },
+  });
 
   return { ok: true };
 }

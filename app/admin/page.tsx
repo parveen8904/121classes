@@ -45,7 +45,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     desc: "Fulfil paid orders — view delivery details and mark dispatched.",
     href: "/admin/orders",
   },
-  { icon: "📡", title: "Live classes", desc: "Schedule Zoom webinars.", phase: "Phase 6" },
+  {
+    icon: "📡",
+    title: "Live classes",
+    desc: "Schedule live sessions (Zoom/Meet) and attach recordings after.",
+    href: "/admin/live",
+  },
   { icon: "📊", title: "Reporting", desc: "Finance, student & warehouse emails.", phase: "Phase 8" },
 ];
 

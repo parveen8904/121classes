@@ -1,74 +1,59 @@
-# Self-hosted encrypted premium video — implementation plan
+# Premium video — "own the brain, rent the pipe" (hybrid HLS)
 
-**Status:** Planned (not built). Decided with the founder.
-**Decisions locked:**
-- **Zero recurring cost / no third-party video DRM** (no Bunny, VdoCipher, etc.). Use existing **Supabase** storage + DB only.
-- **Admin encrypts on upload**; encrypted files are useless outside the app.
-- **Online verification each play**: the decrypt key is released only after the server checks login **and** paid access.
-- **Videos are 1 hour+** → use **chunked encryption** (decrypt-as-you-watch), not whole-file.
-- Free YouTube lectures stay as plain YouTube embeds — only genuinely premium (non-YouTube) videos use this.
+**Status:** Planned (not built). Architecture chosen with the founder.
+**Supersedes** the earlier "download one encrypted file, decrypt in browser" idea — that does **not** work for 3–4 hour lectures (too big to download/decrypt as one blob). For long videos the only correct approach is **adaptive HLS streaming**, which is also what Bunny/YouTube do.
 
----
+## Decisions locked
+- Videos are **3–4 hours** → must be **adaptive-bitrate HLS** (auto quality 240p–1080p, smooth on weak connections).
+- **Hybrid**: **own** the security/control, **rent** the heavy infra.
+  - **Own (build, ~free):** AES key store + access-gated **key endpoint**, **watermark**, the **player**, access control (reuse `has_subject_access`).
+  - **Rent (commodity):** **transcode compute** + **storage + CDN delivery**.
+- Free YouTube lectures stay plain YouTube embeds. This is only for genuinely premium, non-YouTube content.
 
-## Threat model (be honest)
-- ✅ Stops the casual 90–99%: the downloaded file is AES gibberish — won't open in VLC/any player/browser, and can't be decrypted without logging in + having access.
-- ❌ Does **not** stop a determined technical user: the final decrypt happens in the browser (JS/Web Crypto), so the key and decrypted frames are extractable from browser memory; screen-recording always possible. Only hardware DRM (Widevine/FairPlay) or a native app closes this. Accepted trade-off for self-hosted + zero cost.
+## Why hybrid (the economics)
+Bunny is ~₹0.5–1/GB because of massive scale; rebuilding transcode+CDN yourself usually costs **more** (24/7 transcode box + storage + egress + ops) until very large. So rent the muscle, own the brain. Independence comes from controlling keys/access/watermark/student-data — not from running a CDN.
 
 ## Architecture
 
-### 1. Admin encrypt-on-upload (browser-side, no external tools)
-- New admin page / control on a `revision_video`/`full_class_video`/`custom` section: "Upload protected video".
-- In the browser (Web Crypto API):
-  1. Generate a random **AES-GCM 256 key** + per-chunk IVs.
-  2. Read the picked video file, split into **~5–10 MB chunks**, encrypt each chunk.
-  3. Upload encrypted chunks to a **private** Supabase Storage bucket `protected/` (path e.g. `protected/<videoId>/<n>.enc`), plus a small **manifest** (chunk count, sizes, IVs, mime, duration).
-  4. POST the **key + manifest + storage path** to the server → stored in a `protected_videos` row.
-- The plaintext video never touches our server unencrypted; encryption happens on the admin's machine.
+### Pipeline
+1. **Admin uploads the raw source** (3–4 hr file) via the admin panel to a staging bucket.
+2. **Transcode + encrypt worker** (rented muscle — a small cloud VM/container or a transcode API running `ffmpeg`):
+   - Transcodes to multiple renditions (e.g. 240/360/480/720/1080p), packaged as **HLS** (fMP4/TS segments + master `.m3u8`).
+   - Encrypts segments with **AES-128** using a **random key we generate and keep** (HLS `#EXT-X-KEY` points the playlist at *our* key endpoint, not a static file).
+   - Uploads the encrypted HLS output to **storage+CDN** (Bunny Storage+CDN or Cloudflare R2+CDN — used as a *dumb pipe*).
+3. **Key + manifest saved** in our DB (`protected_videos`): the AES key (server-only), the CDN base URL, section link.
 
-### 2. Data model (migration, when built)
+### Playback (student, web)
+- Player = **hls.js** (handles AES-128 + adaptive bitrate natively — no custom crypto code needed).
+- The playlist's key URL → **our access-gated key endpoint**: a route/RPC that returns the AES key **only** if the student is logged in **and** `has_subject_access(subject, min_plan)` passes. hls.js fetches segments from the **CDN** and the key from **us**, decrypts, and plays — auto-switching quality.
+- **Watermark**: student email/id as a semi-transparent moving overlay above the `<video>`.
+- Result: CDN can't serve a playable file (segments are encrypted), the key only comes from us after payment check, and the experience is smooth for 4-hour videos.
+
+### Data model (when built)
 ```
-protected_videos(
-  id uuid pk, section_id uuid -> sections, storage_prefix text,
-  key text,            -- base64 AES key (server-only; never exposed by RLS)
-  manifest jsonb,      -- {chunks:[{path,iv,size}], mime, duration}
-  created_at timestamptz
-)
--- RLS: NO public select. Admin manage only.
--- Key release ONLY via a SECURITY DEFINER function that re-checks access:
-get_protected_key(p_section uuid) returns text
-  -- returns key iff has_subject_access(section's subject, section.min_plan) is true
+protected_videos(id, section_id -> sections, cdn_base_url text,
+  key_b64 text,           -- server-only; never exposed via RLS
+  manifest jsonb, created_at)
+-- RLS: no public select. Key released ONLY by:
+get_hls_key(p_section uuid) returns text   -- SECURITY DEFINER, checks has_subject_access
 ```
-Private storage bucket `protected` (admin write; **no public read** — students get short-lived **signed URLs** per chunk from a server route after the access check).
+New section type `protected_video` (or a flag on existing video types) wired into the section editor + topic player.
 
-### 3. Student playback (web app)
-- A protected section shows **"Download & play"**.
-- Flow:
-  1. App calls a server route → checks `has_subject_access` → returns signed URLs for the encrypted chunks (+ manifest).
-  2. App calls `get_protected_key(section)` (online verification) → gets the AES key.
-  3. App uses **Media Source Extensions (MSE)**: fetch chunk → decrypt with Web Crypto → append to the video buffer → play. Decrypt-as-you-watch keeps memory low for 1hr+ videos; supports seeking.
-  4. **Watermark overlay**: student email + id rendered semi-transparent over the `<video>` (CSS overlay; moving position to deter cropping).
-- Offline: optional later — chunks can be cached (IndexedDB), but the **key fetch stays online** (matches "verify through internet each time"). True offline = native app.
+## What we BUILD now vs LATER
+- **Buildable now (owned, free), even before picking a provider:** the `protected_videos` table + access-gated `get_hls_key` endpoint, the **watermark overlay**, and the **hls.js player** component + `protected_video` section type. These work against any HLS URL.
+- **Needs a provider/decision:** the **transcode+encrypt worker** and **storage+CDN**. Two commodity choices:
+  - **Bunny** (Storage + CDN as a dumb pipe; cheap, India-friendly). Transcode via own ffmpeg worker, then upload encrypted HLS.
+  - **Cloudflare** (R2 storage + CDN; generous free egress). Same ffmpeg worker.
+  - (If we ever accept Bunny's *own* DRM instead of our keys, we lose the "own the brain" property — avoid.)
 
-### 4. Security details
-- Key is **never** in the encrypted files, never in a public table, never in the page source — only returned by the access-checked function over HTTPS at play time.
-- Encrypted bucket is private; chunk URLs are short-lived signed URLs.
-- Same subscription gate as sections (`has_subject_access`) so per-subject/tier access is respected automatically.
-- Rotate/revoke: deleting the `protected_videos` row (or subscription expiry) kills playback.
+## Open decisions (founder)
+1. **Storage + CDN:** Bunny vs Cloudflare R2.
+2. **Transcode worker:** self-host ffmpeg on a small VM, or a transcode API. (Admin browsers can't transcode 4-hr files.)
 
-## Cost
-- No DRM-vendor fees. **Only** Supabase storage + egress as the library grows (encrypted size ≈ original size). Budget Supabase storage/bandwidth at scale.
+## Honest limits (unchanged)
+- Stops casual sharing strongly (encrypted segments + gated key + watermark). A determined techie can still pull from browser memory or screen-record; only hardware DRM / native app fully closes that. Accepted for now.
 
-## Effort (rough)
-1. Migration: `protected_videos` + `get_protected_key()` + `protected` bucket/policies (via MCP). — small
-2. Admin browser encryptor + upload (chunked AES-GCM, manifest). — medium
-3. Server route: access check → signed chunk URLs. — small
-4. Student MSE decrypt player + watermark overlay. — medium/large (the trickiest part: MSE + per-chunk decrypt + seeking across browsers)
-5. Wire into the section editor + topic player as a new "Protected video" section type.
-
-## Known risks
-- MSE + Web Crypto across browsers (esp. iOS Safari) needs care; fMP4 chunking required for MSE.
-- Long videos: chunk size tuning for smooth playback on low-end phones.
-- This is bespoke crypto/playback code — more moving parts than embedding YouTube; test thoroughly.
-
----
-**To start:** founder says "build it" → begin with step 1 (migration) + a small test video to validate the MSE decrypt pipeline before wiring the full UI.
+## Suggested build order
+1. (Owned, free) `protected_videos` + `get_hls_key()` migration + watermarked hls.js player + section type — works with any test HLS stream.
+2. Pick storage/CDN + stand up the ffmpeg transcode+encrypt worker.
+3. Wire admin upload → worker → CDN; point the player at it. Test with one real 3-hr lecture.

@@ -59,7 +59,7 @@ const testimonials = [
 
 export default async function Home() {
   const supabase = createClient();
-  const [{ data: announcements }, { data: dbCourses }] = await Promise.all([
+  const [{ data: announcements }, { data: dbCourses }, { data: settings }] = await Promise.all([
     supabase
       .from("announcements")
       .select("id, kind, title, body, link_url, published_at")
@@ -72,8 +72,12 @@ export default async function Home() {
       .eq("is_published", true)
       .order("order_index")
       .limit(3),
+    supabase.from("site_settings").select("key, value"),
   ]);
   const latestHighlight = announcements?.[0] ?? null;
+  const siteImg = new Map((settings ?? []).map((r) => [r.key, r.value as string | null]));
+  const founderPhoto = siteImg.get("founder_photo") || "";
+  const heroBanner = siteImg.get("hero_banner") || "";
 
   return (
     <main>
@@ -98,6 +102,18 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* HERO BANNER IMAGE (uploaded in admin → Site images) */}
+      {heroBanner && (
+        <div className="container" style={{ marginTop: 6 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={heroBanner}
+            alt="1:1 CA Classes"
+            style={{ width: "100%", borderRadius: 16, border: "1px solid var(--border)", display: "block" }}
+          />
+        </div>
+      )}
+
       {/* HIGHLIGHT BANNER — latest announcement / course */}
       {latestHighlight && (
         <div className="container" style={{ marginTop: -10, marginBottom: 10 }}>
@@ -114,11 +130,22 @@ export default async function Home() {
       {/* MENTOR — CA Parveen Sharma */}
       <section className="section" id="mentor">
         <div className="mentor">
-          <div className="imgph">
-            <span className="tag">Add photo</span>
-            <span className="em">👨‍🏫</span>
-            <span className="cap">CA Parveen Sharma</span>
-          </div>
+          {founderPhoto ? (
+            <div className="imgph" style={{ padding: 0, overflow: "hidden" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={founderPhoto}
+                alt="CA Parveen Sharma"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            </div>
+          ) : (
+            <div className="imgph">
+              <span className="tag">Add photo</span>
+              <span className="em">👨‍🏫</span>
+              <span className="cap">CA Parveen Sharma</span>
+            </div>
+          )}
           <div>
             <div className="ribbon">Your mentor · The God of Accountancy</div>
             <h2>CA Parveen Sharma</h2>

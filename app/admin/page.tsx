@@ -63,6 +63,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     desc: "Revenue, active plans, book sales and dispatch snapshot.",
     href: "/admin/reports",
   },
+  {
+    icon: "🖼️",
+    title: "Site images",
+    desc: "Upload your founder photo and homepage banner from Canva.",
+    href: "/admin/site",
+  },
 ];
 
 export default function AdminHome() {

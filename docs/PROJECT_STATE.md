@@ -269,6 +269,15 @@ No payment yet (that's Phase 5) — access is granted by admins, and this is wha
 
 ---
 
+## 20. Image uploads (built)
+**Migration 0007** (applied via MCP): public **`media`** storage bucket (admin-only write, public read) + **`site_settings`** key/value table.
+- **`ImageUpload` component** (`app/admin/_components/ImageUpload.tsx`): uploads to the `media` bucket via the browser client, shows a preview, also accepts a pasted URL; carries the result in a named field for the surrounding server-action form.
+- Wired into **Faculty** (photo) and **Books** (cover) admin forms.
+- **`/admin/site`** ("🖼️ Site images"): upload **founder photo** + **homepage banner** → stored in `site_settings` → rendered on the landing page (mentor photo, hero banner). Linked in admin hub + sub-nav.
+- Uploads are admin-only (storage RLS uses `is_admin()`); images are world-readable.
+
+---
+
 ## 11. Working conventions
 - Develop on branch `claude/landing-page-text-fix-C0lDT`, then fast-forward merge to `main`.
 - Vercel auto-deploys on push to `main`.

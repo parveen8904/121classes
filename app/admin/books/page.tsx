@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatINR } from "@/lib/pricing";
 import DeleteButton from "../_components/DeleteButton";
 import AdminHero from "../_components/AdminHero";
+import ImageUpload from "../_components/ImageUpload";
 import { createBook, updateBook, deleteBook } from "./actions";
 
 export default async function AdminBooksPage() {
@@ -35,11 +36,7 @@ export default async function AdminBooksPage() {
           </div>
           <label htmlFor="b-desc">Description</label>
           <textarea id="b-desc" name="description" rows={2} />
-          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 1fr" }}>
-            <div>
-              <label htmlFor="b-cover">Cover image URL</label>
-              <input id="b-cover" name="cover_url" placeholder="https://… (optional)" />
-            </div>
+          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
             <div>
               <label htmlFor="b-price">Price (₹)</label>
               <input id="b-price" name="price_inr" type="number" defaultValue={0} />
@@ -49,6 +46,7 @@ export default async function AdminBooksPage() {
               <input id="b-stock" name="stock_qty" type="number" defaultValue={0} />
             </div>
           </div>
+          <ImageUpload name="cover_url" folder="books" label="Cover image (optional)" />
           <label className="remember" style={{ marginTop: 0 }}>
             <input type="checkbox" name="is_active" defaultChecked /> Active (visible in store)
           </label>
@@ -77,11 +75,7 @@ export default async function AdminBooksPage() {
                 </div>
                 <label>Description</label>
                 <textarea name="description" rows={2} defaultValue={b.description ?? ""} />
-                <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 1fr" }}>
-                  <div>
-                    <label>Cover image URL</label>
-                    <input name="cover_url" defaultValue={b.cover_url ?? ""} />
-                  </div>
+                <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
                   <div>
                     <label>Price (₹)</label>
                     <input name="price_inr" type="number" defaultValue={b.price_inr} />
@@ -91,6 +85,7 @@ export default async function AdminBooksPage() {
                     <input name="stock_qty" type="number" defaultValue={b.stock_qty} />
                   </div>
                 </div>
+                <ImageUpload name="cover_url" defaultValue={b.cover_url ?? ""} folder="books" label="Cover image" />
                 <label className="remember" style={{ marginTop: 0 }}>
                   <input type="checkbox" name="is_active" defaultChecked={b.is_active} /> Active
                 </label>

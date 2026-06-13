@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../_components/DeleteButton";
 import AdminHero from "../_components/AdminHero";
+import ImageUpload from "../_components/ImageUpload";
 import { createFaculty, updateFaculty, deleteFaculty } from "./actions";
 
 export default async function FacultyPage() {
@@ -27,10 +28,7 @@ export default async function FacultyPage() {
               <label htmlFor="f-name">Full name</label>
               <input id="f-name" name="full_name" placeholder="e.g. CA Parveen Sharma" required />
             </div>
-            <div>
-              <label htmlFor="f-photo">Photo URL (optional)</label>
-              <input id="f-photo" name="photo_url" placeholder="/brand/parveen.jpg or https://…" />
-            </div>
+            <ImageUpload name="photo_url" folder="faculty" label="Photo (optional)" />
           </div>
           <label htmlFor="f-bio">Bio (optional)</label>
           <textarea id="f-bio" name="bio" rows={3} placeholder="Short bio shown to students" />
@@ -51,10 +49,7 @@ export default async function FacultyPage() {
                     <label>Full name</label>
                     <input name="full_name" defaultValue={f.full_name} required />
                   </div>
-                  <div>
-                    <label>Photo URL</label>
-                    <input name="photo_url" defaultValue={f.photo_url ?? ""} />
-                  </div>
+                  <ImageUpload name="photo_url" defaultValue={f.photo_url ?? ""} folder="faculty" label="Photo" />
                 </div>
                 <label>Bio</label>
                 <textarea name="bio" rows={3} defaultValue={f.bio ?? ""} />

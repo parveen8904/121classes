@@ -2,6 +2,17 @@ import Link from "next/link";
 import SiteNav from "./components/SiteNav";
 import SiteFooter from "./components/SiteFooter";
 import AnnouncementSplash from "./components/AnnouncementSplash";
+import { createClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
+
+const KIND_LABEL: Record<string, string> = {
+  amendment: "Amendment",
+  whats_new: "What's New",
+  student_corner: "Student Corner",
+  industry: "Industry",
+  macro: "Macro",
+};
 
 const stats = [
   { num: "20+", lbl: "Years teaching CA" },
@@ -46,7 +57,15 @@ const testimonials = [
   { who: "S. Iyer", role: "CA Inter student", quote: "Felt like true 1-to-1 mentoring — exactly what I needed to clear my paper." },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const supabase = createClient();
+  const { data: announcements } = await supabase
+    .from("announcements")
+    .select("id, kind, title, body, link_url, published_at")
+    .eq("is_published", true)
+    .order("published_at", { ascending: false })
+    .limit(6);
+
   return (
     <main>
       <AnnouncementSplash />
@@ -215,13 +234,31 @@ export default function Home() {
           <p>Latest amendments, videos and announcements.</p>
         </div>
         <div className="grid grid-3">
-          {whatsNew.map((n) => (
-            <div className="tile" key={n.title}>
-              <span className="badge">{n.tag}</span>
-              <h3 style={{ marginTop: 12 }}>{n.title}</h3>
-              <p>{n.desc}</p>
-            </div>
-          ))}
+          {announcements && announcements.length > 0
+            ? announcements.map((a) => (
+                <div className="tile" key={a.id}>
+                  <span className="badge">{KIND_LABEL[a.kind] ?? a.kind}</span>
+                  <h3 style={{ marginTop: 12 }}>{a.title}</h3>
+                  {a.body && <p>{a.body}</p>}
+                  {a.link_url && (
+                    <a
+                      href={a.link_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".9rem" }}
+                    >
+                      Read more →
+                    </a>
+                  )}
+                </div>
+              ))
+            : whatsNew.map((n) => (
+                <div className="tile" key={n.title}>
+                  <span className="badge">{n.tag}</span>
+                  <h3 style={{ marginTop: 12 }}>{n.title}</h3>
+                  <p>{n.desc}</p>
+                </div>
+              ))}
         </div>
       </section>
 

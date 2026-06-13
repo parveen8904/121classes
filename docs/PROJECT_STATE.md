@@ -158,7 +158,7 @@ RLS is **enabled on every table**. The script is transactional and re-runnable (
 6. 🟡 **Phase 6 — Live classes + messaging** — built (see §16). Live-class scheduling + student/admin live views work now (manual links). Email/WhatsApp notifications **activate when keys are added** (Mailgun API / Interakt).
 7. 🟡 **Phase 7 — Tests + AI** — built (see §17). MCQ auto-grading works now; AI subjective grading + doubt-solving **activate with `ANTHROPIC_API_KEY`** (fall back to faculty review until then).
 8. 🟡 **Phase 8 — Reporting & warehouse** — built (see §18). Reports dashboard works now; the daily warehouse dispatch email **activates with Mailgun + WAREHOUSE_EMAIL**.
-9. **Phase 9 — Landing sections from DB** (amendments / what's new / resources editable).
+9. ✅ **Phase 9 — Landing "What's new" from DB** — the homepage now renders published `announcements` (newest 6) in the What's New section, falling back to placeholders when empty. Manage at `/admin/announcements`. **Plus Zoom auto-create** (see §16).
 10. **Phase 10 — Mobile apps** (Expo iOS + Android; store billing).
 
 ---
@@ -232,7 +232,8 @@ No payment yet (that's Phase 5) — access is granted by admins, and this is wha
 - **Messaging (`lib/notify.ts`, graceful):** `sendEmail` via **Mailgun HTTP API**, `sendWhatsApp` via **Interakt** (both no-op + logged "skipped" when unconfigured). `notifyByEmail` logs to `notifications` via the service client. Branded `emailShell` wrapper.
 - **Wired events (send confirmation email + log):** admin enrolment **grant** (single + bulk), **plan purchase** (verifyPlanPayment), **book order** (verifyBookPayment).
 - **Env to activate email:** `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `NOTIFY_FROM_EMAIL`. WhatsApp: `INTERAKT_API_KEY` (needs approved templates).
-- **Not yet:** auto-create Zoom webinars via API (manual link entry only), end-of-day warehouse email, scheduled reminders.
+- **Zoom auto-create (`lib/zoom.ts`, optional):** Server-to-Server OAuth → "🎥 Auto-create Zoom link" button on `/admin/live` (shown only when `ZOOM_ACCOUNT_ID`/`ZOOM_CLIENT_ID`/`ZOOM_CLIENT_SECRET` are set) creates a scheduled meeting from the section title + start time and stores `join_url` + `zoom_webinar_id`. Falls back to manual paste when unconfigured.
+- **Not yet:** scheduled student reminders (expiry/upcoming-class); native apps (Phase 10).
 
 ---
 

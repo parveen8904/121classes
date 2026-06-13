@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../_components/AdminHero";
-import { updateLiveSchedule } from "./actions";
+import { zoomConfigured } from "@/lib/zoom";
+import { updateLiveSchedule, createZoomForLive } from "./actions";
 
 type LiveRow = {
   id: string;
@@ -12,8 +13,13 @@ type LiveRow = {
   topics: { title: string; subjects: { title: string; courses: { title: string } | null } | null } | null;
 };
 
-export default async function AdminLivePage() {
+export default async function AdminLivePage({
+  searchParams,
+}: {
+  searchParams: { zoom?: string };
+}) {
   const supabase = createClient();
+  const zoomOn = zoomConfigured();
   const { data } = await supabase
     .from("sections")
     .select("id, title, is_published, config, topic_id, topics(title, subjects(title, courses(title)))")
@@ -47,9 +53,23 @@ export default async function AdminLivePage() {
         back={{ href: "/admin", label: "Admin" }}
       />
 
+      {searchParams.zoom && (
+        <div
+          className={`notice ${searchParams.zoom === "created" ? "ok" : "err"}`}
+          style={{ marginTop: 16 }}
+        >
+          {searchParams.zoom === "created"
+            ? "🎥 Zoom link created and saved."
+            : searchParams.zoom === "unconfigured"
+              ? "Zoom isn't connected yet — add ZOOM_* keys in Vercel, or just paste a link manually."
+              : "Couldn't reach Zoom. Check your keys, or paste a link manually."}
+        </div>
+      )}
+
       <p className="muted" style={{ marginTop: 18, fontSize: ".9rem" }}>
         These are all your <strong>Live class</strong> sections. Create more by adding a Live class
         section inside any topic.
+        {zoomOn && " Use “Auto-create Zoom link” to generate a meeting automatically."}
       </p>
 
       <div style={{ marginTop: 18, display: "grid", gap: 14 }}>
@@ -63,9 +83,19 @@ export default async function AdminLivePage() {
                     {x.course} · {x.topic} · {x.published ? "🟢 published" : "⚪ draft"}
                   </p>
                 </div>
-                <Link className="btn small secondary" href={`/admin/topics/${x.topicId}`}>
-                  Open topic →
-                </Link>
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  {zoomOn && (
+                    <form action={createZoomForLive} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={x.id} />
+                      <button className="btn small" type="submit">
+                        🎥 Auto-create Zoom link
+                      </button>
+                    </form>
+                  )}
+                  <Link className="btn small secondary" href={`/admin/topics/${x.topicId}`}>
+                    Open topic →
+                  </Link>
+                </div>
               </div>
 
               <form action={updateLiveSchedule} style={{ marginTop: 12 }}>

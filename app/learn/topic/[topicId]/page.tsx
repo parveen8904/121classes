@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { videoEmbedSrc } from "../../_lib/media";
+import DoubtBox from "./DoubtBox";
 
 export const dynamic = "force-dynamic";
 
@@ -167,22 +168,16 @@ function SectionBody({
   }
 
   if (type === "ask_doubt") {
-    return (
-      <div style={{ marginTop: 14 }}>
-        <textarea rows={3} placeholder="Type your doubt…" disabled />
-        <p className="muted" style={{ fontSize: ".85rem" }}>
-          AI doubt-solving is being wired up. Your answers are reviewed under CA Parveen
-          Sharma&apos;s guidance.
-        </p>
-      </div>
-    );
+    return <DoubtBox sectionId={id} />;
   }
 
   if (type === "mcq_test" || type === "subjective_test") {
     return (
-      <p className="muted" style={{ marginTop: 14 }}>
-        This test will open here soon.
-      </p>
+      <div style={{ marginTop: 14 }}>
+        <Link className="btn small" href={`/learn/section/${id}`}>
+          {type === "mcq_test" ? "Start MCQ test 🧠" : "Start subjective test ✍️"} →
+        </Link>
+      </div>
     );
   }
 

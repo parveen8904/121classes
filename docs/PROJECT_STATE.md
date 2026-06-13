@@ -156,7 +156,7 @@ RLS is **enabled on every table**. The script is transactional and re-runnable (
 4. ✅ **Phase 4 — Subscriptions & admin enrolment** — DONE (see §13). Admin single/bulk grants, revoke/extend; plan price editor; student access status + cancel auto-renew. **Requires `supabase/migrations/0003_phase4.sql`.**
 5. 🟡 **Phase 5 — Payments & book store** — built (see §15). Razorpay checkout for **plans** and **books** (guest checkout), admin book catalogue + order fulfilment. **Activates when Razorpay keys are added to Vercel env** (degrades to "contact us" until then). Remaining: automated end-of-day warehouse email.
 6. 🟡 **Phase 6 — Live classes + messaging** — built (see §16). Live-class scheduling + student/admin live views work now (manual links). Email/WhatsApp notifications **activate when keys are added** (Mailgun API / Interakt).
-7. **Phase 7 — Tests + AI** (MCQ auto-grade; subjective; Claude paper-checking + doubt-solving).
+7. 🟡 **Phase 7 — Tests + AI** — built (see §17). MCQ auto-grading works now; AI subjective grading + doubt-solving **activate with `ANTHROPIC_API_KEY`** (fall back to faculty review until then).
 8. **Phase 8 — Reporting** (finance, student emails, warehouse).
 9. **Phase 9 — Landing sections from DB** (amendments / what's new / resources editable).
 10. **Phase 10 — Mobile apps** (Expo iOS + Android; store billing).
@@ -233,6 +233,17 @@ No payment yet (that's Phase 5) — access is granted by admins, and this is wha
 - **Wired events (send confirmation email + log):** admin enrolment **grant** (single + bulk), **plan purchase** (verifyPlanPayment), **book order** (verifyBookPayment).
 - **Env to activate email:** `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `NOTIFY_FROM_EMAIL`. WhatsApp: `INTERAKT_API_KEY` (needs approved templates).
 - **Not yet:** auto-create Zoom webinars via API (manual link entry only), end-of-day warehouse email, scheduled reminders.
+
+---
+
+## 17. Tests & AI (Phase 7 — built)
+**No DB migration** (uses existing `mcq_questions`/`mcq_attempts`/`subjective_questions`/`subjective_submissions`/`doubts`).
+- **Section route is now a dispatcher:** `app/learn/section/[sectionId]/page.tsx` loads the section (RLS-gated) and renders `McqSection`, `SubjectiveSection`, or `DiscussionSection` by `type`; other types redirect to the topic.
+- **MCQ (works now, no AI):** admin `/admin/mcq/[sectionId]` (add questions: 4 options + correct radio, stored in `mcq_questions.options` jsonb). Student `McqForm` submits to `gradeMcqAttempt` (server) which fetches `correct_index` **server-side only** (never sent to browser), scores, and writes `mcq_attempts`.
+- **Subjective (AI paper-checking):** admin `/admin/subjective/[sectionId]` (prompt + max_marks). Student `SubjectiveForm` → `submitSubjective`: if AI configured, `gradeSubjective` returns `{score, feedback}` (status `graded`); else status `submitted` with a faculty-review message. Writes `subjective_submissions`.
+- **AI doubt-solving:** `ask_doubt` sections render `DoubtBox` inline on the topic page → `askDoubt` → `answerDoubt` (Claude) or "faculty will review" fallback; logged to `doubts`.
+- **`lib/ai.ts`:** Anthropic Messages API via fetch, model `claude-sonnet-4-6` (override `ANTHROPIC_MODEL`); `answerDoubt`, `gradeSubjective`, `aiConfigured`. **Env:** `ANTHROPIC_API_KEY`.
+- Test editors linked from the topic editor section rows; tests opened from the student topic page ("Start test →").
 
 ---
 

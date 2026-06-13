@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../../_components/DeleteButton";
@@ -70,6 +71,16 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                   </p>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  {s.type === "mcq_test" && (
+                    <Link className="btn small secondary" href={`/admin/mcq/${s.id}`}>
+                      Manage MCQs →
+                    </Link>
+                  )}
+                  {s.type === "subjective_test" && (
+                    <Link className="btn small secondary" href={`/admin/subjective/${s.id}`}>
+                      Manage questions →
+                    </Link>
+                  )}
                   <form action={toggleSectionPublish} style={{ display: "inline" }}>
                     <input type="hidden" name="id" value={s.id} />
                     <input type="hidden" name="topicId" value={topic.id} />

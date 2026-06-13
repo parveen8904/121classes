@@ -291,6 +291,15 @@ No payment yet (that's Phase 5) — access is granted by admins, and this is wha
 
 ---
 
+## 22. Premium video — Bunny.net Stream (built, needs keys)
+Decision: use **Bunny Stream** as-is (cheap; does transcode + adaptive HLS + CDN + MediaCage DRM). Hybrid/self-host plan in `docs/ENCRYPTED_VIDEO_PLAN.md` is parked.
+- **Playback:** `lib/media.ts` `videoEmbedSrc` returns the Bunny embed `https://iframe.mediadelivery.net/embed/<lib>/<videoId>` when a section's `bunny_video_id` is set and `NEXT_PUBLIC_BUNNY_LIBRARY_ID` exists. Precedence: `embed_url` → Bunny → YouTube.
+- **Watermark:** student email/phone overlaid on the player (`.vwm`, moves between corners every ~24s) — `SectionBody` gets a `watermark` prop on the topic page.
+- **Admin:** paste the Bunny video GUID into a video section's "Bunny.net Stream video ID" field (upload the video in the Bunny dashboard for now; API upload from admin can come later).
+- **Env to activate:** `NEXT_PUBLIC_BUNNY_LIBRARY_ID` (+ `BUNNY_STREAM_API_KEY`, `BUNNY_CDN_HOSTNAME` for later). Until set, Bunny sections show "Video coming soon"; YouTube/embed sections work regardless.
+
+---
+
 ## 11. Working conventions
 - Develop on branch `claude/landing-page-text-fix-C0lDT`, then fast-forward merge to `main`.
 - Vercel auto-deploys on push to `main`.

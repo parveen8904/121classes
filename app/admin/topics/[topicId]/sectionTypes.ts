@@ -28,7 +28,7 @@ export const ALL_CONFIG_FIELDS: ConfigField[] = [
 
 export const FIELD_LABELS: Record<ConfigField, string> = {
   revision_round: "Revision round (First / Second)",
-  bunny_video_id: "Bunny.net video ID",
+  bunny_video_id: "Bunny.net Stream video ID (secure premium player)",
   youtube_url: "YouTube URL (optional, marketing copy)",
   embed_url: "Embed URL (HeyGen / other iframe src)",
   pdf_url: "PDF URL / storage path",

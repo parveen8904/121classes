@@ -51,10 +51,12 @@ function SectionBody({
   id,
   type,
   config,
+  watermark,
 }: {
   id: string;
   type: string;
   config: Record<string, unknown> | null;
+  watermark?: string;
 }) {
   const c = (config ?? {}) as Record<string, string>;
 
@@ -81,6 +83,7 @@ function SectionBody({
         {src ? (
           <div className="video-frame" style={{ marginTop: 14 }}>
             <iframe src={src} allow="encrypted-media; fullscreen" allowFullScreen title="Video" />
+            {watermark && <span className="vwm">{watermark}</span>}
           </div>
         ) : (
           <p className="muted" style={{ marginTop: 12 }}>
@@ -284,7 +287,12 @@ export default async function LearnTopic({ params }: { params: { topicId: string
                       </Link>
                     </div>
                   ) : (
-                    <SectionBody id={s.id} type={s.type} config={configById.get(s.id) ?? null} />
+                    <SectionBody
+                      id={s.id}
+                      type={s.type}
+                      config={configById.get(s.id) ?? null}
+                      watermark={user.email ?? user.phone ?? ""}
+                    />
                   )}
                 </div>
               );

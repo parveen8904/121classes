@@ -9,6 +9,11 @@ export function youtubeEmbed(url: string): string | null {
 export function videoEmbedSrc(config: Record<string, unknown> | null | undefined): string | null {
   const c = (config ?? {}) as Record<string, string>;
   if (c.embed_url) return c.embed_url;
+  // Bunny Stream: secure adaptive player via the library embed iframe.
+  const lib = process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID;
+  if (c.bunny_video_id && lib) {
+    return `https://iframe.mediadelivery.net/embed/${lib}/${c.bunny_video_id}?preload=false&responsive=true`;
+  }
   if (c.youtube_url) return youtubeEmbed(c.youtube_url) ?? c.youtube_url;
-  return null; // Bunny.net signed playback comes in a later phase
+  return null;
 }

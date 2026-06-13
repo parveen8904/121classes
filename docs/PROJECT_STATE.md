@@ -142,7 +142,8 @@ RLS is **enabled on every table**. The script is transactional and re-runnable (
 ## 8. Outstanding / TODO
 - [ ] Upload founder/student/studio **photos** to `public/brand/` → wire `<img>` into the slots.
 - [ ] Provide a **YouTube link** for the homepage intro video (replace sample embed).
-- [ ] Connect **`121caclasses.com`** (primary) as the Vercel custom domain (+ DNS); add **`121coaching.ai`** as an alias to the same deployment; update Supabase Site URL/redirects.
+- [x] **Domain LIVE:** `121caclasses.com` is connected in Vercel (GoDaddy A `@`→76.76.21.21, CNAME `www`→cname.vercel-dns.com); `121coaching.ai` 308-redirects to `www.121caclasses.com`. SSL issued.
+  - [ ] Follow-ups: update Supabase Auth **Site URL** → `https://121caclasses.com` + redirect URLs; add the real domains to **Bunny allowed domains** (lib 682810).
 - [ ] (Optional) Mailgun: verify `121caclasses.com` so email comes from `@121caclasses.com`.
 - [ ] (Optional) Enable **single session per user** (Supabase → Authentication → Sessions; may need Pro).
 - [ ] Replace placeholder copy (testimonials, stats, course/book details, announcement text, legal pages) with real content.

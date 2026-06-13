@@ -15,8 +15,8 @@ export default async function FacultyPage() {
         <span className="eyebrow">👩‍🏫 Faculty</span>
         <h2>Meet the team</h2>
         <p>
-          Led by <strong>CA Parveen Sharma</strong> — the &ldquo;God of Accountancy&rdquo; — and his
-          handpicked faculty.
+          Led by <strong>CA Parveen Sharma</strong> — one of India&apos;s most renowned Accountancy
+          educators — and his handpicked faculty.
         </p>
       </div>
 

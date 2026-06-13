@@ -147,19 +147,21 @@ export default async function Home() {
               />
             </div>
           ) : (
-            <div className="imgph">
-              <span className="tag">Add photo</span>
-              <span className="em">👨‍🏫</span>
-              <span className="cap">CA Parveen Sharma</span>
+            <div
+              className="imgph"
+              style={{ background: "linear-gradient(135deg, var(--accent), var(--accent-2))", border: "none" }}
+            >
+              <span style={{ fontSize: "4.5rem", fontWeight: 800, letterSpacing: "3px", color: "#fff" }}>PS</span>
+              <span className="cap" style={{ color: "rgba(255,255,255,0.92)" }}>CA Parveen Sharma</span>
             </div>
           )}
           <div>
-            <div className="ribbon">Your mentor · The God of Accountancy</div>
+            <div className="ribbon">Your mentor · 30+ years teaching CA</div>
             <h2>CA Parveen Sharma</h2>
             <div className="role">Founder &amp; Lead Faculty · 1:1 CA Classes</div>
             <p className="muted">
               CA Parveen Sharma is one of India&apos;s most renowned Accountancy educators,
-              widely known as the <strong>&ldquo;God of Accountancy&rdquo;</strong> among CA students.
+              deeply respected by CA students across the country.
               With <strong>30+ years of teaching experience</strong>, he has mentored thousands of
               aspiring Chartered Accountants across the country. A <strong>rank holder in both
               CA Intermediate and CA Final</strong>, he specialises in <strong>Advanced Accounting
@@ -177,11 +179,6 @@ export default async function Home() {
                   <div className="stat-lbl">{s.lbl}</div>
                 </div>
               ))}
-            </div>
-            <div className="gallery">
-              <div className="imgph"><span className="tag">Add photo</span><span className="em">🎓</span><span className="cap">With students</span></div>
-              <div className="imgph"><span className="tag">Add photo</span><span className="em">🏫</span><span className="cap">In class</span></div>
-              <div className="imgph"><span className="tag">Add photo</span><span className="em">🏆</span><span className="cap">Recognition</span></div>
             </div>
           </div>
         </div>

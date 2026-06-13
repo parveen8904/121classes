@@ -54,6 +54,9 @@ export default async function CoursesPage({
           <label className="remember" style={{ marginTop: 0 }}>
             <input type="checkbox" name="is_published" /> Published (visible to students)
           </label>
+          <label className="remember" style={{ marginTop: 0 }}>
+            <input type="checkbox" name="is_test_series" /> This is a Test Series
+          </label>
           <button className="btn" type="submit">
             Add course
           </button>

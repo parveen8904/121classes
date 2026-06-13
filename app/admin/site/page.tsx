@@ -32,8 +32,19 @@ export default async function SiteImagesPage() {
             label="Homepage banner (wide image)"
           />
         </div>
+        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr", marginTop: 18 }}>
+          <div>
+            <label>📱 WhatsApp number (for the support button)</label>
+            <input name="support_whatsapp" defaultValue={m.get("support_whatsapp") ?? ""} placeholder="e.g. 919812345678" />
+          </div>
+          <div>
+            <label>📞 Phone number (for the call button)</label>
+            <input name="support_phone" defaultValue={m.get("support_phone") ?? ""} placeholder="e.g. 919812345678" />
+          </div>
+        </div>
+
         <button className="btn" type="submit" style={{ marginTop: 18 }}>
-          Save images
+          Save
         </button>
       </form>
 

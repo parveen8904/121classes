@@ -7,8 +7,10 @@ import {
   fetchRazorpayOrder,
   verifyRazorpaySignature,
 } from "@/lib/razorpay";
+import { createServiceClient } from "@/lib/supabase/service";
 import { computePrice } from "@/lib/pricing";
 import { notifyByEmail, emailShell } from "@/lib/notify";
+import { applyCoupon, redeemCoupon } from "@/lib/coupons";
 
 const TIERS = ["bronze", "silver", "gold"];
 
@@ -20,6 +22,7 @@ export async function createPlanOrder(input: {
   courseId: string;
   tier: string;
   months: number;
+  couponCode?: string;
 }): Promise<CreateOrderResult> {
   if (!razorpayConfigured()) return { ok: false, reason: "unconfigured" };
   if (!TIERS.includes(input.tier)) return { ok: false, reason: "error" };
@@ -46,7 +49,16 @@ export async function createPlanOrder(input: {
     .eq("id", user.id)
     .single();
 
-  const amountInr = computePrice(plan.web_price_inr, input.months);
+    const baseAmount = computePrice(plan.web_price_inr, input.months);
+  let amountInr = baseAmount;
+  let couponId = "";
+  if (input.couponCode) {
+    const applied = await applyCoupon(input.couponCode, baseAmount);
+    if (applied) {
+      amountInr = applied.amount;
+      couponId = applied.couponId;
+    }
+  }
 
   try {
     const order = await createRazorpayOrder(amountInr, `plan_${Date.now()}`, {
@@ -56,6 +68,7 @@ export async function createPlanOrder(input: {
       months: String(input.months),
       planId: plan.id,
       userId: user.id,
+      couponId,
     });
     // Record the order attempt.
     await supabase.from("orders").insert({
@@ -120,7 +133,10 @@ export async function verifyPlanPayment(input: {
   const ends = new Date();
   ends.setMonth(ends.getMonth() + months);
 
-  await supabase.from("subscriptions").insert({
+  // Service client: students have no INSERT policy on subscriptions; this is a
+  // trusted server action running only after a verified payment.
+  const svc = createServiceClient();
+  await svc.from("subscriptions").insert({
     student_id: user.id,
     course_id: n.courseId,
     plan_id: n.planId,
@@ -129,10 +145,11 @@ export async function verifyPlanPayment(input: {
     status: "active",
     auto_renew: true,
   });
-  await supabase
+  await svc
     .from("orders")
     .update({ status: "paid", store_txn_id: input.razorpay_payment_id })
     .eq("razorpay_order_id", input.razorpay_order_id);
+  if (n.couponId) await redeemCoupon(n.couponId);
 
   const { data: course } = await supabase.from("courses").select("title").eq("id", n.courseId).maybeSingle();
   await notifyByEmail({

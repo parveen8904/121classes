@@ -12,7 +12,7 @@ export default async function CourseDetail({ params }: { params: { courseId: str
 
   const { data: course } = await supabase
     .from("courses")
-    .select("id, title, slug, order_index, is_published")
+    .select("id, title, slug, order_index, is_published, is_test_series")
     .eq("id", courseId)
     .single();
 
@@ -54,6 +54,9 @@ export default async function CourseDetail({ params }: { params: { courseId: str
           </div>
           <label className="remember" style={{ marginTop: 0 }}>
             <input type="checkbox" name="is_published" defaultChecked={course.is_published} /> Published
+          </label>
+          <label className="remember" style={{ marginTop: 0 }}>
+            <input type="checkbox" name="is_test_series" defaultChecked={course.is_test_series} /> This is a Test Series
           </label>
           <button className="btn" type="submit">
             Save changes

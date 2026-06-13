@@ -11,9 +11,11 @@ export default function SiteNav() {
         </Link>
         <div className="lp-nav-links">
           <Link className="hide-sm" href="/courses">Courses</Link>
+          <Link className="hide-sm" href="/combos">Combos</Link>
+          <Link className="hide-sm" href="/test-series">Test Series</Link>
+          <Link className="hide-sm" href="/results">Results</Link>
+          <Link className="hide-sm" href="/faculty">Faculty</Link>
           <Link className="hide-sm" href="/books">Books</Link>
-          <Link className="hide-sm" href="/#resources">Resources</Link>
-          <Link className="hide-sm" href="/#about">About</Link>
           <Link className="hide-sm" href="/#contact">Contact</Link>
           <ThemeToggle />
           <Link className="btn" href="/login">Log in</Link>

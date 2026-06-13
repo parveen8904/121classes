@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { createClient } from "@/lib/supabase/server";
+import FloatingSupport from "./components/FloatingSupport";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "1:1 CA Classes — Highly Personalized, AI-Enabled CA Coaching",
@@ -10,13 +14,23 @@ export const metadata: Metadata = {
 // Applies the saved/system theme before paint to avoid a flash of the wrong theme.
 const themeScript = `try{var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}`;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const supabase = createClient();
+  const { data: settings } = await supabase
+    .from("site_settings")
+    .select("key, value")
+    .in("key", ["support_whatsapp", "support_phone"]);
+  const m = new Map((settings ?? []).map((r) => [r.key, r.value as string | null]));
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <FloatingSupport whatsapp={m.get("support_whatsapp")} phone={m.get("support_phone")} />
+      </body>
     </html>
   );
 }

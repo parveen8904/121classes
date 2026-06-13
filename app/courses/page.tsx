@@ -13,6 +13,7 @@ export default async function CoursesPage() {
     .from("courses")
     .select("id, title, subjects(id, title, subject_faculty(faculties(full_name)))")
     .eq("is_published", true)
+    .eq("is_test_series", false)
     .order("order_index");
 
   const courses = (data ?? []) as unknown as CourseRow[];

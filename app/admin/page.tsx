@@ -58,6 +58,24 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/live",
   },
   {
+    icon: "🏆",
+    title: "Results",
+    desc: "Showcase rank-holders & toppers — the #1 trust signal for CA students.",
+    href: "/admin/results",
+  },
+  {
+    icon: "🏷️",
+    title: "Coupons",
+    desc: "Run % or flat-amount discount codes applied at checkout.",
+    href: "/admin/coupons",
+  },
+  {
+    icon: "🎁",
+    title: "Combos",
+    desc: "Bundle several subjects at one discounted price.",
+    href: "/admin/combos",
+  },
+  {
     icon: "📊",
     title: "Reports",
     desc: "Revenue, active plans, book sales and dispatch snapshot.",

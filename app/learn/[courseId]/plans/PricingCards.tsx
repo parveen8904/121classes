@@ -45,6 +45,7 @@ export default function PricingCards({
 }) {
   const [months, setMonths] = useState<number>(6);
   const [busy, setBusy] = useState<string | null>(null);
+  const [coupon, setCoupon] = useState("");
   const discount = Math.round(durationDiscount(months) * 100);
 
   async function buy(tier: string) {
@@ -54,7 +55,7 @@ export default function PricingCards({
     }
     setBusy(tier);
     try {
-      const res = await createPlanOrder({ courseId, tier, months });
+      const res = await createPlanOrder({ courseId, tier, months, couponCode: coupon });
       if (!res.ok) {
         if (res.reason === "unconfigured") window.location.href = contactHref;
         else alert("Could not start checkout. Please try again or contact us.");
@@ -97,6 +98,16 @@ export default function PricingCards({
       <p className="muted" style={{ textAlign: "center", fontSize: ".82rem", marginBottom: 6 }}>
         {discount > 0 ? `Save ${discount}% versus paying monthly 🎉` : "Billed for one month"}
       </p>
+      {configured && (
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+          <input
+            value={coupon}
+            onChange={(e) => setCoupon(e.target.value.toUpperCase())}
+            placeholder="🏷️ Coupon code (optional)"
+            style={{ maxWidth: 240, marginBottom: 0, textAlign: "center" }}
+          />
+        </div>
+      )}
 
       <div className="plans-grid">
         {plans.map((p) => {

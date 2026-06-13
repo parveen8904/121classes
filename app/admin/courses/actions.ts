@@ -14,6 +14,7 @@ export async function createCourse(formData: FormData) {
     slug: str(formData.get("slug")) || slugify(title),
     order_index: num(formData.get("order_index")),
     is_published: formData.get("is_published") === "on",
+    is_test_series: formData.get("is_test_series") === "on",
   });
   revalidatePath("/admin/courses");
 }
@@ -30,6 +31,7 @@ export async function updateCourse(formData: FormData) {
       slug: str(formData.get("slug")) || slugify(title),
       order_index: num(formData.get("order_index")),
       is_published: formData.get("is_published") === "on",
+      is_test_series: formData.get("is_test_series") === "on",
     })
     .eq("id", id);
   revalidatePath("/admin/courses");

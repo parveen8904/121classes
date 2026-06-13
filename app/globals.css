@@ -429,6 +429,14 @@ textarea {
 .portal-footer .line { font-weight: 600; }
 .portal-footer .sub { color: var(--muted); font-size: .82rem; margin-top: 8px; }
 
+/* floating support buttons */
+.fab-stack { position: fixed; right: 18px; bottom: 18px; z-index: 100; display: flex; flex-direction: column; gap: 10px; }
+.fab {
+  width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem; color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.3); transition: transform .15s;
+}
+.fab:hover { transform: scale(1.08); }
+
 /* ===================== Admin polish ===================== */
 .admin-cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 28px; }
 .admin-tile {

@@ -17,6 +17,9 @@ const ADMIN_LINKS: [string, string][] = [
   ["📦 Books", "/admin/books"],
   ["🚚 Orders", "/admin/orders"],
   ["📡 Live", "/admin/live"],
+  ["🏆 Results", "/admin/results"],
+  ["🏷️ Coupons", "/admin/coupons"],
+  ["🎁 Combos", "/admin/combos"],
   ["📊 Reports", "/admin/reports"],
   ["🖼️ Site images", "/admin/site"],
 ];

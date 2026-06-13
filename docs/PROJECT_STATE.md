@@ -278,6 +278,19 @@ No payment yet (that's Phase 5) — access is granted by admins, and this is wha
 
 ---
 
+## 21. Competitive features (built — vs BB Virtuals)
+**Migration 0008** (via MCP): `courses.is_test_series`, `results`, `coupons`, `combos`/`combo_items`.
+- **Results / rank-holders:** admin `/admin/results` (CRUD + photo upload); public `/results`; homepage toppers strip. Biggest trust lever.
+- **Public Faculty page** `/faculty` (from `faculties` table). **Public Courses** `/courses` already existed; nav now has Courses/Combos/Test Series/Results/Faculty/Books.
+- **WhatsApp + Call support:** `FloatingSupport` (bottom-right) on every page via root layout; numbers set in `/admin/site` (`support_whatsapp`, `support_phone` in `site_settings`). Root layout is now `force-dynamic`.
+- **Test Series:** `is_test_series` flag on a course (admin toggle); public `/test-series`; excluded from `/courses` + homepage.
+- **Coupons:** admin `/admin/coupons`; `lib/coupons.ts` `applyCoupon`/`redeemCoupon` (service-role, server-only); applied at plan checkout (coupon field in `PricingCards`, discount in `createPlanOrder`, redeem in verify).
+- **Combos:** admin `/admin/combos` (bundle subjects → one price/tier/duration); public `/combos` with Razorpay `ComboCheckout`; on verified payment grants a subscription per included subject (service role).
+- **Payment-grant fix:** plan + combo subscription inserts now use the **service client** (students have no INSERT policy on `subscriptions`) — this fixes a latent bug in the Phase-5 plan flow.
+- **Not built (strategic decision):** offline/download + "views/validity" delivery model.
+
+---
+
 ## 11. Working conventions
 - Develop on branch `claude/landing-page-text-fix-C0lDT`, then fast-forward merge to `main`.
 - Vercel auto-deploys on push to `main`.

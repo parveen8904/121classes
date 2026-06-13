@@ -70,10 +70,17 @@ export default async function Home() {
       .from("courses")
       .select("id, title")
       .eq("is_published", true)
+      .eq("is_test_series", false)
       .order("order_index")
       .limit(3),
     supabase.from("site_settings").select("key, value"),
   ]);
+  const { data: topResults } = await supabase
+    .from("results")
+    .select("id, student_name, headline, attempt, marks, photo_url")
+    .eq("is_published", true)
+    .order("order_index")
+    .limit(6);
   const latestHighlight = announcements?.[0] ?? null;
   const siteImg = new Map((settings ?? []).map((r) => [r.key, r.value as string | null]));
   const founderPhoto = siteImg.get("founder_photo") || "";
@@ -347,6 +354,53 @@ export default async function Home() {
           ))}
         </div>
       </section>
+
+      {/* RESULTS / TOPPERS */}
+      {topResults && topResults.length > 0 && (
+        <section className="section" id="results">
+          <div className="section-head">
+            <div className="eyebrow">🏆 Results</div>
+            <h2>Our students. Our pride.</h2>
+            <p>Rank-holders mentored by CA Parveen Sharma &amp; team.</p>
+          </div>
+          <div className="grid grid-3">
+            {topResults.map((r) => (
+              <div className="tile" key={r.id} style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    width: 84,
+                    height: 84,
+                    borderRadius: "50%",
+                    margin: "0 auto 12px",
+                    overflow: "hidden",
+                    border: "2px solid var(--accent)",
+                    background: "linear-gradient(135deg, rgba(13,148,136,.25), rgba(16,185,129,.25))",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "1.8rem",
+                  }}
+                >
+                  {r.photo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.photo_url} alt={r.student_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    "🎓"
+                  )}
+                </div>
+                <h3 style={{ fontSize: "1.05rem" }}>{r.student_name}</h3>
+                {r.headline && <p className="grad" style={{ fontWeight: 800, marginTop: 2 }}>{r.headline}</p>}
+                <p className="muted" style={{ fontSize: ".82rem", marginTop: 2 }}>
+                  {[r.attempt, r.marks].filter(Boolean).join(" · ")}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign: "center", marginTop: 26 }}>
+            <a className="btn secondary" href="/results">See all results →</a>
+          </div>
+        </section>
+      )}
 
       {/* TESTIMONIALS */}
       <section className="section alt" id="testimonials">

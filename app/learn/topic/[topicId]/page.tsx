@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { videoEmbedSrc } from "../../_lib/media";
+import { bunnyEmbedUrl } from "@/lib/bunny";
 import DoubtBox from "./DoubtBox";
 
 export const dynamic = "force-dynamic";
@@ -77,7 +78,7 @@ function SectionBody({
     type === "discussion_video" ||
     type === "custom"
   ) {
-    const src = videoEmbedSrc(config);
+    const src = c.bunny_video_id ? bunnyEmbedUrl(c.bunny_video_id) : videoEmbedSrc(config);
     return (
       <>
         {src ? (

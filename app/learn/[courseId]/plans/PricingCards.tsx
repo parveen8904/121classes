@@ -116,21 +116,32 @@ export default function PricingCards({
           const perMonth = Math.round(total / months);
           const owned = currentTier ? TIER_RANK[currentTier] >= TIER_RANK[p.tier] : false;
           const isCurrent = currentTier === p.tier;
+          const isFree = (p.web_price_inr ?? 0) === 0;
           return (
             <div key={p.id} className={`plan-card${p.tier === "silver" ? " featured" : ""}`}>
               {p.tier === "silver" && <span className="plan-pop">Most popular</span>}
               <div className="tier-name">{p.name}</div>
               <div className="tagline">{meta?.tagline}</div>
-              <div className="plan-price">
-                {formatINR(total)} <small>/ {durationLabel(months)}</small>
-              </div>
-              <div className="plan-permonth">≈ {formatINR(perMonth)} / month</div>
+              {isFree ? (
+                <div className="plan-price">Free</div>
+              ) : (
+                <>
+                  <div className="plan-price">
+                    {formatINR(total)} <small>/ {durationLabel(months)}</small>
+                  </div>
+                  <div className="plan-permonth">≈ {formatINR(perMonth)} / month</div>
+                </>
+              )}
               <ul className="feat-list">
                 {meta?.features.map((f) => (
                   <li key={f}>{f}</li>
                 ))}
               </ul>
-              {owned ? (
+              {isFree ? (
+                <a className="btn block secondary" href="/login">
+                  Start free →
+                </a>
+              ) : owned ? (
                 <div className="plan-current">{isCurrent ? "✓ Your current plan" : "Included in your plan"}</div>
               ) : configured ? (
                 <button className="btn block" type="button" disabled={busy === p.tier} onClick={() => buy(p.tier)}>

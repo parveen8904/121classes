@@ -71,8 +71,8 @@ export const SECTION_TYPES: {
 ];
 
 export const PLAN_OPTIONS = [
-  { value: "", label: "Free (no subscription needed)" },
-  { value: "bronze", label: "Bronze and up" },
-  { value: "silver", label: "Silver and up" },
-  { value: "gold", label: "Gold only" },
+  { value: "", label: "🆓 Free — everyone" },
+  { value: "bronze", label: "🥉 Bronze (free)" },
+  { value: "silver", label: "🥈 Silver (paid — tests)" },
+  { value: "gold", label: "🥇 Gold (paid — premium classes)" },
 ];

@@ -1,33 +1,32 @@
 // Marketing-facing description of each tier (what a student actually gets).
-// Kept separate from the raw `plans.features` jsonb so the pricing page reads
-// like a real plan comparison rather than a flag dump.
+// Bronze is FREE for everyone; Silver adds tests; Gold adds premium classes.
 
 export type TierMeta = { tagline: string; features: string[] };
 
 export const TIER_META: Record<string, TierMeta> = {
   bronze: {
-    tagline: "Self-paced revision essentials to lock in the concepts.",
+    tagline: "Free for everyone — core lectures & notes.",
     features: [
-      "First & second revision videos",
-      "All topic videos",
+      "Revision & topic videos",
       "Downloadable PDF notes & question banks",
       "Past examination questions",
+      "No payment needed",
     ],
   },
   silver: {
-    tagline: "Revision plus practice and instant doubt-solving.",
+    tagline: "Everything free, plus tests & doubt-solving.",
     features: [
-      "Everything in Bronze",
-      "AI Ask-a-Doubt, guided by CA Parveen Sharma",
-      "Subjective tests with AI evaluation",
+      "Everything in Bronze (free)",
       "Auto-graded MCQ tests",
+      "Subjective tests with AI evaluation",
+      "AI Ask-a-Doubt, guided by CA Parveen Sharma",
     ],
   },
   gold: {
-    tagline: "The complete 1:1 experience — nothing held back.",
+    tagline: "The complete experience — premium classes.",
     features: [
       "Everything in Silver",
-      "Full coaching-class recordings",
+      "Premium full coaching-class videos",
       "Live classes on Zoom",
       "Priority doubt-solving",
     ],

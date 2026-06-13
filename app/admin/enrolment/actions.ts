@@ -45,9 +45,11 @@ async function planIdForTier(
 export async function grantSubscription(formData: FormData) {
   const email = str(formData.get("email")).toLowerCase();
   const courseId = str(formData.get("course_id"));
+  const subjectRaw = str(formData.get("subject_id"));
+  const subjectId = subjectRaw && subjectRaw !== "all" ? subjectRaw : null;
   const tier = str(formData.get("tier"));
   const months = num(formData.get("months"), 1);
-  if (!email || !courseId || !TIERS.includes(tier)) {
+  if (!email || !courseId || !subjectRaw || !TIERS.includes(tier)) {
     redirect("/admin/enrolment?error=missing");
   }
 
@@ -69,6 +71,7 @@ export async function grantSubscription(formData: FormData) {
   await supabase.from("subscriptions").insert({
     student_id: profile.id,
     course_id: courseId,
+    subject_id: subjectId,
     plan_id: planId,
     channel: "admin_grant",
     ends_at: endsAtFromNow(months),
@@ -95,6 +98,8 @@ export async function grantSubscription(formData: FormData) {
 export async function bulkGrant(formData: FormData) {
   const raw = str(formData.get("emails"));
   const courseId = str(formData.get("course_id"));
+  const subjectRaw = str(formData.get("subject_id"));
+  const subjectId = subjectRaw && subjectRaw !== "all" ? subjectRaw : null;
   const tier = str(formData.get("tier"));
   const months = num(formData.get("months"), 1);
   const emails = Array.from(
@@ -105,7 +110,7 @@ export async function bulkGrant(formData: FormData) {
         .filter((e) => e.includes("@")),
     ),
   );
-  if (!emails.length || !courseId || !TIERS.includes(tier)) {
+  if (!emails.length || !courseId || !subjectRaw || !TIERS.includes(tier)) {
     redirect("/admin/enrolment?error=missing");
   }
 
@@ -132,6 +137,7 @@ export async function bulkGrant(formData: FormData) {
       found.map((p) => ({
         student_id: p.id,
         course_id: courseId,
+        subject_id: subjectId,
         plan_id: planId,
         channel: "admin_grant",
         ends_at: ends,

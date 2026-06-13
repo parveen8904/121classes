@@ -14,6 +14,7 @@ type SubRow = {
   ends_at: string | null;
   channel: string;
   courses: { title: string } | null;
+  subjects: { title: string } | null;
   plans: { tier: string } | null;
 };
 
@@ -30,7 +31,7 @@ export default async function UserDetail({ params }: { params: { id: string } })
 
   const { data: subsData } = await supabase
     .from("subscriptions")
-    .select("id, status, ends_at, channel, courses(title), plans(tier)")
+    .select("id, status, ends_at, channel, courses(title), subjects(title), plans(tier)")
     .eq("student_id", u.id)
     .order("created_at", { ascending: false });
   const subs = (subsData ?? []) as unknown as SubRow[];
@@ -121,7 +122,7 @@ export default async function UserDetail({ params }: { params: { id: string } })
               <div>
                 <span className="row-title">📘 {s.courses?.title ?? "Course"}</span>
                 <p className="row-sub">
-                  {s.plans?.tier ?? "—"} · {s.status}
+                  {s.subjects?.title ?? "Whole course"} · {s.plans?.tier ?? "—"} · {s.status}
                   {s.status === "active" ? ` · expires ${fmt(s.ends_at)}` : ""} · {s.channel}
                 </p>
               </div>

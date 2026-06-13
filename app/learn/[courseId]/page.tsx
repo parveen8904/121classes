@@ -42,13 +42,11 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
       .order("title"),
     supabase
       .from("subscriptions")
-      .select("id, ends_at, status, auto_renew, plans(tier, name)")
+      .select("id, ends_at, auto_renew, subject_id, plans(tier, name), subjects(title)")
       .eq("student_id", user.id)
       .eq("course_id", course.id)
       .eq("status", "active")
-      .order("ends_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .order("ends_at", { ascending: false }),
   ]);
 
   const subjectIds = (subjects ?? []).map((s) => s.id);
@@ -62,9 +60,21 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
     : { data: [] as never[] };
 
   const target = profile?.target_attempt ?? null;
-  const sub = subscription as
-    | { id: string; ends_at: string | null; auto_renew: boolean; plans: { tier: string; name: string } | null }
-    | null;
+  type Sub = {
+    id: string;
+    ends_at: string | null;
+    auto_renew: boolean;
+    subject_id: string | null;
+    plans: { tier: string; name: string } | null;
+    subjects: { title: string } | null;
+  };
+  const subs = (subscription as unknown as Sub[] | null) ?? [];
+  const wholeCourseSub = subs.find((s) => !s.subject_id) ?? null;
+  const accessLabels = subs.map((s) =>
+    s.subject_id
+      ? `${s.subjects?.title ?? "Subject"} (${s.plans?.name ?? s.plans?.tier ?? "Plan"})`
+      : `Whole course (${s.plans?.name ?? s.plans?.tier ?? "Plan"})`,
+  );
   const topicCount = (topics ?? []).length;
 
   return (
@@ -86,23 +96,26 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
 
         {/* Access banner */}
         <div className="access-banner">
-          {sub ? (
+          {subs.length > 0 ? (
             <>
               <div>
-                <div className="lead">✓ {sub.plans?.name ?? sub.plans?.tier ?? "Plan"} active</div>
+                <div className="lead">✓ Active access</div>
                 <div className="sub">
-                  Access until {fmtDate(sub.ends_at)} · auto-renew {sub.auto_renew ? "on" : "off"}
+                  {accessLabels.join(" · ")}
+                  {wholeCourseSub && ` · until ${fmtDate(wholeCourseSub.ends_at)}`}
                 </div>
               </div>
               <div className="access-actions">
-                <form action={setAutoRenew} style={{ margin: 0 }}>
-                  <input type="hidden" name="sub_id" value={sub.id} />
-                  <input type="hidden" name="course_id" value={course.id} />
-                  <input type="hidden" name="on" value={sub.auto_renew ? "false" : "true"} />
-                  <button className="btn small secondary" type="submit">
-                    {sub.auto_renew ? "Cancel auto-renew" : "Turn on auto-renew"}
-                  </button>
-                </form>
+                {wholeCourseSub && (
+                  <form action={setAutoRenew} style={{ margin: 0 }}>
+                    <input type="hidden" name="sub_id" value={wholeCourseSub.id} />
+                    <input type="hidden" name="course_id" value={course.id} />
+                    <input type="hidden" name="on" value={wholeCourseSub.auto_renew ? "false" : "true"} />
+                    <button className="btn small secondary" type="submit">
+                      {wholeCourseSub.auto_renew ? "Cancel auto-renew" : "Turn on auto-renew"}
+                    </button>
+                  </form>
+                )}
                 <Link className="btn small secondary" href={`/learn/${course.id}/plans`}>
                   View plans
                 </Link>

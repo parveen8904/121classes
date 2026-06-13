@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatINR } from "@/lib/pricing";
 import AdminHero from "../_components/AdminHero";
-import { setOrderStatus } from "./actions";
+import { setOrderStatus, sendDispatchEmail } from "./actions";
 
 type Ship = { name?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string; phone?: string };
 type Contact = { name?: string; email?: string; phone?: string };
@@ -27,7 +27,11 @@ function fmt(s: string): string {
   return new Date(s).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" });
 }
 
-export default async function AdminOrdersPage() {
+export default async function AdminOrdersPage({
+  searchParams,
+}: {
+  searchParams: { dispatch?: string };
+}) {
   const supabase = createClient();
   const { data } = await supabase
     .from("book_orders")
@@ -45,7 +49,24 @@ export default async function AdminOrdersPage() {
         back={{ href: "/admin", label: "Admin" }}
       />
 
-      <div style={{ marginTop: 24, display: "grid", gap: 12 }}>
+      {searchParams.dispatch && (
+        <div className={`notice ${searchParams.dispatch === "skipped" ? "err" : "ok"}`} style={{ marginTop: 16 }}>
+          {searchParams.dispatch === "skipped"
+            ? "Email isn't configured yet (set MAILGUN + WAREHOUSE_EMAIL) — nothing was sent."
+            : `📧 Dispatch email sent for ${searchParams.dispatch} order(s).`}
+        </div>
+      )}
+
+      <form action={sendDispatchEmail} style={{ marginTop: 18 }}>
+        <button className="btn small" type="submit">
+          📧 Email dispatch list to warehouse
+        </button>
+        <span className="muted" style={{ fontSize: ".8rem", marginLeft: 10 }}>
+          Also runs automatically each evening.
+        </span>
+      </form>
+
+      <div style={{ marginTop: 18, display: "grid", gap: 12 }}>
         {orders.length > 0 ? (
           orders.map((o) => {
             const qty = (o.items ?? []).reduce((s, i) => s + (i.qty ?? 0), 0);

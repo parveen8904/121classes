@@ -51,7 +51,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     desc: "Schedule live sessions (Zoom/Meet) and attach recordings after.",
     href: "/admin/live",
   },
-  { icon: "📊", title: "Reporting", desc: "Finance, student & warehouse emails.", phase: "Phase 8" },
+  {
+    icon: "📊",
+    title: "Reports",
+    desc: "Revenue, active plans, book sales and dispatch snapshot.",
+    href: "/admin/reports",
+  },
 ];
 
 export default function AdminHome() {

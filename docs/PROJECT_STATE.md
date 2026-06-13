@@ -157,7 +157,7 @@ RLS is **enabled on every table**. The script is transactional and re-runnable (
 5. 🟡 **Phase 5 — Payments & book store** — built (see §15). Razorpay checkout for **plans** and **books** (guest checkout), admin book catalogue + order fulfilment. **Activates when Razorpay keys are added to Vercel env** (degrades to "contact us" until then). Remaining: automated end-of-day warehouse email.
 6. 🟡 **Phase 6 — Live classes + messaging** — built (see §16). Live-class scheduling + student/admin live views work now (manual links). Email/WhatsApp notifications **activate when keys are added** (Mailgun API / Interakt).
 7. 🟡 **Phase 7 — Tests + AI** — built (see §17). MCQ auto-grading works now; AI subjective grading + doubt-solving **activate with `ANTHROPIC_API_KEY`** (fall back to faculty review until then).
-8. **Phase 8 — Reporting** (finance, student emails, warehouse).
+8. 🟡 **Phase 8 — Reporting & warehouse** — built (see §18). Reports dashboard works now; the daily warehouse dispatch email **activates with Mailgun + WAREHOUSE_EMAIL**.
 9. **Phase 9 — Landing sections from DB** (amendments / what's new / resources editable).
 10. **Phase 10 — Mobile apps** (Expo iOS + Android; store billing).
 
@@ -244,6 +244,17 @@ No payment yet (that's Phase 5) — access is granted by admins, and this is wha
 - **AI doubt-solving:** `ask_doubt` sections render `DoubtBox` inline on the topic page → `askDoubt` → `answerDoubt` (Claude) or "faculty will review" fallback; logged to `doubts`.
 - **`lib/ai.ts`:** Anthropic Messages API via fetch, model `claude-sonnet-4-6` (override `ANTHROPIC_MODEL`); `answerDoubt`, `gradeSubjective`, `aiConfigured`. **Env:** `ANTHROPIC_API_KEY`.
 - Test editors linked from the topic editor section rows; tests opened from the student topic page ("Start test →").
+
+---
+
+## 18. Reporting & warehouse (Phase 8 — built)
+**No DB migration.**
+- **`/admin/reports`:** live KPIs (total & this-month revenue, active subscriptions, students, book orders, awaiting dispatch), revenue split (subscriptions vs books), active plans by tier, top-selling books. Revenue = **paid online orders** (`orders` kind=subscription status=paid + non-cancelled `book_orders`); admin-granted free enrolments don't count. Sums computed in JS (fine at current scale; swap to an RPC if volume grows).
+- **Warehouse dispatch email** (`lib/warehouse.ts` `runWarehouseDispatch()`): emails the warehouse all **paid + not-yet-`warehouse_notified_at`** book orders (items + ship-to table), then stamps them. Idempotent.
+  - **Cron:** `app/api/cron/warehouse-dispatch/route.ts` + `vercel.json` cron `30 12 * * *` (18:00 IST). Secured by `CRON_SECRET` (Vercel sends it as Bearer; `?secret=` also accepted for manual hits).
+  - **Manual:** `/admin/orders` has an "📧 Email dispatch list to warehouse" button (server action → same helper).
+  - **Env:** `WAREHOUSE_EMAIL`, `CRON_SECRET` (+ Mailgun from Phase 6).
+- Admin hub + sub-nav gained **📊 Reports**.
 
 ---
 

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/warehouse-dispatch",
+      "schedule": "30 12 * * *"
+    }
+  ]
+}

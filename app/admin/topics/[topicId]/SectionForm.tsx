@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SECTION_TYPES, FIELD_LABELS, PLAN_OPTIONS, type ConfigField } from "./sectionTypes";
+import BunnyUploader from "./BunnyUploader";
 
 type Section = {
   id: string;
@@ -68,7 +69,9 @@ export default function SectionForm({
       {def && def.fields.length > 0 && (
         <div style={{ marginTop: 4 }}>
           {def.fields.map((f: ConfigField) =>
-            f === "revision_round" ? (
+            f === "bunny_video_id" ? (
+              <BunnyUploader key={f} name={f} defaultValue={cfg[f] ?? ""} />
+            ) : f === "revision_round" ? (
               <div key={f}>
                 <label>{FIELD_LABELS[f]}</label>
                 <select name={f} defaultValue={cfg[f] ?? ""}>

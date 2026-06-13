@@ -295,7 +295,7 @@ No payment yet (that's Phase 5) — access is granted by admins, and this is wha
 Decision: use **Bunny Stream** as-is (cheap; does transcode + adaptive HLS + CDN + MediaCage DRM). Hybrid/self-host plan in `docs/ENCRYPTED_VIDEO_PLAN.md` is parked.
 - **Playback:** `lib/media.ts` `videoEmbedSrc` returns the Bunny embed `https://iframe.mediadelivery.net/embed/<lib>/<videoId>` when a section's `bunny_video_id` is set and `NEXT_PUBLIC_BUNNY_LIBRARY_ID` exists. Precedence: `embed_url` → Bunny → YouTube.
 - **Watermark:** student email/phone overlaid on the player (`.vwm`, moves between corners every ~24s) — `SectionBody` gets a `watermark` prop on the topic page.
-- **Admin:** paste the Bunny video GUID into a video section's "Bunny.net Stream video ID" field (upload the video in the Bunny dashboard for now; API upload from admin can come later).
+- **Admin upload (built):** video sections show **"⬆️ Upload video to Bunny"** (`BunnyUploader` + `bunnyActions.createBunnyUpload`). Uses Bunny's **TUS resumable** upload directly from the browser; the server only mints a short-lived signature (API key never hits the browser). On success the field is filled with the video GUID. **Needs `BUNNY_STREAM_API_KEY` in Vercel** (server-only); without it the button explains to paste a GUID instead. Dep added: `tus-js-client`.
 - **Env to activate:** `NEXT_PUBLIC_BUNNY_LIBRARY_ID` (+ `BUNNY_STREAM_API_KEY`, `BUNNY_CDN_HOSTNAME` for later). Until set, Bunny sections show "Video coming soon"; YouTube/embed sections work regardless.
 
 ---

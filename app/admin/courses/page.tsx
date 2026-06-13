@@ -5,13 +5,25 @@ import PublishToggle from "../_components/PublishToggle";
 import AdminHero from "../_components/AdminHero";
 import { createCourse, deleteCourse, toggleCoursePublish } from "./actions";
 
-export default async function CoursesPage() {
+export default async function CoursesPage({
+  searchParams,
+}: {
+  searchParams: { q?: string; status?: string };
+}) {
   const supabase = createClient();
-  const { data: courses } = await supabase
+  const q = (searchParams.q ?? "").trim();
+  const status = searchParams.status ?? "";
+
+  let query = supabase
     .from("courses")
     .select("id, title, slug, order_index, is_published")
     .order("order_index")
     .order("title");
+  if (q) query = query.or(`title.ilike.%${q}%,slug.ilike.%${q}%`);
+  if (status === "published") query = query.eq("is_published", true);
+  if (status === "draft") query = query.eq("is_published", false);
+
+  const { data: courses } = await query;
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -48,7 +60,32 @@ export default async function CoursesPage() {
         </form>
       </div>
 
-      <h2 className="admin-section-title">📚 All courses</h2>
+      <form style={{ marginTop: 24, display: "grid", gap: 12, gridTemplateColumns: "2fr 1fr auto", alignItems: "end" }}>
+        <div>
+          <label htmlFor="q">Search courses</label>
+          <input id="q" name="q" defaultValue={q} placeholder="Title or slug…" style={{ marginBottom: 0 }} />
+        </div>
+        <div>
+          <label htmlFor="status">Status</label>
+          <select id="status" name="status" defaultValue={status} style={{ marginBottom: 0 }}>
+            <option value="">All</option>
+            <option value="published">🟢 Published</option>
+            <option value="draft">⚪ Draft</option>
+          </select>
+        </div>
+        <button className="btn" type="submit">
+          Filter
+        </button>
+      </form>
+
+      <h2 className="admin-section-title">
+        📚 All courses
+        {(q || status) && (
+          <Link className="muted" href="/admin/courses" style={{ fontSize: ".8rem", fontWeight: 400 }}>
+            clear
+          </Link>
+        )}
+      </h2>
       <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
         {courses && courses.length > 0 ? (
           courses.map((c) => (

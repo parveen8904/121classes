@@ -10,7 +10,7 @@ export default function SiteNav() {
           <Logo />
         </Link>
         <div className="lp-nav-links">
-          <Link className="hide-sm" href="/#courses">Courses</Link>
+          <Link className="hide-sm" href="/courses">Courses</Link>
           <Link className="hide-sm" href="/books">Books</Link>
           <Link className="hide-sm" href="/#resources">Resources</Link>
           <Link className="hide-sm" href="/#about">About</Link>

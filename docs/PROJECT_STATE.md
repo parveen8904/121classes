@@ -259,6 +259,16 @@ No payment yet (that's Phase 5) — access is granted by admins, and this is wha
 
 ---
 
+## 19. Founder feedback — round 1 (built)
+- **Admin Users** `/admin/users` (+ `[id]`): search/filter all profiles by name/email/phone & role; view/edit any profile (name, phone, attempt, **role**, address, GST) and see their subscriptions. Linked in admin header sub-nav + hub.
+- **Courses filter:** `/admin/courses` has search (title/slug) + status (published/draft).
+- **Public Courses page** `/courses` (SiteNav/Footer layout): all published courses with subjects + faculty. Homepage Courses section now pulls newest 3 from DB with an "Explore all courses →" CTA; nav "Courses" → `/courses`.
+- **Homepage highlight banner:** slim banner under the hero showing the latest announcement (links to it / #whats-new).
+- **Bio update:** mentor section rewritten with the "God of Accountancy" / 30+ yrs / rank-holder / Advanced Accounting & FR copy.
+- **Still pending decisions (asked):** subject-level enrolment (Course+Subject mandatory) and course↔multiple-plan mapping — both touch the access model.
+
+---
+
 ## 11. Working conventions
 - Develop on branch `claude/landing-page-text-fix-C0lDT`, then fast-forward merge to `main`.
 - Vercel auto-deploys on push to `main`.

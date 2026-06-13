@@ -10,6 +10,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/courses",
   },
   {
+    icon: "👥",
+    title: "Users",
+    desc: "View, edit & manage every account — roles, attempts, contact details.",
+    href: "/admin/users",
+  },
+  {
     icon: "👩‍🏫",
     title: "Faculty",
     desc: "Add faculty (name, photo, bio) and assign them to subjects.",

@@ -59,12 +59,21 @@ const testimonials = [
 
 export default async function Home() {
   const supabase = createClient();
-  const { data: announcements } = await supabase
-    .from("announcements")
-    .select("id, kind, title, body, link_url, published_at")
-    .eq("is_published", true)
-    .order("published_at", { ascending: false })
-    .limit(6);
+  const [{ data: announcements }, { data: dbCourses }] = await Promise.all([
+    supabase
+      .from("announcements")
+      .select("id, kind, title, body, link_url, published_at")
+      .eq("is_published", true)
+      .order("published_at", { ascending: false })
+      .limit(6),
+    supabase
+      .from("courses")
+      .select("id, title")
+      .eq("is_published", true)
+      .order("order_index")
+      .limit(3),
+  ]);
+  const latestHighlight = announcements?.[0] ?? null;
 
   return (
     <main>
@@ -89,6 +98,19 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* HIGHLIGHT BANNER — latest announcement / course */}
+      {latestHighlight && (
+        <div className="container" style={{ marginTop: -10, marginBottom: 10 }}>
+          <Link href={latestHighlight.link_url || "/#whats-new"} style={{ display: "block" }}>
+            <div className="leadline" style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+              <span className="badge">📣 {KIND_LABEL[latestHighlight.kind] ?? "Latest"}</span>
+              <span>{latestHighlight.title}</span>
+              <span style={{ color: "var(--accent)", fontWeight: 700 }}>→</span>
+            </div>
+          </Link>
+        </div>
+      )}
+
       {/* MENTOR — CA Parveen Sharma */}
       <section className="section" id="mentor">
         <div className="mentor">
@@ -98,15 +120,21 @@ export default async function Home() {
             <span className="cap">CA Parveen Sharma</span>
           </div>
           <div>
-            <div className="ribbon">Your mentor</div>
+            <div className="ribbon">Your mentor · The God of Accountancy</div>
             <h2>CA Parveen Sharma</h2>
             <div className="role">Founder &amp; Lead Faculty · 1:1 CA Classes</div>
             <p className="muted">
-              A renowned CA faculty known for clear, exam-focused teaching, CA Parveen
-              Sharma personally leads every course. His mission is simple: highly
-              personalized, result-oriented preparation that cuts the clutter and gets
-              students through their exams. The entire venture — the teaching, the
-              method, and the technology around it — is built and guided by him.
+              CA Parveen Sharma is one of India&apos;s most renowned Accountancy educators,
+              widely known as the <strong>&ldquo;God of Accountancy&rdquo;</strong> among CA students.
+              With <strong>30+ years of teaching experience</strong>, he has mentored thousands of
+              aspiring Chartered Accountants across the country. A <strong>rank holder in both
+              CA Intermediate and CA Final</strong>, he specialises in <strong>Advanced Accounting
+              and Financial Reporting</strong> and is loved for his concept-based teaching style
+              that simplifies the toughest topics.
+            </p>
+            <p className="muted" style={{ marginTop: 12 }}>
+              His classes focus on building strong conceptual clarity, exam-oriented preparation
+              and practical understanding — helping students achieve excellence in their CA journey.
             </p>
             <div className="stats">
               {stats.map((s) => (
@@ -189,19 +217,32 @@ export default async function Home() {
           <p>Taught by <strong>CA Parveen Sharma &amp; his team</strong> — structured, attempt-wise content.</p>
         </div>
         <div className="grid grid-3">
-          {courses.map((c) => (
-            <div className="tile" key={c.title}>
-              <div className="ic">{c.icon}</div>
-              <h3>{c.title}</h3>
-              <p>{c.desc}</p>
-              <p className="muted" style={{ marginTop: 10, fontSize: ".82rem" }}>
-                👨‍🏫 Taught by CA Parveen Sharma &amp; team
-              </p>
-              <p style={{ marginTop: 12 }}>
-                <Link className="btn secondary small" href="/login">View course</Link>
-              </p>
-            </div>
-          ))}
+          {dbCourses && dbCourses.length > 0
+            ? dbCourses.map((c) => (
+                <div className="tile" key={c.id}>
+                  <div className="ic">📘</div>
+                  <h3>{c.title}</h3>
+                  <p className="muted" style={{ marginTop: 10, fontSize: ".82rem" }}>
+                    👨‍🏫 Taught by CA Parveen Sharma &amp; team
+                  </p>
+                  <p style={{ marginTop: 12 }}>
+                    <Link className="btn secondary small" href="/courses">View course</Link>
+                  </p>
+                </div>
+              ))
+            : courses.map((c) => (
+                <div className="tile" key={c.title}>
+                  <div className="ic">{c.icon}</div>
+                  <h3>{c.title}</h3>
+                  <p>{c.desc}</p>
+                  <p style={{ marginTop: 12 }}>
+                    <Link className="btn secondary small" href="/courses">View course</Link>
+                  </p>
+                </div>
+              ))}
+        </div>
+        <div style={{ textAlign: "center", marginTop: 30 }}>
+          <Link className="btn" href="/courses">Explore all courses →</Link>
         </div>
       </section>
 

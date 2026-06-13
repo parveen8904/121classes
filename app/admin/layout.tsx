@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 const ADMIN_LINKS: [string, string][] = [
   ["📘 Courses", "/admin/courses"],
+  ["👥 Users", "/admin/users"],
   ["👩‍🏫 Faculty", "/admin/faculty"],
   ["📣 Announcements", "/admin/announcements"],
   ["🎟️ Enrolment", "/admin/enrolment"],

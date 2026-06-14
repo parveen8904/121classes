@@ -6,10 +6,12 @@ export default async function SiteFooter() {
   const supabase = createClient();
   const { data } = await supabase
     .from("site_settings")
-    .select("value")
-    .eq("key", "support_telegram")
-    .maybeSingle();
-  const telegram = (data?.value as string) || "";
+    .select("key, value")
+    .in("key", ["support_telegram", "support_instagram", "support_whatsapp"]);
+  const s = new Map((data ?? []).map((r) => [r.key, r.value as string]));
+  const telegram = s.get("support_telegram") || "";
+  const instagram = s.get("support_instagram") || "";
+  const whatsapp = s.get("support_whatsapp") || "";
 
   return (
     <footer className="lp-footer">
@@ -24,19 +26,31 @@ export default async function SiteFooter() {
             A venture by <strong>CA Parveen Sharma</strong>.
           </p>
           <p className="muted" style={{ marginTop: 8, fontSize: ".82rem" }}>
-            Office: W 6/30, DLF, Gurugram
+            Office: W 6/30, DLF Phase 3, Gurugram
           </p>
-          {telegram && (
-            <a
-              href={telegram}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn small"
-              style={{ marginTop: 14, background: "#229ED9", color: "#fff" }}
-            >
-              ✈️ Join us on Telegram
-            </a>
-          )}
+          <p className="muted" style={{ marginTop: 4, fontSize: ".82rem" }}>
+            📧 <a className="grad" href="mailto:help@121caclasses.com">help@121caclasses.com</a>
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+            {telegram && (
+              <a href={telegram} target="_blank" rel="noopener noreferrer" className="btn small"
+                style={{ background: "#229ED9", color: "#fff" }}>
+                ✈️ Telegram
+              </a>
+            )}
+            {whatsapp && (
+              <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="btn small"
+                style={{ background: "#25D366", color: "#fff" }}>
+                💬 WhatsApp
+              </a>
+            )}
+            {instagram && (
+              <a href={instagram} target="_blank" rel="noopener noreferrer" className="btn small"
+                style={{ background: "linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)", color: "#fff" }}>
+                📸 Instagram
+              </a>
+            )}
+          </div>
         </div>
         <div>
           <h4>Explore</h4>

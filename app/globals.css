@@ -138,7 +138,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 /* readable highlighter for key names (no low-contrast gradient text) */
 .namehl {
   font-weight: 800; color: #fff;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  background: #000;
   padding: .04em .32em; border-radius: 10px;
   -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }

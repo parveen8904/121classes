@@ -61,8 +61,8 @@ const APP_PLATFORMS = [
   { key: "app_url_web", icon: "🌐", label: "Web app", cta: "Open in browser", fallback: "/login" },
   { key: "app_url_mac", icon: "🍎", label: "Mac app", cta: "Download for Mac" },
   { key: "app_url_windows", icon: "🪟", label: "Windows app", cta: "Download for Windows" },
-  { key: "app_url_ios", icon: "📱", label: "iPhone", cta: "On the App Store" },
-  { key: "app_url_android", icon: "🤖", label: "Android", cta: "On Google Play" },
+  { key: "app_url_ios", icon: "📱", label: "iPhone", cta: "Install on iPhone", fallback: "/install" },
+  { key: "app_url_android", icon: "🤖", label: "Android", cta: "Install on Android", fallback: "/install" },
 ];
 
 export default async function Home() {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SetPassword from "./set-password";
+import ConnectChannels from "./ConnectChannels";
 
 export default async function Dashboard() {
   const supabase = createClient();
@@ -13,9 +14,15 @@ export default async function Dashboard() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role, target_attempt")
+    .select("full_name, role, target_attempt, telegram_chat_id")
     .eq("id", user.id)
     .single();
+
+  const { data: chSettings } = await supabase
+    .from("site_settings")
+    .select("key, value")
+    .in("key", ["support_telegram", "support_whatsapp"]);
+  const chMap = new Map((chSettings ?? []).map((r) => [r.key, r.value as string]));
 
   const { data: courses } = await supabase
     .from("courses")
@@ -47,6 +54,12 @@ export default async function Dashboard() {
         <div style={{ marginTop: 20 }}>
           <SetPassword />
         </div>
+
+        <ConnectChannels
+          telegramChannel={chMap.get("support_telegram")}
+          whatsapp={chMap.get("support_whatsapp")}
+          alreadyLinked={!!profile?.telegram_chat_id}
+        />
 
         {announcements && announcements.length > 0 && (
           <>

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function NotificationsPage({
   searchParams,
 }: {
-  searchParams: { tg?: string; em?: string; emt?: string };
+  searchParams: { tg?: string; em?: string; emt?: string; dm?: string; dmt?: string };
 }) {
   const tgOn = telegramConfigured();
   const emOn = emailConfigured();
@@ -44,7 +44,8 @@ export default async function NotificationsPage({
         <div className="notice ok" style={{ marginTop: 16 }}>
           {searchParams.tg === "ok" && "✅ Posted to your Telegram channel (all members). "}
           {searchParams.tg === "fail" && "⚠️ Telegram post failed — check the bot token. "}
-          {totalEmail > 0 && `✉️ Emailed ${sentEmail}/${totalEmail} students${totalEmail >= 500 ? " (first 500 this batch — send again for the rest)" : ""}.`}
+          {totalEmail > 0 && `✉️ Emailed ${sentEmail}/${totalEmail} students${totalEmail >= 500 ? " (first 500 this batch — send again for the rest)" : ""}. `}
+          {Number(searchParams.dmt ?? 0) > 0 && `✈️ Sent ${Number(searchParams.dm ?? 0)}/${Number(searchParams.dmt ?? 0)} personal Telegram messages.`}
         </div>
       )}
 
@@ -71,6 +72,9 @@ export default async function NotificationsPage({
           <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
             <label className="remember" style={{ margin: 0, opacity: tgOn ? 1 : 0.5 }}>
               <input type="checkbox" name="ch_telegram" defaultChecked={tgOn} disabled={!tgOn} /> ✈️ Telegram channel (reaches all)
+            </label>
+            <label className="remember" style={{ margin: 0, opacity: tgOn ? 1 : 0.5 }}>
+              <input type="checkbox" name="ch_telegram_dm" disabled={!tgOn} /> 📨 Telegram personal messages (to connected students)
             </label>
             <label className="remember" style={{ margin: 0, opacity: emOn ? 1 : 0.5 }}>
               <input type="checkbox" name="ch_email" defaultChecked={false} disabled={!emOn} /> ✉️ Email students

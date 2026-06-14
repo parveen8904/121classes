@@ -32,6 +32,33 @@ export async function sendTelegramChannel(text: string, linkUrl?: string): Promi
   }
 }
 
+// The bot's @username (no @), used to build personal deep links (t.me/<bot>?start=…).
+export function telegramBotUsername(): string {
+  return process.env.TELEGRAM_BOT_USERNAME || "";
+}
+
+// Send a direct message to ONE linked student's Telegram chat. Used for the
+// doubt-bot replies and for mass *individual* messaging.
+export async function sendTelegramMessage(
+  chatId: string,
+  text: string,
+  linkUrl?: string,
+): Promise<boolean> {
+  if (!telegramConfigured() || !chatId) return false;
+  const body = linkUrl ? `${text}\n\n${linkUrl}` : text;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: body }),
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   if (!emailConfigured() || !to) return false;
   const domain = process.env.MAILGUN_DOMAIN!;

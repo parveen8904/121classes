@@ -9,6 +9,28 @@ export function emailConfigured(): boolean {
 export function whatsappConfigured(): boolean {
   return Boolean(process.env.INTERAKT_API_KEY);
 }
+export function telegramConfigured(): boolean {
+  return Boolean(process.env.TELEGRAM_BOT_TOKEN);
+}
+
+// Post one message to the Telegram channel — reaches EVERY member in a single
+// API call (scale-safe). The bot must be an admin of the channel.
+export async function sendTelegramChannel(text: string, linkUrl?: string): Promise<boolean> {
+  if (!telegramConfigured()) return false;
+  const chat = process.env.TELEGRAM_CHANNEL_ID || "@caparveen";
+  const body = linkUrl ? `${text}\n\n${linkUrl}` : text;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chat, text: body }),
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   if (!emailConfigured() || !to) return false;

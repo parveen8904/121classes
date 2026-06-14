@@ -30,8 +30,13 @@ student who passes `has_subject_access`.
   auth via `lib/supabase/token.ts`, permissive CORS).
 - **Admin**: `/admin/protected` — register an encrypted class (title, subject,
   min_plan, CDN url, key, iv, size).
-- **Tooling**: `scripts/encrypt-class.mjs` — AES-256-CBC encrypts a video, prints
-  key/iv/size.
+- **Tooling**:
+  - `scripts/encrypt-class.mjs` — AES-256-CBC encrypts a video, prints key/iv/size (manual host + register).
+  - `scripts/publish-class.mjs` — **one command**: encrypt → upload to **Bunny Storage** → auto-register in `protected_videos`. Runs locally (NOT Vercel — serverless can't encrypt multi-GB files). Needs `BUNNY_STORAGE_ZONE/KEY`, `BUNNY_PULL_ZONE_HOST`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Usage: `node scripts/publish-class.mjs class.mp4 "FR — AS 24 Class 1" financial-reporting`.
+- **Landing app links**: a "Get the app" section on `/` with Web/Mac/Windows/iPhone/Android
+  buttons, each an admin-set URL (`site_settings.app_url_*`, editable in Admin → Site).
+  Unset = "Coming soon". Web defaults to `/login`. iOS/Android are placeholders — no
+  mobile apps exist yet.
 
 ## Built (desktop scaffold — `desktop/`, needs `npm install` + content)
 Electron app: login (Supabase) → list classes → download `.enc` → per-play license

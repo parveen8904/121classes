@@ -47,6 +47,33 @@ export default async function SiteImagesPage() {
           </div>
         </div>
 
+        <h3 style={{ marginTop: 24, marginBottom: 4 }}>📲 App download links (landing page)</h3>
+        <p className="muted" style={{ fontSize: ".82rem", marginBottom: 10 }}>
+          Paste each link as the app becomes available. Blank = the button shows &ldquo;Coming soon&rdquo;.
+        </p>
+        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
+          <div>
+            <label>🌐 Web app URL</label>
+            <input name="app_url_web" defaultValue={m.get("app_url_web") ?? ""} placeholder="/login" />
+          </div>
+          <div>
+            <label>🍎 Mac app (.dmg) URL</label>
+            <input name="app_url_mac" defaultValue={m.get("app_url_mac") ?? ""} placeholder="https://…/app.dmg" />
+          </div>
+          <div>
+            <label>🪟 Windows app (.exe) URL</label>
+            <input name="app_url_windows" defaultValue={m.get("app_url_windows") ?? ""} placeholder="https://…/app.exe" />
+          </div>
+          <div>
+            <label>📱 iPhone App Store URL</label>
+            <input name="app_url_ios" defaultValue={m.get("app_url_ios") ?? ""} placeholder="https://apps.apple.com/…" />
+          </div>
+          <div>
+            <label>🤖 Android Play Store URL</label>
+            <input name="app_url_android" defaultValue={m.get("app_url_android") ?? ""} placeholder="https://play.google.com/…" />
+          </div>
+        </div>
+
         <button className="btn" type="submit" style={{ marginTop: 18 }}>
           Save
         </button>

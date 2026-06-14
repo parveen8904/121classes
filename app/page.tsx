@@ -57,6 +57,14 @@ const testimonials = [
   { who: "S. Iyer", role: "CA Inter student", quote: "Felt like true 1-to-1 mentoring — exactly what I needed to clear my paper." },
 ];
 
+const APP_PLATFORMS = [
+  { key: "app_url_web", icon: "🌐", label: "Web app", cta: "Open in browser", fallback: "/login" },
+  { key: "app_url_mac", icon: "🍎", label: "Mac app", cta: "Download for Mac" },
+  { key: "app_url_windows", icon: "🪟", label: "Windows app", cta: "Download for Windows" },
+  { key: "app_url_ios", icon: "📱", label: "iPhone", cta: "On the App Store" },
+  { key: "app_url_android", icon: "🤖", label: "Android", cta: "On Google Play" },
+];
+
 export default async function Home() {
   const supabase = createClient();
   const [{ data: announcements }, { data: dbCourses }, { data: settings }] = await Promise.all([
@@ -369,6 +377,36 @@ export default async function Home() {
                   <p>{n.desc}</p>
                 </div>
               ))}
+        </div>
+      </section>
+
+      {/* GET THE APP */}
+      <section className="section alt" id="apps">
+        <div className="section-head">
+          <div className="eyebrow">Study anywhere</div>
+          <h2>Get the app</h2>
+          <p>
+            Learn on the web, or download your classes to watch offline on the desktop app — securely,
+            with your name watermarked on every video.
+          </p>
+        </div>
+        <div className="grid grid-3" style={{ maxWidth: 880, margin: "0 auto" }}>
+          {APP_PLATFORMS.map((p) => {
+            const url = siteImg.get(p.key) || p.fallback || "";
+            return url ? (
+              <a className="tile" key={p.key} href={url} style={{ textAlign: "center" }}>
+                <div className="ic">{p.icon}</div>
+                <h3>{p.label}</h3>
+                <p style={{ color: "var(--accent)", fontWeight: 700 }}>{p.cta} →</p>
+              </a>
+            ) : (
+              <div className="tile" key={p.key} style={{ textAlign: "center", opacity: 0.6 }}>
+                <div className="ic">{p.icon}</div>
+                <h3>{p.label}</h3>
+                <p className="muted">Coming soon</p>
+              </div>
+            );
+          })}
         </div>
       </section>
 

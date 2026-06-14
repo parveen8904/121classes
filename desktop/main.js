@@ -1,7 +1,7 @@
 // Electron main process. The window loads the FULL website; the preload exposes
 // a small native bridge (download/decrypt/play) so the site's Downloads page can
 // save encrypted classes and play them offline in a local player window.
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const { createDecipheriv } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -112,9 +112,51 @@ app.on("before-quit", () => {
   }
 });
 
+// Returns true if remote semver (e.g. "2.1.0") is newer than local.
+function isNewer(remote, local) {
+  const r = String(remote).split(".").map((n) => parseInt(n, 10) || 0);
+  const l = String(local).split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(r.length, l.length); i++) {
+    if ((r[i] || 0) > (l[i] || 0)) return true;
+    if ((r[i] || 0) < (l[i] || 0)) return false;
+  }
+  return false;
+}
+
+// On launch, ask the website what the latest app version is. If a newer build
+// exists, show a friendly "Update available" prompt with a one-click download.
+// Never blocks startup and fails silently if offline.
+async function checkForUpdate() {
+  try {
+    const res = await fetch(WEB + "/api/app/version", { cache: "no-store" });
+    if (!res.ok) return;
+    const info = await res.json();
+    const latest = info && info.version;
+    if (!latest || !isNewer(latest, app.getVersion())) return;
+
+    const url = process.platform === "darwin" ? info.mac : info.windows;
+    if (!url) return;
+
+    const { response } = await dialog.showMessageBox({
+      type: "info",
+      title: "Update available",
+      message: `A new version of 121 CA Classes (v${latest}) is available.`,
+      detail: (info.notes ? info.notes + "\n\n" : "") +
+        "Click Download to get the latest version, then open the file and replace the app.",
+      buttons: ["Download", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response === 0) await shell.openExternal(url);
+  } catch {
+    /* offline or no endpoint — ignore */
+  }
+}
+
 app.whenReady().then(() => {
   createWindow();
   app.focus({ steal: true });
+  setTimeout(checkForUpdate, 4000); // after the window has settled
 });
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

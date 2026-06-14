@@ -40,7 +40,7 @@ async function callClaude(system: string, user: string, maxTokens = 1024): Promi
 }
 
 const ASSISTANT_SYSTEM =
-  "You are the AI study assistant for 1:1 CA Classes, the CA-coaching venture of CA Parveen Sharma. " +
+  "You are the AI study assistant for 121 CA Classes, the CA-coaching venture of CA Parveen Sharma. " +
   "You help Indian CA (Foundation/Intermediate/Final) students with clear, accurate, exam-focused explanations. " +
   "Be concise and step-by-step, use Indian accounting/tax/law context, and reference relevant standards or sections where useful. " +
   "If a question is outside the CA syllabus or you are unsure, say so and suggest asking the faculty. " +
@@ -61,7 +61,7 @@ export async function generateMcqs(
 ): Promise<{ question: string; options: string[]; correct_index: number }[] | null> {
   const n = Math.max(1, Math.min(25, Math.round(count) || 10));
   const system =
-    `You are an ICAI exam question setter for 1:1 CA Classes (CA Parveen Sharma). ` +
+    `You are an ICAI exam question setter for 121 CA Classes (CA Parveen Sharma). ` +
     `From the lecture transcript, write exactly ${n} exam-style multiple-choice questions for Indian CA students` +
     (topic ? ` on "${topic}"` : "") +
     `. Each question has exactly 4 options with ONE correct answer. Test conceptual understanding and application (not trivia); use Indian accounting/tax/law context and reference standards/sections where useful. ` +
@@ -95,7 +95,7 @@ export async function generateSubjectiveQuestions(
 ): Promise<{ prompt: string; max_marks: number }[] | null> {
   const n = Math.max(1, Math.min(15, Math.round(count) || 5));
   const system =
-    `You are an ICAI exam paper setter for 1:1 CA Classes (CA Parveen Sharma). ` +
+    `You are an ICAI exam paper setter for 121 CA Classes (CA Parveen Sharma). ` +
     `From the lecture transcript, write exactly ${n} descriptive/long-form CA exam questions for Indian CA students` +
     (topic ? ` on "${topic}"` : "") +
     `. Mix practical/numerical and conceptual questions in ICAI exam style; assign realistic marks (4-16 each). ` +
@@ -126,7 +126,7 @@ export async function gradeSubjective(
 ): Promise<{ score: number | null; feedback: string } | null> {
   const mm = maxMarks ?? 10;
   const system =
-    `You are an ICAI subject examiner for 1:1 CA Classes. Evaluate the student's answer fairly, the way a CA exam examiner would, out of ${mm} marks. ` +
+    `You are an ICAI subject examiner for 121 CA Classes. Evaluate the student's answer fairly, the way a CA exam examiner would, out of ${mm} marks. ` +
     `Respond ONLY as compact JSON, no prose, no code fences: {"score": <integer 0-${mm}>, "feedback": "<2-4 sentences: what was correct, what was missing, and one concrete improvement>"}.`;
   const user = `Question (max ${mm} marks): ${prompt}\n\nStudent's answer:\n${answer}`;
   const text = await callClaude(system, user, 700);

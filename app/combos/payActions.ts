@@ -47,7 +47,7 @@ export async function createComboOrder(input: { comboId: string }): Promise<Comb
       orderId: order.id,
       amount: order.amount,
       keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? process.env.RAZORPAY_KEY_ID!,
-      name: "1:1 CA Classes",
+      name: "121 CA Classes",
       description: combo.title,
       prefill: {
         name: profile?.full_name ?? undefined,

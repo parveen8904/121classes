@@ -3,7 +3,7 @@ import SiteFooter from "../components/SiteFooter";
 import InstallHelper from "./InstallHelper";
 
 export const metadata = {
-  title: "Install the app — 1:1 CA Classes",
+  title: "Install the app — 121 CA Classes",
 };
 
 export default function InstallPage() {
@@ -14,7 +14,7 @@ export default function InstallPage() {
         <div className="section-head">
           <div className="eyebrow">Get the app</div>
           <h2>Install on your device</h2>
-          <p>Add 1:1 CA Classes to your phone or computer — it runs full-screen, like an app.</p>
+          <p>Add 121 CA Classes to your phone or computer — it runs full-screen, like an app.</p>
         </div>
         <InstallHelper />
       </section>

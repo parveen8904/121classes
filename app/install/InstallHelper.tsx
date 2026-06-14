@@ -63,7 +63,7 @@ export default function InstallHelper() {
     return (
       <Card>
         <div style={{ fontSize: "2.4rem" }}>📲</div>
-        <h2 style={{ margin: "8px 0" }}>Install 1:1 CA Classes</h2>
+        <h2 style={{ margin: "8px 0" }}>Install 121 CA Classes</h2>
         <p className="muted">One tap — it adds the app to your device and opens full-screen.</p>
         <button className="btn" onClick={install} style={{ marginTop: 14 }}>
           Install app
@@ -86,7 +86,7 @@ export default function InstallHelper() {
             Scroll down and tap <strong>Add to Home Screen</strong>.
           </li>
           <li>
-            Tap <strong>Add</strong> — the 1:1 CA Classes icon appears on your home screen.
+            Tap <strong>Add</strong> — the 121 CA Classes icon appears on your home screen.
           </li>
         </ol>
         <p className="muted" style={{ fontSize: ".85rem" }}>

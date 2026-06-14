@@ -78,7 +78,7 @@ export async function createBookOrder(input: {
       orderId: order.id,
       amount: order.amount,
       keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? process.env.RAZORPAY_KEY_ID!,
-      name: "1:1 CA Classes — Books",
+      name: "121 CA Classes — Books",
       description: `${book.title} × ${qty}`,
       prefill: { name: b.name, email: b.email, contact: b.phone },
     };

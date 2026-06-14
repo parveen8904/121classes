@@ -105,7 +105,7 @@ export default function LoginForm() {
   return (
     <main>
       <header className="topbar">
-        <Link className="logo" href="/">1:1 <span>CA Classes</span></Link>
+        <Link className="logo" href="/">121 <span>CA Classes</span></Link>
       </header>
 
       <section className="narrow" style={{ paddingTop: 60 }}>

@@ -4,7 +4,7 @@ import SiteFooter from "../components/SiteFooter";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "How to install the app — 1:1 CA Classes" };
+export const metadata = { title: "How to install the app — 121 CA Classes" };
 
 export default async function InstallHelpPage() {
   const supabase = createClient();
@@ -61,7 +61,7 @@ export default async function InstallHelpPage() {
           <ol style={{ lineHeight: 1.9, paddingLeft: 18 }}>
             <li>Click <strong>Download for Mac</strong> below.</li>
             <li>Open the downloaded <strong>.dmg</strong> file (in your Downloads).</li>
-            <li>Drag <strong>1to1 CA Classes</strong> into your <strong>Applications</strong> folder.</li>
+            <li>Drag <strong>121 CA Classes</strong> into your <strong>Applications</strong> folder.</li>
             <li>Open it from Applications — it launches straight away (no warning).</li>
             <li>Sign in with your normal account, then download any class to watch offline.</li>
           </ol>

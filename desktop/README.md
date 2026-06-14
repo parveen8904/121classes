@@ -1,4 +1,4 @@
-# 1:1 CA Classes — Desktop app (Mac / Windows)
+# 121 CA Classes — Desktop app (Mac / Windows)
 
 Downloads **encrypted** class videos and plays them **offline** after verifying the
 student's access against the website. The encrypted file on disk is useless

@@ -37,7 +37,7 @@ export default function ResetForm() {
     <main>
       <header className="topbar">
         <Link className="logo" href="/">
-          1:1 <span>CA Classes</span>
+          121 <span>CA Classes</span>
         </Link>
       </header>
 

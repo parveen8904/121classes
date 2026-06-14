@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { postCommunity, deleteCommunity, pinCommunity } from "./actions";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Community — 1:1 CA Classes" };
+export const metadata = { title: "Community — 121 CA Classes" };
 
 type Row = {
   id: string;

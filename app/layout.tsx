@@ -7,7 +7,7 @@ import RegisterSW from "./components/RegisterSW";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "1:1 CA Classes — Highly Personalized, AI-Enabled CA Coaching",
+  title: "121 CA Classes — Highly Personalized, AI-Enabled CA Coaching",
   description:
     "Highly personalized, AI-enabled CA coaching that clears the clutter — top-notch, result-oriented 1-to-1 teaching, live classes and ad-free lectures for CA students in India.",
   manifest: "/manifest.webmanifest",

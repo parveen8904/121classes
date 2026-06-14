@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import OfflineDownloads from "./OfflineDownloads";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Offline downloads — 1:1 CA Classes" };
+export const metadata = { title: "Offline downloads — 121 CA Classes" };
 
 export default async function DownloadsPage() {
   const supabase = createClient();

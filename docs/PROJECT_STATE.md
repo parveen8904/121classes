@@ -1,4 +1,4 @@
-# 1:1 CA Classes — Project State & Handoff
+# 121 CA Classes — Project State & Handoff
 
 **Purpose:** single source of truth to resume work in a fresh chat.
 **Last updated:** 2026-06-09
@@ -8,7 +8,7 @@
 ---
 
 ## 1. Project at a glance
-- **Brand (display):** **1:1 CA Classes** · **Primary domain:** `121caclasses.com` (`121coaching.ai` is a live **alias** for the same site — still resolves, not abandoned)
+- **Brand (display):** **121 CA Classes** · **Primary domain:** `121caclasses.com` (`121coaching.ai` is a live **alias** for the same site — still resolves, not abandoned)
 - **Founder / face of brand:** **CA Parveen Sharma** (renowned CA faculty). The whole venture is his; the landing page is founder-centric.
 - **Positioning:** highly personalized · AI-enabled (AI *assists* only) · clears the clutter · top-notch · result-oriented.
 - **AI stance:** Teaching is 100% CA Parveen Sharma & team. **AI only assists** with **paper checking** and **doubt-solving**, under his guidance.

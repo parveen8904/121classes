@@ -103,7 +103,7 @@ export async function createPlanOrder(input: {
       orderId: order.id,
       amount: order.amount,
       keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? process.env.RAZORPAY_KEY_ID!,
-      name: "1:1 CA Classes",
+      name: "121 CA Classes",
       description: `${subject.title} · ${plan.name} (${months} months)`,
       prefill: {
         name: profile?.full_name ?? undefined,

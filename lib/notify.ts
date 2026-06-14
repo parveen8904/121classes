@@ -35,7 +35,7 @@ export async function sendTelegramChannel(text: string, linkUrl?: string): Promi
 export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   if (!emailConfigured() || !to) return false;
   const domain = process.env.MAILGUN_DOMAIN!;
-  const from = process.env.NOTIFY_FROM_EMAIL || `1:1 CA Classes <no-reply@${domain}>`;
+  const from = process.env.NOTIFY_FROM_EMAIL || `121 CA Classes <no-reply@${domain}>`;
   const body = new URLSearchParams({ from, to, subject, html });
   try {
     const res = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
@@ -124,6 +124,6 @@ export function emailShell(heading: string, bodyHtml: string): string {
     <div style="height:4px;background:linear-gradient(90deg,#0d9488,#10b981);border-radius:4px"></div>
     <h2 style="margin:18px 0 8px">${heading}</h2>
     <div style="font-size:15px;line-height:1.6">${bodyHtml}</div>
-    <p style="margin-top:24px;color:#64748b;font-size:13px">📚 1:1 CA Classes — a venture by CA Parveen Sharma.</p>
+    <p style="margin-top:24px;color:#64748b;font-size:13px">📚 121 CA Classes — a venture by CA Parveen Sharma.</p>
   </div>`;
 }

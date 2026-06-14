@@ -1,4 +1,4 @@
-# Handover Memo — 1:1 CA Classes Platform
+# Handover Memo — 121 CA Classes Platform
 
 _Last updated: 2026-06-14_
 
@@ -8,7 +8,7 @@ _Last updated: 2026-06-14_
 
 ## 1. Executive Summary
 
-**The matter.** Building and operating "1:1 CA Classes" (brand also written "121 CA Classes"), an online coaching platform for Indian Chartered Accountancy (CA) students. Live at **121caclasses.com** / **www.121caclasses.com**. Founder is **CA Parveen Sharma** (email **ps.smay@gmail.com**; an Aldine-domain address `ra***@aldine.edu.in` is also used for Apple notarization). The founder is **non-technical** — instructions must be concrete, and the assistant performs the technical execution.
+**The matter.** Building and operating "121 CA Classes" (brand also written "121 CA Classes"), an online coaching platform for Indian Chartered Accountancy (CA) students. Live at **121caclasses.com** / **www.121caclasses.com**. Founder is **CA Parveen Sharma** (email **ps.smay@gmail.com**; an Aldine-domain address `ra***@aldine.edu.in` is also used for Apple notarization). The founder is **non-technical** — instructions must be concrete, and the assistant performs the technical execution.
 
 **Current status.** Core platform is live and feature-rich: tiered courses/subjects/topics, per-tier pricing, flexible Gold validity, encrypted **downloadable classes** delivered through a **signed/notarized Mac + Windows desktop app** (Electron), inline YouTube-style comments, a community board, dashboard announcements, AI-generated tests, live-class scheduling, bulk-notification composer, and an installable **PWA**. The encrypted-download pipeline is **proven end-to-end**.
 
@@ -139,7 +139,7 @@ Key observations:
 - **No real topper/result data** — results features must wait for founder-supplied data.
 - **Bulk student import** — not built.
 - **Verification still useful:** confirm inline comments + community board render correctly **inside the desktop app** (offered, not fully verified on-device).
-- **Trash item:** old `1to1 CA Classes 2.app` is in the macOS Trash (not yet emptied) — harmless.
+- **Trash item:** old `121 CA Classes 2.app` is in the macOS Trash (not yet emptied) — harmless.
 
 ### Risks / uncertainties
 - Founder tends to run the app from the **DMG window** instead of /Applications → recurring "file in use / won't delete" problem. Mitigation = always drag to Applications, then eject DMG, run from Applications.
@@ -151,7 +151,7 @@ Key observations:
 ## 8. Action Items
 
 ### Immediate
-- (Optional) Empty Trash to remove the old `1to1 CA Classes 2.app`.
+- (Optional) Empty Trash to remove the old `121 CA Classes 2.app`.
 - Founder: install v2 from the website, **drag to Applications, then eject DMG**, launch from Applications.
 - Founder: supply the four integration keys when ready (assistant will place them in Vercel env).
 
@@ -189,7 +189,7 @@ Key observations:
 
 ## Quick Reference Sheet (one page)
 
-**Project:** 1:1 CA Classes — CA-coaching platform. Live: **www.121caclasses.com**.
+**Project:** 121 CA Classes — CA-coaching platform. Live: **www.121caclasses.com**.
 **Founder:** CA Parveen Sharma (ps.smay@gmail.com) — non-technical; has Apple Developer acct; owns aldine.edu.in.
 **Stack:** Next.js 14 + Supabase (`ydpkcmyjkekvfwnnvphn`) + Vercel (push `main` → deploy) + Electron desktop + Bunny CDN + PWA.
 

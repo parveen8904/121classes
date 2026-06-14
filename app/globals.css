@@ -142,6 +142,23 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
   padding: .04em .32em; border-radius: 10px;
   -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
+/* "?" help tooltip (beside buttons/sections) */
+.help-wrap { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
+.help-q {
+  width: 18px; height: 18px; border-radius: 999px; border: 1px solid var(--accent);
+  background: transparent; color: var(--accent); font-size: .72rem; font-weight: 800;
+  line-height: 1; cursor: help; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+}
+.help-q:hover { background: var(--accent); color: #fff; }
+.help-tip {
+  position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: 260px; z-index: 130;
+  background: var(--card); color: var(--text); border: 1px solid var(--border);
+  border-radius: 10px; padding: 9px 11px; font-size: .8rem; font-weight: 500; line-height: 1.4;
+  box-shadow: 0 10px 30px rgba(0,0,0,.3); text-align: left; white-space: normal;
+}
+@media (max-width: 560px) { .help-tip { max-width: 200px; } }
+
 /* "Ask me" floating widget (every page) */
 .askme-fab {
   position: fixed; left: 18px; bottom: 18px; z-index: 120;

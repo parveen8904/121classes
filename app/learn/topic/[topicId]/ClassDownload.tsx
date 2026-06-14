@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getOfflineKey } from "../../downloads/actions";
+import Help from "@/app/components/Help";
 
 type PV = {
   id: string;
@@ -78,14 +79,18 @@ export default function ClassDownload({ pv, watermark }: { pv: PV; watermark: st
   }
 
   return (
-    <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+    <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
       <button className="btn small secondary" type="button" onClick={download}>
         📥 {label}
       </button>
+      <Help text="Saves this class to your computer so you can watch it without internet. It downloads securely (encrypted) — the first time can take a few minutes for a long class." />
       {ready && (
-        <button className="btn small" type="button" onClick={play}>
-          ▶️ Play offline
-        </button>
+        <>
+          <button className="btn small" type="button" onClick={play}>
+            ▶️ Play offline
+          </button>
+          <Help text="Opens the downloaded class in the secure player. Your name stays watermarked on the video. No internet needed once it's downloaded." />
+        </>
       )}
     </div>
   );

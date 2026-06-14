@@ -1,6 +1,17 @@
 import Link from "next/link";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
+import MobileMenu from "./MobileMenu";
+
+const NAV_LINKS = [
+  { href: "/courses", label: "Courses" },
+  { href: "/combos", label: "Combos" },
+  { href: "/test-series", label: "Test Series" },
+  { href: "/results", label: "Results" },
+  { href: "/faculty", label: "Faculty" },
+  { href: "/books", label: "Books" },
+  { href: "/#contact", label: "Contact" },
+];
 
 export default function SiteNav() {
   return (
@@ -10,15 +21,16 @@ export default function SiteNav() {
           <Logo />
         </Link>
         <div className="lp-nav-links">
-          <Link className="hide-sm" href="/courses">Courses</Link>
-          <Link className="hide-sm" href="/combos">Combos</Link>
-          <Link className="hide-sm" href="/test-series">Test Series</Link>
-          <Link className="hide-sm" href="/results">Results</Link>
-          <Link className="hide-sm" href="/faculty">Faculty</Link>
-          <Link className="hide-sm" href="/books">Books</Link>
-          <Link className="hide-sm" href="/#contact">Contact</Link>
+          {NAV_LINKS.map((l) => (
+            <Link key={l.href} className="hide-sm" href={l.href}>
+              {l.label}
+            </Link>
+          ))}
           <ThemeToggle />
-          <Link className="btn" href="/login">Log in</Link>
+          <Link className="btn hide-sm" href="/login">
+            Log in
+          </Link>
+          <MobileMenu links={NAV_LINKS} />
         </div>
       </div>
     </nav>

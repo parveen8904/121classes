@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { createClient } from "@/lib/supabase/server";
 import FloatingSupport from "./components/FloatingSupport";
@@ -9,6 +9,12 @@ export const metadata: Metadata = {
   title: "1:1 CA Classes — Highly Personalized, AI-Enabled CA Coaching",
   description:
     "Highly personalized, AI-enabled CA coaching that clears the clutter — top-notch, result-oriented 1-to-1 teaching, live classes and ad-free lectures for CA students in India.",
+};
+
+// Ensure mobile browsers render at device width (responsive layout).
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 // Applies the saved/system theme before paint to avoid a flash of the wrong theme.

@@ -5,6 +5,7 @@ import { videoEmbedSrc } from "../../_lib/media";
 import { bunnyEmbedUrl } from "@/lib/bunny";
 import DoubtBox from "./DoubtBox";
 import ClassDownload from "./ClassDownload";
+import DiscussionBoard from "../../section/[sectionId]/DiscussionBoard";
 
 type Downloadable = {
   id: string;
@@ -102,18 +103,11 @@ function SectionBody({
           </p>
         )}
         {c.body && <p style={{ marginTop: 12, whiteSpace: "pre-wrap" }}>{c.body}</p>}
-        {(c.pdf_url || type === "full_class_video") && (
+        {c.pdf_url && (
           <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-            {c.pdf_url && (
-              <a className="btn small secondary" href={c.pdf_url} target="_blank" rel="noopener noreferrer">
-                📄 Class notes (PDF)
-              </a>
-            )}
-            {type === "full_class_video" && (
-              <Link className="btn small secondary" href={`/learn/section/${id}?view=discussion`}>
-                💬 Discussion
-              </Link>
-            )}
+            <a className="btn small secondary" href={c.pdf_url} target="_blank" rel="noopener noreferrer">
+              📄 Class notes (PDF)
+            </a>
           </div>
         )}
       </>
@@ -260,9 +254,10 @@ export default async function LearnTopic({ params }: { params: { topicId: string
   // Per-student floating watermark (traceability) — name + email/phone.
   const { data: wmProfile } = await supabase
     .from("profiles")
-    .select("full_name, phone")
+    .select("full_name, phone, role")
     .eq("id", user.id)
     .maybeSingle();
+  const isAdmin = wmProfile?.role === "admin";
   const watermarkText = [wmProfile?.full_name, user.email ?? wmProfile?.phone]
     .filter(Boolean)
     .join(" · ");
@@ -341,6 +336,19 @@ export default async function LearnTopic({ params }: { params: { topicId: string
                       />
                       {downloadBySection.has(s.id) && (
                         <ClassDownload pv={downloadBySection.get(s.id)!} watermark={watermarkText} />
+                      )}
+                      {s.type === "full_class_video" && (
+                        <div style={{ marginTop: 18 }}>
+                          <h3 style={{ fontSize: "1rem", marginBottom: 10 }}>💬 Comments</h3>
+                          <DiscussionBoard
+                            sectionId={s.id}
+                            userId={user.id}
+                            isAdmin={isAdmin}
+                            returnPath={`/learn/topic/${topic.id}`}
+                            promptLabel="Add a comment"
+                            placeholder="Ask a question or share a thought…"
+                          />
+                        </div>
                       )}
                     </>
                   )}

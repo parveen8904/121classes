@@ -13,6 +13,14 @@ async function me() {
   return { supabase, user };
 }
 
+// Refresh the section page AND whatever page the board was embedded on
+// (e.g. the topic page for inline comments, or /community).
+function refresh(formData: FormData, sectionId: string) {
+  revalidatePath(`/learn/section/${sectionId}`);
+  const rp = str(formData.get("return_path"));
+  if (rp && rp !== `/learn/section/${sectionId}`) revalidatePath(rp);
+}
+
 export async function createThread(formData: FormData) {
   const sectionId = str(formData.get("section_id"));
   const title = str(formData.get("title"));
@@ -25,7 +33,7 @@ export async function createThread(formData: FormData) {
     title,
     body: nullable(formData.get("body")),
   });
-  revalidatePath(`/learn/section/${sectionId}`);
+  refresh(formData, sectionId);
 }
 
 export async function createPost(formData: FormData) {
@@ -42,7 +50,7 @@ export async function createPost(formData: FormData) {
     pdf_url: nullable(formData.get("pdf_url")),
     video_ref: nullable(formData.get("video_ref")),
   });
-  revalidatePath(`/learn/section/${sectionId}`);
+  refresh(formData, sectionId);
 }
 
 export async function toggleSolution(formData: FormData) {
@@ -51,7 +59,7 @@ export async function toggleSolution(formData: FormData) {
   const on = formData.get("on") === "true";
   const { supabase } = await me();
   await supabase.from("discussion_posts").update({ is_solution: on }).eq("id", postId);
-  revalidatePath(`/learn/section/${sectionId}`);
+  refresh(formData, sectionId);
 }
 
 export async function toggleResolved(formData: FormData) {
@@ -60,7 +68,7 @@ export async function toggleResolved(formData: FormData) {
   const on = formData.get("on") === "true";
   const { supabase } = await me();
   await supabase.from("discussion_threads").update({ is_resolved: on }).eq("id", threadId);
-  revalidatePath(`/learn/section/${sectionId}`);
+  refresh(formData, sectionId);
 }
 
 export async function deletePost(formData: FormData) {
@@ -68,7 +76,7 @@ export async function deletePost(formData: FormData) {
   const postId = str(formData.get("post_id"));
   const { supabase } = await me();
   await supabase.from("discussion_posts").delete().eq("id", postId);
-  revalidatePath(`/learn/section/${sectionId}`);
+  refresh(formData, sectionId);
 }
 
 export async function deleteThread(formData: FormData) {
@@ -76,5 +84,5 @@ export async function deleteThread(formData: FormData) {
   const threadId = str(formData.get("thread_id"));
   const { supabase } = await me();
   await supabase.from("discussion_threads").delete().eq("id", threadId);
-  revalidatePath(`/learn/section/${sectionId}`);
+  refresh(formData, sectionId);
 }

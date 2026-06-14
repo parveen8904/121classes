@@ -23,6 +23,7 @@ export default async function PortalHeader() {
     { href: "/dashboard", label: "🏠 Dashboard" },
     { href: "/live", label: "📡 Live" },
     { href: "/learn/downloads", label: "📥 Downloads" },
+    { href: "/community", label: "💬 Community" },
     { href: "/books", label: "📦 Books" },
     { href: "/dashboard/profile", label: "👤 Profile" },
     ...(isAdmin ? [{ href: "/admin", label: "🛠️ Admin" }] : []),

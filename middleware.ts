@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { deviceKind } from "@/lib/device";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -42,6 +43,52 @@ export async function middleware(request: NextRequest) {
     url.pathname = "/login";
     url.searchParams.set("next", path);
     return NextResponse.redirect(url);
+  }
+
+  // For signed-in users on portal routes: enforce single-device + mandatory
+  // password. Both checks fail OPEN (any DB hiccup never locks anyone out).
+  if (user && isProtected) {
+    // 1) Single active session per device kind. Only enforced once a session has
+    //    claimed a device (has the dsid cookie); older/grandfathered sessions pass.
+    const dsid = request.cookies.get("dsid")?.value;
+    if (dsid) {
+      try {
+        const kind = deviceKind(request.headers.get("user-agent") || "");
+        const { data: ds } = await supabase
+          .from("device_sessions")
+          .select("token")
+          .eq("user_id", user.id)
+          .eq("device_kind", kind)
+          .maybeSingle();
+        if (ds && ds.token !== dsid) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/auth/signout";
+          url.search = "";
+          url.searchParams.set("reason", "elsewhere");
+          return NextResponse.redirect(url);
+        }
+      } catch {
+        /* fail-open */
+      }
+    }
+
+    // 2) Mandatory password: first-timers must set one before using the portal.
+    try {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("has_password")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (prof && prof.has_password === false) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/auth/set-password";
+        url.search = "";
+        url.searchParams.set("next", path);
+        return NextResponse.redirect(url);
+      }
+    } catch {
+      /* fail-open */
+    }
   }
 
   return response;

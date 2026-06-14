@@ -2,99 +2,100 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { claimDevice, needsPassword } from "../auth/session-actions";
 
 type Tab = "email" | "phone";
-type Step = "enter" | "code";
 
 export default function LoginForm() {
   const supabase = createClient();
   const router = useRouter();
+  const params = useSearchParams();
+  const next = params.get("next") || "/dashboard";
+  const reason = params.get("reason");
 
   const [tab, setTab] = useState<Tab>("email");
-  const [usePassword, setUsePassword] = useState(false);
+  // email modes: "password" (default) or "code" (first time / forgot)
+  const [emailMode, setEmailMode] = useState<"password" | "code">("password");
+  const [codeSent, setCodeSent] = useState(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [emailStep, setEmailStep] = useState<Step>("enter");
   const [emailCode, setEmailCode] = useState("");
 
   const [phone, setPhone] = useState("");
-  const [phoneStep, setPhoneStep] = useState<Step>("enter");
+  const [phoneSent, setPhoneSent] = useState(false);
   const [phoneCode, setPhoneCode] = useState("");
 
-  const [remember, setRemember] = useState(true);
-  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(
+    reason === "elsewhere"
+      ? { kind: "err", text: "You were signed out because your account was used on another device of the same type." }
+      : null,
+  );
   const [loading, setLoading] = useState(false);
 
-  const rememberRow = (
-    <label className="remember">
-      <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-      Keep me logged in on this device
-    </label>
-  );
-
-  function go() {
-    router.push("/dashboard");
-    router.refresh();
-  }
   function err(text: string) { setMsg({ kind: "err", text }); }
   function ok(text: string) { setMsg({ kind: "ok", text }); }
 
-  // ---- Email: one-time code ----
-  async function sendEmailCode(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true); setMsg(null);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: true },
-    });
-    setLoading(false);
-    if (error) return err(error.message);
-    setEmailStep("code");
-    ok("We emailed you a 6-digit code. Enter it below.");
-  }
-  async function verifyEmailCode(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true); setMsg(null);
-    const { error } = await supabase.auth.verifyOtp({
-      email, token: emailCode.trim(), type: "email",
-    });
-    setLoading(false);
-    if (error) return err(error.message);
-    go();
+  // After any successful auth: first-timers set a password; everyone else goes in.
+  async function finish() {
+    const need = await needsPassword();
+    if (need) {
+      router.push(`/auth/set-password?next=${encodeURIComponent(next)}`);
+      router.refresh();
+      return;
+    }
+    await claimDevice();
+    router.push(next);
+    router.refresh();
   }
 
-  // ---- Email: password ----
   async function passwordLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true); setMsg(null);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) return err(error.message);
-    go();
+    if (error) {
+      return err("That email and password didn't match. First time here? Use “Get a login code” below.");
+    }
+    await finish();
   }
 
-  // ---- Phone: one-time code ----
+  async function sendEmailCode(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true); setMsg(null);
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+    setLoading(false);
+    if (error) return err(error.message);
+    setCodeSent(true);
+    ok("We emailed you a 6-digit code. Enter it below.");
+  }
+  async function verifyEmailCode(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true); setMsg(null);
+    const { error } = await supabase.auth.verifyOtp({ email, token: emailCode.trim(), type: "email" });
+    setLoading(false);
+    if (error) return err(error.message);
+    await finish();
+  }
+
   async function sendPhoneCode(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true); setMsg(null);
     const { error } = await supabase.auth.signInWithOtp({ phone });
     setLoading(false);
     if (error) return err(error.message);
-    setPhoneStep("code");
+    setPhoneSent(true);
     ok("We sent a 6-digit code to your phone.");
   }
   async function verifyPhoneCode(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true); setMsg(null);
-    const { error } = await supabase.auth.verifyOtp({
-      phone, token: phoneCode.trim(), type: "sms",
-    });
+    const { error } = await supabase.auth.verifyOtp({ phone, token: phoneCode.trim(), type: "sms" });
     setLoading(false);
     if (error) return err(error.message);
-    go();
+    await finish();
   }
 
   const linkBtn = {
@@ -110,9 +111,9 @@ export default function LoginForm() {
 
       <section className="narrow" style={{ paddingTop: 60 }}>
         <div className="card">
-          <h1 style={{ fontSize: "1.5rem", marginBottom: 6 }}>Log in or sign up</h1>
+          <h1 style={{ fontSize: "1.5rem", marginBottom: 6 }}>Log in</h1>
           <p className="muted" style={{ marginBottom: 20, fontSize: ".9rem" }}>
-            Quick and easy — get a one-time code, or use a password.
+            Log in with your password. First time? Get a one-time code, then set a password.
           </p>
 
           <div className="tabs">
@@ -124,41 +125,8 @@ export default function LoginForm() {
 
           {msg && <div className={`notice ${msg.kind}`}>{msg.text}</div>}
 
-          {/* EMAIL TAB */}
-          {tab === "email" && !usePassword && emailStep === "enter" && (
-            <form onSubmit={sendEmailCode}>
-              <label htmlFor="email">Email address</label>
-              <input id="email" type="email" required value={email}
-                onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-              {rememberRow}
-              <button className="btn block" disabled={loading} type="submit">
-                {loading ? "Sending…" : "Email me a code"}
-              </button>
-              <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".85rem" }}>
-                <button type="button" style={linkBtn}
-                  onClick={() => { setUsePassword(true); setMsg(null); }}>Use a password instead</button>
-              </p>
-            </form>
-          )}
-
-          {tab === "email" && !usePassword && emailStep === "code" && (
-            <form onSubmit={verifyEmailCode}>
-              <label htmlFor="ecode">Enter the 6-digit code sent to {email}</label>
-              <input id="ecode" inputMode="numeric" required value={emailCode}
-                onChange={(e) => setEmailCode(e.target.value)} placeholder="123456" />
-              <button className="btn block" disabled={loading} type="submit">
-                {loading ? "Verifying…" : "Verify & log in"}
-              </button>
-              <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".85rem" }}>
-                <button type="button" style={linkBtn}
-                  onClick={() => { setEmailStep("enter"); setEmailCode(""); setMsg(null); }}>
-                  Use a different email / resend
-                </button>
-              </p>
-            </form>
-          )}
-
-          {tab === "email" && usePassword && (
+          {/* EMAIL — PASSWORD (default) */}
+          {tab === "email" && emailMode === "password" && (
             <form onSubmit={passwordLogin}>
               <label htmlFor="pemail">Email address</label>
               <input id="pemail" type="email" required value={email}
@@ -166,21 +134,55 @@ export default function LoginForm() {
               <label htmlFor="pw">Password</label>
               <input id="pw" type="password" required value={password}
                 onChange={(e) => setPassword(e.target.value)} placeholder="Your password" />
-              {rememberRow}
               <button className="btn block" disabled={loading} type="submit">
                 {loading ? "Please wait…" : "Log in"}
               </button>
               <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".85rem" }}>
-                Forgot it? <button type="button" style={linkBtn}
-                  onClick={() => { setUsePassword(false); setMsg(null); }}>
-                  Log in with an email code
-                </button>{" "}— then set a new password on your dashboard.
+                <button type="button" style={linkBtn}
+                  onClick={() => { setEmailMode("code"); setCodeSent(false); setMsg(null); }}>
+                  First time, or forgot password? Get a login code
+                </button>
               </p>
             </form>
           )}
 
-          {/* PHONE TAB */}
-          {tab === "phone" && phoneStep === "enter" && (
+          {/* EMAIL — CODE (first time / forgot) */}
+          {tab === "email" && emailMode === "code" && !codeSent && (
+            <form onSubmit={sendEmailCode}>
+              <label htmlFor="email">Email address</label>
+              <input id="email" type="email" required value={email}
+                onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+              <button className="btn block" disabled={loading} type="submit">
+                {loading ? "Sending…" : "Email me a code"}
+              </button>
+              <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".85rem" }}>
+                <button type="button" style={linkBtn}
+                  onClick={() => { setEmailMode("password"); setMsg(null); }}>
+                  ← Back to password login
+                </button>
+              </p>
+            </form>
+          )}
+
+          {tab === "email" && emailMode === "code" && codeSent && (
+            <form onSubmit={verifyEmailCode}>
+              <label htmlFor="ecode">Enter the 6-digit code sent to {email}</label>
+              <input id="ecode" inputMode="numeric" required value={emailCode}
+                onChange={(e) => setEmailCode(e.target.value)} placeholder="123456" />
+              <button className="btn block" disabled={loading} type="submit">
+                {loading ? "Verifying…" : "Verify & continue"}
+              </button>
+              <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".85rem" }}>
+                <button type="button" style={linkBtn}
+                  onClick={() => { setCodeSent(false); setEmailCode(""); setMsg(null); }}>
+                  Use a different email / resend
+                </button>
+              </p>
+            </form>
+          )}
+
+          {/* PHONE TAB (one-time code) */}
+          {tab === "phone" && !phoneSent && (
             <form onSubmit={sendPhoneCode}>
               <label htmlFor="phone">Phone number (with country code)</label>
               <input id="phone" type="tel" required value={phone}
@@ -191,17 +193,17 @@ export default function LoginForm() {
             </form>
           )}
 
-          {tab === "phone" && phoneStep === "code" && (
+          {tab === "phone" && phoneSent && (
             <form onSubmit={verifyPhoneCode}>
               <label htmlFor="pcode">Enter the 6-digit code sent to {phone}</label>
               <input id="pcode" inputMode="numeric" required value={phoneCode}
                 onChange={(e) => setPhoneCode(e.target.value)} placeholder="123456" />
               <button className="btn block" disabled={loading} type="submit">
-                {loading ? "Verifying…" : "Verify & log in"}
+                {loading ? "Verifying…" : "Verify & continue"}
               </button>
               <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".85rem" }}>
                 <button type="button" style={linkBtn}
-                  onClick={() => { setPhoneStep("enter"); setPhoneCode(""); setMsg(null); }}>
+                  onClick={() => { setPhoneSent(false); setPhoneCode(""); setMsg(null); }}>
                   Use a different number / resend
                 </button>
               </p>
@@ -210,8 +212,7 @@ export default function LoginForm() {
         </div>
 
         <p className="muted" style={{ textAlign: "center", marginTop: 16, fontSize: ".8rem" }}>
-          Codes verify your email/phone instantly — no links to click. Phone needs an
-          SMS provider configured in Supabase.
+          For your security, your account can be open on only one computer and one phone at a time.
         </p>
       </section>
     </main>

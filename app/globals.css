@@ -478,6 +478,11 @@ textarea {
 .list-row .row-sub { color: var(--muted); font-size: .8rem; margin-top: 3px; }
 .row-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
+/* <summary> styled as a button (collapsible admin panels) */
+summary.as-btn { list-style: none; cursor: pointer; display: inline-flex; align-items: center; }
+summary.as-btn::-webkit-details-marker { display: none; }
+summary.as-btn::marker { content: ""; }
+
 /* admin form card heading */
 .form-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px 26px; }
 .form-card > h3 { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }

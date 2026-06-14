@@ -501,8 +501,17 @@ textarea {
 .nav-drawer a { padding: 11px 14px; border-radius: 10px; color: var(--text); font-size: .95rem; }
 .nav-drawer a:hover { background: var(--bg-soft); color: var(--accent); }
 .nav-drawer .btn { margin-top: 6px; }
+.nav-drawer-signout { margin-top: 6px; padding: 0 2px; }
+.nav-drawer-signout .btn { width: 100%; }
+/* landing nav collapses to a hamburger at 880px */
 @media (max-width: 880px) {
-  .nav-burger { display: inline-flex; }
+  .lp-nav .nav-burger { display: inline-flex; }
+}
+/* portal/dashboard nav collapses to a hamburger at 760px (fewer links) */
+@media (max-width: 760px) {
+  .portal-nav .portal-link,
+  .portal-nav .portal-signout { display: none; }
+  .portal-nav .nav-burger { display: inline-flex; }
 }
 
 /* ===================== Small-screen spacing polish ===================== */

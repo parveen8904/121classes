@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import Logo from "@/app/components/Logo";
 import ThemeToggle from "@/app/components/ThemeToggle";
 import SignOutButton from "@/app/dashboard/sign-out";
+import PortalMobileMenu from "@/app/components/PortalMobileMenu";
 
 // Shared header for every signed-in portal page (student + admin).
 // Two-colour brand strip on top + an inspirational line + emoji nav.
@@ -18,6 +19,14 @@ export default async function PortalHeader() {
     isAdmin = data?.role === "admin";
   }
 
+  const links = [
+    { href: "/dashboard", label: "🏠 Dashboard" },
+    { href: "/live", label: "📡 Live" },
+    { href: "/books", label: "📦 Books" },
+    { href: "/dashboard/profile", label: "👤 Profile" },
+    ...(isAdmin ? [{ href: "/admin", label: "🛠️ Admin" }] : []),
+  ];
+
   return (
     <header className="portal-header">
       <div className="portal-strip" />
@@ -29,13 +38,18 @@ export default async function PortalHeader() {
           <span className="portal-tagline">✨ Small steps daily, big CA dreams 💪</span>
         </div>
         <nav className="portal-nav">
-          <Link href="/dashboard">🏠 Dashboard</Link>
-          <Link href="/live">📡 Live</Link>
-          <Link href="/books">📦 Books</Link>
-          <Link href="/dashboard/profile">👤 Profile</Link>
-          {isAdmin && <Link href="/admin">🛠️ Admin</Link>}
+          {links.map((l) => (
+            <Link key={l.href} className="portal-link" href={l.href}>
+              {l.label}
+            </Link>
+          ))}
           <ThemeToggle />
-          {user && <SignOutButton />}
+          {user && (
+            <span className="portal-signout">
+              <SignOutButton />
+            </span>
+          )}
+          <PortalMobileMenu links={links} signedIn={!!user} />
         </nav>
       </div>
     </header>

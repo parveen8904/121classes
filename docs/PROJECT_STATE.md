@@ -301,6 +301,16 @@ Decision: use **Bunny Stream** as-is (cheap; does transcode + adaptive HLS + CDN
 
 ---
 
+## 23. Mobile responsiveness (built — 2026-06-14)
+The whole site was made mobile-browser friendly. Problem fixed: below 880px the landing nav hid **all** links (`.hide-sm`) with no replacement, so phones couldn't navigate the site.
+- **Landing nav mobile menu:** `app/components/MobileMenu.tsx` (client) renders a ☰ hamburger + dropdown drawer with every nav link + Log in. `SiteNav` now defines links once in a `NAV_LINKS` array and passes them to it. Collapses at **≤880px** (`.lp-nav .nav-burger`).
+- **Portal/dashboard nav mobile menu:** `app/components/PortalMobileMenu.tsx` (client) does the same for the signed-in header (Dashboard/Live/Books/Profile/Admin + Sign out). `PortalHeader` builds the link list (Admin only if `isAdmin`) and passes it in. Collapses at **≤760px** (`.portal-nav .nav-burger`); `.portal-link` / `.portal-signout` hide on mobile.
+- **Viewport:** explicit `export const viewport: Viewport = { width: "device-width", initialScale: 1 }` in `app/layout.tsx` (Next auto-adds one, but made explicit since layout has a custom `<head>`).
+- **Spacing pass:** `@media (max-width:600px)` block in `globals.css` tightens container/section/card padding, stacks CTA buttons full-width, shrinks floating support buttons; `@media (max-width:400px)` scales the brand mark down.
+- **Shared drawer styles:** `.nav-burger`, `.nav-scrim`, `.nav-drawer` in `globals.css` are reused by both menus; the two collapse at different breakpoints, scoped by ancestor (`.lp-nav` vs `.portal-nav`) so they don't collide.
+
+---
+
 ## 11. Working conventions
 - Develop on branch `claude/landing-page-text-fix-C0lDT`, then fast-forward merge to `main`.
 - Vercel auto-deploys on push to `main`.

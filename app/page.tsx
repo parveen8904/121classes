@@ -408,6 +408,12 @@ export default async function Home() {
             );
           })}
         </div>
+        <p className="muted" style={{ textAlign: "center", marginTop: 18 }}>
+          Need help installing?{" "}
+          <Link href="/help" style={{ color: "var(--accent)", fontWeight: 700 }}>
+            See the step-by-step guide →
+          </Link>
+        </p>
       </section>
 
       {/* RESOURCES */}

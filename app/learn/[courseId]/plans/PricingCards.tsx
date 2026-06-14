@@ -6,6 +6,7 @@ import Script from "next/script";
 import { formatINR } from "@/lib/pricing";
 import { TIER_META, TIER_RANK } from "@/lib/tiers";
 import { createPlanOrder, verifyPlanPayment } from "./payActions";
+import Help from "@/app/components/Help";
 
 type Subject = {
   id: string;
@@ -168,7 +169,10 @@ export default function PricingCards({
               {/* Gold validity selector */}
               {tier === "gold" && !noPrice && !owned && (
                 <div style={{ margin: "8px 0 12px" }}>
-                  <label style={{ fontSize: ".78rem" }}>Choose validity</label>
+                  <label style={{ fontSize: ".78rem" }}>
+                    Choose validity
+                    <Help text="How long you want Gold access for. A longer validity costs more but works out cheaper per month. Pick a preset or enter your own number of months." />
+                  </label>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
                     {goldValidityOptions.map((m) => (
                       <button

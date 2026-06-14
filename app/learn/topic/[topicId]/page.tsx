@@ -6,6 +6,7 @@ import { bunnyEmbedUrl } from "@/lib/bunny";
 import DoubtBox from "./DoubtBox";
 import ClassDownload from "./ClassDownload";
 import DiscussionBoard from "../../section/[sectionId]/DiscussionBoard";
+import Help from "@/app/components/Help";
 
 type Downloadable = {
   id: string;
@@ -182,9 +183,12 @@ function SectionBody({
         {whenLabel && <p className="muted">🗓️ {whenLabel}</p>}
         <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
           {c.join_url && (
-            <a className="btn small" href={c.join_url} target="_blank" rel="noopener noreferrer">
-              📡 Join live class
-            </a>
+            <>
+              <a className="btn small" href={c.join_url} target="_blank" rel="noopener noreferrer">
+                📡 Join live class
+              </a>
+              <Help text="Opens the live class link at the scheduled time. Join a few minutes early. A recording usually appears here afterwards." />
+            </>
           )}
           {c.recording_url && (
             <a className="btn small secondary" href={c.recording_url} target="_blank" rel="noopener noreferrer">
@@ -205,10 +209,17 @@ function SectionBody({
 
   if (type === "mcq_test" || type === "subjective_test") {
     return (
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 14, display: "flex", alignItems: "center" }}>
         <Link className="btn small" href={`/learn/section/${id}`}>
           {type === "mcq_test" ? "Start MCQ test 🧠" : "Start subjective test ✍️"} →
         </Link>
+        <Help
+          text={
+            type === "mcq_test"
+              ? "A multiple-choice test on this topic. Pick answers and submit to see your score instantly."
+              : "Write/upload your answers. They're checked against the faculty's marking scheme, and you get a detailed performance report."
+          }
+        />
       </div>
     );
   }

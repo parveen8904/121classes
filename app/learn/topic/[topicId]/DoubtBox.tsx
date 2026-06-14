@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { askDoubt } from "../../section/[sectionId]/testActions";
+import Help from "@/app/components/Help";
 
 export default function DoubtBox({ sectionId }: { sectionId: string }) {
   const [question, setQuestion] = useState("");
@@ -38,6 +39,7 @@ export default function DoubtBox({ sectionId }: { sectionId: string }) {
       <button className="btn small" type="button" disabled={busy || !question.trim()} onClick={ask}>
         {busy ? "Thinking…" : "Ask 💬"}
       </button>
+      <Help text="Type your doubt and tap Ask. You'll get an instant answer based on CA Parveen Sharma's material. If it needs the faculty, it's forwarded to them and they'll reply." />
 
       {answer && (
         <div className="card" style={{ marginTop: 12 }}>

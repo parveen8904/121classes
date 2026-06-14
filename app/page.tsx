@@ -117,7 +117,7 @@ export default async function Home() {
       <section className="hero">
         <span className="ribbon flash">A venture by CA Parveen Sharma</span>
         <h1>
-          Learn CA from <span className="namehl">CA Parveen Sharma</span> — one of
+          Learn CA from <span style={{ color: "var(--accent)" }}>CA Parveen Sharma</span> — one of
           India&apos;s most renowned faculty.
         </h1>
         <p className="sub">
@@ -162,7 +162,7 @@ export default async function Home() {
           <div
             style={{
               border: "1px solid var(--accent)",
-              background: "linear-gradient(120deg, rgba(13,148,136,.12), rgba(16,185,129,.08))",
+              background: "var(--bg-soft)",
               borderRadius: 16,
               padding: "16px 20px",
             }}
@@ -208,7 +208,7 @@ export default async function Home() {
           ) : (
             <div
               className="imgph"
-              style={{ background: "linear-gradient(135deg, var(--accent), var(--accent-2))", border: "none" }}
+              style={{ background: "var(--accent)", border: "none" }}
             >
               <span style={{ fontSize: "4.5rem", fontWeight: 800, letterSpacing: "3px", color: "#fff" }}>PS</span>
               <span className="cap" style={{ color: "rgba(255,255,255,0.92)" }}>CA Parveen Sharma</span>
@@ -500,7 +500,7 @@ export default async function Home() {
                     margin: "0 auto 12px",
                     overflow: "hidden",
                     border: "2px solid var(--accent)",
-                    background: "linear-gradient(135deg, rgba(13,148,136,.25), rgba(16,185,129,.25))",
+                    background: "var(--bg-soft)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",

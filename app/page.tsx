@@ -133,7 +133,7 @@ export default async function Home() {
 
       {/* HERO BANNER IMAGE (uploaded in admin → Site images) */}
       {heroBanner && (
-        <div className="container" style={{ marginTop: 6 }}>
+        <div className="container" style={{ marginTop: 6, maxWidth: 1140 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={heroBanner}
@@ -145,7 +145,7 @@ export default async function Home() {
 
       {/* HIGHLIGHT BANNER — latest announcement / course */}
       {latestHighlight && (
-        <div className="container" style={{ marginTop: -10, marginBottom: 10 }}>
+        <div className="container" style={{ marginTop: -10, marginBottom: 10, maxWidth: 1140 }}>
           <Link href={latestHighlight.link_url || "/#whats-new"} style={{ display: "block" }}>
             <div className="leadline" style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
               <span className="badge">📣 {KIND_LABEL[latestHighlight.kind] ?? "Latest"}</span>
@@ -158,7 +158,7 @@ export default async function Home() {
 
       {/* ICAI AMENDMENTS — surfaced immediately and prominently */}
       {amendments.length > 0 && (
-        <div className="container" style={{ marginTop: 4, marginBottom: 14 }}>
+        <div className="container" style={{ marginTop: 4, marginBottom: 14, maxWidth: 1140 }}>
           <div
             style={{
               border: "1px solid var(--accent)",

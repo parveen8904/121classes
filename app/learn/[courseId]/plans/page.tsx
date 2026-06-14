@@ -6,7 +6,13 @@ import PricingCards from "./PricingCards";
 
 export const dynamic = "force-dynamic";
 
-export default async function CoursePlans({ params }: { params: { courseId: string } }) {
+export default async function CoursePlans({
+  params,
+  searchParams,
+}: {
+  params: { courseId: string };
+  searchParams: { subject?: string };
+}) {
   const supabase = createClient();
   const {
     data: { user },
@@ -20,25 +26,67 @@ export default async function CoursePlans({ params }: { params: { courseId: stri
     .single();
   if (!course) notFound();
 
-  const [{ data: plans }, { data: sub }] = await Promise.all([
+  // Subjects of this course (each carries its own Gold price + validity), the
+  // flat Silver price, and the student's existing access for this course.
+  const [{ data: subjects }, { data: silverPlan }, { data: subs }] = await Promise.all([
+    supabase
+      .from("subjects")
+      .select("id, title, gold_price_inr, validity_months, subject_faculty(faculties(full_name))")
+      .eq("course_id", course.id)
+      .order("order_index"),
     supabase
       .from("plans")
-      .select("id, tier, name, web_price_inr, rank")
+      .select("web_price_inr")
+      .eq("tier", "silver")
       .eq("is_active", true)
-      .order("rank"),
+      .maybeSingle(),
     supabase
       .from("subscriptions")
-      .select("plans(tier)")
+      .select("subject_id, plans(tier, rank)")
       .eq("student_id", user.id)
       .eq("course_id", course.id)
-      .eq("status", "active")
-      .order("ends_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .eq("status", "active"),
   ]);
 
-  const currentTier =
-    (sub as { plans?: { tier?: string } | null } | null)?.plans?.tier ?? null;
+  const subjectList = subjects ?? [];
+  if (subjectList.length === 0) {
+    return (
+      <main>
+        <section className="container" style={{ paddingTop: 40, paddingBottom: 70 }}>
+          <p className="crumb">
+            <Link href={`/learn/${course.id}`}>← {course.title}</Link>
+          </p>
+          <p className="muted" style={{ textAlign: "center", marginTop: 30 }}>
+            Subjects are being set up. Please check back shortly.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  const selected =
+    subjectList.find((s) => s.id === searchParams.subject) ?? subjectList[0];
+
+  // Highest active tier the student already has for the selected subject
+  // (a whole-course subscription has subject_id = null and covers everything).
+  let currentTier: string | null = null;
+  let currentRank = 0;
+  for (const row of subs ?? []) {
+    const r = row as { subject_id: string | null; plans?: { tier?: string; rank?: number } | null };
+    const covers = r.subject_id === null || r.subject_id === selected.id;
+    const rank = r.plans?.rank ?? 0;
+    if (covers && rank > currentRank) {
+      currentRank = rank;
+      currentTier = r.plans?.tier ?? null;
+    }
+  }
+
+  const facultyNames = ((selected as {
+    subject_faculty?: { faculties?: { full_name?: string } | null }[];
+  }).subject_faculty ?? [])
+    .map((sf) => sf.faculties?.full_name)
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <main>
@@ -47,30 +95,55 @@ export default async function CoursePlans({ params }: { params: { courseId: stri
           <Link href={`/learn/${course.id}`}>← {course.title}</Link>
         </p>
 
-        <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 10px" }}>
+        <div style={{ textAlign: "center", maxWidth: 660, margin: "0 auto 18px" }}>
           <span className="badge">{course.title}</span>
           <h1 style={{ margin: "14px 0 8px", fontSize: "clamp(1.8rem,4vw,2.6rem)" }}>
-            Choose the plan that fits your prep
+            Choose a subject &amp; plan
           </h1>
           <p className="muted">
-            One subscription per course. Upgrade any time — higher tiers unlock more of every topic,
-            from revision videos to live classes with CA Parveen Sharma&apos;s team.
+            Each subject is priced on its own. Bronze is free, Silver adds tests &amp; AI doubt-solving,
+            and Gold unlocks the full premium classes with CA Parveen Sharma&apos;s team.
           </p>
         </div>
 
-        {plans && plans.length > 0 ? (
-          <PricingCards
-            plans={plans}
-            currentTier={currentTier}
-            courseId={course.id}
-            configured={razorpayConfigured()}
-            contactHref="/#contact"
-          />
-        ) : (
-          <p className="muted" style={{ textAlign: "center", marginTop: 30 }}>
-            Plans are being set up. Please check back shortly.
-          </p>
-        )}
+        {/* Subject picker */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", margin: "0 auto 26px", maxWidth: 900 }}>
+          {subjectList.map((s) => {
+            const active = s.id === selected.id;
+            return (
+              <Link
+                key={s.id}
+                href={`/learn/${course.id}/plans?subject=${s.id}`}
+                style={{
+                  borderRadius: 999,
+                  padding: "9px 16px",
+                  fontWeight: 600,
+                  fontSize: ".88rem",
+                  border: "1px solid var(--border)",
+                  background: active ? "linear-gradient(90deg, var(--accent), var(--accent-2))" : "var(--bg-soft)",
+                  color: active ? "#fff" : "var(--muted)",
+                }}
+              >
+                {s.title}
+              </Link>
+            );
+          })}
+        </div>
+
+        <PricingCards
+          subject={{
+            id: selected.id,
+            title: selected.title,
+            gold_price_inr: selected.gold_price_inr,
+            validity_months: selected.validity_months ?? 12,
+          }}
+          facultyNames={facultyNames}
+          silverPrice={silverPlan?.web_price_inr ?? null}
+          currentTier={currentTier}
+          courseId={course.id}
+          configured={razorpayConfigured()}
+          contactHref="/#contact"
+        />
       </section>
     </main>
   );

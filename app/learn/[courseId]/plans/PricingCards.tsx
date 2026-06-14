@@ -1,14 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import Script from "next/script";
-import { DURATIONS, computePrice, durationDiscount, durationLabel, formatINR } from "@/lib/pricing";
+import { formatINR } from "@/lib/pricing";
 import { TIER_META, TIER_RANK } from "@/lib/tiers";
 import { createPlanOrder, verifyPlanPayment } from "./payActions";
 
-type Plan = { id: string; tier: string; name: string; web_price_inr: number | null };
+type Subject = {
+  id: string;
+  title: string;
+  gold_price_inr: number | null;
+  validity_months: number;
+};
 
-// Minimal shape of the Razorpay checkout we use.
 type RazorpayOptions = {
   key: string;
   amount: number;
@@ -31,22 +36,31 @@ declare global {
 }
 
 export default function PricingCards({
-  plans,
+  subject,
+  facultyNames,
+  silverPrice,
   currentTier,
   courseId,
   configured,
   contactHref,
 }: {
-  plans: Plan[];
+  subject: Subject;
+  facultyNames: string;
+  silverPrice: number | null;
   currentTier: string | null;
   courseId: string;
   configured: boolean;
   contactHref: string;
 }) {
-  const [months, setMonths] = useState<number>(6);
   const [busy, setBusy] = useState<string | null>(null);
   const [coupon, setCoupon] = useState("");
-  const discount = Math.round(durationDiscount(months) * 100);
+
+  // Price per tier for THIS subject. Bronze free; Silver flat; Gold per-subject.
+  const tierPrice: Record<string, number | null> = {
+    bronze: 0,
+    silver: silverPrice,
+    gold: subject.gold_price_inr,
+  };
 
   async function buy(tier: string) {
     if (!window.Razorpay) {
@@ -55,9 +69,10 @@ export default function PricingCards({
     }
     setBusy(tier);
     try {
-      const res = await createPlanOrder({ courseId, tier, months, couponCode: coupon });
+      const res = await createPlanOrder({ subjectId: subject.id, tier, couponCode: coupon });
       if (!res.ok) {
         if (res.reason === "unconfigured") window.location.href = contactHref;
+        else if (res.reason === "noprice") alert("This plan isn't priced yet — please contact us and we'll enrol you.");
         else alert("Could not start checkout. Please try again or contact us.");
         return;
       }
@@ -82,22 +97,20 @@ export default function PricingCards({
     }
   }
 
+  const tiers = ["bronze", "silver", "gold"];
+
   return (
     <>
       {configured && <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />}
 
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-        <div className="seg" role="group" aria-label="Billing duration">
-          {DURATIONS.map((m) => (
-            <button key={m} type="button" className={m === months ? "active" : ""} onClick={() => setMonths(m)}>
-              {durationLabel(m)}
-            </button>
-          ))}
+      <div style={{ textAlign: "center", marginBottom: 16 }}>
+        <strong>{subject.title}</strong>
+        {facultyNames && <span className="muted"> · {facultyNames}</span>}
+        <div className="muted" style={{ fontSize: ".82rem" }}>
+          Paid plans give {subject.validity_months} months access.
         </div>
       </div>
-      <p className="muted" style={{ textAlign: "center", fontSize: ".82rem", marginBottom: 6 }}>
-        {discount > 0 ? `Save ${discount}% versus paying monthly 🎉` : "Billed for one month"}
-      </p>
+
       {configured && (
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
           <input
@@ -110,47 +123,58 @@ export default function PricingCards({
       )}
 
       <div className="plans-grid">
-        {plans.map((p) => {
-          const meta = TIER_META[p.tier];
-          const total = computePrice(p.web_price_inr, months);
-          const perMonth = Math.round(total / months);
-          const owned = currentTier ? TIER_RANK[currentTier] >= TIER_RANK[p.tier] : false;
-          const isCurrent = currentTier === p.tier;
-          const isFree = (p.web_price_inr ?? 0) === 0;
+        {tiers.map((tier) => {
+          const meta = TIER_META[tier];
+          const price = tierPrice[tier];
+          const isFree = tier === "bronze" || (price ?? 0) === 0;
+          const owned = currentTier ? TIER_RANK[currentTier] >= TIER_RANK[tier] : false;
+          const isCurrent = currentTier === tier;
+          const noPrice = !isFree && (price === null || price === undefined);
+          const tierName = tier.charAt(0).toUpperCase() + tier.slice(1);
+
           return (
-            <div key={p.id} className={`plan-card${p.tier === "silver" ? " featured" : ""}`}>
-              {p.tier === "silver" && <span className="plan-pop">Most popular</span>}
-              <div className="tier-name">{p.name}</div>
+            <div key={tier} className={`plan-card${tier === "gold" ? " featured" : ""}`}>
+              {tier === "gold" && <span className="plan-pop">Full classes</span>}
+              <div className="tier-name">{tierName}</div>
               <div className="tagline">{meta?.tagline}</div>
+
               {isFree ? (
                 <div className="plan-price">Free</div>
+              ) : noPrice ? (
+                <div className="plan-price" style={{ fontSize: "1.3rem" }}>
+                  On request
+                </div>
               ) : (
                 <>
-                  <div className="plan-price">
-                    {formatINR(total)} <small>/ {durationLabel(months)}</small>
-                  </div>
-                  <div className="plan-permonth">≈ {formatINR(perMonth)} / month</div>
+                  <div className="plan-price">{formatINR(price as number)}</div>
+                  <div className="plan-permonth">{subject.validity_months} months access</div>
                 </>
               )}
+
               <ul className="feat-list">
                 {meta?.features.map((f) => (
                   <li key={f}>{f}</li>
                 ))}
               </ul>
+
               {isFree ? (
-                <a className="btn block secondary" href="/login">
-                  Start free →
-                </a>
+                owned ? (
+                  <div className="plan-current">✓ Included free</div>
+                ) : (
+                  <Link className="btn block secondary" href={`/learn/${courseId}`}>
+                    Start free →
+                  </Link>
+                )
               ) : owned ? (
                 <div className="plan-current">{isCurrent ? "✓ Your current plan" : "Included in your plan"}</div>
-              ) : configured ? (
-                <button className="btn block" type="button" disabled={busy === p.tier} onClick={() => buy(p.tier)}>
-                  {busy === p.tier ? "Starting…" : `Get ${p.name} →`}
-                </button>
-              ) : (
+              ) : noPrice || !configured ? (
                 <a className="btn block" href={contactHref}>
-                  Get {p.name} →
+                  Get {tierName} →
                 </a>
+              ) : (
+                <button className="btn block" type="button" disabled={busy === tier} onClick={() => buy(tier)}>
+                  {busy === tier ? "Starting…" : `Get ${tierName} →`}
+                </button>
               )}
             </div>
           );

@@ -8,30 +8,35 @@ import {
   verifyRazorpaySignature,
 } from "@/lib/razorpay";
 import { createServiceClient } from "@/lib/supabase/service";
-import { computePrice } from "@/lib/pricing";
 import { notifyByEmail, emailShell } from "@/lib/notify";
 import { applyCoupon, redeemCoupon } from "@/lib/coupons";
 
-const TIERS = ["bronze", "silver", "gold"];
+const PAID_TIERS = ["silver", "gold"];
 
 export type CreateOrderResult =
   | { ok: true; orderId: string; amount: number; keyId: string; name: string; description: string; prefill: { name?: string; email?: string; contact?: string } }
-  | { ok: false; reason: "unconfigured" | "auth" | "noplan" | "error" };
+  | { ok: false; reason: "unconfigured" | "auth" | "noplan" | "noprice" | "error" };
 
 export async function createPlanOrder(input: {
-  courseId: string;
+  subjectId: string;
   tier: string;
-  months: number;
   couponCode?: string;
 }): Promise<CreateOrderResult> {
   if (!razorpayConfigured()) return { ok: false, reason: "unconfigured" };
-  if (!TIERS.includes(input.tier)) return { ok: false, reason: "error" };
+  if (!PAID_TIERS.includes(input.tier)) return { ok: false, reason: "error" };
 
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, reason: "auth" };
+
+  const { data: subject } = await supabase
+    .from("subjects")
+    .select("id, title, course_id, gold_price_inr, validity_months")
+    .eq("id", input.subjectId)
+    .single();
+  if (!subject) return { ok: false, reason: "error" };
 
   const { data: plan } = await supabase
     .from("plans")
@@ -43,13 +48,16 @@ export async function createPlanOrder(input: {
     .maybeSingle();
   if (!plan) return { ok: false, reason: "noplan" };
 
+  // Silver = the flat plan price; Gold = this subject's own price.
+  const baseAmount = input.tier === "gold" ? subject.gold_price_inr : plan.web_price_inr;
+  if (!baseAmount || baseAmount <= 0) return { ok: false, reason: "noprice" };
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name, email, phone")
     .eq("id", user.id)
     .single();
 
-    const baseAmount = computePrice(plan.web_price_inr, input.months);
   let amountInr = baseAmount;
   let couponId = "";
   if (input.couponCode) {
@@ -60,17 +68,19 @@ export async function createPlanOrder(input: {
     }
   }
 
+  const months = subject.validity_months ?? 12;
+
   try {
     const order = await createRazorpayOrder(amountInr, `plan_${Date.now()}`, {
       kind: "subscription",
-      courseId: input.courseId,
+      courseId: subject.course_id,
+      subjectId: subject.id,
       tier: input.tier,
-      months: String(input.months),
+      months: String(months),
       planId: plan.id,
       userId: user.id,
       couponId,
     });
-    // Record the order attempt.
     await supabase.from("orders").insert({
       student_id: user.id,
       kind: "subscription",
@@ -85,7 +95,7 @@ export async function createPlanOrder(input: {
       amount: order.amount,
       keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? process.env.RAZORPAY_KEY_ID!,
       name: "1:1 CA Classes",
-      description: `${plan.name} plan · ${input.months} month${input.months === 1 ? "" : "s"}`,
+      description: `${subject.title} · ${plan.name} (${months} months)`,
       prefill: {
         name: profile?.full_name ?? undefined,
         email: profile?.email ?? user.email ?? undefined,
@@ -129,16 +139,18 @@ export async function verifyPlanPayment(input: {
   if (n.kind !== "subscription" || n.userId !== user.id) return { ok: false };
   if (order.status !== "paid") return { ok: false };
 
-  const months = Number(n.months) || 1;
+  const months = Number(n.months) || 12;
   const ends = new Date();
   ends.setMonth(ends.getMonth() + months);
 
   // Service client: students have no INSERT policy on subscriptions; this is a
-  // trusted server action running only after a verified payment.
+  // trusted server action running only after a verified payment. The grant is
+  // per-subject (subject_id) so it unlocks exactly what was bought.
   const svc = createServiceClient();
   await svc.from("subscriptions").insert({
     student_id: user.id,
     course_id: n.courseId,
+    subject_id: n.subjectId ?? null,
     plan_id: n.planId,
     channel: "web",
     ends_at: ends.toISOString(),
@@ -151,18 +163,22 @@ export async function verifyPlanPayment(input: {
     .eq("razorpay_order_id", input.razorpay_order_id);
   if (n.couponId) await redeemCoupon(n.couponId);
 
-  const { data: course } = await supabase.from("courses").select("title").eq("id", n.courseId).maybeSingle();
+  const { data: subject } = await supabase
+    .from("subjects")
+    .select("title")
+    .eq("id", n.subjectId)
+    .maybeSingle();
   await notifyByEmail({
     studentId: user.id,
     email: user.email ?? null,
-    subject: `✅ Payment received — ${course?.title ?? "your course"}`,
+    subject: `✅ Payment received — ${subject?.title ?? "your subject"}`,
     html: emailShell(
       "Payment successful 🎉",
-      `<p>Thank you! Your <strong>${n.tier}</strong> access to <strong>${course?.title ?? "your course"}</strong> is now active for ${months} month${months === 1 ? "" : "s"}.</p>
+      `<p>Thank you! Your <strong>${n.tier}</strong> access to <strong>${subject?.title ?? "your subject"}</strong> is now active for ${months} month${months === 1 ? "" : "s"}.</p>
        <p>Jump back in and keep learning. 📚💪</p>`,
     ),
     template: "plan_purchased",
-    payload: { courseId: n.courseId, tier: n.tier, months },
+    payload: { courseId: n.courseId, subjectId: n.subjectId, tier: n.tier, months },
   });
 
   return { ok: true, courseId: n.courseId };

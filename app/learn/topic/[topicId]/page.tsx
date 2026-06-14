@@ -235,7 +235,9 @@ export default async function LearnTopic({ params }: { params: { topicId: string
         }));
   const subject = (topic as { subjects?: { title?: string; course_id?: string } | null }).subjects;
   const courseId = subject?.course_id;
-  const plansHref = courseId ? `/learn/${courseId}/plans` : "/dashboard";
+  const plansHref = courseId
+    ? `/learn/${courseId}/plans?subject=${topic.subject_id}`
+    : "/dashboard";
 
   return (
     <main>

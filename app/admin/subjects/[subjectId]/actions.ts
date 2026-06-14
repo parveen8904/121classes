@@ -46,6 +46,8 @@ export async function updateSubjectInline(formData: FormData) {
   const id = str(formData.get("id"));
   const title = str(formData.get("title"));
   if (!id || !title) return;
+  const goldStr = str(formData.get("gold_price_inr"));
+  const validity = num(formData.get("validity_months"));
   const supabase = createClient();
   await supabase
     .from("subjects")
@@ -53,6 +55,8 @@ export async function updateSubjectInline(formData: FormData) {
       title,
       slug: str(formData.get("slug")) || slugify(title),
       order_index: num(formData.get("order_index")),
+      gold_price_inr: goldStr ? Number(goldStr) : null,
+      validity_months: validity > 0 ? validity : 12,
     })
     .eq("id", id);
   revalidatePath(`/admin/subjects/${id}`);

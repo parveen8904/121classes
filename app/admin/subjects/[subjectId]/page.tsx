@@ -17,7 +17,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, slug, order_index, course_id, courses(title)")
+    .select("id, title, slug, order_index, course_id, gold_price_inr, validity_months, courses(title)")
     .eq("id", subjectId)
     .single();
 
@@ -65,6 +65,33 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
               <input id="su-order" name="order_index" type="number" defaultValue={subject.order_index} />
             </div>
           </div>
+          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr", marginTop: 4 }}>
+            <div>
+              <label htmlFor="su-gold">🥇 Gold price (₹) — leave blank if sold only in a combo</label>
+              <input
+                id="su-gold"
+                name="gold_price_inr"
+                type="number"
+                min={0}
+                placeholder="e.g. 9900"
+                defaultValue={subject.gold_price_inr ?? ""}
+              />
+            </div>
+            <div>
+              <label htmlFor="su-validity">Access validity (months)</label>
+              <input
+                id="su-validity"
+                name="validity_months"
+                type="number"
+                min={1}
+                defaultValue={subject.validity_months ?? 12}
+              />
+            </div>
+          </div>
+          <p className="muted" style={{ fontSize: ".82rem", marginBottom: 12 }}>
+            Bronze is free for everyone. Silver is a flat price set on the{" "}
+            <Link href="/admin/plans">Plans page</Link>. Gold is the per-subject price above.
+          </p>
           <button className="btn" type="submit">
             Save subject
           </button>

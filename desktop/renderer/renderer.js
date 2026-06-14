@@ -34,21 +34,43 @@ async function loadLibrary() {
     $("libMsg").textContent = classes.length ? "" : "No downloadable classes available on your plan yet.";
     $("list").innerHTML = "";
     for (const c of classes) {
-      const downloaded = await window.native.isDownloaded(c.id);
+      const downloaded = await window.native.isDownloaded(c.id, c.byte_size);
       const el = document.createElement("div");
       el.className = "card";
-      el.innerHTML = `<div><strong>${c.title}</strong><div class="muted">${c.subject_title ?? ""}</div></div>`;
+      el.innerHTML = `<div><strong>${c.title}</strong><div class="muted">${c.subject_title ?? ""} · ${(Number(c.byte_size) / 1e6).toFixed(0)} MB</div></div>`;
       const btns = document.createElement("div");
       const dl = document.createElement("button");
       dl.className = "btn sec";
       dl.textContent = downloaded ? "Downloaded ✓" : "Download";
-      dl.onclick = async () => { dl.textContent = "Downloading…"; await window.native.download(c.id, c.storage_url); dl.textContent = "Downloaded ✓"; play.disabled = false; };
       const play = document.createElement("button");
       play.className = "btn";
       play.textContent = "Play";
       play.style.marginLeft = "8px";
       play.disabled = !downloaded;
-      play.onclick = () => playClass(c);
+      play.onclick = () => playClass(c, play);
+
+      // Live progress for this card.
+      window.native.onProgress(({ id, received, total }) => {
+        if (id !== c.id) return;
+        const pct = total ? Math.floor((received * 100) / total) : 0;
+        dl.textContent = pct >= 100 ? "Downloaded ✓" : `Downloading… ${pct}%`;
+      });
+
+      dl.onclick = async () => {
+        dl.disabled = true;
+        dl.textContent = "Downloading… 0%";
+        try {
+          await window.native.download(c.id, c.storage_url, c.byte_size);
+          dl.textContent = "Downloaded ✓";
+          play.disabled = false;
+        } catch (err) {
+          dl.textContent = "Retry download";
+          alert("Download failed: " + err.message);
+        } finally {
+          dl.disabled = false;
+        }
+      };
+
       btns.append(dl, play);
       el.append(btns);
       $("list").append(el);
@@ -58,16 +80,22 @@ async function loadLibrary() {
   }
 }
 
-async function playClass(c) {
+async function playClass(c, btn) {
+  const label = btn ? btn.textContent : "Play";
+  if (btn) { btn.disabled = true; btn.textContent = "Verifying…"; }
   try {
     // License = access re-check + the AES key (and who unlocked it, for the watermark).
     const { key, watermark } = await api("/api/app/license", { method: "POST", body: JSON.stringify({ id: c.id }) });
+    if (btn) btn.textContent = "Decrypting… ⏳ (~1 min)";
     const fileUrl = await window.native.decrypt(c.id, key, c.iv_b64, c.alg);
     $("video").src = fileUrl;
     $("wm").textContent = watermark || "";
     $("player").classList.add("show");
+    $("video").play().catch(() => {});
   } catch (e) {
     alert("Cannot play: " + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label || "Play"; }
   }
 }
 

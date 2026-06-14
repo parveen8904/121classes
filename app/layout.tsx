@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { createClient } from "@/lib/supabase/server";
 import FloatingSupport from "./components/FloatingSupport";
+import RegisterSW from "./components/RegisterSW";
 
 export const dynamic = "force-dynamic";
 
@@ -9,12 +10,15 @@ export const metadata: Metadata = {
   title: "1:1 CA Classes — Highly Personalized, AI-Enabled CA Coaching",
   description:
     "Highly personalized, AI-enabled CA coaching that clears the clutter — top-notch, result-oriented 1-to-1 teaching, live classes and ad-free lectures for CA students in India.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "CA Classes" },
 };
 
 // Ensure mobile browsers render at device width (responsive layout).
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#0d9488",
 };
 
 // Applies the saved/system theme before paint to avoid a flash of the wrong theme.
@@ -40,6 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           phone={m.get("support_phone")}
           telegram={m.get("support_telegram")}
         />
+        <RegisterSW />
       </body>
     </html>
   );

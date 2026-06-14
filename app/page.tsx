@@ -82,6 +82,7 @@ export default async function Home() {
     .order("order_index")
     .limit(6);
   const latestHighlight = announcements?.[0] ?? null;
+  const amendments = (announcements ?? []).filter((a) => a.kind === "amendment").slice(0, 3);
   const siteImg = new Map((settings ?? []).map((r) => [r.key, r.value as string | null]));
   const founderPhoto = siteImg.get("founder_photo") || "";
   const heroBanner = siteImg.get("hero_banner") || "";
@@ -131,6 +132,43 @@ export default async function Home() {
               <span style={{ color: "var(--accent)", fontWeight: 700 }}>→</span>
             </div>
           </Link>
+        </div>
+      )}
+
+      {/* ICAI AMENDMENTS — surfaced immediately and prominently */}
+      {amendments.length > 0 && (
+        <div className="container" style={{ marginTop: 4, marginBottom: 14 }}>
+          <div
+            style={{
+              border: "1px solid var(--accent)",
+              background: "linear-gradient(120deg, rgba(13,148,136,.12), rgba(16,185,129,.08))",
+              borderRadius: 16,
+              padding: "16px 20px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: "1.1rem" }}>📌</span>
+              <strong>Latest ICAI amendments</strong>
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {amendments.map((a) => (
+                <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <span className="badge">Amendment</span>
+                  <span style={{ fontWeight: 600 }}>{a.title}</span>
+                  {a.link_url && (
+                    <a
+                      href={a.link_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".88rem" }}
+                    >
+                      Read more →
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

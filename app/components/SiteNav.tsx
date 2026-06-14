@@ -7,6 +7,7 @@ const NAV_LINKS = [
   { href: "/courses", label: "Courses" },
   { href: "/combos", label: "Combos" },
   { href: "/test-series", label: "Test Series" },
+  { href: "/calendar", label: "Calendar" },
   { href: "/results", label: "Results" },
   { href: "/faculty", label: "Faculty" },
   { href: "/books", label: "Books" },

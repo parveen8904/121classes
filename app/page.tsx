@@ -2,6 +2,7 @@ import Link from "next/link";
 import SiteNav from "./components/SiteNav";
 import SiteFooter from "./components/SiteFooter";
 import AnnouncementSplash from "./components/AnnouncementSplash";
+import NotifyButton from "./components/NotifyButton";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -94,8 +95,13 @@ export default async function Home() {
     .select("id, title, audience, starts_at")
     .eq("is_published", true)
     .gte("starts_at", new Date(Date.now() - 2 * 3600 * 1000).toISOString())
+    .lte("starts_at", new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString())
     .order("starts_at")
-    .limit(3);
+    .limit(6);
+  const {
+    data: { user: landingUser },
+  } = await supabase.auth.getUser();
+  const signedIn = !!landingUser;
   const latestHighlight = announcements?.[0] ?? null;
   const amendments = (announcements ?? []).filter((a) => a.kind === "amendment").slice(0, 3);
   const siteImg = new Map((settings ?? []).map((r) => [r.key, r.value as string | null]));
@@ -387,14 +393,14 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* UPCOMING LIVE CLASSES */}
-      {liveUpcoming && liveUpcoming.length > 0 && (
-        <section className="section" id="live">
-          <div className="section-head">
-            <div className="eyebrow">📡 Live</div>
-            <h2>Upcoming live classes</h2>
-            <p>Join live sessions with CA Parveen Sharma &amp; team.</p>
-          </div>
+      {/* THIS WEEK'S LIVE CLASSES */}
+      <section className="section" id="live">
+        <div className="section-head">
+          <div className="eyebrow">📡 Live this week</div>
+          <h2>Live classes this week</h2>
+          <p>Join live sessions with CA Parveen Sharma &amp; team — tap <strong>Notify me</strong> for a reminder.</p>
+        </div>
+        {liveUpcoming && liveUpcoming.length > 0 ? (
           <div className="grid grid-3" style={{ maxWidth: 980, margin: "0 auto" }}>
             {liveUpcoming.map((s) => (
               <div className="tile" key={s.id}>
@@ -403,17 +409,23 @@ export default async function Home() {
                 <p className="muted">
                   {s.audience ? s.audience + " · " : ""}
                   {s.starts_at
-                    ? new Date(s.starts_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+                    ? new Date(s.starts_at).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })
                     : "Time to be announced"}
                 </p>
-                <Link href="/live" style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".9rem" }}>
-                  Details / Join →
-                </Link>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
+                  <Link className="btn small secondary" href="/live">Details / Join</Link>
+                  <NotifyButton sessionId={s.id} signedIn={signedIn} />
+                </div>
               </div>
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <p className="muted" style={{ textAlign: "center" }}>No live classes scheduled this week yet — check the calendar for what&apos;s ahead.</p>
+        )}
+        <div style={{ textAlign: "center", marginTop: 26 }}>
+          <Link className="btn secondary" href="/calendar">🗓️ See full calendar →</Link>
+        </div>
+      </section>
 
       {/* GET THE APP */}
       <section className="section alt" id="apps">

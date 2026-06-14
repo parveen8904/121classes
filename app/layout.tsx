@@ -3,6 +3,7 @@ import "./globals.css";
 import { createClient } from "@/lib/supabase/server";
 import FloatingSupport from "./components/FloatingSupport";
 import RegisterSW from "./components/RegisterSW";
+import AskMe from "./components/AskMe";
 
 export const dynamic = "force-dynamic";
 
@@ -26,11 +27,15 @@ const themeScript = `try{var t=localStorage.getItem('theme')||(window.matchMedia
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
-  const { data: settings } = await supabase
-    .from("site_settings")
-    .select("key, value")
-    .in("key", ["support_whatsapp", "support_phone", "support_telegram"]);
+  const [{ data: settings }, { data: auth }] = await Promise.all([
+    supabase
+      .from("site_settings")
+      .select("key, value")
+      .in("key", ["support_whatsapp", "support_phone", "support_telegram"]),
+    supabase.auth.getUser(),
+  ]);
   const m = new Map((settings ?? []).map((r) => [r.key, r.value as string | null]));
+  const signedIn = !!auth?.user;
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -44,6 +49,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           phone={m.get("support_phone")}
           telegram={m.get("support_telegram")}
         />
+        <AskMe signedIn={signedIn} />
         <RegisterSW />
       </body>
     </html>

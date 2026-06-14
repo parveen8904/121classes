@@ -142,6 +142,29 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
   padding: .04em .32em; border-radius: 10px;
   -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
+/* "Ask me" floating widget (every page) */
+.askme-fab {
+  position: fixed; left: 18px; bottom: 18px; z-index: 120;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: #fff;
+  border: none; border-radius: 999px; padding: 11px 18px; font-weight: 700; font-size: .9rem;
+  cursor: pointer; box-shadow: 0 8px 24px rgba(13,148,136,.4);
+}
+.askme-fab:hover { filter: brightness(1.05); }
+.askme-overlay {
+  position: fixed; inset: 0; z-index: 210; display: flex; align-items: center; justify-content: center;
+  background: rgba(2,6,23,.6); padding: 20px;
+}
+.askme-card {
+  position: relative; width: 100%; max-width: 440px; background: var(--card);
+  border: 1px solid var(--border); border-radius: 16px; padding: 22px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.45);
+}
+.askme-x {
+  position: absolute; top: 10px; right: 12px; background: none; border: none;
+  font-size: 1.5rem; line-height: 1; color: var(--muted); cursor: pointer;
+}
+@media (max-width: 560px) { .askme-fab { left: 12px; bottom: 12px; padding: 9px 14px; } }
+
 /* brand lockup: logo + one-on-one tagline */
 .lp-brand { display: inline-flex; flex-direction: column; gap: 1px; line-height: 1.1; }
 .lp-tagline {

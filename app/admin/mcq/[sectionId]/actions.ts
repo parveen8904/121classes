@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../../_lib/util";
+import { generateMcqs } from "@/lib/ai";
 
 export async function addMcq(formData: FormData) {
   const sectionId = str(formData.get("section_id"));
@@ -40,6 +41,37 @@ export async function addMcq(formData: FormData) {
     correct_index: correctIndex,
     order_index: count ?? 0,
   });
+  revalidatePath(`/admin/mcq/${sectionId}`);
+}
+
+// Generate MCQs from a pasted transcript via AI, ONCE, and store them.
+// Students then take the test from stored questions — no per-student AI tokens.
+export async function generateMcqsFromTranscript(formData: FormData) {
+  const sectionId = str(formData.get("section_id"));
+  const transcript = str(formData.get("transcript"));
+  const count = num(formData.get("count")) || 10;
+  const topic = str(formData.get("topic"));
+  if (!sectionId || transcript.length < 50) return;
+
+  const items = await generateMcqs(transcript, count, topic || undefined);
+  if (!items || items.length === 0) return; // AI off or unparseable — insert nothing
+
+  const supabase = createClient();
+  const { count: existing } = await supabase
+    .from("mcq_questions")
+    .select("id", { count: "exact", head: true })
+    .eq("section_id", sectionId);
+  let order = existing ?? 0;
+
+  await supabase.from("mcq_questions").insert(
+    items.map((q) => ({
+      section_id: sectionId,
+      question: q.question,
+      options: q.options,
+      correct_index: q.correct_index,
+      order_index: order++,
+    })),
+  );
   revalidatePath(`/admin/mcq/${sectionId}`);
 }
 

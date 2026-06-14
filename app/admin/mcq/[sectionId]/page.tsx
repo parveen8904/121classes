@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { aiConfigured } from "@/lib/ai";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
-import { addMcq, deleteMcq } from "./actions";
+import { addMcq, deleteMcq, generateMcqsFromTranscript } from "./actions";
 
 export default async function McqAdminPage({ params }: { params: { sectionId: string } }) {
   const supabase = createClient();
@@ -28,7 +29,46 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
         back={{ href: `/admin/topics/${section.topic_id}`, label: "Topic" }}
       />
 
-      <div className="form-card" style={{ marginTop: 24 }}>
+      {/* AI generation — run once, questions are stored & served statically */}
+      <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+        <summary className="btn as-btn">🤖 Generate from transcript (AI)</summary>
+        <div className="form-card" style={{ marginTop: 12, width: "100%" }}>
+          <h3>🤖 Generate MCQs with AI</h3>
+          {aiConfigured() ? (
+            <>
+              <p className="muted" style={{ fontSize: ".82rem", marginTop: 0, marginBottom: 10 }}>
+                Paste the class transcript. AI writes the questions <strong>once</strong> and saves them below —
+                students take the test with no AI cost. Review/edit before publishing.
+              </p>
+              <form action={generateMcqsFromTranscript}>
+                <input type="hidden" name="section_id" value={section.id} />
+                <div style={{ display: "grid", gap: 12, gridTemplateColumns: "2fr 1fr" }}>
+                  <div>
+                    <label>Topic / chapter (optional)</label>
+                    <input name="topic" placeholder="e.g. IND AS 115 — Revenue" />
+                  </div>
+                  <div>
+                    <label>How many questions?</label>
+                    <input name="count" type="number" min={1} max={25} defaultValue={10} />
+                  </div>
+                </div>
+                <label>Transcript</label>
+                <textarea name="transcript" rows={8} placeholder="Paste the class transcript here…" required />
+                <button className="btn" type="submit">
+                  Generate &amp; save questions
+                </button>
+              </form>
+            </>
+          ) : (
+            <p className="muted" style={{ fontSize: ".9rem", marginBottom: 0 }}>
+              AI isn&apos;t switched on yet. Add <code>ANTHROPIC_API_KEY</code> in Vercel and redeploy, then this
+              will generate questions from a transcript automatically.
+            </p>
+          )}
+        </div>
+      </details>
+
+      <div className="form-card" style={{ marginTop: 14 }}>
         <h3>➕ Add a question</h3>
         <form action={addMcq}>
           <input type="hidden" name="section_id" value={section.id} />

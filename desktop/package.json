@@ -23,7 +23,13 @@
       "config.js"
     ],
     "mac": {
-      "target": "dmg",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["universal"]
+        }
+      ],
+      "icon": "build/icon.png",
       "category": "public.app-category.education",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
@@ -32,6 +38,7 @@
       "notarize": false
     },
     "win": {
+      "icon": "build/icon.png",
       "target": [
         {
           "target": "nsis",

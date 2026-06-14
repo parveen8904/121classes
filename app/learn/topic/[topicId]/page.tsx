@@ -247,6 +247,16 @@ export default async function LearnTopic({ params }: { params: { topicId: string
           min_plan: r.min_plan,
           unlocked: true, // RLS already filtered to what this user may read
         }));
+  // Per-student floating watermark (traceability) — name + email/phone.
+  const { data: wmProfile } = await supabase
+    .from("profiles")
+    .select("full_name, phone")
+    .eq("id", user.id)
+    .maybeSingle();
+  const watermarkText = [wmProfile?.full_name, user.email ?? wmProfile?.phone]
+    .filter(Boolean)
+    .join(" · ");
+
   const subject = (topic as { subjects?: { title?: string; course_id?: string } | null }).subjects;
   const courseId = subject?.course_id;
   const plansHref = courseId
@@ -308,7 +318,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
                       id={s.id}
                       type={s.type}
                       config={configById.get(s.id) ?? null}
-                      watermark={user.email ?? user.phone ?? ""}
+                      watermark={watermarkText}
                     />
                   )}
                 </div>

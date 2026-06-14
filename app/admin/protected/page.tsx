@@ -26,7 +26,7 @@ export default async function ProtectedClassesPage() {
       <AdminHero
         badge="🔐 Downloadable classes"
         title="Encrypted classes (desktop app)"
-        subtitle="Encrypt a class with scripts/encrypt-class.mjs, upload the .enc to your CDN, then register it here. The desktop app downloads it and unlocks it after access check. 🖥️"
+        subtitle="Encrypt a class with scripts/encrypt-class.mjs, host the .enc on Bunny Storage (recommended) or Google Drive — not Supabase — then register it here. The desktop app downloads it and unlocks it after an access check. 🖥️"
         back={{ href: "/admin", label: "Admin" }}
       />
 
@@ -66,8 +66,8 @@ export default async function ProtectedClassesPage() {
                 </select>
               </div>
             </div>
-            <label>Encrypted file URL (storage_url)</label>
-            <input name="storage_url" placeholder="https://cdn…/class.enc" required />
+            <label>Encrypted file URL — Bunny Storage / Google Drive direct link (storage_url)</label>
+            <input name="storage_url" placeholder="https://…bunnycdn.com/class.enc" required />
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 1fr 1fr" }}>
               <div>
                 <label>key_b64</label>

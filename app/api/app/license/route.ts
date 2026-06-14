@@ -33,8 +33,15 @@ export async function POST(req: Request) {
   if (!key) return NextResponse.json({ error: "no_access" }, { status: 403, headers: corsHeaders });
 
   // Watermark the player with who unlocked it (traceability on leaks).
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, phone")
+    .eq("id", user.id)
+    .maybeSingle();
+  const watermark = [profile?.full_name, user.email ?? profile?.phone].filter(Boolean).join(" · ");
+
   return NextResponse.json(
-    { key, watermark: user.email ?? user.id },
+    { key, watermark: watermark || user.id },
     { headers: corsHeaders },
   );
 }

@@ -142,6 +142,13 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
   padding: .04em .32em; border-radius: 10px;
   -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
+/* brand lockup: logo + one-on-one tagline */
+.lp-brand { display: inline-flex; flex-direction: column; gap: 1px; line-height: 1.1; }
+.lp-tagline {
+  font-size: .66rem; font-weight: 600; letter-spacing: .02em;
+  color: var(--accent); text-transform: none;
+}
+@media (max-width: 560px) { .lp-tagline { display: none; } }
 
 /* announcement splash on landing */
 .splash-overlay {

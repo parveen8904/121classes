@@ -67,6 +67,7 @@ export default async function SiteFooter() {
           <Link href="/#contact">Contact Us</Link>
           <Link href="/privacy">Privacy Policy</Link>
           <Link href="/refund">Refund Policy</Link>
+          <Link href="/terms">Terms of Service</Link>
         </div>
       </div>
       <div className="copy">

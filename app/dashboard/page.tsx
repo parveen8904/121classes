@@ -23,6 +23,14 @@ export default async function Dashboard() {
     .eq("is_published", true)
     .order("order_index");
 
+  // Faculty messages / updates — shown to every student on login.
+  const { data: announcements } = await supabase
+    .from("announcements")
+    .select("id, kind, title, body, link_url, published_at")
+    .eq("is_published", true)
+    .order("published_at", { ascending: false })
+    .limit(5);
+
   return (
     <main>
 
@@ -39,6 +47,32 @@ export default async function Dashboard() {
         <div style={{ marginTop: 20 }}>
           <SetPassword />
         </div>
+
+        {announcements && announcements.length > 0 && (
+          <>
+            <h2 style={{ margin: "32px 0 12px", fontSize: "1.2rem" }}>📣 From CA Parveen Sharma</h2>
+            <div style={{ display: "grid", gap: 10 }}>
+              {announcements.map((a) => (
+                <div
+                  key={a.id}
+                  className="card"
+                  style={{ borderColor: a.kind === "amendment" ? "var(--accent)" : "var(--border)" }}
+                >
+                  <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+                    <span className="badge">{a.kind === "amendment" ? "Amendment" : "Update"}</span>
+                    <strong>{a.title}</strong>
+                  </div>
+                  {a.body && <p className="muted" style={{ fontSize: ".9rem", marginTop: 6 }}>{a.body}</p>}
+                  {a.link_url && (
+                    <a href={a.link_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".88rem" }}>
+                      Read more →
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
         <h2 style={{ margin: "32px 0 16px", fontSize: "1.2rem" }}>📚 Your courses</h2>
         {courses && courses.length > 0 ? (

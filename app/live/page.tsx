@@ -48,7 +48,26 @@ export default async function LivePage() {
     .eq("type", "live_class")
     .eq("is_published", true);
 
-  const all = shape((data ?? []) as unknown as LiveRow[]);
+  // Standalone scheduled live classes (RLS returns only published ones).
+  const { data: liveData } = await supabase
+    .from("live_sessions")
+    .select("id, title, description, audience, starts_at, join_url, recording_url");
+  const standalone = (liveData ?? []).map((s) => {
+    const when = s.starts_at ? new Date(s.starts_at) : null;
+    return {
+      id: s.id,
+      title: s.title as string,
+      topicId: "",
+      course: (s.audience as string) || "Live class",
+      subject: "",
+      topic: (s.description as string) || "",
+      when: when && !isNaN(when.getTime()) ? when : null,
+      join: (s.join_url as string) || "",
+      recording: (s.recording_url as string) || "",
+    };
+  });
+
+  const all = [...shape((data ?? []) as unknown as LiveRow[]), ...standalone];
   const now = Date.now();
   const upcoming = all
     .filter((x) => !x.when || x.when.getTime() >= now - 2 * 3600 * 1000)
@@ -73,7 +92,7 @@ export default async function LivePage() {
               <div>
                 <span className="row-title">📡 {x.title}</span>
                 <p className="row-sub">
-                  {x.course} · {x.subject} · {x.topic} · 🗓️ {whenLabel(x.when)}
+                  {[x.course, x.subject, x.topic].filter(Boolean).join(" · ")} · 🗓️ {whenLabel(x.when)}
                 </p>
               </div>
               <div className="row-actions">
@@ -81,10 +100,12 @@ export default async function LivePage() {
                   <a className="btn small" href={x.join} target="_blank" rel="noopener noreferrer">
                     Join →
                   </a>
-                ) : (
+                ) : x.topicId ? (
                   <Link className="btn small secondary" href={`/learn/topic/${x.topicId}`}>
                     Open topic
                   </Link>
+                ) : (
+                  <span className="muted" style={{ fontSize: ".82rem" }}>Join link coming soon</span>
                 )}
               </div>
             </div>
@@ -113,10 +134,12 @@ export default async function LivePage() {
                     <a className="btn small secondary" href={x.recording} target="_blank" rel="noopener noreferrer">
                       ▶️ Watch recording
                     </a>
-                  ) : (
+                  ) : x.topicId ? (
                     <Link className="btn small secondary" href={`/learn/topic/${x.topicId}`}>
                       Open topic
                     </Link>
+                  ) : (
+                    <span className="muted" style={{ fontSize: ".82rem" }}>Recording soon</span>
                   )}
                 </div>
               </div>

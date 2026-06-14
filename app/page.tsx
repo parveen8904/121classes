@@ -89,6 +89,13 @@ export default async function Home() {
     .eq("is_published", true)
     .order("order_index")
     .limit(6);
+  const { data: liveUpcoming } = await supabase
+    .from("live_sessions")
+    .select("id, title, audience, starts_at")
+    .eq("is_published", true)
+    .gte("starts_at", new Date(Date.now() - 2 * 3600 * 1000).toISOString())
+    .order("starts_at")
+    .limit(3);
   const latestHighlight = announcements?.[0] ?? null;
   const amendments = (announcements ?? []).filter((a) => a.kind === "amendment").slice(0, 3);
   const siteImg = new Map((settings ?? []).map((r) => [r.key, r.value as string | null]));
@@ -379,6 +386,34 @@ export default async function Home() {
               ))}
         </div>
       </section>
+
+      {/* UPCOMING LIVE CLASSES */}
+      {liveUpcoming && liveUpcoming.length > 0 && (
+        <section className="section" id="live">
+          <div className="section-head">
+            <div className="eyebrow">📡 Live</div>
+            <h2>Upcoming live classes</h2>
+            <p>Join live sessions with CA Parveen Sharma &amp; team.</p>
+          </div>
+          <div className="grid grid-3" style={{ maxWidth: 980, margin: "0 auto" }}>
+            {liveUpcoming.map((s) => (
+              <div className="tile" key={s.id}>
+                <div className="ic">📡</div>
+                <h3>{s.title}</h3>
+                <p className="muted">
+                  {s.audience ? s.audience + " · " : ""}
+                  {s.starts_at
+                    ? new Date(s.starts_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+                    : "Time to be announced"}
+                </p>
+                <Link href="/live" style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".9rem" }}>
+                  Details / Join →
+                </Link>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* GET THE APP */}
       <section className="section alt" id="apps">

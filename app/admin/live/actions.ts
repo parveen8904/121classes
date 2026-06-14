@@ -4,7 +4,53 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { zoomConfigured, createZoomMeeting } from "@/lib/zoom";
-import { str, nullable } from "../_lib/util";
+import { createServiceClient } from "@/lib/supabase/service";
+import { str, num, nullable } from "../_lib/util";
+
+// Standalone scheduled live class (not tied to any course/topic).
+export async function createLiveSession(formData: FormData) {
+  const title = str(formData.get("title"));
+  if (!title) return;
+  const svc = createServiceClient();
+  await svc.from("live_sessions").insert({
+    title,
+    description: nullable(formData.get("description")),
+    audience: nullable(formData.get("audience")),
+    starts_at: str(formData.get("starts_at")) ? new Date(str(formData.get("starts_at"))).toISOString() : null,
+    duration_mins: num(formData.get("duration_mins"), 60),
+    join_url: nullable(formData.get("join_url")),
+    is_published: formData.get("is_published") === "on",
+  });
+  revalidatePath("/admin/live");
+  revalidatePath("/live");
+  revalidatePath("/");
+}
+
+export async function updateLiveSession(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  await svc
+    .from("live_sessions")
+    .update({
+      join_url: nullable(formData.get("join_url")),
+      recording_url: nullable(formData.get("recording_url")),
+      is_published: formData.get("is_published") === "on",
+    })
+    .eq("id", id);
+  revalidatePath("/admin/live");
+  revalidatePath("/live");
+  revalidatePath("/");
+}
+
+export async function deleteLiveSession(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  await svc.from("live_sessions").delete().eq("id", id);
+  revalidatePath("/admin/live");
+  revalidatePath("/live");
+}
 
 // Merge the schedule fields into a live_class section's config (preserving
 // any other keys like zoom_webinar_id).

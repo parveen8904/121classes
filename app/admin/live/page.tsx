@@ -1,8 +1,16 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
+import DeleteButton from "../_components/DeleteButton";
 import { zoomConfigured } from "@/lib/zoom";
-import { updateLiveSchedule, createZoomForLive } from "./actions";
+import {
+  updateLiveSchedule,
+  createZoomForLive,
+  createLiveSession,
+  updateLiveSession,
+  deleteLiveSession,
+} from "./actions";
 
 type LiveRow = {
   id: string;
@@ -25,6 +33,13 @@ export default async function AdminLivePage({
     .select("id, title, is_published, config, topic_id, topics(title, subjects(title, courses(title)))")
     .eq("type", "live_class")
     .order("title");
+
+  // Standalone scheduled classes (service client so drafts are visible too).
+  const svc = createServiceClient();
+  const { data: sessions } = await svc
+    .from("live_sessions")
+    .select("id, title, audience, starts_at, join_url, recording_url, is_published")
+    .order("starts_at", { ascending: false });
 
   const rows = ((data ?? []) as unknown as LiveRow[]).map((r) => {
     const c = (r.config ?? {}) as Record<string, string>;
@@ -66,8 +81,99 @@ export default async function AdminLivePage({
         </div>
       )}
 
-      <p className="muted" style={{ marginTop: 18, fontSize: ".9rem" }}>
-        These are all your <strong>Live class</strong> sections. Create more by adding a Live class
+      {/* Standalone scheduled live classes (not tied to a course) */}
+      <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+        <summary className="btn as-btn">＋ Schedule a live class</summary>
+        <div className="form-card" style={{ marginTop: 12, width: "100%" }}>
+          <h3>📅 Schedule a standalone live class</h3>
+          <p className="muted" style={{ fontSize: ".82rem", marginTop: 0, marginBottom: 10 }}>
+            For a Zoom/Meet class not tied to a course. Shows on the student Live page and the landing page.
+          </p>
+          <form action={createLiveSession}>
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "2fr 1fr" }}>
+              <div>
+                <label>Title</label>
+                <input name="title" placeholder="e.g. FR Doubt-Solving Marathon" required />
+              </div>
+              <div>
+                <label>For whom (audience)</label>
+                <input name="audience" placeholder="CA Final FR batch / All students" />
+              </div>
+            </div>
+            <label>Description (optional)</label>
+            <input name="description" placeholder="What the session covers" />
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1.2fr 0.6fr 1.4fr" }}>
+              <div>
+                <label>Starts at</label>
+                <input type="datetime-local" name="starts_at" />
+              </div>
+              <div>
+                <label>Minutes</label>
+                <input type="number" name="duration_mins" defaultValue={60} />
+              </div>
+              <div>
+                <label>Join link (Zoom/Meet)</label>
+                <input name="join_url" placeholder="https://…" />
+              </div>
+            </div>
+            <label className="remember" style={{ marginTop: 0 }}>
+              <input type="checkbox" name="is_published" defaultChecked /> Published (visible to students + landing)
+            </label>
+            <button className="btn" type="submit">
+              Schedule class
+            </button>
+          </form>
+        </div>
+      </details>
+
+      {sessions && sessions.length > 0 && (
+        <>
+          <h2 className="admin-section-title">📅 Scheduled live classes</h2>
+          <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+            {sessions.map((s) => (
+              <div className="card" key={s.id}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <strong>📅 {s.title}</strong>
+                    <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
+                      {s.audience ? s.audience + " · " : ""}
+                      {s.starts_at
+                        ? new Date(s.starts_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+                        : "Time TBA"}
+                      {" · "}
+                      {s.is_published ? "🟢 published" : "⚪ draft"}
+                    </p>
+                  </div>
+                  <DeleteButton action={deleteLiveSession} id={s.id} message="Delete this scheduled class?" />
+                </div>
+                <form action={updateLiveSession} style={{ marginTop: 12 }}>
+                  <input type="hidden" name="id" value={s.id} />
+                  <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
+                    <div>
+                      <label>Join link</label>
+                      <input name="join_url" defaultValue={s.join_url ?? ""} placeholder="https://…" />
+                    </div>
+                    <div>
+                      <label>Recording link (after)</label>
+                      <input name="recording_url" defaultValue={s.recording_url ?? ""} placeholder="https://…" />
+                    </div>
+                  </div>
+                  <label className="remember" style={{ marginTop: 0 }}>
+                    <input type="checkbox" name="is_published" defaultChecked={s.is_published} /> Published
+                  </label>
+                  <button className="btn small" type="submit">
+                    Save
+                  </button>
+                </form>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <h2 className="admin-section-title" style={{ marginTop: 28 }}>🎥 Course live classes (inside topics)</h2>
+      <p className="muted" style={{ marginTop: 4, fontSize: ".9rem" }}>
+        These are <strong>Live class</strong> sections inside courses. Create more by adding a Live class
         section inside any topic.
         {zoomOn && " Use “Auto-create Zoom link” to generate a meeting automatically."}
       </p>

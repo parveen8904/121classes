@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatINR } from "@/lib/pricing";
 import AdminHero from "../_components/AdminHero";
-import { updatePlan } from "./actions";
+import { updatePlan, setGoldValidityOptions } from "./actions";
 
 const TIER_NOTE: Record<string, string> = {
   bronze: "Free for everyone — keep the price at 0.",
@@ -12,10 +12,14 @@ const TIER_NOTE: Record<string, string> = {
 
 export default async function PlansPage() {
   const supabase = createClient();
-  const { data: plans } = await supabase
-    .from("plans")
-    .select("id, tier, name, rank, web_price_inr, app_price_inr, is_active")
-    .order("rank");
+  const [{ data: plans }, { data: validity }] = await Promise.all([
+    supabase
+      .from("plans")
+      .select("id, tier, name, rank, web_price_inr, app_price_inr, is_active")
+      .order("rank"),
+    supabase.from("site_settings").select("value").eq("key", "gold_validity_options").maybeSingle(),
+  ]);
+  const goldValidity = (validity?.value as string) ?? "1,2,3,6,12,18,24";
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -26,7 +30,25 @@ export default async function PlansPage() {
         back={{ href: "/admin", label: "Admin" }}
       />
 
-      <div style={{ marginTop: 24, display: "grid", gap: 16 }}>
+      {/* Gold validity options shown to students */}
+      <div className="form-card" style={{ marginTop: 24 }}>
+        <h3>⏳ Gold validity options</h3>
+        <p className="muted" style={{ fontSize: ".82rem", marginTop: -4, marginBottom: 10 }}>
+          Months a student can pick for Gold (comma-separated). The price scales from each subject&apos;s
+          Gold price. Students can also type a custom number of months.
+        </p>
+        <form action={setGoldValidityOptions} style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <label>Validity months</label>
+            <input name="gold_validity_options" defaultValue={goldValidity} style={{ marginBottom: 0 }} />
+          </div>
+          <button className="btn small" type="submit">
+            Save
+          </button>
+        </form>
+      </div>
+
+      <div style={{ marginTop: 16, display: "grid", gap: 16 }}>
         {(plans ?? []).map((p) => {
           const isGold = p.tier === "gold";
           const isBronze = p.tier === "bronze";

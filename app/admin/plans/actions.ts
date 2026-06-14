@@ -20,3 +20,18 @@ export async function updatePlan(formData: FormData) {
     .eq("id", id);
   revalidatePath("/admin/plans");
 }
+
+// Gold validity options shown to students (comma-separated months).
+export async function setGoldValidityOptions(formData: FormData) {
+  const raw = str(formData.get("gold_validity_options"));
+  const cleaned = raw
+    .split(",")
+    .map((x) => parseInt(x.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n > 0 && n <= 60)
+    .join(",");
+  const supabase = createClient();
+  await supabase
+    .from("site_settings")
+    .upsert({ key: "gold_validity_options", value: cleaned || "1,3,6,12" }, { onConflict: "key" });
+  revalidatePath("/admin/plans");
+}

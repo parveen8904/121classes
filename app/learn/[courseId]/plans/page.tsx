@@ -28,25 +28,32 @@ export default async function CoursePlans({
 
   // Subjects of this course (each carries its own Gold price + validity), the
   // flat Silver price, and the student's existing access for this course.
-  const [{ data: subjects }, { data: silverPlan }, { data: subs }] = await Promise.all([
-    supabase
-      .from("subjects")
-      .select("id, title, gold_price_inr, validity_months, subject_faculty(faculties(full_name))")
-      .eq("course_id", course.id)
-      .order("order_index"),
-    supabase
-      .from("plans")
-      .select("web_price_inr")
-      .eq("tier", "silver")
-      .eq("is_active", true)
-      .maybeSingle(),
-    supabase
-      .from("subscriptions")
-      .select("subject_id, plans(tier, rank)")
-      .eq("student_id", user.id)
-      .eq("course_id", course.id)
-      .eq("status", "active"),
-  ]);
+  const [{ data: subjects }, { data: silverPlan }, { data: subs }, { data: validitySetting }] =
+    await Promise.all([
+      supabase
+        .from("subjects")
+        .select("id, title, gold_price_inr, validity_months, subject_faculty(faculties(full_name))")
+        .eq("course_id", course.id)
+        .order("order_index"),
+      supabase
+        .from("plans")
+        .select("web_price_inr")
+        .eq("tier", "silver")
+        .eq("is_active", true)
+        .maybeSingle(),
+      supabase
+        .from("subscriptions")
+        .select("subject_id, plans(tier, rank)")
+        .eq("student_id", user.id)
+        .eq("course_id", course.id)
+        .eq("status", "active"),
+      supabase.from("site_settings").select("value").eq("key", "gold_validity_options").maybeSingle(),
+    ]);
+
+  const goldValidityOptions = ((validitySetting?.value as string) ?? "1,2,3,6,12,18,24")
+    .split(",")
+    .map((x) => parseInt(x.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n > 0);
 
   const subjectList = subjects ?? [];
   if (subjectList.length === 0) {
@@ -139,6 +146,7 @@ export default async function CoursePlans({
           }}
           facultyNames={facultyNames}
           silverPrice={silverPlan?.web_price_inr ?? null}
+          goldValidityOptions={goldValidityOptions}
           currentTier={currentTier}
           courseId={course.id}
           configured={razorpayConfigured()}

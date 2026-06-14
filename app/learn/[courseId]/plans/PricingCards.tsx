@@ -39,6 +39,7 @@ export default function PricingCards({
   subject,
   facultyNames,
   silverPrice,
+  goldValidityOptions,
   currentTier,
   courseId,
   configured,
@@ -47,6 +48,7 @@ export default function PricingCards({
   subject: Subject;
   facultyNames: string;
   silverPrice: number | null;
+  goldValidityOptions: number[];
   currentTier: string | null;
   courseId: string;
   configured: boolean;
@@ -55,12 +57,35 @@ export default function PricingCards({
   const [busy, setBusy] = useState<string | null>(null);
   const [coupon, setCoupon] = useState("");
 
-  // Price per tier for THIS subject. Bronze free; Silver flat; Gold per-subject.
+  const goldBase = subject.validity_months || 12;
+  const defaultMonths = goldValidityOptions.includes(goldBase)
+    ? goldBase
+    : goldValidityOptions[0] ?? goldBase;
+  const [goldMonths, setGoldMonths] = useState<number>(defaultMonths);
+  const [custom, setCustom] = useState("");
+
+  // Gold price scales with the chosen validity from the subject's base price.
+  const goldTotal =
+    subject.gold_price_inr == null
+      ? null
+      : Math.max(1, Math.round((subject.gold_price_inr * goldMonths) / goldBase));
+
   const tierPrice: Record<string, number | null> = {
     bronze: 0,
     silver: silverPrice,
-    gold: subject.gold_price_inr,
+    gold: goldTotal,
   };
+  const tierMonths: Record<string, number> = {
+    bronze: 0,
+    silver: subject.validity_months,
+    gold: goldMonths,
+  };
+
+  function setCustomMonths(v: string) {
+    setCustom(v);
+    const n = parseInt(v, 10);
+    if (Number.isFinite(n) && n > 0) setGoldMonths(Math.min(60, n));
+  }
 
   async function buy(tier: string) {
     if (!window.Razorpay) {
@@ -69,7 +94,12 @@ export default function PricingCards({
     }
     setBusy(tier);
     try {
-      const res = await createPlanOrder({ subjectId: subject.id, tier, couponCode: coupon });
+      const res = await createPlanOrder({
+        subjectId: subject.id,
+        tier,
+        months: tier === "gold" ? goldMonths : undefined,
+        couponCode: coupon,
+      });
       if (!res.ok) {
         if (res.reason === "unconfigured") window.location.href = contactHref;
         else if (res.reason === "noprice") alert("This plan isn't priced yet — please contact us and we'll enrol you.");
@@ -106,9 +136,6 @@ export default function PricingCards({
       <div style={{ textAlign: "center", marginBottom: 16 }}>
         <strong>{subject.title}</strong>
         {facultyNames && <span className="muted"> · {facultyNames}</span>}
-        <div className="muted" style={{ fontSize: ".82rem" }}>
-          Paid plans give {subject.validity_months} months access.
-        </div>
       </div>
 
       {configured && (
@@ -138,6 +165,42 @@ export default function PricingCards({
               <div className="tier-name">{tierName}</div>
               <div className="tagline">{meta?.tagline}</div>
 
+              {/* Gold validity selector */}
+              {tier === "gold" && !noPrice && !owned && (
+                <div style={{ margin: "8px 0 12px" }}>
+                  <label style={{ fontSize: ".78rem" }}>Choose validity</label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                    {goldValidityOptions.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => {
+                          setGoldMonths(m);
+                          setCustom("");
+                        }}
+                        className="btn small secondary"
+                        style={
+                          goldMonths === m && !custom
+                            ? { background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", borderColor: "transparent" }
+                            : undefined
+                        }
+                      >
+                        {m}m
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={custom}
+                    onChange={(e) => setCustomMonths(e.target.value)}
+                    placeholder="…or custom months"
+                    style={{ marginBottom: 0, fontSize: ".85rem" }}
+                  />
+                </div>
+              )}
+
               {isFree ? (
                 <div className="plan-price">Free</div>
               ) : noPrice ? (
@@ -147,7 +210,7 @@ export default function PricingCards({
               ) : (
                 <>
                   <div className="plan-price">{formatINR(price as number)}</div>
-                  <div className="plan-permonth">{subject.validity_months} months access</div>
+                  <div className="plan-permonth">{tierMonths[tier]} months access</div>
                 </>
               )}
 

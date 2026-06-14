@@ -20,6 +20,7 @@ export type CreateOrderResult =
 export async function createPlanOrder(input: {
   subjectId: string;
   tier: string;
+  months?: number;
   couponCode?: string;
 }): Promise<CreateOrderResult> {
   if (!razorpayConfigured()) return { ok: false, reason: "unconfigured" };
@@ -48,9 +49,19 @@ export async function createPlanOrder(input: {
     .maybeSingle();
   if (!plan) return { ok: false, reason: "noplan" };
 
-  // Silver = the flat plan price; Gold = this subject's own price.
-  const baseAmount = input.tier === "gold" ? subject.gold_price_inr : plan.web_price_inr;
-  if (!baseAmount || baseAmount <= 0) return { ok: false, reason: "noprice" };
+  // Silver = a flat price for the subject's standard validity. Gold = the
+  // subject's own price, scaled to the validity the student chose.
+  const baseMonths = subject.validity_months || 12;
+  let months = baseMonths;
+  let baseAmount: number | null;
+  if (input.tier === "gold") {
+    if (!subject.gold_price_inr || subject.gold_price_inr <= 0) return { ok: false, reason: "noprice" };
+    months = input.months ? Math.min(60, Math.max(1, Math.round(input.months))) : baseMonths;
+    baseAmount = Math.max(1, Math.round((subject.gold_price_inr * months) / baseMonths));
+  } else {
+    baseAmount = plan.web_price_inr;
+    if (!baseAmount || baseAmount <= 0) return { ok: false, reason: "noprice" };
+  }
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -67,8 +78,6 @@ export async function createPlanOrder(input: {
       couponId = applied.couponId;
     }
   }
-
-  const months = subject.validity_months ?? 12;
 
   try {
     const order = await createRazorpayOrder(amountInr, `plan_${Date.now()}`, {

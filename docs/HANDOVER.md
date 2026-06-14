@@ -1,173 +1,215 @@
-# 📋 Handover Memo — 1:1 CA Classes Platform
+# Handover Memo — 1:1 CA Classes Platform
 
-*Prepared for an engineer/expert continuing this build with no access to the prior conversation.*
+_Last updated: 2026-06-14_
+
+> Audience: an incoming engineer/operator who must continue this work **without** access to the original chat. Everything material is captured here.
 
 ---
 
 ## 1. Executive Summary
 
-- **Project:** A full database-driven CA (Chartered Accountant) coaching platform, **"1:1 CA Classes"**, the venture of **CA Parveen Sharma** ("God of Accountancy"). Web app only (mobile apps are future scope).
-- **Status:** **Phases 1–9 of the roadmap plus extensive competitor-parity features are BUILT, deployed, and LIVE** on the production domain. The platform is functionally complete. Remaining work is **operational activation** (adding third-party API keys) and **content entry** (real videos, prices, toppers, faculty), not core development.
-- **Live now:** Domain `121caclasses.com` (HTTPS), admin content manager, student learning portal with per-subject access gating, secure premium video via Bunny.net (with student watermark), book store, discussions, homework, tests, reporting, results/faculty pages.
-- **Inactive pending keys:** Online payments (Razorpay), AI grading/doubt-solving (Anthropic/Claude), automated emails (Mailgun API). All degrade gracefully — the site works without them.
-- **Working method:** Code changes → commit on a branch → `npm run build` → fast-forward merge to `main` → `git push` (Vercel auto-deploys). **Database changes are applied directly via the connected Supabase MCP** (the founder is non-technical and cannot run SQL by hand).
+**The matter.** Building and operating "1:1 CA Classes" (brand also written "121 CA Classes"), an online coaching platform for Indian Chartered Accountancy (CA) students. Live at **121caclasses.com** / **www.121caclasses.com**. Founder is **CA Parveen Sharma** (email **ps.smay@gmail.com**; an Aldine-domain address `ra***@aldine.edu.in` is also used for Apple notarization). The founder is **non-technical** — instructions must be concrete, and the assistant performs the technical execution.
+
+**Current status.** Core platform is live and feature-rich: tiered courses/subjects/topics, per-tier pricing, flexible Gold validity, encrypted **downloadable classes** delivered through a **signed/notarized Mac + Windows desktop app** (Electron), inline YouTube-style comments, a community board, dashboard announcements, AI-generated tests, live-class scheduling, bulk-notification composer, and an installable **PWA**. The encrypted-download pipeline is **proven end-to-end**.
+
+**Most recent action (this session).** Uploaded the **v2** desktop installers directly to Bunny Storage, pointed the website download buttons at them, and resolved a Mac "old app won't delete" problem (app was running from a mounted DMG). Both items are now **complete**.
 
 ---
 
 ## 2. Key Facts and Background
 
-**People / business**
-- Founder & sole face of brand: **CA Parveen Sharma** (30+ yrs teaching, rank holder CA Inter & Final, specialises in Advanced Accounting & Financial Reporting). Positioning is founder-centric; AI only *assists* (paper-checking, doubt-solving) under his guidance.
-- Footer credit required on every page: **"Site built by Dmeter Inc, Texas."**
-- User/operator email: **ps.smay@gmail.com** (also the git commit identity: `Parveen Sharma <ps.smay@gmail.com>`).
-- Founder is **non-technical** — give click-by-click guidance; avoid CLI/SQL instructions; prefer doing things for them via available tools.
+### People & roles
+- **Founder:** CA Parveen Sharma — non-technical; owns the business, has an **Apple Developer account**, owns the existing site **aldine.edu.in**.
+- **Assistant role:** does all technical build/deploy; never logs in as the user; never asks the user to paste secrets into chat.
 
-**Domains**
-- **Primary (LIVE): `121caclasses.com`** — connected to Vercel via GoDaddy DNS.
-- **Alias: `121coaching.ai`** — 308-redirects to `www.121caclasses.com`. (Earlier the original/working domain; now a redirect.)
-- GoDaddy DNS records used: **A record `@` → `76.76.21.21`**, **CNAME `www` → `cname.vercel-dns.com`**.
+### Business / product
+- Audience: ~**20,000 students** (target reach for bulk notifications).
+- Tier model (three plans):
+  - **Gold** — paid, **per-subject pricing**, with **flexible validity** (admin- and student-selectable months).
+  - **Silver** — paid, **one flat price for all subjects**.
+  - **Bronze** — **free**.
+- Some subjects are **bundle-only** (priced inside a bundle rather than standalone).
+- Telegram channel **@caparveen** is linked across the product; one channel post reaches all members.
 
-**Tech stack (actual, live)**
-- **Next.js 14.2.x** (App Router, TypeScript) on **Vercel** (project name assumed **`121classes`**; auto-deploys on push to `main`).
-- **Supabase** — project ref **`ydpkcmyjkekvfwnnvphn`** (dashboard name "121coaching.ai"), Postgres 17, region ap-northeast-1. Auth + DB + Storage + RLS. **Supabase MCP is connected** to this project (org `rnrmaxczwrbrcxoqimaa`); migrations are applied directly through it.
-- **Mailgun** — transactional email (login OTP) via Supabase custom SMTP; sending domain `121coaching.ai`, sender `no-reply@121coaching.ai`. (Mailgun *HTTP API key* for app notifications NOT yet configured.)
-- **Bunny.net Stream** — premium video. **Library ID `682810`** (hard-coded as default in `lib/bunny.ts`; public value).
-- **Razorpay** (payments), **Anthropic/Claude** (AI), **Interakt** (WhatsApp), **Zoom** (live, optional auto-create) — code built, keys NOT set.
-- Repo: **`parveen8904/121classes`** on GitHub. Latest commit at handover: **`6944090`**.
+### Technical stack
+- **Next.js 14 App Router** (TypeScript, Server Components/Actions).
+- **Supabase** (Postgres + RLS + Auth + Storage), project ref **`ydpkcmyjkekvfwnnvphn`**. Access-gated data via **SECURITY DEFINER** Postgres functions.
+- **Vercel** — auto-deploys on push to `main`.
+- **Electron** desktop app (electron **31.7.7**, electron-builder) — the desktop app loads the **full website** (`https://www.121caclasses.com/dashboard`) and adds offline download/play.
+- **Bunny** — Storage zone **`ca-classes`** (region **Singapore**, endpoint `sg.storage.bunnycdn.com`); CDN pull zone **`ca-classes.b-cdn.net`**. Used as a dumb encrypted-blob pipe + installer host.
+- **Anthropic API** via `lib/ai.ts` (raw fetch; default model `claude-sonnet-4-6`; degrades gracefully if `ANTHROPIC_API_KEY` absent).
+- **PWA** (manifest, service worker, generated icons).
 
-**Key product/business decisions (locked)**
-- Content model: **Courses → Subjects (1+ faculty) → Topics → Sections** (typed sections + admin-named custom). Everything admin-managed, no hardcoding.
-- **Access is PER-SUBJECT** (decided this session): a subscription targets a `subject_id`, or `NULL` = whole course. Gating function `has_subject_access`.
-- **Tiers are hierarchical Bronze < Silver < Gold** (kept, not arbitrary multi-plan mapping). "Available in Silver and Gold" = set minimum = Silver.
-- **Bronze = FREE** (latest decision): Bronze content needs no subscription and ₹0 price. **Silver** (paid) adds MCQ tests + AI subjective tests + AI doubt-solving. **Gold** (paid) adds premium full classes + live classes. Silver/Gold fees unchanged.
-- Subscriptions: per-course/subject, durations **1/3/6/12 months**, duration-scaled discount (3mo −5%, 6mo −10%, 12mo −20%), auto-renew; admin can grant free (incl. bulk CSV). App price target ≈130–140% of web (future).
-- Videos: **use Bunny.net normally** (transcode + adaptive HLS + CDN + DRM). A self-hosted "own the brain, rent the pipe" hybrid HLS plan was written but **parked** (see `docs/ENCRYPTED_VIDEO_PLAN.md`). Founder's typical lectures are **3–4 hours**. Many lectures are free on YouTube (so video is not the core moat — AI/tests/mentorship is).
-- Books: ~10 titles, free shipping, guest checkout; end-of-day warehouse dispatch email.
+### Encryption / security model
+- Classes encrypted with **AES-256-CBC** using the platform's **own key** (not Bunny's). CDN only ever holds ciphertext.
+- Desktop app: atomic downloads (`.part` + size verification), decrypt → play in a **native player window** (`file://`), with a **moving per-student watermark** (name + email/phone) for traceability.
+- Mac build is **Developer ID signed + notarized** (Developer ID **"Aldine Ventures Private Limited"**, Apple Team ID **`32W63QKXH8`**; notarytool + stapler, keychain profile **"ca-notary"**, hardened runtime, universal x64+arm64). Windows build is **NSIS x64, currently unsigned** (needs a Windows code-signing cert).
+
+### Constraints / working agreements (must honor)
+- **Never** have the founder paste passwords/secrets in chat. Secrets live in **Vercel env** or **local files** (e.g. `~/Desktop/notary.txt`, `~/Desktop/bunny.txt`) that are read locally and then deleted.
+- The assistant **cannot** log in as the user or enter their credentials.
+- **Never fabricate** student results/toppers — only use real data the founder provides.
+- Secrets are **never committed** to git.
+- **Graceful degradation** is the standard pattern for every paid integration (Razorpay, Mailgun, Interakt/WhatsApp, Anthropic, Telegram, Bunny): absent key → feature disabled cleanly, no crash.
+- **Deploy preference:** ship completed phases by merging to `main` + pushing (Vercel auto-deploys); flag any manual migration steps.
 
 ---
 
 ## 3. Documents and Information Reviewed
 
-- **`docs/PROJECT_STATE.md`** — single source of truth / handoff doc (kept updated throughout; sections §1–§22). Read this first in any new session.
-- **`docs/PORTAL_SPEC.md`** — original portal specification.
-- **`supabase/migrations/0001_init.sql`** — full base schema + RLS + seed plans.
-- **Legacy `courses.html` / `index.html`** — old static AS-24 sample (migrated into DB seed; superseded).
-- **Email from founder (Hinglish)** — feature requests round 1 (courses filter, admin Users section, mandatory Course+Subject in enrolment, separate courses page, homepage highlight banner, course↔multiple-plans, updated bio). 12 attachments were mentioned but **never received/visible** (Unconfirmed contents).
-- **Competitor: bbvirtuals.com** (CA Bhanwar Borana) — fetched & analysed; sold via resellers (castudyweb, lecturewala, smartlearningdestination); offers Google Drive/Pen Drive/Download modes with "views" (credit hours) + validity, test series, combos, 17+ faculty, results/rank page, face-to-face Mumbai centre.
-- **VdoCipher vs Bunny.net research** — DRM/pricing comparison (VdoCipher ~$179/mo entry, strong iOS+Android offline DRM; Bunny MediaCage Basic free, Enterprise DRM $99/mo, far cheaper per GB).
-- **Bunny Stream token-auth docs** — confirmed embed token formula `SHA256_HEX(token_key + video_id + expires)`.
-- **Founder screenshots/paste** — Bunny library Security settings panel; a student topic-page view showing the test video section.
+- **`docs/HANDOVER.md`** (this file), **`docs/PROJECT_STATE.md`** (§24–§27 added: pricing, validity, desktop app, notifications), **`docs/DESKTOP_APP_PLAN.md`**.
+- **Memory files** (`~/.claude/.../memory/`): `MEMORY.md` index, `deploy-preference.md`, `aldine-source-site.md`.
+- **aldine.edu.in** — founder's existing CA site; catalog was **publicly crawled (WebFetch only)** and migrated into the new Supabase DB on **2026-06-14**. (Founder offered admin login; assistant **declined** — public fetch only.)
+- **Supabase migrations** (see §6).
+- **Bunny dashboard credentials** were provided by the founder in a local file (Access Key, read-only key, region endpoint) — used to upload installers; key file then deleted.
+- **Apple notarization artifacts** — Developer ID cert created by founder; app-specific password stored in `notary.txt` (regenerated once after a 401).
+
+Key observations:
+- Aldine per-course prices differ widely → drove the **per-tier pricing** decision.
+- 121caclasses.com **308-redirects to www** → broke desktop CORS until base URL was fixed to `https://www.121caclasses.com`.
 
 ---
 
 ## 4. Analysis Performed
 
-- **Per-subject access design:** Added nullable `subscriptions.subject_id`; `has_subject_access(subject, needed)` returns true if subject-specific OR whole-course (`subject_id IS NULL`) active subscription at/above tier exists. `sections_read` RLS + `list_topic_sections()` rewritten to gate by subject. Chosen over course-only (founder requirement) and over making subject a display-only field.
-- **Bronze-free:** Made `plan_rank(needed) <= 1` (Bronze) return free in both `has_subject_access` and `has_course_access`; set Bronze plan price to ₹0. Preserves Bronze/Silver/Gold labels while making Bronze open.
-- **Latent payment bug fixed:** Students have no INSERT RLS policy on `subscriptions`; post-payment grant inserts (plan + combo verify) now use the **service-role client** (`lib/supabase/service.ts`).
-- **Video security analysis (extensive):** Concluded no scheme makes video uncopyable; goal = "hard + traceable." Browser can't do secure offline (needs native app + DRM). "Plays only in my app" ≠ encrypted (browser dev tools leak unencrypted streams). Recommended Bunny (transcode/ABR/CDN/MediaCage) + a student-email **watermark overlay** (built) + Bunny referrer/token restriction. Self-hosted encrypted HLS hybrid documented but deferred as not cost-effective vs Bunny.
-- **Competitor gap analysis (vs BB Virtuals):** Their edges = offline/views model, test series, combos, results/rank page, faculty roster, reseller distribution. Our edges = AI doubt-solving + paper-checking, discussions, modern UX. Built: results page, faculty page, test series, coupons, combos, WhatsApp/call support. Deliberately did NOT build the offline/"views/validity" delivery model (strategic business decision, parked).
-- **Bunny 403 diagnosis:** "Blank/403" = Bunny **Token Authentication** rejecting the unsigned embed. Built signed-token support (`lib/bunny.ts`). The token key never applied cleanly in Vercel ("value invalid" error), so founder **disabled all Bunny security → video played** → recommendation: re-enable **Allowed domains** (referrer restriction) instead of token keys for simplicity.
-- **Domain "not loading" diagnosis:** Both domains failed with **SSL certificate verification error** = cert still provisioning after DNS change (site itself fine; vercel.app URL worked). Resolved (founder reported "site up").
+- **Secure offline playback requires a native app**, not a browser (a browser can't hold a private decryption key safely or block trivial ripping). → Chose **Electron + own AES key + CDN-as-dumb-pipe**.
+- **Bunny region:** advised **keeping Singapore** (closest low-latency region to India; a storage zone's region cannot be changed without recreating the zone; the CDN edge handles global delivery anyway). Rejected switching.
+- **Pricing structure:** evaluated flat vs per-course vs per-tier. Chose **per-tier** (Gold per-subject, Silver flat, Bronze free) as it matched Aldine reality without over-complicating checkout.
+- **Bulk notifications to 20k:** identified that true scale needs a **cron-drained queue** (not yet built); the current composer sends but large volume needs the queue + provider keys.
+- **Desktop "Failed to fetch"** root-caused to the www redirect + CORS; fixed by pinning base URL to www.
+- **BAD_DECRYPT** root-caused to a **truncated download** (network drop at 63.6%) treated as complete; fixed with **size verification** + atomic `.part`.
+- **Notarize pre-check bug** in `@electron/notarize` (`codesign -dv --deep` returns 1, "host has no guest") → bypassed by `notarize:false` and **manual** notarytool + stapler.
 
 ---
 
 ## 5. Decisions, Conclusions, and Recommendations
 
-**Decisions made**
-- Ship every completed phase to `main` (auto-deploy) — standing approval; flag manual steps. Apply DB migrations via MCP directly.
-- Per-subject access; hierarchical tiers; **Bronze free / Silver+Gold paid**.
-- Use **Bunny.net** for video (not self-hosted); secure via **Allowed-domains referrer restriction** (token auth off for simplicity).
-- Primary domain `121caclasses.com`; `121coaching.ai` redirects to it.
+### Decisions made
+- Desktop app = **full website** + offline layer (not a single-class viewer).
+- **Download button lives on each class** (plus a Downloads page); discussion shown **inline** under each class (YouTube-style), not behind a click-through.
+- **Community board** added where the founder's pinned message is visible to all.
+- Installers hosted on Bunny at stable URLs; website buttons read URLs from `site_settings`.
+- Region stays **Singapore**.
 
-**Recommendations / follow-ups for the founder**
-- **Bunny Security:** set **Allowed domains** = `121caclasses.com`, `www.121caclasses.com`, `121coaching.ai` (+ the `*.vercel.app` test URL); enable "Block direct URL file access"; keep Token Authentication OFF. *(Currently ALL Bunny security is OFF — videos are publicly embeddable until this is set.)* **Unconfirmed whether done.**
-- **Supabase Auth:** set **Site URL → `https://121caclasses.com`** and add redirect URLs `https://121caclasses.com/**`, `https://www.121caclasses.com/**` (so login/password-reset emails point to the live domain). **Unconfirmed whether done.**
-- **Activate paid features** by adding env vars in Vercel (then redeploy): `RAZORPAY_KEY_ID` + `NEXT_PUBLIC_RAZORPAY_KEY_ID` (same value) + `RAZORPAY_KEY_SECRET`; `ANTHROPIC_API_KEY`; `MAILGUN_API_KEY` + `MAILGUN_DOMAIN` + `NOTIFY_FROM_EMAIL`; (optional) `BUNNY_STREAM_API_KEY` (admin video upload), `WAREHOUSE_EMAIL` + `CRON_SECRET`, `INTERAKT_API_KEY`, `ZOOM_*`.
-- Enter real content: Silver/Gold prices (Admin→Plans), toppers (Admin→Results), faculty photos, support WhatsApp/phone number (Admin→Site images), homepage banner & founder photo (Admin→Site images).
-
-**Requires professional/founder review**
-- Real Silver/Gold pricing values (seed placeholders are silver ₹999/mo, gold ₹1499/mo — **Unconfirmed if founder updated them; he said "Silver and Gold fees are correct"**).
-- Whether to ever build offline/native-app delivery (parked strategic decision).
+### Recommendations / follow-up needing the founder or a professional
+- Provide integration keys to fully activate features: **`ANTHROPIC_API_KEY`**, **`TELEGRAM_BOT_TOKEN`** (+ add bot as channel admin of @caparveen), **`MAILGUN_API_KEY`**, **`INTERAKT_API_KEY`**.
+- Provide **real topper/result data** before any results UI goes live.
+- Build the **cron-drained queue** before doing a real 20k email/WhatsApp blast.
+- Consider **bulk student import** tooling.
 
 ---
 
 ## 6. Important Numbers, Dates, and References
 
-- **Supabase project ref:** `ydpkcmyjkekvfwnnvphn` (org `rnrmaxczwrbrcxoqimaa`).
-- **Bunny Stream Library ID:** `682810` (default in code).
-- **Test video GUID:** `d2b21016-947f-4a01-8eaf-019a845e649c` (inserted as free section `dbccccd3-8688-4034-8717-14130df329a2`, title "🎬 Test video (Bunny)").
-- **Test topic:** `ee772ebb-e5d0-4d72-ba10-3694a8e22675` (CA Final → "CA Final-Financial Reporting … By CA Parveen Sharma" → topic "Complete Lectures"). Live URL: `/learn/topic/ee772ebb-e5d0-4d72-ba10-3694a8e22675`.
-- **GitHub:** `parveen8904/121classes`; latest commit `6944090`.
-- **DNS:** A `@` = `76.76.21.21`; CNAME `www` = `cname.vercel-dns.com`.
-- **Seed plan prices (₹/month, web/app):** Bronze **0/0** (now free); Silver 999/1399; Gold 1499/2099 *(Silver/Gold are seed placeholders — Unconfirmed if changed).*
-- **Migrations:** `0001`–`0009`. `0006`/`0007`/`0008`/`0009` (and the named applies `subject_level_access`, `media_storage_and_site_settings`, `results_coupons_combos_testseries`, `bronze_free_tier`) applied via MCP. Diagnostic confirmed `0002`–`0005` already applied (profiles.gstin, discussion tables, `list_topic_sections`, homework enum all present).
-- **Bunny cron (warehouse email):** `vercel.json` cron `30 12 * * *` (= 18:00 IST) → `/api/cron/warehouse-dispatch`.
-- **Date context:** Conversation spanned ~2026-06-13/14. No tax/statutory deadlines apply (software project).
+### Dates
+- **Today / key working date:** 2026-06-14 (Aldine migration, installer uploads, app cleanup all this date).
+
+### URLs & identifiers
+- Site: **121caclasses.com**, **www.121caclasses.com** (canonical; always use www for app/API).
+- Supabase project: **`ydpkcmyjkekvfwnnvphn`**.
+- Bunny storage zone: **`ca-classes`**; SG endpoint **`sg.storage.bunnycdn.com`**; CDN **`ca-classes.b-cdn.net`**.
+- Telegram channel: **@caparveen** (env `TELEGRAM_CHANNEL_ID`, default `@caparveen`).
+- Apple keychain notary profile: **`ca-notary`**; notarization email **`ra***@aldine.edu.in`**.
+
+### Installer files (current, live, verified 2026-06-14)
+- **Mac:** `https://ca-classes.b-cdn.net/CA-Classes-Mac-v2.dmg` — **178,355,930 bytes** (HTTP 200, size-matched).
+- **Windows:** `https://ca-classes.b-cdn.net/CA-Classes-Windows-v2.exe` — **78,351,170 bytes** (HTTP 200, size-matched).
+- `site_settings` keys **`app_url_mac`** and **`app_url_windows`** now point to these v2 URLs.
+
+### Electron version / build
+- electron **31.7.7**; mac target dmg arch **universal**; win target **nsis x64**.
+
+### Supabase migrations (in `supabase/migrations/`)
+- `0010_per_subject_gold_pricing.sql` — `subjects.gold_price_inr`, `subjects.validity_months`.
+- `0011_protected_downloadable_classes.sql` — `protected_videos` table + `list_downloadable_classes()` + `get_protected_class_key()`.
+- `0012_standalone_live_sessions.sql` — `live_sessions` (had to drop/recreate an empty legacy table that lacked `is_published`).
+- `0013_downloadable_section_id.sql` — added `section_id` to `list_downloadable_classes`.
+- `0014_community_board.sql` — `community_posts` + RLS (read all authenticated; insert/delete own; admin pin via service client).
+
+### Pricing (as established)
+- Gold: per-subject INR price (`gold_price_inr`) incl. bundle subjects; flexible validity options (e.g. **1 / 2 / 5 / 7 / 12 / 18 / custom** months).
+- Silver: single flat price all subjects. Bronze: free.
 
 ---
 
 ## 7. Open Issues and Pending Questions
 
-- **Unconfirmed:** Bunny Allowed-domains set? Supabase Auth Site URL updated? These are the two post-domain-launch follow-ups still outstanding.
-- **Unconfirmed:** Does the test video actually play on the live domain now? (It played when all Bunny security was OFF; behaviour after re-enabling Allowed domains untested.)
-- **Inactive:** Razorpay, Anthropic, Mailgun-API, Bunny upload, Zoom, Interakt — all coded but keys absent (features show "coming soon"/graceful fallback).
-- **Risk:** Bunny security currently fully OFF → premium video URLs are publicly embeddable until Allowed domains is set.
-- **Risk:** `NEXT_PUBLIC_SITE_URL` env (used for auth redirects) may still point to localhost/vercel — verify.
-- **Missing:** Real Silver/Gold prices (verify), real content/videos, the 12 email attachments never seen.
-- **Parked:** Offline/download ("views/validity") delivery model; native mobile apps (Phase 10); self-hosted encrypted-HLS hybrid.
-- **Not yet built:** scheduled student reminders (expiry/upcoming class); Razorpay webhook reconciliation; Mailgun verification of `121caclasses.com` sending domain.
+- **Missing integration keys** (blocking full activation): `ANTHROPIC_API_KEY`, `TELEGRAM_BOT_TOKEN`, `MAILGUN_API_KEY`, `INTERAKT_API_KEY`.
+- **No real 20k-scale send path yet** — composer exists, but cron-drained queue is unbuilt; large blasts not safe yet.
+- **No real topper/result data** — results features must wait for founder-supplied data.
+- **Bulk student import** — not built.
+- **Verification still useful:** confirm inline comments + community board render correctly **inside the desktop app** (offered, not fully verified on-device).
+- **Trash item:** old `1to1 CA Classes 2.app` is in the macOS Trash (not yet emptied) — harmless.
+
+### Risks / uncertainties
+- Founder tends to run the app from the **DMG window** instead of /Applications → recurring "file in use / won't delete" problem. Mitigation = always drag to Applications, then eject DMG, run from Applications.
+- The truncated-download class of bug is mitigated but depends on size metadata being correct at registration time.
+- Notarization depends on the app-specific password staying valid; regenerate if a 401 recurs.
 
 ---
 
 ## 8. Action Items
 
-**Immediate (founder, ~15 min)**
-1. Bunny → library 682810 → Security → set **Allowed domains** (3 domains + vercel URL), enable "Block direct URL file access", keep Token Auth OFF.
-2. Supabase → Authentication → URL Configuration → **Site URL** + redirect URLs to `121caclasses.com`.
-3. Confirm the test video plays on the live site.
+### Immediate
+- (Optional) Empty Trash to remove the old `1to1 CA Classes 2.app`.
+- Founder: install v2 from the website, **drag to Applications, then eject DMG**, launch from Applications.
+- Founder: supply the four integration keys when ready (assistant will place them in Vercel env).
 
-**Medium-term**
-4. Set real Silver/Gold prices (Admin → Plans); create Combos if desired.
-5. Add `BUNNY_STREAM_API_KEY` (enables in-admin video upload) → upload real lectures → tag sections (Bronze=free, Silver=tests, Gold=premium classes) → publish topics.
-6. Add **Razorpay** keys (self-serve payments), **Anthropic** key (AI tests/doubt-solving), **Mailgun API** key + `WAREHOUSE_EMAIL` + `CRON_SECRET` (emails + warehouse dispatch). Redeploy after each.
-7. Populate Results (toppers), Faculty photos, Site images (founder photo, homepage banner, support WhatsApp/phone).
+### Medium-term
+- Build the **cron-drained notification queue** for genuine 20k Email/WhatsApp/Telegram sends.
+- Build **bulk student import**.
+- Verify inline comments + community board look right inside the desktop app on Mac and Windows.
+- Register additional encrypted classes (assistant can encrypt → upload to Bunny → register directly using the local key-file flow).
 
-**Long-term**
-8. Native iOS/Android apps (Phase 10) — only path to true offline + screen-record blocking; would use a DRM SDK (VdoCipher) if offline is pursued.
-9. Reseller/affiliate distribution; reconsider offline/views model; Zoom auto-create; expiry reminder crons.
+### Long-term
+- Real results/toppers module once data exists.
+- Expand AI tests (MCQ + subjective from transcripts) across the catalog; keep token-frugal / pre-generated.
+- Scheduled live-class operations at scale.
 
 ---
 
 ## 9. Context for Future Conversations
 
-- **Start every session by reading `docs/PROJECT_STATE.md` and `docs/PORTAL_SPEC.md`.** PROJECT_STATE is current through §22 (Bunny video) plus the Bronze-free change.
-- **Auto-memory** at `~/.claude/.../memory/` has `deploy-preference.md`: ship phases to `main`+push without re-asking; **apply Supabase migrations directly via MCP** to project `ydpkcmyjkekvfwnnvphn`; write the repo migration file too; verify with `execute_sql`.
-- **Conventions:** always `npm run build` before pushing (JSX must escape `'`/`"`); secrets only in Vercel env / Supabase, never committed; co-author trailer `Co-Authored-By: Claude …`; non-`NEXT_PUBLIC` env is server-only.
-- **Graceful-degradation pattern:** every paid integration (Razorpay, Claude, Mailgun, Bunny, Zoom, Interakt) checks `…Configured()` and no-ops with a friendly message when keys are absent — so the live site never breaks.
-- **Key code locations:** access gating `has_subject_access` (DB) + `app/learn/topic/[topicId]/page.tsx` (`list_topic_sections` RPC with fallback); Bunny `lib/bunny.ts`; pricing `lib/pricing.ts` + `lib/tiers.ts`; admin under `app/admin/*`; student under `app/learn/*`; public marketing pages `/`, `/courses`, `/combos`, `/test-series`, `/results`, `/faculty`, `/books`.
-- **Admin sections built:** Courses, Users, Faculty, Announcements, Enrolment (course+subject, single/bulk), Plans, Books, Orders, Live, Results, Coupons, Combos, Reports, Site images, MCQ/Subjective question editors.
-- **Founder communication style:** Hinglish, voice-to-text (expect typos, e.g. "12coaching.ai" = 121coaching.ai); confirm interpretations; keep it simple and visual.
+- **Who you're talking to:** CA Parveen Sharma, non-technical founder. Give concrete, do-this-next guidance; you execute the technical parts.
+- **Deploy:** push to `main` → Vercel auto-deploys. Always flag manual migration/DB steps.
+- **Secrets discipline:** never ask for secrets in chat; read from local files (`~/Desktop/notary.txt`, `~/Desktop/bunny.txt`) then delete; never commit; never log in as the user.
+- **Bunny uploads:** assistant CAN upload directly via `curl -T` PUT to `https://sg.storage.bunnycdn.com/ca-classes/<file>` with the `AccessKey` header read from the local key file (HTTP 201 = success). Verify public URL at `https://ca-classes.b-cdn.net/<file>`.
+- **Desktop base URL must be `https://www.121caclasses.com`** (the apex 308-redirects and breaks CORS).
+- **Encrypted class pipeline:** `scripts/encrypt-class.mjs` (AES-256-CBC) → `scripts/publish-class.mjs` (Bunny upload) → register row in `protected_videos` (with `section_id`) → student downloads via desktop app → decrypt → native player with watermark.
+- **Key files/components:**
+  - `lib/ai.ts` (`generateMcqs`, `generateSubjectiveQuestions`), `lib/notify.ts` (`telegramConfigured`, `sendTelegramChannel`), `lib/supabase/token.ts` (desktop auth: `tokenClient`, `bearer`, `corsHeaders`).
+  - `app/api/app/classes/route.ts` + `app/api/app/license/route.ts` — Bearer-token desktop endpoints.
+  - `desktop/main.js`, `desktop/preload.js` (`window.native = { isDesktopApp, download, isDownloaded, play, onProgress }`), `desktop/renderer/player.html`, `desktop/package.json`, `desktop/build/entitlements.mac.plist`.
+  - `app/learn/topic/[topicId]/page.tsx` + `ClassDownload.tsx`, `app/learn/section/[sectionId]/DiscussionBoard.tsx` + `actions.ts` (note: a perl-edit once caused infinite recursion in `refresh()` — fixed to call `revalidatePath`).
+  - `app/community/page.tsx` + `actions.ts`, `app/dashboard/page.tsx` (announcements), `app/page.tsx` ("Get the app" 5 buttons, live teaser, ICAI strip), PWA files (`app/manifest.ts`, `public/sw.js`, `app/install/*`, `app/help/page.tsx`, `app/components/RegisterSW.tsx`).
+  - `app/admin/*` — protected classes, notifications, plans (Gold validity options via `setGoldValidityOptions`), live scheduler, mcq/subjective generators, decluttered courses/subjects/topics.
+- **Backlog priority order (founder: "do all in order"):** (1) AI tests from transcripts, (2) live-class scheduling, (3) bulk notifications to 20k. (1) and (2) are built; (3) needs the queue + keys.
 
 ---
 
-## Verification Log
+## Quick Reference Sheet (one page)
 
-*(Appended by the continuing session — facts confirmed against the live DB/repo to replace "Unconfirmed" flags.)*
+**Project:** 1:1 CA Classes — CA-coaching platform. Live: **www.121caclasses.com**.
+**Founder:** CA Parveen Sharma (ps.smay@gmail.com) — non-technical; has Apple Developer acct; owns aldine.edu.in.
+**Stack:** Next.js 14 + Supabase (`ydpkcmyjkekvfwnnvphn`) + Vercel (push `main` → deploy) + Electron desktop + Bunny CDN + PWA.
 
-### 2026-06-14 — DB + repo verification
+**Pricing:** Gold = per-subject + flexible validity (1/2/5/7/12/18/custom mo) · Silver = flat all-subjects · Bronze = free.
 
-- **Plan prices (CONFIRMED live in `plans` table):** Bronze ₹0/₹0 (free, active), Silver ₹999 web / ₹1399 app (active), Gold ₹1499 web / ₹2099 app (active). These match the seed placeholders — i.e. founder has **not** changed Silver/Gold from the seeds, but he previously said the Silver/Gold fees are correct, so treat as final unless he says otherwise. *(Resolves the "real prices unconfirmed" flag: values are as listed, confirmed real.)* Columns are `web_price_inr` / `app_price_inr` (not the names guessed in §6).
-- **Bronze-free gating (CONFIRMED live):** both `has_subject_access` and `has_course_access` short-circuit with `plan_rank(needed) <= 1` → Bronze content is open without a subscription. Per-subject logic confirmed: `s.subject_id = subject OR (s.subject_id IS NULL AND s.course_id = subj.course_id)` (subject-specific OR whole-course). Working as designed.
-- **Test video (CONFIRMED live):** section `dbccccd3-…329a2` exists, `type=full_class_video`, `is_published=true`, `min_plan=NULL` (free), `config.bunny_video_id = d2b21016-947f-4a01-8eaf-019a845e649c`. Parent topic `ee772ebb-…22675` ("Complete Lectures") is published with 1 section. DB wiring is correct — if it doesn't play live, the cause is Bunny security, not the data.
-- **`NEXT_PUBLIC_SITE_URL` "risk" — RESOLVED, was a non-issue:** the env var is declared in `.env.example` (default `localhost:3000`) but is **not referenced anywhere in the code** (zero usages in `lib/` or `app/`). Auth redirects are derived dynamically from the request origin in `app/auth/callback/route.ts` (`const { origin } = new URL(request.url)`), so they always point back to whatever live domain served the request. **The localhost default cannot leak into production.** The actual email-link domain is governed solely by the **Supabase dashboard → Auth → Site URL** setting (not inspectable via MCP) — that remains the only founder dashboard check that matters here.
-- **Live render — CONFIRMED by founder (2026-06-14):** the topic page `/learn/topic/ee772ebb-…22675` shows a **login wall when logged out** (expected — portal is gated correctly), and **the test video plays after logging in**. So Bunny is serving the embed fine end-to-end on the live domain.
-- **Bunny security — CONFIRMED done by founder (2026-06-14):** the Bunny library domain/security settings (Allowed-domains) have been configured. Premium video is no longer publicly embeddable. *(Resolves the "Bunny security fully OFF" risk from §7/§8.)*
-- **Automated browser check NOT possible from this machine:** the connected Chrome is a managed profile with an org-level URL blocklist that blocks the general web (even `example.com`), so all live verification above came from the founder opening the page in an unmanaged browser, not from Claude-in-Chrome.
+**Desktop app:** full website + encrypted offline download/play; AES-256-CBC own key; per-student moving watermark. Mac = Developer ID signed+notarized (profile `ca-notary`); Win = NSIS x64. **Base URL must be www** (apex breaks CORS).
 
-### Remaining truly-open items (post-verification)
+**Live installers (verified 2026-06-14):**
+- Mac: `https://ca-classes.b-cdn.net/CA-Classes-Mac-v2.dmg` (178,355,930 B)
+- Win: `https://ca-classes.b-cdn.net/CA-Classes-Windows-v2.exe` (78,351,170 B)
+- `site_settings.app_url_mac` / `app_url_windows` point here.
 
-All "Unconfirmed" flags from the original memo are now resolved EXCEPT:
-- **Supabase Auth Site URL** — not independently re-confirmed this session (dashboard-only; not exposed by the Supabase MCP). Login worked, which is a strong signal it's correct, but the password-reset/email-link domain specifically was not separately checked.
-- **Paid-feature keys still absent** (by design): Razorpay, Anthropic, Mailgun-API, Bunny upload, Zoom, Interakt — all coded with graceful fallback; founder adds Vercel env vars when ready.
-- **Real content** (real lectures, toppers, faculty photos, homepage banner) — content-entry work, not engineering.
+**Bunny:** zone `ca-classes`, SG endpoint `sg.storage.bunnycdn.com`, CDN `ca-classes.b-cdn.net`. Region stays Singapore. Assistant can upload via curl PUT (201=ok); key via local file, then delete.
+
+**Telegram:** channel @caparveen (one post → all members).
+
+**Rules:** never paste secrets in chat; secrets in Vercel env / local files then delete; never commit secrets; never log in as user; never fabricate results; graceful degradation for all paid integrations.
+
+**Blocking inputs needed from founder:** `ANTHROPIC_API_KEY`, `TELEGRAM_BOT_TOKEN` (+ bot as channel admin), `MAILGUN_API_KEY`, `INTERAKT_API_KEY`, real topper data.
+
+**Top next actions:** (1) collect integration keys → set in Vercel; (2) build cron-drained queue before real 20k blast; (3) verify comments/community in desktop app; (4) optional: empty Trash (old app). Install tip for founder: drag app to Applications, **then eject DMG**, run from Applications.
+
+**Migrations:** 0010 per-subject Gold price; 0011 protected_videos + RPCs; 0012 live_sessions; 0013 section_id on downloadables; 0014 community_board.

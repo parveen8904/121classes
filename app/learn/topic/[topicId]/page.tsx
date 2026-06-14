@@ -68,11 +68,13 @@ function SectionBody({
   type,
   config,
   watermark,
+  hasDownload,
 }: {
   id: string;
   type: string;
   config: Record<string, unknown> | null;
   watermark?: string;
+  hasDownload?: boolean;
 }) {
   const c = (config ?? {}) as Record<string, string>;
 
@@ -101,6 +103,10 @@ function SectionBody({
             <iframe src={src} allow="encrypted-media; fullscreen" allowFullScreen title="Video" />
             {watermark && <span className="vwm">{watermark}</span>}
           </div>
+        ) : hasDownload ? (
+          <p className="muted" style={{ marginTop: 12 }}>
+            📥 This class is available to download and watch securely in the desktop app.
+          </p>
         ) : (
           <p className="muted" style={{ marginTop: 12 }}>
             Video coming soon.
@@ -337,6 +343,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
                         type={s.type}
                         config={configById.get(s.id) ?? null}
                         watermark={watermarkText}
+                        hasDownload={downloadBySection.has(s.id)}
                       />
                       {downloadBySection.has(s.id) && (
                         <ClassDownload pv={downloadBySection.get(s.id)!} watermark={watermarkText} />

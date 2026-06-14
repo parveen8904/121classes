@@ -27,6 +27,10 @@ type SectionMeta = {
   unlocked: boolean;
 };
 
+// Every video kind gets YouTube-style comments — free (bronze) classes included,
+// not just premium full classes.
+const VIDEO_TYPES = new Set(["full_class_video", "revision_video", "discussion_video", "custom"]);
+
 const PLAN_LABEL: Record<string, string> = { bronze: "Bronze", silver: "Silver", gold: "Gold" };
 const TYPE_LABEL: Record<string, string> = {
   revision_video: "Revision video",
@@ -337,7 +341,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
                       {downloadBySection.has(s.id) && (
                         <ClassDownload pv={downloadBySection.get(s.id)!} watermark={watermarkText} />
                       )}
-                      {s.type === "full_class_video" && (
+                      {VIDEO_TYPES.has(s.type) && (
                         <div style={{ marginTop: 18 }}>
                           <h3 style={{ fontSize: "1rem", marginBottom: 10 }}>💬 Comments</h3>
                           <DiscussionBoard

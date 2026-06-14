@@ -4,6 +4,16 @@ import { createClient } from "@/lib/supabase/server";
 import { videoEmbedSrc } from "../../_lib/media";
 import { bunnyEmbedUrl } from "@/lib/bunny";
 import DoubtBox from "./DoubtBox";
+import ClassDownload from "./ClassDownload";
+
+type Downloadable = {
+  id: string;
+  section_id: string | null;
+  storage_url: string;
+  iv_b64: string | null;
+  alg: string | null;
+  byte_size: number | null;
+};
 
 export const dynamic = "force-dynamic";
 
@@ -257,6 +267,14 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     .filter(Boolean)
     .join(" · ");
 
+  // Encrypted classes the student may download, keyed by section (for the
+  // "Download for offline" button on the class).
+  const { data: dlRows } = await supabase.rpc("list_downloadable_classes");
+  const downloadBySection = new Map<string, Downloadable>();
+  for (const d of (dlRows ?? []) as Downloadable[]) {
+    if (d.section_id) downloadBySection.set(d.section_id, d);
+  }
+
   const subject = (topic as { subjects?: { title?: string; course_id?: string } | null }).subjects;
   const courseId = subject?.course_id;
   const plansHref = courseId
@@ -314,12 +332,17 @@ export default async function LearnTopic({ params }: { params: { topicId: string
                       </Link>
                     </div>
                   ) : (
-                    <SectionBody
-                      id={s.id}
-                      type={s.type}
-                      config={configById.get(s.id) ?? null}
-                      watermark={watermarkText}
-                    />
+                    <>
+                      <SectionBody
+                        id={s.id}
+                        type={s.type}
+                        config={configById.get(s.id) ?? null}
+                        watermark={watermarkText}
+                      />
+                      {downloadBySection.has(s.id) && (
+                        <ClassDownload pv={downloadBySection.get(s.id)!} watermark={watermarkText} />
+                      )}
+                    </>
                   )}
                 </div>
               );

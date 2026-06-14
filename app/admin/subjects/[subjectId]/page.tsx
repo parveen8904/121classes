@@ -42,132 +42,137 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
       <AdminHero
         badge="📂 Subject"
         title={subject.title}
-        subtitle={`Part of ${courseTitle ?? "this course"} · assign faculty and add topics below. 👩‍🏫`}
+        subtitle={`Part of ${courseTitle ?? "this course"} · manage its topics below. 📖`}
         back={{ href: `/admin/courses/${subject.course_id}`, label: courseTitle ?? "Course" }}
       />
 
-      {/* Edit subject */}
-      <div className="form-card" style={{ marginTop: 24 }}>
-        <h3>✏️ Edit subject</h3>
-        <form action={updateSubjectInline}>
-          <input type="hidden" name="id" value={subject.id} />
-          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
-            <div>
-              <label htmlFor="su-title">Title</label>
-              <input id="su-title" name="title" defaultValue={subject.title} required />
-            </div>
-            <div>
-              <label htmlFor="su-slug">Slug</label>
-              <input id="su-slug" name="slug" defaultValue={subject.slug ?? ""} />
-            </div>
-            <div>
-              <label htmlFor="su-order">Order</label>
-              <input id="su-order" name="order_index" type="number" defaultValue={subject.order_index} />
-            </div>
-          </div>
-          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr", marginTop: 4 }}>
-            <div>
-              <label htmlFor="su-gold">🥇 Gold price (₹) — leave blank if sold only in a combo</label>
-              <input
-                id="su-gold"
-                name="gold_price_inr"
-                type="number"
-                min={0}
-                placeholder="e.g. 9900"
-                defaultValue={subject.gold_price_inr ?? ""}
-              />
-            </div>
-            <div>
-              <label htmlFor="su-validity">Access validity (months)</label>
-              <input
-                id="su-validity"
-                name="validity_months"
-                type="number"
-                min={1}
-                defaultValue={subject.validity_months ?? 12}
-              />
-            </div>
-          </div>
-          <p className="muted" style={{ fontSize: ".82rem", marginBottom: 12 }}>
-            Bronze is free for everyone. Silver is a flat price set on the{" "}
-            <Link href="/admin/plans">Plans page</Link>. Gold is the per-subject price above.
+      {/* New topic — right-aligned expander (primary action) */}
+      <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+        <summary className="btn as-btn">＋ New topic</summary>
+        <div className="form-card" style={{ marginTop: 12, width: "100%" }}>
+          <h3>➕ Add a topic</h3>
+          <p className="muted" style={{ fontSize: ".82rem", marginTop: -4, marginBottom: 10 }}>
+            Optionally set the exam attempt a topic applies <strong>from</strong> — it keeps applying to
+            every later attempt. Leave blank to show it to everyone.
           </p>
-          <button className="btn" type="submit">
-            Save subject
-          </button>
-        </form>
-      </div>
-
-      {/* Faculty assignment */}
-      <div className="form-card" style={{ marginTop: 16 }}>
-        <h3>👩‍🏫 Faculty for this subject</h3>
-        {faculties && faculties.length > 0 ? (
-          <form action={setSubjectFaculty}>
+          <form action={createTopic}>
             <input type="hidden" name="subjectId" value={subject.id} />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 14, margin: "10px 0 14px" }}>
-              {faculties.map((f) => (
-                <label key={f.id} className="remember" style={{ margin: 0 }}>
-                  <input
-                    type="checkbox"
-                    name="faculty_id"
-                    value={f.id}
-                    defaultChecked={assignedIds.has(f.id)}
-                  />{" "}
-                  {f.full_name}
-                </label>
-              ))}
+            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
+              <div>
+                <label htmlFor="t-title">Title</label>
+                <input id="t-title" name="title" placeholder="e.g. AS 24 – Discontinuing Operations" required />
+              </div>
+              <div>
+                <label htmlFor="t-slug">Slug (optional)</label>
+                <input id="t-slug" name="slug" placeholder="auto from title" />
+              </div>
+              <div>
+                <label htmlFor="t-order">Order</label>
+                <input id="t-order" name="order_index" type="number" defaultValue={0} />
+              </div>
             </div>
+            <div style={{ maxWidth: 320 }}>
+              <label htmlFor="t-from">Applies from attempt (optional)</label>
+              <input id="t-from" name="valid_from_attempt" placeholder="e.g. MAY_2026 — blank = all attempts" />
+            </div>
+            <label className="remember" style={{ marginTop: 0 }}>
+              <input type="checkbox" name="is_published" /> Published
+            </label>
             <button className="btn" type="submit">
-              Save faculty
+              Add topic
             </button>
           </form>
-        ) : (
-          <p className="muted" style={{ fontSize: ".9rem" }}>
-            No faculty yet. Add some on the{" "}
-            <Link href="/admin/faculty">Faculty page</Link>, then assign them here.
-          </p>
-        )}
-      </div>
+        </div>
+      </details>
+
+      {/* Subject settings & faculty — tucked away */}
+      <details style={{ marginTop: 10 }}>
+        <summary className="btn small secondary as-btn">⚙️ Subject settings &amp; faculty</summary>
+
+        <div className="form-card" style={{ marginTop: 10 }}>
+          <h3>✏️ Edit subject</h3>
+          <form action={updateSubjectInline}>
+            <input type="hidden" name="id" value={subject.id} />
+            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
+              <div>
+                <label htmlFor="su-title">Title</label>
+                <input id="su-title" name="title" defaultValue={subject.title} required />
+              </div>
+              <div>
+                <label htmlFor="su-slug">Slug</label>
+                <input id="su-slug" name="slug" defaultValue={subject.slug ?? ""} />
+              </div>
+              <div>
+                <label htmlFor="su-order">Order</label>
+                <input id="su-order" name="order_index" type="number" defaultValue={subject.order_index} />
+              </div>
+            </div>
+            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr", marginTop: 4 }}>
+              <div>
+                <label htmlFor="su-gold">🥇 Gold price (₹) — blank if sold only in a combo</label>
+                <input
+                  id="su-gold"
+                  name="gold_price_inr"
+                  type="number"
+                  min={0}
+                  placeholder="e.g. 9900"
+                  defaultValue={subject.gold_price_inr ?? ""}
+                />
+              </div>
+              <div>
+                <label htmlFor="su-validity">Access validity (months)</label>
+                <input
+                  id="su-validity"
+                  name="validity_months"
+                  type="number"
+                  min={1}
+                  defaultValue={subject.validity_months ?? 12}
+                />
+              </div>
+            </div>
+            <p className="muted" style={{ fontSize: ".82rem", marginBottom: 12 }}>
+              Bronze is free. Silver is a flat price on the <Link href="/admin/plans">Plans page</Link>. Gold
+              is the per-subject price above.
+            </p>
+            <button className="btn" type="submit">
+              Save subject
+            </button>
+          </form>
+        </div>
+
+        <div className="form-card" style={{ marginTop: 10 }}>
+          <h3>👩‍🏫 Faculty for this subject</h3>
+          {faculties && faculties.length > 0 ? (
+            <form action={setSubjectFaculty}>
+              <input type="hidden" name="subjectId" value={subject.id} />
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 14, margin: "10px 0 14px" }}>
+                {faculties.map((f) => (
+                  <label key={f.id} className="remember" style={{ margin: 0 }}>
+                    <input
+                      type="checkbox"
+                      name="faculty_id"
+                      value={f.id}
+                      defaultChecked={assignedIds.has(f.id)}
+                    />{" "}
+                    {f.full_name}
+                  </label>
+                ))}
+              </div>
+              <button className="btn" type="submit">
+                Save faculty
+              </button>
+            </form>
+          ) : (
+            <p className="muted" style={{ fontSize: ".9rem" }}>
+              No faculty yet. Add some on the <Link href="/admin/faculty">Faculty page</Link>, then assign them here.
+            </p>
+          )}
+        </div>
+      </details>
 
       {/* Topics */}
       <h2 className="admin-section-title">📖 Topics</h2>
-      <p className="muted" style={{ fontSize: ".9rem" }}>
-        Optionally set the exam attempt a topic applies <strong>from</strong> — it then keeps applying
-        to every later attempt. Leave it blank to show the topic to everyone.
-      </p>
-
-      <div className="form-card" style={{ marginTop: 16 }}>
-        <h3>➕ Add a topic</h3>
-        <form action={createTopic}>
-          <input type="hidden" name="subjectId" value={subject.id} />
-          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
-            <div>
-              <label htmlFor="t-title">Title</label>
-              <input id="t-title" name="title" placeholder="e.g. AS 24 – Discontinuing Operations" required />
-            </div>
-            <div>
-              <label htmlFor="t-slug">Slug (optional)</label>
-              <input id="t-slug" name="slug" placeholder="auto from title" />
-            </div>
-            <div>
-              <label htmlFor="t-order">Order</label>
-              <input id="t-order" name="order_index" type="number" defaultValue={0} />
-            </div>
-          </div>
-          <div style={{ maxWidth: 320 }}>
-            <label htmlFor="t-from">Applies from attempt (optional)</label>
-            <input id="t-from" name="valid_from_attempt" placeholder="e.g. MAY_2026 — blank = all attempts" />
-          </div>
-          <label className="remember" style={{ marginTop: 0 }}>
-            <input type="checkbox" name="is_published" /> Published
-          </label>
-          <button className="btn" type="submit">
-            Add topic
-          </button>
-        </form>
-      </div>
-
-      <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
+      <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
         {topics && topics.length > 0 ? (
           topics.map((t) => (
             <div className="list-row" key={t.id}>
@@ -181,8 +186,8 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                 </p>
               </div>
               <div className="row-actions">
-                <Link className="btn small secondary" href={`/admin/topics/${t.id}`}>
-                  Sections →
+                <Link className="btn small" href={`/admin/topics/${t.id}`}>
+                  Classes →
                 </Link>
                 <form action={toggleTopicPublish} style={{ display: "inline" }}>
                   <input type="hidden" name="id" value={t.id} />
@@ -203,7 +208,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
           ))
         ) : (
           <div className="card">
-            <p className="muted">📭 No topics yet — add the first one above.</p>
+            <p className="muted">📭 No topics yet — tap ＋ New topic above.</p>
           </div>
         )}
       </div>

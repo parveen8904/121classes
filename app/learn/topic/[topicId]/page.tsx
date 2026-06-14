@@ -19,7 +19,7 @@ type SectionMeta = {
 const PLAN_LABEL: Record<string, string> = { bronze: "Bronze", silver: "Silver", gold: "Gold" };
 const TYPE_LABEL: Record<string, string> = {
   revision_video: "Revision video",
-  full_class_video: "Full class video",
+  full_class_video: "Class",
   discussion_video: "Discussion video",
   discussion: "Discussion board",
   homework: "Homework",
@@ -34,7 +34,7 @@ const TYPE_LABEL: Record<string, string> = {
 };
 const TYPE_ICON: Record<string, string> = {
   revision_video: "🎬",
-  full_class_video: "🎥",
+  full_class_video: "🎓",
   discussion_video: "🎞️",
   discussion: "🗣️",
   homework: "📚",
@@ -92,6 +92,20 @@ function SectionBody({
           </p>
         )}
         {c.body && <p style={{ marginTop: 12, whiteSpace: "pre-wrap" }}>{c.body}</p>}
+        {(c.pdf_url || type === "full_class_video") && (
+          <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            {c.pdf_url && (
+              <a className="btn small secondary" href={c.pdf_url} target="_blank" rel="noopener noreferrer">
+                📄 Class notes (PDF)
+              </a>
+            )}
+            {type === "full_class_video" && (
+              <Link className="btn small secondary" href={`/learn/section/${id}?view=discussion`}>
+                💬 Discussion
+              </Link>
+            )}
+          </div>
+        )}
       </>
     );
   }

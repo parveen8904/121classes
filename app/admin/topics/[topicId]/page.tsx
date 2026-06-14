@@ -41,9 +41,24 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
       />
 
       <div className="form-card" style={{ marginTop: 24 }}>
-        <h3>➕ Add a section</h3>
-        <SectionForm action={createSection} topicId={topic.id} submitLabel="Add section" />
+        <h3>🎓 Add a class</h3>
+        <p className="muted" style={{ fontSize: ".85rem", marginTop: -4, marginBottom: 10 }}>
+          A class = lecture video + notes PDF + its own discussion. Add as many classes as the topic needs.
+        </p>
+        <SectionForm
+          action={createSection}
+          topicId={topic.id}
+          submitLabel="Add class"
+          defaultType="full_class_video"
+        />
       </div>
+
+      <details style={{ marginTop: 14 }}>
+        <summary className="btn small secondary as-btn">➕ Add another section type (notes, test, homework…)</summary>
+        <div className="form-card" style={{ marginTop: 10 }}>
+          <SectionForm action={createSection} topicId={topic.id} submitLabel="Add section" />
+        </div>
+      </details>
 
       <h2 className="admin-section-title">🧩 Sections</h2>
       <p className="muted" style={{ fontSize: ".9rem" }}>

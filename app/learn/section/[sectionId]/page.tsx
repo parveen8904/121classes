@@ -8,7 +8,13 @@ export const dynamic = "force-dynamic";
 
 // One route, dispatched by section type. RLS only returns the section if the
 // student may access it (free or subscribed) — locked ones 404 back to topic.
-export default async function SectionPage({ params }: { params: { sectionId: string } }) {
+export default async function SectionPage({
+  params,
+  searchParams,
+}: {
+  params: { sectionId: string };
+  searchParams: { view?: string };
+}) {
   const supabase = createClient();
   const {
     data: { user },
@@ -25,7 +31,9 @@ export default async function SectionPage({ params }: { params: { sectionId: str
   if (section.type === "mcq_test") return <McqSection section={section} />;
   if (section.type === "subjective_test") return <SubjectiveSection section={section} />;
 
-  if (section.type === "discussion") {
+  // A "discussion" section, OR any section (e.g. a class) opened with
+  // ?view=discussion, shows its own discussion board.
+  if (section.type === "discussion" || searchParams.view === "discussion") {
     const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
     return (
       <DiscussionSection section={section} userId={user.id} isAdmin={profile?.role === "admin"} />

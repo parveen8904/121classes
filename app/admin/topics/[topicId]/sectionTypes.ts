@@ -46,7 +46,12 @@ export const SECTION_TYPES: {
   note?: string;
 }[] = [
   { value: "revision_video", label: "Revision video", fields: ["revision_round", "bunny_video_id", "youtube_url", "embed_url"] },
-  { value: "full_class_video", label: "Full class video", fields: ["bunny_video_id", "youtube_url", "embed_url"] },
+  {
+    value: "full_class_video",
+    label: "🎓 Class (video + PDF + discussion)",
+    fields: ["bunny_video_id", "pdf_url", "youtube_url", "embed_url"],
+    note: "A full class: upload the lecture video and the class notes PDF. Students also get a discussion thread on this class for their doubts.",
+  },
   { value: "discussion_video", label: "Discussion / walkthrough video", fields: ["bunny_video_id", "youtube_url", "embed_url"] },
   {
     value: "discussion",

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SECTION_TYPES, FIELD_LABELS, PLAN_OPTIONS, type ConfigField } from "./sectionTypes";
 import BunnyUploader from "./BunnyUploader";
+import PdfUpload from "../../_components/PdfUpload";
 
 type Section = {
   id: string;
@@ -19,13 +20,15 @@ export default function SectionForm({
   topicId,
   section,
   submitLabel = "Add section",
+  defaultType,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   topicId: string;
   section?: Section;
   submitLabel?: string;
+  defaultType?: string;
 }) {
-  const [type, setType] = useState(section?.type ?? "revision_video");
+  const [type, setType] = useState(section?.type ?? defaultType ?? "revision_video");
   const def = SECTION_TYPES.find((t) => t.value === type);
   const cfg = (section?.config ?? {}) as Record<string, string>;
 
@@ -71,6 +74,8 @@ export default function SectionForm({
           {def.fields.map((f: ConfigField) =>
             f === "bunny_video_id" ? (
               <BunnyUploader key={f} name={f} defaultValue={cfg[f] ?? ""} />
+            ) : f === "pdf_url" ? (
+              <PdfUpload key={f} name={f} defaultValue={cfg[f] ?? ""} label={FIELD_LABELS[f]} />
             ) : f === "revision_round" ? (
               <div key={f}>
                 <label>{FIELD_LABELS[f]}</label>

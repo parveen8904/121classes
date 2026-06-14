@@ -311,6 +311,28 @@ The whole site was made mobile-browser friendly. Problem fixed: below 880px the 
 
 ---
 
+## 24. Aldine catalog import + per-subject pricing (built — 2026-06-14)
+Migrated the founder's existing site **aldine.edu.in** (WooCommerce) into the new DB; see auto-memory `aldine-source-site.md`.
+- **Imported:** 12 new subjects under existing Foundation/Inter/Final courses; 5 new faculties (+ bios for all 7); 14 paid products as **`combos`** (price-bearing bundles, `combo_items` → subjects); 2 books. Combo prices = Aldine *sale* prices; list prices in descriptions; tagged "(Imported from Aldine)".
+- **Per-subject Gold pricing** (migration `0010`): `subjects.gold_price_inr` + `subjects.validity_months`. Model = **Bronze free · Silver flat (the active `silver` plan's `web_price_inr`, used as a one-time price, not per-month) · Gold per-subject**. All 13 subjects have Gold prices (6 from real Aldine single-subject batches; 7 bundle-only subjects are **estimates** derived from list-price math — flag for founder review).
+- **Buy flow rewritten** (`app/learn/[courseId]/plans/*`): subject-aware — pick a subject (pill selector / `?subject=` param), see its Bronze/Silver/Gold prices; `payActions.createPlanOrder({subjectId, tier})` prices by subject+tier and grants **per-subject** subscription (`subscriptions.subject_id`) for `validity_months`. Topic upgrade CTA deep-links to the subject. `lib/pricing.ts` `computePrice` (per-month×duration discount) is now **legacy** — only the combos page still uses the old duration model.
+- **Admin:** subject editor (`/admin/subjects/[id]`) edits Gold price + validity; `/admin/plans` relabelled (Bronze free / Silver flat / Gold note → "set per subject").
+
+## 25. Founder product backlog (requested 2026-06-14, NOT yet built)
+Captured verbatim-ish for sequencing. Most need API keys (AI/Anthropic, Mailgun, Interakt-WhatsApp, Telegram bot) or founder input first.
+- **Flexible Gold validity:** validity options 1/2/5/7/12/18 + any custom months; admin- AND student-selectable custom-validity plans (price presumably scales). Reworks the current fixed per-subject `validity_months`.
+- **Admin Courses UX redesign:** a clean "Manage courses" list with a top-right "+ New course"; edit via a pencil/edit affordance per row (current create/edit page "not looking good").
+- **Topic → multiple "Classes":** each topic gets an "Add class" button; each class supports **PDF upload** and has its **own discussion thread**. (Likely a new entity/section-type under topics.)
+- **Telegram integration:** link the founder's Telegram channel at many touchpoints (while watching videos, doing MCQ tests, etc.) — one-tap "join Telegram". NEED: the channel URL.
+- **AI content pipeline (token-frugal):** upload class **transcripts** + ICAI **PDFs** into an "AI repository"; **pre-generate once** (not per-request) → MCQ tests + **descriptive tests** stored on the site; AI tokens spent only on live student doubt-queries. Needs `ANTHROPIC_API_KEY` + a storage/RAG design.
+- **Announcements → landing page:** any student announcement should immediately appear on the public landing page (partial infra exists: `announcements` table + landing highlight banner — wire fully).
+- **ICAI amendments feed:** post ICAI amendments to the site immediately (new content/post type).
+- **Bulk notifications at 20k+ scale:** import 20,000+ students at once; send Email + WhatsApp + Telegram blasts immediately. Needs Mailgun API + Interakt + Telegram bot + a queue/batching design.
+- **Live/recorded scheduled classes per batch:** schedule streams (count, audience/"for whom"), auto-push schedule to Telegram/WhatsApp/email/landing; students log in to attend. Plus standalone **Zoom** live classes independent of any course. Builds on existing `/live`.
+- **Past results on landing:** show toppers/ranks like competitors. **Blocker:** Aldine's results are image-only (gallery `Rank-1.jpeg`…), no extractable names/marks; do NOT fabricate — founder must supply real topper data (name, rank/marks, attempt, photo) or images for Admin → Results.
+
+---
+
 ## 11. Working conventions
 - Develop on branch `claude/landing-page-text-fix-C0lDT`, then fast-forward merge to `main`.
 - Vercel auto-deploys on push to `main`.

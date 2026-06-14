@@ -1,0 +1,23 @@
+{
+  "name": "121caclasses-desktop",
+  "version": "0.1.0",
+  "description": "1:1 CA Classes — desktop app (Mac/Windows) for downloading & playing encrypted classes offline.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "in.caclasses.desktop",
+    "productName": "1to1 CA Classes",
+    "files": ["main.js", "preload.js", "renderer/**/*", "config.js"],
+    "mac": { "target": "dmg", "category": "public.app-category.education" },
+    "win": { "target": "nsis" }
+  }
+}

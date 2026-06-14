@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://*.supabase.co https://121caclasses.com https://esm.sh data: file:; media-src file: blob:; img-src * data:;" />
+    <title>1:1 CA Classes</title>
+    <style>
+      :root { --accent: #0d9488; --accent2: #10b981; --bg: #0c1413; --card: #15201e; --border: rgba(255,255,255,.1); --text: #e8f0ee; --muted: #9bb0ab; }
+      * { box-sizing: border-box; margin: 0; }
+      body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+      header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+      .brand b { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #fff; padding: 1px 8px; border-radius: 8px; }
+      main { padding: 20px; max-width: 900px; margin: 0 auto; }
+      input, button { font: inherit; }
+      input { width: 100%; padding: 11px 13px; border-radius: 10px; border: 1px solid var(--border); background: #0e1a18; color: var(--text); margin-bottom: 12px; }
+      .btn { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #fff; border: 0; padding: 11px 20px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+      .btn.sec { background: #1b2a28; border: 1px solid var(--border); }
+      .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+      .muted { color: var(--muted); font-size: .85rem; }
+      .hidden { display: none; }
+      #player { position: fixed; inset: 0; background: #000d; display: none; align-items: center; justify-content: center; z-index: 50; }
+      #player.show { display: flex; }
+      video { max-width: 92vw; max-height: 82vh; border-radius: 12px; }
+      .wm { position: absolute; color: rgba(255,255,255,.5); font-size: .8rem; pointer-events: none; top: 12%; left: 8%; text-shadow: 0 1px 2px #000; }
+      .close { position: absolute; top: 16px; right: 20px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="brand"><b>1:1</b> CA Classes — Desktop</span>
+    </header>
+    <main>
+      <section id="login">
+        <h2 style="margin-bottom:14px">Sign in</h2>
+        <input id="email" type="email" placeholder="Email" />
+        <input id="password" type="password" placeholder="Password" />
+        <button class="btn" id="loginBtn">Sign in</button>
+        <p class="muted" id="loginMsg" style="margin-top:10px"></p>
+      </section>
+
+      <section id="library" class="hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <h2>Your classes</h2>
+          <button class="btn sec" id="logoutBtn">Sign out</button>
+        </div>
+        <div id="list"></div>
+        <p class="muted" id="libMsg"></p>
+      </section>
+    </main>
+
+    <div id="player">
+      <button class="btn sec close" id="closePlayer">Close ✕</button>
+      <div style="position:relative">
+        <video id="video" controls autoplay></video>
+        <span class="wm" id="wm"></span>
+      </div>
+    </div>
+
+    <script src="../config.js"></script>
+    <script type="module" src="./renderer.js"></script>
+  </body>
+</html>

@@ -87,6 +87,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     desc: "Upload your founder photo and homepage banner from Canva.",
     href: "/admin/site",
   },
+  {
+    icon: "🔐",
+    title: "Downloadable classes",
+    desc: "Register encrypted classes for the Mac/Windows desktop app.",
+    href: "/admin/protected",
+  },
 ];
 
 export default function AdminHome() {

@@ -1,10 +1,12 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-// Safe bridge: the renderer can ask the main process to download/decrypt, but
-// has no direct filesystem or crypto access.
+// Native bridge exposed to the loaded website. Lets the Downloads page save
+// encrypted classes and play them offline. Present only in the desktop app —
+// the website checks `window.native` to decide whether to show offline controls.
 contextBridge.exposeInMainWorld("native", {
+  isDesktopApp: true,
   download: (id, url, expectedSize) => ipcRenderer.invoke("download", { id, url, expectedSize }),
   isDownloaded: (id, expectedSize) => ipcRenderer.invoke("is-downloaded", { id, expectedSize }),
-  decrypt: (id, keyB64, ivB64, alg) => ipcRenderer.invoke("decrypt", { id, keyB64, ivB64, alg }),
+  play: (id, keyB64, ivB64, alg, watermark) => ipcRenderer.invoke("play", { id, keyB64, ivB64, alg, watermark }),
   onProgress: (cb) => ipcRenderer.on("download-progress", (_e, data) => cb(data)),
 });

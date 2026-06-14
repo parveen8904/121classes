@@ -1,21 +1,26 @@
-// Electron main process. Handles the privileged work the renderer must not do:
-// downloading the encrypted .enc file and decrypting it with the server-issued
-// key. Decrypted bytes are written to a temp file only while playing, then wiped.
+// Electron main process. The window loads the FULL website; the preload exposes
+// a small native bridge (download/decrypt/play) so the site's Downloads page can
+// save encrypted classes and play them offline in a local player window.
 const { app, BrowserWindow, ipcMain } = require("electron");
 const { createDecipheriv } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pipeline } = require("node:stream/promises");
 const { Readable, Transform } = require("node:stream");
-
 const { pathToFileURL } = require("node:url");
-let tmpToWipe = [];
+
+const WEB = process.env.CA_WEB || "https://www.121caclasses.com";
+const tmpToWipe = [];
 const decrypted = new Map(); // id -> decrypted temp path (cached per session)
+
+function classPath(id) {
+  return path.join(app.getPath("userData"), "classes", `${id}.enc`);
+}
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1100,
-    height: 760,
+    width: 1280,
+    height: 860,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -23,32 +28,25 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
-  win.loadFile(path.join(__dirname, "renderer", "index.html"));
+  win.loadURL(WEB + "/dashboard");
   win.once("ready-to-show", () => {
     win.show();
     win.focus();
   });
 }
 
-function classPath(id) {
-  return path.join(app.getPath("userData"), "classes", `${id}.enc`);
-}
-
-// Download the encrypted file atomically: stream to a .part file, verify the
-// final size matches what the server expects, then rename. Reports progress.
+// Download the encrypted file atomically: stream to .part, verify the size,
+// then rename. Reports progress to the page.
 ipcMain.handle("download", async (e, { id, url, expectedSize }) => {
   const dir = path.join(app.getPath("userData"), "classes");
   fs.mkdirSync(dir, { recursive: true });
   const dest = classPath(id);
   const part = dest + ".part";
-
-  // Already fully downloaded?
   if (fs.existsSync(dest) && (!expectedSize || fs.statSync(dest).size === expectedSize)) return dest;
 
   const res = await fetch(url);
   if (!res.ok || !res.body) throw new Error("download failed (HTTP " + res.status + ")");
   const total = expectedSize || Number(res.headers.get("content-length")) || 0;
-
   let received = 0;
   let lastSent = 0;
   const counter = new Transform({
@@ -61,9 +59,7 @@ ipcMain.handle("download", async (e, { id, url, expectedSize }) => {
       cb(null, chunk);
     },
   });
-
   await pipeline(Readable.fromWeb(res.body), counter, fs.createWriteStream(part));
-
   const size = fs.statSync(part).size;
   if (expectedSize && size !== expectedSize) {
     try { fs.unlinkSync(part); } catch {}
@@ -79,12 +75,9 @@ ipcMain.handle("is-downloaded", async (_e, { id, expectedSize }) => {
   return fs.existsSync(p) && (!expectedSize || fs.statSync(p).size === expectedSize);
 });
 
-// Decrypt the .enc file with the server-issued key/iv into a temp playable file.
-// Cached per session (so replays are instant) and written atomically.
-ipcMain.handle("decrypt", async (_e, { id, keyB64, ivB64, alg }) => {
+async function decryptToFile(id, keyB64, ivB64, alg) {
   const cached = decrypted.get(id);
-  if (cached && fs.existsSync(cached)) return pathToFileURL(cached).href;
-
+  if (cached && fs.existsSync(cached)) return cached;
   const enc = classPath(id);
   if (!fs.existsSync(enc)) throw new Error("not downloaded");
   const out = path.join(app.getPath("temp"), `play-${id}.mp4`);
@@ -98,10 +91,21 @@ ipcMain.handle("decrypt", async (_e, { id, keyB64, ivB64, alg }) => {
   fs.renameSync(part, out);
   decrypted.set(id, out);
   tmpToWipe.push(out);
-  return pathToFileURL(out).href;
+  return out;
+}
+
+// Decrypt then play in a separate LOCAL player window (so the remote https page
+// doesn't have to load a file:// video, which browsers block).
+ipcMain.handle("play", async (_e, { id, keyB64, ivB64, alg, watermark }) => {
+  const file = await decryptToFile(id, keyB64, ivB64, alg);
+  const player = new BrowserWindow({ width: 1100, height: 720, title: "Class", backgroundColor: "#000" });
+  const url =
+    pathToFileURL(path.join(__dirname, "renderer", "player.html")).href +
+    `?src=${encodeURIComponent(pathToFileURL(file).href)}&wm=${encodeURIComponent(watermark || "")}`;
+  player.loadURL(url);
+  return true;
 });
 
-// Best-effort wipe of decrypted temp files on quit.
 app.on("before-quit", () => {
   for (const f of tmpToWipe) {
     try { fs.unlinkSync(f); } catch {}

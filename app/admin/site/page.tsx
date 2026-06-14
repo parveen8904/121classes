@@ -41,6 +41,10 @@ export default async function SiteImagesPage() {
             <label>📞 Phone number (for the call button)</label>
             <input name="support_phone" defaultValue={m.get("support_phone") ?? ""} placeholder="e.g. 919812345678" />
           </div>
+          <div>
+            <label>✈️ Telegram channel link (for the Telegram button)</label>
+            <input name="support_telegram" defaultValue={m.get("support_telegram") ?? ""} placeholder="e.g. https://t.me/caparveen" />
+          </div>
         </div>
 
         <button className="btn" type="submit" style={{ marginTop: 18 }}>

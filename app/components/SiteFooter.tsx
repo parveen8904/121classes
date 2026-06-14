@@ -1,7 +1,16 @@
 import Link from "next/link";
 import Logo from "./Logo";
+import { createClient } from "@/lib/supabase/server";
 
-export default function SiteFooter() {
+export default async function SiteFooter() {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("site_settings")
+    .select("value")
+    .eq("key", "support_telegram")
+    .maybeSingle();
+  const telegram = (data?.value as string) || "";
+
   return (
     <footer className="lp-footer">
       <div className="lp-footer-inner">
@@ -17,6 +26,17 @@ export default function SiteFooter() {
           <p className="muted" style={{ marginTop: 8, fontSize: ".82rem" }}>
             Office: W 6/30, DLF, Gurugram
           </p>
+          {telegram && (
+            <a
+              href={telegram}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn small"
+              style={{ marginTop: 14, background: "#229ED9", color: "#fff" }}
+            >
+              ✈️ Join us on Telegram
+            </a>
+          )}
         </div>
         <div>
           <h4>Explore</h4>

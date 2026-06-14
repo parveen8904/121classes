@@ -25,7 +25,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const { data: settings } = await supabase
     .from("site_settings")
     .select("key, value")
-    .in("key", ["support_whatsapp", "support_phone"]);
+    .in("key", ["support_whatsapp", "support_phone", "support_telegram"]);
   const m = new Map((settings ?? []).map((r) => [r.key, r.value as string | null]));
 
   return (
@@ -35,7 +35,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         {children}
-        <FloatingSupport whatsapp={m.get("support_whatsapp")} phone={m.get("support_phone")} />
+        <FloatingSupport
+          whatsapp={m.get("support_whatsapp")}
+          phone={m.get("support_phone")}
+          telegram={m.get("support_telegram")}
+        />
       </body>
     </html>
   );

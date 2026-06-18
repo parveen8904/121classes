@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import NextTopLoader from "nextjs-toploader";
 import "./globals.css";
 import { createClient } from "@/lib/supabase/server";
 import FloatingSupport from "./components/FloatingSupport";
@@ -43,6 +44,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
+        {/* Top progress bar shown on every page load / navigation */}
+        <NextTopLoader color="#0d9488" height={3} showSpinner={false} shadow="0 0 8px #0d9488" />
         {children}
         <FloatingSupport
           whatsapp={m.get("support_whatsapp")}

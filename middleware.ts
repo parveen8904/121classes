@@ -48,6 +48,14 @@ export async function middleware(request: NextRequest) {
   // For signed-in users on portal routes: enforce single-device + mandatory
   // password. Both checks fail OPEN (any DB hiccup never locks anyone out).
   if (user && isProtected) {
+    // Email must be verified before using the portal.
+    if (user.email && !user.email_confirmed_at && !user.phone_confirmed_at) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/verify-pending";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+
     // 1) Single active session per device kind. Only enforced once a session has
     //    claimed a device (has the dsid cookie); older/grandfathered sessions pass.
     const dsid = request.cookies.get("dsid")?.value;

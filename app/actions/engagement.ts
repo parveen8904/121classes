@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { aiConfigured, answerAssistant, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getSiteFacts } from "@/lib/sitefacts";
@@ -58,14 +59,29 @@ export async function askQuestion(
     escalated = true;
   }
 
-  // Log it (answered ones for the record; open ones for faculty to reply).
-  await supabase.from("page_questions").insert({
-    user_id: user?.id ?? null,
-    email,
-    page_path: pagePath,
-    question,
-    status: answer ? "answered" : "open",
-  });
+  // Log the question (answered ones for the record; open ones for faculty).
+  // Store the AI answer as a linked reply row so it appears in the student's
+  // own inbox (they can read their own page_questions rows via RLS).
+  const svc = createServiceClient();
+  const { data: inserted } = await svc
+    .from("page_questions")
+    .insert({
+      user_id: user?.id ?? null,
+      email,
+      page_path: pagePath,
+      question,
+      status: answer ? "answered" : "open",
+    })
+    .select("id")
+    .single();
+  if (answer && user && inserted?.id) {
+    await svc.from("page_questions").insert({
+      user_id: user.id,
+      question: answer,
+      page_path: `reply:${inserted.id}`,
+      status: "reply",
+    });
+  }
 
   if (!answer) {
     await notifyFaculty(

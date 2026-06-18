@@ -56,6 +56,15 @@ export async function replyToQuestion(formData: FormData) {
   }
 
   await svc.from("page_questions").update({ status: "replied" }).eq("id", id);
+  // Linked reply row so it shows in the student's own inbox for follow-up.
+  if (q.user_id) {
+    await svc.from("page_questions").insert({
+      user_id: q.user_id,
+      question: reply,
+      page_path: `reply:${id}`,
+      status: "reply",
+    });
+  }
   try {
     await svc.from("notifications").insert({
       student_id: q.user_id ?? null,

@@ -83,14 +83,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Log it so faculty can see (and follow up if needed).
+  // Log it so faculty can see (and the student can follow up in their inbox).
   try {
-    await svc.from("page_questions").insert({
-      user_id: who.data?.id ?? null,
-      page_path: "telegram",
-      question: text,
-      status: answer ? "answered" : "open",
-    });
+    const { data: ins } = await svc
+      .from("page_questions")
+      .insert({
+        user_id: who.data?.id ?? null,
+        page_path: "telegram",
+        question: text,
+        status: answer ? "answered" : "open",
+      })
+      .select("id")
+      .single();
+    if (answer && who.data?.id && ins?.id) {
+      await svc.from("page_questions").insert({
+        user_id: who.data.id,
+        question: answer,
+        page_path: `reply:${ins.id}`,
+        status: "reply",
+      });
+    }
   } catch {
     /* best-effort */
   }

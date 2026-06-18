@@ -80,6 +80,26 @@ export default function AskMe({ signedIn }: { signedIn?: boolean }) {
                   placeholder="e.g. When is the next live class? / Explain IND AS 115 revenue recognition."
                   style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)" }}
                 />
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                  {[
+                    "When is the next live class?",
+                    "Who are the faculty?",
+                    "What courses do you offer?",
+                    "How do I download a class?",
+                  ].map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setQ(s)}
+                      style={{
+                        border: "1px solid var(--border)", background: "var(--bg-soft)", color: "var(--text)",
+                        borderRadius: 999, padding: "5px 11px", fontSize: ".78rem", cursor: "pointer",
+                      }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
                 {!signedIn && (
                   <input
                     type="email"

@@ -31,7 +31,8 @@ export default async function AdminInbox() {
     svc.from("class_reminders").select("id, email, session_id, created_at").order("created_at", { ascending: false }).limit(500),
     svc.from("live_sessions").select("id, title"),
   ]);
-  const questions = (qData ?? []) as Question[];
+  // Exclude linked reply rows (page_path "reply:<id>") — those are answers, not questions.
+  const questions = ((qData ?? []) as Question[]).filter((q) => !(q.page_path ?? "").startsWith("reply:"));
   const reminders = (rData ?? []) as Reminder[];
   const titleOf = new Map((sessions ?? []).map((s) => [s.id, s.title as string]));
   const openCount = questions.filter((q) => q.status === "open").length;

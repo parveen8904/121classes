@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { buildSchedule, type PlanSetup, type SchedEntry } from "@/lib/plan";
+import { buildDayPlan, DEFAULT_CONFIG, type PlanSetup, type PlannerConfig, type SchedEntry } from "@/lib/plan";
 import { savePlan, setRemind as setRemindAction } from "./actions";
 
 export type PlanItem = { id: string; title: string; subject: string };
 type Task = { id: string; text: string; due: string; done: boolean };
 type DiaryEntry = { id: string; date: string; text: string };
-type Setup = { source: "us" | "others"; classes: string; tests: string; examDate: string };
+type Setup = {
+  source: "us" | "others"; classes: string; tests: string; examDate: string;
+  selfStudyHours: string; daysOffPerWeek: string; holidays: string; extras: string;
+};
 
 const LS_DONE = "planner_done";
 const LS_TASKS = "planner_tasks";
@@ -17,10 +20,12 @@ export default function Planner({
   items,
   signedIn,
   initial,
+  config,
 }: {
   items: PlanItem[];
   signedIn?: boolean;
   initial?: { setup: PlanSetup | null; schedule: SchedEntry[] | null; remind: boolean } | null;
+  config?: Partial<PlannerConfig> | null;
 }) {
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -33,11 +38,17 @@ export default function Planner({
     classes: initial?.setup?.classes ? String(initial.setup.classes) : "",
     tests: initial?.setup?.tests ? String(initial.setup.tests) : "",
     examDate: initial?.setup?.examDate ?? "",
+    selfStudyHours: initial?.setup?.selfStudyHours ? String(initial.setup.selfStudyHours) : "3",
+    daysOffPerWeek: initial?.setup?.daysOffPerWeek != null ? String(initial.setup.daysOffPerWeek) : "1",
+    holidays: (initial?.setup?.holidays ?? []).join(", "),
+    extras: (initial?.setup?.extras ?? []).join("\n"),
   });
   const [schedule, setSchedule] = useState<SchedEntry[]>(initial?.schedule ?? []);
+  const [warning, setWarning] = useState("");
   const [remind, setRemindState] = useState<boolean>(initial?.remind ?? true);
   const [saving, startSave] = useTransition();
   const [savedMsg, setSavedMsg] = useState("");
+  const cfg: PlannerConfig = { ...DEFAULT_CONFIG, ...(config ?? {}) };
 
   useEffect(() => {
     try {
@@ -53,20 +64,33 @@ export default function Planner({
       classes: Number(setup.classes) || (setup.source === "us" ? items.length : 0),
       tests: Number(setup.tests) || 0,
       examDate: setup.examDate,
+      selfStudyHours: Number(setup.selfStudyHours) || 3,
+      daysOffPerWeek: Number(setup.daysOffPerWeek) || 0,
+      holidays: setup.holidays.split(",").map((s) => s.trim()).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)),
+      extras: setup.extras.split("\n").map((s) => s.trim()).filter(Boolean),
     };
   }
 
   function generate() {
     if (!setup.examDate) { alert("Please pick your exam date."); return; }
     const ps = resolvedSetup();
-    const sched = buildSchedule(ps);
-    setSchedule(sched);
+    const titles = ps.source === "us" ? items.map((i) => i.title) : [];
+    const { entries, warning: warn } = buildDayPlan(ps, cfg, titles);
+    setSchedule(entries);
+    setWarning(warn ?? "");
     setSavedMsg("");
     startSave(async () => {
-      const r = await savePlan(ps, remind);
+      const r = await savePlan(ps, entries, remind);
       setSavedMsg(r.ok ? "✅ Plan saved — we'll remind you each week." : "");
     });
   }
+
+  // Group schedule entries by day for a day-by-day view.
+  const byDay = useMemo(() => {
+    const m = new Map<string, SchedEntry[]>();
+    for (const e of schedule) { if (!m.has(e.iso)) m.set(e.iso, []); m.get(e.iso)!.push(e); }
+    return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  }, [schedule]);
 
   function toggleRemind(v: boolean) {
     setRemindState(v);
@@ -113,32 +137,56 @@ export default function Planner({
             </>
           )}
           <div><label>Your exam date</label><input type="date" value={setup.examDate} onChange={(e) => setSetup({ ...setup, examDate: e.target.value })} /></div>
+          <div>
+            <label>Hours of <strong style={{ color: "var(--accent)" }}>self study</strong> per day</label>
+            <input type="number" min={1} max={16} value={setup.selfStudyHours} onChange={(e) => setSetup({ ...setup, selfStudyHours: e.target.value })} />
+          </div>
+          <div>
+            <label>Days off per week</label>
+            <select value={setup.daysOffPerWeek} onChange={(e) => setSetup({ ...setup, daysOffPerWeek: e.target.value })}>
+              <option value="0">None</option>
+              <option value="1">Sundays</option>
+              <option value="2">Sat &amp; Sun</option>
+            </select>
+          </div>
         </div>
+        <label style={{ marginTop: 8 }}>Holidays / days you can&apos;t study (dates, comma-separated)</label>
+        <input value={setup.holidays} onChange={(e) => setSetup({ ...setup, holidays: e.target.value })} placeholder="2026-07-15, 2026-08-20" />
+        <label style={{ marginTop: 8 }}>Extra work to add (one per line — optionally <code>YYYY-MM-DD | task</code>)</label>
+        <textarea rows={2} value={setup.extras} onChange={(e) => setSetup({ ...setup, extras: e.target.value })} placeholder={"2026-07-10 | Revise Costing formulas\nSolve last 3 RTPs"} />
+        <p className="muted" style={{ fontSize: ".8rem", marginTop: 6 }}>
+          We fit your classes into your <strong style={{ color: "var(--accent)" }}>self study</strong> hours each day. If they don&apos;t fit before the exam, we&apos;ll warn you.
+        </p>
         <label className="remember" style={{ marginTop: 10 }}>
           <input type="checkbox" checked={remind} onChange={(e) => toggleRemind(e.target.checked)} /> 🔔 Remind me each week (Telegram/email)
         </label>
         <button className="btn" type="button" onClick={generate} disabled={saving} style={{ marginTop: 6 }}>
-          {saving ? "Saving…" : "Generate my plan →"}
+          {saving ? "Saving…" : "Generate my day-by-day plan →"}
         </button>
         {savedMsg && <p className="muted" style={{ fontSize: ".82rem", marginTop: 8 }}>{savedMsg}</p>}
-        {setup.source === "us" && <p className="muted" style={{ fontSize: ".8rem", marginTop: 8 }}>We&apos;ll use our {items.length} published topics as your class count.</p>}
+        {setup.source === "us" && <p className="muted" style={{ fontSize: ".8rem", marginTop: 8 }}>We&apos;ll schedule our {items.length} published topics as your classes.</p>}
       </div>
 
-      {/* Generated schedule */}
-      {schedule.length > 0 && (
+      {warning && (
+        <div className="notice err" style={{ lineHeight: 1.6 }}>{warning}</div>
+      )}
+
+      {/* Generated day-by-day plan */}
+      {byDay.length > 0 && (
         <div className="card">
-          <h3 style={{ margin: "0 0 8px" }}>📅 Your week-by-week plan</h3>
-          <div style={{ display: "grid", gap: 6 }}>
-            {schedule.map((s, i) => (
-              <div key={i} style={{ display: "flex", gap: 10, padding: "6px 10px", borderRadius: 8, background: s.mock ? "rgba(13,148,136,.12)" : "transparent", fontWeight: s.mock ? 700 : 400 }}>
-                <span className="muted" style={{ minWidth: 110, fontSize: ".82rem" }}>{s.date}</span>
-                <span>{s.label}</span>
+          <h3 style={{ margin: "0 0 8px" }}>📅 Your day-by-day plan</h3>
+          <div style={{ display: "grid", gap: 8 }}>
+            {byDay.map(([iso, entries]) => (
+              <div key={iso} style={{ display: "flex", gap: 12, padding: "8px 10px", borderRadius: 8, background: entries.some((e) => e.mock) ? "rgba(13,148,136,.12)" : "var(--bg-soft)" }}>
+                <span className="muted" style={{ minWidth: 92, fontSize: ".8rem", fontWeight: 700 }}>{entries[0].date}</span>
+                <div style={{ display: "grid", gap: 3 }}>
+                  {entries.map((e, j) => (
+                    <span key={j} style={{ fontWeight: e.mock ? 700 : 400 }}>{e.label}</span>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
-          <p className="muted" style={{ fontSize: ".78rem", marginTop: 10 }}>
-            {signedIn ? "Tick topics off below as you go." : "Log in to also track your topic checklist and get reminders."}
-          </p>
         </div>
       )}
 

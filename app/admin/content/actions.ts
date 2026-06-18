@@ -27,6 +27,18 @@ export async function saveContent(formData: FormData) {
     { key: "wellness_tips", value: str(formData.get("wellness_tips")) },
   ];
   for (const r of rows) await svc.from("site_settings").upsert(r, { onConflict: "key" });
+
+  // Planner cadence config (drives the day-by-day plan).
+  const num = (k: string, d: number) => Number(str(formData.get(k))) || d;
+  const config = {
+    classMinutes: num("classMinutes", 60),
+    mcqEveryClasses: num("mcqEveryClasses", 5),
+    descEveryClasses: num("descEveryClasses", 10),
+    mockCount: num("mockCount", 3),
+    revisionDays: num("revisionDays", 7),
+  };
+  await svc.from("site_settings").upsert({ key: "planner_config", value: JSON.stringify(config) }, { onConflict: "key" });
+
   redirect("/admin/content?saved=1");
 }
 

@@ -14,6 +14,8 @@ export default async function ContentPage({ searchParams }: { searchParams: { sa
   const amend = (a: string) => {
     try { return JSON.parse(m.get(`amend:${a}`) || "{}"); } catch { return {}; }
   };
+  let pc: Record<string, number> = {};
+  try { pc = JSON.parse(m.get("planner_config") || "{}"); } catch {}
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 820 }}>
@@ -38,7 +40,17 @@ export default async function ContentPage({ searchParams }: { searchParams: { sa
         <h3 style={{ marginTop: 18 }}>🧘 Daily wellness tips</h3>
         <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>One tip per line — students see one per day (rotates).</p>
         <textarea name="wellness_tips" rows={5} defaultValue={m.get("wellness_tips") || ""} placeholder={"Take a 10-min walk between study blocks.\nRevise yesterday's topic for 15 min before new material.\nSleep 7 hours — memory consolidates at night."} />
-        <button className="btn" type="submit" style={{ marginTop: 12 }}>Save career &amp; wellness</button>
+
+        <h3 style={{ marginTop: 18 }}>🗓️ Planner cadence (drives each student&apos;s day-by-day plan)</h3>
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr" }}>
+          <div><label>Avg minutes per class</label><input name="classMinutes" type="number" defaultValue={pc.classMinutes ?? 60} /></div>
+          <div><label>MCQ test after every N classes</label><input name="mcqEveryClasses" type="number" defaultValue={pc.mcqEveryClasses ?? 5} /></div>
+          <div><label>Descriptive test after every N classes</label><input name="descEveryClasses" type="number" defaultValue={pc.descEveryClasses ?? 10} /></div>
+          <div><label>Number of full mock tests</label><input name="mockCount" type="number" defaultValue={pc.mockCount ?? 3} /></div>
+          <div><label>Revision days before exam</label><input name="revisionDays" type="number" defaultValue={pc.revisionDays ?? 7} /></div>
+        </div>
+
+        <button className="btn" type="submit" style={{ marginTop: 12 }}>Save career, wellness &amp; planner</button>
       </form>
 
       {/* AMENDMENTS PER ATTEMPT */}

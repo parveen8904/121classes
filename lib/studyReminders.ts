@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { buildSchedule, thisWeekEntries, type PlanSetup, type SchedEntry } from "@/lib/plan";
+import { thisWeekEntries, type PlanSetup, type SchedEntry } from "@/lib/plan";
 import { sendEmail, emailShell, sendTelegramMessage } from "@/lib/notify";
 
 // Sends each student a "this week's plan" nudge — at most once per ISO week
@@ -41,10 +41,10 @@ export async function runStudyReminders(): Promise<{ sent: number }> {
       .maybeSingle();
     if (marker) continue;
 
-    const schedule: SchedEntry[] = (p.schedule as SchedEntry[]) ?? buildSchedule(setup, now);
+    const schedule: SchedEntry[] = (p.schedule as SchedEntry[]) ?? [];
     const wk = thisWeekEntries(schedule, now);
     if (wk.length === 0) continue;
-    const body = wk.map((e) => `• ${e.label}`).join("\n");
+    const body = wk.slice(0, 12).map((e) => `• ${e.date}: ${e.label}`).join("\n");
 
     const { data: prof } = await svc.from("profiles").select("email, telegram_chat_id, full_name").eq("id", p.user_id).maybeSingle();
     let delivered = false;

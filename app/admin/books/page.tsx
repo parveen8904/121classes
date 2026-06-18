@@ -21,7 +21,9 @@ export default async function AdminBooksPage() {
         back={{ href: "/admin", label: "Admin" }}
       />
 
-      <div className="form-card" style={{ marginTop: 24 }}>
+      <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+        <summary className="btn as-btn">＋ New book</summary>
+        <div style={{ marginTop: 12, width: "100%" }}><div className="form-card" style={{ marginTop: 24 }}>
         <h3>➕ Add a book</h3>
         <form action={createBook}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr" }}>
@@ -54,7 +56,8 @@ export default async function AdminBooksPage() {
             Add book
           </button>
         </form>
-      </div>
+      </div></div>
+      </details>
 
       <h2 className="admin-section-title">📚 All books</h2>
       <div style={{ marginTop: 12, display: "grid", gap: 12 }}>

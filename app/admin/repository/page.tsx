@@ -61,8 +61,10 @@ export default async function RepositoryPage() {
         </div>
       )}
 
-      {/* ADD FORM */}
-      <div className="form-card" style={{ marginTop: 18 }}>
+      {/* ADD FORM — collapsed; list shows first */}
+      <details style={{ marginTop: 18, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+        <summary className="btn as-btn">＋ Add material</summary>
+        <div className="form-card" style={{ marginTop: 12, width: "100%" }}>
         <h3>➕ Add material</h3>
         <form action={addRepositoryItem}>
           <label>Name *</label>
@@ -111,7 +113,8 @@ export default async function RepositoryPage() {
 
           <button className="btn" type="submit" style={{ marginTop: 14 }}>Add to repository</button>
         </form>
-      </div>
+        </div>
+      </details>
 
       {/* LIST */}
       <h3 style={{ marginTop: 30 }}>📦 In the repository ({list.length})</h3>

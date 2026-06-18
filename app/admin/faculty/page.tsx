@@ -20,7 +20,9 @@ export default async function FacultyPage() {
         back={{ href: "/admin", label: "Admin" }}
       />
 
-      <div className="form-card" style={{ marginTop: 24 }}>
+      <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+        <summary className="btn as-btn">＋ New faculty</summary>
+        <div style={{ marginTop: 12, width: "100%" }}><div className="form-card" style={{ marginTop: 24 }}>
         <h3>➕ Add faculty</h3>
         <form action={createFaculty}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
@@ -36,7 +38,8 @@ export default async function FacultyPage() {
             Add faculty
           </button>
         </form>
-      </div>
+      </div></div>
+      </details>
 
       <div style={{ marginTop: 24, display: "grid", gap: 12 }}>
         {faculties && faculties.length > 0 ? (

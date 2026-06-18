@@ -36,7 +36,9 @@ export default async function CombosPage() {
         back={{ href: "/admin", label: "Admin" }}
       />
 
-      <div className="form-card" style={{ marginTop: 24 }}>
+      <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+        <summary className="btn as-btn">＋ New combo</summary>
+        <div style={{ marginTop: 12, width: "100%" }}><div className="form-card" style={{ marginTop: 24 }}>
         <h3>➕ Create a combo</h3>
         <form action={createCombo}>
           <label>Title</label>
@@ -96,7 +98,8 @@ export default async function CombosPage() {
             Create combo
           </button>
         </form>
-      </div>
+      </div></div>
+      </details>
 
       <h2 className="admin-section-title">🎁 All combos</h2>
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>

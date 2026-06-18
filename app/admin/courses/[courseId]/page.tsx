@@ -34,64 +34,71 @@ export default async function CourseDetail({ params }: { params: { courseId: str
         back={{ href: "/admin/courses", label: "Courses" }}
       />
 
-      <div className="form-card" style={{ marginTop: 24 }}>
-        <h3>✏️ Edit course</h3>
-        <form action={updateCourse}>
-          <input type="hidden" name="id" value={course.id} />
-          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
-            <div>
-              <label htmlFor="e-title">Title</label>
-              <input id="e-title" name="title" defaultValue={course.title} required />
+      {/* New subject — right-aligned expander (primary action) */}
+      <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+        <summary className="btn as-btn">＋ New subject</summary>
+        <div className="form-card" style={{ marginTop: 12, width: "100%" }}>
+          <h3>➕ Add a subject</h3>
+          <form action={createSubject}>
+            <input type="hidden" name="courseId" value={course.id} />
+            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
+              <div>
+                <label htmlFor="s-title">Title</label>
+                <input id="s-title" name="title" placeholder="e.g. Accounting" required />
+              </div>
+              <div>
+                <label htmlFor="s-slug">Slug (optional)</label>
+                <input id="s-slug" name="slug" placeholder="auto from title" />
+              </div>
+              <div>
+                <label htmlFor="s-order">Order</label>
+                <input id="s-order" name="order_index" type="number" defaultValue={0} />
+              </div>
             </div>
-            <div>
-              <label htmlFor="e-slug">Slug</label>
-              <input id="e-slug" name="slug" defaultValue={course.slug ?? ""} />
+            <button className="btn" type="submit">
+              Add subject
+            </button>
+          </form>
+        </div>
+      </details>
+
+      {/* Edit course details — collapsed */}
+      <details style={{ marginTop: 10 }}>
+        <summary className="btn small secondary as-btn">✏️ Edit course details</summary>
+        <div className="form-card" style={{ marginTop: 10 }}>
+          <form action={updateCourse}>
+            <input type="hidden" name="id" value={course.id} />
+            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
+              <div>
+                <label htmlFor="e-title">Title</label>
+                <input id="e-title" name="title" defaultValue={course.title} required />
+              </div>
+              <div>
+                <label htmlFor="e-slug">Slug</label>
+                <input id="e-slug" name="slug" defaultValue={course.slug ?? ""} />
+              </div>
+              <div>
+                <label htmlFor="e-order">Order</label>
+                <input id="e-order" name="order_index" type="number" defaultValue={course.order_index} />
+              </div>
             </div>
-            <div>
-              <label htmlFor="e-order">Order</label>
-              <input id="e-order" name="order_index" type="number" defaultValue={course.order_index} />
-            </div>
-          </div>
-          <label className="remember" style={{ marginTop: 0 }}>
-            <input type="checkbox" name="is_published" defaultChecked={course.is_published} /> Published
-          </label>
-          <label className="remember" style={{ marginTop: 0 }}>
-            <input type="checkbox" name="is_test_series" defaultChecked={course.is_test_series} /> This is a Test Series
-          </label>
-          <button className="btn" type="submit">
-            Save changes
-          </button>
-        </form>
-      </div>
+            <label className="remember" style={{ marginTop: 0 }}>
+              <input type="checkbox" name="is_published" defaultChecked={course.is_published} /> Published
+            </label>
+            <label className="remember" style={{ marginTop: 0 }}>
+              <input type="checkbox" name="is_test_series" defaultChecked={course.is_test_series} /> This is a Test Series
+            </label>
+            <button className="btn small" type="submit">
+              Save changes
+            </button>
+          </form>
+        </div>
+      </details>
 
       <h2 className="admin-section-title">📂 Subjects</h2>
       <p className="muted" style={{ fontSize: ".9rem" }}>
         Each subject is led by one or more faculty and holds topics. Click a subject to manage topics.
       </p>
-
-      <div className="form-card" style={{ marginTop: 16 }}>
-        <h3>➕ Add a subject</h3>
-        <form action={createSubject}>
-          <input type="hidden" name="courseId" value={course.id} />
-          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
-            <div>
-              <label htmlFor="s-title">Title</label>
-              <input id="s-title" name="title" placeholder="e.g. Accounting" required />
-            </div>
-            <div>
-              <label htmlFor="s-slug">Slug (optional)</label>
-              <input id="s-slug" name="slug" placeholder="auto from title" />
-            </div>
-            <div>
-              <label htmlFor="s-order">Order</label>
-              <input id="s-order" name="order_index" type="number" defaultValue={0} />
-            </div>
-          </div>
-          <button className="btn" type="submit">
-            Add subject
-          </button>
-        </form>
-      </div>
 
       <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
         {subjects && subjects.length > 0 ? (

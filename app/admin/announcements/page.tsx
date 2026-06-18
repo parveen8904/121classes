@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../_components/DeleteButton";
 import AdminHero from "../_components/AdminHero";
-import { createAnnouncement, updateAnnouncement, deleteAnnouncement } from "./actions";
+import { getSecret } from "@/lib/secrets";
+import { createAnnouncement, updateAnnouncement, deleteAnnouncement, saveGovtFeeds, fetchGovtFeedsNow } from "./actions";
 
 const KINDS = [
   { value: "amendment", label: "Amendment" },
@@ -23,12 +24,18 @@ function KindSelect({ name, value }: { name: string; value?: string }) {
   );
 }
 
-export default async function AnnouncementsPage() {
+export default async function AnnouncementsPage({
+  searchParams,
+}: {
+  searchParams: { feeds?: string; fetched?: string };
+}) {
   const supabase = createClient();
   const { data: items } = await supabase
     .from("announcements")
     .select("id, kind, title, body, link_url, is_published, published_at")
     .order("published_at", { ascending: false });
+  const pendingCount = (items ?? []).filter((i) => !i.is_published).length;
+  const govtFeeds = await getSecret("GOVT_FEEDS");
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -38,6 +45,27 @@ export default async function AnnouncementsPage() {
         subtitle="Amendments, what's new, student corner, industry & macro updates. 📰"
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {searchParams.feeds === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Feed sources saved.</div>}
+      {searchParams.fetched !== undefined && <div className="notice ok" style={{ marginTop: 16 }}>✅ Fetched {searchParams.fetched} new item(s) — they&apos;re below as unpublished, awaiting your approval.</div>}
+
+      {/* GOVT / ICAI AUTO-FEED */}
+      <div className="form-card" style={{ marginTop: 18 }}>
+        <h3>🏛️ Government / ICAI auto-feed</h3>
+        <p className="muted" style={{ fontSize: ".85rem", marginBottom: 10 }}>
+          Paste <strong>RSS/Atom feed URLs</strong> (one per line) from ICAI / government sites. New items are pulled
+          automatically and appear below as <strong>unpublished</strong> — they only go live when you tick
+          &ldquo;Published&rdquo; (your approval). {pendingCount > 0 && <strong>{pendingCount} item(s) awaiting approval.</strong>}
+        </p>
+        <form action={saveGovtFeeds}>
+          <textarea name="govt_feeds" rows={3} defaultValue={govtFeeds}
+            placeholder={"https://icai.org/…/rss\nhttps://incometax.gov.in/…/feed"} />
+          <button className="btn small" type="submit" style={{ marginTop: 8 }}>Save feed sources</button>
+        </form>
+        <form action={fetchGovtFeedsNow} style={{ marginTop: 8 }}>
+          <button className="btn small secondary" type="submit">⤵️ Fetch new items now</button>
+        </form>
+      </div>
 
       <div className="form-card" style={{ marginTop: 24 }}>
         <h3>➕ Add an announcement</h3>

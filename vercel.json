@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/warehouse-dispatch",
       "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/cron/govt-feed",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/class-reminders",
+      "schedule": "0 * * * *"
     }
   ]
 }

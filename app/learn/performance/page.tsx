@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -50,10 +51,28 @@ export default async function PerformancePage() {
   // section titles
   const allSectionIds = [...new Set([...mcqSectionIds, ...(questions ?? []).map((q) => q.section_id)])];
   const { data: sections } = allSectionIds.length
-    ? await svc.from("sections").select("id, title").in("id", allSectionIds)
+    ? await svc.from("sections").select("id, title, topic_id, topics(title)").in("id", allSectionIds)
     : { data: [] as any[] };
   const secTitle = new Map((sections ?? []).map((s) => [s.id, s.title as string]));
+  const secTopic = new Map(
+    (sections ?? []).map((s) => [
+      s.id,
+      { topicId: (s as any).topic_id as string | null, topicTitle: ((s as any).topics?.title as string) ?? "this topic" },
+    ]),
+  );
   const qById = new Map((questions ?? []).map((q) => [q.id, q]));
+
+  // "Rewatch" link to the topic's class videos for a given section.
+  function rewatch(sectionId: string | null | undefined) {
+    if (!sectionId) return null;
+    const t = secTopic.get(sectionId);
+    if (!t?.topicId) return null;
+    return (
+      <Link href={`/learn/topic/${t.topicId}`} style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".85rem" }}>
+        📺 Rewatch the classes for {t.topicTitle} →
+      </Link>
+    );
+  }
 
   // Best MCQ attempt per section (mine), with rank.
   const bestMine = new Map<string, { score: number; total: number }>();
@@ -111,6 +130,7 @@ export default async function PerformancePage() {
                     <div style={{ marginTop: 6, fontWeight: 700, color: "var(--accent)" }}>
                       🏅 Better than {pct}% of students{ratios.length > 1 ? ` (${ratios.length} took it)` : ""}
                     </div>
+                    {wrong > 0 && <div style={{ marginTop: 6 }}>{rewatch(sid)}</div>}
                   </div>
                 );
               })}
@@ -139,6 +159,9 @@ export default async function PerformancePage() {
                     </div>
                     {s.ai_feedback && (
                       <p style={{ marginTop: 8, whiteSpace: "pre-wrap", fontSize: ".9rem" }}>{s.ai_feedback}</p>
+                    )}
+                    {typeof s.ai_score === "number" && s.ai_score < mm && (
+                      <div style={{ marginTop: 6 }}>{rewatch(q?.section_id)}</div>
                     )}
                   </div>
                 );

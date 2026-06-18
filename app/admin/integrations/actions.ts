@@ -72,6 +72,7 @@ const SECRET_KEYS = [
   "INTERAKT_API_KEY",
   "FACULTY_TELEGRAM_CHAT_ID",
   "FACULTY_EMAIL",
+  "CRON_SECRET",
 ] as const;
 
 // Save API keys pasted in the admin. Blank fields are IGNORED (so you can update

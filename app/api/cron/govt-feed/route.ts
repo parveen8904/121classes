@@ -1,0 +1,20 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { ingestGovtFeeds } from "@/lib/govtfeed";
+import { getSecret } from "@/lib/secrets";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+// Scheduled (Vercel cron) + safe to call manually. Pulls new govt/ICAI feed
+// items into PENDING announcements for faculty approval.
+export async function GET(req: NextRequest) {
+  const secret = await getSecret("CRON_SECRET");
+  if (secret) {
+    const ok =
+      req.headers.get("authorization") === `Bearer ${secret}` ||
+      new URL(req.url).searchParams.get("key") === secret;
+    if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const result = await ingestGovtFeeds();
+  return NextResponse.json({ ok: true, ...result });
+}

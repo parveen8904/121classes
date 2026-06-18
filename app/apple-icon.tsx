@@ -14,9 +14,9 @@ export default function AppleIcon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "linear-gradient(135deg,#0d9488,#10b981)",
+          background: "#0d9488",
           color: "#fff",
-          fontSize: 74,
+          fontSize: 88,
           fontWeight: 800,
         }}
       >

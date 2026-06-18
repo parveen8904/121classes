@@ -70,6 +70,8 @@ const SECRET_KEYS = [
   "MAILGUN_API_KEY",
   "MAILGUN_DOMAIN",
   "INTERAKT_API_KEY",
+  "FACULTY_TELEGRAM_CHAT_ID",
+  "FACULTY_EMAIL",
 ] as const;
 
 // Save API keys pasted in the admin. Blank fields are IGNORED (so you can update

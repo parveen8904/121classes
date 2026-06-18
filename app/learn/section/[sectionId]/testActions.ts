@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { aiConfigured, gradeSubjective, answerDoubtFromMaterial, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
+import { notifyFaculty } from "@/lib/notify";
 
 export async function gradeMcqAttempt(input: {
   sectionId: string;
@@ -123,6 +124,14 @@ export async function askDoubt(input: {
     ai_answer: answer,
     status,
   });
+
+  // Couldn't answer from the repository → alert faculty to reply.
+  if (status === "open") {
+    await notifyFaculty(
+      "A student doubt needs your reply",
+      `From: ${user.email ?? user.id}\n\nQuestion:\n${question}\n\nReply from Admin → Inbox.`,
+    );
+  }
 
   return { ok: true, answer, pending: !answer };
 }

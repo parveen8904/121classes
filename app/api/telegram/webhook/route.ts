@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { sendTelegramMessage } from "@/lib/notify";
+import { sendTelegramMessage, notifyFaculty } from "@/lib/notify";
 import { answerDoubtFromMaterial, aiConfigured, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getSecret } from "@/lib/secrets";
@@ -76,6 +76,10 @@ export async function POST(req: NextRequest) {
     await sendTelegramMessage(
       chatId,
       "✅ Got your doubt! Our faculty will review it and reply here soon.",
+    );
+    await notifyFaculty(
+      "A student doubt needs your reply (Telegram)",
+      `Question:\n${text}\n\nReply from Admin → Inbox.`,
     );
   }
 

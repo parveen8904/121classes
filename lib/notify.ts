@@ -138,6 +138,24 @@ async function record(
   }
 }
 
+// Alert the faculty (founder) that something needs a human reply — e.g. a doubt
+// the AI couldn't answer from the repository. Sends a Telegram DM (if a faculty
+// chat id is set) and an email. Best-effort; never throws.
+export async function notifyFaculty(title: string, body: string): Promise<void> {
+  try {
+    const facultyChat = await getSecret("FACULTY_TELEGRAM_CHAT_ID");
+    if (facultyChat) await sendTelegramMessage(facultyChat, `🔔 ${title}\n\n${body}`);
+  } catch {
+    /* ignore */
+  }
+  try {
+    const facultyEmail = (await getSecret("FACULTY_EMAIL")) || "help@121caclasses.com";
+    await sendEmail(facultyEmail, `🔔 ${title}`, emailShell(title, body.replace(/\n/g, "<br/>")));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Send an email (and log it). Safe to call even with no provider configured.
 export async function notifyByEmail(opts: {
   studentId?: string | null;

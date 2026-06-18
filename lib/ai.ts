@@ -150,7 +150,7 @@ export async function gradeSubjective(
   const mm = maxMarks ?? 10;
   const system =
     `You are an ICAI subject examiner for 121 CA Classes. Evaluate the student's answer fairly, the way a CA exam examiner would, out of ${mm} marks. ` +
-    `Respond ONLY as compact JSON, no prose, no code fences: {"score": <integer 0-${mm}>, "feedback": "<2-4 sentences: what was correct, what was missing, and one concrete improvement>"}.`;
+    `Respond ONLY as compact JSON, no prose, no code fences: {"score": <integer 0-${mm}>, "feedback": "<a short structured report: ✅ What was correct: …; ❌ What was wrong/missing: …; 📘 Concept to revise: <name the specific concept/standard/section>; 🎯 How to improve: <one concrete next step / what to study again>>"}.`;
   const user = `Question (max ${mm} marks): ${prompt}\n\nStudent's answer:\n${answer}`;
   const text = await callClaude(system, user, 700);
   if (!text) return null;

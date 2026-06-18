@@ -135,6 +135,8 @@ export default async function IntegrationsPage({
           <KeyField name="MAILGUN_API_KEY" label="Mailgun API key" placeholder="key-…" />
           <KeyField name="MAILGUN_DOMAIN" label="Mailgun domain" placeholder="mg.121caclasses.com" />
           <KeyField name="INTERAKT_API_KEY" label="Interakt (WhatsApp) key" placeholder="Basic auth key" />
+          <KeyField name="FACULTY_TELEGRAM_CHAT_ID" label="Faculty Telegram chat id (for doubt alerts)" placeholder="your own Telegram chat id" />
+          <KeyField name="FACULTY_EMAIL" label="Faculty alert email" placeholder="help@121caclasses.com" />
           <button className="btn" type="submit" style={{ marginTop: 6 }}>Save keys</button>
         </form>
       </div>

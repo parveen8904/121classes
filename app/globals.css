@@ -183,6 +183,10 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 /* uploaded brand logo image */
 .brand-logo { height: 42px; width: auto; max-width: 260px; object-fit: contain; display: block; }
 @media (max-width: 560px) { .brand-logo { height: 34px; max-width: 200px; } }
+/* theme-aware built-in logo: light-text on dark theme, dark-text on light theme */
+.logo-on-light { display: none; }
+[data-theme="light"] .logo-on-light { display: block; }
+[data-theme="light"] .logo-on-dark { display: none; }
 
 /* brand lockup: logo + one-on-one tagline */
 .lp-brand { display: inline-flex; flex-direction: column; gap: 1px; line-height: 1.1; }

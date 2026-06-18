@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../_components/AdminHero";
+import { addUsers } from "./actions";
 
 const ROLE_EMOJI: Record<string, string> = { student: "🎓", admin: "🛠️", faculty: "👩‍🏫" };
 
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams: { q?: string; role?: string };
+  searchParams: { q?: string; role?: string; added?: string; invited?: string; failed?: string };
 }) {
   const supabase = createClient();
   const q = (searchParams.q ?? "").trim();
@@ -32,7 +33,40 @@ export default async function UsersPage({
         back={{ href: "/admin", label: "Admin" }}
       />
 
-      <form className="form-card" style={{ marginTop: 24 }}>
+      {searchParams.added !== undefined && (
+        <div className="notice ok" style={{ marginTop: 16 }}>
+          ✅ Created {searchParams.added} user(s), emailed {searchParams.invited ?? 0} a set-password link
+          {Number(searchParams.failed ?? 0) > 0 ? `, ${searchParams.failed} skipped (already exist / bad email)` : ""}.
+        </div>
+      )}
+      {searchParams.added === undefined && searchParams.invited === "1" && (
+        <div className="notice ok" style={{ marginTop: 16 }}>✅ Set-password email sent.</div>
+      )}
+
+      {/* Add users — collapsed, top-right */}
+      <details style={{ marginTop: 18, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+        <summary className="btn as-btn">＋ Add users</summary>
+        <div className="form-card" style={{ marginTop: 12, width: "100%" }}>
+          <h3>➕ Add one or many users</h3>
+          <p className="muted" style={{ fontSize: ".84rem", marginBottom: 10 }}>
+            One per line as <strong>Name, email</strong> (e.g. <code>Riya Sharma, riya@example.com</code>). No verification needed —
+            each person is emailed a link to set their own password, then logs in with email + password.
+          </p>
+          <form action={addUsers}>
+            <label>Role for these users</label>
+            <select name="role" defaultValue="student">
+              <option value="student">🎓 Student</option>
+              <option value="faculty">👩‍🏫 Faculty</option>
+              <option value="admin">🛠️ Admin</option>
+            </select>
+            <label style={{ marginTop: 10 }}>Users (one per line)</label>
+            <textarea name="bulk" rows={6} placeholder={"Riya Sharma, riya@example.com\nAmit Verma, amit@example.com"} required />
+            <button className="btn" type="submit" style={{ marginTop: 8 }}>Create &amp; email set-password links</button>
+          </form>
+        </div>
+      </details>
+
+      <form className="form-card" style={{ marginTop: 16 }}>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr auto", alignItems: "end" }}>
           <div>
             <label htmlFor="q">Search (name, email, phone)</label>

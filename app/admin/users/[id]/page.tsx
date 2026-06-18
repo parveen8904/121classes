@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../../_components/AdminHero";
-import { updateUser } from "../actions";
+import { updateUser, sendSetPasswordEmail, adminSetPassword } from "../actions";
 
 function fmt(s: string | null): string {
   if (!s) return "—";
@@ -18,7 +18,13 @@ type SubRow = {
   plans: { tier: string } | null;
 };
 
-export default async function UserDetail({ params }: { params: { id: string } }) {
+export default async function UserDetail({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { pwset?: string };
+}) {
   const supabase = createClient();
   const { data: u } = await supabase
     .from("profiles")
@@ -45,7 +51,41 @@ export default async function UserDetail({ params }: { params: { id: string } })
         back={{ href: "/admin/users", label: "Users" }}
       />
 
-      <form action={updateUser} style={{ marginTop: 24 }}>
+      {searchParams.pwset === "1" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Password set for this user.</div>}
+
+      {/* Password rescue tools */}
+      <details style={{ marginTop: 18 }}>
+        <summary className="btn small secondary as-btn">🔑 Password help</summary>
+        <div className="form-card" style={{ marginTop: 10 }}>
+          <h3 style={{ marginTop: 0 }}>Reset this user&apos;s password</h3>
+          {u.email ? (
+            <>
+              <form action={sendSetPasswordEmail} style={{ marginBottom: 14 }}>
+                <input type="hidden" name="email" value={u.email} />
+                <input type="hidden" name="name" value={u.full_name ?? ""} />
+                <p className="muted" style={{ fontSize: ".85rem", marginBottom: 8 }}>
+                  Email them a link to set their own password (recommended).
+                </p>
+                <button className="btn small" type="submit">📧 Send set-password email</button>
+              </form>
+              <form action={adminSetPassword}>
+                <input type="hidden" name="id" value={u.id} />
+                <p className="muted" style={{ fontSize: ".85rem", marginBottom: 8 }}>
+                  Or set a password directly (tell them in person):
+                </p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <input name="password" type="text" placeholder="New password (min 6)" style={{ marginBottom: 0, maxWidth: 240 }} />
+                  <button className="btn small secondary" type="submit">Set password</button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <p className="muted">This user has no email on file.</p>
+          )}
+        </div>
+      </details>
+
+      <form action={updateUser} style={{ marginTop: 16 }}>
         <input type="hidden" name="id" value={u.id} />
 
         <div className="form-card">

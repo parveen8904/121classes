@@ -1,0 +1,69 @@
+import { createServiceClient } from "@/lib/supabase/service";
+import AdminHero from "../_components/AdminHero";
+import { saveContent, saveAmendments } from "./actions";
+
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Career & Amendments — Admin" };
+
+const ATTEMPTS = ["May 2026", "Nov 2026", "May 2027", "Nov 2027"];
+
+export default async function ContentPage({ searchParams }: { searchParams: { saved?: string } }) {
+  const svc = createServiceClient();
+  const { data } = await svc.from("site_settings").select("key, value");
+  const m = new Map((data ?? []).map((r) => [r.key, r.value as string]));
+  const amend = (a: string) => {
+    try { return JSON.parse(m.get(`amend:${a}`) || "{}"); } catch { return {}; }
+  };
+
+  return (
+    <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 820 }}>
+      <AdminHero badge="🧭 Career & Amendments" title="Career corner, amendments & wellness"
+        subtitle="Content students see in their Career Corner, 'Know your amendments', and the daily wellness tip."
+        back={{ href: "/admin", label: "Admin" }} />
+
+      {searchParams.saved === "1" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Saved.</div>}
+
+      {/* CAREER + WELLNESS */}
+      <form action={saveContent} className="form-card" style={{ marginTop: 18 }}>
+        <h3>🎓 Career corner</h3>
+        <label>Articleship guidance</label>
+        <textarea name="career_articleship" rows={4} defaultValue={m.get("career_articleship") || ""} placeholder="How to find articleship, what to look for, CA firm guidance…" />
+        <label>Placement &amp; interviews</label>
+        <textarea name="career_placement" rows={4} defaultValue={m.get("career_placement") || ""} placeholder="Placement process, mock interview tips, CV pointers…" />
+        <label>Career resources / links</label>
+        <textarea name="career_resources" rows={3} defaultValue={m.get("career_resources") || ""} placeholder="Useful links, opportunities, community…" />
+        <h3 style={{ marginTop: 18 }}>🧘 Daily wellness tips</h3>
+        <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>One tip per line — students see one per day (rotates).</p>
+        <textarea name="wellness_tips" rows={5} defaultValue={m.get("wellness_tips") || ""} placeholder={"Take a 10-min walk between study blocks.\nRevise yesterday's topic for 15 min before new material.\nSleep 7 hours — memory consolidates at night."} />
+        <button className="btn" type="submit" style={{ marginTop: 12 }}>Save career &amp; wellness</button>
+      </form>
+
+      {/* AMENDMENTS PER ATTEMPT */}
+      <form action={saveAmendments} className="form-card" style={{ marginTop: 18 }}>
+        <h3>📜 Know your amendments (per attempt)</h3>
+        <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
+          For each attempt: the cut-off date (last date amendments can still be added), what&apos;s applicable so far, and what&apos;s expected.
+        </p>
+        {ATTEMPTS.map((a) => {
+          const v = amend(a);
+          return (
+            <div key={a} style={{ borderTop: "1px solid var(--border)", paddingTop: 12, marginTop: 12 }}>
+              <strong>{a}</strong>
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr", marginTop: 6 }}>
+                <div>
+                  <label>Amendments cut-off date</label>
+                  <input name={`cutoff:${a}`} defaultValue={v.cutoff || ""} placeholder="e.g. 31 Oct 2025" />
+                </div>
+              </div>
+              <label style={{ marginTop: 8 }}>Applicable amendments so far</label>
+              <textarea name={`applicable:${a}`} rows={3} defaultValue={v.applicable || ""} placeholder="List the amendments applicable for this attempt…" />
+              <label>Expected / upcoming (if you change to this attempt)</label>
+              <textarea name={`expected:${a}`} rows={2} defaultValue={v.expected || ""} placeholder="Amendments expected before the cut-off…" />
+            </div>
+          );
+        })}
+        <button className="btn" type="submit" style={{ marginTop: 14 }}>Save amendments</button>
+      </form>
+    </section>
+  );
+}

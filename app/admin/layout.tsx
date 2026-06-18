@@ -14,6 +14,7 @@ const ADMIN_LINKS: [string, string][] = [
   ["📣 Announcements", "/admin/announcements"],
   ["📥 Inbox", "/admin/inbox"],
   ["📚 AI Repository", "/admin/repository"],
+  ["🧭 Career & Amendments", "/admin/content"],
   ["🗄️ Storage", "/admin/storage"],
   ["🔌 Integrations", "/admin/integrations"],
   ["🎟️ Enrolment", "/admin/enrolment"],

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SetPassword from "./set-password";
 import ConnectChannels from "./ConnectChannels";
+import WellnessTip from "@/app/components/WellnessTip";
 
 export default async function Dashboard() {
   const supabase = createClient();
@@ -60,6 +61,14 @@ export default async function Dashboard() {
           whatsapp={chMap.get("support_whatsapp")}
           alreadyLinked={!!profile?.telegram_chat_id}
         />
+
+        <WellnessTip />
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+          <Link className="btn small secondary" href="/planner">🗓️ Study planner</Link>
+          <Link className="btn small secondary" href="/amendments">📜 Know your amendments</Link>
+          <Link className="btn small secondary" href="/career">🎓 Career corner</Link>
+        </div>
 
         {announcements && announcements.length > 0 && (
           <>

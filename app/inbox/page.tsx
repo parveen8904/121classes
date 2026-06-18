@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getStudyRecommendations } from "@/lib/recommend";
+import { getSubjModelAnswers } from "@/lib/answers";
 import { shareToCommunity, shareToTelegram } from "./actions";
 import PaperTools from "./PaperTools";
 
@@ -68,6 +69,7 @@ export default async function StudentInbox() {
     ? await svc.from("subjective_questions").select("id, prompt, max_marks").in("id", subQIds)
     : { data: [] as { id: string; prompt: string; max_marks: number | null }[] };
   const qMap = new Map((subQs ?? []).map((q) => [q.id, q]));
+  const modelAnswers = await getSubjModelAnswers(subQIds);
   const { data: mcq } = await svc
     .from("mcq_attempts")
     .select("score, total")
@@ -150,7 +152,7 @@ export default async function StudentInbox() {
                     </div>
                   )}
                   <PaperTools
-                    questionId={s.question_id}
+                    suggested={modelAnswers.get(s.question_id)}
                     shareTitle="My CA paper — 121 CA Classes"
                     shareText={shareText}
                   />

@@ -3,29 +3,59 @@
 import { createClient } from "@/lib/supabase/server";
 import { aiConfigured, gradeSubjective, answerDoubtFromMaterial, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
+import { getMcqExplanations } from "@/lib/answers";
 import { notifyFaculty } from "@/lib/notify";
+
+// Per-question review shown AFTER submit. For a correct answer we show why it's
+// correct; for a wrong one we explain only the chosen wrong option + the correct
+// option (not the other options). Uses pre-saved explanations — no AI here.
+export type McqReview = {
+  question: string;
+  options: string[];
+  chosenIndex: number;
+  correctIndex: number;
+  isCorrect: boolean;
+  whyCorrect: string;
+  whyChosenWrong: string;
+};
 
 export async function gradeMcqAttempt(input: {
   sectionId: string;
   answers: Record<string, number>;
-}): Promise<{ ok: boolean; score?: number; total?: number }> {
+}): Promise<{ ok: boolean; score?: number; total?: number; review?: McqReview[] }> {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false };
 
-  // correct_index is fetched server-side only — never sent to the browser.
+  // correct_index is fetched server-side only — never sent to the browser before grading.
   const { data: questions } = await supabase
     .from("mcq_questions")
-    .select("id, correct_index")
-    .eq("section_id", input.sectionId);
+    .select("id, question, options, correct_index, order_index")
+    .eq("section_id", input.sectionId)
+    .order("order_index");
   const qs = questions ?? [];
   if (!qs.length) return { ok: false };
 
+  const explain = await getMcqExplanations(qs.map((q) => q.id));
+
   let score = 0;
+  const review: McqReview[] = [];
   for (const q of qs) {
-    if (input.answers?.[q.id] === q.correct_index) score += 1;
+    const chosen = input.answers?.[q.id];
+    const isCorrect = chosen === q.correct_index;
+    if (isCorrect) score += 1;
+    const ex = explain.get(q.id);
+    review.push({
+      question: q.question,
+      options: (q.options as string[]) ?? [],
+      chosenIndex: typeof chosen === "number" ? chosen : -1,
+      correctIndex: q.correct_index,
+      isCorrect,
+      whyCorrect: ex?.wc ?? "",
+      whyChosenWrong: !isCorrect && ex?.ww && typeof chosen === "number" ? ex.ww[chosen] ?? "" : "",
+    });
   }
   const total = qs.length;
 
@@ -37,7 +67,7 @@ export async function gradeMcqAttempt(input: {
     answers: input.answers ?? {},
   });
 
-  return { ok: true, score, total };
+  return { ok: true, score, total, review };
 }
 
 export async function submitSubjective(input: {

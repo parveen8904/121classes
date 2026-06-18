@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../../_lib/util";
 import { generateSubjectiveQuestions } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
+import { saveSubjModelAnswer } from "@/lib/answers";
 
 // Generate descriptive questions from a transcript (or the AI Repository), once.
 export async function generateSubjectiveFromTranscript(formData: FormData) {
@@ -30,9 +31,16 @@ export async function generateSubjectiveFromTranscript(formData: FormData) {
   if (formData.get("replace") === "on") {
     await supabase.from("subjective_questions").delete().eq("section_id", sectionId);
   }
-  await supabase.from("subjective_questions").insert(
-    items.map((q) => ({ section_id: sectionId, prompt: q.prompt, max_marks: q.max_marks })),
-  );
+  const { data: inserted } = await supabase
+    .from("subjective_questions")
+    .insert(items.map((q) => ({ section_id: sectionId, prompt: q.prompt, max_marks: q.max_marks })))
+    .select("id, prompt");
+  // Save each question's model answer ONCE (no further AI at review time).
+  const byPrompt = new Map(items.map((q) => [q.prompt, q.model_answer]));
+  for (const r of inserted ?? []) {
+    const ma = byPrompt.get(r.prompt);
+    if (ma) await saveSubjModelAnswer(r.id, ma);
+  }
   revalidatePath(`/admin/subjective/${sectionId}`);
 }
 

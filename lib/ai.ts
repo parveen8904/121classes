@@ -128,29 +128,38 @@ export async function generateMcqs(
   transcript: string,
   count: number,
   topic?: string,
-): Promise<{ question: string; options: string[]; correct_index: number }[] | null> {
+): Promise<
+  { question: string; options: string[]; correct_index: number; why_correct: string; why_wrong: string[] }[] | null
+> {
   const n = Math.max(1, Math.min(25, Math.round(count) || 10));
   const system =
     `You are an ICAI exam question setter for 121 CA Classes (CA Parveen Sharma). ` +
     `From the lecture transcript, write exactly ${n} exam-style multiple-choice questions for Indian CA students` +
     (topic ? ` on "${topic}"` : "") +
     `. Each question has exactly 4 options with ONE correct answer. Test conceptual understanding and application (not trivia); use Indian accounting/tax/law context and reference standards/sections where useful. ` +
+    `For EACH question also explain WHY the correct option is correct, and for EACH option a short reason WHY it is right or wrong (one line each, same order as options). ` +
     `Respond ONLY as compact JSON, no prose, no code fences: ` +
-    `{"questions":[{"question":"...","options":["...","...","...","..."],"correct_index":0}]} ` +
-    `where correct_index is the 0-based index of the correct option.`;
+    `{"questions":[{"question":"...","options":["...","...","...","..."],"correct_index":0,"why_correct":"...","why_options":["why opt1","why opt2","why opt3","why opt4"]}]} ` +
+    `where correct_index is the 0-based index of the correct option and why_options has one reason per option in the same order.`;
   const user = `Transcript:\n${transcript.slice(0, 24000)}`;
-  const text = await callClaude(system, user, 4000);
+  const text = await callClaude(system, user, 6000);
   if (!text) return null;
   try {
     const json = JSON.parse(text.replace(/```json|```/g, "").trim());
     const arr = Array.isArray(json) ? json : json.questions;
     if (!Array.isArray(arr)) return null;
     return arr
-      .map((q: { question?: unknown; options?: unknown; correct_index?: unknown }) => ({
-        question: String(q.question ?? "").trim(),
-        options: (Array.isArray(q.options) ? q.options : []).map((o) => String(o).trim()).filter(Boolean),
-        correct_index: Number.isInteger(q.correct_index) ? (q.correct_index as number) : 0,
-      }))
+      .map((q: { question?: unknown; options?: unknown; correct_index?: unknown; why_correct?: unknown; why_options?: unknown }) => {
+        const options = (Array.isArray(q.options) ? q.options : []).map((o) => String(o).trim()).filter(Boolean);
+        const why_wrong = (Array.isArray(q.why_options) ? q.why_options : []).map((o) => String(o ?? "").trim());
+        return {
+          question: String(q.question ?? "").trim(),
+          options,
+          correct_index: Number.isInteger(q.correct_index) ? (q.correct_index as number) : 0,
+          why_correct: String(q.why_correct ?? "").trim(),
+          why_wrong,
+        };
+      })
       .filter((q) => q.question && q.options.length >= 2 && q.correct_index < q.options.length);
   } catch {
     return null;
@@ -162,26 +171,28 @@ export async function generateSubjectiveQuestions(
   transcript: string,
   count: number,
   topic?: string,
-): Promise<{ prompt: string; max_marks: number }[] | null> {
+): Promise<{ prompt: string; max_marks: number; model_answer: string }[] | null> {
   const n = Math.max(1, Math.min(15, Math.round(count) || 5));
   const system =
     `You are an ICAI exam paper setter for 121 CA Classes (CA Parveen Sharma). ` +
     `From the lecture transcript, write exactly ${n} descriptive/long-form CA exam questions for Indian CA students` +
     (topic ? ` on "${topic}"` : "") +
     `. Mix practical/numerical and conceptual questions in ICAI exam style; assign realistic marks (4-16 each). ` +
+    `For EACH question also provide a concise MODEL ANSWER a student could write to score full marks (exam conventions, cite standards/sections). ` +
     `Respond ONLY as compact JSON, no prose, no code fences: ` +
-    `{"questions":[{"prompt":"...","max_marks":8}]}.`;
+    `{"questions":[{"prompt":"...","max_marks":8,"model_answer":"..."}]}.`;
   const user = `Transcript:\n${transcript.slice(0, 24000)}`;
-  const text = await callClaude(system, user, 3000);
+  const text = await callClaude(system, user, 6000);
   if (!text) return null;
   try {
     const json = JSON.parse(text.replace(/```json|```/g, "").trim());
     const arr = Array.isArray(json) ? json : json.questions;
     if (!Array.isArray(arr)) return null;
     return arr
-      .map((q: { prompt?: unknown; max_marks?: unknown }) => ({
+      .map((q: { prompt?: unknown; max_marks?: unknown; model_answer?: unknown }) => ({
         prompt: String(q.prompt ?? "").trim(),
         max_marks: Number.isFinite(Number(q.max_marks)) ? Math.max(1, Math.min(100, Math.round(Number(q.max_marks)))) : 10,
+        model_answer: String(q.model_answer ?? "").trim(),
       }))
       .filter((q) => q.prompt.length > 0);
   } catch {

@@ -1,44 +1,31 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { getSuggestedAnswer } from "./suggested-actions";
+import { useState } from "react";
 
-// Per-item tools: reveal a suggested answer (subjective), and share externally
-// (Gmail compose, native share, print/PDF).
+// Per-paper tools: reveal the pre-saved suggested answer, and share externally
+// (Gmail compose, native share, print/PDF). No AI at view time.
 export default function PaperTools({
-  questionId,
+  suggested,
   shareTitle,
   shareText,
 }: {
-  questionId?: string;
+  suggested?: string;
   shareTitle: string;
   shareText: string;
 }) {
-  const [answer, setAnswer] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-  const [err, setErr] = useState<string | null>(null);
-
-  function suggest() {
-    if (!questionId) return;
-    setErr(null);
-    start(async () => {
-      const r = await getSuggestedAnswer(questionId);
-      if (r.ok && r.answer) setAnswer(r.answer);
-      else setErr("Couldn't generate a suggested answer right now.");
-    });
-  }
+  const [show, setShow] = useState(false);
 
   function gmail() {
     const url =
       "https://mail.google.com/mail/?view=cm&fs=1&su=" +
       encodeURIComponent(shareTitle) +
       "&body=" +
-      encodeURIComponent(shareText + (answer ? `\n\nSuggested answer:\n${answer}` : ""));
+      encodeURIComponent(shareText + (suggested ? `\n\nSuggested answer:\n${suggested}` : ""));
     window.open(url, "_blank", "noopener");
   }
 
   async function share() {
-    const text = shareText + (answer ? `\n\nSuggested answer:\n${answer}` : "");
+    const text = shareText + (suggested ? `\n\nSuggested answer:\n${suggested}` : "");
     if (navigator.share) {
       try {
         await navigator.share({ title: shareTitle, text });
@@ -58,20 +45,19 @@ export default function PaperTools({
   return (
     <div style={{ marginTop: 10 }}>
       <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {questionId && (
-          <button className="btn small secondary" type="button" onClick={suggest} disabled={pending}>
-            {pending ? "Preparing…" : "💡 Suggested answer"}
+        {suggested && (
+          <button className="btn small secondary" type="button" onClick={() => setShow((v) => !v)}>
+            {show ? "Hide suggested answer" : "💡 Suggested answer"}
           </button>
         )}
         <button className="btn small secondary" type="button" onClick={gmail}>📧 Email (Gmail)</button>
         <button className="btn small secondary" type="button" onClick={share}>🔗 Share</button>
         <button className="btn small secondary" type="button" onClick={() => window.print()}>🖨️ Print / PDF</button>
       </div>
-      {err && <p className="muted" style={{ fontSize: ".8rem", marginTop: 6 }}>{err}</p>}
-      {answer && (
+      {suggested && show && (
         <div style={{ marginTop: 10, paddingLeft: 12, borderLeft: "3px solid var(--accent)" }}>
           <p className="muted" style={{ fontSize: ".75rem", margin: 0 }}>💡 Suggested model answer</p>
-          <p style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{answer}</p>
+          <p style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{suggested}</p>
         </div>
       )}
     </div>

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../../_lib/util";
 import { generateMcqs } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
+import { saveMcqExplanation } from "@/lib/answers";
 
 export async function addMcq(formData: FormData) {
   const sectionId = str(formData.get("section_id"));
@@ -77,17 +78,28 @@ export async function generateMcqsFromTranscript(formData: FormData) {
     .from("mcq_questions")
     .select("id", { count: "exact", head: true })
     .eq("section_id", sectionId);
-  let order = existing ?? 0;
+  const base = existing ?? 0;
 
-  await supabase.from("mcq_questions").insert(
-    items.map((q) => ({
-      section_id: sectionId,
-      question: q.question,
-      options: q.options,
-      correct_index: q.correct_index,
-      order_index: order++,
-    })),
-  );
+  const { data: inserted } = await supabase
+    .from("mcq_questions")
+    .insert(
+      items.map((q, i) => ({
+        section_id: sectionId,
+        question: q.question,
+        options: q.options,
+        correct_index: q.correct_index,
+        order_index: base + i,
+      })),
+    )
+    .select("id, order_index");
+
+  // Save each question's "why correct / why each option" — ONCE — so reviews
+  // need no further AI.
+  const byOrder = new Map(items.map((q, i) => [base + i, q]));
+  for (const r of inserted ?? []) {
+    const it = byOrder.get(r.order_index);
+    if (it) await saveMcqExplanation(r.id, it.why_correct, it.why_wrong);
+  }
   revalidatePath(`/admin/mcq/${sectionId}`);
 }
 

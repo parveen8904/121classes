@@ -108,6 +108,7 @@ export default async function Home() {
   const founderPhoto = siteImg.get("founder_photo") || "";
   const heroBanner = siteImg.get("hero_banner") || "";
   const studioPhoto = siteImg.get("studio_photo") || "";
+  const careerJobs = (siteImg.get("career_jobs") || "").split("\n").map((l) => l.trim()).filter(Boolean);
   const splashBanner = siteImg.get("splash_banner") || "";
   const splashLink = siteImg.get("splash_link") || "";
   const splashSeconds = Number(siteImg.get("splash_seconds")) || 5;
@@ -629,6 +630,33 @@ export default async function Home() {
           top-notch coaching, helped (not replaced) by AI.
         </p>
       </section>
+
+      {/* JOB OPENINGS — public teaser; applying needs login */}
+      {careerJobs.length > 0 && (
+        <section className="section alt" id="openings">
+          <div className="section-head">
+            <div className="eyebrow">💼 Opportunities</div>
+            <h2>Job &amp; articleship openings</h2>
+            <p>Live openings for our students. Log in to apply &amp; see full details.</p>
+          </div>
+          <div style={{ display: "grid", gap: 10, maxWidth: 760, margin: "0 auto" }}>
+            {careerJobs.slice(0, 6).map((line, i) => {
+              const [title, firm, location] = line.split("|").map((s) => s.trim());
+              return (
+                <div className="tile" key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <div>
+                    <strong>{title || line}</strong>
+                    {(firm || location) && (
+                      <p className="muted" style={{ fontSize: ".85rem", margin: "2px 0 0" }}>{[firm, location].filter(Boolean).join(" · ")}</p>
+                    )}
+                  </div>
+                  <Link className="btn small" href="/login?next=/career">Apply (log in) →</Link>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* CONTACT */}
       <section className="section" id="contact">

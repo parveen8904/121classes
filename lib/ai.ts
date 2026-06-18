@@ -74,6 +74,25 @@ export async function answerDoubtFromMaterial(
   return callClaude(REPO_SYSTEM, user, 1024);
 }
 
+const ASSIST_SYSTEM =
+  "You are the friendly assistant for 121 CA Classes (CA Parveen Sharma). You answer two kinds of questions:\n" +
+  "1) PORTAL/LOGISTICS (faculty names, courses, when classes or live sessions start, contact, plans, how to do something on the site) — answer ONLY from the SITE INFO section.\n" +
+  "2) CA SUBJECT DOUBTS — answer ONLY from the STUDY MATERIAL section.\n" +
+  "Be concise, warm and specific. If a subject doubt is not covered by the study material, reply exactly with " +
+  `"${NEED_FACULTY}". For portal questions, if the SITE INFO doesn't contain the answer, say you're not sure and point them to help@121caclasses.com. Never invent facts.`;
+
+// The "Ask me" assistant: handles both portal questions (from site facts) and
+// CA doubts (from repository material) in one call. Returns the answer or the
+// NEED_FACULTY sentinel (subject doubt not in material → send to faculty).
+export async function answerAssistant(
+  question: string,
+  siteFacts: string,
+  material: string,
+): Promise<string | null> {
+  const user = `SITE INFO:\n${siteFacts}\n\nSTUDY MATERIAL:\n${material || "(none provided)"}\n\nQUESTION:\n${question}`;
+  return callClaude(ASSIST_SYSTEM, user, 900);
+}
+
 // Pre-generate MCQs from a class transcript (token-frugal: run ONCE at upload
 // time, store the questions, serve them statically to every student). Returns
 // null when AI is unconfigured or the response can't be parsed.

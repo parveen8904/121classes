@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { markQuestionDone } from "./actions";
+import { markQuestionDone, replyToQuestion } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Inbox — Admin" };
@@ -72,6 +72,17 @@ export default async function AdminInbox() {
                 </form>
               </div>
               <p style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{q.question}</p>
+              <details style={{ marginTop: 8 }}>
+                <summary className="btn small secondary as-btn">✍️ Reply</summary>
+                <form action={replyToQuestion} style={{ marginTop: 8 }}>
+                  <input type="hidden" name="id" value={q.id} />
+                  <textarea name="reply" rows={3} required placeholder="Type your reply — sent to the student by Telegram (if connected) or email…" />
+                  <button className="btn small" type="submit" style={{ marginTop: 6 }}>Send reply</button>
+                </form>
+                {!q.email && !q.user_id && (
+                  <p className="muted" style={{ fontSize: ".78rem", marginTop: 6 }}>⚠️ No email/account on this question — can&apos;t deliver a reply.</p>
+                )}
+              </details>
             </div>
           ))}
         </div>

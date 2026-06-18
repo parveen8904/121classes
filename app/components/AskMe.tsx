@@ -4,13 +4,16 @@ import { useState, useTransition } from "react";
 import { usePathname } from "next/navigation";
 import { askQuestion } from "@/app/actions/engagement";
 
-// Floating "Ask me" button shown on every page. A student (or visitor) can ask
-// a doubt or any question about the portal. Stored now; AI auto-answers later.
+// Floating "Ask me" button shown on every page. Answers instantly: portal
+// questions (faculty, schedule, next live class, contact) from site facts, and
+// CA subject doubts from the AI repository. Anything it can't answer goes to
+// faculty (and the student is told).
 export default function AskMe({ signedIn }: { signedIn?: boolean }) {
   const [open, setOpen] = useState(false);
-  const [done, setDone] = useState(false);
   const [q, setQ] = useState("");
   const [email, setEmail] = useState("");
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [escalated, setEscalated] = useState(false);
   const [pending, start] = useTransition();
   const path = usePathname();
 
@@ -21,9 +24,20 @@ export default function AskMe({ signedIn }: { signedIn?: boolean }) {
     if (email) fd.set("email", email);
     start(async () => {
       const r = await askQuestion(fd);
-      if (r.ok) setDone(true);
+      if (r.ok) {
+        setAnswer(r.answer ?? null);
+        setEscalated(!r.answer);
+      }
     });
   }
+
+  function reset() {
+    setAnswer(null);
+    setEscalated(false);
+    setQ("");
+  }
+
+  const answered = answer !== null || escalated;
 
   return (
     <>
@@ -34,24 +48,36 @@ export default function AskMe({ signedIn }: { signedIn?: boolean }) {
       {open && (
         <div className="askme-overlay" onClick={() => setOpen(false)}>
           <div className="askme-card" onClick={(e) => e.stopPropagation()}>
-            <button className="askme-x" onClick={() => setOpen(false)} aria-label="Close">×</button>
-            {done ? (
-              <div style={{ textAlign: "center", padding: "10px 0" }}>
-                <div style={{ fontSize: "2rem" }}>✅</div>
-                <h3 style={{ margin: "8px 0" }}>Thank you!</h3>
-                <p className="muted">Your question has been received. We&apos;ll get back to you soon.</p>
+            <button className="askme-x" onClick={() => { setOpen(false); reset(); }} aria-label="Close">×</button>
+
+            {answered ? (
+              <div>
+                <h3 style={{ margin: "0 0 10px" }}>💬 Answer</h3>
+                {answer ? (
+                  <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{answer}</p>
+                ) : (
+                  <p className="muted" style={{ lineHeight: 1.6 }}>
+                    ✅ Good question! I&apos;ve sent it to CA Parveen Sharma&apos;s team and they&apos;ll get back to you{email || signedIn ? "" : " (add your email next time so we can reply)"} soon.
+                  </p>
+                )}
+                <p className="muted" style={{ fontSize: ".75rem", marginTop: 12 }}>
+                  AI assistant · guided by CA Parveen Sharma&apos;s team. Double-check anything important.
+                </p>
+                <button className="btn block secondary" style={{ marginTop: 12 }} onClick={reset}>
+                  Ask another question
+                </button>
               </div>
             ) : (
               <>
                 <h3 style={{ margin: "0 0 4px" }}>Ask me anything 💬</h3>
                 <p className="muted" style={{ fontSize: ".85rem", marginBottom: 12 }}>
-                  A doubt about a topic, or a question about the portal — ask away.
+                  A CA doubt, or a question about the portal (faculty, classes, live sessions, fees) — ask away.
                 </p>
                 <textarea
                   rows={4}
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Type your question…"
+                  placeholder="e.g. When is the next live class? / Explain IND AS 115 revenue recognition."
                   style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)" }}
                 />
                 {!signedIn && (
@@ -59,7 +85,7 @@ export default function AskMe({ signedIn }: { signedIn?: boolean }) {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Your email (so we can reply)"
+                    placeholder="Your email (so we can reply if needed)"
                     style={{ width: "100%", marginTop: 8, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)" }}
                   />
                 )}
@@ -69,7 +95,7 @@ export default function AskMe({ signedIn }: { signedIn?: boolean }) {
                   disabled={pending || q.trim().length < 3}
                   onClick={submit}
                 >
-                  {pending ? "Sending…" : "Send question"}
+                  {pending ? "Thinking…" : "Ask"}
                 </button>
               </>
             )}

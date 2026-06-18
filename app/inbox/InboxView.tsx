@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { shareToCommunity, shareToTelegram } from "./actions";
+import { saveInboxPrefs } from "./prefs-actions";
 import PaperTools from "./PaperTools";
 
 export type Msg = {
@@ -32,10 +33,14 @@ export default function InboxView({
   messages,
   performance,
   recs,
+  initialFolders,
+  initialLabels,
 }: {
   messages: Msg[];
   performance: { mcqCount: number; paperCount: number };
   recs: { concepts: string[]; topics: { id: string; title: string; subject?: { title?: string } | null }[]; material: { id: string; title: string }[] } | null;
+  initialFolders?: string[];
+  initialLabels?: Record<string, string>;
 }) {
   const [folder, setFolder] = useState("All");
   const [search, setSearch] = useState("");
@@ -44,21 +49,31 @@ export default function InboxView({
   const [labels, setLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    // Server prefs win (sync across devices); else fall back to device storage.
+    if ((initialFolders && initialFolders.length) || (initialLabels && Object.keys(initialLabels).length)) {
+      setCustomFolders(initialFolders ?? []);
+      setLabels(initialLabels ?? {});
+      return;
+    }
     try {
       setCustomFolders(JSON.parse(localStorage.getItem(LS_FOLDERS) || "[]"));
       setLabels(JSON.parse(localStorage.getItem(LS_LABELS) || "{}"));
     } catch {}
-  }, []);
+  }, [initialFolders, initialLabels]);
 
+  function persist(f: string[], l: Record<string, string>) {
+    try { localStorage.setItem(LS_FOLDERS, JSON.stringify(f)); localStorage.setItem(LS_LABELS, JSON.stringify(l)); } catch {}
+    void saveInboxPrefs(f, l);
+  }
   function saveFolders(f: string[]) {
     setCustomFolders(f);
-    try { localStorage.setItem(LS_FOLDERS, JSON.stringify(f)); } catch {}
+    persist(f, labels);
   }
   function setLabel(id: string, name: string) {
     const next = { ...labels };
     if (name) next[id] = name; else delete next[id];
     setLabels(next);
-    try { localStorage.setItem(LS_LABELS, JSON.stringify(next)); } catch {}
+    persist(customFolders, next);
   }
   function newFolder() {
     const name = prompt("New folder name:")?.trim();

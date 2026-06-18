@@ -91,6 +91,7 @@ export default async function StudentInbox() {
   messages.sort((a, b) => (a.when < b.when ? 1 : -1));
 
   const [recs] = await Promise.all([getStudyRecommendations(user.id)]);
+  const { data: prefs } = await svc.from("inbox_prefs").select("folders, labels").eq("user_id", user.id).maybeSingle();
   const mcqCount = (await svc.from("mcq_attempts").select("id", { count: "exact", head: true }).eq("student_id", user.id)).count ?? 0;
 
   return (
@@ -100,7 +101,13 @@ export default async function StudentInbox() {
         <h1>Inbox</h1>
         <p className="meta">Your questions, answers, checked papers and performance — all in one place. Use folders to organise.</p>
       </div>
-      <InboxView messages={messages} performance={{ mcqCount, paperCount: (subs ?? []).length }} recs={recs} />
+      <InboxView
+        messages={messages}
+        performance={{ mcqCount, paperCount: (subs ?? []).length }}
+        recs={recs}
+        initialFolders={(prefs?.folders as string[]) ?? undefined}
+        initialLabels={(prefs?.labels as Record<string, string>) ?? undefined}
+      />
     </section>
   );
 }

@@ -1,9 +1,10 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { aiConfigured } from "@/lib/ai";
 import { emailConfigured, whatsappConfigured, telegramConfigured, telegramBotUsername } from "@/lib/notify";
+import { razorpayConfigured } from "@/lib/razorpay";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
-import { connectTelegramWebhook, saveLinks, saveSecrets } from "./actions";
+import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Integrations — Admin" };
@@ -60,13 +61,14 @@ async function KeyField({ name, label, placeholder }: { name: string; label: str
 export default async function IntegrationsPage({
   searchParams,
 }: {
-  searchParams: { tg?: string; links?: string; keys?: string };
+  searchParams: { tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string };
 }) {
-  const [tg, ai, em, wa, botUser, health] = await Promise.all([
+  const [tg, ai, em, wa, rzp, botUser, health] = await Promise.all([
     telegramConfigured(),
     aiConfigured(),
     emailConfigured(),
     whatsappConfigured(),
+    razorpayConfigured(),
     telegramBotUsername(),
     telegramHealth(),
   ]);
@@ -118,6 +120,15 @@ export default async function IntegrationsPage({
         <Row on={ai} label="🤖 AI (doubts, tests, grading)" help={<>Key from <a className="grad" href="https://console.anthropic.com" target="_blank" rel="noreferrer">console.anthropic.com</a> → API Keys (needs billing).</>} />
         <Row on={em} label="✉️ Email (Mailgun)" help={<>Key + domain from your <a className="grad" href="https://app.mailgun.com" target="_blank" rel="noreferrer">Mailgun</a> account.</>} />
         <Row on={wa} label="💬 WhatsApp (Interakt)" help={<>Key from <a className="grad" href="https://app.interakt.ai" target="_blank" rel="noreferrer">Interakt</a> → Settings → Developer Settings. Bulk WhatsApp also needs an approved template.</>} />
+        <Row on={rzp} label="💳 Razorpay (payments)" help={<>Key ID + Secret from <a className="grad" href="https://dashboard.razorpay.com" target="_blank" rel="noreferrer">Razorpay</a> → Settings → API Keys. After saving, click <strong>Test</strong> below before going live.</>} />
+        {rzp && (
+          <form action={testRazorpayConnection}>
+            <button className="btn small" type="submit">🧪 Test Razorpay keys</button>
+          </form>
+        )}
+        {searchParams.rzpmsg && (
+          <div className={`notice ${searchParams.rzp === "ok" ? "ok" : "err"}`}>{searchParams.rzpmsg}</div>
+        )}
       </div>
 
       {/* PASTE KEYS */}
@@ -138,6 +149,8 @@ export default async function IntegrationsPage({
           <KeyField name="FACULTY_TELEGRAM_CHAT_ID" label="Faculty Telegram chat id (for doubt alerts)" placeholder="your own Telegram chat id" />
           <KeyField name="FACULTY_EMAIL" label="Faculty alert email" placeholder="help@121caclasses.com" />
           <KeyField name="CRON_SECRET" label="Cron secret (optional — protects scheduled jobs)" placeholder="any random text" />
+          <KeyField name="RAZORPAY_KEY_ID" label="Razorpay Key ID" placeholder="rzp_live_… or rzp_test_…" />
+          <KeyField name="RAZORPAY_KEY_SECRET" label="Razorpay Key Secret" placeholder="from Razorpay dashboard" />
           <button className="btn" type="submit" style={{ marginTop: 6 }}>Save keys</button>
         </form>
       </div>

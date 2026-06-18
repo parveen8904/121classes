@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { telegramConfigured } from "@/lib/notify";
 import { getSecret, clearSecretCache } from "@/lib/secrets";
+import { testRazorpay } from "@/lib/razorpay";
 import { str } from "../_lib/util";
 
 async function requireAdmin() {
@@ -73,6 +74,8 @@ const SECRET_KEYS = [
   "FACULTY_TELEGRAM_CHAT_ID",
   "FACULTY_EMAIL",
   "CRON_SECRET",
+  "RAZORPAY_KEY_ID",
+  "RAZORPAY_KEY_SECRET",
 ] as const;
 
 // Save API keys pasted in the admin. Blank fields are IGNORED (so you can update
@@ -95,4 +98,11 @@ export async function saveSecrets(formData: FormData) {
   }
   clearSecretCache();
   redirect("/admin/integrations?keys=saved");
+}
+
+// Verify the saved Razorpay keys by creating a tiny test order.
+export async function testRazorpayConnection() {
+  if (!(await requireAdmin())) return;
+  const r = await testRazorpay();
+  redirect(`/admin/integrations?rzp=${r.ok ? "ok" : "fail"}&rzpmsg=${encodeURIComponent(r.message)}`);
 }

@@ -95,6 +95,8 @@ export default async function CoursePlans({
     .filter(Boolean)
     .join(", ");
 
+  const razorpayOn = await razorpayConfigured();
+
   return (
     <main>
       <section className="container" style={{ paddingTop: 40, paddingBottom: 70 }}>
@@ -149,7 +151,7 @@ export default async function CoursePlans({
           goldValidityOptions={goldValidityOptions}
           currentTier={currentTier}
           courseId={course.id}
-          configured={razorpayConfigured()}
+          configured={razorpayOn}
           contactHref="/#contact"
         />
       </section>

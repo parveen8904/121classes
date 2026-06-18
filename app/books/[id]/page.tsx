@@ -17,6 +17,8 @@ export default async function BookDetail({ params }: { params: { id: string } })
     .maybeSingle();
   if (!book) notFound();
 
+  const razorpayOn = await razorpayConfigured();
+
   return (
     <section className="section" style={{ maxWidth: 980 }}>
       <p className="crumb">
@@ -53,7 +55,7 @@ export default async function BookDetail({ params }: { params: { id: string } })
         <BookCheckout
           bookId={book.id}
           inStock={book.stock_qty > 0}
-          configured={razorpayConfigured()}
+          configured={razorpayOn}
         />
       </div>
     </section>

@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import {
   razorpayConfigured,
+  razorpayKeyId,
   createRazorpayOrder,
   fetchRazorpayOrder,
   verifyRazorpaySignature,
@@ -23,7 +24,7 @@ export async function createPlanOrder(input: {
   months?: number;
   couponCode?: string;
 }): Promise<CreateOrderResult> {
-  if (!razorpayConfigured()) return { ok: false, reason: "unconfigured" };
+  if (!(await razorpayConfigured())) return { ok: false, reason: "unconfigured" };
   if (!PAID_TIERS.includes(input.tier)) return { ok: false, reason: "error" };
 
   const supabase = createClient();
@@ -102,7 +103,7 @@ export async function createPlanOrder(input: {
       ok: true,
       orderId: order.id,
       amount: order.amount,
-      keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? process.env.RAZORPAY_KEY_ID!,
+      keyId: await razorpayKeyId(),
       name: "121 CA Classes",
       description: `${subject.title} · ${plan.name} (${months} months)`,
       prefill: {
@@ -122,11 +123,11 @@ export async function verifyPlanPayment(input: {
   razorpay_signature: string;
 }): Promise<{ ok: boolean; courseId?: string }> {
   if (
-    !verifyRazorpaySignature(
+    !(await verifyRazorpaySignature(
       input.razorpay_order_id,
       input.razorpay_payment_id,
       input.razorpay_signature,
-    )
+    ))
   ) {
     return { ok: false };
   }

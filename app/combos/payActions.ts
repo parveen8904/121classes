@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   razorpayConfigured,
+  razorpayKeyId,
   createRazorpayOrder,
   fetchRazorpayOrder,
   verifyRazorpaySignature,
@@ -14,7 +15,7 @@ export type ComboOrderResult =
   | { ok: false; reason: "unconfigured" | "auth" | "invalid" | "error" };
 
 export async function createComboOrder(input: { comboId: string }): Promise<ComboOrderResult> {
-  if (!razorpayConfigured()) return { ok: false, reason: "unconfigured" };
+  if (!(await razorpayConfigured())) return { ok: false, reason: "unconfigured" };
   const supabase = createClient();
   const {
     data: { user },
@@ -46,7 +47,7 @@ export async function createComboOrder(input: { comboId: string }): Promise<Comb
       ok: true,
       orderId: order.id,
       amount: order.amount,
-      keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? process.env.RAZORPAY_KEY_ID!,
+      keyId: await razorpayKeyId(),
       name: "121 CA Classes",
       description: combo.title,
       prefill: {
@@ -66,7 +67,7 @@ export async function verifyComboPayment(input: {
   razorpay_signature: string;
 }): Promise<{ ok: boolean }> {
   if (
-    !verifyRazorpaySignature(input.razorpay_order_id, input.razorpay_payment_id, input.razorpay_signature)
+    !(await verifyRazorpaySignature(input.razorpay_order_id, input.razorpay_payment_id, input.razorpay_signature))
   ) {
     return { ok: false };
   }

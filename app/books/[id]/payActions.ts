@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   razorpayConfigured,
+  razorpayKeyId,
   createRazorpayOrder,
   fetchRazorpayOrder,
   verifyRazorpaySignature,
@@ -30,7 +31,7 @@ export async function createBookOrder(input: {
   qty: number;
   buyer: Buyer;
 }): Promise<BookOrderResult> {
-  if (!razorpayConfigured()) return { ok: false, reason: "unconfigured" };
+  if (!(await razorpayConfigured())) return { ok: false, reason: "unconfigured" };
   const qty = Math.max(1, Math.min(20, Math.floor(input.qty || 1)));
   const b = input.buyer;
   if (!b?.name || !b?.email || !b?.phone || !b?.line1 || !b?.city || !b?.pincode) {
@@ -77,7 +78,7 @@ export async function createBookOrder(input: {
       ok: true,
       orderId: order.id,
       amount: order.amount,
-      keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? process.env.RAZORPAY_KEY_ID!,
+      keyId: await razorpayKeyId(),
       name: "121 CA Classes — Books",
       description: `${book.title} × ${qty}`,
       prefill: { name: b.name, email: b.email, contact: b.phone },
@@ -93,11 +94,11 @@ export async function verifyBookPayment(input: {
   razorpay_signature: string;
 }): Promise<{ ok: boolean }> {
   if (
-    !verifyRazorpaySignature(
+    !(await verifyRazorpaySignature(
       input.razorpay_order_id,
       input.razorpay_payment_id,
       input.razorpay_signature,
-    )
+    ))
   ) {
     return { ok: false };
   }

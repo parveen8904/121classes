@@ -23,7 +23,7 @@ export default async function CombosPublicPage() {
     .eq("is_active", true)
     .order("created_at", { ascending: false });
   const combos = (data ?? []) as unknown as ComboRow[];
-  const configured = razorpayConfigured();
+  const configured = await razorpayConfigured();
 
   return (
     <section className="section">

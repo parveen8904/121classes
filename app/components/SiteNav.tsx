@@ -14,13 +14,12 @@ const NAV_LINKS = [
   { href: "/#contact", label: "Contact" },
 ];
 
-export default function SiteNav() {
+export default async function SiteNav() {
   return (
     <nav className="lp-nav">
       <div className="lp-nav-inner">
         <Link href="/" aria-label="121 CA Classes home" className="lp-brand">
           <Logo />
-          <span className="lp-tagline">Personalised one-on-one learning</span>
         </Link>
         <div className="lp-nav-links">
           {NAV_LINKS.map((l) => (

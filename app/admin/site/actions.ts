@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { str } from "../_lib/util";
 
 const KEYS = [
+  "logo_url",
   "founder_photo",
   "hero_banner",
   "support_whatsapp",

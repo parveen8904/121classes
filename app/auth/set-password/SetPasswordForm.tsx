@@ -36,7 +36,7 @@ export default function SetPasswordForm({ next }: { next: string }) {
   return (
     <main>
       <header className="topbar">
-        <Link className="logo" href="/">121 <span>CA Classes</span></Link>
+        <Link href="/">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/logo-121.png" alt="121 CA Classes" className="brand-logo" /></Link>
       </header>
       <section className="narrow" style={{ paddingTop: 60 }}>
         <div className="card">

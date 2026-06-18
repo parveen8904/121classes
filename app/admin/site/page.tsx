@@ -19,6 +19,13 @@ export default async function SiteImagesPage() {
 
       <form action={updateSiteSettings} className="form-card" style={{ marginTop: 24 }}>
         <ImageUpload
+          name="logo_url"
+          defaultValue={m.get("logo_url") ?? ""}
+          folder="site"
+          label="Brand logo (appears in the header & footer on every page) — PNG, ideally transparent, wide"
+        />
+        <div style={{ marginTop: 18 }} />
+        <ImageUpload
           name="founder_photo"
           defaultValue={m.get("founder_photo") ?? ""}
           folder="site"

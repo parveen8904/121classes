@@ -103,11 +103,13 @@ export function buildDayPlan(
   };
 
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const planEnd = new Date(examMs - bufferDays * DAY);
+  // The last revision is the final `bufferDays` (default 5) days before the exam.
+  // Everything else must finish before it starts.
+  const lastRevStart = new Date(examMs - bufferDays * DAY);
 
-  // Non-off study days available between today and the buffer before the exam.
+  // Non-off study days available between today and the start of the last revision.
   let studyDaysAvail = 0;
-  for (let d = new Date(start); d.getTime() <= planEnd.getTime(); d = new Date(d.getTime() + DAY)) {
+  for (let d = new Date(start); d.getTime() < lastRevStart.getTime(); d = new Date(d.getTime() + DAY)) {
     if (!isOff(d)) studyDaysAvail++;
   }
 
@@ -115,9 +117,10 @@ export function buildDayPlan(
   let totalMin = 0;
   for (let i = 0; i < classCount; i++) totalMin += durOf(i);
 
-  // Stage sizing. Revision stages are fractions of the exhaustive day-count E.
-  // F = exhaustive(1) + first revision(0.25) + extra(0.15?) + second(0.125).
-  const F = 1 + 0.25 + (wantExtra ? 0.15 : 0) + 0.125;
+  // Stage sizing. The exhaustive stage + revisions before the last one must fit
+  // before the last revision starts. F = exhaustive(1) + first revision(0.25) +
+  // optional extra(0.15). The last revision is a fixed window (bufferDays).
+  const F = 1 + 0.25 + (wantExtra ? 0.15 : 0);
   let dailyMinutes = enteredDaily;
   let E = totalMin > 0 ? Math.ceil(totalMin / dailyMinutes) : 0;
   let warning: string | undefined;
@@ -129,14 +132,13 @@ export function buildDayPlan(
     dailyMinutes = Math.ceil(totalMin / E);
     assumedHours = r1(dailyMinutes / 60);
     warning =
-      `⚠️ You're short of time. To finish everything (classes + first & second revision${wantExtra ? " + your extra revision" : ""}) before your exam, ` +
+      `⚠️ You're short of time. To finish everything (classes + first revision${wantExtra ? " + your extra revision" : ""}) before the last revision begins (${bufferDays} days before your exam), ` +
       `this plan assumes about ${assumedHours} hours of study per day — more than the ${setup.selfStudyHours} you entered. ` +
       `If that isn't realistic, start sooner, take fewer days off, or drop the extra revision.`;
   }
 
   const rev1Days = E > 0 ? Math.ceil(0.25 * E) : 0;
   const extraDays = wantExtra && E > 0 ? Math.ceil(0.15 * E) : 0;
-  const rev2Days = E > 0 ? Math.ceil(0.125 * E) : 0;
 
   // Master-question allocation per class (split each subject's list across its
   // classes, numbered within the subject).
@@ -175,7 +177,7 @@ export function buildDayPlan(
 
   // ---- Stage 1: exhaustive ----
   let classIdx = 0, sinceMcq = 0, sinceDesc = 0;
-  while (classIdx < classCount && cursor.getTime() <= planEnd.getTime()) {
+  while (classIdx < classCount && cursor.getTime() < lastRevStart.getTime()) {
     if (!isOff(cursor)) {
       const todays: number[] = [];
       const qParts: string[] = [];
@@ -216,7 +218,7 @@ export function buildDayPlan(
   const nextOpenDay = () => { while (isOff(cursor)) cursor = new Date(cursor.getTime() + DAY); };
 
   // ---- Stage 2: first revision ----
-  for (let k = 0; k < rev1Days && cursor.getTime() <= planEnd.getTime(); k++) {
+  for (let k = 0; k < rev1Days && cursor.getTime() < lastRevStart.getTime(); k++) {
     nextOpenDay();
     const s = subjectOrder[k % subjectOrder.length];
     const revCount = (opts.subjectRev || {})[s] || 0;
@@ -231,7 +233,7 @@ export function buildDayPlan(
   }
 
   // ---- Optional extra revision (fast pace) ----
-  for (let k = 0; k < extraDays && cursor.getTime() <= planEnd.getTime(); k++) {
+  for (let k = 0; k < extraDays && cursor.getTime() < lastRevStart.getTime(); k++) {
     nextOpenDay();
     const s = subjectOrder[k % subjectOrder.length];
     entries.push({
@@ -243,35 +245,40 @@ export function buildDayPlan(
     cursor = new Date(cursor.getTime() + DAY);
   }
 
-  // ---- Stage 3: second revision (marked questions + full mocks) ----
-  const rev2Mocks = new Set<number>();
-  if (rev2Days > 0) {
-    for (let i = 0; i < mockCount; i++) {
-      rev2Mocks.add(Math.min(rev2Days - 1, Math.floor(((i + 1) * rev2Days) / (mockCount + 1))));
-    }
-    rev2Mocks.add(rev2Days - 1); // final mock on the last day
+  // ---- Last revision: the final `bufferDays` days before the exam ----
+  // Dedicated to the student's must-do questions (added per sub-topic in the
+  // planner), with full mocks interspersed. The actual questions are overlaid
+  // by the UI; here we lay out the day skeletons.
+  if (cursor.getTime() < lastRevStart.getTime()) cursor = new Date(lastRevStart.getTime());
+  const revDates: Date[] = [];
+  while (cursor.getTime() < examMs) {
+    if (!isOff(cursor)) revDates.push(new Date(cursor));
+    cursor = new Date(cursor.getTime() + DAY);
   }
-  for (let k = 0; k < rev2Days && cursor.getTime() <= planEnd.getTime(); k++) {
-    nextOpenDay();
-    const s = subjectOrder[k % subjectOrder.length];
-    if (rev2Mocks.has(k)) {
-      const last = k === rev2Days - 1;
+  const lastIdx = revDates.length - 1;
+  const mocks = new Set<number>();
+  if (revDates.length) {
+    for (let i = 0; i < mockCount; i++) mocks.add(Math.min(lastIdx, Math.floor(((i + 1) * revDates.length) / (mockCount + 1))));
+    mocks.add(lastIdx); // final mock on the last day
+  }
+  revDates.forEach((d, k) => {
+    if (mocks.has(k)) {
+      const last = k === lastIdx;
       entries.push({
-        iso: iso(cursor), date: disp(cursor), stage: "rev2", mock: true,
+        iso: iso(d), date: disp(d), stage: "rev2", mock: true,
         topic: last ? "📝 Final full mock" : "📝 Full mock test", hours: dailyHoursDisp,
-        test: last ? "Final mock" : "Full mock", questions: "Your marked questions",
+        test: last ? "Final mock" : "Full mock", questions: "Your must-do questions",
         label: last ? "📝 FINAL FULL MOCK" : "📝 Full mock test",
       });
     } else {
       entries.push({
-        iso: iso(cursor), date: disp(cursor), stage: "rev2",
-        topic: `🔂 Second revision: ${s}`, hours: dailyHoursDisp, test: "",
-        questions: "Your marked questions (else revision list)",
-        label: `🔂 Second revision — ${s} (${dailyHoursDisp}h) · your marked questions`,
+        iso: iso(d), date: disp(d), stage: "rev2",
+        topic: "🔂 Last revision — your must-do questions", hours: dailyHoursDisp, test: "",
+        questions: "Your must-do questions",
+        label: `🔂 Last revision — your must-do questions (${dailyHoursDisp}h)`,
       });
     }
-    cursor = new Date(cursor.getTime() + DAY);
-  }
+  });
 
   // Student's dated extra work.
   for (const ex of setup.extras || []) {

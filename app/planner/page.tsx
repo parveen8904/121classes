@@ -83,8 +83,8 @@ export default async function PlannerPage() {
         <span className="badge">🗓️ Study Planner</span>
         <h1>Study planner &amp; diary</h1>
         <p className="meta">
-          Tell us your exam date and how you&apos;re studying — we&apos;ll build a day-by-day plan in three stages
-          (study, first revision, second revision) with tests and mock exams so you finish on time
+          Tell us your exam date and how you&apos;re studying — we&apos;ll build a day-by-day plan in stages
+          (study, first revision, and a last revision of your must-do questions in the final 5 days) with tests and mock exams so you finish on time
           {targetAttempt ? ` for ${targetAttempt}` : ""}. ✍️
         </p>
       </div>

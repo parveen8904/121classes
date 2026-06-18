@@ -6,7 +6,7 @@ import { savePlan, setRemind as setRemindAction } from "./actions";
 
 export type PlanItem = { id: string; title: string; subject: string; subjectId?: string | null };
 type Task = { id: string; text: string; due: string; done: boolean };
-type DiaryEntry = { id: string; date: string; text: string };
+type MustDo = { id: string; topicId: string; topicTitle: string; text: string };
 type Setup = {
   source: "us" | "others"; classes: string; tests: string; examDate: string;
   selfStudyHours: string; daysOffPerWeek: string; holidays: string; extras: string;
@@ -17,12 +17,12 @@ const STAGE_HEAD: Record<string, { label: string; bg: string; fg: string }> = {
   exhaustive: { label: "📚 Stage 1 — Exhaustive study (classes, homework, MCQ & descriptive tests · master important questions)", bg: "rgba(13,148,136,.10)", fg: "var(--accent)" },
   rev1: { label: "🔁 Stage 2 — First revision (starts after classes · 25% of study time · revision videos + revision questions)", bg: "rgba(59,130,246,.10)", fg: "#2563eb" },
   extra: { label: "⚡ Extra revision (optional · 15% of study time · revision videos at fast pace)", bg: "rgba(245,158,11,.12)", fg: "#b45309" },
-  rev2: { label: "🔂 Stage 3 — Second revision (50% of first revision · your marked questions · ends ~5 days before exam)", bg: "rgba(236,72,153,.10)", fg: "#be185d" },
+  rev2: { label: "🔂 Last revision — your must-do questions (the final 5 days before the exam)", bg: "rgba(236,72,153,.10)", fg: "#be185d" },
 };
 
 const LS_DONE = "planner_done";
 const LS_TASKS = "planner_tasks";
-const LS_DIARY = "planner_diary";
+const LS_MUSTDO = "planner_mustdo";
 
 export default function Planner({
   items,
@@ -45,10 +45,11 @@ export default function Planner({
 }) {
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [diary, setDiary] = useState<DiaryEntry[]>([]);
+  const [mustDo, setMustDo] = useState<MustDo[]>([]);
   const [taskText, setTaskText] = useState("");
   const [taskDue, setTaskDue] = useState("");
-  const [note, setNote] = useState("");
+  const [mdTopic, setMdTopic] = useState("");
+  const [mdText, setMdText] = useState("");
   const [setup, setSetup] = useState<Setup>({
     source: initial?.setup?.source ?? "us",
     classes: initial?.setup?.classes ? String(initial.setup.classes) : "",
@@ -71,7 +72,7 @@ export default function Planner({
     try {
       setDone(JSON.parse(localStorage.getItem(LS_DONE) || "{}"));
       setTasks(JSON.parse(localStorage.getItem(LS_TASKS) || "[]"));
-      setDiary(JSON.parse(localStorage.getItem(LS_DIARY) || "[]"));
+      setMustDo(JSON.parse(localStorage.getItem(LS_MUSTDO) || "[]"));
     } catch {}
   }, []);
 
@@ -164,7 +165,7 @@ export default function Planner({
 
   const saveDone = (d: Record<string, boolean>) => { setDone(d); try { localStorage.setItem(LS_DONE, JSON.stringify(d)); } catch {} };
   const saveTasks = (t: Task[]) => { setTasks(t); try { localStorage.setItem(LS_TASKS, JSON.stringify(t)); } catch {} };
-  const saveDiary = (d: DiaryEntry[]) => { setDiary(d); try { localStorage.setItem(LS_DIARY, JSON.stringify(d)); } catch {} };
+  const saveMustDo = (m: MustDo[]) => { setMustDo(m); try { localStorage.setItem(LS_MUSTDO, JSON.stringify(m)); } catch {} };
 
   const rid = () => Math.random().toString(36).slice(2);
 
@@ -173,6 +174,21 @@ export default function Planner({
     for (const it of items) { if (!m.has(it.subject)) m.set(it.subject, []); m.get(it.subject)!.push(it); }
     return [...m.entries()];
   }, [items]);
+
+  // Spread the student's must-do questions across the last-revision days.
+  const mustDoByIso = useMemo(() => {
+    const map = new Map<string, MustDo[]>();
+    if (!mustDo.length) return map;
+    let isos = [...new Set(schedule.filter((e) => e.stage === "rev2" && !e.mock).map((e) => e.iso))].sort();
+    if (!isos.length) isos = [...new Set(schedule.filter((e) => e.stage === "rev2").map((e) => e.iso))].sort();
+    if (!isos.length) return map;
+    const per = Math.ceil(mustDo.length / isos.length);
+    isos.forEach((iso, i) => {
+      const slice = mustDo.slice(i * per, (i + 1) * per);
+      if (slice.length) map.set(iso, slice);
+    });
+    return map;
+  }, [schedule, mustDo]);
 
   const totalDone = items.filter((i) => done[i.id]).length;
   const pct = items.length ? Math.round((totalDone / items.length) * 100) : 0;
@@ -265,6 +281,15 @@ export default function Planner({
                 {rows.map(({ iso, date, e }, idx) => {
                   const header = e.stage && e.stage !== lastStage ? STAGE_HEAD[e.stage] : null;
                   if (e.stage) lastStage = e.stage;
+                  let qNode: ReactNode = e.questions || "—";
+                  const md = mustDoByIso.get(e.iso);
+                  if (e.stage === "rev2" && md && md.length) {
+                    qNode = (
+                      <div style={{ display: "grid", gap: 2 }}>
+                        {md.map((m) => <span key={m.id}><strong>{m.topicTitle}:</strong> {m.text}</span>)}
+                      </div>
+                    );
+                  }
                   return (
                     <FragmentRow
                       key={idx}
@@ -272,6 +297,7 @@ export default function Planner({
                       date={date}
                       e={e}
                       isToday={iso === todayIso}
+                      questions={qNode}
                       pace={paceCell(e)}
                     />
                   );
@@ -340,21 +366,57 @@ export default function Planner({
         ))}
       </div>
 
-      {/* Diary */}
+      {/* Must-do questions — feed the last revision */}
       <div className="card">
-        <h3 style={{ margin: "0 0 8px" }}>📔 Daily diary</h3>
-        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="What did you study today? How did it go?" />
-        <button className="btn small" type="button" onClick={() => { if (note.trim()) { saveDiary([{ id: rid(), date: today, text: note.trim() }, ...diary]); setNote(""); } }}>Save entry</button>
-        <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
-          {diary.map((d) => (
-            <div key={d.id} style={{ borderLeft: "3px solid var(--accent)", paddingLeft: 10 }}>
-              <p className="muted" style={{ fontSize: ".75rem", margin: 0 }}>{d.date}
-                <button type="button" onClick={() => saveDiary(diary.filter((x) => x.id !== d.id))} className="muted" style={{ marginLeft: 8, border: "none", background: "none", cursor: "pointer" }}>✕</button>
-              </p>
-              <p style={{ margin: "2px 0 0", whiteSpace: "pre-wrap" }}>{d.text}</p>
-            </div>
-          ))}
+        <h3 style={{ margin: "0 0 4px" }}>📌 Must-do questions</h3>
+        <p className="muted" style={{ fontSize: ".85rem", marginTop: 0 }}>
+          Pick a sub-topic and add the questions you <strong>must</strong> revise. They go into your <strong>last revision</strong> (the final 5 days before the exam). Add as many as you like to any topic.
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <select value={mdTopic} onChange={(e) => setMdTopic(e.target.value)} style={{ minWidth: 200, marginBottom: 0 }}>
+            <option value="">— Choose sub-topic —</option>
+            {bySubject.map(([subject, list]) => (
+              <optgroup key={subject} label={subject}>
+                {list.map((i) => <option key={i.id} value={i.id}>{i.title}</option>)}
+              </optgroup>
+            ))}
+          </select>
+          <input value={mdText} onChange={(e) => setMdText(e.target.value)} placeholder="e.g. Q12 — consolidation with foreign subsidiary" style={{ flex: 1, minWidth: 180, marginBottom: 0 }} />
+          <button
+            className="btn small"
+            type="button"
+            onClick={() => {
+              const it = items.find((x) => x.id === mdTopic);
+              if (it && mdText.trim()) {
+                saveMustDo([...mustDo, { id: rid(), topicId: it.id, topicTitle: it.title, text: mdText.trim() }]);
+                setMdText("");
+              }
+            }}
+          >Add</button>
         </div>
+        {mustDo.length === 0 ? (
+          <p className="muted" style={{ fontSize: ".85rem", marginTop: 10 }}>No must-do questions yet. Add the ones you keep getting wrong or find important.</p>
+        ) : (
+          <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+            {bySubject.flatMap(([, list]) => list).map((it) => {
+              const qs = mustDo.filter((m) => m.topicId === it.id);
+              if (!qs.length) return null;
+              return (
+                <div key={it.id}>
+                  <strong style={{ fontSize: ".88rem" }}>{it.title}</strong>
+                  <div style={{ display: "grid", gap: 4, marginTop: 4, paddingLeft: 6 }}>
+                    {qs.map((m) => (
+                      <label key={m.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <span>• {m.text}</span>
+                        <button type="button" onClick={() => saveMustDo(mustDo.filter((x) => x.id !== m.id))} className="muted" style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer" }}>✕</button>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <p className="muted" style={{ fontSize: ".78rem" }}>Your planner, to-dos and diary are saved on this device.</p>
@@ -363,10 +425,10 @@ export default function Planner({
 }
 
 function FragmentRow({
-  header, date, e, isToday, pace,
+  header, date, e, isToday, questions, pace,
 }: {
   header: { label: string; bg: string; fg: string } | null;
-  date: string; e: SchedEntry; isToday: boolean; pace: ReactNode;
+  date: string; e: SchedEntry; isToday: boolean; questions: ReactNode; pace: ReactNode;
 }) {
   const td = { padding: "7px 8px", borderBottom: "1px solid var(--border, #eee)", verticalAlign: "top" as const };
   return (
@@ -385,7 +447,7 @@ function FragmentRow({
         <td style={{ ...td, fontWeight: e.mock ? 700 : 400 }}>{e.topic ?? e.label}</td>
         <td style={td}>{e.hours ? `${e.hours}` : "—"}</td>
         <td style={td}>{e.test ? <span style={{ background: "var(--bg-soft)", padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>{e.test}</span> : "—"}</td>
-        <td style={td}>{e.questions || "—"}</td>
+        <td style={td}>{questions}</td>
         <td style={td}>{pace}</td>
       </tr>
     </>

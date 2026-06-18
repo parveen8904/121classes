@@ -32,8 +32,9 @@ export default async function ContentPage({ searchParams }: { searchParams: { sa
         <textarea name="career_placement" rows={4} defaultValue={m.get("career_placement") || ""} placeholder="Placement process, mock interview tips, CV pointers…" />
         <label>Career resources / links</label>
         <textarea name="career_resources" rows={3} defaultValue={m.get("career_resources") || ""} placeholder="Useful links, opportunities, community…" />
-        <label>Current job / articleship openings (one per line)</label>
-        <textarea name="career_jobs" rows={4} defaultValue={m.get("career_jobs") || ""} placeholder={"CA Articleship — XYZ & Co, Gurugram — apply: email@firm.com\nAudit Associate — ABC LLP, Delhi — https://…"} />
+        <label>Job / articleship openings — one per line as <code>Title | Firm | Location | apply link or email</code></label>
+        <textarea name="career_jobs" rows={5} defaultValue={m.get("career_jobs") || ""} placeholder={"CA Articleship | XYZ & Co | Gurugram | careers@xyz.com\nAudit Associate | ABC LLP | Delhi | https://abc.com/apply"} />
+        <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>Each opening shows on the Career page with an &ldquo;Apply&rdquo; button linking where you point it.</p>
         <h3 style={{ marginTop: 18 }}>🧘 Daily wellness tips</h3>
         <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>One tip per line — students see one per day (rotates).</p>
         <textarea name="wellness_tips" rows={5} defaultValue={m.get("wellness_tips") || ""} placeholder={"Take a 10-min walk between study blocks.\nRevise yesterday's topic for 15 min before new material.\nSleep 7 hours — memory consolidates at night."} />

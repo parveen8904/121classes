@@ -5,13 +5,13 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Career Corner — 121 CA Classes" };
 
-// Live job-search shortcuts (open Google/portals pre-filtered for CA roles).
-const JOB_SEARCHES = [
-  { label: "🔎 Google jobs", url: "https://www.google.com/search?q=CA+articleship+jobs+near+me&ibp=htl;jobs" },
-  { label: "Naukri", url: "https://www.naukri.com/chartered-accountant-jobs" },
-  { label: "LinkedIn", url: "https://www.linkedin.com/jobs/search/?keywords=Chartered%20Accountant%20articleship" },
-  { label: "Indeed", url: "https://in.indeed.com/jobs?q=CA+articleship" },
-];
+// Each opening line: "Title | Firm | Location | applyLinkOrEmail"
+function parseJob(line: string) {
+  const [title, firm, location, apply] = line.split("|").map((s) => s.trim());
+  let href = apply || "";
+  if (href && !/^https?:|^mailto:/.test(href)) href = href.includes("@") ? `mailto:${href}` : `https://${href}`;
+  return { title, firm, location, href };
+}
 
 function Block({ icon, title, body }: { icon: string; title: string; body: string }) {
   if (!body?.trim()) return null;
@@ -47,21 +47,30 @@ export default async function CareerPage() {
         <Link className="btn secondary" href="/career/interview">🎤 AI mock interview</Link>
       </div>
 
-      {/* Job openings */}
-      <div className="card" style={{ marginTop: 16 }}>
-        <h3 style={{ margin: "0 0 8px" }}>💼 Job &amp; articleship openings</h3>
-        {jobs.length > 0 && (
-          <ul style={{ margin: "0 0 12px", paddingLeft: 18 }}>
-            {jobs.map((j, i) => <li key={i} style={{ marginBottom: 4 }}>{j}</li>)}
-          </ul>
-        )}
-        <p className="muted" style={{ fontSize: ".85rem", margin: "0 0 8px" }}>Find more live openings:</p>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {JOB_SEARCHES.map((s) => (
-            <a key={s.label} className="btn small secondary" href={s.url} target="_blank" rel="noreferrer">{s.label}</a>
-          ))}
+      {/* Job openings — shown here with an Apply link */}
+      <h2 style={{ marginTop: 24, fontSize: "1.15rem" }}>💼 Job &amp; articleship openings</h2>
+      {jobs.length > 0 ? (
+        <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+          {jobs.map((line, i) => {
+            const j = parseJob(line);
+            return (
+              <div className="card" key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <div>
+                  <strong>{j.title || line}</strong>
+                  {(j.firm || j.location) && (
+                    <p className="muted" style={{ fontSize: ".85rem", margin: "2px 0 0" }}>
+                      {[j.firm, j.location].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
+                </div>
+                {j.href && <a className="btn small" href={j.href} target="_blank" rel="noreferrer">Apply →</a>}
+              </div>
+            );
+          })}
         </div>
-      </div>
+      ) : (
+        <div className="card" style={{ marginTop: 10 }}><p className="muted">No openings posted right now — check back soon. ✨</p></div>
+      )}
       {any ? (
         <>
           <Block icon="📄" title="Articleship guidance" body={m.get("career_articleship") || ""} />

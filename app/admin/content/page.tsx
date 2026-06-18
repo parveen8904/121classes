@@ -46,9 +46,12 @@ export default async function ContentPage({ searchParams }: { searchParams: { sa
           <div><label>Avg minutes per class</label><input name="classMinutes" type="number" defaultValue={pc.classMinutes ?? 60} /></div>
           <div><label>MCQ test after every N classes</label><input name="mcqEveryClasses" type="number" defaultValue={pc.mcqEveryClasses ?? 5} /></div>
           <div><label>Descriptive test after every N classes</label><input name="descEveryClasses" type="number" defaultValue={pc.descEveryClasses ?? 10} /></div>
-          <div><label>Number of full mock tests</label><input name="mockCount" type="number" defaultValue={pc.mockCount ?? 3} /></div>
-          <div><label>Revision days before exam</label><input name="revisionDays" type="number" defaultValue={pc.revisionDays ?? 7} /></div>
+          <div><label>Full mock tests (in 2nd revision)</label><input name="mockCount" type="number" defaultValue={pc.mockCount ?? 3} /></div>
+          <div><label>Buffer days kept free before exam</label><input name="revisionDays" type="number" defaultValue={pc.revisionDays ?? 5} /></div>
         </div>
+        <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
+          The plan now builds three stages automatically — exhaustive study, first revision (25% of study time) and second revision (≈12.5%). &ldquo;Buffer days&rdquo; is the gap left free right before the exam.
+        </p>
 
         <button className="btn" type="submit" style={{ marginTop: 12 }}>Save career, wellness &amp; planner</button>
       </form>

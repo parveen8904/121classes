@@ -12,6 +12,8 @@ const KIND_LABEL: Record<string, string> = {
   book: "📕 Book PDF",
   icai: "🏛️ ICAI material",
   notes: "📝 Notes",
+  important_qs: "📌 Important questions (master list)",
+  revision_qs: "🔁 Revision questions list",
   other: "📦 Other",
 };
 
@@ -109,6 +111,7 @@ export default async function RepositoryPage() {
           <textarea name="content" rows={6} placeholder="Paste the class transcript or the important text here. This is what the AI reads to answer doubts and make questions." />
           <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
             Tip: transcripts work best pasted as text. For book/ICAI PDFs you can also paste the key portions here so the AI can use them.
+            For <strong>Important questions</strong> / <strong>Revision questions</strong> lists, pick a Subject and paste <strong>one question per line</strong> — the study planner counts these and spreads them across the plan.
           </p>
 
           <button className="btn" type="submit" style={{ marginTop: 14 }}>Add to repository</button>

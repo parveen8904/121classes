@@ -1,15 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { buildDayPlan, DEFAULT_CONFIG, type PlanSetup, type PlannerConfig, type SchedEntry } from "@/lib/plan";
 import { savePlan, setRemind as setRemindAction } from "./actions";
 
-export type PlanItem = { id: string; title: string; subject: string };
+export type PlanItem = { id: string; title: string; subject: string; subjectId?: string | null };
 type Task = { id: string; text: string; due: string; done: boolean };
 type DiaryEntry = { id: string; date: string; text: string };
 type Setup = {
   source: "us" | "others"; classes: string; tests: string; examDate: string;
   selfStudyHours: string; daysOffPerWeek: string; holidays: string; extras: string;
+  wantExtraRevision: boolean;
+};
+
+const STAGE_HEAD: Record<string, { label: string; bg: string; fg: string }> = {
+  exhaustive: { label: "📚 Stage 1 — Exhaustive study (classes, homework, MCQ & descriptive tests · master important questions)", bg: "rgba(13,148,136,.10)", fg: "var(--accent)" },
+  rev1: { label: "🔁 Stage 2 — First revision (starts after classes · 25% of study time · revision videos + revision questions)", bg: "rgba(59,130,246,.10)", fg: "#2563eb" },
+  extra: { label: "⚡ Extra revision (optional · 15% of study time · revision videos at fast pace)", bg: "rgba(245,158,11,.12)", fg: "#b45309" },
+  rev2: { label: "🔂 Stage 3 — Second revision (50% of first revision · your marked questions · ends ~5 days before exam)", bg: "rgba(236,72,153,.10)", fg: "#be185d" },
 };
 
 const LS_DONE = "planner_done";
@@ -22,12 +30,18 @@ export default function Planner({
   initial,
   config,
   durations,
+  subjectMaster,
+  subjectRev,
+  testPerf = -1,
 }: {
   items: PlanItem[];
   signedIn?: boolean;
   initial?: { setup: PlanSetup | null; schedule: SchedEntry[] | null; remind: boolean } | null;
   config?: Partial<PlannerConfig> | null;
   durations?: number[];
+  subjectMaster?: Record<string, number>;
+  subjectRev?: Record<string, number>;
+  testPerf?: number;
 }) {
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -44,6 +58,7 @@ export default function Planner({
     daysOffPerWeek: initial?.setup?.daysOffPerWeek != null ? String(initial.setup.daysOffPerWeek) : "1",
     holidays: (initial?.setup?.holidays ?? []).join(", "),
     extras: (initial?.setup?.extras ?? []).join("\n"),
+    wantExtraRevision: initial?.setup?.wantExtraRevision ?? false,
   });
   const [schedule, setSchedule] = useState<SchedEntry[]>(initial?.schedule ?? []);
   const [warning, setWarning] = useState("");
@@ -70,15 +85,25 @@ export default function Planner({
       daysOffPerWeek: Number(setup.daysOffPerWeek) || 0,
       holidays: setup.holidays.split(",").map((s) => s.trim()).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)),
       extras: setup.extras.split("\n").map((s) => s.trim()).filter(Boolean),
+      wantExtraRevision: setup.wantExtraRevision,
     };
   }
 
   function generate() {
     if (!setup.examDate) { alert("Please pick your exam date."); return; }
     const ps = resolvedSetup();
-    const titles = ps.source === "us" ? items.map((i) => i.title) : [];
-    const durs = ps.source === "us" ? (durations ?? []) : [];
-    const { entries, warning: warn } = buildDayPlan(ps, cfg, titles, new Date(), durs);
+    const us = ps.source === "us";
+    const titles = us ? items.map((i) => i.title) : [];
+    const durs = us ? (durations ?? []) : [];
+    const opts = us
+      ? {
+          classSubjects: items.map((i) => i.subject),
+          classIds: items.map((i) => i.id),
+          subjectMaster: subjectMaster ?? {},
+          subjectRev: subjectRev ?? {},
+        }
+      : {};
+    const { entries, warning: warn } = buildDayPlan(ps, cfg, titles, new Date(), durs, opts);
     setSchedule(entries);
     setWarning(warn ?? "");
     setSavedMsg("");
@@ -102,6 +127,35 @@ export default function Planner({
     }
     return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
   }, [schedule, tasks]);
+
+  // Pace (ahead / behind) per exhaustive day — schedule adherence + test
+  // performance combined. Positive = ahead, negative = behind, in study-days.
+  const paceByIso = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    let penalty = 0;
+    if (testPerf >= 0) { if (testPerf < 50) penalty = 2; else if (testPerf < 65) penalty = 1; }
+    const exh = schedule.filter((e) => e.stage === "exhaustive").sort((a, b) => (a.iso < b.iso ? -1 : 1));
+    let expected = 0, doneC = 0;
+    const map = new Map<string, number>();
+    for (const e of exh) {
+      expected++;
+      const ids = e.topicIds ?? [];
+      if (ids.length > 0 && ids.every((id) => done[id])) doneC++;
+      if (e.iso <= today) map.set(e.iso, doneC - expected - penalty);
+    }
+    return map;
+  }, [schedule, done, testPerf]);
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  function paceCell(e: SchedEntry) {
+    if (e.stage !== "exhaustive" || e.iso > todayIso || !paceByIso.has(e.iso)) {
+      return <span className="muted">—</span>;
+    }
+    const v = paceByIso.get(e.iso)!;
+    if (v === 0) return <span style={{ color: "#16a34a", fontWeight: 600 }}>On track</span>;
+    if (v > 0) return <span style={{ color: "#16a34a", fontWeight: 600 }}>+{v}d ahead</span>;
+    return <span style={{ color: -v >= 2 ? "#dc2626" : "#d97706", fontWeight: 600 }}>{v}d behind</span>;
+  }
 
   function toggleRemind(v: boolean) {
     setRemindState(v);
@@ -169,6 +223,9 @@ export default function Planner({
           We fit your classes into your <strong style={{ color: "var(--accent)" }}>self study</strong> hours each day. If they don&apos;t fit before the exam, we&apos;ll warn you.
         </p>
         <label className="remember" style={{ marginTop: 10 }}>
+          <input type="checkbox" checked={setup.wantExtraRevision} onChange={(e) => setSetup({ ...setup, wantExtraRevision: e.target.checked })} /> ⚡ Add one extra (fast) revision — between first &amp; second revision
+        </label>
+        <label className="remember" style={{ marginTop: 6 }}>
           <input type="checkbox" checked={remind} onChange={(e) => toggleRemind(e.target.checked)} /> 🔔 Remind me each week (Telegram/email)
         </label>
         <button className="btn" type="button" onClick={generate} disabled={saving} style={{ marginTop: 6 }}>
@@ -182,24 +239,48 @@ export default function Planner({
         <div className="notice err" style={{ lineHeight: 1.6 }}>{warning}</div>
       )}
 
-      {/* Generated day-by-day plan */}
-      {byDay.length > 0 && (
-        <div className="card">
-          <h3 style={{ margin: "0 0 8px" }}>📅 Your day-by-day plan</h3>
-          <div style={{ display: "grid", gap: 8 }}>
-            {byDay.map(([iso, entries]) => (
-              <div key={iso} style={{ display: "flex", gap: 12, padding: "8px 10px", borderRadius: 8, background: entries.some((e) => e.mock) ? "rgba(13,148,136,.12)" : "var(--bg-soft)" }}>
-                <span className="muted" style={{ minWidth: 92, fontSize: ".8rem", fontWeight: 700 }}>{entries[0].date}</span>
-                <div style={{ display: "grid", gap: 3 }}>
-                  {entries.map((e, j) => (
-                    <span key={j} style={{ fontWeight: e.mock ? 700 : 400 }}>{e.label}</span>
-                  ))}
-                </div>
-              </div>
-            ))}
+      {/* Generated day-by-day plan — table with the 3 stages */}
+      {byDay.length > 0 && (() => {
+        const rows: { iso: string; date: string; e: SchedEntry }[] = [];
+        for (const [, entries] of byDay) for (const e of entries) rows.push({ iso: e.iso, date: e.date, e });
+        let lastStage = "";
+        return (
+          <div className="card" style={{ overflowX: "auto" }}>
+            <h3 style={{ margin: "0 0 4px" }}>📅 Your day-by-day plan</h3>
+            <p className="muted" style={{ fontSize: ".8rem", marginTop: 0, marginBottom: 10 }}>
+              Tick classes off in the syllabus checklist below — the <strong>Pace</strong> column updates to show how far ahead or behind you are.
+            </p>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem", minWidth: 640 }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "var(--muted, #888)", borderBottom: "1px solid var(--border, #ddd)" }}>
+                  <th style={{ padding: "6px 8px", fontWeight: 600 }}>Date</th>
+                  <th style={{ padding: "6px 8px", fontWeight: 600 }}>Topic / class</th>
+                  <th style={{ padding: "6px 8px", fontWeight: 600 }}>Hrs</th>
+                  <th style={{ padding: "6px 8px", fontWeight: 600 }}>Test</th>
+                  <th style={{ padding: "6px 8px", fontWeight: 600 }}>Questions to do</th>
+                  <th style={{ padding: "6px 8px", fontWeight: 600 }}>Pace</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ iso, date, e }, idx) => {
+                  const header = e.stage && e.stage !== lastStage ? STAGE_HEAD[e.stage] : null;
+                  if (e.stage) lastStage = e.stage;
+                  return (
+                    <FragmentRow
+                      key={idx}
+                      header={header}
+                      date={date}
+                      e={e}
+                      isToday={iso === todayIso}
+                      pace={paceCell(e)}
+                    />
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Progress + today's focus */}
       <div className="card">
@@ -278,5 +359,35 @@ export default function Planner({
 
       <p className="muted" style={{ fontSize: ".78rem" }}>Your planner, to-dos and diary are saved on this device.</p>
     </div>
+  );
+}
+
+function FragmentRow({
+  header, date, e, isToday, pace,
+}: {
+  header: { label: string; bg: string; fg: string } | null;
+  date: string; e: SchedEntry; isToday: boolean; pace: ReactNode;
+}) {
+  const td = { padding: "7px 8px", borderBottom: "1px solid var(--border, #eee)", verticalAlign: "top" as const };
+  return (
+    <>
+      {header && (
+        <tr>
+          <td colSpan={6} style={{ padding: "8px 8px", background: header.bg, color: header.fg, fontWeight: 600 }}>
+            {header.label}
+          </td>
+        </tr>
+      )}
+      <tr style={isToday ? { background: "rgba(13,148,136,.08)" } : undefined}>
+        <td style={{ ...td, whiteSpace: "nowrap", fontWeight: isToday ? 700 : 400 }}>
+          {date}{isToday ? " · today" : ""}
+        </td>
+        <td style={{ ...td, fontWeight: e.mock ? 700 : 400 }}>{e.topic ?? e.label}</td>
+        <td style={td}>{e.hours ? `${e.hours}` : "—"}</td>
+        <td style={td}>{e.test ? <span style={{ background: "var(--bg-soft)", padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>{e.test}</span> : "—"}</td>
+        <td style={td}>{e.questions || "—"}</td>
+        <td style={td}>{pace}</td>
+      </tr>
+    </>
   );
 }

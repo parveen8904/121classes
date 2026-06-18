@@ -74,6 +74,22 @@ export async function answerDoubtFromMaterial(
   return callClaude(REPO_SYSTEM, user, 1024);
 }
 
+// From a student's recent questions, pull the specific CA topics/standards they
+// seem to be struggling with — as short search terms to match against the catalog.
+export async function extractConcepts(questionsText: string): Promise<string[]> {
+  const sys =
+    "From the student's questions below, list 2–5 specific CA exam topics, standards or concepts they seem to be struggling with. " +
+    'Reply ONLY as a compact JSON array of short search terms, e.g. ["IND AS 115","revenue recognition","AS 24"]. No prose.';
+  const out = await callClaude(sys, questionsText, 200);
+  if (!out) return [];
+  try {
+    const arr = JSON.parse(out.replace(/```json|```/g, "").trim());
+    return Array.isArray(arr) ? arr.slice(0, 5).map((x) => String(x).trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
 const ASSIST_SYSTEM =
   "You are the friendly assistant for 121 CA Classes (CA Parveen Sharma). You answer two kinds of questions:\n" +
   "1) PORTAL/LOGISTICS (faculty names, courses, when classes or live sessions start, contact, plans, how to do something on the site) — answer ONLY from the SITE INFO section.\n" +

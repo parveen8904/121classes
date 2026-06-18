@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getStudyRecommendations } from "@/lib/recommend";
+import { shareToCommunity, shareToTelegram } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My Questions — 121 CA Classes" };
@@ -50,6 +53,8 @@ export default async function StudentInbox() {
   }
   entries.sort((a, b) => (a.when < b.when ? 1 : -1));
 
+  const recs = await getStudyRecommendations(user.id);
+
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
       <div className="learn-hero">
@@ -57,6 +62,32 @@ export default async function StudentInbox() {
         <h1>My questions &amp; answers</h1>
         <p className="meta">Everything you&apos;ve asked — doubts, and questions about the portal — with the replies. Follow up anytime.</p>
       </div>
+
+      {recs && (recs.topics.length > 0 || recs.material.length > 0) && (
+        <div className="card" style={{ marginTop: 18, borderColor: "var(--accent)" }}>
+          <h3 style={{ margin: "0 0 6px" }}>🎯 Recommended for you</h3>
+          <p className="muted" style={{ fontSize: ".85rem", marginTop: 0 }}>
+            Based on your questions, focus on: <strong>{recs.concepts.join(", ")}</strong>.
+          </p>
+          {recs.topics.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 4px" }}>📚 Study these (class videos, tests &amp; notes are inside):</p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {recs.topics.map((t) => (
+                  <Link key={t.id} className="btn small secondary" href={`/learn/topic/${t.id}`}>
+                    {t.subject?.title ? `${t.subject.title}: ` : ""}{t.title} →
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+          {recs.material.length > 0 && (
+            <p className="muted" style={{ fontSize: ".8rem", marginTop: 10 }}>
+              📘 Related material: {recs.material.map((m) => m.title).join(" · ")}
+            </p>
+          )}
+        </div>
+      )}
 
       {entries.length === 0 ? (
         <div className="card" style={{ marginTop: 22 }}>
@@ -86,6 +117,22 @@ export default async function StudentInbox() {
                   Sent to the team — you&apos;ll get a reply here soon.
                 </p>
               )}
+              {(() => {
+                const shareText =
+                  `Q: ${e.question}` + (e.answers[0] ? `\n\nA: ${e.answers[0].text}` : "");
+                return (
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                    <form action={shareToCommunity} style={{ margin: 0 }}>
+                      <input type="hidden" name="text" value={shareText} />
+                      <button className="btn small secondary" type="submit">📢 Share to community</button>
+                    </form>
+                    <form action={shareToTelegram} style={{ margin: 0 }}>
+                      <input type="hidden" name="text" value={shareText} />
+                      <button className="btn small secondary" type="submit">✈️ Share to Telegram</button>
+                    </form>
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </div>

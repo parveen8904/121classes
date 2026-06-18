@@ -254,6 +254,30 @@ export default async function Home() {
           <h2>Taught by Parveen Sharma. Powered by AI.</h2>
           <p>To be clear: your teacher is CA Parveen Sharma. AI only assists — it checks papers and answers doubts, under his guidance.</p>
         </div>
+
+        {/* AI promise — trained on ICAI material, not random web data */}
+        <div
+          style={{
+            maxWidth: 880,
+            margin: "0 auto 36px",
+            border: "2px solid var(--accent)",
+            borderRadius: 16,
+            background: "var(--bg-soft)",
+            padding: "22px 26px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "1.5rem", marginBottom: 6 }}>🧠🔒</div>
+          <h3 style={{ fontSize: "1.15rem", fontWeight: 800, margin: "0 0 8px" }}>
+            Our AI is trained on ICAI material — not random internet data.
+          </h3>
+          <p className="muted" style={{ margin: 0, fontSize: ".95rem", lineHeight: 1.6 }}>
+            Every answer comes <strong>only</strong> from official <strong>ICAI study material</strong> and
+            CA&nbsp;Parveen&nbsp;Sharma&apos;s own classes — properly built for the CA syllabus and
+            <strong> kept updated with the latest amendments</strong>. No guesswork, no off-syllabus content.
+          </p>
+        </div>
+
         <div className="grid grid-3">
           {aiPoints.map((p) => (
             <div className="tile" key={p.title}>

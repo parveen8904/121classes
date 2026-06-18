@@ -1,19 +1,26 @@
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import Planner, { type PlanItem } from "./Planner";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Study Planner — 121 CA Classes" };
 
+// Public — anyone can build a plan, even if they're not our student yet.
 export default async function PlannerPage() {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login?next=/planner");
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const { data: prof } = await supabase.from("profiles").select("full_name, target_attempt").eq("id", user.id).maybeSingle();
+  let targetAttempt = "";
+  if (user) {
+    const { data: prof } = await supabase.from("profiles").select("target_attempt").eq("id", user.id).maybeSingle();
+    targetAttempt = String(prof?.target_attempt || "").replace(/_/g, " ");
+  }
 
-  // The syllabus checklist: published topics, grouped by subject.
-  const { data: topics } = await supabase
+  // Syllabus checklist for our students (published topics). Service client so it
+  // works for logged-out visitors too.
+  const { data: topics } = await createServiceClient()
     .from("topics")
     .select("id, title, order_index, subjects(title)")
     .eq("is_published", true)
@@ -32,11 +39,11 @@ export default async function PlannerPage() {
         <span className="badge">🗓️ Study Planner</span>
         <h1>Study planner &amp; diary</h1>
         <p className="meta">
-          Your full syllabus as a checklist, your own to-dos, and a daily diary — so you never fall behind
-          {prof?.target_attempt ? ` for ${String(prof.target_attempt).replace(/_/g, " ")}` : ""}. ✍️
+          Tell us your exam date and how you&apos;re studying — we&apos;ll build a week-by-week plan with mock exams so you finish on time
+          {targetAttempt ? ` for ${targetAttempt}` : ""}. Anyone can use it. ✍️
         </p>
       </div>
-      <Planner items={items} />
+      <Planner items={items} signedIn={!!user} />
     </section>
   );
 }

@@ -23,6 +23,7 @@ export async function saveContent(formData: FormData) {
     { key: "career_articleship", value: str(formData.get("career_articleship")) },
     { key: "career_placement", value: str(formData.get("career_placement")) },
     { key: "career_resources", value: str(formData.get("career_resources")) },
+    { key: "career_jobs", value: str(formData.get("career_jobs")) },
     { key: "wellness_tips", value: str(formData.get("wellness_tips")) },
   ];
   for (const r of rows) await svc.from("site_settings").upsert(r, { onConflict: "key" });

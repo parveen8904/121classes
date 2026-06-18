@@ -102,6 +102,27 @@ export async function suggestedAnswer(
   return callClaude(sys, user, 1200);
 }
 
+// AI mock interviewer for CA articleship/placement. The client passes the
+// running transcript; we give brief feedback on the last answer + the next
+// question, or a final assessment when the interview is ending.
+export async function interviewReply(transcript: string): Promise<string | null> {
+  const sys =
+    "You are a professional but encouraging interviewer for a CA articleship/job at an Indian CA firm. " +
+    "Conduct a realistic mock interview covering technical (accounting, audit, tax, law), practical and HR questions. " +
+    "On each turn: give 1–2 lines of constructive feedback on the candidate's LAST answer, then ask exactly ONE next question. Keep it short. " +
+    "If the transcript has 6 or more candidate answers, or contains 'END INTERVIEW', instead give a FINAL ASSESSMENT: strengths, what to improve, and a readiness score out of 10. " +
+    "If the transcript is empty, just warmly greet and ask the first question.";
+  return callClaude(sys, transcript || "(start the interview)", 600);
+}
+
+// Polish a CV summary/objective into crisp professional lines.
+export async function improveSummary(text: string): Promise<string | null> {
+  if (!text.trim()) return null;
+  const sys =
+    "Rewrite the following CA student's CV summary/objective into 2–3 crisp, professional sentences suitable for an Indian CA articleship/job CV. Keep it truthful to what's given; no fluff. Return only the rewritten text.";
+  return callClaude(sys, text, 400);
+}
+
 const ASSIST_SYSTEM =
   "You are the friendly assistant for 121 CA Classes (CA Parveen Sharma). You answer two kinds of questions:\n" +
   "1) PORTAL/LOGISTICS (faculty names, courses, when classes or live sessions start, contact, plans, how to do something on the site) — answer ONLY from the SITE INFO section.\n" +

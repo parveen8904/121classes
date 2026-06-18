@@ -5,26 +5,70 @@ import { useEffect, useMemo, useState } from "react";
 export type PlanItem = { id: string; title: string; subject: string };
 type Task = { id: string; text: string; due: string; done: boolean };
 type DiaryEntry = { id: string; date: string; text: string };
+type Setup = { source: "us" | "others"; classes: string; tests: string; examDate: string };
+type Sched = { date: string; label: string; mock?: boolean };
 
 const LS_DONE = "planner_done";
 const LS_TASKS = "planner_tasks";
 const LS_DIARY = "planner_diary";
+const LS_SETUP = "planner_setup";
 
-export default function Planner({ items }: { items: PlanItem[] }) {
+export default function Planner({ items, signedIn }: { items: PlanItem[]; signedIn?: boolean }) {
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [tasks, setTasks] = useState<Task[]>([]);
   const [diary, setDiary] = useState<DiaryEntry[]>([]);
   const [taskText, setTaskText] = useState("");
   const [taskDue, setTaskDue] = useState("");
   const [note, setNote] = useState("");
+  const [setup, setSetup] = useState<Setup>({ source: "us", classes: "", tests: "", examDate: "" });
+  const [schedule, setSchedule] = useState<Sched[]>([]);
 
   useEffect(() => {
     try {
       setDone(JSON.parse(localStorage.getItem(LS_DONE) || "{}"));
       setTasks(JSON.parse(localStorage.getItem(LS_TASKS) || "[]"));
       setDiary(JSON.parse(localStorage.getItem(LS_DIARY) || "[]"));
+      const s = localStorage.getItem(LS_SETUP);
+      if (s) { const p = JSON.parse(s); setSetup(p.setup); setSchedule(p.schedule || []); }
     } catch {}
   }, []);
+
+  function buildSchedule(s: Setup): Sched[] {
+    if (!s.examDate) return [];
+    const now = new Date();
+    const exam = new Date(s.examDate);
+    const msWeek = 7 * 86400000;
+    const weeks = Math.max(1, Math.ceil((exam.getTime() - now.getTime()) / msWeek));
+    const revisionWeeks = Math.min(3, Math.max(1, Math.floor(weeks * 0.2)));
+    const studyWeeks = Math.max(1, weeks - revisionWeeks);
+    const classes = Number(s.classes) || (s.source === "us" ? items.length : 0) || studyWeeks;
+    const tests = Number(s.tests) || Math.max(1, Math.round(classes / 5));
+    const cpw = Math.ceil(classes / studyWeeks);
+    const tpw = Math.max(1, Math.ceil(tests / studyWeeks));
+    const fmt = (w: number) => new Date(now.getTime() + (w - 1) * msWeek).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    const mockWeeks = new Set([Math.max(2, Math.floor(studyWeeks * 0.5)), Math.max(3, Math.floor(studyWeeks * 0.8))]);
+    const out: Sched[] = [];
+    for (let w = 1; w <= studyWeeks; w++) {
+      out.push({ date: fmt(w), label: `Week ${w}: ${cpw} class${cpw > 1 ? "es" : ""} · ${tpw} test${tpw > 1 ? "s" : ""}` });
+      if (mockWeeks.has(w)) out.push({ date: fmt(w), label: "📝 MOCK FULL EXAM", mock: true });
+    }
+    for (let r = 1; r <= revisionWeeks; r++) {
+      const w = studyWeeks + r;
+      out.push({
+        date: fmt(w),
+        label: r === revisionWeeks ? "📝 FINAL FULL MOCK + full revision" : "🔁 Revision & question practice",
+        mock: r === revisionWeeks,
+      });
+    }
+    return out;
+  }
+
+  function generate() {
+    if (!setup.examDate) { alert("Please pick your exam date."); return; }
+    const sched = buildSchedule(setup);
+    setSchedule(sched);
+    try { localStorage.setItem(LS_SETUP, JSON.stringify({ setup, schedule: sched })); } catch {}
+  }
 
   const saveDone = (d: Record<string, boolean>) => { setDone(d); try { localStorage.setItem(LS_DONE, JSON.stringify(d)); } catch {} };
   const saveTasks = (t: Task[]) => { setTasks(t); try { localStorage.setItem(LS_TASKS, JSON.stringify(t)); } catch {} };
@@ -46,6 +90,49 @@ export default function Planner({ items }: { items: PlanItem[] }) {
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
+      {/* Intake — build a dated plan */}
+      <div className="card" style={{ borderColor: "var(--accent)" }}>
+        <h3 style={{ margin: "0 0 8px" }}>🎯 Build my plan</h3>
+        <label>Are you taking classes with us, or elsewhere?</label>
+        <div style={{ display: "flex", gap: 16, margin: "4px 0 10px" }}>
+          <label className="remember" style={{ margin: 0 }}>
+            <input type="radio" name="src" checked={setup.source === "us"} onChange={() => setSetup({ ...setup, source: "us" })} /> With 121 CA Classes
+          </label>
+          <label className="remember" style={{ margin: 0 }}>
+            <input type="radio" name="src" checked={setup.source === "others"} onChange={() => setSetup({ ...setup, source: "others" })} /> Elsewhere
+          </label>
+        </div>
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr 1fr" }}>
+          {setup.source === "others" && (
+            <>
+              <div><label>Total classes to do</label><input type="number" value={setup.classes} onChange={(e) => setSetup({ ...setup, classes: e.target.value })} placeholder="e.g. 120" /></div>
+              <div><label>Total tests to do</label><input type="number" value={setup.tests} onChange={(e) => setSetup({ ...setup, tests: e.target.value })} placeholder="e.g. 24" /></div>
+            </>
+          )}
+          <div><label>Your exam date</label><input type="date" value={setup.examDate} onChange={(e) => setSetup({ ...setup, examDate: e.target.value })} /></div>
+        </div>
+        <button className="btn" type="button" onClick={generate} style={{ marginTop: 10 }}>Generate my plan →</button>
+        {setup.source === "us" && <p className="muted" style={{ fontSize: ".8rem", marginTop: 8 }}>We&apos;ll use our {items.length} published topics as your class count.</p>}
+      </div>
+
+      {/* Generated schedule */}
+      {schedule.length > 0 && (
+        <div className="card">
+          <h3 style={{ margin: "0 0 8px" }}>📅 Your week-by-week plan</h3>
+          <div style={{ display: "grid", gap: 6 }}>
+            {schedule.map((s, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, padding: "6px 10px", borderRadius: 8, background: s.mock ? "rgba(13,148,136,.12)" : "transparent", fontWeight: s.mock ? 700 : 400 }}>
+                <span className="muted" style={{ minWidth: 110, fontSize: ".82rem" }}>{s.date}</span>
+                <span>{s.label}</span>
+              </div>
+            ))}
+          </div>
+          <p className="muted" style={{ fontSize: ".78rem", marginTop: 10 }}>
+            {signedIn ? "Tick topics off below as you go." : "Log in to also track your topic checklist and get reminders."}
+          </p>
+        </div>
+      )}
+
       {/* Progress + today's focus */}
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>

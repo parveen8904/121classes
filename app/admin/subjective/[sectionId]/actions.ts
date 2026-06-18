@@ -26,6 +26,10 @@ export async function generateSubjectiveFromTranscript(formData: FormData) {
   if (!items || items.length === 0) return;
 
   const supabase = createClient();
+  // "Revise": replace the existing set instead of appending to it.
+  if (formData.get("replace") === "on") {
+    await supabase.from("subjective_questions").delete().eq("section_id", sectionId);
+  }
   await supabase.from("subjective_questions").insert(
     items.map((q) => ({ section_id: sectionId, prompt: q.prompt, max_marks: q.max_marks })),
   );

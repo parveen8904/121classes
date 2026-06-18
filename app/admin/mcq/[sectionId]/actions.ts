@@ -68,6 +68,11 @@ export async function generateMcqsFromTranscript(formData: FormData) {
   if (!items || items.length === 0) return; // AI off or unparseable — insert nothing
 
   const supabase = createClient();
+
+  // "Revise": replace the existing set instead of appending to it.
+  if (formData.get("replace") === "on") {
+    await supabase.from("mcq_questions").delete().eq("section_id", sectionId);
+  }
   const { count: existing } = await supabase
     .from("mcq_questions")
     .select("id", { count: "exact", head: true })

@@ -58,6 +58,12 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
                 <label className="remember" style={{ marginTop: 8 }}>
                   <input type="checkbox" name="use_repo" /> 📚 Use my AI Repository for this subject (instead of pasting)
                 </label>
+                <label className="remember" style={{ marginTop: 4 }}>
+                  <input type="checkbox" name="replace" /> ♻️ Revise — replace the existing questions (otherwise new ones are added)
+                </label>
+                <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
+                  Generated <strong>once</strong> and saved — every student attempts the same questions. They never change until you revise here.
+                </p>
                 <button className="btn" type="submit">
                   Generate &amp; save questions
                 </button>

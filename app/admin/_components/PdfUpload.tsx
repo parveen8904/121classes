@@ -26,10 +26,24 @@ export default function PdfUpload({
     if (!file) return;
     setBusy(true);
     try {
+      const ct = file.type || "application/pdf";
+      const res = await fetch("/api/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder, ext: "pdf", contentType: ct }),
+      });
+      const dest = await res.json();
+      if (dest.provider === "r2" && dest.uploadUrl) {
+        const put = await fetch(dest.uploadUrl, { method: "PUT", headers: { "Content-Type": ct }, body: file });
+        if (!put.ok) { alert("Upload failed (R2): " + put.status); return; }
+        setUrl(dest.publicUrl);
+        setFileName(file.name);
+        return;
+      }
       const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
       const { error } = await supabase.storage
         .from("media")
-        .upload(path, file, { upsert: false, contentType: file.type || "application/pdf" });
+        .upload(path, file, { upsert: false, contentType: ct });
       if (error) {
         alert("Upload failed: " + error.message);
         return;

@@ -76,6 +76,11 @@ const SECRET_KEYS = [
   "CRON_SECRET",
   "RAZORPAY_KEY_ID",
   "RAZORPAY_KEY_SECRET",
+  "R2_ACCOUNT_ID",
+  "R2_ACCESS_KEY_ID",
+  "R2_SECRET_ACCESS_KEY",
+  "R2_BUCKET",
+  "R2_PUBLIC_BASE",
 ] as const;
 
 // Save API keys pasted in the admin. Blank fields are IGNORED (so you can update

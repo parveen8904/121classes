@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { aiConfigured } from "@/lib/ai";
 import { emailConfigured, whatsappConfigured, telegramConfigured, telegramBotUsername } from "@/lib/notify";
 import { razorpayConfigured } from "@/lib/razorpay";
+import { r2Configured } from "@/lib/r2";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
 import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection } from "./actions";
@@ -63,12 +64,13 @@ export default async function IntegrationsPage({
 }: {
   searchParams: { tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string };
 }) {
-  const [tg, ai, em, wa, rzp, botUser, health] = await Promise.all([
+  const [tg, ai, em, wa, rzp, r2, botUser, health] = await Promise.all([
     telegramConfigured(),
     aiConfigured(),
     emailConfigured(),
     whatsappConfigured(),
     razorpayConfigured(),
+    r2Configured(),
     telegramBotUsername(),
     telegramHealth(),
   ]);
@@ -129,6 +131,7 @@ export default async function IntegrationsPage({
         {searchParams.rzpmsg && (
           <div className={`notice ${searchParams.rzp === "ok" ? "ok" : "err"}`}>{searchParams.rzpmsg}</div>
         )}
+        <Row on={r2} label="🗄️ Cloudflare R2 (PDF/image storage)" help={<>Optional cheaper storage for PDFs/images (free bandwidth). Keys from <a className="grad" href="https://dash.cloudflare.com" target="_blank" rel="noreferrer">Cloudflare</a> → R2 → Manage API Tokens. When set, new uploads go to R2; existing files keep working. <strong>Remember to allow your site in the bucket&apos;s CORS settings (PUT).</strong></>} />
       </div>
 
       {/* PASTE KEYS */}
@@ -151,6 +154,14 @@ export default async function IntegrationsPage({
           <KeyField name="CRON_SECRET" label="Cron secret (optional — protects scheduled jobs)" placeholder="any random text" />
           <KeyField name="RAZORPAY_KEY_ID" label="Razorpay Key ID" placeholder="rzp_live_… or rzp_test_…" />
           <KeyField name="RAZORPAY_KEY_SECRET" label="Razorpay Key Secret" placeholder="from Razorpay dashboard" />
+          <div style={{ borderTop: "1px solid var(--border)", margin: "12px 0", paddingTop: 12 }}>
+            <p className="muted" style={{ fontSize: ".82rem", marginBottom: 8 }}>Cloudflare R2 (optional cheaper storage for PDFs/images):</p>
+          </div>
+          <KeyField name="R2_ACCOUNT_ID" label="R2 Account ID" placeholder="Cloudflare account id" />
+          <KeyField name="R2_ACCESS_KEY_ID" label="R2 Access Key ID" placeholder="from R2 API token" />
+          <KeyField name="R2_SECRET_ACCESS_KEY" label="R2 Secret Access Key" placeholder="from R2 API token" />
+          <KeyField name="R2_BUCKET" label="R2 Bucket name" placeholder="e.g. 121-files" />
+          <KeyField name="R2_PUBLIC_BASE" label="R2 Public URL (custom domain or r2.dev)" placeholder="https://files.121caclasses.com" />
           <button className="btn" type="submit" style={{ marginTop: 6 }}>Save keys</button>
         </form>
       </div>

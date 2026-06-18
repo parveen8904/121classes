@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import Help from "@/app/components/Help";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My Performance — 121 CA Classes" };
@@ -101,7 +102,7 @@ export default async function PerformancePage() {
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 820 }}>
         <div className="learn-hero">
           <span className="badge">📊 Performance</span>
-          <h1>My performance</h1>
+          <h1>My performance <Help text="Your saved test scores and feedback. 'Better than X% of students' shows your rank among everyone who took the same test. The 'Rewatch' links take you to the classes for topics you got wrong." /></h1>
           <p className="meta">Your test scores, feedback and where you stand among other students.</p>
         </div>
 

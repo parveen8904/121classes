@@ -107,10 +107,14 @@ export default async function Home() {
   const siteImg = new Map((settings ?? []).map((r) => [r.key, r.value as string | null]));
   const founderPhoto = siteImg.get("founder_photo") || "";
   const heroBanner = siteImg.get("hero_banner") || "";
+  const studioPhoto = siteImg.get("studio_photo") || "";
+  const splashBanner = siteImg.get("splash_banner") || "";
+  const splashLink = siteImg.get("splash_link") || "";
+  const splashSeconds = Number(siteImg.get("splash_seconds")) || 5;
 
   return (
     <main>
-      <AnnouncementSplash />
+      <AnnouncementSplash banner={splashBanner} link={splashLink} seconds={splashSeconds} />
       <SiteNav />
 
       {/* HERO */}
@@ -268,11 +272,19 @@ export default async function Home() {
       {/* STUDIO + INTRO VIDEO */}
       <section className="section">
         <div className="studio">
-          <div className="imgph">
-            <span className="tag">Add photo</span>
-            <span className="em">🎬</span>
-            <span className="cap">CA Parveen Sharma teaching live from the studio</span>
-          </div>
+          {studioPhoto ? (
+            <div className="imgph" style={{ padding: 0, overflow: "hidden" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={studioPhoto} alt="CA Parveen Sharma teaching from the studio"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </div>
+          ) : (
+            <div className="imgph">
+              <span className="tag">Add photo</span>
+              <span className="em">🎬</span>
+              <span className="cap">CA Parveen Sharma teaching live from the studio</span>
+            </div>
+          )}
           <div>
             <div className="eyebrow" style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".8rem", letterSpacing: ".08em", textTransform: "uppercase" }}>
               Studio-quality teaching

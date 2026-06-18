@@ -20,9 +20,9 @@ export default async function SiteImagesPage() {
       <form action={updateSiteSettings} className="form-card" style={{ marginTop: 24 }}>
         <ImageUpload
           name="logo_url"
-          defaultValue={m.get("logo_url") ?? ""}
+          defaultValue={m.get("logo_url") ?? "/logo-121.png"}
           folder="site"
-          label="Brand logo (appears in the header & footer on every page) — PNG, ideally transparent, wide"
+          label="Brand logo (header & footer on every page) — PNG, ideally transparent, wide"
         />
         <div style={{ marginTop: 18 }} />
         <ImageUpload
@@ -38,6 +38,36 @@ export default async function SiteImagesPage() {
             folder="site"
             label="Homepage banner (wide image)"
           />
+        </div>
+        <div style={{ marginTop: 18 }}>
+          <ImageUpload
+            name="studio_photo"
+            defaultValue={m.get("studio_photo") ?? ""}
+            folder="site"
+            label="Studio photo (CA Parveen Sharma teaching — shown in the 'Studio-quality teaching' section)"
+          />
+        </div>
+
+        <h3 style={{ marginTop: 24, marginBottom: 4 }}>🎉 Pop-up banner (dynamic)</h3>
+        <p className="muted" style={{ fontSize: ".82rem", marginBottom: 10 }}>
+          A creative/banner image that pops up when someone opens the site, then disappears on its own.
+          Leave blank for no pop-up.
+        </p>
+        <ImageUpload
+          name="splash_banner"
+          defaultValue={m.get("splash_banner") ?? ""}
+          folder="site"
+          label="Pop-up banner image"
+        />
+        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr", marginTop: 12 }}>
+          <div>
+            <label>Auto-close after (seconds)</label>
+            <input name="splash_seconds" type="number" min={2} max={20} defaultValue={m.get("splash_seconds") ?? "5"} />
+          </div>
+          <div>
+            <label>Link when clicked (optional)</label>
+            <input name="splash_link" defaultValue={m.get("splash_link") ?? ""} placeholder="https://… or /courses" />
+          </div>
         </div>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr", marginTop: 18 }}>
           <div>

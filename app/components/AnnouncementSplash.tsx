@@ -1,14 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 
-export default function AnnouncementSplash() {
+// Dynamic pop-up banner. The image + duration + link are set in
+// Admin → Site images → "Pop-up banner". Shows once per visit and auto-closes
+// after the configured number of seconds.
+export default function AnnouncementSplash({
+  banner,
+  link,
+  seconds = 5,
+}: {
+  banner?: string;
+  link?: string;
+  seconds?: number;
+}) {
   const [show, setShow] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
-    // Show only once per visit (per browser session/tab).
+    if (!banner) return;
     let seen = false;
     try {
       seen = sessionStorage.getItem("splashSeen") === "1";
@@ -18,16 +28,22 @@ export default function AnnouncementSplash() {
       sessionStorage.setItem("splashSeen", "1");
     } catch {}
 
+    const ms = Math.max(2, Math.min(20, seconds)) * 1000;
     setShow(true);
-    const t1 = setTimeout(() => setLeaving(true), 9600);
-    const t2 = setTimeout(() => setShow(false), 10000);
+    const t1 = setTimeout(() => setLeaving(true), ms - 400);
+    const t2 = setTimeout(() => setShow(false), ms);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
     };
-  }, []);
+  }, [banner, seconds]);
 
-  if (!show) return null;
+  if (!banner || !show) return null;
+
+  const img = (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={banner} alt="Announcement" style={{ display: "block", width: "100%", height: "auto" }} />
+  );
 
   return (
     <div
@@ -40,16 +56,13 @@ export default function AnnouncementSplash() {
         <button className="splash-close" onClick={() => setShow(false)} aria-label="Close">
           ×
         </button>
-        <div className="splash-head">📢 What&apos;s New</div>
-        <div className="splash-body">
-          <p>
-            May 2026 amendments are now live, and fresh AS 24 revision videos have been
-            added by CA Parveen Sharma &amp; team.
-          </p>
-          <Link className="btn" href="/login" onClick={() => setShow(false)}>
-            Explore now
-          </Link>
-        </div>
+        {link ? (
+          <a href={link} onClick={() => setShow(false)}>
+            {img}
+          </a>
+        ) : (
+          img
+        )}
       </div>
     </div>
   );

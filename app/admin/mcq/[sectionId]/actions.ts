@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../../_lib/util";
 import { generateMcqs } from "@/lib/ai";
+import { getRepositoryContext } from "@/lib/repository";
 
 export async function addMcq(formData: FormData) {
   const sectionId = str(formData.get("section_id"));
@@ -48,10 +49,20 @@ export async function addMcq(formData: FormData) {
 // Students then take the test from stored questions — no per-student AI tokens.
 export async function generateMcqsFromTranscript(formData: FormData) {
   const sectionId = str(formData.get("section_id"));
-  const transcript = str(formData.get("transcript"));
+  let transcript = str(formData.get("transcript"));
   const count = num(formData.get("count")) || 10;
   const topic = str(formData.get("topic"));
-  if (!sectionId || transcript.length < 50) return;
+  if (!sectionId) return;
+
+  // Optionally generate from the AI Repository (this section's subject) instead
+  // of a pasted transcript.
+  if (formData.get("use_repo") === "on" && transcript.length < 50) {
+    const supabase = createClient();
+    const { data: sec } = await supabase.from("sections").select("topics(subject_id)").eq("id", sectionId).maybeSingle();
+    const subjectId = (sec as { topics?: { subject_id?: string } | null } | null)?.topics?.subject_id ?? null;
+    transcript = await getRepositoryContext(subjectId, 30000);
+  }
+  if (transcript.length < 50) return;
 
   const items = await generateMcqs(transcript, count, topic || undefined);
   if (!items || items.length === 0) return; // AI off or unparseable — insert nothing

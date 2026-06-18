@@ -2,7 +2,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { aiConfigured } from "@/lib/ai";
 import AdminHero from "../_components/AdminHero";
 import PdfUpload from "../_components/PdfUpload";
-import { addRepositoryItem, deleteRepositoryItem, toggleRepositoryItem } from "./actions";
+import { addRepositoryItem, deleteRepositoryItem, toggleRepositoryItem, extractItemText } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "AI Repository — Admin" };
@@ -133,6 +133,12 @@ export default async function RepositoryPage() {
                 </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   {it.file_url && <a className="btn small secondary" href={it.file_url} target="_blank" rel="noreferrer">View</a>}
+                  {it.file_url && !it.content && /\.pdf($|\?)/i.test(it.file_url) && (
+                    <form action={extractItemText} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={it.id} />
+                      <button className="btn small secondary" type="submit">Extract text</button>
+                    </form>
+                  )}
                   <form action={toggleRepositoryItem} style={{ margin: 0 }}>
                     <input type="hidden" name="id" value={it.id} />
                     <input type="hidden" name="active" value={it.is_active ? "false" : "true"} />

@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendTelegramMessage } from "@/lib/notify";
-import { answerDoubt, aiConfigured } from "@/lib/ai";
+import { answerDoubtFromMaterial, aiConfigured, NEED_FACULTY } from "@/lib/ai";
+import { getRepositoryContext } from "@/lib/repository";
 import { getSecret } from "@/lib/secrets";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +64,12 @@ export async function POST(req: NextRequest) {
     .eq("telegram_chat_id", chatId)
     .maybeSingle();
 
-  const answer = (await aiConfigured()) ? await answerDoubt(text) : null;
+  let answer: string | null = null;
+  if (await aiConfigured()) {
+    const material = await getRepositoryContext(null);
+    const raw = await answerDoubtFromMaterial(text, material);
+    if (raw && raw.trim() !== NEED_FACULTY) answer = raw;
+  }
   if (answer) {
     await sendTelegramMessage(chatId, answer + "\n\n— Guided by CA Parveen Sharma's team.");
   } else {

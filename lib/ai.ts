@@ -53,6 +53,27 @@ export async function answerDoubt(question: string, context?: string): Promise<s
   return callClaude(ASSISTANT_SYSTEM, user, 1024);
 }
 
+// Sentinel the model returns when the repository doesn't cover the question.
+export const NEED_FACULTY = "NEED_FACULTY";
+
+const REPO_SYSTEM =
+  "You are the study assistant for 121 CA Classes (CA Parveen Sharma). Answer the student's question " +
+  "USING ONLY the study material provided below (transcripts, books, ICAI material). " +
+  "Do not use outside knowledge. If the material does not contain enough to answer confidently, " +
+  `reply with exactly "${NEED_FACULTY}" and nothing else. ` +
+  "Otherwise answer clearly and step-by-step in Indian CA exam context, citing the relevant part of the material.";
+
+// Answer strictly from the repository material. Returns the answer, the literal
+// NEED_FACULTY sentinel (escalate to faculty), or null if AI/material unavailable.
+export async function answerDoubtFromMaterial(
+  question: string,
+  material: string,
+): Promise<string | null> {
+  if (!material.trim()) return null;
+  const user = `STUDY MATERIAL:\n${material}\n\nSTUDENT QUESTION:\n${question}`;
+  return callClaude(REPO_SYSTEM, user, 1024);
+}
+
 // Pre-generate MCQs from a class transcript (token-frugal: run ONCE at upload
 // time, store the questions, serve them statically to every student). Returns
 // null when AI is unconfigured or the response can't be parsed.

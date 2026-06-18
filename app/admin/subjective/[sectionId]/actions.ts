@@ -4,14 +4,23 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../../_lib/util";
 import { generateSubjectiveQuestions } from "@/lib/ai";
+import { getRepositoryContext } from "@/lib/repository";
 
-// Generate descriptive questions from a transcript via AI, once, and store them.
+// Generate descriptive questions from a transcript (or the AI Repository), once.
 export async function generateSubjectiveFromTranscript(formData: FormData) {
   const sectionId = str(formData.get("section_id"));
-  const transcript = str(formData.get("transcript"));
+  let transcript = str(formData.get("transcript"));
   const count = num(formData.get("count")) || 5;
   const topic = str(formData.get("topic"));
-  if (!sectionId || transcript.length < 50) return;
+  if (!sectionId) return;
+
+  if (formData.get("use_repo") === "on" && transcript.length < 50) {
+    const supabase = createClient();
+    const { data: sec } = await supabase.from("sections").select("topics(subject_id)").eq("id", sectionId).maybeSingle();
+    const subjectId = (sec as { topics?: { subject_id?: string } | null } | null)?.topics?.subject_id ?? null;
+    transcript = await getRepositoryContext(subjectId, 30000);
+  }
+  if (transcript.length < 50) return;
 
   const items = await generateSubjectiveQuestions(transcript, count, topic || undefined);
   if (!items || items.length === 0) return;

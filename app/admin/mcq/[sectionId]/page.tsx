@@ -54,7 +54,10 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
                   </div>
                 </div>
                 <label>Transcript</label>
-                <textarea name="transcript" rows={8} placeholder="Paste the class transcript here…" required />
+                <textarea name="transcript" rows={8} placeholder="Paste the class transcript here… (or tick the box below to use your AI Repository)" />
+                <label className="remember" style={{ marginTop: 8 }}>
+                  <input type="checkbox" name="use_repo" /> 📚 Use my AI Repository for this subject (instead of pasting)
+                </label>
                 <button className="btn" type="submit">
                   Generate &amp; save questions
                 </button>

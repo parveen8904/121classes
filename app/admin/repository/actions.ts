@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { extractPdfText } from "@/lib/pdf";
 import { str } from "../_lib/util";
 
 async function requireAdmin(): Promise<boolean> {
@@ -21,18 +22,41 @@ export async function addRepositoryItem(formData: FormData) {
   if (!(await requireAdmin())) return;
   const title = str(formData.get("title")).trim();
   if (!title) return;
+  const fileUrl = orNull(formData.get("file_url"));
+  let content = orNull(formData.get("content"));
+
+  // Auto-extract text from an uploaded PDF when no text was pasted.
+  if (!content && fileUrl && /\.pdf($|\?)/i.test(fileUrl)) {
+    const extracted = await extractPdfText(fileUrl);
+    if (extracted) content = extracted;
+  }
+
   const svc = createServiceClient();
   await svc.from("repository_items").insert({
     title,
     kind: str(formData.get("kind")) || "transcript",
     subject_id: orNull(formData.get("subject_id")),
     course_id: orNull(formData.get("course_id")),
-    file_url: orNull(formData.get("file_url")),
-    content: orNull(formData.get("content")),
+    file_url: fileUrl,
+    content,
     valid_from: orNull(formData.get("valid_from")),
     valid_to: orNull(formData.get("valid_to")),
     valid_from_attempt: orNull(formData.get("valid_from_attempt")),
   });
+  revalidatePath("/admin/repository");
+}
+
+// Re-extract text from an item's PDF (for file-only items, or to refresh).
+export async function extractItemText(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  const { data: item } = await svc.from("repository_items").select("file_url").eq("id", id).maybeSingle();
+  if (item?.file_url) {
+    const text = await extractPdfText(item.file_url);
+    if (text) await svc.from("repository_items").update({ content: text }).eq("id", id);
+  }
   revalidatePath("/admin/repository");
 }
 

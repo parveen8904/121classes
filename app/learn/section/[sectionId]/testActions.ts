@@ -1,7 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { aiConfigured, gradeSubjective, answerDoubt } from "@/lib/ai";
+import { aiConfigured, gradeSubjective, answerDoubtFromMaterial, NEED_FACULTY } from "@/lib/ai";
+import { getRepositoryContext } from "@/lib/repository";
 
 export async function gradeMcqAttempt(input: {
   sectionId: string;
@@ -94,19 +95,25 @@ export async function askDoubt(input: {
   const question = (input.question ?? "").trim();
   if (!question) return { ok: false, answer: null, pending: false };
 
-  // Topic title gives the AI a little context.
+  // Find the subject so we can pull the right repository material.
   const { data: section } = await supabase
     .from("sections")
-    .select("topics(title)")
+    .select("topics(subject_id)")
     .eq("id", input.sectionId)
     .maybeSingle();
-  const context = (section as { topics?: { title?: string } | null } | null)?.topics?.title;
+  const subjectId =
+    (section as { topics?: { subject_id?: string } | null } | null)?.topics?.subject_id ?? null;
 
+  // Answer ONLY from the repository. If it's not covered, forward to faculty.
   let answer: string | null = null;
   let status = "open";
   if (await aiConfigured()) {
-    answer = await answerDoubt(question, context);
-    if (answer) status = "answered";
+    const material = await getRepositoryContext(subjectId);
+    const raw = await answerDoubtFromMaterial(question, material);
+    if (raw && raw.trim() !== NEED_FACULTY) {
+      answer = raw;
+      status = "answered";
+    }
   }
 
   await supabase.from("doubts").insert({

@@ -20,6 +20,21 @@ function readMinPlan(formData: FormData): string | null {
   return v === "bronze" || v === "silver" || v === "gold" ? v : null;
 }
 
+// Per-class duration (minutes) used by the study planner. Stored in
+// site_settings under dur:<topicId>.
+export async function setClassDuration(formData: FormData) {
+  const topicId = str(formData.get("topicId"));
+  if (!topicId) return;
+  const minutes = num(formData.get("minutes"));
+  const supabase = createClient();
+  if (minutes > 0) {
+    await supabase.from("site_settings").upsert({ key: `dur:${topicId}`, value: String(minutes) }, { onConflict: "key" });
+  } else {
+    await supabase.from("site_settings").delete().eq("key", `dur:${topicId}`);
+  }
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
 export async function createSection(formData: FormData) {
   const topicId = str(formData.get("topicId"));
   const title = str(formData.get("title"));

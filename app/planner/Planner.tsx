@@ -21,11 +21,13 @@ export default function Planner({
   signedIn,
   initial,
   config,
+  durations,
 }: {
   items: PlanItem[];
   signedIn?: boolean;
   initial?: { setup: PlanSetup | null; schedule: SchedEntry[] | null; remind: boolean } | null;
   config?: Partial<PlannerConfig> | null;
+  durations?: number[];
 }) {
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -75,7 +77,8 @@ export default function Planner({
     if (!setup.examDate) { alert("Please pick your exam date."); return; }
     const ps = resolvedSetup();
     const titles = ps.source === "us" ? items.map((i) => i.title) : [];
-    const { entries, warning: warn } = buildDayPlan(ps, cfg, titles);
+    const durs = ps.source === "us" ? (durations ?? []) : [];
+    const { entries, warning: warn } = buildDayPlan(ps, cfg, titles, new Date(), durs);
     setSchedule(entries);
     setWarning(warn ?? "");
     setSavedMsg("");
@@ -85,12 +88,20 @@ export default function Planner({
     });
   }
 
-  // Group schedule entries by day for a day-by-day view.
+  // Group schedule entries by day — and fold in the student's dated to-dos.
   const byDay = useMemo(() => {
     const m = new Map<string, SchedEntry[]>();
     for (const e of schedule) { if (!m.has(e.iso)) m.set(e.iso, []); m.get(e.iso)!.push(e); }
+    for (const t of tasks) {
+      if (!t.due) continue;
+      const d = new Date(t.due);
+      const label = `✅ To-do: ${t.text}${t.done ? " (done)" : ""}`;
+      const entry: SchedEntry = { iso: t.due, date: d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }), label };
+      if (!m.has(t.due)) m.set(t.due, []);
+      m.get(t.due)!.push(entry);
+    }
     return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
-  }, [schedule]);
+  }, [schedule, tasks]);
 
   function toggleRemind(v: boolean) {
     setRemindState(v);

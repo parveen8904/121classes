@@ -38,6 +38,11 @@ export default async function PlannerPage() {
     subject: (t as { subjects?: { title?: string } | null }).subjects?.title ?? "General",
   }));
 
+  // Per-class durations (admin-set, key dur:<topicId>), aligned to items order.
+  const { data: durRows } = await supabase.from("site_settings").select("key, value").like("key", "dur:%");
+  const durMap = new Map((durRows ?? []).map((r) => [(r.key as string).slice(4), Number(r.value) || 0]));
+  const durations = items.map((i) => durMap.get(i.id) || 0);
+
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 820 }}>
       <div className="learn-hero" style={{ marginBottom: 18 }}>
@@ -48,7 +53,7 @@ export default async function PlannerPage() {
           {targetAttempt ? ` for ${targetAttempt}` : ""}. ✍️
         </p>
       </div>
-      <Planner items={items} signedIn={!!user} initial={initial as never} config={config as never} />
+      <Planner items={items} signedIn={!!user} initial={initial as never} config={config as never} durations={durations} />
     </section>
   );
 }

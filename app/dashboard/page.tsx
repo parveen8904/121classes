@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import SetPassword from "./set-password";
 import ConnectChannels from "./ConnectChannels";
 import WellnessTip from "@/app/components/WellnessTip";
+import TodayPlan from "@/app/components/TodayPlan";
 
 export default async function Dashboard() {
   const supabase = createClient();
@@ -61,6 +62,8 @@ export default async function Dashboard() {
           whatsapp={chMap.get("support_whatsapp")}
           alreadyLinked={!!profile?.telegram_chat_id}
         />
+
+        <TodayPlan />
 
         <WellnessTip />
 

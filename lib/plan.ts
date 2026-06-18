@@ -41,12 +41,14 @@ export function buildDayPlan(
   config: PlannerConfig,
   classTitles: string[],
   now: Date = new Date(),
+  classDurations: number[] = [],
 ): { entries: SchedEntry[]; warning?: string } {
   const examMs = Date.parse(setup.examDate);
   if (!setup.examDate || isNaN(examMs)) return { entries: [] };
 
   const classMinutes = config.classMinutes || 60;
-  const perDay = Math.max(1, Math.floor(((setup.selfStudyHours || 2) * 60) / classMinutes));
+  const dailyMinutes = Math.max(classMinutes, (setup.selfStudyHours || 2) * 60);
+  const durOf = (i: number) => classDurations[i] || classMinutes;
   const mcqEvery = Math.max(1, config.mcqEveryClasses || 5);
   const descEvery = Math.max(1, config.descEveryClasses || 10);
   const mockCount = Math.max(0, config.mockCount ?? 3);
@@ -74,9 +76,15 @@ export function buildDayPlan(
   while (cursor.getTime() < revisionStart && classIdx < classCount) {
     if (!isOff(cursor)) {
       const todays: string[] = [];
-      for (let k = 0; k < perDay && classIdx < classCount; k++) { todays.push(title(classIdx)); classIdx++; sinceMcq++; sinceDesc++; }
+      let dayMin = 0;
+      while (classIdx < classCount) {
+        const dur = durOf(classIdx);
+        if (todays.length > 0 && dayMin + dur > dailyMinutes) break; // day's self-study hours full
+        todays.push(`${title(classIdx)} (${dur} min)`);
+        dayMin += dur; classIdx++; sinceMcq++; sinceDesc++;
+      }
       if (todays.length) {
-        entries.push({ iso: iso(cursor), date: disp(cursor), label: `📺 Watch: ${todays.join("; ")}` });
+        entries.push({ iso: iso(cursor), date: disp(cursor), label: `📺 Watch: ${todays.join("; ")} — ${dayMin} min` });
         if (sinceMcq >= mcqEvery) { entries.push({ iso: iso(cursor), date: disp(cursor), label: "🧠 MCQ test" }); sinceMcq = 0; }
         if (sinceDesc >= descEvery) { entries.push({ iso: iso(cursor), date: disp(cursor), label: "✍️ Descriptive test" }); sinceDesc = 0; }
       }
@@ -109,9 +117,11 @@ export function buildDayPlan(
 
   let warning: string | undefined;
   if (overflow) {
-    const daysNeeded = Math.ceil(classCount / perDay);
+    let totalMin = 0;
+    for (let i = 0; i < classCount; i++) totalMin += durOf(i);
+    const daysNeeded = Math.ceil(totalMin / dailyMinutes);
     warning =
-      `⚠️ At ${setup.selfStudyHours} hours/day of self study (~${perDay} class${perDay > 1 ? "es" : ""}/day), there isn't enough time to finish all ${classCount} classes before the ${revisionDays}-day revision window. ` +
+      `⚠️ At ${setup.selfStudyHours} hours/day of self study, there isn't enough time to finish all ${classCount} classes (~${Math.round(totalMin / 60)} hrs total) before the ${revisionDays}-day revision window. ` +
       `You'd need about ${daysNeeded} study days. Increase your self-study hours, remove some days off, or start sooner — otherwise your plan runs past the exam date.`;
   }
   return { entries, warning };

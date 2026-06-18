@@ -5,7 +5,7 @@ import DeleteButton from "../../_components/DeleteButton";
 import AdminHero from "../../_components/AdminHero";
 import SectionForm from "./SectionForm";
 import { SECTION_TYPES } from "./sectionTypes";
-import { createSection, updateSection, deleteSection, toggleSectionPublish } from "./actions";
+import { createSection, updateSection, deleteSection, toggleSectionPublish, setClassDuration } from "./actions";
 
 const TYPE_LABEL = Object.fromEntries(SECTION_TYPES.map((t) => [t.value, t.label]));
 const PLAN_LABEL: Record<string, string> = { bronze: "Bronze+", silver: "Silver+", gold: "Gold" };
@@ -21,6 +21,10 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
     .single();
 
   if (!topic) notFound();
+
+  // Current planner duration (minutes) for this class/topic.
+  const { data: durRow } = await supabase.from("site_settings").select("value").eq("key", `dur:${topicId}`).maybeSingle();
+  const durMinutes = Number(durRow?.value) || 0;
 
   const { data: sections } = await supabase
     .from("sections")
@@ -39,6 +43,25 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
         subtitle="Add the sections students will see — videos, PDFs, homework, discussion and tests. 🎬📑"
         back={{ href: `/admin/subjects/${topic.subject_id}`, label: subjectTitle ?? "Subject" }}
       />
+
+      {/* Class duration for the study planner */}
+      <form action={setClassDuration} className="card" style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <input type="hidden" name="topicId" value={topicId} />
+        <span style={{ fontWeight: 600 }}>⏱️ Class duration</span>
+        <input
+          type="number"
+          name="minutes"
+          min={0}
+          step={5}
+          defaultValue={durMinutes || ""}
+          placeholder="e.g. 75"
+          style={{ width: 100 }}
+        />
+        <span className="muted" style={{ fontSize: ".85rem" }}>
+          minutes — used by the day-by-day study planner. Leave blank to use the default.
+        </span>
+        <button className="btn small" type="submit">Save</button>
+      </form>
 
       {/* Add a class — right-aligned expander (primary action) */}
       <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>

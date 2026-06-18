@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import { sendEmail, emailShell } from "@/lib/notify";
+import { runStudyReminders } from "@/lib/studyReminders";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -75,5 +76,13 @@ export async function GET(req: NextRequest) {
     reminded++;
   }
 
-  return NextResponse.json({ ok: true, classes_reminded: reminded, emails_sent: emailed });
+  // Also send weekly study-plan nudges (deduped per ISO week per student).
+  let study = { sent: 0 };
+  try {
+    study = await runStudyReminders();
+  } catch {
+    /* best-effort */
+  }
+
+  return NextResponse.json({ ok: true, classes_reminded: reminded, emails_sent: emailed, study_reminders: study.sent });
 }

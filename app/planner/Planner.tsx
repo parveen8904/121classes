@@ -1,73 +1,76 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { buildSchedule, type PlanSetup, type SchedEntry } from "@/lib/plan";
+import { savePlan, setRemind as setRemindAction } from "./actions";
 
 export type PlanItem = { id: string; title: string; subject: string };
 type Task = { id: string; text: string; due: string; done: boolean };
 type DiaryEntry = { id: string; date: string; text: string };
 type Setup = { source: "us" | "others"; classes: string; tests: string; examDate: string };
-type Sched = { date: string; label: string; mock?: boolean };
 
 const LS_DONE = "planner_done";
 const LS_TASKS = "planner_tasks";
 const LS_DIARY = "planner_diary";
-const LS_SETUP = "planner_setup";
 
-export default function Planner({ items, signedIn }: { items: PlanItem[]; signedIn?: boolean }) {
+export default function Planner({
+  items,
+  signedIn,
+  initial,
+}: {
+  items: PlanItem[];
+  signedIn?: boolean;
+  initial?: { setup: PlanSetup | null; schedule: SchedEntry[] | null; remind: boolean } | null;
+}) {
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [tasks, setTasks] = useState<Task[]>([]);
   const [diary, setDiary] = useState<DiaryEntry[]>([]);
   const [taskText, setTaskText] = useState("");
   const [taskDue, setTaskDue] = useState("");
   const [note, setNote] = useState("");
-  const [setup, setSetup] = useState<Setup>({ source: "us", classes: "", tests: "", examDate: "" });
-  const [schedule, setSchedule] = useState<Sched[]>([]);
+  const [setup, setSetup] = useState<Setup>({
+    source: initial?.setup?.source ?? "us",
+    classes: initial?.setup?.classes ? String(initial.setup.classes) : "",
+    tests: initial?.setup?.tests ? String(initial.setup.tests) : "",
+    examDate: initial?.setup?.examDate ?? "",
+  });
+  const [schedule, setSchedule] = useState<SchedEntry[]>(initial?.schedule ?? []);
+  const [remind, setRemindState] = useState<boolean>(initial?.remind ?? true);
+  const [saving, startSave] = useTransition();
+  const [savedMsg, setSavedMsg] = useState("");
 
   useEffect(() => {
     try {
       setDone(JSON.parse(localStorage.getItem(LS_DONE) || "{}"));
       setTasks(JSON.parse(localStorage.getItem(LS_TASKS) || "[]"));
       setDiary(JSON.parse(localStorage.getItem(LS_DIARY) || "[]"));
-      const s = localStorage.getItem(LS_SETUP);
-      if (s) { const p = JSON.parse(s); setSetup(p.setup); setSchedule(p.schedule || []); }
     } catch {}
   }, []);
 
-  function buildSchedule(s: Setup): Sched[] {
-    if (!s.examDate) return [];
-    const now = new Date();
-    const exam = new Date(s.examDate);
-    const msWeek = 7 * 86400000;
-    const weeks = Math.max(1, Math.ceil((exam.getTime() - now.getTime()) / msWeek));
-    const revisionWeeks = Math.min(3, Math.max(1, Math.floor(weeks * 0.2)));
-    const studyWeeks = Math.max(1, weeks - revisionWeeks);
-    const classes = Number(s.classes) || (s.source === "us" ? items.length : 0) || studyWeeks;
-    const tests = Number(s.tests) || Math.max(1, Math.round(classes / 5));
-    const cpw = Math.ceil(classes / studyWeeks);
-    const tpw = Math.max(1, Math.ceil(tests / studyWeeks));
-    const fmt = (w: number) => new Date(now.getTime() + (w - 1) * msWeek).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-    const mockWeeks = new Set([Math.max(2, Math.floor(studyWeeks * 0.5)), Math.max(3, Math.floor(studyWeeks * 0.8))]);
-    const out: Sched[] = [];
-    for (let w = 1; w <= studyWeeks; w++) {
-      out.push({ date: fmt(w), label: `Week ${w}: ${cpw} class${cpw > 1 ? "es" : ""} · ${tpw} test${tpw > 1 ? "s" : ""}` });
-      if (mockWeeks.has(w)) out.push({ date: fmt(w), label: "📝 MOCK FULL EXAM", mock: true });
-    }
-    for (let r = 1; r <= revisionWeeks; r++) {
-      const w = studyWeeks + r;
-      out.push({
-        date: fmt(w),
-        label: r === revisionWeeks ? "📝 FINAL FULL MOCK + full revision" : "🔁 Revision & question practice",
-        mock: r === revisionWeeks,
-      });
-    }
-    return out;
+  function resolvedSetup(): PlanSetup {
+    return {
+      source: setup.source,
+      classes: Number(setup.classes) || (setup.source === "us" ? items.length : 0),
+      tests: Number(setup.tests) || 0,
+      examDate: setup.examDate,
+    };
   }
 
   function generate() {
     if (!setup.examDate) { alert("Please pick your exam date."); return; }
-    const sched = buildSchedule(setup);
+    const ps = resolvedSetup();
+    const sched = buildSchedule(ps);
     setSchedule(sched);
-    try { localStorage.setItem(LS_SETUP, JSON.stringify({ setup, schedule: sched })); } catch {}
+    setSavedMsg("");
+    startSave(async () => {
+      const r = await savePlan(ps, remind);
+      setSavedMsg(r.ok ? "✅ Plan saved — we'll remind you each week." : "");
+    });
+  }
+
+  function toggleRemind(v: boolean) {
+    setRemindState(v);
+    startSave(async () => { await setRemindAction(v); });
   }
 
   const saveDone = (d: Record<string, boolean>) => { setDone(d); try { localStorage.setItem(LS_DONE, JSON.stringify(d)); } catch {} };
@@ -111,7 +114,13 @@ export default function Planner({ items, signedIn }: { items: PlanItem[]; signed
           )}
           <div><label>Your exam date</label><input type="date" value={setup.examDate} onChange={(e) => setSetup({ ...setup, examDate: e.target.value })} /></div>
         </div>
-        <button className="btn" type="button" onClick={generate} style={{ marginTop: 10 }}>Generate my plan →</button>
+        <label className="remember" style={{ marginTop: 10 }}>
+          <input type="checkbox" checked={remind} onChange={(e) => toggleRemind(e.target.checked)} /> 🔔 Remind me each week (Telegram/email)
+        </label>
+        <button className="btn" type="button" onClick={generate} disabled={saving} style={{ marginTop: 6 }}>
+          {saving ? "Saving…" : "Generate my plan →"}
+        </button>
+        {savedMsg && <p className="muted" style={{ fontSize: ".82rem", marginTop: 8 }}>{savedMsg}</p>}
         {setup.source === "us" && <p className="muted" style={{ fontSize: ".8rem", marginTop: 8 }}>We&apos;ll use our {items.length} published topics as your class count.</p>}
       </div>
 

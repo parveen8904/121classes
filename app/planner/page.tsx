@@ -16,6 +16,9 @@ export default async function PlannerPage() {
   const { data: prof } = await supabase.from("profiles").select("target_attempt").eq("id", user.id).maybeSingle();
   const targetAttempt = String(prof?.target_attempt || "").replace(/_/g, " ");
 
+  const { data: plan } = await supabase.from("study_plans").select("setup, schedule, remind").eq("user_id", user.id).maybeSingle();
+  const initial = plan ? { setup: plan.setup, schedule: plan.schedule, remind: plan.remind } : null;
+
   // Syllabus checklist for our students (published topics). Service client so it
   // works for logged-out visitors too.
   const { data: topics } = await createServiceClient()
@@ -41,7 +44,7 @@ export default async function PlannerPage() {
           {targetAttempt ? ` for ${targetAttempt}` : ""}. ✍️
         </p>
       </div>
-      <Planner items={items} signedIn={!!user} />
+      <Planner items={items} signedIn={!!user} initial={initial as never} />
     </section>
   );
 }

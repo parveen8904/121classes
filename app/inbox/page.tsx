@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getStudyRecommendations } from "@/lib/recommend";
 import { shareToCommunity, shareToTelegram } from "./actions";
+import PaperTools from "./PaperTools";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My Questions — 121 CA Classes" };
@@ -55,6 +56,25 @@ export default async function StudentInbox() {
 
   const recs = await getStudyRecommendations(user.id);
 
+  // Checked papers (graded subjective submissions) + a performance snapshot.
+  const { data: subs } = await svc
+    .from("subjective_submissions")
+    .select("id, question_id, answer_text, ai_score, ai_feedback, status, created_at")
+    .eq("student_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  const subQIds = [...new Set((subs ?? []).map((s) => s.question_id))];
+  const { data: subQs } = subQIds.length
+    ? await svc.from("subjective_questions").select("id, prompt, max_marks").in("id", subQIds)
+    : { data: [] as { id: string; prompt: string; max_marks: number | null }[] };
+  const qMap = new Map((subQs ?? []).map((q) => [q.id, q]));
+  const { data: mcq } = await svc
+    .from("mcq_attempts")
+    .select("score, total")
+    .eq("student_id", user.id);
+  const mcqCount = (mcq ?? []).length;
+  const paperCount = (subs ?? []).length;
+
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
       <div className="learn-hero">
@@ -89,8 +109,61 @@ export default async function StudentInbox() {
         </div>
       )}
 
+      {/* PERFORMANCE SNAPSHOT */}
+      {(mcqCount > 0 || paperCount > 0) && (
+        <div className="card" style={{ marginTop: 18 }}>
+          <h3 style={{ margin: "0 0 6px" }}>📊 Performance summary</h3>
+          <p className="muted" style={{ fontSize: ".9rem", margin: 0 }}>
+            You&apos;ve attempted <strong>{mcqCount}</strong> MCQ test{mcqCount === 1 ? "" : "s"} and{" "}
+            <strong>{paperCount}</strong> descriptive paper{paperCount === 1 ? "" : "s"}.
+          </p>
+          <Link className="btn small" style={{ marginTop: 10 }} href="/learn/performance">
+            See full performance &amp; ranking →
+          </Link>
+        </div>
+      )}
+
+      {/* CHECKED PAPERS */}
+      {paperCount > 0 && (
+        <>
+          <h2 style={{ marginTop: 28, fontSize: "1.15rem" }}>📝 Your checked papers</h2>
+          <div style={{ display: "grid", gap: 12, marginTop: 10 }}>
+            {(subs ?? []).map((s) => {
+              const q = qMap.get(s.question_id);
+              const mm = q?.max_marks ?? 10;
+              const shareText =
+                `Question: ${q?.prompt ?? ""}\n\nMy answer: ${s.answer_text}` +
+                (typeof s.ai_score === "number" ? `\n\nScore: ${s.ai_score}/${mm}` : "") +
+                (s.ai_feedback ? `\n\nFeedback: ${s.ai_feedback}` : "");
+              return (
+                <div className="card" key={s.id}>
+                  <p style={{ fontWeight: 700, margin: 0 }}>{q?.prompt ?? "Question"}</p>
+                  {typeof s.ai_score === "number" && (
+                    <p className="grad" style={{ fontWeight: 800, marginTop: 6 }}>Score: {s.ai_score}/{mm}</p>
+                  )}
+                  <p className="muted" style={{ fontSize: ".82rem", marginTop: 8, marginBottom: 2 }}>Your answer:</p>
+                  <p style={{ whiteSpace: "pre-wrap", marginTop: 0 }}>{s.answer_text}</p>
+                  {s.ai_feedback && (
+                    <div style={{ marginTop: 8, paddingLeft: 12, borderLeft: "3px solid var(--accent)" }}>
+                      <p className="muted" style={{ fontSize: ".75rem", margin: 0 }}>📋 Examiner feedback</p>
+                      <p style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{s.ai_feedback}</p>
+                    </div>
+                  )}
+                  <PaperTools
+                    questionId={s.question_id}
+                    shareTitle="My CA paper — 121 CA Classes"
+                    shareText={shareText}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      <h2 style={{ marginTop: 28, fontSize: "1.15rem" }}>💬 Questions &amp; answers</h2>
       {entries.length === 0 ? (
-        <div className="card" style={{ marginTop: 22 }}>
+        <div className="card" style={{ marginTop: 12 }}>
           <p className="muted">You haven&apos;t asked anything yet. Tap the <strong>💬 Ask me</strong> button anywhere to ask a doubt or a question about the portal. ✨</p>
         </div>
       ) : (

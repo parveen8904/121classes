@@ -90,6 +90,18 @@ export async function extractConcepts(questionsText: string): Promise<string[]> 
   }
 }
 
+// A model/suggested answer a student could write to score full marks.
+export async function suggestedAnswer(
+  prompt: string,
+  maxMarks: number,
+  material: string,
+): Promise<string | null> {
+  const sys =
+    "You are an ICAI exam expert for 121 CA Classes. Write a concise, well-structured MODEL ANSWER a student could write to score full marks for the question, using Indian CA exam conventions and citing the relevant standards/sections. Keep it proportional to the marks. If study material is provided, ground the answer in it.";
+  const user = `QUESTION (${maxMarks} marks): ${prompt}` + (material ? `\n\nSTUDY MATERIAL:\n${material}` : "");
+  return callClaude(sys, user, 1200);
+}
+
 const ASSIST_SYSTEM =
   "You are the friendly assistant for 121 CA Classes (CA Parveen Sharma). You answer two kinds of questions:\n" +
   "1) PORTAL/LOGISTICS (faculty names, courses, when classes or live sessions start, contact, plans, how to do something on the site) — answer ONLY from the SITE INFO section.\n" +

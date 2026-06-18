@@ -133,6 +133,21 @@ export default async function Home() {
           <Link className="btn" href="/login">Get started — it&apos;s free to join</Link>
           <Link className="btn secondary" href="/#mentor">Meet CA Parveen Sharma</Link>
         </div>
+        <p
+          style={{
+            display: "inline-block",
+            margin: "26px auto 0",
+            border: "2px solid var(--accent)",
+            borderRadius: 999,
+            padding: "10px 20px",
+            fontWeight: 700,
+            fontSize: ".95rem",
+            maxWidth: 720,
+          }}
+        >
+          🧠🔒 Our AI is trained on official <strong>ICAI material</strong> &amp; CA Parveen Sharma&apos;s
+          classes — <strong>not random web data</strong>, and kept updated daily.
+        </p>
       </section>
 
       {/* HERO BANNER IMAGE (uploaded in admin → Site images) */}

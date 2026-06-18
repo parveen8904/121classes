@@ -2,24 +2,26 @@
 // ANTHROPIC_API_KEY is absent, AI calls return null and the app falls back to
 // "our faculty will review this".
 
-export function aiConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+import { getSecret } from "@/lib/secrets";
+
+export async function aiConfigured(): Promise<boolean> {
+  return Boolean(await getSecret("ANTHROPIC_API_KEY"));
 }
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
-
 async function callClaude(system: string, user: string, maxTokens = 1024): Promise<string | null> {
-  if (!aiConfigured()) return null;
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey) return null;
+  const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: MODEL,
+        model,
         max_tokens: maxTokens,
         system,
         messages: [{ role: "user", content: user }],

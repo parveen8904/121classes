@@ -38,7 +38,7 @@ export async function broadcast(formData: FormData) {
   }
 
   // Mass *individual* Telegram messages to students who connected the bot.
-  if (chTelegramDm && telegramConfigured()) {
+  if (chTelegramDm && (await telegramConfigured())) {
     const svc = createServiceClient();
     const { data: linked } = await svc
       .from("profiles")
@@ -56,7 +56,7 @@ export async function broadcast(formData: FormData) {
     }
   }
 
-  if (chEmail && emailConfigured()) {
+  if (chEmail && (await emailConfigured())) {
     const svc = createServiceClient();
     const { data: students } = await svc
       .from("profiles")

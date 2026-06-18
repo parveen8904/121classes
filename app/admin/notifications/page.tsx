@@ -10,9 +10,9 @@ export default async function NotificationsPage({
 }: {
   searchParams: { tg?: string; em?: string; emt?: string; dm?: string; dmt?: string };
 }) {
-  const tgOn = telegramConfigured();
-  const emOn = emailConfigured();
-  const waOn = whatsappConfigured();
+  const tgOn = await telegramConfigured();
+  const emOn = await emailConfigured();
+  const waOn = await whatsappConfigured();
 
   // Audience size (students with contact info).
   const svc = createServiceClient();

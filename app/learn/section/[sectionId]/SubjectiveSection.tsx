@@ -19,6 +19,7 @@ export default async function SubjectiveSection({
     prompt: q.prompt,
     max_marks: q.max_marks,
   }));
+  const ai = await aiConfigured();
 
   return (
     <main>
@@ -30,7 +31,7 @@ export default async function SubjectiveSection({
           <span className="badge">✍️ Subjective test</span>
           <h1>{section.title}</h1>
           <p className="meta">
-            {aiConfigured()
+            {ai
               ? "Write your answer and get instant AI feedback, guided by CA Parveen Sharma's team. 🤖"
               : "Write your answer — our faculty will review and share feedback. ✍️"}
           </p>

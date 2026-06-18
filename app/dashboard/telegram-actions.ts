@@ -11,7 +11,7 @@ export async function ensureTelegramLink(): Promise<{
   linked: boolean;
   url?: string;
 }> {
-  const bot = telegramBotUsername();
+  const bot = await telegramBotUsername();
   if (!bot) return { configured: false, linked: false };
 
   const supabase = createClient();

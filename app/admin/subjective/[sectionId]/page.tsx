@@ -18,6 +18,7 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
     .from("subjective_questions")
     .select("id, prompt, max_marks")
     .eq("section_id", section.id);
+  const ai = await aiConfigured();
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -25,14 +26,14 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
         badge="✍️ Subjective test"
         title={section.title}
         subtitle={
-          aiConfigured()
+          ai
             ? "Add written questions — student answers are graded by AI (paper-checking). 🤖"
             : "Add written questions. Connect an AI key to auto-grade, or review answers yourself. ✍️"
         }
         back={{ href: `/admin/topics/${section.topic_id}`, label: "Topic" }}
       />
 
-      {aiConfigured() && (
+      {ai && (
         <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
           <summary className="btn as-btn">🤖 Generate from transcript (AI)</summary>
           <div className="form-card" style={{ marginTop: 12, width: "100%" }}>

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendTelegramMessage } from "@/lib/notify";
 import { answerDoubt, aiConfigured } from "@/lib/ai";
+import { getSecret } from "@/lib/secrets";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 //     can't help, tell them it's gone to faculty and store it for review.
 export async function POST(req: NextRequest) {
   // Optional shared-secret check (set TELEGRAM_WEBHOOK_SECRET + pass it to setWebhook).
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  const secret = await getSecret("TELEGRAM_WEBHOOK_SECRET");
   if (secret && req.headers.get("x-telegram-bot-api-secret-token") !== secret) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
     .eq("telegram_chat_id", chatId)
     .maybeSingle();
 
-  const answer = aiConfigured() ? await answerDoubt(text) : null;
+  const answer = (await aiConfigured()) ? await answerDoubt(text) : null;
   if (answer) {
     await sendTelegramMessage(chatId, answer + "\n\n— Guided by CA Parveen Sharma's team.");
   } else {

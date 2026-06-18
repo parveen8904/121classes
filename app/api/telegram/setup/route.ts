@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { telegramConfigured } from "@/lib/notify";
+import { getSecret } from "@/lib/secrets";
 
 export const dynamic = "force-dynamic";
 
@@ -15,18 +16,19 @@ export async function GET(req: NextRequest) {
   const { data: prof } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
   if (prof?.role !== "admin") return NextResponse.json({ error: "admin only" }, { status: 403 });
 
-  if (!telegramConfigured()) {
+  if (!(await telegramConfigured())) {
     return NextResponse.json({ ok: false, error: "Set TELEGRAM_BOT_TOKEN first." });
   }
 
   const origin = new URL(req.url).origin;
   const webhookUrl = `${origin}/api/telegram/webhook`;
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  const secret = await getSecret("TELEGRAM_WEBHOOK_SECRET");
+  const token = await getSecret("TELEGRAM_BOT_TOKEN");
   const params: Record<string, string> = { url: webhookUrl };
   if (secret) params.secret_token = secret;
 
   try {
-    const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/setWebhook`, {
+    const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),

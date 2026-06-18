@@ -14,7 +14,7 @@ type OrderRow = {
 // stamp them. Returns a summary. Safe to call repeatedly (idempotent on the flag).
 export async function runWarehouseDispatch(): Promise<{ ok: boolean; count: number; skipped?: string }> {
   const warehouse = process.env.WAREHOUSE_EMAIL;
-  if (!warehouse || !emailConfigured()) {
+  if (!warehouse || !(await emailConfigured())) {
     return { ok: true, count: 0, skipped: "email or WAREHOUSE_EMAIL not configured" };
   }
 

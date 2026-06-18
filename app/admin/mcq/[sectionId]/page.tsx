@@ -19,6 +19,7 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
     .select("id, question, options, correct_index, order_index")
     .eq("section_id", section.id)
     .order("order_index");
+  const ai = await aiConfigured();
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -34,7 +35,7 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
         <summary className="btn as-btn">🤖 Generate from transcript (AI)</summary>
         <div className="form-card" style={{ marginTop: 12, width: "100%" }}>
           <h3>🤖 Generate MCQs with AI</h3>
-          {aiConfigured() ? (
+          {ai ? (
             <>
               <p className="muted" style={{ fontSize: ".82rem", marginTop: 0, marginBottom: 10 }}>
                 Paste the class transcript. AI writes the questions <strong>once</strong> and saves them below —

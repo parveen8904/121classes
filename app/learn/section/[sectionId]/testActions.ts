@@ -61,7 +61,7 @@ export async function submitSubjective(input: {
   let feedback = "✅ Submitted! Our faculty will review your answer and share feedback soon.";
   let status = "submitted";
 
-  if (aiConfigured()) {
+  if (await aiConfigured()) {
     const graded = await gradeSubjective(q.prompt, answer, q.max_marks);
     if (graded) {
       score = graded.score;
@@ -104,7 +104,7 @@ export async function askDoubt(input: {
 
   let answer: string | null = null;
   let status = "open";
-  if (aiConfigured()) {
+  if (await aiConfigured()) {
     answer = await answerDoubt(question, context);
     if (answer) status = "answered";
   }

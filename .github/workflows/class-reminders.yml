@@ -1,0 +1,10 @@
+name: Class reminders
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS "https://www.121caclasses.com/api/cron/class-reminders" || true

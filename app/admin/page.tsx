@@ -101,8 +101,14 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
   },
   {
     icon: "💰",
-    title: "AI usage & cost",
-    desc: "Live Anthropic token spend, by feature and model.",
+    title: "Costs & usage",
+    desc: "AI, Bunny, Cloudflare & Supabase costs in one place.",
+    href: "/admin/costs",
+  },
+  {
+    icon: "🤖",
+    title: "AI usage detail",
+    desc: "Anthropic token spend by feature & model; cap & alert.",
     href: "/admin/ai-usage",
   },
   {

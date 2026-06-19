@@ -310,6 +310,54 @@ export async function gradeSubjective(
   }
 }
 
+// Convert a handwritten-notes PDF into clean typed notes (Markdown) using
+// Claude's vision. Run ONCE at admin level; the result goes to faculty for
+// approval before students see it.
+export async function transcribeHandwriting(pdfUrl: string): Promise<string | null> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey || !pdfUrl) return null;
+  const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
+  try {
+    const pdfRes = await fetch(pdfUrl, { cache: "no-store" });
+    if (!pdfRes.ok) return null;
+    const b64 = Buffer.from(await pdfRes.arrayBuffer()).toString("base64");
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4000,
+        system:
+          "You convert handwritten CA class notes into clean, well-structured TYPED notes in Markdown. " +
+          "Preserve headings, sub-points, numbering, formulas, journal entries and the original order. " +
+          "Use Indian CA conventions. Output ONLY the typed notes — no commentary, no preamble.",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } },
+              { type: "text", text: "Convert these handwritten notes into clean typed notes." },
+            ],
+          },
+        ],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("transcribe", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    const text = (data.content ?? [])
+      .filter((b: { type: string }) => b.type === "text")
+      .map((b: { text: string }) => b.text)
+      .join("\n")
+      .trim();
+    return text || null;
+  } catch {
+    return null;
+  }
+}
+
 // Read a class transcript and summarise it: overview, how many questions were
 // solved, the homework given, and the key concepts. Run ONCE at upload time.
 export async function summarizeClass(

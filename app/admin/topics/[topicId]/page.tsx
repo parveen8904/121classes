@@ -6,7 +6,7 @@ import AdminHero from "../../_components/AdminHero";
 import SectionForm from "./SectionForm";
 import TopicMetaForm, { type TopicMeta } from "./TopicMetaForm";
 import { SECTION_TYPES } from "./sectionTypes";
-import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection } from "./actions";
+import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, convertHandwrittenNotes, approveTypedNotes, rejectTypedNotes } from "./actions";
 
 const TYPE_LABEL = Object.fromEntries(SECTION_TYPES.map((t) => [t.value, t.label]));
 const PLAN_LABEL: Record<string, string> = { bronze: "Bronze+", silver: "Silver+", gold: "Gold" };
@@ -117,6 +117,13 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                       <button className="btn small secondary" type="submit">🤖 Summarize (AI)</button>
                     </form>
                   )}
+                  {!!(s.config as Record<string, unknown> | null)?.notes_hand_url && !((s.config as Record<string, unknown>)?.notes_typed_status) && (
+                    <form action={convertHandwrittenNotes} style={{ display: "inline" }}>
+                      <input type="hidden" name="sectionId" value={s.id} />
+                      <input type="hidden" name="topicId" value={topic.id} />
+                      <button className="btn small secondary" type="submit">✍️→⌨️ Convert notes (AI)</button>
+                    </form>
+                  )}
                   <form action={toggleSectionPublish} style={{ display: "inline" }}>
                     <input type="hidden" name="id" value={s.id} />
                     <input type="hidden" name="topicId" value={topic.id} />
@@ -133,6 +140,35 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                   />
                 </div>
               </div>
+
+              {(() => {
+                const cfg = (s.config as Record<string, unknown> | null) ?? {};
+                const status = cfg.notes_typed_status as string | undefined;
+                if (status === "pending") {
+                  return (
+                    <div style={{ marginTop: 12, padding: "10px 12px", background: "#fef3c7", borderRadius: 8, fontSize: ".88rem" }}>
+                      <strong>⏳ Typed notes awaiting faculty approval</strong>
+                      <p style={{ margin: "4px 0 8px", whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto" }}>{String(cfg.notes_typed_pending ?? "")}</p>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <form action={approveTypedNotes}>
+                          <input type="hidden" name="sectionId" value={s.id} />
+                          <input type="hidden" name="topicId" value={topic.id} />
+                          <button className="btn small" type="submit">✅ Approve &amp; publish</button>
+                        </form>
+                        <form action={rejectTypedNotes}>
+                          <input type="hidden" name="sectionId" value={s.id} />
+                          <input type="hidden" name="topicId" value={topic.id} />
+                          <button className="btn small secondary" type="submit">✕ Reject</button>
+                        </form>
+                      </div>
+                    </div>
+                  );
+                }
+                if (status === "approved") {
+                  return <p className="muted" style={{ marginTop: 10, fontSize: ".82rem", color: "#16a34a" }}>✅ Typed notes approved &amp; live for students.</p>;
+                }
+                return null;
+              })()}
 
               {(() => {
                 const cfg = (s.config as Record<string, unknown> | null) ?? {};

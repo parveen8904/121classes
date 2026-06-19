@@ -136,6 +136,12 @@ function SectionBody({
             <p style={{ margin: "4px 0 0", whiteSpace: "pre-wrap" }}>{c.homework}</p>
           </div>
         )}
+        {c.notes_typed_status === "approved" && c.notes_typed_text && (
+          <details style={{ marginTop: 12 }}>
+            <summary style={{ cursor: "pointer", color: "var(--accent)" }}>⌨️ Typed notes (faculty-approved)</summary>
+            <p style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{c.notes_typed_text}</p>
+          </details>
+        )}
       </>
     );
   }

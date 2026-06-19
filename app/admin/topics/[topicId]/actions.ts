@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../../_lib/util";
 import { ALL_CONFIG_FIELDS } from "./sectionTypes";
-import { summarizeClass } from "@/lib/ai";
+import { summarizeClass, transcribeHandwriting } from "@/lib/ai";
+import { notifyFaculty } from "@/lib/notify";
 
 function readConfig(formData: FormData): Record<string, string> {
   const config: Record<string, string> = {};
@@ -105,6 +106,66 @@ export async function summarizeClassSection(formData: FormData) {
         ai_key_points: result.key_points.join("\n"),
       },
     })
+    .eq("id", sectionId);
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
+// Convert a class's handwritten notes to typed notes (AI) and send to faculty
+// for approval. The typed notes stay hidden from students until approved.
+export async function convertHandwrittenNotes(formData: FormData) {
+  const sectionId = str(formData.get("sectionId"));
+  const topicId = str(formData.get("topicId"));
+  if (!sectionId) return;
+  const supabase = createClient();
+  const { data: sec } = await supabase.from("sections").select("title, config").eq("id", sectionId).maybeSingle();
+  const config = (sec?.config ?? {}) as Record<string, unknown>;
+  const hand = String(config.notes_hand_url ?? "");
+  if (!hand) return;
+  const typed = await transcribeHandwriting(hand);
+  if (!typed) return;
+  await supabase
+    .from("sections")
+    .update({ config: { ...config, notes_typed_pending: typed, notes_typed_status: "pending" } })
+    .eq("id", sectionId);
+  // Share the converted notes with faculty for approval.
+  await notifyFaculty(
+    `Typed notes need approval — ${sec?.title ?? "class"}`,
+    `AI converted the handwritten notes for "${sec?.title ?? "a class"}" into typed notes. ` +
+      `Please review and approve at Admin → Topics → this class.\n\n--- Converted notes ---\n\n${typed.slice(0, 6000)}`,
+  );
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
+export async function approveTypedNotes(formData: FormData) {
+  const sectionId = str(formData.get("sectionId"));
+  const topicId = str(formData.get("topicId"));
+  if (!sectionId) return;
+  const supabase = createClient();
+  const { data: sec } = await supabase.from("sections").select("config").eq("id", sectionId).maybeSingle();
+  const config = (sec?.config ?? {}) as Record<string, unknown>;
+  const pending = String(config.notes_typed_pending ?? "");
+  if (!pending) return;
+  const { notes_typed_pending: _omit, ...rest } = config;
+  void _omit;
+  await supabase
+    .from("sections")
+    .update({ config: { ...rest, notes_typed_text: pending, notes_typed_status: "approved" } })
+    .eq("id", sectionId);
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
+export async function rejectTypedNotes(formData: FormData) {
+  const sectionId = str(formData.get("sectionId"));
+  const topicId = str(formData.get("topicId"));
+  if (!sectionId) return;
+  const supabase = createClient();
+  const { data: sec } = await supabase.from("sections").select("config").eq("id", sectionId).maybeSingle();
+  const config = (sec?.config ?? {}) as Record<string, unknown>;
+  const { notes_typed_pending: _omit, ...rest } = config;
+  void _omit;
+  await supabase
+    .from("sections")
+    .update({ config: { ...rest, notes_typed_status: "rejected" } })
     .eq("id", sectionId);
   revalidatePath(`/admin/topics/${topicId}`);
 }

@@ -27,10 +27,11 @@ export async function GET(req: NextRequest) {
     try {
       urlSet = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
       srkSet = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-      const { data, error } = await createServiceClient().from("app_secrets").select("key");
+      const { data, error } = await createServiceClient().from("app_secrets").select("key, value");
       dbRows = (data ?? []).length;
-      dbHasJooble = (data ?? []).some((r) => r.key === "JOOBLE_API_KEY");
-      dbErr = error ? String(error.message).slice(0, 200) : "";
+      const jrow = (data ?? []).find((r) => r.key === "JOOBLE_API_KEY") as { value?: string } | undefined;
+      dbHasJooble = !!jrow;
+      dbErr = error ? String(error.message).slice(0, 200) : `joobleValueLen=${jrow?.value?.length ?? "none"};envJooble=${process.env.JOOBLE_API_KEY === undefined ? "undef" : `len${(process.env.JOOBLE_API_KEY || "").length}`}`;
     } catch (e) {
       dbErr = String(e).slice(0, 200);
     }

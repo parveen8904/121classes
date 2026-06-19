@@ -28,8 +28,26 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/career");
 
-  const { data } = await supabase.from("site_settings").select("key, value").in("key", ["career_articleship", "career_placement", "career_resources", "career_jobs"]);
+  const { data } = await supabase.from("site_settings").select("key, value").in("key", ["career_articleship", "career_placement", "career_resources", "career_jobs", "career_links"]);
   const m = new Map((data ?? []).map((r) => [r.key, r.value as string]));
+
+  // Quick "browse & apply directly" links — admin-set, else sensible defaults
+  // covering Google Jobs, Naukri, Monster/foundit, Indeed, ICAI, CAclubindia.
+  const DEFAULT_LINKS = [
+    "Google Jobs — CA jobs | https://www.google.com/search?q=chartered+accountant+jobs+in+india&ibp=htl;jobs",
+    "Google Jobs — CA articleship | https://www.google.com/search?q=ca+articleship+jobs+in+india&ibp=htl;jobs",
+    "Naukri — CA jobs | https://www.naukri.com/chartered-accountant-jobs",
+    "Naukri — CA articleship | https://www.naukri.com/ca-articleship-jobs",
+    "Monster/foundit — CA | https://www.foundit.in/srp/results?query=chartered%20accountant",
+    "Indeed — CA | https://in.indeed.com/jobs?q=chartered+accountant",
+    "ICAI Jobs Portal | https://cajobs.icai.org/",
+    "CAclubindia — Jobs | https://www.caclubindia.com/jobs/",
+    "LinkedIn — CA jobs | https://www.linkedin.com/jobs/chartered-accountant-jobs/",
+  ];
+  const linkLines = (m.get("career_links") || "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const browseLinks = (linkLines.length ? linkLines : DEFAULT_LINKS)
+    .map((l) => { const [label, url] = l.split("|").map((s) => s.trim()); return { label, url }; })
+    .filter((x) => x.label && /^https?:\/\//.test(x.url || ""));
   const any = ["career_articleship", "career_placement", "career_resources", "career_jobs"].some((k) => (m.get(k) || "").trim());
   const jobs = (m.get("career_jobs") || "").split("\n").map((l) => l.trim()).filter(Boolean);
 
@@ -78,6 +96,21 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
         <Link className="btn" href="/career/cv">📄 Build my CV</Link>
         <Link className="btn secondary" href="/career/interview">🎤 AI mock interview</Link>
       </div>
+
+      {/* Browse & apply directly on job portals + CA firm sites */}
+      {browseLinks.length > 0 && (
+        <div className="card" style={{ marginTop: 18 }}>
+          <h3 style={{ margin: "0 0 4px" }}>🔎 Browse openings &amp; walk-ins (apply directly)</h3>
+          <p className="muted" style={{ fontSize: ".84rem", marginTop: 0, marginBottom: 10 }}>
+            Live CA / articleship openings and walk-ins on Google Jobs, Naukri, Monster, ICAI &amp; firm sites — opens the source so you apply directly.
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {browseLinks.map((l, i) => (
+              <a key={i} className="btn small secondary" href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* City filter */}
       {cities.length > 1 && (

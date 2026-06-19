@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ingestGovtFeeds } from "@/lib/govtfeed";
 import { ingestJobs, sendPlacementDigest } from "@/lib/jobsfeed";
-import { getSecret } from "@/lib/secrets";
+import { getSecret, clearSecretCache } from "@/lib/secrets";
+import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -20,6 +21,19 @@ export async function GET(req: NextRequest) {
   // Temporary diagnostic: /api/cron/govt-feed?probe=1 — checks whether the
   // server can read the Jooble key and reach the Jooble API.
   if (new URL(req.url).searchParams.get("probe") === "1") {
+    // Direct DB read (bypass cache) to see if the service client can read secrets.
+    clearSecretCache();
+    let dbRows = -1, dbHasJooble = false, dbErr = "", urlSet = false, srkSet = false;
+    try {
+      urlSet = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+      srkSet = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const { data, error } = await createServiceClient().from("app_secrets").select("key");
+      dbRows = (data ?? []).length;
+      dbHasJooble = (data ?? []).some((r) => r.key === "JOOBLE_API_KEY");
+      dbErr = error ? String(error.message).slice(0, 200) : "";
+    } catch (e) {
+      dbErr = String(e).slice(0, 200);
+    }
     const key = await getSecret("JOOBLE_API_KEY");
     let status = 0, count = -1, err = "";
     if (key) {
@@ -37,7 +51,7 @@ export async function GET(req: NextRequest) {
         err = String(e).slice(0, 200);
       }
     }
-    return NextResponse.json({ keySet: !!key, keyLen: key.length, joobleStatus: status, joobleCount: count, err });
+    return NextResponse.json({ urlSet, srkSet, dbRows, dbHasJooble, dbErr, keySet: !!key, keyLen: key.length, joobleStatus: status, joobleCount: count, err });
   }
 
   const result = await ingestGovtFeeds();

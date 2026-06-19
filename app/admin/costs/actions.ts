@@ -16,6 +16,7 @@ export async function saveCostSettings(formData: FormData) {
   if (!(await isAdmin())) return;
   const rows = [
     { key: "bunny_cap_usd", value: String(Number(formData.get("bunny_cap_usd")) || 0) },
+    { key: "supabase_storage_cap_mb", value: String(Number(formData.get("supabase_storage_cap_mb")) || 0) },
     { key: "cost_alert_email", value: String(formData.get("cost_alert_email") || "").trim() },
   ];
   await createServiceClient().from("site_settings").upsert(rows, { onConflict: "key" });

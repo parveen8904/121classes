@@ -22,5 +22,7 @@ export async function GET(req: NextRequest) {
   if (jobs.items?.length) await sendPlacementDigest(jobs.items);
   const { maybeBunnyAlert } = await import("@/lib/bunny");
   await maybeBunnyAlert();
+  const { maybeStorageAlert } = await import("@/lib/costalerts");
+  await maybeStorageAlert();
   return NextResponse.json({ ok: true, feeds: result, jobs: { added: jobs.added, checked: jobs.checked } });
 }

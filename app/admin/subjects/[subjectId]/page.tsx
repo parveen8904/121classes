@@ -5,6 +5,7 @@ import DeleteButton from "../../_components/DeleteButton";
 import AdminHero from "../../_components/AdminHero";
 import {
   createTopic,
+  addCombinedTopic,
   deleteTopic,
   toggleTopicPublish,
   updateSubjectInline,
@@ -26,8 +27,9 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
   const [{ data: topics }, { data: faculties }, { data: assigned }] = await Promise.all([
     supabase
       .from("topics")
-      .select("id, title, slug, order_index, valid_from_attempt, valid_to_attempt, amendments_upto, is_published")
+      .select("id, title, slug, order_index, valid_from_attempt, valid_to_attempt, amendments_upto, is_published, is_combined")
       .eq("subject_id", subjectId)
+      .order("is_combined")
       .order("order_index")
       .order("title"),
     supabase.from("faculties").select("id, full_name").order("full_name"),
@@ -171,16 +173,25 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
       </details>
 
       {/* Topics */}
-      <h2 className="admin-section-title">📖 Topics</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
+        <h2 className="admin-section-title">📖 Topics</h2>
+        {!topics?.some((t) => (t as { is_combined?: boolean }).is_combined) && (
+          <form action={addCombinedTopic}>
+            <input type="hidden" name="subjectId" value={subject.id} />
+            <button className="btn small secondary" type="submit">🧩 Add combined topic</button>
+          </form>
+        )}
+      </div>
       <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
         {topics && topics.length > 0 ? (
           topics.map((t) => (
             <div className="list-row" key={t.id}>
               <div>
                 <Link href={`/admin/topics/${t.id}`} className="row-title">
-                  📖 {t.title}
+                  {(t as { is_combined?: boolean }).is_combined ? "🧩" : "📖"} {t.title}
                 </Link>
                 <p className="row-sub">
+                  {(t as { is_combined?: boolean }).is_combined ? "combined topic · " : ""}
                   order {t.order_index} · {t.is_published ? "🟢 published" : "⚪ draft"}
                   {t.valid_from_attempt ? ` · from ${t.valid_from_attempt}` : ""}
                 </p>

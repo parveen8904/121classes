@@ -225,12 +225,22 @@ export async function gradeSubjective(
   prompt: string,
   answer: string,
   maxMarks: number | null,
+  rubric?: { point: string; marks: number }[] | null,
+  modelAnswer?: string | null,
 ): Promise<{ score: number | null; feedback: string } | null> {
   const mm = maxMarks ?? 10;
+  const scheme = (rubric ?? []).filter((r) => r && r.point);
+  const schemeText = scheme.length
+    ? `\n\nMarking scheme — award marks STRICTLY against these points (do not invent your own):\n${scheme.map((r) => `- ${r.point} (${r.marks} marks)`).join("\n")}`
+    : "";
+  const modelText = modelAnswer ? `\n\nModel answer (the ideal answer to compare against):\n${modelAnswer}` : "";
   const system =
-    `You are an ICAI subject examiner for 121 CA Classes. Evaluate the student's answer fairly, the way a CA exam examiner would, out of ${mm} marks. ` +
+    `You are an ICAI subject examiner for 121 CA Classes. Evaluate the student's answer the way a CA exam examiner would, out of ${mm} marks. ` +
+    (scheme.length
+      ? `Award marks point-by-point using ONLY the marking scheme provided; the feedback must say which points were earned and which were missed. `
+      : "") +
     `Respond ONLY as compact JSON, no prose, no code fences: {"score": <integer 0-${mm}>, "feedback": "<a short structured report: ✅ What was correct: …; ❌ What was wrong/missing: …; 📘 Concept to revise: <name the specific concept/standard/section>; 🎯 How to improve: <one concrete next step / what to study again>>"}.`;
-  const user = `Question (max ${mm} marks): ${prompt}\n\nStudent's answer:\n${answer}`;
+  const user = `Question (max ${mm} marks): ${prompt}${schemeText}${modelText}\n\nStudent's answer:\n${answer}`;
   const text = await callClaude(system, user, 700);
   if (!text) return null;
   try {

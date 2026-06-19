@@ -5,7 +5,18 @@ import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../../_lib/util";
 import { generateSubjectiveQuestions } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
-import { saveSubjModelAnswer } from "@/lib/answers";
+
+// Marking scheme: one line per point, "point text | marks".
+function parseRubric(raw: string): { point: string; marks: number }[] {
+  return raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const [p, m] = l.split("|").map((s) => s.trim());
+      return { point: p, marks: Number(m) || 0 };
+    });
+}
 
 // Generate descriptive questions from a transcript (or the AI Repository), once.
 export async function generateSubjectiveFromTranscript(formData: FormData) {
@@ -31,16 +42,10 @@ export async function generateSubjectiveFromTranscript(formData: FormData) {
   if (formData.get("replace") === "on") {
     await supabase.from("subjective_questions").delete().eq("section_id", sectionId);
   }
-  const { data: inserted } = await supabase
-    .from("subjective_questions")
-    .insert(items.map((q) => ({ section_id: sectionId, prompt: q.prompt, max_marks: q.max_marks })))
-    .select("id, prompt");
   // Save each question's model answer ONCE (no further AI at review time).
-  const byPrompt = new Map(items.map((q) => [q.prompt, q.model_answer]));
-  for (const r of inserted ?? []) {
-    const ma = byPrompt.get(r.prompt);
-    if (ma) await saveSubjModelAnswer(r.id, ma);
-  }
+  await supabase
+    .from("subjective_questions")
+    .insert(items.map((q, i) => ({ section_id: sectionId, prompt: q.prompt, max_marks: q.max_marks, model_answer: q.model_answer, order_index: i })));
   revalidatePath(`/admin/subjective/${sectionId}`);
 }
 
@@ -53,7 +58,29 @@ export async function addSubjective(formData: FormData) {
     section_id: sectionId,
     prompt,
     max_marks: num(formData.get("max_marks"), 10),
+    level: str(formData.get("level")) || null,
+    model_answer: str(formData.get("model_answer")) || null,
+    rubric: parseRubric(str(formData.get("rubric"))),
   });
+  revalidatePath(`/admin/subjective/${sectionId}`);
+}
+
+export async function updateSubjective(formData: FormData) {
+  const id = str(formData.get("id"));
+  const sectionId = str(formData.get("section_id"));
+  const prompt = str(formData.get("prompt"));
+  if (!id || !prompt) return;
+  const supabase = createClient();
+  await supabase
+    .from("subjective_questions")
+    .update({
+      prompt,
+      max_marks: num(formData.get("max_marks"), 10),
+      level: str(formData.get("level")) || null,
+      model_answer: str(formData.get("model_answer")) || null,
+      rubric: parseRubric(str(formData.get("rubric"))),
+    })
+    .eq("id", id);
   revalidatePath(`/admin/subjective/${sectionId}`);
 }
 

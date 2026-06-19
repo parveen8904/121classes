@@ -84,7 +84,7 @@ export async function submitSubjective(input: {
 
   const { data: q } = await supabase
     .from("subjective_questions")
-    .select("id, prompt, max_marks")
+    .select("id, prompt, max_marks, rubric, model_answer")
     .eq("id", input.questionId)
     .maybeSingle();
   if (!q) return { ok: false, status: "error", score: null, feedback: "" };
@@ -94,7 +94,7 @@ export async function submitSubjective(input: {
   let status = "submitted";
 
   if (await aiConfigured()) {
-    const graded = await gradeSubjective(q.prompt, answer, q.max_marks);
+    const graded = await gradeSubjective(q.prompt, answer, q.max_marks, q.rubric as { point: string; marks: number }[] | null, q.model_answer);
     if (graded) {
       score = graded.score;
       feedback = graded.feedback || feedback;

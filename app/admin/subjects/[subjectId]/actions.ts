@@ -24,6 +24,31 @@ export async function createTopic(formData: FormData) {
   revalidatePath(`/admin/subjects/${subjectId}`);
 }
 
+// One combined topic per subject (subject-wide mocks, amendments, past papers,
+// full book). Placed after the regular topics.
+export async function addCombinedTopic(formData: FormData) {
+  const subjectId = str(formData.get("subjectId"));
+  if (!subjectId) return;
+  const supabase = createClient();
+  const { data: existing } = await supabase
+    .from("topics")
+    .select("id")
+    .eq("subject_id", subjectId)
+    .eq("is_combined", true)
+    .maybeSingle();
+  if (existing) {
+    revalidatePath(`/admin/subjects/${subjectId}`);
+    redirect(`/admin/topics/${existing.id}`);
+  }
+  const { data: created } = await supabase
+    .from("topics")
+    .insert({ subject_id: subjectId, title: "Combined topic (whole subject)", slug: `combined-${subjectId.slice(0, 8)}`, order_index: 999, is_combined: true, is_published: false })
+    .select("id")
+    .single();
+  revalidatePath(`/admin/subjects/${subjectId}`);
+  if (created) redirect(`/admin/topics/${created.id}`);
+}
+
 export async function deleteTopic(formData: FormData) {
   const id = str(formData.get("id"));
   const subjectId = str(formData.get("parentId"));

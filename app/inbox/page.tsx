@@ -62,10 +62,12 @@ export default async function StudentInbox() {
   // Papers (graded subjective submissions) + their saved model answers.
   const subQIds = [...new Set((subs ?? []).map((s) => s.question_id))];
   const { data: subQs } = subQIds.length
-    ? await svc.from("subjective_questions").select("id, prompt, max_marks").in("id", subQIds)
-    : { data: [] as { id: string; prompt: string; max_marks: number | null }[] };
+    ? await svc.from("subjective_questions").select("id, prompt, max_marks, model_answer").in("id", subQIds)
+    : { data: [] as { id: string; prompt: string; max_marks: number | null; model_answer: string | null }[] };
   const qMap = new Map((subQs ?? []).map((q) => [q.id, q]));
+  // Model answer now lives on the question; fall back to the older site_settings store.
   const modelAnswers = await getSubjModelAnswers(subQIds);
+  const modelAnswerFor = (qid: string) => (qMap.get(qid) as { model_answer?: string | null } | undefined)?.model_answer || modelAnswers.get(qid);
 
   for (const s of subs ?? []) {
     const q = qMap.get(s.question_id);
@@ -80,7 +82,7 @@ export default async function StudentInbox() {
       max: mm,
       yourAnswer: s.answer_text,
       feedback: s.ai_feedback,
-      suggested: modelAnswers.get(s.question_id),
+      suggested: modelAnswerFor(s.question_id),
       shareText:
         `Question: ${q?.prompt ?? ""}\n\nMy answer: ${s.answer_text}` +
         (typeof s.ai_score === "number" ? `\n\nScore: ${s.ai_score}/${mm}` : "") +

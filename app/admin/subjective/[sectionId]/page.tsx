@@ -3,7 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { aiConfigured } from "@/lib/ai";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
-import { addSubjective, deleteSubjective, generateSubjectiveFromTranscript } from "./actions";
+import { addSubjective, updateSubjective, deleteSubjective, generateSubjectiveFromTranscript } from "./actions";
+
+type Rubric = { point: string; marks: number }[];
+const rubricToText = (r: Rubric | null | undefined) => (r ?? []).map((x) => `${x.point} | ${x.marks}`).join("\n");
+const LEVELS = ["Easy", "Medium", "Hard", "Exam-level"];
 
 export default async function SubjectiveAdminPage({ params }: { params: { sectionId: string } }) {
   const supabase = createClient();
@@ -16,8 +20,9 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
 
   const { data: questions } = await supabase
     .from("subjective_questions")
-    .select("id, prompt, max_marks")
-    .eq("section_id", section.id);
+    .select("id, prompt, max_marks, level, model_answer, rubric, order_index")
+    .eq("section_id", section.id)
+    .order("order_index");
   const ai = await aiConfigured();
 
   return (
@@ -79,10 +84,26 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
           <input type="hidden" name="section_id" value={section.id} />
           <label>Question / prompt</label>
           <textarea name="prompt" rows={3} placeholder="e.g. Explain the disclosure requirements under AS 24." required />
-          <div style={{ maxWidth: 200 }}>
-            <label>Max marks</label>
-            <input name="max_marks" type="number" defaultValue={10} />
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+            <div>
+              <label>Max marks</label>
+              <input name="max_marks" type="number" defaultValue={10} />
+            </div>
+            <div>
+              <label>Level</label>
+              <select name="level" defaultValue="">
+                <option value="">—</option>
+                {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
           </div>
+          <label>Model answer (the ideal answer — saved once, shown to students after they submit)</label>
+          <textarea name="model_answer" rows={4} placeholder="The complete model answer…" />
+          <label>Marking scheme — one point per line, <code>point | marks</code></label>
+          <textarea name="rubric" rows={4} placeholder={"Defines what disclosure means | 2\nLists all 4 disclosure requirements | 4\nGives an example | 2"} />
+          <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
+            The AI grades each student&apos;s answer against exactly these points and marks — your scheme, not random web data.
+          </p>
           <button className="btn" type="submit">
             Add question
           </button>
@@ -92,17 +113,52 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
       <h2 className="admin-section-title">📋 Questions</h2>
       <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
         {questions && questions.length > 0 ? (
-          questions.map((q, i) => (
-            <div className="list-row" key={q.id}>
-              <div>
-                <span className="row-title">
-                  {i + 1}. {q.prompt}
-                </span>
-                <p className="row-sub">{q.max_marks ?? 10} marks</p>
+          questions.map((q, i) => {
+            const rubric = (q.rubric as Rubric | null) ?? [];
+            const rubricTotal = rubric.reduce((s, x) => s + (x.marks || 0), 0);
+            return (
+              <div className="card" key={q.id}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <strong>{i + 1}. {q.prompt}</strong>
+                    <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
+                      {q.max_marks ?? 10} marks{q.level ? ` · ${q.level}` : ""}
+                      {rubric.length ? ` · ${rubric.length} marking points (${rubricTotal} marks)` : " · ⚠️ no marking scheme"}
+                      {q.model_answer ? " · ✅ model answer" : " · ⚠️ no model answer"}
+                    </p>
+                  </div>
+                  <DeleteButton action={deleteSubjective} id={q.id} parentId={section.id} message="Delete this question?" />
+                </div>
+                <details style={{ marginTop: 10 }}>
+                  <summary style={{ cursor: "pointer", color: "var(--accent)", fontSize: ".9rem" }}>Edit question &amp; marking scheme</summary>
+                  <form action={updateSubjective} style={{ marginTop: 12 }}>
+                    <input type="hidden" name="id" value={q.id} />
+                    <input type="hidden" name="section_id" value={section.id} />
+                    <label>Question / prompt</label>
+                    <textarea name="prompt" rows={3} defaultValue={q.prompt} required />
+                    <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+                      <div>
+                        <label>Max marks</label>
+                        <input name="max_marks" type="number" defaultValue={q.max_marks ?? 10} />
+                      </div>
+                      <div>
+                        <label>Level</label>
+                        <select name="level" defaultValue={q.level ?? ""}>
+                          <option value="">—</option>
+                          {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <label>Model answer</label>
+                    <textarea name="model_answer" rows={4} defaultValue={q.model_answer ?? ""} />
+                    <label>Marking scheme — <code>point | marks</code> per line</label>
+                    <textarea name="rubric" rows={4} defaultValue={rubricToText(rubric)} />
+                    <button className="btn small" type="submit">Save</button>
+                  </form>
+                </details>
               </div>
-              <DeleteButton action={deleteSubjective} id={q.id} parentId={section.id} message="Delete this question?" />
-            </div>
-          ))
+            );
+          })
         ) : (
           <div className="card">
             <p className="muted">📭 No questions yet — add your first above.</p>

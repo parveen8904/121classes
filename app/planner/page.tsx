@@ -29,14 +29,15 @@ export default async function PlannerPage() {
   // combined topic is a subject-wide bundle, not a study unit).
   const { data: topics } = await svc
     .from("topics")
-    .select("id, title, order_index, subject_id, importance, important_qs_rev1, important_qs_rev2, subjects(title)")
+    .select("id, title, order_index, subject_id, importance, weightage_marks, important_qs_rev1, important_qs_rev2, subjects(title)")
     .eq("is_published", true)
     .eq("is_combined", false)
     .order("order_index")
     .limit(400);
 
-  // Order by the hit list for the student's attempt (A→B→C), falling back to the
-  // exhaustive class order (order_index) when no hit list is set.
+  // Order by the hit list for the student's attempt (A→B→C); within the same
+  // category, heavier (higher ICAI weightage) topics come first so they get
+  // studied sooner and more revision runway. Falls back to exhaustive order.
   const normAtt = (s: string) => s.toLowerCase().replace(/[_\s]+/g, " ").trim();
   const catRank = (imp: Record<string, string> | null | undefined) => {
     if (!imp) return 9;
@@ -48,7 +49,10 @@ export default async function PlannerPage() {
     .map((t, i) => ({ t, i }))
     .sort((a, b) => {
       const r = catRank(a.t.importance as Record<string, string>) - catRank(b.t.importance as Record<string, string>);
-      return r !== 0 ? r : a.i - b.i;
+      if (r !== 0) return r;
+      const w = (Number(b.t.weightage_marks) || 0) - (Number(a.t.weightage_marks) || 0);
+      if (w !== 0) return w;
+      return a.i - b.i;
     })
     .map((x) => x.t);
 

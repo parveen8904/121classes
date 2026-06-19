@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/service";
 import { aiConfigured } from "@/lib/ai";
+import SubmitButton from "@/app/components/SubmitButton";
 import AdminHero from "../_components/AdminHero";
 import PdfUpload from "../_components/PdfUpload";
 import { addRepositoryItem, deleteRepositoryItem, toggleRepositoryItem, extractItemText } from "./actions";
@@ -125,7 +126,7 @@ export default async function RepositoryPage() {
           <label style={{ marginTop: 4 }}>Resources page label (optional — defaults to the name)</label>
           <input name="resource_label" placeholder="e.g. ICAI RTP — May 2026 (FR)" />
 
-          <button className="btn" type="submit" style={{ marginTop: 14 }}>Add to repository</button>
+          <SubmitButton className="btn" savedLabel="✓ Added" style={{ marginTop: 14 }}>Add to repository</SubmitButton>
         </form>
         </div>
       </details>

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import FloatingSupport from "./components/FloatingSupport";
 import RegisterSW from "./components/RegisterSW";
 import AskMe from "./components/AskMe";
+import GlobalSaving from "./components/GlobalSaving";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         {/* Top progress bar shown on every page load / navigation */}
-        <NextTopLoader color="#0d9488" height={3} showSpinner={false} shadow="0 0 8px #0d9488" />
+        <NextTopLoader color="#0d9488" height={4} showSpinner={true} shadow="0 0 8px #0d9488" />
+        <GlobalSaving />
         {children}
         <FloatingSupport
           whatsapp={m.get("support_whatsapp")}

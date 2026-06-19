@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import PdfUpload from "../../_components/PdfUpload";
+import SubmitButton from "@/app/components/SubmitButton";
 
 export type TopicMeta = {
   id: string;
@@ -140,7 +141,7 @@ export default function TopicMetaForm({
         </>
       )}
 
-      <button className="btn" type="submit" style={{ marginTop: 14 }}>Save topic details</button>
+      <SubmitButton className="btn" closeDetails style={{ marginTop: 14 }}>Save topic details</SubmitButton>
     </form>
   );
 }

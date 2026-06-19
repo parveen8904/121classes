@@ -1,6 +1,7 @@
 import AdminHero from "../_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
 import { saveAiSettings } from "./actions";
+import SubmitButton from "@/app/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "AI usage & cost — Admin" };
@@ -114,7 +115,7 @@ export default async function AiUsagePage() {
             <input name="ai_doubt_daily_limit" type="number" min={0} step={1} defaultValue={cfg.get("ai_doubt_daily_limit") ?? ""} placeholder="e.g. 20" />
           </div>
         </div>
-        <button className="btn" type="submit" style={{ marginTop: 10 }}>Save budget &amp; limits</button>
+        <SubmitButton className="btn" style={{ marginTop: 10 }}>Save budget &amp; limits</SubmitButton>
         <p className="muted" style={{ fontSize: ".8rem", marginTop: 6 }}>
           You get one email the first time monthly spend crosses the cap. Over the daily limit, a student&apos;s doubts are still saved and answered by faculty — just not by AI.
         </p>

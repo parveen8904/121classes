@@ -622,3 +622,35 @@ summary.as-btn::marker { content: ""; }
 @media (max-width: 400px) {
   .brand .word { font-size: 1.18rem; }
 }
+
+/* --- Save / progress feedback --- */
+@keyframes spin121 { to { transform: rotate(360deg); } }
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin121 0.7s linear infinite;
+  vertical-align: -2px;
+}
+/* Global safety-net: spin any submit button the moment a form is submitted.
+   Keeps the label and uses the button's own text colour so it stays visible on
+   both filled (teal) and outline buttons. */
+button.is-saving {
+  pointer-events: none;
+  opacity: 0.9;
+}
+button.is-saving::before {
+  content: "";
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  margin-right: 8px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin121 0.7s linear infinite;
+  vertical-align: -2px;
+}

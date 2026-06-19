@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import { saveContent, saveAmendments } from "./actions";
+import SubmitButton from "@/app/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Career & Amendments — Admin" };
@@ -53,7 +54,7 @@ export default async function ContentPage({ searchParams }: { searchParams: { sa
           The plan now builds three stages automatically — exhaustive study, first revision (25% of study time) and second revision (≈12.5%). &ldquo;Buffer days&rdquo; is the gap left free right before the exam.
         </p>
 
-        <button className="btn" type="submit" style={{ marginTop: 12 }}>Save career, wellness &amp; planner</button>
+        <SubmitButton className="btn" style={{ marginTop: 12 }}>Save career, wellness &amp; planner</SubmitButton>
       </form>
 
       {/* AMENDMENTS PER ATTEMPT */}
@@ -80,7 +81,7 @@ export default async function ContentPage({ searchParams }: { searchParams: { sa
             </div>
           );
         })}
-        <button className="btn" type="submit" style={{ marginTop: 14 }}>Save amendments</button>
+        <SubmitButton className="btn" style={{ marginTop: 14 }}>Save amendments</SubmitButton>
       </form>
     </section>
   );

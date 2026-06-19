@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SECTION_TYPES, FIELD_LABELS, PLAN_OPTIONS, TEXTAREA_FIELDS, PDF_FIELDS, type ConfigField } from "./sectionTypes";
 import BunnyUploader from "./BunnyUploader";
 import PdfUpload from "../../_components/PdfUpload";
+import SubmitButton from "@/app/components/SubmitButton";
 
 type Section = {
   id: string;
@@ -124,9 +125,7 @@ export default function SectionForm({
       <label className="remember" style={{ marginTop: 0 }}>
         <input type="checkbox" name="is_published" defaultChecked={section?.is_published ?? false} /> Published
       </label>
-      <button className="btn" type="submit">
-        {submitLabel}
-      </button>
+      <SubmitButton className="btn">{submitLabel}</SubmitButton>
     </form>
   );
 }

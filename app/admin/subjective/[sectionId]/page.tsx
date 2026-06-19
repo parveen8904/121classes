@@ -4,6 +4,7 @@ import { aiConfigured } from "@/lib/ai";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
 import { addSubjective, updateSubjective, deleteSubjective, generateSubjectiveFromTranscript } from "./actions";
+import SubmitButton from "@/app/components/SubmitButton";
 
 type Rubric = { point: string; marks: number }[];
 const rubricToText = (r: Rubric | null | undefined) => (r ?? []).map((x) => `${x.point} | ${x.marks}`).join("\n");
@@ -70,9 +71,7 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
               <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
                 Generated <strong>once</strong> and saved — every student attempts the same questions. They never change until you revise here.
               </p>
-              <button className="btn" type="submit">
-                Generate &amp; save questions
-              </button>
+              <SubmitButton className="btn" savedLabel="✓ Generated">Generate &amp; save questions</SubmitButton>
             </form>
           </div>
         </details>
@@ -104,9 +103,7 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
           <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
             The AI grades each student&apos;s answer against exactly these points and marks — your scheme, not random web data.
           </p>
-          <button className="btn" type="submit">
-            Add question
-          </button>
+          <SubmitButton className="btn" savedLabel="✓ Added">Add question</SubmitButton>
         </form>
       </div>
 
@@ -153,7 +150,7 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
                     <textarea name="model_answer" rows={4} defaultValue={q.model_answer ?? ""} />
                     <label>Marking scheme — <code>point | marks</code> per line</label>
                     <textarea name="rubric" rows={4} defaultValue={rubricToText(rubric)} />
-                    <button className="btn small" type="submit">Save</button>
+                    <SubmitButton className="btn small">Save</SubmitButton>
                   </form>
                 </details>
               </div>

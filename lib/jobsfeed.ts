@@ -10,7 +10,17 @@ import { classifyJobs } from "@/lib/ai";
 
 type Raw = { title: string; company: string; location: string; url: string; snippet: string; source: string; posted_at: string | null };
 
-const DEFAULT_QUERIES = ["Chartered Accountant", "CA articleship", "CA Inter", "CA fresher", "audit associate"];
+const DEFAULT_QUERIES = ["Chartered Accountant", "CA articleship", "CA Inter", "CA Final", "CA fresher", "articleship trainee", "statutory audit CA"];
+
+// Keep ONLY genuine Indian Chartered-Accountant / articleship roles. Requires an
+// EXPLICIT CA signal (so generic "accountant", "banker", IT, and "CA" =
+// California are excluded) and drops clearly foreign listings.
+export function isCaRelevant(title: string, snippet?: string, company?: string): boolean {
+  const t = `${title} ${snippet ?? ""} ${company ?? ""}`.toLowerCase();
+  const strong = /chartered accountant|\barticle\s?ship\b|article\s?assistant|article\s?trainee|\barticled\b|\bicai\b|\bca[\s-]?inter\b|\bca[\s-]?final\b|\bca[\s-]?ipcc\b|semi[\s-]?qualified\s*(ca)?|qualified\s+ca\b|\bca\s+(fresher|trainee|article|firm|aspirant|drop\s?out)|aspiring\s+ca\b|\bca\s*\/\s*cma\b|\bca\s+&\s+/;
+  const foreign = /united states|\busa\b|u\.s\.a|\bamerica\b|\bcanada\b|united kingdom|\buk\b|\bdubai\b|\buae\b|singapore|australia|\bafrica\b|nigeria|kenya|philippines|malaysia|qatar|saudi|\b(mn|tx|ny|nj|fl|il|wa|oh|pa)\b/;
+  return strong.test(t) && !foreign.test(t);
+}
 
 async function fromJooble(): Promise<Raw[]> {
   const key = await getSecret("JOOBLE_API_KEY");
@@ -107,9 +117,11 @@ export async function ingestJobs(): Promise<{ added: number; checked: number; it
   const all = [...(await fromJooble()), ...(await fromRss())];
   if (!all.length) return { added: 0, checked: 0, items: [] as DigestItem[] };
 
-  // Dedupe within this run, then against what's already stored.
+  // Dedupe within this run + keep only genuine CA / articleship roles.
   const seen = new Set<string>();
-  const unique = all.filter((j) => (seen.has(j.url) ? false : (seen.add(j.url), true)));
+  const unique = all
+    .filter((j) => (seen.has(j.url) ? false : (seen.add(j.url), true)))
+    .filter((j) => isCaRelevant(j.title, j.snippet, j.company));
   const fresh: Raw[] = [];
   for (const j of unique) {
     const { data: existing } = await svc.from("job_listings").select("id").eq("url", j.url).maybeSingle();

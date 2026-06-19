@@ -149,6 +149,9 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                     <div style={{ marginTop: 12, padding: "10px 12px", background: "#fef3c7", borderRadius: 8, fontSize: ".88rem" }}>
                       <strong>⏳ Typed notes awaiting faculty approval</strong>
                       <p style={{ margin: "4px 0 8px", whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto" }}>{String(cfg.notes_typed_pending ?? "")}</p>
+                      <a className="btn small secondary" href={`/learn/notes/${s.id}/pdf`} target="_blank" rel="noopener noreferrer" style={{ marginBottom: 8, display: "inline-block" }}>
+                        ⬇️ Download as PDF to review
+                      </a>
                       <div style={{ display: "flex", gap: 8 }}>
                         <form action={approveTypedNotes}>
                           <input type="hidden" name="sectionId" value={s.id} />

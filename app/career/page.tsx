@@ -43,6 +43,14 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
     "ICAI Jobs Portal | https://cajobs.icai.org/",
     "CAclubindia — Jobs | https://www.caclubindia.com/jobs/",
     "LinkedIn — CA jobs | https://www.linkedin.com/jobs/chartered-accountant-jobs/",
+    // Top CA / audit firms in India — careers pages
+    "Deloitte India — Careers | https://www2.deloitte.com/in/en/careers/careers.html",
+    "PwC India — Careers | https://www.pwc.in/careers.html",
+    "EY India — Careers | https://www.ey.com/en_in/careers",
+    "KPMG India — Careers | https://kpmg.com/in/en/home/careers.html",
+    "Grant Thornton Bharat — Careers | https://www.grantthornton.in/careers/",
+    "BDO India — Careers | https://www.bdo.in/en-gb/careers",
+    "RSM India — Careers | https://www.rsm.global/india/careers",
   ];
   const linkLines = (m.get("career_links") || "").split("\n").map((l) => l.trim()).filter(Boolean);
   const browseLinks = (linkLines.length ? linkLines : DEFAULT_LINKS)

@@ -632,13 +632,25 @@ export default async function Home() {
       </section>
 
       {/* JOB OPENINGS — public teaser; applying needs login */}
-      {careerJobs.length > 0 && (
-        <section className="section alt" id="openings">
-          <div className="section-head">
-            <div className="eyebrow">💼 Opportunities</div>
-            <h2>Job &amp; articleship openings</h2>
-            <p>Live openings for our students. Log in to apply &amp; see full details.</p>
-          </div>
+      <section className="section alt" id="openings">
+        <div className="section-head">
+          <div className="eyebrow">💼 Opportunities</div>
+          <h2>CA jobs &amp; articleship openings</h2>
+          <p>Browse live openings &amp; walk-ins on the top portals, or log in for our curated list and Career Corner.</p>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", maxWidth: 760, margin: "0 auto 16px" }}>
+          {[
+            ["Google Jobs — CA", "https://www.google.com/search?q=chartered+accountant+jobs+in+india&ibp=htl;jobs"],
+            ["Google Jobs — Articleship", "https://www.google.com/search?q=ca+articleship+jobs+in+india&ibp=htl;jobs"],
+            ["Naukri — CA", "https://www.naukri.com/chartered-accountant-jobs"],
+            ["Naukri — Articleship", "https://www.naukri.com/ca-articleship-jobs"],
+            ["ICAI Jobs Portal", "https://cajobs.icai.org/"],
+          ].map(([label, url]) => (
+            <a key={url} className="btn small secondary" href={url} target="_blank" rel="noopener noreferrer">{label} ↗</a>
+          ))}
+          <Link className="btn small" href="/login?next=/career">Career Corner (log in) →</Link>
+        </div>
+        {careerJobs.length > 0 && (
           <div style={{ display: "grid", gap: 10, maxWidth: 760, margin: "0 auto" }}>
             {careerJobs.slice(0, 6).map((line, i) => {
               const [title, firm, location] = line.split("|").map((s) => s.trim());
@@ -655,8 +667,8 @@ export default async function Home() {
               );
             })}
           </div>
-        </section>
-      )}
+        )}
+      </section>
 
       {/* CONTACT */}
       <section className="section" id="contact">

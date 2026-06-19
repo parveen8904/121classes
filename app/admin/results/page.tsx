@@ -3,6 +3,7 @@ import AdminHero from "../_components/AdminHero";
 import ImageUpload from "../_components/ImageUpload";
 import DeleteButton from "../_components/DeleteButton";
 import { createResult, updateResult, deleteResult } from "./actions";
+import SubmitButton from "@/app/components/SubmitButton";
 
 export default async function ResultsAdminPage() {
   const supabase = createClient();
@@ -56,9 +57,7 @@ export default async function ResultsAdminPage() {
           <label className="remember" style={{ marginTop: 0 }}>
             <input type="checkbox" name="is_published" defaultChecked /> Published
           </label>
-          <button className="btn" type="submit">
-            Add result
-          </button>
+          <SubmitButton className="btn" savedLabel="✓ Added">Add result</SubmitButton>
         </form>
       </div></div>
       </details>

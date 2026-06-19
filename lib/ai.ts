@@ -310,6 +310,28 @@ export async function gradeSubjective(
   }
 }
 
+// Classify a batch of job openings into placement categories in ONE cheap call.
+// Returns an array of categories aligned to the input order.
+export const JOB_CATEGORIES = ["Articleship", "Fresher CA", "Experienced CA", "Industry / Corporate", "Audit firm", "Internship", "Other"] as const;
+export async function classifyJobs(jobs: { title: string; company?: string; snippet?: string }[]): Promise<string[]> {
+  if (!jobs.length) return [];
+  const sys =
+    `You classify Indian CA job openings into exactly one of these categories: ${JOB_CATEGORIES.join(", ")}. ` +
+    `Respond ONLY as a compact JSON array of category strings, one per opening, in the same order. No prose.`;
+  const user = jobs.map((j, i) => `${i + 1}. ${j.title} — ${j.company ?? ""} — ${(j.snippet ?? "").slice(0, 160)}`).join("\n");
+  const out = await callClaude(sys, user, 800, { model: await fastModel(), feature: "classify_jobs" });
+  if (!out) return jobs.map(() => "Other");
+  try {
+    const arr = JSON.parse(out.replace(/```json|```/g, "").trim());
+    return jobs.map((_, i) => {
+      const c = String(Array.isArray(arr) ? arr[i] ?? "" : "").trim();
+      return (JOB_CATEGORIES as readonly string[]).includes(c) ? c : "Other";
+    });
+  } catch {
+    return jobs.map(() => "Other");
+  }
+}
+
 // Convert a handwritten-notes PDF into clean typed notes (Markdown) using
 // Claude's vision. Run ONCE at admin level; the result goes to faculty for
 // approval before students see it.

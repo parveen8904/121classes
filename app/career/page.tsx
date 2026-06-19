@@ -33,6 +33,20 @@ export default async function CareerPage() {
   const any = ["career_articleship", "career_placement", "career_resources", "career_jobs"].some((k) => (m.get(k) || "").trim());
   const jobs = (m.get("career_jobs") || "").split("\n").map((l) => l.trim()).filter(Boolean);
 
+  // Auto-aggregated, admin-approved openings, grouped by category.
+  const { data: listings } = await supabase
+    .from("job_listings")
+    .select("id, title, company, location, url, category, source")
+    .eq("status", "approved")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  const byCat = new Map<string, NonNullable<typeof listings>>();
+  for (const j of listings ?? []) {
+    const c = j.category || "Other";
+    if (!byCat.has(c)) byCat.set(c, [] as never);
+    byCat.get(c)!.push(j);
+  }
+
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
       <div className="learn-hero">
@@ -47,29 +61,62 @@ export default async function CareerPage() {
         <Link className="btn secondary" href="/career/interview">🎤 AI mock interview</Link>
       </div>
 
-      {/* Job openings — shown here with an Apply link */}
-      <h2 style={{ marginTop: 24, fontSize: "1.15rem" }}>💼 Job &amp; articleship openings</h2>
-      {jobs.length > 0 ? (
-        <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-          {jobs.map((line, i) => {
-            const j = parseJob(line);
-            return (
-              <div className="card" key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                <div>
-                  <strong>{j.title || line}</strong>
-                  {(j.firm || j.location) && (
-                    <p className="muted" style={{ fontSize: ".85rem", margin: "2px 0 0" }}>
-                      {[j.firm, j.location].filter(Boolean).join(" · ")}
-                    </p>
-                  )}
-                </div>
-                {j.href && <a className="btn small" href={j.href} target="_blank" rel="noreferrer">Apply →</a>}
+      {/* Auto-aggregated openings, grouped by category */}
+      {byCat.size > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <h2 style={{ fontSize: "1.15rem" }}>💼 Latest openings</h2>
+          {[...byCat.entries()].map(([cat, list]) => (
+            <div key={cat} style={{ marginTop: 12 }}>
+              <h3 style={{ fontSize: "1rem", margin: "0 0 6px" }}>{cat}</h3>
+              <div style={{ display: "grid", gap: 8 }}>
+                {list.map((j) => (
+                  <div className="card" key={j.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <strong>{j.title}</strong>
+                      {(j.company || j.location || j.source) && (
+                        <p className="muted" style={{ fontSize: ".82rem", margin: "2px 0 0" }}>
+                          {[j.company, j.location, j.source].filter(Boolean).join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                    <a className="btn small" href={j.url} target="_blank" rel="noopener noreferrer">Apply →</a>
+                  </div>
+                ))}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
-      ) : (
-        <div className="card" style={{ marginTop: 10 }}><p className="muted">No openings posted right now — check back soon. ✨</p></div>
+      )}
+
+      {/* Manually posted openings (optional, in addition to the feed) */}
+      {jobs.length > 0 && (
+        <>
+          <h2 style={{ marginTop: 24, fontSize: "1.15rem" }}>💼 {byCat.size > 0 ? "More" : "Job & articleship"} openings</h2>
+          <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+            {jobs.map((line, i) => {
+              const j = parseJob(line);
+              return (
+                <div className="card" key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <div>
+                    <strong>{j.title || line}</strong>
+                    {(j.firm || j.location) && (
+                      <p className="muted" style={{ fontSize: ".85rem", margin: "2px 0 0" }}>
+                        {[j.firm, j.location].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
+                  </div>
+                  {j.href && <a className="btn small" href={j.href} target="_blank" rel="noreferrer">Apply →</a>}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {jobs.length === 0 && byCat.size === 0 && (
+        <>
+          <h2 style={{ marginTop: 24, fontSize: "1.15rem" }}>💼 Job &amp; articleship openings</h2>
+          <div className="card" style={{ marginTop: 10 }}><p className="muted">No openings posted right now — check back soon. ✨</p></div>
+        </>
       )}
       {any ? (
         <>

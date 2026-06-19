@@ -3,6 +3,7 @@ import DeleteButton from "../_components/DeleteButton";
 import AdminHero from "../_components/AdminHero";
 import ImageUpload from "../_components/ImageUpload";
 import { createFaculty, updateFaculty, deleteFaculty } from "./actions";
+import SubmitButton from "@/app/components/SubmitButton";
 
 export default async function FacultyPage() {
   const supabase = createClient();
@@ -34,9 +35,7 @@ export default async function FacultyPage() {
           </div>
           <label htmlFor="f-bio">Bio (optional)</label>
           <textarea id="f-bio" name="bio" rows={3} placeholder="Short bio shown to students" />
-          <button className="btn" type="submit">
-            Add faculty
-          </button>
+          <SubmitButton className="btn" savedLabel="✓ Added">Add faculty</SubmitButton>
         </form>
       </div></div>
       </details>

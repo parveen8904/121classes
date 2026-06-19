@@ -4,6 +4,7 @@ import DeleteButton from "../_components/DeleteButton";
 import PublishToggle from "../_components/PublishToggle";
 import AdminHero from "../_components/AdminHero";
 import { createCourse, updateCourse, deleteCourse, toggleCoursePublish } from "./actions";
+import SubmitButton from "@/app/components/SubmitButton";
 
 export default async function CoursesPage() {
   const supabase = createClient();
@@ -48,9 +49,7 @@ export default async function CoursesPage() {
             <label className="remember" style={{ marginTop: 0 }}>
               <input type="checkbox" name="is_test_series" /> This is a Test Series
             </label>
-            <button className="btn" type="submit">
-              Add course
-            </button>
+            <SubmitButton className="btn" savedLabel="✓ Added">Add course</SubmitButton>
           </form>
         </div>
       </details>

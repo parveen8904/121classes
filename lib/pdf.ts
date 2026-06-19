@@ -1,12 +1,60 @@
 import { extractText, getDocumentProxy } from "unpdf";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
+
+// Noto Sans (covers ₹ and most Unicode) fetched once and cached in memory.
+let fontCache: { reg: Uint8Array; bold: Uint8Array } | null = null;
+let fontPromise: Promise<{ reg: Uint8Array; bold: Uint8Array } | null> | null = null;
+async function loadNoto() {
+  if (fontCache) return fontCache;
+  if (!fontPromise) {
+    const base = "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/";
+    fontPromise = (async () => {
+      const [r, b] = await Promise.all([
+        fetch(base + "NotoSans-Regular.ttf").then((x) => x.arrayBuffer()),
+        fetch(base + "NotoSans-Bold.ttf").then((x) => x.arrayBuffer()),
+      ]);
+      fontCache = { reg: new Uint8Array(r), bold: new Uint8Array(b) };
+      return fontCache;
+    })().catch(() => {
+      fontPromise = null;
+      return null;
+    });
+  }
+  return fontPromise;
+}
+
+// Fallback transliteration (only used if the Unicode font fails to load) so a
+// standard PDF font can still render the common symbols.
+const translit = (s: string) =>
+  s
+    .replace(/₹/g, "Rs.")
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[–—]/g, "-")
+    .replace(/•/g, "-")
+    .replace(/×/g, "x")
+    .replace(/÷/g, "/")
+    .replace(/[→⇒]/g, "->")
+    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "");
 
 // Render plain/markdown-ish notes text into a simple, readable A4 PDF.
 // Lines starting with # become headings; -, * or • become bullets.
 export async function notesToPdf(title: string, text: string): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  let font: PDFFont;
+  let bold: PDFFont;
+  let unicode = false;
+  const noto = await loadNoto();
+  if (noto) {
+    doc.registerFontkit(fontkit);
+    font = await doc.embedFont(noto.reg, { subset: true });
+    bold = await doc.embedFont(noto.bold, { subset: true });
+    unicode = true;
+  } else {
+    font = await doc.embedFont(StandardFonts.Helvetica);
+    bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  }
 
   const A4 = { w: 595.28, h: 841.89 };
   const margin = 50;
@@ -19,7 +67,7 @@ export async function notesToPdf(title: string, text: string): Promise<Uint8Arra
   const newPage = () => { page = doc.addPage([A4.w, A4.h]); y = A4.h - margin; };
   const ensure = (need: number) => { if (y - need < margin) newPage(); };
 
-  const wrap = (s: string, f: typeof font, size: number): string[] => {
+  const wrap = (s: string, f: PDFFont, size: number): string[] => {
     const words = s.split(/\s+/);
     const lines: string[] = [];
     let line = "";
@@ -32,10 +80,10 @@ export async function notesToPdf(title: string, text: string): Promise<Uint8Arra
     return lines.length ? lines : [""];
   };
 
-  // pdf-lib's WinAnsi fonts can't encode every Unicode char; strip the rest.
-  const safe = (s: string) => s.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "");
+  // With the Unicode font we keep text as-is; otherwise transliterate to ASCII.
+  const safe = (s: string) => (unicode ? s : translit(s));
 
-  const draw = (s: string, f: typeof font, size: number, color = dark, indent = 0) => {
+  const draw = (s: string, f: PDFFont, size: number, color = dark, indent = 0) => {
     for (const ln of wrap(safe(s), f, size)) {
       ensure(size + 6);
       page.drawText(ln, { x: margin + indent, y: y - size, size, font: f, color });

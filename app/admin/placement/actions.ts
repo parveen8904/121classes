@@ -1,0 +1,64 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { clearSecretCache } from "@/lib/secrets";
+import { ingestJobs } from "@/lib/jobsfeed";
+
+async function isAdmin(): Promise<boolean> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  return data?.role === "admin";
+}
+
+export async function saveJobSources(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const svc = createServiceClient();
+  const rows = [
+    { key: "JOOBLE_API_KEY", value: String(formData.get("JOOBLE_API_KEY") || "").trim() },
+    { key: "JOB_QUERIES", value: String(formData.get("JOB_QUERIES") || "").trim() },
+    { key: "JOB_LOCATION", value: String(formData.get("JOB_LOCATION") || "").trim() },
+    { key: "JOB_FEEDS", value: String(formData.get("JOB_FEEDS") || "").trim() },
+  ].map((r) => ({ ...r, updated_at: new Date().toISOString() }));
+  await svc.from("app_secrets").upsert(rows, { onConflict: "key" });
+  clearSecretCache();
+  redirect("/admin/placement?saved=1");
+}
+
+export async function fetchJobsNow() {
+  if (!(await isAdmin())) return;
+  const { added } = await ingestJobs();
+  revalidatePath("/admin/placement");
+  redirect(`/admin/placement?fetched=${added}`);
+}
+
+export async function approveJob(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const id = String(formData.get("id") || "");
+  const category = String(formData.get("category") || "Other");
+  if (!id) return;
+  await createServiceClient().from("job_listings").update({ status: "approved", category }).eq("id", id);
+  revalidatePath("/admin/placement");
+  revalidatePath("/career");
+}
+
+export async function rejectJob(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+  await createServiceClient().from("job_listings").update({ status: "rejected" }).eq("id", id);
+  revalidatePath("/admin/placement");
+}
+
+export async function deleteJob(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+  await createServiceClient().from("job_listings").delete().eq("id", id);
+  revalidatePath("/admin/placement");
+  revalidatePath("/career");
+}

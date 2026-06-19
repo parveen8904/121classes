@@ -3,6 +3,7 @@ import DeleteButton from "../_components/DeleteButton";
 import AdminHero from "../_components/AdminHero";
 import { getSecret } from "@/lib/secrets";
 import { createAnnouncement, updateAnnouncement, deleteAnnouncement, saveGovtFeeds, fetchGovtFeedsNow } from "./actions";
+import SubmitButton from "@/app/components/SubmitButton";
 
 const KINDS = [
   { value: "amendment", label: "Amendment" },
@@ -87,9 +88,7 @@ export default async function AnnouncementsPage({
           <label className="remember" style={{ marginTop: 0 }}>
             <input type="checkbox" name="is_published" defaultChecked /> Published
           </label>
-          <button className="btn" type="submit">
-            Add announcement
-          </button>
+          <SubmitButton className="btn" savedLabel="✓ Added">Add announcement</SubmitButton>
         </form>
       </div>
 

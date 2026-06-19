@@ -105,6 +105,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     desc: "Live Anthropic token spend, by feature and model.",
     href: "/admin/ai-usage",
   },
+  {
+    icon: "🎓",
+    title: "Student placement",
+    desc: "Auto-pulled CA openings — categorise & approve to publish.",
+    href: "/admin/placement",
+  },
 ];
 
 export default function AdminHome() {

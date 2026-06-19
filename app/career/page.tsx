@@ -51,11 +51,24 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
     "Grant Thornton Bharat — Careers | https://www.grantthornton.in/careers/",
     "BDO India — Careers | https://www.bdo.in/en-gb/careers",
     "RSM India — Careers | https://www.rsm.global/india/careers",
+    // Well-known mid-size / regional Indian CA firms (Google search → their careers)
+    "Nangia Andersen | https://www.google.com/search?q=Nangia+Andersen+careers+chartered+accountant",
+    "Walker Chandiok | https://www.google.com/search?q=Walker+Chandiok+careers+chartered+accountant",
+    "S.R. Dinodia & Co. | https://www.google.com/search?q=S+R+Dinodia+%26+Co+careers",
+    "Lodha & Co. | https://www.google.com/search?q=Lodha+%26+Co+chartered+accountants+careers",
+    "T. R. Chadha & Co. | https://www.google.com/search?q=T+R+Chadha+%26+Co+careers",
+    "ASA & Associates | https://www.google.com/search?q=ASA+%26+Associates+LLP+careers",
+    "S.S. Kothari Mehta | https://www.google.com/search?q=S+S+Kothari+Mehta+%26+Co+careers",
+    "Khimji Kunverji & Co. | https://www.google.com/search?q=Khimji+Kunverji+%26+Co+careers",
   ];
   const linkLines = (m.get("career_links") || "").split("\n").map((l) => l.trim()).filter(Boolean);
   const browseLinks = (linkLines.length ? linkLines : DEFAULT_LINKS)
     .map((l) => { const [label, url] = l.split("|").map((s) => s.trim()); return { label, url }; })
     .filter((x) => x.label && /^https?:\/\//.test(x.url || ""));
+
+  // City-wise quick filter → Google Jobs for CA roles in that city.
+  const CITIES = ["Delhi", "Gurgaon", "Noida", "Mumbai", "Pune", "Bengaluru", "Hyderabad", "Chennai", "Kolkata", "Ahmedabad", "Jaipur"];
+  const cityLink = (c: string) => `https://www.google.com/search?q=${encodeURIComponent(`chartered accountant jobs in ${c}`)}&ibp=htl;jobs`;
   const any = ["career_articleship", "career_placement", "career_resources", "career_jobs"].some((k) => (m.get(k) || "").trim());
   const jobs = (m.get("career_jobs") || "").split("\n").map((l) => l.trim()).filter(Boolean);
 
@@ -115,6 +128,13 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {browseLinks.map((l, i) => (
               <a key={i} className="btn small secondary" href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>
+            ))}
+          </div>
+
+          <p style={{ fontSize: ".84rem", fontWeight: 600, margin: "14px 0 6px" }}>📍 CA jobs by city</p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {CITIES.map((c) => (
+              <a key={c} className="btn small secondary" href={cityLink(c)} target="_blank" rel="noopener noreferrer">{c} ↗</a>
             ))}
           </div>
         </div>

@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import { JOB_CATEGORIES } from "@/lib/ai";
 import SubmitButton from "@/app/components/SubmitButton";
-import { saveJobSources, fetchJobsNow, approveJob, rejectJob, deleteJob } from "./actions";
+import { saveJobSources, fetchJobsNow, approveJob, approveAllPending, rejectJob, deleteJob } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Student Placement — Admin" };
@@ -19,6 +19,7 @@ export default async function PlacementAdmin({ searchParams }: { searchParams: {
     getSecret("JOB_FEEDS"),
     getSecret("PLACEMENT_DIGEST_EMAIL"),
   ]);
+  const autoPublish = (await getSecret("JOB_AUTOPUBLISH")) === "1";
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 920 }}>
@@ -58,6 +59,9 @@ export default async function PlacementAdmin({ searchParams }: { searchParams: {
           <textarea name="JOB_FEEDS" rows={2} defaultValue={feeds} placeholder={"https://…/jobs/rss"} />
           <label>📧 Email me new openings each morning (digest)</label>
           <input name="PLACEMENT_DIGEST_EMAIL" type="email" defaultValue={digestEmail} placeholder="you@example.com (leave blank for no email)" />
+          <label className="remember" style={{ marginTop: 10 }}>
+            <input type="checkbox" name="JOB_AUTOPUBLISH" defaultChecked={autoPublish} /> 🚀 Publish openings automatically (skip manual review — they go straight to the Career page)
+          </label>
           <SubmitButton className="btn" style={{ marginTop: 10 }}>Save sources</SubmitButton>
         </form>
         <form action={fetchJobsNow} style={{ marginTop: 8 }}>
@@ -66,7 +70,14 @@ export default async function PlacementAdmin({ searchParams }: { searchParams: {
       </div>
 
       {/* Pending review */}
-      <h2 className="admin-section-title" style={{ marginTop: 28 }}>📥 To review ({pending?.length ?? 0})</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", marginTop: 28 }}>
+        <h2 className="admin-section-title" style={{ margin: 0 }}>📥 To review ({pending?.length ?? 0})</h2>
+        {pending && pending.length > 0 && (
+          <form action={approveAllPending}>
+            <SubmitButton className="btn small" savedLabel="✓ Published">✅ Approve all &amp; publish</SubmitButton>
+          </form>
+        )}
+      </div>
       {!pending || pending.length === 0 ? (
         <div className="card"><p className="muted">Nothing to review. Set a Jooble key above and tap &ldquo;Fetch latest openings now&rdquo;.</p></div>
       ) : (

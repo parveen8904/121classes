@@ -24,6 +24,7 @@ export async function saveJobSources(formData: FormData) {
     { key: "JOB_LOCATION", value: String(formData.get("JOB_LOCATION") || "").trim() },
     { key: "JOB_FEEDS", value: String(formData.get("JOB_FEEDS") || "").trim() },
     { key: "PLACEMENT_DIGEST_EMAIL", value: String(formData.get("PLACEMENT_DIGEST_EMAIL") || "").trim() },
+    { key: "JOB_AUTOPUBLISH", value: formData.get("JOB_AUTOPUBLISH") === "on" ? "1" : "" },
   ].map((r) => ({ ...r, updated_at: new Date().toISOString() }));
   await svc.from("app_secrets").upsert(rows, { onConflict: "key" });
   clearSecretCache();
@@ -43,6 +44,13 @@ export async function approveJob(formData: FormData) {
   const category = String(formData.get("category") || "Other");
   if (!id) return;
   await createServiceClient().from("job_listings").update({ status: "approved", category }).eq("id", id);
+  revalidatePath("/admin/placement");
+  revalidatePath("/career");
+}
+
+export async function approveAllPending() {
+  if (!(await isAdmin())) return;
+  await createServiceClient().from("job_listings").update({ status: "approved" }).eq("status", "new");
   revalidatePath("/admin/placement");
   revalidatePath("/career");
 }

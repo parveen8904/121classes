@@ -8,7 +8,7 @@ import { classifyJobs } from "@/lib/ai";
 //   - Any job RSS/Atom feed URLs the admin pastes (Google Jobs, firm careers).
 // Deduped by URL. AI pre-classifies each into a placement category.
 
-type Raw = { title: string; company: string; location: string; url: string; snippet: string; source: string };
+type Raw = { title: string; company: string; location: string; url: string; snippet: string; source: string; posted_at: string | null };
 
 const DEFAULT_QUERIES = ["Chartered Accountant", "CA articleship", "CA Inter", "CA fresher", "audit associate"];
 
@@ -20,21 +20,22 @@ async function fromJooble(): Promise<Raw[]> {
   const locRaw = (await getSecret("JOB_LOCATION")) || "India";
   const locations = locRaw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
   if (!locations.length) locations.push("India");
-  // Each keyword × each city, capped so we don't hammer the API.
-  const combos: { keywords: string; location: string }[] = [];
-  for (const keywords of queries) for (const location of locations) combos.push({ keywords, location });
+  const pages = Math.min(3, Math.max(1, Number(await getSecret("JOB_PAGES")) || 2));
+  // Each keyword × each city × pages, capped so we don't hammer the free API.
+  const combos: { keywords: string; location: string; page: number }[] = [];
+  for (const keywords of queries) for (const location of locations) for (let page = 1; page <= pages; page++) combos.push({ keywords, location, page });
   const out: Raw[] = [];
-  for (const { keywords, location } of combos.slice(0, 14)) {
+  for (const { keywords, location, page } of combos.slice(0, 40)) {
     try {
       const res = await fetch(`https://jooble.org/api/${key}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ keywords, location }),
+        body: JSON.stringify({ keywords, location, page }),
         cache: "no-store",
       });
       if (!res.ok) continue;
       const data = await res.json();
-      for (const j of (data.jobs ?? []).slice(0, 20)) {
+      for (const j of (data.jobs ?? []).slice(0, 40)) {
         if (!j.title || !j.link) continue;
         out.push({
           title: String(j.title).slice(0, 280),
@@ -43,6 +44,7 @@ async function fromJooble(): Promise<Raw[]> {
           url: String(j.link),
           snippet: String(j.snippet ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 500),
           source: String(j.source ?? "Jooble").slice(0, 80),
+          posted_at: j.updated ? String(j.updated) : null,
         });
       }
     } catch {
@@ -92,6 +94,7 @@ async function fromRss(): Promise<Raw[]> {
         url: link,
         snippet: (pick(block, "description") || pick(block, "summary")).slice(0, 500),
         source: (() => { try { return new URL(url).hostname; } catch { return "feed"; } })(),
+        posted_at: pick(block, "pubDate") || pick(block, "published") || pick(block, "updated") || null,
       });
     }
   }
@@ -114,11 +117,13 @@ export async function ingestJobs(): Promise<{ added: number; checked: number; it
   }
   if (!fresh.length) return { added: 0, checked: unique.length, items: [] as DigestItem[] };
 
+  const autoPublish = (await getSecret("JOB_AUTOPUBLISH")) === "1";
   const cats = await classifyJobs(fresh.map((j) => ({ title: j.title, company: j.company, snippet: j.snippet })));
   const items: { title: string; company: string; category: string; url: string }[] = [];
   for (let i = 0; i < fresh.length; i++) {
     const j = fresh[i];
     const category = cats[i] || "Other";
+    const posted = j.posted_at && !isNaN(Date.parse(j.posted_at)) ? new Date(j.posted_at).toISOString() : null;
     const { error } = await svc.from("job_listings").insert({
       source: j.source,
       title: j.title,
@@ -127,7 +132,8 @@ export async function ingestJobs(): Promise<{ added: number; checked: number; it
       url: j.url,
       snippet: j.snippet || null,
       category,
-      status: "new",
+      posted_at: posted,
+      status: autoPublish ? "approved" : "new",
     });
     if (!error) items.push({ title: j.title, company: j.company, category, url: j.url });
   }

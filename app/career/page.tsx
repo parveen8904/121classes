@@ -34,12 +34,22 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
   const jobs = (m.get("career_jobs") || "").split("\n").map((l) => l.trim()).filter(Boolean);
 
   // Auto-aggregated, admin-approved openings, grouped by category.
-  const { data: listings } = await supabase
+  const { data: listingsRaw } = await supabase
     .from("job_listings")
-    .select("id, title, company, location, url, category, source")
+    .select("id, title, company, location, url, category, source, posted_at, created_at")
     .eq("status", "approved")
     .order("created_at", { ascending: false })
-    .limit(200);
+    .limit(300);
+  // Auto-expire: hide openings older than 45 days so the page stays current.
+  const FRESH_MS = 45 * 24 * 3600 * 1000;
+  const now = Date.now();
+  const dateOf = (j: { posted_at: string | null; created_at: string }) => Date.parse(j.posted_at || j.created_at);
+  const listings = (listingsRaw ?? []).filter((j) => now - dateOf(j) < FRESH_MS);
+  const ago = (j: { posted_at: string | null; created_at: string }) => {
+    const days = Math.floor((now - dateOf(j)) / (24 * 3600 * 1000));
+    if (isNaN(days)) return "";
+    return days <= 0 ? "today" : days === 1 ? "1 day ago" : `${days} days ago`;
+  };
   // City list (first part of each location) for the filter dropdown.
   const cityOf = (loc: string | null) => (loc || "").split(/[,|]/)[0].trim();
   const cities = [...new Set((listings ?? []).map((j) => cityOf(j.location)).filter(Boolean))].sort();
@@ -93,9 +103,9 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
                   <div className="card" key={j.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                     <div style={{ minWidth: 0 }}>
                       <strong>{j.title}</strong>
-                      {(j.company || j.location || j.source) && (
+                      {(j.company || j.location || j.source || ago(j)) && (
                         <p className="muted" style={{ fontSize: ".82rem", margin: "2px 0 0" }}>
-                          {[j.company, j.location, j.source].filter(Boolean).join(" · ")}
+                          {[j.company, j.location, j.source, ago(j)].filter(Boolean).join(" · ")}
                         </p>
                       )}
                     </div>

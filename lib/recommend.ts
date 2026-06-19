@@ -6,7 +6,12 @@ type Topic = { id: string; title: string; subject?: { title?: string; course_id?
 // Looks at a student's recent questions, works out their weak concepts, and
 // matches them to topics (videos + tests + material live on the topic page) and
 // repository material. Best-effort; returns null if AI is off or nothing matches.
-type Reco = { concepts: string[]; topics: Topic[]; material: { id: string; title: string }[] };
+type Reco = {
+  concepts: string[];
+  topics: Topic[];
+  material: { id: string; title: string }[];
+  classes: { topicId: string; topicTitle: string; classTitle: string }[];
+};
 
 export async function getStudyRecommendations(userId: string): Promise<Reco | null> {
   if (!(await aiConfigured())) return null;
@@ -36,16 +41,33 @@ export async function getStudyRecommendations(userId: string): Promise<Reco | nu
 
   const topics = new Map<string, Topic>();
   const material = new Map<string, { id: string; title: string }>();
+  const classes = new Map<string, { topicId: string; topicTitle: string; classTitle: string }>();
   for (const c of concepts) {
     const term = c.replace(/[%_]/g, "").slice(0, 40);
     if (term.length < 2) continue;
-    const [{ data: t }, { data: m }] = await Promise.all([
+    const [{ data: t }, { data: m }, { data: cls }] = await Promise.all([
       svc.from("topics").select("id, title, subject_id, subjects(title, course_id)").ilike("title", `%${term}%`).eq("is_published", true).limit(4),
       svc.from("repository_items").select("id, title").ilike("title", `%${term}%`).eq("is_active", true).limit(4),
+      // the specific class (video) that teaches this concept — so a weak student
+      // can jump straight to it.
+      svc
+        .from("sections")
+        .select("id, title, topic_id, topics(title)")
+        .eq("type", "full_class_video")
+        .eq("is_published", true)
+        .or(`config->>ai_key_points.ilike.%${term}%,config->>important_concepts.ilike.%${term}%`)
+        .limit(3),
     ]);
     for (const row of t ?? []) topics.set(row.id, { id: row.id, title: row.title, subject: (row as any).subjects });
     for (const row of m ?? []) material.set(row.id, { id: row.id, title: row.title });
+    for (const row of cls ?? [])
+      classes.set(row.id, { topicId: row.topic_id, topicTitle: (row as any).topics?.title ?? "", classTitle: row.title });
   }
 
-  return save({ concepts, topics: [...topics.values()].slice(0, 6), material: [...material.values()].slice(0, 6) });
+  return save({
+    concepts,
+    topics: [...topics.values()].slice(0, 6),
+    material: [...material.values()].slice(0, 6),
+    classes: [...classes.values()].slice(0, 6),
+  });
 }

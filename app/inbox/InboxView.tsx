@@ -38,7 +38,7 @@ export default function InboxView({
 }: {
   messages: Msg[];
   performance: { mcqCount: number; paperCount: number };
-  recs: { concepts: string[]; topics: { id: string; title: string; subject?: { title?: string } | null }[]; material: { id: string; title: string }[] } | null;
+  recs: { concepts: string[]; topics: { id: string; title: string; subject?: { title?: string } | null }[]; material: { id: string; title: string }[]; classes?: { topicId: string; topicTitle: string; classTitle: string }[] } | null;
   initialFolders?: string[];
   initialLabels?: Record<string, string>;
 }) {
@@ -144,10 +144,22 @@ export default function InboxView({
           </div>
         ) : (
           <>
-            {folder === "All" && recs && (recs.topics.length > 0 || recs.material.length > 0) && (
+            {folder === "All" && recs && (recs.topics.length > 0 || recs.material.length > 0 || (recs.classes?.length ?? 0) > 0) && (
               <div className="card" style={{ borderColor: "var(--accent)", marginBottom: 12 }}>
                 <h3 style={{ margin: "0 0 6px" }}>🎯 Recommended for you</h3>
-                <p className="muted" style={{ fontSize: ".85rem", marginTop: 0 }}>Focus on: <strong>{recs.concepts.join(", ")}</strong>.</p>
+                <p className="muted" style={{ fontSize: ".85rem", marginTop: 0 }}>Based on your doubts, focus on: <strong>{recs.concepts.join(", ")}</strong>.</p>
+                {recs.classes && recs.classes.length > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <p style={{ fontSize: ".82rem", fontWeight: 600, margin: "4px 0" }}>▶️ Re-watch the class that covers this:</p>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {recs.classes.map((c, i) => (
+                        <Link key={i} className="btn small" href={`/learn/topic/${c.topicId}`}>
+                          {c.classTitle}{c.topicTitle ? ` (${c.topicTitle})` : ""} →
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {recs.topics.map((t) => (
                     <Link key={t.id} className="btn small secondary" href={`/learn/topic/${t.id}`}>

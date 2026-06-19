@@ -6,7 +6,7 @@ import AdminHero from "../../_components/AdminHero";
 import SectionForm from "./SectionForm";
 import TopicMetaForm, { type TopicMeta } from "./TopicMetaForm";
 import { SECTION_TYPES } from "./sectionTypes";
-import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta } from "./actions";
+import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection } from "./actions";
 
 const TYPE_LABEL = Object.fromEntries(SECTION_TYPES.map((t) => [t.value, t.label]));
 const PLAN_LABEL: Record<string, string> = { bronze: "Bronze+", silver: "Silver+", gold: "Gold" };
@@ -110,6 +110,13 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                       Manage questions →
                     </Link>
                   )}
+                  {s.type === "full_class_video" && !!(s.config as Record<string, unknown> | null)?.transcript && (
+                    <form action={summarizeClassSection} style={{ display: "inline" }}>
+                      <input type="hidden" name="sectionId" value={s.id} />
+                      <input type="hidden" name="topicId" value={topic.id} />
+                      <button className="btn small secondary" type="submit">🤖 Summarize (AI)</button>
+                    </form>
+                  )}
                   <form action={toggleSectionPublish} style={{ display: "inline" }}>
                     <input type="hidden" name="id" value={s.id} />
                     <input type="hidden" name="topicId" value={topic.id} />
@@ -126,6 +133,26 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                   />
                 </div>
               </div>
+
+              {(() => {
+                const cfg = (s.config as Record<string, unknown> | null) ?? {};
+                if (!cfg.ai_summary) return null;
+                return (
+                  <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--bg-soft)", borderRadius: 8, fontSize: ".88rem" }}>
+                    <strong>🤖 AI class summary</strong>
+                    <p style={{ margin: "4px 0 6px" }}>{String(cfg.ai_summary)}</p>
+                    <p className="muted" style={{ margin: 0, fontSize: ".82rem" }}>
+                      ❓ {Number(cfg.ai_questions_count) || 0} questions solved
+                      {cfg.ai_homework ? ` · 📚 Homework: ${String(cfg.ai_homework)}` : ""}
+                    </p>
+                    {cfg.ai_key_points ? (
+                      <p className="muted" style={{ margin: "4px 0 0", fontSize: ".82rem" }}>
+                        🔑 Key concepts: {String(cfg.ai_key_points).split("\n").filter(Boolean).join(" · ")}
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              })()}
 
               <details style={{ marginTop: 14 }}>
                 <summary style={{ cursor: "pointer", color: "var(--accent)", fontSize: ".9rem" }}>

@@ -309,3 +309,27 @@ export async function gradeSubjective(
     return { score: null, feedback: text.slice(0, 800) };
   }
 }
+
+// Read a class transcript and summarise it: overview, how many questions were
+// solved, the homework given, and the key concepts. Run ONCE at upload time.
+export async function summarizeClass(
+  transcript: string,
+): Promise<{ summary: string; questions_count: number; homework: string; key_points: string[] } | null> {
+  if (!transcript.trim()) return null;
+  const sys =
+    "You are an academic assistant for 121 CA Classes. From the class transcript below, produce a concise study summary for revision. " +
+    'Respond ONLY as compact JSON, no prose, no code fences: {"summary":"<3-5 sentence overview of what the class covered>","questions_count":<number of questions/problems solved in the class>,"homework":"<the homework given to students, or empty string>","key_points":["<important concept/standard/section 1>","<concept 2>", "..."]}.';
+  const text = await callClaude(sys, `Transcript:\n${transcript.slice(0, 24000)}`, 900, { feature: "summarize" });
+  if (!text) return null;
+  try {
+    const j = JSON.parse(text.replace(/```json|```/g, "").trim());
+    return {
+      summary: String(j.summary ?? "").trim(),
+      questions_count: Number(j.questions_count) || 0,
+      homework: String(j.homework ?? "").trim(),
+      key_points: Array.isArray(j.key_points) ? j.key_points.map((x: unknown) => String(x).trim()).filter(Boolean) : [],
+    };
+  } catch {
+    return null;
+  }
+}

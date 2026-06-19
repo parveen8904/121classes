@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../../_lib/util";
 import { ALL_CONFIG_FIELDS } from "./sectionTypes";
+import { summarizeClass } from "@/lib/ai";
 
 function readConfig(formData: FormData): Record<string, string> {
   const config: Record<string, string> = {};
@@ -77,6 +78,34 @@ export async function setClassDuration(formData: FormData) {
   } else {
     await supabase.from("site_settings").delete().eq("key", `dur:${topicId}`);
   }
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
+// Read a class section's transcript and store an AI summary (overview, number
+// of questions solved, homework, key concepts) on the section config.
+export async function summarizeClassSection(formData: FormData) {
+  const sectionId = str(formData.get("sectionId"));
+  const topicId = str(formData.get("topicId"));
+  if (!sectionId) return;
+  const supabase = createClient();
+  const { data: sec } = await supabase.from("sections").select("config").eq("id", sectionId).maybeSingle();
+  const config = (sec?.config ?? {}) as Record<string, unknown>;
+  const transcript = String(config.transcript ?? "");
+  if (transcript.trim().length < 50) return;
+  const result = await summarizeClass(transcript);
+  if (!result) return;
+  await supabase
+    .from("sections")
+    .update({
+      config: {
+        ...config,
+        ai_summary: result.summary,
+        ai_questions_count: result.questions_count,
+        ai_homework: result.homework,
+        ai_key_points: result.key_points.join("\n"),
+      },
+    })
+    .eq("id", sectionId);
   revalidatePath(`/admin/topics/${topicId}`);
 }
 

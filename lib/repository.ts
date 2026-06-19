@@ -63,6 +63,8 @@ export async function getRepositoryContext(
     for (const s of secByTopic.get(t.id) ?? []) {
       const c = s.config;
       const parts: string[] = [];
+      if (c.ai_summary) parts.push(`Class summary: ${c.ai_summary}`);
+      if (c.ai_key_points) parts.push(`Key concepts: ${String(c.ai_key_points).split("\n").filter(Boolean).join("; ")}`);
       if (c.important_concepts) parts.push(`Important concepts: ${c.important_concepts}`);
       if (c.important_questions) parts.push(`Important questions: ${c.important_questions}`);
       if (c.homework) parts.push(`Homework: ${c.homework}`);

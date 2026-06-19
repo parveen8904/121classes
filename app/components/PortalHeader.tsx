@@ -4,6 +4,7 @@ import Logo from "@/app/components/Logo";
 import ThemeToggle from "@/app/components/ThemeToggle";
 import SignOutButton from "@/app/dashboard/sign-out";
 import PortalMobileMenu from "@/app/components/PortalMobileMenu";
+import BackButton from "@/app/components/BackButton";
 
 // Shared header for every signed-in portal page (student + admin).
 // Two-colour brand strip on top + an inspirational line + emoji nav.
@@ -39,6 +40,7 @@ export default async function PortalHeader() {
       <div className="portal-strip" />
       <div className="portal-header-inner">
         <div className="portal-brand">
+          <BackButton />
           <Link href="/">
             <Logo />
           </Link>

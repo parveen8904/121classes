@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { videoEmbedSrc } from "../../_lib/media";
 import { bunnyEmbedUrl } from "@/lib/bunny";
 import DoubtBox from "./DoubtBox";
@@ -265,47 +266,47 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     .single();
   if (!topic) notFound();
 
-  // Primary path: list_topic_sections() returns metadata for ALL published
-  // sections (incl. locked) so we can show upgrade teasers.
-  const { data: metas, error: metaErr } = await supabase.rpc("list_topic_sections", {
-    p_topic: topic.id,
-  });
-
-  // Rows the RLS lets this user read (admins: all published; students: free +
-  // subscribed) — gives us `config` for unlocked sections, and doubles as a
-  // fallback list if the RPC isn't deployed yet.
-  const { data: accessRows } = await supabase
-    .from("sections")
-    .select("id, type, title, order_index, min_plan, is_published, config")
-    .eq("topic_id", topic.id)
-    .eq("is_published", true)
-    .order("order_index")
-    .order("title");
-  const configById = new Map<string, Record<string, unknown> | null>(
-    (accessRows ?? []).map((r) => [r.id, r.config as Record<string, unknown> | null]),
-  );
-
-  const sections: SectionMeta[] =
-    !metaErr && metas
-      ? (metas as SectionMeta[])
-      : (accessRows ?? []).map((r) => ({
-          id: r.id,
-          type: r.type,
-          title: r.title,
-          order_index: r.order_index,
-          min_plan: r.min_plan,
-          unlocked: true, // RLS already filtered to what this user may read
-        }));
-  // Per-student floating watermark (traceability) — name + email/phone.
+  // Who's viewing — admins & faculty preview ALL sections (incl. paid) with full content.
   const { data: wmProfile } = await supabase
     .from("profiles")
     .select("full_name, phone, role, target_attempt")
     .eq("id", user.id)
     .maybeSingle();
-  const isAdmin = wmProfile?.role === "admin";
-  const watermarkText = [wmProfile?.full_name, user.email ?? wmProfile?.phone]
-    .filter(Boolean)
-    .join(" · ");
+  const isAdmin = wmProfile?.role === "admin" || wmProfile?.role === "faculty";
+  const watermarkText = [wmProfile?.full_name, user.email ?? wmProfile?.phone].filter(Boolean).join(" · ");
+
+  const configById = new Map<string, Record<string, unknown> | null>();
+  let sections: SectionMeta[] = [];
+
+  if (isAdmin) {
+    // Service client → every published section, fully unlocked, with its content.
+    const { data: rows } = await createServiceClient()
+      .from("sections")
+      .select("id, type, title, order_index, min_plan, config")
+      .eq("topic_id", topic.id)
+      .eq("is_published", true)
+      .order("order_index")
+      .order("title");
+    for (const r of rows ?? []) {
+      configById.set(r.id, r.config as Record<string, unknown> | null);
+      sections.push({ id: r.id, type: r.type, title: r.title, order_index: r.order_index, min_plan: r.min_plan, unlocked: true });
+    }
+  } else {
+    // Students: RPC marks paid sections locked; RLS gives config for unlocked ones.
+    const { data: metas, error: metaErr } = await supabase.rpc("list_topic_sections", { p_topic: topic.id });
+    const { data: accessRows } = await supabase
+      .from("sections")
+      .select("id, type, title, order_index, min_plan, is_published, config")
+      .eq("topic_id", topic.id)
+      .eq("is_published", true)
+      .order("order_index")
+      .order("title");
+    for (const r of accessRows ?? []) configById.set(r.id, r.config as Record<string, unknown> | null);
+    sections =
+      !metaErr && metas
+        ? (metas as SectionMeta[])
+        : (accessRows ?? []).map((r) => ({ id: r.id, type: r.type, title: r.title, order_index: r.order_index, min_plan: r.min_plan, unlocked: true }));
+  }
 
   // Encrypted classes the student may download, keyed by section (for the
   // "Download for offline" button on the class).

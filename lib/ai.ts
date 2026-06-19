@@ -310,26 +310,24 @@ export async function gradeSubjective(
   }
 }
 
-// Classify a batch of job openings into placement categories in ONE cheap call.
-// Returns an array of categories aligned to the input order.
 export const JOB_CATEGORIES = ["Articleship", "Fresher CA", "Experienced CA", "Industry / Corporate", "Audit firm", "Internship", "Other"] as const;
+
+// Categorise an opening from its title/snippet with reliable keyword rules
+// (instant, free, and consistent — beats an LLM that often returns "Other").
+export function categorizeJob(title: string, snippet?: string): string {
+  const t = `${title} ${snippet ?? ""}`.toLowerCase();
+  if (/article\s?ship|article\s?assistant|article\s?trainee|ca\s?article/.test(t)) return "Articleship";
+  if (/\bintern(ship)?\b/.test(t)) return "Internship";
+  if (/manager|senior|sr\.?\b|lead|head|director|controller|principal|experienced|[5-9]\+?\s*years?|1[0-9]\s*years?/.test(t)) return "Experienced CA";
+  if (/fresher|trainee|entry[-\s]?level|graduate|0\s*-\s*[12]\s*years?|qualified ca/.test(t)) return "Fresher CA";
+  if (/audit|assurance|ca firm|chartered accountant firm|articled/.test(t)) return "Audit firm";
+  if (/finance|account|taxation|gst|analyst|industry|corporate|controller|treasury/.test(t)) return "Industry / Corporate";
+  return "Other";
+}
+
+// Batch helper (kept async for the existing call site). No AI cost.
 export async function classifyJobs(jobs: { title: string; company?: string; snippet?: string }[]): Promise<string[]> {
-  if (!jobs.length) return [];
-  const sys =
-    `You classify Indian CA job openings into exactly one of these categories: ${JOB_CATEGORIES.join(", ")}. ` +
-    `Respond ONLY as a compact JSON array of category strings, one per opening, in the same order. No prose.`;
-  const user = jobs.map((j, i) => `${i + 1}. ${j.title} — ${j.company ?? ""} — ${(j.snippet ?? "").slice(0, 160)}`).join("\n");
-  const out = await callClaude(sys, user, 800, { model: await fastModel(), feature: "classify_jobs" });
-  if (!out) return jobs.map(() => "Other");
-  try {
-    const arr = JSON.parse(out.replace(/```json|```/g, "").trim());
-    return jobs.map((_, i) => {
-      const c = String(Array.isArray(arr) ? arr[i] ?? "" : "").trim();
-      return (JOB_CATEGORIES as readonly string[]).includes(c) ? c : "Other";
-    });
-  } catch {
-    return jobs.map(() => "Other");
-  }
+  return jobs.map((j) => categorizeJob(j.title, j.snippet));
 }
 
 // Convert a handwritten-notes PDF into clean typed notes (Markdown) using

@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       dbRows = (data ?? []).length;
       const jrow = (data ?? []).find((r) => r.key === "JOOBLE_API_KEY") as { value?: string } | undefined;
       dbHasJooble = !!jrow;
-      dbErr = error ? String(error.message).slice(0, 200) : `joobleValueLen=${jrow?.value?.length ?? "none"};envJooble=${process.env.JOOBLE_API_KEY === undefined ? "undef" : `len${(process.env.JOOBLE_API_KEY || "").length}`}`;
+      dbErr = error ? String(error.message).slice(0, 200) : `keys=[${(data ?? []).map((r) => r.key).join(",")}]`;
     } catch (e) {
       dbErr = String(e).slice(0, 200);
     }

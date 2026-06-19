@@ -71,6 +71,7 @@ const SECRET_KEYS = [
   "MAILGUN_API_KEY",
   "MAILGUN_DOMAIN",
   "MAILGUN_REGION",
+  "NOTIFY_FROM_EMAIL",
   "INTERAKT_API_KEY",
   "FACULTY_TELEGRAM_CHAT_ID",
   "FACULTY_EMAIL",
@@ -116,4 +117,35 @@ export async function testRazorpayConnection() {
   if (!(await requireAdmin())) return;
   const r = await testRazorpay();
   redirect(`/admin/integrations?rzp=${r.ok ? "ok" : "fail"}&rzpmsg=${encodeURIComponent(r.message)}`);
+}
+
+// Send a test email to FACULTY_EMAIL and surface Mailgun's EXACT response so the
+// admin can see why email fails (wrong domain, EU region, from not allowed…).
+export async function sendTestEmail() {
+  if (!(await requireAdmin())) return;
+  const apiKey = await getSecret("MAILGUN_API_KEY");
+  const domain = await getSecret("MAILGUN_DOMAIN");
+  const to = (await getSecret("FACULTY_EMAIL")) || "";
+  const region = (await getSecret("MAILGUN_REGION")).toLowerCase();
+  const from = (await getSecret("NOTIFY_FROM_EMAIL")) || `121 CA Classes <no-reply@${domain}>`;
+  const apiBase = region === "eu" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
+  let msg = "";
+  if (!apiKey || !domain) msg = "Mailgun API key / domain not set.";
+  else if (!to) msg = "Set FACULTY_EMAIL (the address to send the test to).";
+  else {
+    try {
+      const body = new URLSearchParams({ from, to, subject: "121 CA Classes — test email", html: "<p>✅ Mailgun is working.</p>" });
+      const res = await fetch(`${apiBase}/v3/${domain}/messages`, {
+        method: "POST",
+        headers: { Authorization: "Basic " + Buffer.from(`api:${apiKey}`).toString("base64"), "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+        cache: "no-store",
+      });
+      const text = (await res.text()).slice(0, 240);
+      msg = res.ok ? `✅ Sent to ${to} (from ${from}). Check the inbox.` : `❌ Mailgun ${res.status}: ${text}`;
+    } catch (e) {
+      msg = "❌ " + String(e).slice(0, 200);
+    }
+  }
+  redirect(`/admin/integrations?mailtest=${encodeURIComponent(msg)}`);
 }

@@ -5,7 +5,7 @@ import { razorpayConfigured } from "@/lib/razorpay";
 import { r2Configured } from "@/lib/r2";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
-import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection } from "./actions";
+import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection, sendTestEmail } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +63,7 @@ async function KeyField({ name, label, placeholder }: { name: string; label: str
 export default async function IntegrationsPage({
   searchParams,
 }: {
-  searchParams: { tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string };
+  searchParams: { tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string; mailtest?: string };
 }) {
   const [tg, ai, em, wa, rzp, r2, botUser, health, jooble] = await Promise.all([
     telegramConfigured(),
@@ -102,6 +102,7 @@ export default async function IntegrationsPage({
       {searchParams.tg === "notoken" && <div className="notice err" style={{ marginTop: 16 }}>Add your Telegram bot token below first.</div>}
       {searchParams.links === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Links saved.</div>}
       {searchParams.keys === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Keys saved.</div>}
+      {searchParams.mailtest && <div className={`notice ${searchParams.mailtest.startsWith("✅") ? "ok" : "err"}`} style={{ marginTop: 16 }}>{searchParams.mailtest}</div>}
 
       {/* STATUS */}
       <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
@@ -125,7 +126,10 @@ export default async function IntegrationsPage({
           </form>
         )}
         <Row on={ai} label="🤖 AI (doubts, tests, grading)" help={<>Key from <a className="grad" href="https://console.anthropic.com" target="_blank" rel="noreferrer">console.anthropic.com</a> → API Keys (needs billing).</>} />
-        <Row on={em} label="✉️ Email (Mailgun)" help={<>Key + domain from your <a className="grad" href="https://app.mailgun.com" target="_blank" rel="noreferrer">Mailgun</a> account.</>} />
+        <Row on={em} label="✉️ Email (Mailgun)" help={<>Key + domain from <a className="grad" href="https://app.mailgun.com" target="_blank" rel="noreferrer">Mailgun</a>. The <strong>domain below must exactly match a VERIFIED Mailgun domain</strong>, and set region <code>eu</code> if it&apos;s an EU domain. Then test ↓</>} />
+        <form action={sendTestEmail}>
+          <button className="btn small" type="submit">✉️ Send test email (shows the exact error)</button>
+        </form>
         <Row on={wa} label="💬 WhatsApp (Interakt)" help={<>Key from <a className="grad" href="https://app.interakt.ai" target="_blank" rel="noreferrer">Interakt</a> → Settings → Developer Settings. Bulk WhatsApp also needs an approved template.</>} />
         <Row on={rzp} label="💳 Razorpay (payments)" help={<>Key ID + Secret from <a className="grad" href="https://dashboard.razorpay.com" target="_blank" rel="noreferrer">Razorpay</a> → Settings → API Keys. After saving, click <strong>Test</strong> below before going live.</>} />
         {rzp && (
@@ -162,6 +166,7 @@ export default async function IntegrationsPage({
           <KeyField name="MAILGUN_API_KEY" label="Mailgun API key" placeholder="key-…" />
           <KeyField name="MAILGUN_DOMAIN" label="Mailgun domain" placeholder="mg.121caclasses.com" />
           <KeyField name="MAILGUN_REGION" label="Mailgun region — type eu if your domain is EU (mxa.eu.mailgun.org)" placeholder="eu  (or leave blank for US)" />
+          <KeyField name="NOTIFY_FROM_EMAIL" label="From address (must be on the verified Mailgun domain)" placeholder="121 CA Classes <help@121caclasses.com>" />
           <KeyField name="INTERAKT_API_KEY" label="Interakt (WhatsApp) key" placeholder="Basic auth key" />
           <KeyField name="FACULTY_TELEGRAM_CHAT_ID" label="Faculty Telegram chat id (for doubt alerts)" placeholder="your own Telegram chat id" />
           <KeyField name="FACULTY_EMAIL" label="Faculty alert email" placeholder="help@121caclasses.com" />

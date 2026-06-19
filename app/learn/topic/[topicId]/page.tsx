@@ -114,11 +114,26 @@ function SectionBody({
           </p>
         )}
         {c.body && <p style={{ marginTop: 12, whiteSpace: "pre-wrap" }}>{c.body}</p>}
-        {c.pdf_url && (
+        {(c.pdf_url || c.notes_hand_url || c.notes_typed_url || c.homework_solutions) && (
           <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-            <a className="btn small secondary" href={c.pdf_url} target="_blank" rel="noopener noreferrer">
-              📄 Class notes (PDF)
-            </a>
+            {c.pdf_url && (
+              <a className="btn small secondary" href={c.pdf_url} target="_blank" rel="noopener noreferrer">📄 Class notes (PDF)</a>
+            )}
+            {c.notes_hand_url && (
+              <a className="btn small secondary" href={c.notes_hand_url} target="_blank" rel="noopener noreferrer">✍️ Handwritten notes</a>
+            )}
+            {c.notes_typed_url && (
+              <a className="btn small secondary" href={c.notes_typed_url} target="_blank" rel="noopener noreferrer">⌨️ Typed notes</a>
+            )}
+            {c.homework_solutions && (
+              <a className="btn small secondary" href={c.homework_solutions} target="_blank" rel="noopener noreferrer">✅ Homework solutions</a>
+            )}
+          </div>
+        )}
+        {c.homework && (
+          <div style={{ marginTop: 12 }}>
+            <strong style={{ fontSize: ".9rem" }}>📚 Homework</strong>
+            <p style={{ margin: "4px 0 0", whiteSpace: "pre-wrap" }}>{c.homework}</p>
           </div>
         )}
       </>
@@ -236,7 +251,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
 
   const { data: topic } = await supabase
     .from("topics")
-    .select("id, title, subject_id, subjects(title, course_id)")
+    .select("id, title, subject_id, weightage_marks, important_qs_rev1, update_coming, update_on, update_for, update_note, subjects(title, course_id)")
     .eq("id", params.topicId)
     .single();
   if (!topic) notFound();
@@ -314,8 +329,28 @@ export default async function LearnTopic({ params }: { params: { topicId: string
           <p className="meta">
             {sections.length} section{sections.length === 1 ? "" : "s"} · revision, notes, tests &amp;
             doubt-solving
+            {(topic as { weightage_marks?: number | null }).weightage_marks
+              ? ` · 🎯 ${(topic as { weightage_marks?: number }).weightage_marks} marks (ICAI weightage)`
+              : ""}
           </p>
         </div>
+
+        {(topic as { update_coming?: boolean }).update_coming && (
+          <div
+            className="notice"
+            style={{ marginTop: 16, background: "var(--bg-soft)", borderLeft: "4px solid var(--accent)", padding: "12px 14px", borderRadius: 8 }}
+          >
+            <strong>🔔 Updated content coming{(topic as { update_on?: string | null }).update_on ? ` on ${new Date((topic as { update_on?: string }).update_on!).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}` : " soon"}.</strong>
+            {(topic as { update_note?: string | null }).update_note && (
+              <span> {(topic as { update_note?: string }).update_note}</span>
+            )}
+            {(topic as { update_for?: string | null }).update_for && (
+              <span className="muted" style={{ display: "block", fontSize: ".85rem", marginTop: 4 }}>
+                Applicable for: {(topic as { update_for?: string }).update_for}
+              </span>
+            )}
+          </div>
+        )}
 
         {sections.length > 0 ? (
           <div className="sec-list" style={{ marginTop: 22 }}>

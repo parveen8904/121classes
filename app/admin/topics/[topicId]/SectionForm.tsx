@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SECTION_TYPES, FIELD_LABELS, PLAN_OPTIONS, type ConfigField } from "./sectionTypes";
+import { SECTION_TYPES, FIELD_LABELS, PLAN_OPTIONS, TEXTAREA_FIELDS, PDF_FIELDS, type ConfigField } from "./sectionTypes";
 import BunnyUploader from "./BunnyUploader";
 import PdfUpload from "../../_components/PdfUpload";
 
@@ -74,8 +74,18 @@ export default function SectionForm({
           {def.fields.map((f: ConfigField) =>
             f === "bunny_video_id" ? (
               <BunnyUploader key={f} name={f} defaultValue={cfg[f] ?? ""} />
-            ) : f === "pdf_url" ? (
+            ) : PDF_FIELDS.includes(f) ? (
               <PdfUpload key={f} name={f} defaultValue={cfg[f] ?? ""} label={FIELD_LABELS[f]} />
+            ) : TEXTAREA_FIELDS.includes(f) ? (
+              <div key={f}>
+                <label>{FIELD_LABELS[f]}</label>
+                <textarea name={f} rows={f === "transcript" ? 6 : 3} defaultValue={cfg[f] ?? ""} />
+              </div>
+            ) : f === "duration_minutes" ? (
+              <div key={f}>
+                <label>{FIELD_LABELS[f]}</label>
+                <input name={f} type="number" min={0} step={5} defaultValue={cfg[f] ?? ""} />
+              </div>
             ) : f === "revision_round" ? (
               <div key={f}>
                 <label>{FIELD_LABELS[f]}</label>

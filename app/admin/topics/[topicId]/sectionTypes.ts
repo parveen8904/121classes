@@ -11,7 +11,17 @@ export type ConfigField =
   | "zoom_webinar_id"
   | "join_url"
   | "starts_at"
-  | "recording_url";
+  | "recording_url"
+  // class-level fields (used by the unified AI repository / planner)
+  | "video_ref"
+  | "duration_minutes"
+  | "notes_hand_url"
+  | "notes_typed_url"
+  | "transcript"
+  | "important_questions"
+  | "important_concepts"
+  | "homework"
+  | "homework_solutions";
 
 export const ALL_CONFIG_FIELDS: ConfigField[] = [
   "revision_round",
@@ -24,6 +34,15 @@ export const ALL_CONFIG_FIELDS: ConfigField[] = [
   "join_url",
   "starts_at",
   "recording_url",
+  "video_ref",
+  "duration_minutes",
+  "notes_hand_url",
+  "notes_typed_url",
+  "transcript",
+  "important_questions",
+  "important_concepts",
+  "homework",
+  "homework_solutions",
 ];
 
 export const FIELD_LABELS: Record<ConfigField, string> = {
@@ -37,7 +56,20 @@ export const FIELD_LABELS: Record<ConfigField, string> = {
   join_url: "Join link (Zoom / Google Meet / any)",
   starts_at: "Starts at",
   recording_url: "Recording link (after the class — YouTube/embed)",
+  video_ref: "Video reference number",
+  duration_minutes: "Class duration (minutes) — used by the study planner",
+  notes_hand_url: "Handwritten notes PDF",
+  notes_typed_url: "Typed notes PDF",
+  transcript: "Transcript (powers AI answers — paste the class text)",
+  important_questions: "Important questions discussed (one per line)",
+  important_concepts: "Important concepts covered (one per line)",
+  homework: "Homework (questions for this class)",
+  homework_solutions: "Homework solutions PDF",
 };
+
+// Long-text fields rendered as a textarea; PDF fields rendered with the uploader.
+export const TEXTAREA_FIELDS: ConfigField[] = ["body", "transcript", "important_questions", "important_concepts", "homework"];
+export const PDF_FIELDS: ConfigField[] = ["pdf_url", "notes_hand_url", "notes_typed_url", "homework_solutions"];
 
 export const SECTION_TYPES: {
   value: string;
@@ -48,9 +80,9 @@ export const SECTION_TYPES: {
   { value: "revision_video", label: "Revision video", fields: ["revision_round", "bunny_video_id", "youtube_url", "embed_url"] },
   {
     value: "full_class_video",
-    label: "🎓 Class (video + PDF + discussion)",
-    fields: ["bunny_video_id", "pdf_url", "youtube_url", "embed_url"],
-    note: "A full class: upload the lecture video and the class notes PDF. Students also get a discussion thread on this class for their doubts.",
+    label: "🎓 Class (video + notes + transcript + homework)",
+    fields: ["bunny_video_id", "video_ref", "duration_minutes", "notes_hand_url", "notes_typed_url", "transcript", "important_questions", "important_concepts", "homework", "homework_solutions", "youtube_url", "embed_url"],
+    note: "A full class: lecture video, handwritten + typed notes, transcript (for AI), the important questions & concepts covered, and homework with solutions. Students also get a discussion thread for doubts.",
   },
   { value: "discussion_video", label: "Discussion / walkthrough video", fields: ["bunny_video_id", "youtube_url", "embed_url"] },
   {

@@ -25,11 +25,13 @@ export default async function PlannerPage() {
 
   const svc = createServiceClient();
 
-  // Syllabus checklist for our students (published topics).
+  // Syllabus checklist for our students — published, regular topics (the
+  // combined topic is a subject-wide bundle, not a study unit).
   const { data: topics } = await svc
     .from("topics")
-    .select("id, title, order_index, subject_id, subjects(title)")
+    .select("id, title, order_index, subject_id, important_qs_rev1, important_qs_rev2, subjects(title)")
     .eq("is_published", true)
+    .eq("is_combined", false)
     .order("order_index")
     .limit(400);
 
@@ -40,32 +42,32 @@ export default async function PlannerPage() {
     subject: (t as { subjects?: { title?: string } | null }).subjects?.title ?? "General",
   }));
 
-  // Per-class durations (admin-set, key dur:<topicId>), aligned to items order.
-  const { data: durRows } = await supabase.from("site_settings").select("key, value").like("key", "dur:%");
-  const durMap = new Map((durRows ?? []).map((r) => [(r.key as string).slice(4), Number(r.value) || 0]));
-  const durations = items.map((i) => durMap.get(i.id) || 0);
+  // Per-topic durations + important-question counts come from the classes
+  // (sections) and the topic's revision question lists.
+  const topicIds = items.map((i) => i.id);
+  const { data: secRows } = topicIds.length
+    ? await svc.from("sections").select("topic_id, config").in("topic_id", topicIds).eq("is_published", true)
+    : { data: [] as { topic_id: string; config: Record<string, unknown> | null }[] };
+  const lineCount = (v: unknown) => (v ? String(v).split("\n").map((s) => s.trim()).filter(Boolean).length : 0);
 
-  // Question lists from the AI repository (per subject). master = important_qs,
-  // revision = revision_qs. Count is the number of non-empty lines of content.
-  const today = new Date().toISOString().slice(0, 10);
-  const { data: qItems } = await svc
-    .from("repository_items")
-    .select("kind, subject_id, content, valid_from, valid_to, is_active")
-    .in("kind", ["important_qs", "revision_qs"])
-    .eq("is_active", true);
-  const { data: subjRows } = await svc.from("subjects").select("id, title");
-  const subjTitle = new Map((subjRows ?? []).map((s) => [s.id, s.title as string]));
+  const durByTopic = new Map<string, number>();
+  const importantQByTopic = new Map<string, number>();
+  for (const s of secRows ?? []) {
+    const cfg = (s.config ?? {}) as Record<string, unknown>;
+    durByTopic.set(s.topic_id, (durByTopic.get(s.topic_id) || 0) + (Number(cfg.duration_minutes) || 0));
+    importantQByTopic.set(s.topic_id, (importantQByTopic.get(s.topic_id) || 0) + lineCount(cfg.important_questions));
+  }
+  const durations = items.map((i) => durByTopic.get(i.id) || 0);
 
+  // Master Qs (exhaustive) = questions discussed in the classes; first-revision
+  // Qs = the topic's first-revision important-question list. Aggregated by
+  // subject for the planner's distribution.
   const subjectMaster: Record<string, number> = {};
   const subjectRev: Record<string, number> = {};
-  for (const it of qItems ?? []) {
-    if (it.valid_from && it.valid_from > today) continue;
-    if (it.valid_to && it.valid_to < today) continue;
-    const title = it.subject_id ? subjTitle.get(it.subject_id) : null;
-    if (!title || !it.content) continue;
-    const count = String(it.content).split("\n").map((s) => s.trim()).filter(Boolean).length;
-    const bucket = it.kind === "important_qs" ? subjectMaster : subjectRev;
-    bucket[title] = (bucket[title] || 0) + count;
+  for (const t of topics ?? []) {
+    const subj = (t as { subjects?: { title?: string } | null }).subjects?.title ?? "General";
+    subjectMaster[subj] = (subjectMaster[subj] || 0) + (importantQByTopic.get(t.id) || 0);
+    subjectRev[subj] = (subjectRev[subj] || 0) + lineCount((t as { important_qs_rev1?: string }).important_qs_rev1);
   }
 
   // Student test performance (avg MCQ score %) — feeds the pace column.

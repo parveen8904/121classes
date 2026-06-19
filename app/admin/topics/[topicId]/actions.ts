@@ -20,6 +20,40 @@ function readMinPlan(formData: FormData): string | null {
   return v === "bronze" || v === "silver" || v === "gold" ? v : null;
 }
 
+// Topic-level repository metadata (weightage, applicability, important
+// questions, revision/ICAI materials, "updated content coming" notice, and the
+// combined-topic flag + subject-wide materials).
+export async function updateTopicMeta(formData: FormData) {
+  const topicId = str(formData.get("topicId"));
+  if (!topicId) return;
+  const nn = (k: string) => str(formData.get(k)) || null;
+  const supabase = createClient();
+  await supabase
+    .from("topics")
+    .update({
+      weightage_marks: str(formData.get("weightage_marks")) ? num(formData.get("weightage_marks")) : null,
+      valid_from_attempt: nn("valid_from_attempt"),
+      valid_to_attempt: nn("valid_to_attempt"),
+      amendments_upto: nn("amendments_upto"),
+      important_qs_rev1: nn("important_qs_rev1"),
+      important_qs_rev2: nn("important_qs_rev2"),
+      book_pdf_url: nn("book_pdf_url"),
+      icai_material_url: nn("icai_material_url"),
+      revision_video_url: nn("revision_video_url"),
+      revision_notes_hand_url: nn("revision_notes_hand_url"),
+      revision_notes_typed_url: nn("revision_notes_typed_url"),
+      update_coming: formData.get("update_coming") === "on",
+      update_on: nn("update_on"),
+      update_for: nn("update_for"),
+      update_note: nn("update_note"),
+      is_combined: formData.get("is_combined") === "on",
+      revision_paper_url: nn("revision_paper_url"),
+      amendments_pdf_url: nn("amendments_pdf_url"),
+    })
+    .eq("id", topicId);
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
 // Per-class duration (minutes) used by the study planner. Stored in
 // site_settings under dur:<topicId>.
 export async function setClassDuration(formData: FormData) {

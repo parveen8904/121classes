@@ -16,6 +16,30 @@ export async function GET(req: NextRequest) {
       new URL(req.url).searchParams.get("key") === secret;
     if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  // Temporary diagnostic: /api/cron/govt-feed?probe=1 — checks whether the
+  // server can read the Jooble key and reach the Jooble API.
+  if (new URL(req.url).searchParams.get("probe") === "1") {
+    const key = await getSecret("JOOBLE_API_KEY");
+    let status = 0, count = -1, err = "";
+    if (key) {
+      try {
+        const r = await fetch(`https://jooble.org/api/${key}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ keywords: "Chartered Accountant", location: "India" }),
+          cache: "no-store",
+        });
+        status = r.status;
+        const d = await r.json().catch(() => ({}));
+        count = Array.isArray(d.jobs) ? d.jobs.length : -2;
+      } catch (e) {
+        err = String(e).slice(0, 200);
+      }
+    }
+    return NextResponse.json({ keySet: !!key, keyLen: key.length, joobleStatus: status, joobleCount: count, err });
+  }
+
   const result = await ingestGovtFeeds();
   const jobs = await ingestJobs();
   if (jobs.items?.length) await sendPlacementDigest(jobs.items);

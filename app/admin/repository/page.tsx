@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/service";
 import { aiConfigured } from "@/lib/ai";
 import AdminHero from "../_components/AdminHero";
@@ -57,6 +58,10 @@ export default async function RepositoryPage() {
         back={{ href: "/admin", label: "Admin" }}
       />
 
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+        <Link className="btn small secondary" href="/admin/repository/overview">📊 Overview — what&apos;s missing</Link>
+      </div>
+
       {!ai && (
         <div className="notice" style={{ marginTop: 16, background: "var(--bg-soft)" }}>
           💡 Add your Anthropic key in <strong>Integrations</strong> to switch on AI answers & test generation. You can still build the repository now.
@@ -113,6 +118,12 @@ export default async function RepositoryPage() {
             Tip: transcripts work best pasted as text. For book/ICAI PDFs you can also paste the key portions here so the AI can use them.
             For <strong>Important questions</strong> / <strong>Revision questions</strong> lists, pick a Subject and paste <strong>one question per line</strong> — the study planner counts these and spreads them across the plan.
           </p>
+
+          <label className="remember" style={{ marginTop: 10 }}>
+            <input type="checkbox" name="share_to_resources" /> 🌐 Also share this PDF on the public <strong>Resources</strong> page (PDFs only)
+          </label>
+          <label style={{ marginTop: 4 }}>Resources page label (optional — defaults to the name)</label>
+          <input name="resource_label" placeholder="e.g. ICAI RTP — May 2026 (FR)" />
 
           <button className="btn" type="submit" style={{ marginTop: 14 }}>Add to repository</button>
         </form>

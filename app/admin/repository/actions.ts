@@ -31,6 +31,9 @@ export async function addRepositoryItem(formData: FormData) {
     if (extracted) content = extracted;
   }
 
+  // Only a PDF can be shared on the public Resources page.
+  const shareToResources = formData.get("share_to_resources") === "on" && !!fileUrl && /\.pdf($|\?)/i.test(fileUrl);
+
   const svc = createServiceClient();
   await svc.from("repository_items").insert({
     title,
@@ -42,8 +45,11 @@ export async function addRepositoryItem(formData: FormData) {
     valid_from: orNull(formData.get("valid_from")),
     valid_to: orNull(formData.get("valid_to")),
     valid_from_attempt: orNull(formData.get("valid_from_attempt")),
+    share_to_resources: shareToResources,
+    resource_label: shareToResources ? (str(formData.get("resource_label")) || title) : null,
   });
   revalidatePath("/admin/repository");
+  revalidatePath("/resources");
 }
 
 // Re-extract text from an item's PDF (for file-only items, or to refresh).

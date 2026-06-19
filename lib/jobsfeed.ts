@@ -25,11 +25,64 @@ export function isCaRelevant(title: string, snippet?: string, company?: string):
   return titleCA.test(titleL) && !foreign.test(full) && !nonCa.test(full);
 }
 
+async function queryList(): Promise<string[]> {
+  const raw = await getSecret("JOB_QUERIES");
+  return (raw ? raw.split(/[\n,]/).map((q) => q.trim()).filter(Boolean) : DEFAULT_QUERIES);
+}
+
+// "3 days ago" / "30+ days ago" → an ISO date (best effort).
+function parseRelative(s: string): string | null {
+  const m = s.toLowerCase().match(/(\d+)\+?\s*(hour|day|week|month)/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  const unit = m[2];
+  const ms = unit === "hour" ? 3600e3 : unit === "day" ? 864e5 : unit === "week" ? 7 * 864e5 : 30 * 864e5;
+  return new Date(Date.now() - n * ms).toISOString();
+}
+
+// Google Jobs via SerpAPI — real listings with CORRECT locations (paid key).
+async function fromSerpApi(): Promise<Raw[]> {
+  const key = await getSecret("SERPAPI_KEY");
+  if (!key) return [];
+  const queries = (await queryList()).slice(0, 6);
+  const locRaw = (await getSecret("JOB_LOCATION")) || "India";
+  const locations = locRaw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+  if (!locations.length) locations.push("India");
+  const combos: { q: string; loc: string }[] = [];
+  for (const q of queries) for (const loc of locations) combos.push({ q, loc });
+  const out: Raw[] = [];
+  for (const { q, loc } of combos.slice(0, 12)) {
+    const location = /india/i.test(loc) ? loc : `${loc}, India`;
+    const u = `https://serpapi.com/search.json?engine=google_jobs&q=${encodeURIComponent(q)}&location=${encodeURIComponent(location)}&hl=en&gl=in&api_key=${key}`;
+    try {
+      const res = await fetch(u, { cache: "no-store" });
+      if (!res.ok) continue;
+      const data = await res.json();
+      for (const j of (data.jobs_results ?? []).slice(0, 15)) {
+        const apply = Array.isArray(j.apply_options) && j.apply_options[0]?.link ? String(j.apply_options[0].link) : (j.share_link ? String(j.share_link) : "");
+        if (!j.title || !apply) continue;
+        const posted = j.detected_extensions?.posted_at ? parseRelative(String(j.detected_extensions.posted_at)) : null;
+        out.push({
+          title: String(j.title).slice(0, 280),
+          company: String(j.company_name ?? "").slice(0, 160),
+          location: String(j.location ?? "").slice(0, 160),
+          url: apply,
+          snippet: String(j.description ?? "").replace(/\s+/g, " ").trim().slice(0, 500),
+          source: String(j.via ?? "Google Jobs").replace(/^via\s+/i, "").slice(0, 80),
+          posted_at: posted,
+        });
+      }
+    } catch {
+      // skip
+    }
+  }
+  return out;
+}
+
 async function fromJooble(): Promise<Raw[]> {
   const key = await getSecret("JOOBLE_API_KEY");
   if (!key) return [];
-  const queriesRaw = await getSecret("JOB_QUERIES");
-  const queries = (queriesRaw ? queriesRaw.split(/[\n,]/).map((q) => q.trim()).filter(Boolean) : DEFAULT_QUERIES).slice(0, 6);
+  const queries = (await queryList()).slice(0, 6);
   const locRaw = (await getSecret("JOB_LOCATION")) || "India";
   const locations = locRaw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
   if (!locations.length) locations.push("India");
@@ -117,7 +170,11 @@ async function fromRss(): Promise<Raw[]> {
 type DigestItem = { title: string; company: string; category: string; url: string };
 export async function ingestJobs(): Promise<{ added: number; checked: number; items: DigestItem[] }> {
   const svc = createServiceClient();
-  const all = [...(await fromJooble()), ...(await fromRss())];
+  // Prefer Google Jobs (SerpAPI) when configured — real listings, correct
+  // locations. Fall back to Jooble only if SerpAPI isn't set up. RSS always.
+  const serp = await fromSerpApi();
+  const primary = serp.length || (await getSecret("SERPAPI_KEY")) ? serp : await fromJooble();
+  const all = [...primary, ...(await fromRss())];
   if (!all.length) return { added: 0, checked: 0, items: [] as DigestItem[] };
 
   // Dedupe within this run + keep only genuine CA / articleship roles.

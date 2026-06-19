@@ -39,8 +39,7 @@ export default async function PlacementAdmin({ searchParams }: { searchParams: {
       <div className="form-card" style={{ marginTop: 18 }}>
         <h3>🔌 Where openings come from</h3>
         <p className="muted" style={{ fontSize: ".85rem", marginTop: 0 }}>
-          The free <strong>Jooble</strong> API aggregates Naukri, Indeed, company career pages and more. Get a free key at{" "}
-          <a href="https://jooble.org/api/about" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>jooble.org/api/about</a> and paste it below. You can also add job RSS feeds (e.g. Google Jobs, a firm&apos;s careers feed).
+          Add your <strong>Google Jobs (SerpAPI)</strong> key in <a href="/admin/integrations" style={{ color: "var(--accent)" }}>Integrations</a> — it pulls real Indian CA / articleship openings with correct locations and is used automatically here. (Jooble is a free fallback if no SerpAPI key is set, but it mislabels locations.) Then set the search terms below and tap “Fetch latest openings now”.
         </p>
         <form action={saveJobSources}>
           <label>Jooble API key</label>

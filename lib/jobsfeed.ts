@@ -12,16 +12,17 @@ type Raw = { title: string; company: string; location: string; url: string; snip
 
 const DEFAULT_QUERIES = ["Chartered Accountant", "CA articleship", "CA Inter", "CA Final", "CA fresher", "articleship trainee", "statutory audit CA"];
 
-// Keep ONLY Indian Chartered-Accountant–domain roles. Requires (1) a CA / audit
-// / tax signal, (2) an India signal (usually from the location), and (3) NOT an
-// IT / sales / other non-CA role. This drops IT jobs, "CA" = California, generic
-// banking, and foreign listings.
-export function isCaRelevant(title: string, snippet?: string, company?: string, location?: string): boolean {
-  const t = `${title} ${snippet ?? ""} ${company ?? ""} ${location ?? ""}`.toLowerCase();
-  const caDomain = /chartered accountant|\barticle\s?ship\b|article\s?assistant|article\s?trainee|\barticled\b|\bicai\b|\bca[\s-]?inter\b|\bca[\s-]?final\b|\bca[\s-]?ipcc\b|semi[\s-]?qualified|qualified\s+ca\b|\bca\b|\bcma\b|\baudit\b|\bauditor\b|taxation|\btax\b|\bgst\b|statutory|assurance|cost accountant/;
-  const india = /\bindia\b|mumbai|new delhi|\bdelhi\b|bengaluru|bangalore|gurgaon|gurugram|noida|\bpune\b|chennai|hyderabad|kolkata|ahmedabad|jaipur|surat|indore|lucknow|nagpur|coimbatore|kochi|chandigarh|maharashtra|karnataka|tamil nadu|gujarat|uttar pradesh|\bharyana\b|telangana|rajasthan|\bncr\b/;
-  const nonCa = /software|web\s?developer|app developer|\bdeveloper\b|programmer|\bengineer\b|devops|front[\s-]?end|back[\s-]?end|full[\s-]?stack|\bjava\b|javascript|python|react|node\.?js|\.net|data scien|machine learning|\bqa\b|tester|ui\/ux|graphic|web designer|\bsales\b|marketing|\bbpo\b|telecall|customer (support|care)|\bnurse\b|\bdoctor\b|teacher|\bdriver\b|electric|mechanic|civil eng|recruit|organi[sz]er|\bunion\b|casino|\bbanker\b|paraplanner|merchandiser|warehouse|delivery/;
-  return caDomain.test(t) && india.test(t) && !nonCa.test(t);
+// Keep ONLY Chartered-Accountant–domain roles. The aggregator mislabels every
+// result's location with our search location, so we can't trust it; instead we
+// require a CA / audit / tax signal IN THE TITLE, and exclude clearly foreign
+// and non-CA (IT / sales / etc.) listings from the full text.
+export function isCaRelevant(title: string, snippet?: string, company?: string): boolean {
+  const titleL = title.toLowerCase();
+  const full = `${title} ${snippet ?? ""} ${company ?? ""}`.toLowerCase();
+  const titleCA = /chartered accountant|\barticle|\bicai\b|\bca[\s-]?inter\b|\bca[\s-]?final\b|\bca[\s-]?ipcc\b|semi[\s-]?qualified|qualified\s+ca\b|\bca\b|\baudit|\bauditor\b|taxation|\btax\b|statutory|assurance|cost account|\bcma\b/;
+  const foreign = /united states|\busa\b|u\.s\.|us tax|us gaap|\bamerica\b|\bcanada\b|united kingdom|\buk\b|\bdubai\b|\buae\b|singapore|australia|\bafrica\b|nigeria|kenya|philippines|malaysia|qatar|saudi|\b(mn|tx|ny|nj|fl|il|wa|oh|pa)\b/;
+  const nonCa = /software|web\s?developer|app developer|\bdeveloper\b|programmer|\bengineer\b|devops|front[\s-]?end|back[\s-]?end|full[\s-]?stack|\bjava\b|javascript|python|react|node\.?js|\.net|data scien|machine learning|\bqa\b|tester|ui\/ux|graphic|web designer|\bsales\b|marketing|\bbpo\b|telecall|customer (support|care)|\bnurse\b|\bdoctor\b|teacher|\bdriver\b|electric|mechanic|civil eng|recruit|organi[sz]er|\bunion\b|casino|\bbanker\b|paraplanner|merchandiser|warehouse|delivery|public policy|financial analyst/;
+  return titleCA.test(titleL) && !foreign.test(full) && !nonCa.test(full);
 }
 
 async function fromJooble(): Promise<Raw[]> {
@@ -123,7 +124,7 @@ export async function ingestJobs(): Promise<{ added: number; checked: number; it
   const seen = new Set<string>();
   const unique = all
     .filter((j) => (seen.has(j.url) ? false : (seen.add(j.url), true)))
-    .filter((j) => isCaRelevant(j.title, j.snippet, j.company, j.location));
+    .filter((j) => isCaRelevant(j.title, j.snippet, j.company));
   const fresh: Raw[] = [];
   for (const j of unique) {
     const { data: existing } = await svc.from("job_listings").select("id").eq("url", j.url).maybeSingle();

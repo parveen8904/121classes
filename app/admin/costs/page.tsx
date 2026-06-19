@@ -3,6 +3,8 @@ import AdminHero from "../_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import { getBunnyBilling } from "@/lib/bunny";
+import SubmitButton from "@/app/components/SubmitButton";
+import { saveCostSettings } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Costs & usage — Admin" };
@@ -33,8 +35,12 @@ export default async function CostsPage() {
     /* show link instead */
   }
 
-  // --- Bunny live billing (this month's charges) ---
+  // --- Bunny live billing (this month's charges) + cap settings ---
   const bunnyBill = await getBunnyBilling();
+  const { data: costCfg } = await svc.from("site_settings").select("key, value").in("key", ["bunny_cap_usd", "cost_alert_email"]);
+  const cfg = new Map((costCfg ?? []).map((r) => [r.key, r.value as string]));
+  const bunnyCap = Number(cfg.get("bunny_cap_usd")) || 0;
+  const bunnyOver = bunnyBill && bunnyCap > 0 && bunnyBill.thisMonth >= bunnyCap;
 
   // --- Bunny videos vs YouTube (usage proxy) ---
   const { data: secs } = await svc.from("sections").select("config").limit(5000);
@@ -63,6 +69,12 @@ export default async function CostsPage() {
         subtitle="AI is tracked exactly here. For Bunny, Cloudflare & Supabase, see the usage we can measure plus a one-tap link to the provider's own bill."
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {bunnyOver && (
+        <div style={{ marginTop: 16, background: "#fee2e2", color: "#b91c1c", padding: "12px 14px", borderRadius: 8, fontWeight: 700 }}>
+          ⚠️ Bunny video cost this month ({money(bunnyBill!.thisMonth)}) has reached your cap of {money(bunnyCap)}.
+        </div>
+      )}
 
       <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", marginTop: 20 }}>
 
@@ -124,6 +136,25 @@ export default async function CostsPage() {
         </div>
 
       </div>
+
+      {/* Bunny budget cap + alert */}
+      <h2 className="admin-section-title" style={{ marginTop: 28 }}>🔔 Bunny budget alert</h2>
+      <form action={saveCostSettings} className="form-card" style={{ marginTop: 8 }}>
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+          <div>
+            <label>Bunny monthly cap (USD) — 0 = off</label>
+            <input name="bunny_cap_usd" type="number" min={0} step={1} defaultValue={cfg.get("bunny_cap_usd") ?? ""} placeholder="e.g. 20" />
+          </div>
+          <div>
+            <label>Email me when Bunny crosses the cap</label>
+            <input name="cost_alert_email" type="email" defaultValue={cfg.get("cost_alert_email") ?? ""} placeholder="you@example.com" />
+          </div>
+        </div>
+        <SubmitButton className="btn" style={{ marginTop: 10 }}>Save budget alert</SubmitButton>
+        <p className="muted" style={{ fontSize: ".8rem", marginTop: 6 }}>
+          You get one email the first time Bunny&apos;s month-to-date charge crosses the cap. Needs the Bunny Account API key set in Integrations.
+        </p>
+      </form>
 
       <p className="muted" style={{ fontSize: ".8rem", marginTop: 18 }}>
         💡 Want live ₹ figures for Bunny / Cloudflare / Supabase pulled into this page automatically? That needs each provider&apos;s billing API token — tell me and I&apos;ll wire it up. The AI monthly cap &amp; alert are set in <Link href="/admin/ai-usage" style={{ color: "var(--accent)" }}>AI usage</Link>.

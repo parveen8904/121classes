@@ -20,5 +20,7 @@ export async function GET(req: NextRequest) {
   const result = await ingestGovtFeeds();
   const jobs = await ingestJobs();
   if (jobs.items?.length) await sendPlacementDigest(jobs.items);
+  const { maybeBunnyAlert } = await import("@/lib/bunny");
+  await maybeBunnyAlert();
   return NextResponse.json({ ok: true, feeds: result, jobs: { added: jobs.added, checked: jobs.checked } });
 }

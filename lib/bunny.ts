@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { getSecret } from "@/lib/secrets";
+import { createServiceClient } from "@/lib/supabase/service";
 
 // Live Bunny billing — this month's charges + account balance. Needs the
 // ACCOUNT API key (dash.bunny.net → Account → API), not the Stream library key.
@@ -17,6 +18,30 @@ export async function getBunnyBilling(): Promise<{ thisMonth: number; balance: n
   } catch {
     return null;
   }
+}
+
+// Email the admin once when Bunny's month-to-date charges cross the cap
+// (site_settings bunny_cap_usd → cost_alert_email). Called daily by the cron.
+export async function maybeBunnyAlert() {
+  const bill = await getBunnyBilling();
+  if (!bill) return;
+  const svc = createServiceClient();
+  const get = async (k: string) => (await svc.from("site_settings").select("value").eq("key", k).maybeSingle()).data?.value as string | undefined;
+  const cap = Number(await get("bunny_cap_usd")) || 0;
+  if (cap <= 0 || bill.thisMonth < cap) return;
+  const month = new Date().toISOString().slice(0, 7);
+  const flagKey = `bunny_alert_sent:${month}`;
+  if (await get(flagKey)) return;
+  const to = (await get("cost_alert_email")) || "";
+  if (to) {
+    const { sendEmail } = await import("@/lib/notify");
+    await sendEmail(
+      to,
+      "⚠️ 121 CA Classes — Bunny video cost over budget",
+      `<p>Bunny charges this month have reached <strong>$${bill.thisMonth.toFixed(2)}</strong> (cap $${cap.toFixed(2)}).</p><p>See Admin → Costs &amp; usage.</p>`,
+    );
+  }
+  await svc.from("site_settings").upsert({ key: flagKey, value: "1" }, { onConflict: "key" });
 }
 
 // Build a Bunny Stream embed URL. SERVER-ONLY (signs with the secret token key).

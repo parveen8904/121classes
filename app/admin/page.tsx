@@ -1,5 +1,10 @@
 import Link from "next/link";
 import AdminHero from "./_components/AdminHero";
+import { createServiceClient } from "@/lib/supabase/service";
+import { getBunnyBilling } from "@/lib/bunny";
+
+export const dynamic = "force-dynamic";
+const INR = 85;
 
 // The layout already guards admin access, so this is just the hub.
 const PANELS: { icon: string; title: string; desc: string; href?: string; phase?: string }[] = [
@@ -119,14 +124,63 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
   },
 ];
 
-export default function AdminHome() {
+async function loadStats() {
+  const svc = createServiceClient();
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+  const head = { count: "exact" as const, head: true };
+  const [students, openings, doubts, questions, ai, storage, bunny] = await Promise.all([
+    svc.from("profiles").select("id", head).eq("role", "student"),
+    svc.from("job_listings").select("id", head).eq("status", "new"),
+    svc.from("doubts").select("id", head).eq("status", "open"),
+    svc.from("page_questions").select("id", head).eq("status", "open"),
+    svc.from("ai_usage").select("cost_usd").gte("created_at", monthStart).limit(20000),
+    svc.rpc("storage_usage"),
+    getBunnyBilling(),
+  ]);
+  const aiMonth = (ai.data ?? []).reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
+  const stRow = Array.isArray(storage.data) ? storage.data[0] : storage.data;
+  return {
+    students: students.count ?? 0,
+    openings: openings.count ?? 0,
+    doubts: doubts.count ?? 0,
+    questions: questions.count ?? 0,
+    aiMonth,
+    storageMb: stRow ? (Number(stRow.bytes) || 0) / (1024 * 1024) : 0,
+    bunnyMonth: bunny ? bunny.thisMonth : null,
+  };
+}
+
+export default async function AdminHome() {
+  const s = await loadStats();
+  const inr = (usd: number) => `₹${Math.round(usd * INR)}`;
+  const cards = [
+    { label: "Students", value: String(s.students), href: "/admin/users" },
+    { label: "Openings to review", value: String(s.openings), href: "/admin/placement", alert: s.openings > 0 },
+    { label: "Open doubts", value: String(s.doubts), href: "/admin/inbox", alert: s.doubts > 0 },
+    { label: "Open questions", value: String(s.questions), href: "/admin/inbox", alert: s.questions > 0 },
+    { label: "AI cost (this month)", value: inr(s.aiMonth), href: "/admin/costs" },
+    ...(s.bunnyMonth !== null ? [{ label: "Bunny (this month)", value: inr(s.bunnyMonth), href: "/admin/costs" }] : []),
+    { label: "Storage used", value: `${s.storageMb.toFixed(1)} MB`, href: "/admin/costs" },
+  ];
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
       <AdminHero
-        badge="🛠️ Admin"
-        title="Admin panel"
-        subtitle="Manage your catalogue, faculty, enrolments and announcements — all in one place. 🚀"
+        badge="🛠️ Admin dashboard"
+        title="Admin dashboard"
+        subtitle="Your control centre — key numbers at a glance, then everything to manage below. 🚀"
       />
+
+      {/* At-a-glance stats */}
+      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", marginTop: 18, marginBottom: 26 }}>
+        {cards.map((c) => (
+          <Link key={c.label} href={c.href} style={{ display: "block", textDecoration: "none" }}>
+            <div style={{ background: "var(--bg-soft)", borderRadius: 10, padding: "14px 16px", border: c.alert ? "1px solid #f59e0b" : "1px solid transparent" }}>
+              <div className="muted" style={{ fontSize: ".78rem" }}>{c.label}</div>
+              <div style={{ fontSize: "1.5rem", fontWeight: 700, marginTop: 2 }}>{c.value}</div>
+            </div>
+          </Link>
+        ))}
+      </div>
 
       <div className="admin-cards">
         {PANELS.map((p) => {

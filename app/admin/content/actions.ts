@@ -53,6 +53,7 @@ export async function saveAmendments(formData: FormData) {
       cutoff: str(formData.get(`cutoff:${a}`)),
       applicable: str(formData.get(`applicable:${a}`)),
       expected: str(formData.get(`expected:${a}`)),
+      pdf: str(formData.get(`pdf:${a}`)),
     });
     await svc.from("site_settings").upsert({ key: `amend:${a}`, value }, { onConflict: "key" });
   }

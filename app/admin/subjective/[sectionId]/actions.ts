@@ -49,6 +49,18 @@ export async function generateSubjectiveFromTranscript(formData: FormData) {
   revalidatePath(`/admin/subjective/${sectionId}`);
 }
 
+// Attach a reference PDF (question paper / answer key) to the test section.
+export async function attachSectionPdf(formData: FormData) {
+  const sectionId = str(formData.get("section_id"));
+  if (!sectionId) return;
+  const url = str(formData.get("pdf_url"));
+  const supabase = createClient();
+  const { data: sec } = await supabase.from("sections").select("config").eq("id", sectionId).maybeSingle();
+  const config = (sec?.config ?? {}) as Record<string, unknown>;
+  await supabase.from("sections").update({ config: { ...config, pdf_url: url } }).eq("id", sectionId);
+  revalidatePath(`/admin/subjective/${sectionId}`);
+}
+
 export async function addSubjective(formData: FormData) {
   const sectionId = str(formData.get("section_id"));
   const prompt = str(formData.get("prompt"));

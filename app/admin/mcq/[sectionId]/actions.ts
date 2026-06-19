@@ -7,6 +7,18 @@ import { generateMcqs } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { saveMcqExplanation } from "@/lib/answers";
 
+// Attach a reference PDF (question paper / answer key) to the test section.
+export async function attachSectionPdf(formData: FormData) {
+  const sectionId = str(formData.get("section_id"));
+  if (!sectionId) return;
+  const url = str(formData.get("pdf_url"));
+  const supabase = createClient();
+  const { data: sec } = await supabase.from("sections").select("config").eq("id", sectionId).maybeSingle();
+  const config = (sec?.config ?? {}) as Record<string, unknown>;
+  await supabase.from("sections").update({ config: { ...config, pdf_url: url } }).eq("id", sectionId);
+  revalidatePath(`/admin/mcq/${sectionId}`);
+}
+
 export async function addMcq(formData: FormData) {
   const sectionId = str(formData.get("section_id"));
   const question = str(formData.get("question"));

@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import { saveContent, saveAmendments } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
+import PdfUpload from "../_components/PdfUpload";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Career & Amendments — Admin" };
@@ -86,6 +87,9 @@ export default async function ContentPage({ searchParams }: { searchParams: { sa
               <textarea name={`applicable:${a}`} rows={3} defaultValue={v.applicable || ""} placeholder="List the amendments applicable for this attempt…" />
               <label>Expected / upcoming (if you change to this attempt)</label>
               <textarea name={`expected:${a}`} rows={2} defaultValue={v.expected || ""} placeholder="Amendments expected before the cut-off…" />
+              <div style={{ marginTop: 8 }}>
+                <PdfUpload name={`pdf:${a}`} defaultValue={v.pdf || ""} label="Amendments PDF (optional)" />
+              </div>
             </div>
           );
         })}

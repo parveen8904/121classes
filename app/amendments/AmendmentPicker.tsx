@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type Info = { cutoff?: string; applicable?: string; expected?: string };
+type Info = { cutoff?: string; applicable?: string; expected?: string; pdf?: string };
 
 export default function AmendmentPicker({
   attempts,
@@ -48,7 +48,12 @@ export default function AmendmentPicker({
             <p style={{ whiteSpace: "pre-wrap", marginTop: 0 }}>{info.expected}</p>
           </>
         )}
-        {!info.cutoff && !info.applicable && !info.expected && (
+        {info.pdf && (
+          <a className="btn small" href={info.pdf} target="_blank" rel="noopener noreferrer" style={{ marginTop: 10, display: "inline-block" }}>
+            📄 Download amendments PDF
+          </a>
+        )}
+        {!info.cutoff && !info.applicable && !info.expected && !info.pdf && (
           <p className="muted">Details for {attempt} will be updated soon.</p>
         )}
       </div>

@@ -3,8 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { aiConfigured } from "@/lib/ai";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
-import { addSubjective, updateSubjective, deleteSubjective, generateSubjectiveFromTranscript } from "./actions";
+import { addSubjective, updateSubjective, deleteSubjective, generateSubjectiveFromTranscript, attachSectionPdf } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
+import PdfUpload from "../../_components/PdfUpload";
 
 type Rubric = { point: string; marks: number }[];
 const rubricToText = (r: Rubric | null | undefined) => (r ?? []).map((x) => `${x.point} | ${x.marks}`).join("\n");
@@ -14,10 +15,11 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
   const supabase = createClient();
   const { data: section } = await supabase
     .from("sections")
-    .select("id, title, type, topic_id")
+    .select("id, title, type, topic_id, config")
     .eq("id", params.sectionId)
     .maybeSingle();
   if (!section) notFound();
+  const refPdf = ((section.config ?? {}) as Record<string, string>).pdf_url ?? "";
 
   const { data: questions } = await supabase
     .from("subjective_questions")
@@ -38,6 +40,13 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
         }
         back={{ href: `/admin/topics/${section.topic_id}`, label: "Topic" }}
       />
+
+      {/* Attach a reference PDF (question paper / answer key) */}
+      <form action={attachSectionPdf} className="form-card" style={{ marginTop: 14 }}>
+        <input type="hidden" name="section_id" value={section.id} />
+        <PdfUpload name="pdf_url" defaultValue={refPdf} label="📄 Attach a PDF (question paper / answer key) — shown to students" />
+        <SubmitButton className="btn small" style={{ marginTop: 8 }}>Save PDF</SubmitButton>
+      </form>
 
       {ai && (
         <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>

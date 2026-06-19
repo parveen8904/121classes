@@ -3,16 +3,19 @@ import { createClient } from "@/lib/supabase/server";
 import { aiConfigured } from "@/lib/ai";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
-import { addMcq, deleteMcq, generateMcqsFromTranscript } from "./actions";
+import { addMcq, deleteMcq, generateMcqsFromTranscript, attachSectionPdf } from "./actions";
+import PdfUpload from "../../_components/PdfUpload";
+import SubmitButton from "@/app/components/SubmitButton";
 
 export default async function McqAdminPage({ params }: { params: { sectionId: string } }) {
   const supabase = createClient();
   const { data: section } = await supabase
     .from("sections")
-    .select("id, title, type, topic_id")
+    .select("id, title, type, topic_id, config")
     .eq("id", params.sectionId)
     .maybeSingle();
   if (!section) notFound();
+  const refPdf = ((section.config ?? {}) as Record<string, string>).pdf_url ?? "";
 
   const { data: questions } = await supabase
     .from("mcq_questions")
@@ -29,6 +32,13 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
         subtitle="Add multiple-choice questions. They're auto-graded for students. ✅"
         back={{ href: `/admin/topics/${section.topic_id}`, label: "Topic" }}
       />
+
+      {/* Attach a reference PDF (question paper / answer key) */}
+      <form action={attachSectionPdf} className="form-card" style={{ marginTop: 14 }}>
+        <input type="hidden" name="section_id" value={section.id} />
+        <PdfUpload name="pdf_url" defaultValue={refPdf} label="📄 Attach a PDF (question paper / answer key) — shown to students" />
+        <SubmitButton className="btn small" style={{ marginTop: 8 }}>Save PDF</SubmitButton>
+      </form>
 
       {/* AI generation — run once, questions are stored & served statically */}
       <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>

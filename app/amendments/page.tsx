@@ -17,7 +17,7 @@ export default async function AmendmentsPage() {
   const myAttempt = ATTEMPTS.find((a) => a.toUpperCase() === raw) || ATTEMPTS[0];
 
   const { data } = await supabase.from("site_settings").select("key, value").like("key", "amend:%");
-  const map: Record<string, { cutoff?: string; applicable?: string; expected?: string }> = {};
+  const map: Record<string, { cutoff?: string; applicable?: string; expected?: string; pdf?: string }> = {};
   for (const r of data ?? []) {
     try { map[(r.key as string).slice(6)] = JSON.parse(r.value as string); } catch {}
   }

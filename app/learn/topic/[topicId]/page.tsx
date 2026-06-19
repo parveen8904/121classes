@@ -234,10 +234,13 @@ function SectionBody({
 
   if (type === "mcq_test" || type === "subjective_test") {
     return (
-      <div style={{ marginTop: 14, display: "flex", alignItems: "center" }}>
+      <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <Link className="btn small" href={`/learn/section/${id}`}>
           {type === "mcq_test" ? "Start MCQ test 🧠" : "Start subjective test ✍️"} →
         </Link>
+        {c.pdf_url && (
+          <a className="btn small secondary" href={c.pdf_url} target="_blank" rel="noopener noreferrer">📄 Question paper (PDF)</a>
+        )}
         <Help
           text={
             type === "mcq_test"

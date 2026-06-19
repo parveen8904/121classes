@@ -40,12 +40,22 @@ export default function PdfUpload({
         setFileName(file.name);
         return;
       }
+      // Supabase free-tier caps a single file at 50 MB. Big book PDFs need R2.
+      const MB = file.size / (1024 * 1024);
+      if (MB > 50) {
+        alert(
+          `This PDF is ${MB.toFixed(0)} MB. The current storage limit is 50 MB per file.\n\n` +
+            `For large books, ask the admin to enable Cloudflare R2 (Integrations → it removes the size limit), or compress/split the PDF.`,
+        );
+        return;
+      }
       const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
       const { error } = await supabase.storage
         .from("media")
         .upload(path, file, { upsert: false, contentType: ct });
       if (error) {
-        alert("Upload failed: " + error.message);
+        const big = MB > 45;
+        alert("Upload failed: " + error.message + (big ? `\n\n(This file is ${MB.toFixed(0)} MB — large PDFs need Cloudflare R2; ask admin to enable it.)` : ""));
         return;
       }
       const { data } = supabase.storage.from("media").getPublicUrl(path);

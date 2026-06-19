@@ -83,6 +83,8 @@ const SECRET_KEYS = [
   "R2_PUBLIC_BASE",
   "JOOBLE_API_KEY",
   "SERPAPI_KEY",
+  "BUNNY_STREAM_API_KEY",
+  "BUNNY_LIBRARY_ID",
 ] as const;
 
 // Save API keys pasted in the admin. Blank fields are IGNORED (so you can update

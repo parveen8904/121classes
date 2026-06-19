@@ -1,17 +1,18 @@
 "use server";
 
 import crypto from "crypto";
-
-const LIBRARY_ID = process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID || "682810";
+import { getSecret } from "@/lib/secrets";
 
 // Create a Bunny video object (server-side, with the secret API key) and return
 // a short-lived TUS upload signature so the browser can upload the file
-// directly to Bunny — the API key never reaches the browser.
+// directly to Bunny — the API key never reaches the browser. The key + library
+// id come from Vercel env OR the admin key store (Integrations).
 export async function createBunnyUpload(title: string): Promise<
   | { ok: true; videoId: string; libraryId: string; signature: string; expire: number; endpoint: string }
   | { ok: false; reason: "unconfigured" | "error" }
 > {
-  const apiKey = process.env.BUNNY_STREAM_API_KEY;
+  const apiKey = process.env.BUNNY_STREAM_API_KEY || (await getSecret("BUNNY_STREAM_API_KEY"));
+  const LIBRARY_ID = process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID || (await getSecret("BUNNY_LIBRARY_ID")) || "682810";
   if (!apiKey) return { ok: false, reason: "unconfigured" };
   try {
     const res = await fetch(`https://video.bunnycdn.com/library/${LIBRARY_ID}/videos`, {

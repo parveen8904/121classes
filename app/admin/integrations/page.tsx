@@ -77,6 +77,7 @@ export default async function IntegrationsPage({
   ]);
   const jb = Boolean(jooble);
   const serp = Boolean(await getSecret("SERPAPI_KEY"));
+  const bunny = Boolean(await getSecret("BUNNY_STREAM_API_KEY"));
 
   const svc = createServiceClient();
   const { data: links } = await svc
@@ -134,6 +135,7 @@ export default async function IntegrationsPage({
         {searchParams.rzpmsg && (
           <div className={`notice ${searchParams.rzp === "ok" ? "ok" : "err"}`}>{searchParams.rzpmsg}</div>
         )}
+        <Row on={bunny} label="🎬 Bunny Stream (class video uploads)" help={<>Stream API key from <a className="grad" href="https://dash.bunny.net" target="_blank" rel="noreferrer">dash.bunny.net</a> → Stream → your library → API. Paste it below so the &ldquo;Upload video&rdquo; button works (videos go straight to Bunny). Also set the Library ID if it differs from the default.</>} />
         <Row on={r2} label="🗄️ Cloudflare R2 (PDF/image storage)" help={<>Optional cheaper storage for PDFs/images (free bandwidth). Keys from <a className="grad" href="https://dash.cloudflare.com" target="_blank" rel="noreferrer">Cloudflare</a> → R2 → Manage API Tokens. When set, new uploads go to R2; existing files keep working. <strong>Remember to allow your site in the bucket&apos;s CORS settings (PUT).</strong></>} />
         <Row on={serp} label="🎓 Google Jobs (placement — SerpAPI)" help={<>Paid key from <a className="grad" href="https://serpapi.com" target="_blank" rel="noreferrer">serpapi.com</a> — powers the placement feed with real Indian CA / articleship openings from Google for Jobs (correct locations). When set, this is used instead of Jooble. Paste below, then “Fetch latest openings now” in <strong>Admin → Student placement</strong>.</>} />
         <Row on={jb} label="🎓 Jooble (placement — free fallback)" help={<>Free key from <a className="grad" href="https://jooble.org/api/about" target="_blank" rel="noreferrer">jooble.org/api/about</a>. Used only if no Google Jobs key is set. Note: it mislabels locations, so results can be noisier.</>} />
@@ -151,6 +153,8 @@ export default async function IntegrationsPage({
           <KeyField name="TELEGRAM_BOT_USERNAME" label="Telegram bot username (no @)" placeholder="my121bot" />
           <KeyField name="TELEGRAM_CHANNEL_ID" label="Telegram channel (for broadcasts)" placeholder="@caparveen" />
           <KeyField name="ANTHROPIC_API_KEY" label="Anthropic (AI) key" placeholder="sk-ant-…" />
+          <KeyField name="BUNNY_STREAM_API_KEY" label="Bunny Stream API key (video uploads)" placeholder="from dash.bunny.net → Stream → API" />
+          <KeyField name="BUNNY_LIBRARY_ID" label="Bunny Library ID (optional)" placeholder="e.g. 682810" />
           <KeyField name="SERPAPI_KEY" label="Google Jobs (SerpAPI) key — placement" placeholder="from serpapi.com" />
           <KeyField name="JOOBLE_API_KEY" label="Jooble key (free fallback) — placement" placeholder="from jooble.org/api/about" />
           <KeyField name="MAILGUN_API_KEY" label="Mailgun API key" placeholder="key-…" />

@@ -17,9 +17,14 @@ async function fromJooble(): Promise<Raw[]> {
   if (!key) return [];
   const queriesRaw = await getSecret("JOB_QUERIES");
   const queries = (queriesRaw ? queriesRaw.split(/[\n,]/).map((q) => q.trim()).filter(Boolean) : DEFAULT_QUERIES).slice(0, 6);
-  const location = (await getSecret("JOB_LOCATION")) || "India";
+  const locRaw = (await getSecret("JOB_LOCATION")) || "India";
+  const locations = locRaw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+  if (!locations.length) locations.push("India");
+  // Each keyword × each city, capped so we don't hammer the API.
+  const combos: { keywords: string; location: string }[] = [];
+  for (const keywords of queries) for (const location of locations) combos.push({ keywords, location });
   const out: Raw[] = [];
-  for (const keywords of queries) {
+  for (const { keywords, location } of combos.slice(0, 14)) {
     try {
       const res = await fetch(`https://jooble.org/api/${key}`, {
         method: "POST",

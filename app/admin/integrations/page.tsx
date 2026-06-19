@@ -64,7 +64,7 @@ export default async function IntegrationsPage({
 }: {
   searchParams: { tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string };
 }) {
-  const [tg, ai, em, wa, rzp, r2, botUser, health] = await Promise.all([
+  const [tg, ai, em, wa, rzp, r2, botUser, health, jooble] = await Promise.all([
     telegramConfigured(),
     aiConfigured(),
     emailConfigured(),
@@ -73,7 +73,9 @@ export default async function IntegrationsPage({
     r2Configured(),
     telegramBotUsername(),
     telegramHealth(),
+    getSecret("JOOBLE_API_KEY"),
   ]);
+  const jb = Boolean(jooble);
 
   const svc = createServiceClient();
   const { data: links } = await svc
@@ -132,6 +134,7 @@ export default async function IntegrationsPage({
           <div className={`notice ${searchParams.rzp === "ok" ? "ok" : "err"}`}>{searchParams.rzpmsg}</div>
         )}
         <Row on={r2} label="🗄️ Cloudflare R2 (PDF/image storage)" help={<>Optional cheaper storage for PDFs/images (free bandwidth). Keys from <a className="grad" href="https://dash.cloudflare.com" target="_blank" rel="noreferrer">Cloudflare</a> → R2 → Manage API Tokens. When set, new uploads go to R2; existing files keep working. <strong>Remember to allow your site in the bucket&apos;s CORS settings (PUT).</strong></>} />
+        <Row on={jb} label="🎓 Jooble (placement openings)" help={<>Free key from <a className="grad" href="https://jooble.org/api/about" target="_blank" rel="noreferrer">jooble.org/api/about</a> — powers the auto job feed in <strong>Admin → Student placement</strong> (Naukri, Indeed &amp; firm openings). Paste it below, then “Fetch latest openings now”.</>} />
       </div>
 
       {/* PASTE KEYS */}
@@ -146,6 +149,7 @@ export default async function IntegrationsPage({
           <KeyField name="TELEGRAM_BOT_USERNAME" label="Telegram bot username (no @)" placeholder="my121bot" />
           <KeyField name="TELEGRAM_CHANNEL_ID" label="Telegram channel (for broadcasts)" placeholder="@caparveen" />
           <KeyField name="ANTHROPIC_API_KEY" label="Anthropic (AI) key" placeholder="sk-ant-…" />
+          <KeyField name="JOOBLE_API_KEY" label="Jooble (placement openings) key" placeholder="from jooble.org/api/about" />
           <KeyField name="MAILGUN_API_KEY" label="Mailgun API key" placeholder="key-…" />
           <KeyField name="MAILGUN_DOMAIN" label="Mailgun domain" placeholder="mg.121caclasses.com" />
           <KeyField name="INTERAKT_API_KEY" label="Interakt (WhatsApp) key" placeholder="Basic auth key" />

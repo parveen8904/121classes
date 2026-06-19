@@ -50,8 +50,8 @@ export default async function PlacementAdmin({ searchParams }: { searchParams: {
               <textarea name="JOB_QUERIES" rows={3} defaultValue={queries} placeholder={"Chartered Accountant\nCA articleship\nCA fresher"} />
             </div>
             <div>
-              <label>Location</label>
-              <input name="JOB_LOCATION" defaultValue={location || "India"} placeholder="India" />
+              <label>Cities (one per line, or &ldquo;India&rdquo;)</label>
+              <textarea name="JOB_LOCATION" rows={3} defaultValue={location || "India"} placeholder={"India\nGurgaon\nMumbai\nDelhi"} />
             </div>
           </div>
           <label>Job RSS/Atom feed URLs (optional, one per line)</label>

@@ -81,6 +81,7 @@ const SECRET_KEYS = [
   "R2_SECRET_ACCESS_KEY",
   "R2_BUCKET",
   "R2_PUBLIC_BASE",
+  "JOOBLE_API_KEY",
 ] as const;
 
 // Save API keys pasted in the admin. Blank fields are IGNORED (so you can update

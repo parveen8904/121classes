@@ -23,7 +23,7 @@ function Block({ icon, title, body }: { icon: string; title: string; body: strin
   );
 }
 
-export default async function CareerPage() {
+export default async function CareerPage({ searchParams }: { searchParams: { city?: string } }) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/career");
@@ -40,8 +40,16 @@ export default async function CareerPage() {
     .eq("status", "approved")
     .order("created_at", { ascending: false })
     .limit(200);
+  // City list (first part of each location) for the filter dropdown.
+  const cityOf = (loc: string | null) => (loc || "").split(/[,|]/)[0].trim();
+  const cities = [...new Set((listings ?? []).map((j) => cityOf(j.location)).filter(Boolean))].sort();
+  const selectedCity = (searchParams.city || "").trim();
+  const shown = selectedCity
+    ? (listings ?? []).filter((j) => (j.location || "").toLowerCase().includes(selectedCity.toLowerCase()))
+    : (listings ?? []);
+
   const byCat = new Map<string, NonNullable<typeof listings>>();
-  for (const j of listings ?? []) {
+  for (const j of shown) {
     const c = j.category || "Other";
     if (!byCat.has(c)) byCat.set(c, [] as never);
     byCat.get(c)!.push(j);
@@ -61,10 +69,22 @@ export default async function CareerPage() {
         <Link className="btn secondary" href="/career/interview">🎤 AI mock interview</Link>
       </div>
 
+      {/* City filter */}
+      {cities.length > 1 && (
+        <form method="get" style={{ marginTop: 20, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <label style={{ margin: 0, fontSize: ".9rem" }}>📍 Filter by city</label>
+          <select name="city" defaultValue={selectedCity} style={{ marginBottom: 0, maxWidth: 220 }}>
+            <option value="">All cities</option>
+            {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button className="btn small secondary" type="submit">Apply</button>
+        </form>
+      )}
+
       {/* Auto-aggregated openings, grouped by category */}
       {byCat.size > 0 && (
         <div style={{ marginTop: 24 }}>
-          <h2 style={{ fontSize: "1.15rem" }}>💼 Latest openings</h2>
+          <h2 style={{ fontSize: "1.15rem" }}>💼 Latest openings{selectedCity ? ` in ${selectedCity}` : ""}</h2>
           {[...byCat.entries()].map(([cat, list]) => (
             <div key={cat} style={{ marginTop: 12 }}>
               <h3 style={{ fontSize: "1rem", margin: "0 0 6px" }}>{cat}</h3>

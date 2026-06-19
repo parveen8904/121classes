@@ -52,7 +52,8 @@ export async function GET(req: NextRequest) {
         err = String(e).slice(0, 200);
       }
     }
-    return NextResponse.json({ urlSet, srkSet, dbRows, dbHasJooble, dbErr, keySet: !!key, keyLen: key.length, joobleStatus: status, joobleCount: count, err });
+    const supaHost = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/^https?:\/\//, "").split(".")[0];
+    return NextResponse.json({ supaHost, urlSet, srkSet, dbRows, dbHasJooble, dbErr, keySet: !!key, keyLen: key.length, joobleStatus: status, joobleCount: count, err });
   }
 
   const result = await ingestGovtFeeds();

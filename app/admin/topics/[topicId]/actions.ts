@@ -20,9 +20,19 @@ function readMinPlan(formData: FormData): string | null {
   return v === "bronze" || v === "silver" || v === "gold" ? v : null;
 }
 
-// Topic-level repository metadata (weightage, applicability, important
-// questions, revision/ICAI materials, "updated content coming" notice, and the
-// combined-topic flag + subject-wide materials).
+// "Hit list" importance per attempt: lines of "attempt | category" → object.
+function parseImportance(raw: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of raw.split("\n").map((l) => l.trim()).filter(Boolean)) {
+    const [att, cat] = line.split("|").map((s) => s.trim());
+    if (att && cat) out[att] = cat.toUpperCase();
+  }
+  return out;
+}
+
+// Topic-level repository metadata (weightage, applicability, hit-list
+// importance, important questions, revision/ICAI materials, "updated content
+// coming" notice, and the combined-topic flag + subject-wide materials).
 export async function updateTopicMeta(formData: FormData) {
   const topicId = str(formData.get("topicId"));
   if (!topicId) return;
@@ -32,6 +42,7 @@ export async function updateTopicMeta(formData: FormData) {
     .from("topics")
     .update({
       weightage_marks: str(formData.get("weightage_marks")) ? num(formData.get("weightage_marks")) : null,
+      importance: parseImportance(str(formData.get("importance"))),
       valid_from_attempt: nn("valid_from_attempt"),
       valid_to_attempt: nn("valid_to_attempt"),
       amendments_upto: nn("amendments_upto"),

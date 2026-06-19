@@ -1,5 +1,6 @@
 import AdminHero from "../_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
+import { saveAiSettings } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "AI usage & cost — Admin" };
@@ -34,6 +35,13 @@ export default async function AiUsagePage() {
     .order("created_at", { ascending: false })
     .limit(20000);
 
+  const { data: settingRows } = await svc
+    .from("site_settings")
+    .select("key, value")
+    .in("key", ["ai_monthly_cap_usd", "ai_alert_email", "ai_doubt_daily_limit"]);
+  const cfg = new Map((settingRows ?? []).map((r) => [r.key, r.value as string]));
+  const cap = Number(cfg.get("ai_monthly_cap_usd")) || 0;
+
   const all = rows ?? [];
   let monthCost = 0, monthCalls = 0, monthIn = 0, monthOut = 0, todayCost = 0;
   const byFeature = new Map<string, { cost: number; calls: number }>();
@@ -63,6 +71,12 @@ export default async function AiUsagePage() {
         back={{ href: "/admin", label: "Admin" }}
       />
 
+      {cap > 0 && monthCost >= cap && (
+        <div style={{ marginTop: 16, background: "#fee2e2", color: "#b91c1c", padding: "12px 14px", borderRadius: 8, fontWeight: 700 }}>
+          ⚠️ Over budget — this month&apos;s spend ({money(monthCost)}) has reached your cap of {money(cap)}.
+        </div>
+      )}
+
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", marginTop: 18 }}>
         <div style={card}>
           <div className="muted" style={{ fontSize: ".8rem" }}>Today</div>
@@ -83,6 +97,28 @@ export default async function AiUsagePage() {
           </div>
         </div>
       </div>
+
+      <h2 className="admin-section-title" style={{ marginTop: 28 }}>Budget &amp; limits</h2>
+      <form action={saveAiSettings} className="form-card" style={{ marginTop: 8 }}>
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr" }}>
+          <div>
+            <label>Monthly cap (USD) — 0 = off</label>
+            <input name="ai_monthly_cap_usd" type="number" min={0} step={1} defaultValue={cfg.get("ai_monthly_cap_usd") ?? ""} placeholder="e.g. 50" />
+          </div>
+          <div>
+            <label>Alert email when cap reached</label>
+            <input name="ai_alert_email" type="email" defaultValue={cfg.get("ai_alert_email") ?? ""} placeholder="you@example.com" />
+          </div>
+          <div>
+            <label>Daily AI doubts per student — 0 = unlimited</label>
+            <input name="ai_doubt_daily_limit" type="number" min={0} step={1} defaultValue={cfg.get("ai_doubt_daily_limit") ?? ""} placeholder="e.g. 20" />
+          </div>
+        </div>
+        <button className="btn" type="submit" style={{ marginTop: 10 }}>Save budget &amp; limits</button>
+        <p className="muted" style={{ fontSize: ".8rem", marginTop: 6 }}>
+          You get one email the first time monthly spend crosses the cap. Over the daily limit, a student&apos;s doubts are still saved and answered by faculty — just not by AI.
+        </p>
+      </form>
 
       <h2 className="admin-section-title" style={{ marginTop: 28 }}>By feature — {monthLabel}</h2>
       {features.length === 0 ? (

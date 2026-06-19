@@ -29,13 +29,30 @@ export default async function PlannerPage() {
   // combined topic is a subject-wide bundle, not a study unit).
   const { data: topics } = await svc
     .from("topics")
-    .select("id, title, order_index, subject_id, important_qs_rev1, important_qs_rev2, subjects(title)")
+    .select("id, title, order_index, subject_id, importance, important_qs_rev1, important_qs_rev2, subjects(title)")
     .eq("is_published", true)
     .eq("is_combined", false)
     .order("order_index")
     .limit(400);
 
-  const items: PlanItem[] = (topics ?? []).map((t) => ({
+  // Order by the hit list for the student's attempt (A→B→C), falling back to the
+  // exhaustive class order (order_index) when no hit list is set.
+  const normAtt = (s: string) => s.toLowerCase().replace(/[_\s]+/g, " ").trim();
+  const catRank = (imp: Record<string, string> | null | undefined) => {
+    if (!imp) return 9;
+    const hit = Object.entries(imp).find(([a]) => normAtt(a) === normAtt(targetAttempt));
+    const c = hit?.[1]?.toUpperCase();
+    return c === "A" ? 0 : c === "B" ? 1 : c === "C" ? 2 : c ? 3 : 9;
+  };
+  const ordered = [...(topics ?? [])]
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => {
+      const r = catRank(a.t.importance as Record<string, string>) - catRank(b.t.importance as Record<string, string>);
+      return r !== 0 ? r : a.i - b.i;
+    })
+    .map((x) => x.t);
+
+  const items: PlanItem[] = ordered.map((t) => ({
     id: t.id,
     title: t.title,
     subjectId: (t as { subject_id?: string | null }).subject_id ?? null,

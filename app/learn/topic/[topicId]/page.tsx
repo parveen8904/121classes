@@ -251,7 +251,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
 
   const { data: topic } = await supabase
     .from("topics")
-    .select("id, title, subject_id, weightage_marks, important_qs_rev1, update_coming, update_on, update_for, update_note, subjects(title, course_id)")
+    .select("id, title, subject_id, weightage_marks, importance, important_qs_rev1, update_coming, update_on, update_for, update_note, subjects(title, course_id)")
     .eq("id", params.topicId)
     .single();
   if (!topic) notFound();
@@ -290,7 +290,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
   // Per-student floating watermark (traceability) — name + email/phone.
   const { data: wmProfile } = await supabase
     .from("profiles")
-    .select("full_name, phone, role")
+    .select("full_name, phone, role, target_attempt")
     .eq("id", user.id)
     .maybeSingle();
   const isAdmin = wmProfile?.role === "admin";
@@ -308,6 +308,21 @@ export default async function LearnTopic({ params }: { params: { topicId: string
 
   const subject = (topic as { subjects?: { title?: string; course_id?: string } | null }).subjects;
   const courseId = subject?.course_id;
+
+  // Hit-list importance for the student's own attempt.
+  const importance = ((topic as { importance?: Record<string, string> | null }).importance) ?? {};
+  const norm = (s: string) => s.toLowerCase().replace(/[_\s]+/g, " ").trim();
+  const myAttempt = wmProfile?.target_attempt ?? "";
+  let myCategory = "";
+  for (const [att, cat] of Object.entries(importance)) {
+    if (norm(att) === norm(myAttempt)) { myCategory = cat; break; }
+  }
+  const CAT_STYLE: Record<string, { bg: string; fg: string; label: string }> = {
+    A: { bg: "#fee2e2", fg: "#b91c1c", label: "Category A — most important (must do)" },
+    B: { bg: "#fef3c7", fg: "#b45309", label: "Category B — important" },
+    C: { bg: "#e5e7eb", fg: "#374151", label: "Category C — do if time permits" },
+  };
+  const catStyle = CAT_STYLE[myCategory];
   const plansHref = courseId
     ? `/learn/${courseId}/plans?subject=${topic.subject_id}`
     : "/dashboard";
@@ -334,6 +349,12 @@ export default async function LearnTopic({ params }: { params: { topicId: string
               : ""}
           </p>
         </div>
+
+        {catStyle && (
+          <div style={{ marginTop: 16, background: catStyle.bg, color: catStyle.fg, padding: "10px 14px", borderRadius: 8, fontWeight: 700 }}>
+            🎯 {catStyle.label}{myAttempt ? ` — for your ${String(myAttempt).replace(/_/g, " ")} attempt` : ""}
+          </div>
+        )}
 
         {(topic as { update_coming?: boolean }).update_coming && (
           <div

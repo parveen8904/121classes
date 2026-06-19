@@ -7,6 +7,7 @@ export type TopicMeta = {
   id: string;
   is_combined: boolean;
   weightage_marks: number | null;
+  importance: Record<string, string> | null;
   valid_from_attempt: string | null;
   valid_to_attempt: string | null;
   amendments_upto: string | null;
@@ -61,6 +62,23 @@ export default function TopicMetaForm({
       </div>
       <label style={{ marginTop: 8 }}>Amendments up to</label>
       <input name="amendments_upto" defaultValue={topic.amendments_upto ?? ""} placeholder="e.g. Finance Act 2025" />
+
+      {!combined && (
+        <>
+          <label style={{ marginTop: 8 }}>
+            🎯 Hit list — importance per attempt (one per line, <code>attempt | category</code>)
+          </label>
+          <textarea
+            name="importance"
+            rows={3}
+            defaultValue={Object.entries(topic.importance ?? {}).map(([a, c]) => `${a} | ${c}`).join("\n")}
+            placeholder={"May 2027 | A\nNov 2026 | B"}
+          />
+          <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
+            A = most important / sure-shot, B = important, C = if time permits. Shown prominently to each student for the attempt they&apos;re sitting, and used to order the planner.
+          </p>
+        </>
+      )}
 
       {!combined && (
         <>

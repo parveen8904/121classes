@@ -30,11 +30,34 @@ async function logUsage(feature: string, model: string, inTok: number, outTok: n
   try {
     const p = priceFor(model);
     const cost = (inTok / 1e6) * p.in + (outTok / 1e6) * p.out;
-    await createServiceClient()
-      .from("ai_usage")
-      .insert({ feature, model, input_tokens: inTok, output_tokens: outTok, cost_usd: Number(cost.toFixed(5)) });
+    const svc = createServiceClient();
+    await svc.from("ai_usage").insert({ feature, model, input_tokens: inTok, output_tokens: outTok, cost_usd: Number(cost.toFixed(5)) });
+    await maybeSpendAlert(svc, cost);
   } catch {
     // never let usage logging break an AI call
+  }
+}
+
+// Running month-to-date spend (site_settings ai_spend:<YYYY-MM>); email the admin
+// once when it first crosses the monthly cap (ai_monthly_cap_usd).
+async function maybeSpendAlert(svc: ReturnType<typeof createServiceClient>, cost: number) {
+  const get = async (k: string) => (await svc.from("site_settings").select("value").eq("key", k).maybeSingle()).data?.value as string | undefined;
+  const cap = Number(await get("ai_monthly_cap_usd")) || 0;
+  const month = new Date().toISOString().slice(0, 7);
+  const spendKey = `ai_spend:${month}`;
+  const prev = Number(await get(spendKey)) || 0;
+  const total = prev + cost;
+  await svc.from("site_settings").upsert({ key: spendKey, value: String(total.toFixed(5)) }, { onConflict: "key" });
+  if (cap > 0 && total >= cap && prev < cap) {
+    const to = (await get("ai_alert_email")) || "";
+    if (to) {
+      const { sendEmail } = await import("@/lib/notify");
+      await sendEmail(
+        to,
+        "⚠️ 121 CA Classes — AI monthly budget reached",
+        `<p>Your AI spend this month has reached <strong>$${total.toFixed(2)}</strong> (cap $${cap.toFixed(2)}).</p><p>Review the breakdown in Admin → AI usage &amp; cost.</p>`,
+      );
+    }
   }
 }
 

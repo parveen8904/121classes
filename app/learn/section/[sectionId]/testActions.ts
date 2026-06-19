@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { aiConfigured, gradeSubjective, answerDoubtFromMaterial, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getMcqExplanations } from "@/lib/answers";
+import { dailyDoubtLimitReached } from "@/lib/limits";
 import { notifyFaculty } from "@/lib/notify";
 
 // Per-question review shown AFTER submit. For a correct answer we show why it's
@@ -117,7 +118,7 @@ export async function submitSubjective(input: {
 export async function askDoubt(input: {
   sectionId: string;
   question: string;
-}): Promise<{ ok: boolean; answer: string | null; pending: boolean }> {
+}): Promise<{ ok: boolean; answer: string | null; pending: boolean; note?: string }> {
   const supabase = createClient();
   const {
     data: { user },
@@ -140,7 +141,8 @@ export async function askDoubt(input: {
   // context); if it's not covered, forward to faculty.
   let answer: string | null = null;
   let status = "open";
-  if (await aiConfigured()) {
+  const limited = await dailyDoubtLimitReached(user.id);
+  if (!limited && await aiConfigured()) {
     const material = await getRepositoryContext(subjectId, 12000, { topicId, query: question });
     const raw = await answerDoubtFromMaterial(question, material);
     if (raw && raw.trim() !== NEED_FACULTY) {
@@ -165,5 +167,13 @@ export async function askDoubt(input: {
     );
   }
 
+  if (limited) {
+    return {
+      ok: true,
+      answer: null,
+      pending: true,
+      note: "You've reached today's AI-doubt limit. Your question is saved and our faculty will reply soon.",
+    };
+  }
   return { ok: true, answer, pending: !answer };
 }

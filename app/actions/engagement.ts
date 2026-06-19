@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { aiConfigured, answerAssistant, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getSiteFacts } from "@/lib/sitefacts";
+import { dailyDoubtLimitReached } from "@/lib/limits";
 import { notifyFaculty } from "@/lib/notify";
 
 // "Notify me" for a live class/event. Works logged-in (uses account email) or
@@ -47,7 +48,9 @@ export async function askQuestion(
   let answer: string | null = null;
   let escalated = false;
 
-  if (await aiConfigured()) {
+  if (user && (await dailyDoubtLimitReached(user.id))) {
+    escalated = true; // hit today's AI limit → log for faculty, no AI call
+  } else if (await aiConfigured()) {
     const [facts, material] = await Promise.all([getSiteFacts(), getRepositoryContext(null, 8000, { query: question })]);
     const raw = await answerAssistant(question, facts, material);
     if (raw && raw.trim() !== NEED_FACULTY) {

@@ -129,17 +129,19 @@ export async function askDoubt(input: {
   // Find the subject so we can pull the right repository material.
   const { data: section } = await supabase
     .from("sections")
-    .select("topics(subject_id)")
+    .select("topic_id, topics(subject_id)")
     .eq("id", input.sectionId)
     .maybeSingle();
   const subjectId =
     (section as { topics?: { subject_id?: string } | null } | null)?.topics?.subject_id ?? null;
+  const topicId = (section as { topic_id?: string | null } | null)?.topic_id ?? null;
 
-  // Answer ONLY from the repository. If it's not covered, forward to faculty.
+  // Answer ONLY from the repository. Focus on THIS topic (smaller, cheaper
+  // context); if it's not covered, forward to faculty.
   let answer: string | null = null;
   let status = "open";
   if (await aiConfigured()) {
-    const material = await getRepositoryContext(subjectId);
+    const material = await getRepositoryContext(subjectId, 12000, { topicId, query: question });
     const raw = await answerDoubtFromMaterial(question, material);
     if (raw && raw.trim() !== NEED_FACULTY) {
       answer = raw;

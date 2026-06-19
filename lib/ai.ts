@@ -3,15 +3,47 @@
 // "our faculty will review this".
 
 import { getSecret } from "@/lib/secrets";
+import { createServiceClient } from "@/lib/supabase/service";
 
 export async function aiConfigured(): Promise<boolean> {
   return Boolean(await getSecret("ANTHROPIC_API_KEY"));
 }
 
-async function callClaude(system: string, user: string, maxTokens = 1024): Promise<string | null> {
+// Cheaper model for high-frequency student calls (doubts / ask-me). Override
+// via the ANTHROPIC_MODEL_FAST secret. Defaults to Haiku (~3x cheaper).
+async function fastModel(): Promise<string> {
+  return (await getSecret("ANTHROPIC_MODEL_FAST")) || "claude-haiku-4-5";
+}
+
+// Per-1M-token prices (USD) by model family, for the admin cost readout.
+const PRICES: Record<string, { in: number; out: number }> = {
+  "claude-opus": { in: 5, out: 25 },
+  "claude-sonnet": { in: 3, out: 15 },
+  "claude-haiku": { in: 1, out: 5 },
+};
+function priceFor(model: string): { in: number; out: number } {
+  const key = Object.keys(PRICES).find((p) => model.startsWith(p));
+  return key ? PRICES[key] : PRICES["claude-sonnet"];
+}
+
+async function logUsage(feature: string, model: string, inTok: number, outTok: number) {
+  try {
+    const p = priceFor(model);
+    const cost = (inTok / 1e6) * p.in + (outTok / 1e6) * p.out;
+    await createServiceClient()
+      .from("ai_usage")
+      .insert({ feature, model, input_tokens: inTok, output_tokens: outTok, cost_usd: Number(cost.toFixed(5)) });
+  } catch {
+    // never let usage logging break an AI call
+  }
+}
+
+type CallOpts = { model?: string; feature?: string };
+
+async function callClaude(system: string, user: string, maxTokens = 1024, opts: CallOpts = {}): Promise<string | null> {
   const apiKey = await getSecret("ANTHROPIC_API_KEY");
   if (!apiKey) return null;
-  const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
+  const model = opts.model || (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -30,6 +62,8 @@ async function callClaude(system: string, user: string, maxTokens = 1024): Promi
     });
     if (!res.ok) return null;
     const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage(opts.feature || "other", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
     const text = (data.content ?? [])
       .filter((b: { type: string }) => b.type === "text")
       .map((b: { text: string }) => b.text)
@@ -50,7 +84,7 @@ const ASSISTANT_SYSTEM =
 
 export async function answerDoubt(question: string, context?: string): Promise<string | null> {
   const user = (context ? `Topic context: ${context}\n\n` : "") + `Student's doubt: ${question}`;
-  return callClaude(ASSISTANT_SYSTEM, user, 1024);
+  return callClaude(ASSISTANT_SYSTEM, user, 1024, { model: await fastModel(), feature: "doubt" });
 }
 
 // Sentinel the model returns when the repository doesn't cover the question.
@@ -71,7 +105,7 @@ export async function answerDoubtFromMaterial(
 ): Promise<string | null> {
   if (!material.trim()) return null;
   const user = `STUDY MATERIAL:\n${material}\n\nSTUDENT QUESTION:\n${question}`;
-  return callClaude(REPO_SYSTEM, user, 1024);
+  return callClaude(REPO_SYSTEM, user, 1024, { model: await fastModel(), feature: "doubt" });
 }
 
 // From a student's recent questions, pull the specific CA topics/standards they
@@ -80,7 +114,7 @@ export async function extractConcepts(questionsText: string): Promise<string[]> 
   const sys =
     "From the student's questions below, list 2–5 specific CA exam topics, standards or concepts they seem to be struggling with. " +
     'Reply ONLY as a compact JSON array of short search terms, e.g. ["IND AS 115","revenue recognition","AS 24"]. No prose.';
-  const out = await callClaude(sys, questionsText, 200);
+  const out = await callClaude(sys, questionsText, 200, { model: await fastModel(), feature: "recommend" });
   if (!out) return [];
   try {
     const arr = JSON.parse(out.replace(/```json|```/g, "").trim());
@@ -99,7 +133,7 @@ export async function suggestedAnswer(
   const sys =
     "You are an ICAI exam expert for 121 CA Classes. Write a concise, well-structured MODEL ANSWER a student could write to score full marks for the question, using Indian CA exam conventions and citing the relevant standards/sections. Keep it proportional to the marks. If study material is provided, ground the answer in it.";
   const user = `QUESTION (${maxMarks} marks): ${prompt}` + (material ? `\n\nSTUDY MATERIAL:\n${material}` : "");
-  return callClaude(sys, user, 1200);
+  return callClaude(sys, user, 1200, { feature: "suggested_answer" });
 }
 
 // AI mock interviewer for CA articleship/placement. The client passes the
@@ -112,7 +146,7 @@ export async function interviewReply(transcript: string): Promise<string | null>
     "On each turn: give 1–2 lines of constructive feedback on the candidate's LAST answer, then ask exactly ONE next question. Keep it short. " +
     "If the transcript has 6 or more candidate answers, or contains 'END INTERVIEW', instead give a FINAL ASSESSMENT: strengths, what to improve, and a readiness score out of 10. " +
     "If the transcript is empty, just warmly greet and ask the first question.";
-  return callClaude(sys, transcript || "(start the interview)", 600);
+  return callClaude(sys, transcript || "(start the interview)", 600, { model: await fastModel(), feature: "interview" });
 }
 
 // Polish a CV summary/objective into crisp professional lines.
@@ -120,7 +154,7 @@ export async function improveSummary(text: string): Promise<string | null> {
   if (!text.trim()) return null;
   const sys =
     "Rewrite the following CA student's CV summary/objective into 2–3 crisp, professional sentences suitable for an Indian CA articleship/job CV. Keep it truthful to what's given; no fluff. Return only the rewritten text.";
-  return callClaude(sys, text, 400);
+  return callClaude(sys, text, 400, { model: await fastModel(), feature: "cv" });
 }
 
 const ASSIST_SYSTEM =
@@ -139,7 +173,7 @@ export async function answerAssistant(
   material: string,
 ): Promise<string | null> {
   const user = `SITE INFO:\n${siteFacts}\n\nSTUDY MATERIAL:\n${material || "(none provided)"}\n\nQUESTION:\n${question}`;
-  return callClaude(ASSIST_SYSTEM, user, 900);
+  return callClaude(ASSIST_SYSTEM, user, 900, { model: await fastModel(), feature: "ask_me" });
 }
 
 // Pre-generate MCQs from a class transcript (token-frugal: run ONCE at upload
@@ -163,7 +197,7 @@ export async function generateMcqs(
     `{"questions":[{"question":"...","options":["...","...","...","..."],"correct_index":0,"why_correct":"...","why_options":["why opt1","why opt2","why opt3","why opt4"]}]} ` +
     `where correct_index is the 0-based index of the correct option and why_options has one reason per option in the same order.`;
   const user = `Transcript:\n${transcript.slice(0, 24000)}`;
-  const text = await callClaude(system, user, 6000);
+  const text = await callClaude(system, user, 6000, { feature: "generate_mcq" });
   if (!text) return null;
   try {
     const json = JSON.parse(text.replace(/```json|```/g, "").trim());
@@ -203,7 +237,7 @@ export async function generateSubjectiveQuestions(
     `Respond ONLY as compact JSON, no prose, no code fences: ` +
     `{"questions":[{"prompt":"...","max_marks":8,"model_answer":"..."}]}.`;
   const user = `Transcript:\n${transcript.slice(0, 24000)}`;
-  const text = await callClaude(system, user, 6000);
+  const text = await callClaude(system, user, 6000, { feature: "generate_subjective" });
   if (!text) return null;
   try {
     const json = JSON.parse(text.replace(/```json|```/g, "").trim());
@@ -241,7 +275,7 @@ export async function gradeSubjective(
       : "") +
     `Respond ONLY as compact JSON, no prose, no code fences: {"score": <integer 0-${mm}>, "feedback": "<a short structured report: ✅ What was correct: …; ❌ What was wrong/missing: …; 📘 Concept to revise: <name the specific concept/standard/section>; 🎯 How to improve: <one concrete next step / what to study again>>"}.`;
   const user = `Question (max ${mm} marks): ${prompt}${schemeText}${modelText}\n\nStudent's answer:\n${answer}`;
-  const text = await callClaude(system, user, 700);
+  const text = await callClaude(system, user, 700, { feature: "grade" });
   if (!text) return null;
   try {
     const json = JSON.parse(text.replace(/```json|```/g, "").trim());

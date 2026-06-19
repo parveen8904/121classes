@@ -48,7 +48,7 @@ export async function askQuestion(
   let escalated = false;
 
   if (await aiConfigured()) {
-    const [facts, material] = await Promise.all([getSiteFacts(), getRepositoryContext(null, 15000)]);
+    const [facts, material] = await Promise.all([getSiteFacts(), getRepositoryContext(null, 8000, { query: question })]);
     const raw = await answerAssistant(question, facts, material);
     if (raw && raw.trim() !== NEED_FACULTY) {
       answer = raw.trim();

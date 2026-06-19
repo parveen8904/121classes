@@ -10,6 +10,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 export async function getRepositoryContext(
   subjectId?: string | null,
   maxChars = 40000,
+  opts: { topicId?: string | null; query?: string } = {},
 ): Promise<string> {
   const svc = createServiceClient();
   const today = new Date().toISOString().slice(0, 10);
@@ -44,10 +45,10 @@ export async function getRepositoryContext(
     secByTopic.get(s.topic_id)!.push({ title: s.title, config: (s.config ?? {}) as Record<string, unknown> });
   }
 
-  type Chunk = { subject_id: string | null; text: string };
+  type Chunk = { subject_id: string | null; topic_id: string | null; text: string };
   const chunks: Chunk[] = [];
 
-  for (const r of itemRows) chunks.push({ subject_id: r.subject_id, text: `### ${r.title}\n${r.content}` });
+  for (const r of itemRows) chunks.push({ subject_id: r.subject_id, topic_id: null, text: `### ${r.title}\n${r.content}` });
 
   for (const t of topics ?? []) {
     const subj = (t as { subjects?: { title?: string } | null }).subjects?.title ?? "";
@@ -68,17 +69,46 @@ export async function getRepositoryContext(
       if (c.transcript) parts.push(`Transcript:\n${c.transcript}`);
       if (parts.length) lines.push(`— ${s.title} —\n${parts.join("\n")}`);
     }
-    if (lines.length) chunks.push({ subject_id: t.subject_id, text: `${head}\n${lines.join("\n")}` });
+    if (lines.length) chunks.push({ subject_id: t.subject_id, topic_id: t.id, text: `${head}\n${lines.join("\n")}` });
   }
 
-  // Subject-specific first, then general (no subject), then the rest.
-  chunks.sort((a, b) => {
-    const rank = (s: string | null) => (s === subjectId ? 0 : s ? 2 : 1);
-    return rank(a.subject_id) - rank(b.subject_id);
-  });
+  // 1) If a specific topic is in focus (e.g. a doubt asked inside a class),
+  //    use ONLY that topic's material — far smaller input.
+  let pool = chunks;
+  if (opts.topicId) {
+    const topicOnly = chunks.filter((c) => c.topic_id === opts.topicId);
+    if (topicOnly.length) pool = topicOnly;
+  }
+
+  // 2) If we have the question text, keep only chunks that mention its key words
+  //    (relevance filter, most-relevant first) — cuts input several-fold for
+  //    general doubts.
+  let ranked = false;
+  if (pool === chunks && opts.query) {
+    const terms = [...new Set((opts.query.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []))];
+    if (terms.length) {
+      const scored = pool
+        .map((c) => ({ c, s: terms.reduce((n, w) => n + (c.text.toLowerCase().includes(w) ? 1 : 0), 0) }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s);
+      if (scored.length) {
+        pool = scored.map((x) => x.c);
+        ranked = true;
+      }
+    }
+  }
+
+  // Subject-specific first, then general (no subject), then the rest — unless we
+  // already ordered by relevance to the question.
+  if (!ranked) {
+    pool.sort((a, b) => {
+      const rank = (s: string | null) => (s === subjectId ? 0 : s ? 2 : 1);
+      return rank(a.subject_id) - rank(b.subject_id);
+    });
+  }
 
   let out = "";
-  for (const ch of chunks) {
+  for (const ch of pool) {
     const chunk = `\n\n${ch.text}`;
     if (out.length + chunk.length > maxChars) {
       out += chunk.slice(0, Math.max(0, maxChars - out.length));

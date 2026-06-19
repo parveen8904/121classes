@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
 
   let answer: string | null = null;
   if (await aiConfigured()) {
-    const material = await getRepositoryContext(null);
+    const material = await getRepositoryContext(null, 12000, { query: text });
     const raw = await answerDoubtFromMaterial(text, material);
     if (raw && raw.trim() !== NEED_FACULTY) answer = raw;
   }

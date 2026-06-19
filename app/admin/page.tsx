@@ -99,6 +99,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     desc: "Broadcast updates by Telegram, email & WhatsApp.",
     href: "/admin/notifications",
   },
+  {
+    icon: "💰",
+    title: "AI usage & cost",
+    desc: "Live Anthropic token spend, by feature and model.",
+    href: "/admin/ai-usage",
+  },
 ];
 
 export default function AdminHome() {

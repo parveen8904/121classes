@@ -31,7 +31,11 @@ export async function GET(req: NextRequest) {
       dbRows = (data ?? []).length;
       const jrow = (data ?? []).find((r) => r.key === "JOOBLE_API_KEY") as { value?: string } | undefined;
       dbHasJooble = !!jrow;
-      dbErr = error ? String(error.message).slice(0, 200) : `keys=[${(data ?? []).map((r) => r.key).join(",")}]`;
+      // Second read with a different query shape (ordered) — should bypass any
+      // stale cached response at the API layer.
+      const { data: data2 } = await createServiceClient().from("app_secrets").select("key, value").order("updated_at", { ascending: false });
+      const ordHasJooble = (data2 ?? []).some((r) => r.key === "JOOBLE_API_KEY");
+      dbErr = error ? String(error.message).slice(0, 200) : `plain=${dbRows}/${dbHasJooble};ordered=${(data2 ?? []).length}/${ordHasJooble}`;
     } catch (e) {
       dbErr = String(e).slice(0, 200);
     }

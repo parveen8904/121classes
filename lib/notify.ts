@@ -72,6 +72,8 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
   const region = (await getSecret("MAILGUN_REGION")).toLowerCase();
   const apiBase = region === "eu" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
   const body = new URLSearchParams({ from, to, subject, html });
+  const replyTo = await getSecret("NOTIFY_REPLY_TO");
+  if (replyTo) body.set("h:Reply-To", replyTo);
   try {
     const res = await fetch(`${apiBase}/v3/${domain}/messages`, {
       method: "POST",

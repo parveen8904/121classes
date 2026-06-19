@@ -167,6 +167,7 @@ export default async function IntegrationsPage({
           <KeyField name="MAILGUN_DOMAIN" label="Mailgun domain" placeholder="mg.121caclasses.com" />
           <KeyField name="MAILGUN_REGION" label="Mailgun region — type eu if your domain is EU (mxa.eu.mailgun.org)" placeholder="eu  (or leave blank for US)" />
           <KeyField name="NOTIFY_FROM_EMAIL" label="From address (must be on the verified Mailgun domain)" placeholder="121 CA Classes <help@121caclasses.com>" />
+          <KeyField name="NOTIFY_REPLY_TO" label="Reply-To address (where replies go, any domain)" placeholder="help@121caclasses.com" />
           <KeyField name="INTERAKT_API_KEY" label="Interakt (WhatsApp) key" placeholder="Basic auth key" />
           <KeyField name="FACULTY_TELEGRAM_CHAT_ID" label="Faculty Telegram chat id (for doubt alerts)" placeholder="your own Telegram chat id" />
           <KeyField name="FACULTY_EMAIL" label="Faculty alert email" placeholder="help@121caclasses.com" />

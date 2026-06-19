@@ -2,6 +2,7 @@ import Link from "next/link";
 import AdminHero from "../_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
+import { getBunnyBilling } from "@/lib/bunny";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Costs & usage — Admin" };
@@ -22,17 +23,18 @@ export default async function CostsPage() {
   const { data: aiRows } = await svc.from("ai_usage").select("cost_usd").gte("created_at", monthStart).limit(20000);
   const aiMonth = (aiRows ?? []).reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
 
-  // --- Supabase storage used (sum of object sizes) ---
+  // --- Supabase storage used (reliable, via SECURITY DEFINER function) ---
   let storageBytes = -1, storageFiles = -1;
   try {
-    const { data: objs } = await svc.schema("storage").from("objects").select("metadata").limit(10000);
-    if (objs) {
-      storageFiles = objs.length;
-      storageBytes = objs.reduce((s, o) => s + (Number((o.metadata as { size?: number } | null)?.size) || 0), 0);
-    }
+    const { data: u } = await svc.rpc("storage_usage");
+    const row = Array.isArray(u) ? u[0] : u;
+    if (row) { storageFiles = Number(row.files) || 0; storageBytes = Number(row.bytes) || 0; }
   } catch {
-    /* storage schema not queryable — show link instead */
+    /* show link instead */
   }
+
+  // --- Bunny live billing (this month's charges) ---
+  const bunnyBill = await getBunnyBilling();
 
   // --- Bunny videos vs YouTube (usage proxy) ---
   const { data: secs } = await svc.from("sections").select("config").limit(5000);
@@ -96,8 +98,17 @@ export default async function CostsPage() {
             <strong>🎬 Bunny (video)</strong>
             <span className="badge" style={{ color: bunnyOn ? "#16a34a" : "var(--muted)", borderColor: bunnyOn ? "#16a34a" : "var(--border)" }}>{bunnyOn ? "connected" : "not set"}</span>
           </div>
-          <div style={stat}>{bunnyVideos} videos</div>
-          <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>Classes on Bunny ({youtubeVideos} on free YouTube). Bunny bills for storage + streaming — exact ₹ is on Bunny.</p>
+          {bunnyBill ? (
+            <>
+              <div style={stat}>{money(bunnyBill.thisMonth)}</div>
+              <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>This month&apos;s Bunny charges · balance {money(bunnyBill.balance)} · {bunnyVideos} videos ({youtubeVideos} on free YouTube).</p>
+            </>
+          ) : (
+            <>
+              <div style={stat}>{bunnyVideos} videos</div>
+              <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>Classes on Bunny ({youtubeVideos} on free YouTube). Add your Bunny <strong>Account API key</strong> in Integrations to show live ₹ charges here.</p>
+            </>
+          )}
           <a className="btn small secondary" href="https://dash.bunny.net/billing" target="_blank" rel="noopener noreferrer" style={{ marginTop: 10 }}>View Bunny bill ↗</a>
         </div>
 

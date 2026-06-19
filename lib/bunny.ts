@@ -1,4 +1,23 @@
 import crypto from "crypto";
+import { getSecret } from "@/lib/secrets";
+
+// Live Bunny billing — this month's charges + account balance. Needs the
+// ACCOUNT API key (dash.bunny.net → Account → API), not the Stream library key.
+export async function getBunnyBilling(): Promise<{ thisMonth: number; balance: number } | null> {
+  const key = await getSecret("BUNNY_ACCOUNT_API_KEY");
+  if (!key) return null;
+  try {
+    const res = await fetch("https://api.bunny.net/billing", {
+      headers: { AccessKey: key, accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const d = await res.json();
+    return { thisMonth: Number(d.ThisMonthCharges) || 0, balance: Number(d.Balance) || 0 };
+  } catch {
+    return null;
+  }
+}
 
 // Build a Bunny Stream embed URL. SERVER-ONLY (signs with the secret token key).
 // If BUNNY_STREAM_TOKEN_KEY is set, produces a signed URL that works with Bunny

@@ -85,6 +85,7 @@ const SECRET_KEYS = [
   "SERPAPI_KEY",
   "BUNNY_STREAM_API_KEY",
   "BUNNY_LIBRARY_ID",
+  "BUNNY_ACCOUNT_API_KEY",
 ] as const;
 
 // Save API keys pasted in the admin. Blank fields are IGNORED (so you can update

@@ -43,6 +43,9 @@ export default async function ContentPage({ searchParams }: { searchParams: { sa
         <textarea name="career_links" rows={4} defaultValue={m.get("career_links") || ""} placeholder={"Naukri — CA jobs | https://www.naukri.com/chartered-accountant-jobs\nXYZ & Co (walk-in) | https://xyz.com/careers"} />
         <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>Quick links shown on the Career page so students can browse openings &amp; walk-ins directly on Google Jobs, Naukri, Monster, ICAI and specific CA-firm career pages. Add your own firm links here.</p>
 
+        <label style={{ marginTop: 12 }}>📍 Cities for the &ldquo;CA jobs by city&rdquo; filter (comma-separated; blank = default list)</label>
+        <input name="career_cities" defaultValue={m.get("career_cities") || ""} placeholder="Delhi, Gurgaon, Mumbai, Pune, Bengaluru, Hyderabad, Chennai, Kolkata" />
+
         <h3 style={{ marginTop: 18 }}>🧘 Daily wellness tips</h3>
         <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>One tip per line — students see one per day (rotates).</p>
         <textarea name="wellness_tips" rows={5} defaultValue={m.get("wellness_tips") || ""} placeholder={"Take a 10-min walk between study blocks.\nRevise yesterday's topic for 15 min before new material.\nSleep 7 hours — memory consolidates at night."} />

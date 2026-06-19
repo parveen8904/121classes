@@ -28,7 +28,7 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/career");
 
-  const { data } = await supabase.from("site_settings").select("key, value").in("key", ["career_articleship", "career_placement", "career_resources", "career_jobs", "career_links"]);
+  const { data } = await supabase.from("site_settings").select("key, value").in("key", ["career_articleship", "career_placement", "career_resources", "career_jobs", "career_links", "career_cities"]);
   const m = new Map((data ?? []).map((r) => [r.key, r.value as string]));
 
   // Quick "browse & apply directly" links — admin-set, else sensible defaults
@@ -66,8 +66,10 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
     .map((l) => { const [label, url] = l.split("|").map((s) => s.trim()); return { label, url }; })
     .filter((x) => x.label && /^https?:\/\//.test(x.url || ""));
 
-  // City-wise quick filter → Google Jobs for CA roles in that city.
-  const CITIES = ["Delhi", "Gurgaon", "Noida", "Mumbai", "Pune", "Bengaluru", "Hyderabad", "Chennai", "Kolkata", "Ahmedabad", "Jaipur"];
+  // City-wise quick filter → Google Jobs for CA roles in that city. Admin-editable.
+  const DEFAULT_CITIES = ["Delhi", "Gurgaon", "Noida", "Mumbai", "Pune", "Bengaluru", "Hyderabad", "Chennai", "Kolkata", "Ahmedabad", "Jaipur"];
+  const adminCities = (m.get("career_cities") || "").split(/[,\n]/).map((c) => c.trim()).filter(Boolean);
+  const CITIES = adminCities.length ? adminCities : DEFAULT_CITIES;
   const cityLink = (c: string) => `https://www.google.com/search?q=${encodeURIComponent(`chartered accountant jobs in ${c}`)}&ibp=htl;jobs`;
   const any = ["career_articleship", "career_placement", "career_resources", "career_jobs"].some((k) => (m.get(k) || "").trim());
   const jobs = (m.get("career_jobs") || "").split("\n").map((l) => l.trim()).filter(Boolean);

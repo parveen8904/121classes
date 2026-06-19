@@ -109,6 +109,9 @@ export default async function Home() {
   const heroBanner = siteImg.get("hero_banner") || "";
   const studioPhoto = siteImg.get("studio_photo") || "";
   const careerJobs = (siteImg.get("career_jobs") || "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const homeCities = (siteImg.get("career_cities") || "").split(/[,\n]/).map((c) => c.trim()).filter(Boolean);
+  const cityList = (homeCities.length ? homeCities : ["Delhi", "Gurgaon", "Mumbai", "Pune", "Bengaluru", "Hyderabad", "Chennai", "Kolkata"]).slice(0, 12);
+  const cityJobUrl = (c: string) => `https://www.google.com/search?q=${encodeURIComponent(`chartered accountant jobs in ${c}`)}&ibp=htl;jobs`;
   const splashBanner = siteImg.get("splash_banner") || "";
   const splashLink = siteImg.get("splash_link") || "";
   const splashSeconds = Number(siteImg.get("splash_seconds")) || 5;
@@ -649,6 +652,12 @@ export default async function Home() {
             <a key={url} className="btn small secondary" href={url} target="_blank" rel="noopener noreferrer">{label} ↗</a>
           ))}
           <Link className="btn small" href="/login?next=/career">Career Corner (log in) →</Link>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", maxWidth: 760, margin: "0 auto 16px" }}>
+          <span className="muted" style={{ fontSize: ".84rem", alignSelf: "center" }}>📍 By city:</span>
+          {cityList.map((c) => (
+            <a key={c} className="btn small secondary" href={cityJobUrl(c)} target="_blank" rel="noopener noreferrer">{c} ↗</a>
+          ))}
         </div>
         {careerJobs.length > 0 && (
           <div style={{ display: "grid", gap: 10, maxWidth: 760, margin: "0 auto" }}>

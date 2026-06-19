@@ -25,6 +25,7 @@ export async function saveContent(formData: FormData) {
     { key: "career_resources", value: str(formData.get("career_resources")) },
     { key: "career_jobs", value: str(formData.get("career_jobs")) },
     { key: "career_links", value: str(formData.get("career_links")) },
+    { key: "career_cities", value: str(formData.get("career_cities")) },
     { key: "wellness_tips", value: str(formData.get("wellness_tips")) },
   ];
   for (const r of rows) await svc.from("site_settings").upsert(r, { onConflict: "key" });

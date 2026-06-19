@@ -93,10 +93,11 @@ async function fromRss(): Promise<Raw[]> {
   return out;
 }
 
-export async function ingestJobs(): Promise<{ added: number; checked: number }> {
+type DigestItem = { title: string; company: string; category: string; url: string };
+export async function ingestJobs(): Promise<{ added: number; checked: number; items: DigestItem[] }> {
   const svc = createServiceClient();
   const all = [...(await fromJooble()), ...(await fromRss())];
-  if (!all.length) return { added: 0, checked: 0 };
+  if (!all.length) return { added: 0, checked: 0, items: [] as DigestItem[] };
 
   // Dedupe within this run, then against what's already stored.
   const seen = new Set<string>();
@@ -106,12 +107,13 @@ export async function ingestJobs(): Promise<{ added: number; checked: number }> 
     const { data: existing } = await svc.from("job_listings").select("id").eq("url", j.url).maybeSingle();
     if (!existing) fresh.push(j);
   }
-  if (!fresh.length) return { added: 0, checked: unique.length };
+  if (!fresh.length) return { added: 0, checked: unique.length, items: [] as DigestItem[] };
 
   const cats = await classifyJobs(fresh.map((j) => ({ title: j.title, company: j.company, snippet: j.snippet })));
-  let added = 0;
+  const items: { title: string; company: string; category: string; url: string }[] = [];
   for (let i = 0; i < fresh.length; i++) {
     const j = fresh[i];
+    const category = cats[i] || "Other";
     const { error } = await svc.from("job_listings").insert({
       source: j.source,
       title: j.title,
@@ -119,10 +121,27 @@ export async function ingestJobs(): Promise<{ added: number; checked: number }> 
       location: j.location || null,
       url: j.url,
       snippet: j.snippet || null,
-      category: cats[i] || "Other",
+      category,
       status: "new",
     });
-    if (!error) added++;
+    if (!error) items.push({ title: j.title, company: j.company, category, url: j.url });
   }
-  return { added, checked: unique.length };
+  return { added: items.length, checked: unique.length, items };
+}
+
+// Email the admin a digest of newly-pulled openings (used by the daily cron).
+export async function sendPlacementDigest(items: { title: string; company: string; category: string; url: string }[]) {
+  if (!items.length) return;
+  const to = await getSecret("PLACEMENT_DIGEST_EMAIL");
+  if (!to) return;
+  const rows = items
+    .slice(0, 50)
+    .map((j) => `<li><strong>${j.title}</strong>${j.company ? ` — ${j.company}` : ""} <em>(${j.category})</em> — <a href="${j.url}">view</a></li>`)
+    .join("");
+  const { sendEmail } = await import("@/lib/notify");
+  await sendEmail(
+    to,
+    `🎓 ${items.length} new CA opening(s) to review`,
+    `<p>${items.length} new opening(s) were pulled in. Approve the ones you want in <strong>Admin → Student placement</strong>.</p><ul>${rows}</ul>`,
+  );
 }

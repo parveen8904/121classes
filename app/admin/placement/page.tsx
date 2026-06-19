@@ -10,13 +10,14 @@ export const metadata = { title: "Student Placement — Admin" };
 
 export default async function PlacementAdmin({ searchParams }: { searchParams: { fetched?: string; saved?: string } }) {
   const svc = createServiceClient();
-  const [{ data: pending }, { data: approved }, jooble, queries, location, feeds] = await Promise.all([
+  const [{ data: pending }, { data: approved }, jooble, queries, location, feeds, digestEmail] = await Promise.all([
     svc.from("job_listings").select("id, title, company, location, url, snippet, category, source").eq("status", "new").order("created_at", { ascending: false }).limit(150),
     svc.from("job_listings").select("id, title, company, category").eq("status", "approved").order("created_at", { ascending: false }).limit(100),
     getSecret("JOOBLE_API_KEY"),
     getSecret("JOB_QUERIES"),
     getSecret("JOB_LOCATION"),
     getSecret("JOB_FEEDS"),
+    getSecret("PLACEMENT_DIGEST_EMAIL"),
   ]);
 
   return (
@@ -55,6 +56,8 @@ export default async function PlacementAdmin({ searchParams }: { searchParams: {
           </div>
           <label>Job RSS/Atom feed URLs (optional, one per line)</label>
           <textarea name="JOB_FEEDS" rows={2} defaultValue={feeds} placeholder={"https://…/jobs/rss"} />
+          <label>📧 Email me new openings each morning (digest)</label>
+          <input name="PLACEMENT_DIGEST_EMAIL" type="email" defaultValue={digestEmail} placeholder="you@example.com (leave blank for no email)" />
           <SubmitButton className="btn" style={{ marginTop: 10 }}>Save sources</SubmitButton>
         </form>
         <form action={fetchJobsNow} style={{ marginTop: 8 }}>

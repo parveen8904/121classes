@@ -96,7 +96,7 @@ function SectionBody({
     type === "discussion_video" ||
     type === "custom"
   ) {
-    const src = c.bunny_video_id ? bunnyEmbedUrl(c.bunny_video_id) : videoEmbedSrc(config);
+    const src = c.bunny_video_id ? bunnyEmbedUrl(c.bunny_video_id, c.bunny_drm !== "off") : videoEmbedSrc(config);
     return (
       <>
         {src ? (

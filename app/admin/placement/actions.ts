@@ -23,6 +23,7 @@ export async function saveJobSources(formData: FormData) {
     { key: "JOB_QUERIES", value: String(formData.get("JOB_QUERIES") || "").trim() },
     { key: "JOB_LOCATION", value: String(formData.get("JOB_LOCATION") || "").trim() },
     { key: "JOB_FEEDS", value: String(formData.get("JOB_FEEDS") || "").trim() },
+    { key: "PLACEMENT_DIGEST_EMAIL", value: String(formData.get("PLACEMENT_DIGEST_EMAIL") || "").trim() },
   ].map((r) => ({ ...r, updated_at: new Date().toISOString() }));
   await svc.from("app_secrets").upsert(rows, { onConflict: "key" });
   clearSecretCache();

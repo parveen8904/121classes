@@ -4,6 +4,7 @@
 export type ConfigField =
   | "revision_round"
   | "bunny_video_id"
+  | "bunny_drm"
   | "youtube_url"
   | "embed_url"
   | "pdf_url"
@@ -26,6 +27,7 @@ export type ConfigField =
 export const ALL_CONFIG_FIELDS: ConfigField[] = [
   "revision_round",
   "bunny_video_id",
+  "bunny_drm",
   "youtube_url",
   "embed_url",
   "pdf_url",
@@ -48,6 +50,7 @@ export const ALL_CONFIG_FIELDS: ConfigField[] = [
 export const FIELD_LABELS: Record<ConfigField, string> = {
   revision_round: "Revision round (First / Second)",
   bunny_video_id: "Bunny.net Stream video ID (secure premium player)",
+  bunny_drm: "Protection",
   youtube_url: "YouTube URL (optional, marketing copy)",
   embed_url: "Embed URL (HeyGen / other iframe src)",
   pdf_url: "PDF URL / storage path",
@@ -77,14 +80,14 @@ export const SECTION_TYPES: {
   fields: ConfigField[];
   note?: string;
 }[] = [
-  { value: "revision_video", label: "Revision video", fields: ["revision_round", "bunny_video_id", "youtube_url", "embed_url"] },
+  { value: "revision_video", label: "Revision video", fields: ["revision_round", "bunny_video_id", "bunny_drm", "youtube_url", "embed_url"] },
   {
     value: "full_class_video",
     label: "🎓 Class (video + notes + transcript + homework)",
-    fields: ["bunny_video_id", "video_ref", "duration_minutes", "notes_hand_url", "notes_typed_url", "transcript", "important_questions", "important_concepts", "homework", "homework_solutions", "youtube_url", "embed_url"],
+    fields: ["bunny_video_id", "bunny_drm", "video_ref", "duration_minutes", "notes_hand_url", "notes_typed_url", "transcript", "important_questions", "important_concepts", "homework", "homework_solutions", "youtube_url", "embed_url"],
     note: "A full class: lecture video, handwritten + typed notes, transcript (for AI), the important questions & concepts covered, and homework with solutions. Students also get a discussion thread for doubts.",
   },
-  { value: "discussion_video", label: "Discussion / walkthrough video", fields: ["bunny_video_id", "youtube_url", "embed_url"] },
+  { value: "discussion_video", label: "Discussion / walkthrough video", fields: ["bunny_video_id", "bunny_drm", "youtube_url", "embed_url"] },
   {
     value: "discussion",
     label: "Discussion board (Q&A)",

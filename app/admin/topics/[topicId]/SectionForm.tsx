@@ -96,6 +96,14 @@ export default function SectionForm({
                   <option value="Second">Second</option>
                 </select>
               </div>
+            ) : f === "bunny_drm" ? (
+              <div key={f}>
+                <label>{FIELD_LABELS[f]}</label>
+                <select name={f} defaultValue={cfg[f] ?? "drm"}>
+                  <option value="drm">🔒 DRM / protected (secure token player)</option>
+                  <option value="off">▶️ Standard — no DRM</option>
+                </select>
+              </div>
             ) : f === "body" ? (
               <div key={f}>
                 <label>{FIELD_LABELS[f]}</label>

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ingestGovtFeeds } from "@/lib/govtfeed";
-import { ingestJobs } from "@/lib/jobsfeed";
+import { ingestJobs, sendPlacementDigest } from "@/lib/jobsfeed";
 import { getSecret } from "@/lib/secrets";
 
 export const dynamic = "force-dynamic";
@@ -18,5 +18,6 @@ export async function GET(req: NextRequest) {
   }
   const result = await ingestGovtFeeds();
   const jobs = await ingestJobs();
-  return NextResponse.json({ ok: true, feeds: result, jobs });
+  if (jobs.items?.length) await sendPlacementDigest(jobs.items);
+  return NextResponse.json({ ok: true, feeds: result, jobs: { added: jobs.added, checked: jobs.checked } });
 }

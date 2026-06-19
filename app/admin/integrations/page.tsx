@@ -6,6 +6,7 @@ import { r2Configured } from "@/lib/r2";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
 import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection } from "./actions";
+import SubmitButton from "@/app/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Integrations — Admin" };
@@ -173,7 +174,7 @@ export default async function IntegrationsPage({
           <KeyField name="R2_SECRET_ACCESS_KEY" label="R2 Secret Access Key" placeholder="from R2 API token" />
           <KeyField name="R2_BUCKET" label="R2 Bucket name" placeholder="e.g. 121-files" />
           <KeyField name="R2_PUBLIC_BASE" label="R2 Public URL (custom domain or r2.dev)" placeholder="https://files.121caclasses.com" />
-          <button className="btn" type="submit" style={{ marginTop: 6 }}>Save keys</button>
+          <SubmitButton className="btn" style={{ marginTop: 6 }}>Save keys</SubmitButton>
         </form>
       </div>
 
@@ -187,7 +188,7 @@ export default async function IntegrationsPage({
           <input name="support_whatsapp" defaultValue={L.get("support_whatsapp") || ""} placeholder="https://whatsapp.com/channel/…" />
           <label>Instagram link</label>
           <input name="support_instagram" defaultValue={L.get("support_instagram") || ""} placeholder="https://instagram.com/…" />
-          <button className="btn" type="submit" style={{ marginTop: 14 }}>Save links</button>
+          <SubmitButton className="btn" style={{ marginTop: 14 }}>Save links</SubmitButton>
         </form>
       </div>
     </section>

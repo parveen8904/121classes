@@ -161,6 +161,7 @@ export default async function IntegrationsPage({
           <KeyField name="JOOBLE_API_KEY" label="Jooble key (free fallback) — placement" placeholder="from jooble.org/api/about" />
           <KeyField name="MAILGUN_API_KEY" label="Mailgun API key" placeholder="key-…" />
           <KeyField name="MAILGUN_DOMAIN" label="Mailgun domain" placeholder="mg.121caclasses.com" />
+          <KeyField name="MAILGUN_REGION" label="Mailgun region — type eu if your domain is EU (mxa.eu.mailgun.org)" placeholder="eu  (or leave blank for US)" />
           <KeyField name="INTERAKT_API_KEY" label="Interakt (WhatsApp) key" placeholder="Basic auth key" />
           <KeyField name="FACULTY_TELEGRAM_CHAT_ID" label="Faculty Telegram chat id (for doubt alerts)" placeholder="your own Telegram chat id" />
           <KeyField name="FACULTY_EMAIL" label="Faculty alert email" placeholder="help@121caclasses.com" />

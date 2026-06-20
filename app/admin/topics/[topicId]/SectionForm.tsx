@@ -26,9 +26,9 @@ type Section = {
 function clean(s: string) {
   return (s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
-function pad2(s: string) {
+function pad(s: string, width: number) {
   const d = (s || "").replace(/\D/g, "");
-  return d ? d.padStart(2, "0").slice(-2) : "";
+  return d ? d.padStart(width, "0").slice(-width) : "";
 }
 function yymm(date: string) {
   // date is YYYY-MM (month picker) → last two digits of year + month, e.g. 2025-03 → 2503
@@ -53,8 +53,13 @@ function AutoNumber({
 
   const sub = clean(subjectCode);
   const top = clean(topicCode);
+  // Class number is 3 digits (001) since a subject can have 100+ classes;
+  // the within-topic number stays 2 digits. A revision number stays 2 digits.
   const code =
-    sub + yymm(taughtOn) + top + (isRevision ? "R" : "") + pad2(classNo) + (isRevision ? "" : pad2(topicClassNo));
+    sub +
+    yymm(taughtOn) +
+    top +
+    (isRevision ? "R" + pad(classNo, 2) : pad(classNo, 3) + pad(topicClassNo, 2));
 
   const ready = sub && top && taughtOn && classNo && (isRevision || topicClassNo);
 
@@ -74,7 +79,7 @@ function AutoNumber({
         </div>
         <div>
           <label>{isRevision ? "Revision number" : "Class number"}</label>
-          <input inputMode="numeric" value={classNo} onChange={(e) => setClassNo(e.target.value)} placeholder="01" />
+          <input inputMode="numeric" value={classNo} onChange={(e) => setClassNo(e.target.value)} placeholder={isRevision ? "01" : "001"} />
         </div>
         {!isRevision && (
           <div>

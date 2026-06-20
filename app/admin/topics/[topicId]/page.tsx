@@ -163,35 +163,6 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
               >
                 <div>
                   <strong>{s.title}</strong>
-                  {(() => {
-                    const cfg = (s.config as Record<string, unknown> | null) ?? {};
-                    const uniqueNo = cfg.class_number as string | undefined;
-                    const classNo = cfg.class_no as string | undefined;
-                    const topicClassNo = cfg.topic_class_no as string | undefined;
-                    const isRev = s.type === "revision_video";
-                    if (!uniqueNo && !classNo) return null;
-                    return (
-                      <div style={{ marginTop: 6, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                        {uniqueNo && (
-                          <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: "1rem", background: "var(--accent)", color: "#fff", padding: "3px 10px", borderRadius: 6, letterSpacing: ".5px" }}>
-                            {uniqueNo}
-                          </span>
-                        )}
-                        {isRev
-                          ? classNo && (
-                              <span style={{ fontSize: ".85rem", fontWeight: 600 }}>
-                                Revision no <span style={{ color: "var(--accent)" }}>{classNo}</span>
-                              </span>
-                            )
-                          : (topicClassNo || classNo) && (
-                              <span style={{ fontSize: ".85rem", fontWeight: 600, display: "flex", gap: 12, flexWrap: "wrap" }}>
-                                {topicClassNo && <span>Topic class no <span style={{ color: "var(--accent)" }}>{topicClassNo}</span></span>}
-                                {classNo && <span>Class no <span style={{ color: "var(--accent)" }}>{classNo}</span></span>}
-                              </span>
-                            )}
-                      </div>
-                    );
-                  })()}
                   <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
                     {TYPE_LABEL[s.type] ?? s.type} · {s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "Free"} ·
                     order {s.order_index} · {s.is_published ? "published" : "draft"}
@@ -249,6 +220,30 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                       📝 {Number(cfg.ai_homework_count) || 0} homework questions solved in class
                       {cfg.ai_homework_next ? ` · 📚 Homework for next class: ${String(cfg.ai_homework_next)}` : ""}
                     </p>
+                  </div>
+                );
+              })()}
+
+              {(() => {
+                const cfg = (s.config as Record<string, unknown> | null) ?? {};
+                const uniqueNo = cfg.class_number as string | undefined;
+                const classNo = cfg.class_no as string | undefined;
+                const topicClassNo = cfg.topic_class_no as string | undefined;
+                const isRev = s.type === "revision_video";
+                if (!uniqueNo && !classNo) return null;
+                return (
+                  <div style={{ marginTop: 14, padding: "10px 14px", background: "var(--bg-soft)", borderRadius: 8, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                    {uniqueNo && (
+                      <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: "1.05rem", background: "var(--accent)", color: "#fff", padding: "4px 12px", borderRadius: 6, letterSpacing: ".5px" }}>
+                        {uniqueNo}
+                      </span>
+                    )}
+                    {!isRev && topicClassNo && (
+                      <span style={{ fontWeight: 600, fontSize: ".9rem" }}>Topic class no <span style={{ color: "var(--accent)" }}>{topicClassNo}</span></span>
+                    )}
+                    {classNo && (
+                      <span style={{ fontWeight: 600, fontSize: ".9rem" }}>{isRev ? "Revision no" : "Class no"} <span style={{ color: "var(--accent)" }}>{classNo}</span></span>
+                    )}
                   </div>
                 );
               })()}

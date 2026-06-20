@@ -22,14 +22,16 @@ export default function SectionForm({
   section,
   submitLabel = "Add section",
   defaultType,
+  lockType = true,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   topicId: string;
   section?: Section;
   submitLabel?: string;
   defaultType?: string;
+  lockType?: boolean;
 }) {
-  const [type, setType] = useState(section?.type ?? defaultType ?? "revision_video");
+  const [type, setType] = useState(section?.type ?? defaultType ?? "full_class_video");
   const def = SECTION_TYPES.find((t) => t.value === type);
   const cfg = (section?.config ?? {}) as Record<string, string>;
 
@@ -38,21 +40,25 @@ export default function SectionForm({
       {section && <input type="hidden" name="id" value={section.id} />}
       <input type="hidden" name="topicId" value={topicId} />
 
-      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1.3fr 0.7fr" }}>
+      <div style={{ display: "grid", gap: 14, gridTemplateColumns: lockType ? "3fr 0.7fr" : "2fr 1.3fr 0.7fr" }}>
         <div>
           <label>Title</label>
           <input name="title" defaultValue={section?.title ?? ""} placeholder="e.g. First revision" required />
         </div>
-        <div>
-          <label>Type</label>
-          <select name="type" value={type} onChange={(e) => setType(e.target.value)}>
-            {SECTION_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {lockType ? (
+          <input type="hidden" name="type" value={type} />
+        ) : (
+          <div>
+            <label>Type</label>
+            <select name="type" value={type} onChange={(e) => setType(e.target.value)}>
+              {SECTION_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label>Order</label>
           <input name="order_index" type="number" defaultValue={section?.order_index ?? 0} />

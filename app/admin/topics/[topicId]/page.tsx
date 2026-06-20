@@ -108,30 +108,39 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
           </div>
         </details>
 
-      {/* Add a class — right-aligned expander (primary action) */}
-      <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-        <summary className="btn as-btn">🎓 Add a class</summary>
-        <div className="form-card" style={{ marginTop: 12, width: "100%" }}>
-          <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>
-            A class = lecture video + notes PDF + its own discussion. Add as many classes as the topic needs.
-          </p>
-          <SectionForm
-            action={createSection}
-            topicId={topic.id}
-            submitLabel="Add class"
-            defaultType="full_class_video"
-          />
-        </div>
-      </details>
+      {/* Specific adders — no confusing "section type" picker */}
+      <div style={{ marginTop: 20, display: "grid", gap: 10 }}>
+        <details>
+          <summary className="btn as-btn">🎓 Add a class</summary>
+          <div className="form-card" style={{ marginTop: 10 }}>
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Lecture video + PDF + transcript + class number. Add as many as the topic needs.</p>
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add class" defaultType="full_class_video" />
+          </div>
+        </details>
+        <details>
+          <summary className="btn secondary as-btn">🎬 Add a revision video</summary>
+          <div className="form-card" style={{ marginTop: 10 }}>
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Revision video + PDF + transcript + number. Set its tier (Gold/Silver/Bronze) below.</p>
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add revision video" defaultType="revision_video" />
+          </div>
+        </details>
+        <details>
+          <summary className="btn secondary as-btn">🧠 Add the topic MCQ test</summary>
+          <div className="form-card" style={{ marginTop: 10 }}>
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Creates the MCQ test for this topic. Add/generate its questions after creating.</p>
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add MCQ test" defaultType="mcq_test" />
+          </div>
+        </details>
+        <details>
+          <summary className="btn secondary as-btn">✍️ Add the topic descriptive test</summary>
+          <div className="form-card" style={{ marginTop: 10 }}>
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Creates the descriptive test for this topic. Upload its questions &amp; solutions after creating.</p>
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add descriptive test" defaultType="subjective_test" />
+          </div>
+        </details>
+      </div>
 
-      <details style={{ marginTop: 10 }}>
-        <summary className="btn small secondary as-btn">➕ Add another section type (notes, test, homework…)</summary>
-        <div className="form-card" style={{ marginTop: 10 }}>
-          <SectionForm action={createSection} topicId={topic.id} submitLabel="Add section" />
-        </div>
-      </details>
-
-      <h2 className="admin-section-title">🎓 Classes &amp; sections</h2>
+      <h2 className="admin-section-title">🎓 Classes, revision videos &amp; tests</h2>
       <p className="muted" style={{ fontSize: ".9rem" }}>
         These render in order for students. Expand one to edit it.
       </p>

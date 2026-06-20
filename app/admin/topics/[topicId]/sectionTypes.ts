@@ -61,7 +61,7 @@ export const FIELD_LABELS: Record<ConfigField, string> = {
   join_url: "Join link (Zoom / Google Meet / any)",
   starts_at: "Starts at",
   recording_url: "Recording link (after the class — YouTube/embed)",
-  class_number: "Class number (unique)",
+  class_number: "Number (unique)",
   video_ref: "Video reference number",
   duration_minutes: "Class duration (minutes) — used by the study planner",
   notes_hand_url: "Handwritten notes PDF",
@@ -83,7 +83,7 @@ export const SECTION_TYPES: {
   fields: ConfigField[];
   note?: string;
 }[] = [
-  { value: "revision_video", label: "Revision video", fields: ["revision_round", "bunny_video_id", "bunny_drm", "pdf_url", "transcript", "youtube_url", "embed_url"] },
+  { value: "revision_video", label: "Revision video", fields: ["class_number", "revision_round", "bunny_video_id", "bunny_drm", "pdf_url", "transcript", "youtube_url", "embed_url"] },
   {
     value: "full_class_video",
     label: "🎓 Class (video + notes + transcript + homework)",

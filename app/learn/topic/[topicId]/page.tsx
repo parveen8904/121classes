@@ -20,6 +20,15 @@ type Downloadable = {
 
 export const dynamic = "force-dynamic";
 
+// Minutes -> "1h 30m" / "45m".
+function fmtMins(mins: number): string {
+  const m = Math.max(0, Math.round(mins || 0));
+  if (!m) return "";
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return h ? (r ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
+}
+
 type SectionMeta = {
   id: string;
   type: string;
@@ -98,8 +107,23 @@ function SectionBody({
     type === "custom"
   ) {
     const src = c.bunny_video_id ? bunnyEmbedUrl(c.bunny_video_id, c.bunny_drm !== "off") : videoEmbedSrc(config);
+    const isRev = type === "revision_video";
+    const durLabel = fmtMins(Number(c.duration_minutes));
+    const hasDetail = c.class_number || c.class_no || c.topic_class_no || durLabel;
     return (
       <>
+        {hasDetail && (
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginTop: 12 }}>
+            {c.class_number && (
+              <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: ".92rem", background: "var(--bg-soft)", border: "1px solid var(--border)", padding: "3px 10px", borderRadius: 6, letterSpacing: ".5px" }}>
+                {c.class_number}
+              </span>
+            )}
+            {!isRev && c.topic_class_no && <span style={{ fontWeight: 600, fontSize: ".85rem" }}>Topic class no {c.topic_class_no}</span>}
+            {c.class_no && <span style={{ fontWeight: 600, fontSize: ".85rem" }}>{isRev ? "Revision no" : "Class no"} {c.class_no}</span>}
+            {durLabel && <span style={{ fontWeight: 600, fontSize: ".85rem" }}>⏱️ {durLabel}</span>}
+          </div>
+        )}
         {src ? (
           <div className="video-frame" style={{ marginTop: 14 }}>
             <iframe src={src} allow="encrypted-media; fullscreen" allowFullScreen title="Video" />
@@ -282,7 +306,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
 
   const { data: topic } = await supabase
     .from("topics")
-    .select("id, title, subject_id, topic_code, weightage_marks, importance, important_qs_rev1, update_coming, update_on, update_for, update_note, subjects(title, course_id)")
+    .select("id, title, subject_id, topic_code, weightage_marks, importance, important_qs_rev1, important_qs_rev2, valid_from_attempt, valid_to_attempt, amendments_upto, update_coming, update_on, update_for, update_note, subjects(title, course_id)")
     .eq("id", params.topicId)
     .single();
   if (!topic) notFound();
@@ -414,6 +438,44 @@ export default async function LearnTopic({ params }: { params: { topicId: string
             )}
           </div>
         )}
+
+        {(() => {
+          const td = topic as {
+            valid_from_attempt?: string | null;
+            valid_to_attempt?: string | null;
+            amendments_upto?: string | null;
+            important_qs_rev1?: string | null;
+            important_qs_rev2?: string | null;
+          };
+          const hasMeta = td.valid_from_attempt || td.amendments_upto || td.important_qs_rev1 || td.important_qs_rev2;
+          if (!hasMeta) return null;
+          const lines = (s?: string | null) => (s ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+          return (
+            <div className="card" style={{ marginTop: 18 }}>
+              <h3 style={{ margin: "0 0 8px" }}>📋 Topic details</h3>
+              <p className="muted" style={{ fontSize: ".88rem", margin: "0 0 6px" }}>
+                {td.valid_from_attempt ? <>📅 Applicable from <strong>{td.valid_from_attempt}</strong>{td.valid_to_attempt ? <> to <strong>{td.valid_to_attempt}</strong></> : " onwards"}</> : null}
+                {td.amendments_upto ? <> · 📝 Amendments up to <strong>{td.amendments_upto}</strong></> : null}
+              </p>
+              {td.important_qs_rev1 && (
+                <details style={{ marginTop: 6 }}>
+                  <summary style={{ cursor: "pointer", color: "var(--accent)", fontWeight: 600 }}>📌 Most important questions — first revision</summary>
+                  <ol style={{ margin: "8px 0 0", paddingLeft: 20, fontSize: ".9rem" }}>
+                    {lines(td.important_qs_rev1).map((q, i) => <li key={i} style={{ margin: "2px 0" }}>{q}</li>)}
+                  </ol>
+                </details>
+              )}
+              {td.important_qs_rev2 && (
+                <details style={{ marginTop: 6 }}>
+                  <summary style={{ cursor: "pointer", color: "var(--accent)", fontWeight: 600 }}>📌 Most important questions — second revision</summary>
+                  <ol style={{ margin: "8px 0 0", paddingLeft: 20, fontSize: ".9rem" }}>
+                    {lines(td.important_qs_rev2).map((q, i) => <li key={i} style={{ margin: "2px 0" }}>{q}</li>)}
+                  </ol>
+                </details>
+              )}
+            </div>
+          );
+        })()}
 
         {topicMaterials && topicMaterials.length > 0 && (
           <div className="card" style={{ marginTop: 18 }}>

@@ -35,7 +35,7 @@ export default function VerifyPending({ email }: { email: string }) {
             {pending ? "Sending…" : "Resend verification email"}
           </button>
           <p className="muted" style={{ marginTop: 14, fontSize: ".82rem" }}>
-            <Link href="/auth/signout" style={{ color: "var(--accent)" }}>Log out</Link>
+            <a href="/auth/signout" style={{ color: "var(--accent)" }}>Log out</a>
           </p>
         </div>
       </section>

@@ -1,7 +1,8 @@
-// Minimal service worker — makes the app installable and gives an offline
-// fallback. Network-first for same-origin pages; never touches API/auth or
-// cross-origin (Supabase, Bunny, CDN) requests.
-const CACHE = "ca-shell-v1";
+// Minimal service worker — makes the app installable and caches only static
+// assets for offline. It NEVER caches page HTML/navigations, so pages are always
+// fetched fresh from the network (no stale landing page after a deploy). It also
+// never touches API/auth or cross-origin (Supabase, Bunny, CDN) requests.
+const CACHE = "ca-shell-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => {
@@ -18,6 +19,11 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return; // skip Supabase / Bunny / CDN
   if (url.pathname.startsWith("/api/")) return; // never cache API/auth
 
+  // Pages/HTML: don't intercept at all — always load fresh from the network so a
+  // new deploy is never hidden behind a cached page.
+  if (req.mode === "navigate" || req.destination === "document") return;
+
+  // Static assets (JS/CSS/images/fonts): network-first, fall back to cache offline.
   event.respondWith(
     fetch(req)
       .then((res) => {

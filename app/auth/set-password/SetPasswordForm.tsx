@@ -7,7 +7,7 @@ import { markHasPassword, claimDevice } from "../session-actions";
 
 // Mandatory one-time password setup. After this, the student always logs in with
 // their password — no more codes.
-export default function SetPasswordForm({ next, logoUrl = "/logo-121.png" }: { next: string; logoUrl?: string }) {
+export default function SetPasswordForm({ next }: { next: string }) {
   const supabase = createClient();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -33,7 +33,7 @@ export default function SetPasswordForm({ next, logoUrl = "/logo-121.png" }: { n
   return (
     <main>
       <header className="topbar">
-        <Link href="/">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={logoUrl} alt="CA Parveen Sharma" className="brand-logo" /></Link>
+        <Link href="/">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/logo-cps.png" alt="CA Parveen Sharma" className="brand-logo" /></Link>
       </header>
       <section className="narrow" style={{ paddingTop: 60 }}>
         <div className="card">

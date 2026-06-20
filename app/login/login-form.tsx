@@ -9,7 +9,7 @@ import { registerWithVerification, sendPasswordReset } from "../auth/email-actio
 
 type Mode = "login" | "signup" | "forgot";
 
-export default function LoginForm({ logoUrl = "/logo-121.png" }: { logoUrl?: string }) {
+export default function LoginForm() {
   const supabase = createClient();
   const params = useSearchParams();
   const next = params.get("next") || "/dashboard";
@@ -77,7 +77,7 @@ export default function LoginForm({ logoUrl = "/logo-121.png" }: { logoUrl?: str
   return (
     <main>
       <header className="topbar">
-        <Link href="/">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={logoUrl} alt="CA Parveen Sharma" className="brand-logo" /></Link>
+        <Link href="/">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/logo-cps.png" alt="CA Parveen Sharma" className="brand-logo" /></Link>
       </header>
 
       <section className="narrow" style={{ paddingTop: 60 }}>

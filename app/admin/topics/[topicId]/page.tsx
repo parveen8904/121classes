@@ -225,17 +225,22 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
               })()}
 
               {(() => {
+                const isClass = s.type === "full_class_video" || s.type === "revision_video";
+                if (!isClass) return null;
                 const cfg = (s.config as Record<string, unknown> | null) ?? {};
                 const uniqueNo = cfg.class_number as string | undefined;
                 const classNo = cfg.class_no as string | undefined;
                 const topicClassNo = cfg.topic_class_no as string | undefined;
                 const isRev = s.type === "revision_video";
-                if (!uniqueNo && !classNo) return null;
                 return (
                   <div style={{ marginTop: 14, padding: "10px 14px", background: "var(--bg-soft)", borderRadius: 8, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-                    {uniqueNo && (
+                    {uniqueNo ? (
                       <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: "1.05rem", background: "var(--accent)", color: "#fff", padding: "4px 12px", borderRadius: 6, letterSpacing: ".5px" }}>
                         {uniqueNo}
+                      </span>
+                    ) : (
+                      <span style={{ fontWeight: 600, fontSize: ".88rem", color: "#b45309" }}>
+                        🔢 Number not set yet — open <em>Edit section</em> below and fill the month, topic class no &amp; class no
                       </span>
                     )}
                     {!isRev && topicClassNo && (

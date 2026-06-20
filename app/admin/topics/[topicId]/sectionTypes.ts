@@ -86,9 +86,9 @@ export const SECTION_TYPES: {
   { value: "revision_video", label: "Revision video", fields: ["class_number", "revision_round", "bunny_video_id", "bunny_drm", "pdf_url", "transcript", "youtube_url", "embed_url"] },
   {
     value: "full_class_video",
-    label: "🎓 Class (video + notes + transcript + homework)",
-    fields: ["class_number", "bunny_video_id", "bunny_drm", "video_ref", "duration_minutes", "notes_hand_url", "notes_typed_url", "transcript", "important_questions", "important_concepts", "homework", "homework_solutions", "youtube_url", "embed_url"],
-    note: "A full class: lecture video, handwritten + typed notes, transcript (for AI), the important questions & concepts covered, and homework with solutions. Students also get a discussion thread for doubts.",
+    label: "🎓 Class (video + PDF + transcript)",
+    fields: ["class_number", "bunny_video_id", "bunny_drm", "duration_minutes", "notes_hand_url", "notes_typed_url", "transcript", "youtube_url", "embed_url"],
+    note: "A class: number, lecture video, its PDF (handwritten/typed notes) and the transcript. The AI builds the class summary (questions/concepts/homework) from the transcript — no need to type those.",
   },
   { value: "discussion_video", label: "Discussion / walkthrough video", fields: ["bunny_video_id", "bunny_drm", "youtube_url", "embed_url"] },
   {

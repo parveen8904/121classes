@@ -9,11 +9,11 @@ import AskMe from "./components/AskMe";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "121 CA Classes — Highly Personalized, AI-Enabled CA Coaching",
+  title: "CA Parveen Sharma — AI-Enabled CA Coaching | caparveensharma.com",
   description:
     "Highly personalized, AI-enabled CA coaching that clears the clutter — top-notch, result-oriented 1-to-1 teaching, live classes and ad-free lectures for CA students in India.",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "CA Classes" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "CA Parveen Sharma" },
 };
 
 // Ensure mobile browsers render at device width (responsive layout).

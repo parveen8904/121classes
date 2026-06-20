@@ -5,11 +5,8 @@ import MobileMenu from "./MobileMenu";
 
 const NAV_LINKS = [
   { href: "/courses", label: "Courses" },
-  { href: "/combos", label: "Combos" },
   { href: "/test-series", label: "Test Series" },
-  { href: "/calendar", label: "Calendar" },
   { href: "/results", label: "Results" },
-  { href: "/faculty", label: "Faculty" },
   { href: "/books", label: "Books" },
   { href: "/resources", label: "Resources" },
   { href: "/#contact", label: "Contact" },
@@ -19,7 +16,7 @@ export default async function SiteNav() {
   return (
     <nav className="lp-nav">
       <div className="lp-nav-inner">
-        <Link href="/" aria-label="121 CA Classes home" className="lp-brand">
+        <Link href="/" aria-label="CA Parveen Sharma home" className="lp-brand">
           <Logo />
         </Link>
         <div className="lp-nav-links">

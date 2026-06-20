@@ -14,16 +14,16 @@ export default async function Logo() {
   // A custom uploaded logo is shown as-is.
   if (url) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt="121 CA Classes" className="brand-logo" />;
+    return <img src={url} alt="CA Parveen Sharma" className="brand-logo" />;
   }
 
   // Built-in logo: light-text version on dark backgrounds, dark-text on light.
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/logo-121-light.png" alt="121 CA Classes" className="brand-logo logo-on-dark" />
+      <img src="/logo-121-light.png" alt="CA Parveen Sharma" className="brand-logo logo-on-dark" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/logo-121.png" alt="121 CA Classes" className="brand-logo logo-on-light" />
+      <img src="/logo-121.png" alt="CA Parveen Sharma" className="brand-logo logo-on-light" />
     </>
   );
 }

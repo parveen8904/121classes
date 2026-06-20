@@ -248,25 +248,21 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                 const mins = Number(cfg.duration_minutes) || 0;
                 const isRev = s.type === "revision_video";
                 return (
-                  <div style={{ marginTop: 14, padding: "10px 14px", background: "var(--bg-soft)", borderRadius: 8, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                  <div style={{ marginTop: 14, padding: "14px", background: "var(--bg-soft)", borderRadius: 8, textAlign: "center" }}>
                     {uniqueNo ? (
-                      <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: "1.05rem", background: "#fff", border: "1px solid var(--border)", padding: "4px 12px", borderRadius: 6, letterSpacing: ".5px" }}>
+                      <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: "1.5rem", letterSpacing: "1px" }}>
                         {uniqueNo}
-                      </span>
+                      </div>
                     ) : (
-                      <span style={{ fontWeight: 600, fontSize: ".88rem", color: "#b45309" }}>
-                        🔢 Number not set yet — open <em>Edit section</em> below and fill the month, topic class no &amp; class no
-                      </span>
+                      <div style={{ fontWeight: 600, fontSize: ".88rem", color: "#b45309" }}>
+                        🔢 Number not set yet — open <em>Edit section</em> below and set the month taught
+                      </div>
                     )}
-                    {!isRev && topicClassNo && (
-                      <span style={{ fontWeight: 700, fontSize: ".9rem" }}>Topic class no {topicClassNo}</span>
-                    )}
-                    {classNo && (
-                      <span style={{ fontWeight: 700, fontSize: ".9rem" }}>{isRev ? "Revision no" : "Class no"} {classNo}</span>
-                    )}
-                    {mins > 0 && (
-                      <span style={{ fontWeight: 700, fontSize: ".9rem" }}>⏱️ {fmtMins(mins)}</span>
-                    )}
+                    <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap", marginTop: 6, fontWeight: 700, fontSize: ".88rem" }}>
+                      {!isRev && topicClassNo && <span>Topic class no {topicClassNo}</span>}
+                      {classNo && <span>{isRev ? "Revision no" : "Class no"} {classNo}</span>}
+                      {mins > 0 && <span>⏱️ {fmtMins(mins)}</span>}
+                    </div>
                   </div>
                 );
               })()}

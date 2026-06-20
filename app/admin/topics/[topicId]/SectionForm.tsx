@@ -120,11 +120,21 @@ export default function SectionForm({
   const def = SECTION_TYPES.find((t) => t.value === type);
   const cfg = (section?.config ?? {}) as Record<string, string>;
   const showAutoNumber = type === "full_class_video" || type === "revision_video";
+  const isAdd = !section;
+  const [resetN, setResetN] = useState(0);
+
+  // For an "add" form: after the save completes, remount the fields so they
+  // clear automatically (no manual page refresh). Editing keeps its values.
+  async function handleAdd(formData: FormData) {
+    await action(formData);
+    setResetN((n) => n + 1);
+  }
 
   return (
-    <form action={action}>
+    <form action={isAdd ? handleAdd : action}>
       {section && <input type="hidden" name="id" value={section.id} />}
       <input type="hidden" name="topicId" value={topicId} />
+      <div key={resetN}>
 
       <div style={{ display: "grid", gap: 14, gridTemplateColumns: lockType ? "3fr 0.7fr" : "2fr 1.3fr 0.7fr" }}>
         <div>
@@ -226,9 +236,10 @@ export default function SectionForm({
         </p>
       )}
 
-      <label className="remember" style={{ marginTop: 0 }}>
-        <input type="checkbox" name="is_published" defaultChecked={section?.is_published ?? false} /> Published
-      </label>
+        <label className="remember" style={{ marginTop: 0 }}>
+          <input type="checkbox" name="is_published" defaultChecked={section?.is_published ?? false} /> Published
+        </label>
+      </div>
       <SubmitButton className="btn">{submitLabel}</SubmitButton>
     </form>
   );

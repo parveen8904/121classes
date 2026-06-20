@@ -14,6 +14,14 @@ function fmtDate(s: string | null): string {
   return new Date(s).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" });
 }
 
+function fmtMins(mins: number): string {
+  const m = Math.max(0, Math.round(mins || 0));
+  if (!m) return "0m";
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return h ? (r ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
+}
+
 export default async function LearnCourse({ params }: { params: { courseId: string } }) {
   const supabase = createClient();
   const {
@@ -60,11 +68,61 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   const { data: topics } = subjectIds.length
     ? await supabase
         .from("topics")
-        .select("id, title, subject_id, order_index, valid_from_attempt, valid_to_attempt, amendments_upto")
+        .select("id, title, subject_id, order_index, valid_from_attempt, valid_to_attempt, amendments_upto, important_qs_rev1, important_qs_rev2")
         .in("subject_id", subjectIds)
         .order("order_index")
         .order("title")
     : { data: [] as never[] };
+
+  // Per-subject summary (classes, revision videos, tests, materials, important
+  // questions) + per-topic class-number ranges — the same overview admins see.
+  const topicIds2 = (topics ?? []).map((t) => t.id);
+  const topicToSubject = new Map((topics ?? []).map((t) => [t.id, t.subject_id as string]));
+  const sumClasses = new Map<string, number>(), sumClassMins = new Map<string, number>();
+  const sumRev = new Map<string, number>(), sumRevMins = new Map<string, number>();
+  const sumMcq = new Map<string, number>(), sumDesc = new Map<string, number>();
+  const subjMaterials = new Map<string, Set<string>>();
+  const topicRange = new Map<string, { min: number; max: number }>();
+  const inc = (m: Map<string, number>, k: string, by = 1) => m.set(k, (m.get(k) ?? 0) + by);
+  if (topicIds2.length) {
+    const { data: secRows } = await supabase
+      .from("sections")
+      .select("topic_id, type, config")
+      .in("topic_id", topicIds2)
+      .eq("is_published", true);
+    for (const r of secRows ?? []) {
+      const tid = (r as { topic_id: string }).topic_id;
+      const sid = topicToSubject.get(tid);
+      if (!sid) continue;
+      const type = (r as { type: string }).type;
+      const cfg = (r as { config?: { duration_minutes?: unknown; class_no?: unknown } }).config ?? {};
+      const d = Number(cfg.duration_minutes) || 0;
+      if (type === "full_class_video") {
+        inc(sumClasses, sid); inc(sumClassMins, sid, d);
+        const no = parseInt(String(cfg.class_no ?? "").replace(/\D/g, ""), 10);
+        if (Number.isFinite(no) && no > 0) {
+          const cur = topicRange.get(tid);
+          topicRange.set(tid, { min: Math.min(cur?.min ?? no, no), max: Math.max(cur?.max ?? no, no) });
+        }
+      } else if (type === "revision_video") { inc(sumRev, sid); inc(sumRevMins, sid, d); }
+      else if (type === "mcq_test") inc(sumMcq, sid);
+      else if (type === "subjective_test") inc(sumDesc, sid);
+    }
+    const { data: matRows } = await supabase
+      .from("repository_items")
+      .select("topic_id, kind")
+      .in("topic_id", topicIds2)
+      .eq("is_active", true)
+      .not("file_url", "is", null);
+    for (const r of matRows ?? []) {
+      const sid = topicToSubject.get((r as { topic_id: string }).topic_id);
+      const k = (r as { kind: string }).kind;
+      if (!sid || !k || k === "transcript") continue;
+      if (!subjMaterials.has(sid)) subjMaterials.set(sid, new Set());
+      subjMaterials.get(sid)!.add(k);
+    }
+  }
+  const MAT_LABEL: Record<string, string> = { book: "📕 Books", question_bank: "📚 Question bank", icai: "🏛️ ICAI", rtp: "📄 RTP", mtp: "📄 MTP", past_papers: "🗂️ Past papers", notes: "📝 Notes" };
 
   const target = profile?.target_attempt ?? null;
   type Sub = {
@@ -187,12 +245,41 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                     ✈️ Join the {s.title} Telegram group
                   </a>
                 )}
+                {(() => {
+                  const subjAll = (topics ?? []).filter((t) => t.subject_id === s.id);
+                  const hasRev1 = subjAll.some((t) => ((t as { important_qs_rev1?: string | null }).important_qs_rev1 ?? "").trim());
+                  const hasRev2 = subjAll.some((t) => ((t as { important_qs_rev2?: string | null }).important_qs_rev2 ?? "").trim());
+                  const attempts = [...new Set(subjAll.map((t) => t.valid_from_attempt).filter(Boolean) as string[])];
+                  const mats = [...(subjMaterials.get(s.id) ?? [])].map((k) => MAT_LABEL[k] ?? k);
+                  return (
+                    <div className="card" style={{ margin: "4px 0 14px" }}>
+                      <strong style={{ fontSize: ".95rem" }}>📊 What this subject contains</strong>
+                      <div style={{ display: "grid", gap: 6, fontSize: ".9rem", marginTop: 8 }}>
+                        <div>🎓 <strong>{sumClasses.get(s.id) ?? 0}</strong> classes · ⏱️ {fmtMins(sumClassMins.get(s.id) ?? 0)} total</div>
+                        <div>🎬 <strong>{sumRev.get(s.id) ?? 0}</strong> revision videos · ⏱️ {fmtMins(sumRevMins.get(s.id) ?? 0)} total</div>
+                        <div>🧠 <strong>{sumMcq.get(s.id) ?? 0}</strong> MCQ tests · ✍️ <strong>{sumDesc.get(s.id) ?? 0}</strong> descriptive tests</div>
+                        <div>📌 Important questions — first revision: {hasRev1 ? "✓" : "—"} · second revision: {hasRev2 ? "✓" : "—"}</div>
+                        <div>📚 Materials: {mats.length ? mats.join(" · ") : "coming soon"}</div>
+                        <div>📅 Applicable: {attempts.length ? attempts.join(", ") : "all attempts"}</div>
+                      </div>
+                    </div>
+                  );
+                })()}
                 {subjTopics.length > 0 ? (
                   <div className="topic-grid">
                     {subjTopics.map((t) => (
                       <Link key={t.id} href={`/learn/topic/${t.id}`} style={{ display: "block" }}>
                         <div className="topic-card">
                           <h3 style={{ fontSize: "1.08rem" }}>{t.title}</h3>
+                          {(() => {
+                            const r = topicRange.get(t.id);
+                            if (!r) return null;
+                            return (
+                              <p className="muted" style={{ fontSize: ".78rem", fontWeight: 600 }}>
+                                🎓 {r.min === r.max ? `Class ${r.min}` : `Classes ${r.min}–${r.max}`}
+                              </p>
+                            );
+                          })()}
                           {t.valid_from_attempt && (
                             <p className="muted" style={{ fontSize: ".78rem" }}>
                               From {t.valid_from_attempt}

@@ -27,7 +27,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
   const [{ data: topics }, { data: faculties }, { data: assigned }] = await Promise.all([
     supabase
       .from("topics")
-      .select("id, title, slug, order_index, valid_from_attempt, valid_to_attempt, amendments_upto, is_published, is_combined")
+      .select("id, title, slug, order_index, valid_from_attempt, valid_to_attempt, amendments_upto, important_qs_rev1, important_qs_rev2, is_published, is_combined")
       .eq("subject_id", subjectId)
       .order("is_combined")
       .order("order_index")
@@ -39,23 +39,65 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
   const assignedIds = new Set((assigned ?? []).map((a) => a.faculty_id));
   const courseTitle = (subject as { courses?: { title?: string } | null }).courses?.title;
 
-  // Count the classes (lecture videos) and sum their durations per topic.
+  // Aggregate every section in the subject: per-topic class counts/durations +
+  // class-number ranges, and subject-wide totals (classes, revisions, tests).
   const topicIds = (topics ?? []).map((t) => t.id);
   const classCount = new Map<string, number>();
   const classMins = new Map<string, number>();
+  const classNoMin = new Map<string, number>();
+  const classNoMax = new Map<string, number>();
+  let totalClasses = 0, totalClassMins = 0, revisionCount = 0, revisionMins = 0, mcqCount = 0, descCount = 0;
+  const materialKinds = new Set<string>();
+
   if (topicIds.length) {
-    const { data: classRows } = await supabase
+    const { data: secRows } = await supabase
       .from("sections")
-      .select("topic_id, config")
+      .select("topic_id, type, config")
       .in("topic_id", topicIds)
-      .eq("type", "full_class_video");
-    for (const r of classRows ?? []) {
+      .eq("is_published", true);
+    for (const r of secRows ?? []) {
       const tid = (r as { topic_id: string }).topic_id;
-      classCount.set(tid, (classCount.get(tid) ?? 0) + 1);
-      const d = Number((r as { config?: { duration_minutes?: unknown } }).config?.duration_minutes) || 0;
-      classMins.set(tid, (classMins.get(tid) ?? 0) + d);
+      const type = (r as { type: string }).type;
+      const cfg = (r as { config?: { duration_minutes?: unknown; class_no?: unknown } }).config ?? {};
+      const d = Number(cfg.duration_minutes) || 0;
+      if (type === "full_class_video") {
+        totalClasses++; totalClassMins += d;
+        classCount.set(tid, (classCount.get(tid) ?? 0) + 1);
+        classMins.set(tid, (classMins.get(tid) ?? 0) + d);
+        const no = parseInt(String(cfg.class_no ?? "").replace(/\D/g, ""), 10);
+        if (Number.isFinite(no) && no > 0) {
+          classNoMin.set(tid, Math.min(classNoMin.get(tid) ?? Infinity, no));
+          classNoMax.set(tid, Math.max(classNoMax.get(tid) ?? 0, no));
+        }
+      } else if (type === "revision_video") {
+        revisionCount++; revisionMins += d;
+      } else if (type === "mcq_test") {
+        mcqCount++;
+      } else if (type === "subjective_test") {
+        descCount++;
+      }
+    }
+
+    // Materials available in the subject (books / RTP / past papers / ICAI …) —
+    // transcripts are intentionally excluded (never shared with students).
+    const { data: matRows } = await supabase
+      .from("repository_items")
+      .select("kind")
+      .in("topic_id", topicIds)
+      .eq("is_active", true)
+      .not("file_url", "is", null);
+    for (const r of matRows ?? []) {
+      const k = (r as { kind: string }).kind;
+      if (k && k !== "transcript") materialKinds.add(k);
     }
   }
+
+  // Subject-level rollups for the summary banner.
+  const hasRev1 = (topics ?? []).some((t) => ((t as { important_qs_rev1?: string | null }).important_qs_rev1 ?? "").trim());
+  const hasRev2 = (topics ?? []).some((t) => ((t as { important_qs_rev2?: string | null }).important_qs_rev2 ?? "").trim());
+  const attempts = [...new Set((topics ?? []).map((t) => t.valid_from_attempt).filter(Boolean) as string[])];
+  const MAT_LABEL: Record<string, string> = { book: "📕 Books", question_bank: "📚 Question bank", icai: "🏛️ ICAI", rtp: "📄 RTP", mtp: "📄 MTP", past_papers: "🗂️ Past papers", notes: "📝 Notes" };
+  const materialList = [...materialKinds].map((k) => MAT_LABEL[k] ?? k);
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -65,6 +107,22 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
         subtitle={`Part of ${courseTitle ?? "this course"} · manage its topics below. 📖`}
         back={{ href: `/admin/courses/${subject.course_id}`, label: courseTitle ?? "Course" }}
       />
+
+      {/* Subject summary banner — the same overview a student sees */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <h3 style={{ margin: "0 0 10px" }}>📊 Subject summary — {subject.title}</h3>
+        <div style={{ display: "grid", gap: 7, fontSize: ".92rem" }}>
+          <div>🎓 <strong>{totalClasses}</strong> {totalClasses === 1 ? "class" : "classes"} · ⏱️ <strong>{fmtMins(totalClassMins)}</strong> total class time</div>
+          <div>🎬 <strong>{revisionCount}</strong> revision {revisionCount === 1 ? "video" : "videos"} · ⏱️ <strong>{fmtMins(revisionMins)}</strong> total revision time</div>
+          <div>🧠 <strong>{mcqCount}</strong> MCQ {mcqCount === 1 ? "test" : "tests"} · ✍️ <strong>{descCount}</strong> descriptive {descCount === 1 ? "test" : "tests"}</div>
+          <div>📌 Most important questions — first revision: <strong>{hasRev1 ? "✓ available" : "— not added"}</strong> · second revision: <strong>{hasRev2 ? "✓ available" : "— not added"}</strong></div>
+          <div>📚 Materials: <strong>{materialList.length ? materialList.join(" · ") : "none uploaded yet"}</strong></div>
+          <div>📅 Applicable attempt(s): <strong>{attempts.length ? attempts.join(", ") : "all attempts"}</strong></div>
+        </div>
+        <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0 0" }}>
+          Students see this same summary (transcripts are never shown to them).
+        </p>
+      </div>
 
       {/* New topic — right-aligned expander (primary action) */}
       <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
@@ -206,13 +264,18 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
       <h2 className="admin-section-title">📖 Topics</h2>
       <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
         {topics && topics.length > 0 ? (
-          topics.map((t) => (
+          topics.map((t, i) => {
+            const cMin = classNoMin.get(t.id);
+            const cMax = classNoMax.get(t.id);
+            const range = cMin && cMax ? (cMin === cMax ? `Class ${cMin}` : `Classes ${cMin}–${cMax}`) : null;
+            return (
             <div className="list-row" key={t.id}>
               <div>
                 <Link href={`/admin/topics/${t.id}`} className="row-title">
-                  📖 {t.title}
+                  📖 Topic {i + 1}: {t.title}
                 </Link>
                 <p className="row-sub">
+                  {range ? <><strong>{range}</strong> · </> : null}
                   order {t.order_index} · {t.is_published ? "🟢 published" : "⚪ draft"}
                   {t.valid_from_attempt ? ` · from ${t.valid_from_attempt}` : ""}
                 </p>
@@ -240,7 +303,8 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                 />
               </div>
             </div>
-          ))
+            );
+          })
         ) : (
           <div className="card">
             <p className="muted">📭 No topics yet — tap ＋ New topic above.</p>

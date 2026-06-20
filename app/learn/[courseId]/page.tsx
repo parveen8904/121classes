@@ -37,7 +37,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   const [{ data: subjects }, { data: subscription }] = await Promise.all([
     supabase
       .from("subjects")
-      .select("id, title, order_index, subject_faculty(faculties(full_name))")
+      .select("id, title, order_index, telegram_group_url, subject_faculty(faculties(full_name))")
       .eq("course_id", course.id)
       .order("order_index")
       .order("title"),
@@ -176,6 +176,17 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                     </form>
                   )}
                 </div>
+                {mySubjIds.has(s.id) && (s as { telegram_group_url?: string | null }).telegram_group_url && (
+                  <a
+                    className="btn small secondary"
+                    href={(s as { telegram_group_url?: string }).telegram_group_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ background: "#229ED9", color: "#fff", marginBottom: 10, display: "inline-block" }}
+                  >
+                    ✈️ Join the {s.title} Telegram group
+                  </a>
+                )}
                 {subjTopics.length > 0 ? (
                   <div className="topic-grid">
                     {subjTopics.map((t) => (

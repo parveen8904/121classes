@@ -18,7 +18,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, courses(title)")
+    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, telegram_group_url, courses(title)")
     .eq("id", subjectId)
     .single();
 
@@ -157,9 +157,14 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                 />
               </div>
             </div>
+            <div style={{ marginTop: 4 }}>
+              <label htmlFor="su-tg">✈️ Telegram group link (this subject only)</label>
+              <input id="su-tg" name="telegram_group_url" defaultValue={(subject as { telegram_group_url?: string }).telegram_group_url ?? ""} placeholder="https://t.me/+… — shown only to students who added this subject" />
+            </div>
             <p className="muted" style={{ fontSize: ".82rem", marginBottom: 12 }}>
               Bronze is free. Silver is a flat price on the <Link href="/admin/plans">Plans page</Link>. Gold
-              is the per-subject price above.
+              is the per-subject price above. The Telegram group is offered only to students who have this
+              subject in their courses.
             </p>
             <button className="btn" type="submit">
               Save subject

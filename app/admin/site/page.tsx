@@ -69,18 +69,28 @@ export default async function SiteImagesPage() {
             <input name="splash_link" defaultValue={m.get("splash_link") ?? ""} placeholder="https://… or /courses" />
           </div>
         </div>
-        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr", marginTop: 18 }}>
+        <h3 style={{ marginTop: 24, marginBottom: 4 }}>📲 Community channels</h3>
+        <p className="muted" style={{ fontSize: ".82rem", marginBottom: 10 }}>
+          Students see these on their dashboard. The Telegram <strong>channel</strong> is your broadcast for general
+          info; the per-subject Telegram <strong>groups</strong> are set on each subject (only that subject&apos;s
+          students see them).
+        </p>
+        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr", marginTop: 4 }}>
           <div>
-            <label>📱 WhatsApp number (for the support button)</label>
-            <input name="support_whatsapp" defaultValue={m.get("support_whatsapp") ?? ""} placeholder="e.g. 919812345678" />
+            <label>💬 Technical-team WhatsApp (Admin)</label>
+            <input name="support_whatsapp" defaultValue={m.get("support_whatsapp") ?? ""} placeholder="e.g. 919812345678 or https://wa.me/91…" />
+          </div>
+          <div>
+            <label>👩‍🏫 Faculty-team WhatsApp</label>
+            <input name="whatsapp_faculty" defaultValue={m.get("whatsapp_faculty") ?? ""} placeholder="e.g. 919812345678 or https://wa.me/91…" />
+          </div>
+          <div>
+            <label>✈️ Telegram channel (general info — students subscribe)</label>
+            <input name="support_telegram" defaultValue={m.get("support_telegram") ?? ""} placeholder="e.g. https://t.me/caparveen" />
           </div>
           <div>
             <label>📞 Phone number (for the call button)</label>
             <input name="support_phone" defaultValue={m.get("support_phone") ?? ""} placeholder="e.g. 919812345678" />
-          </div>
-          <div>
-            <label>✈️ Telegram channel link (for the Telegram button)</label>
-            <input name="support_telegram" defaultValue={m.get("support_telegram") ?? ""} placeholder="e.g. https://t.me/caparveen" />
           </div>
         </div>
 

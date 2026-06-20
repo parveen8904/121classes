@@ -80,6 +80,7 @@ export async function updateSubjectInline(formData: FormData) {
       title,
       slug: str(formData.get("slug")) || slugify(title),
       code: str(formData.get("code")).toUpperCase().replace(/[^A-Z0-9]/g, "") || null,
+      telegram_group_url: str(formData.get("telegram_group_url")) || null,
       order_index: num(formData.get("order_index")),
       gold_price_inr: goldStr ? Number(goldStr) : null,
       validity_months: validity > 0 ? validity : 12,

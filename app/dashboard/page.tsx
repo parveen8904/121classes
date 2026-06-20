@@ -24,7 +24,7 @@ export default async function Dashboard() {
   const { data: chSettings } = await supabase
     .from("site_settings")
     .select("key, value")
-    .in("key", ["support_telegram", "support_whatsapp"]);
+    .in("key", ["support_telegram", "support_whatsapp", "whatsapp_faculty"]);
   const chMap = new Map((chSettings ?? []).map((r) => [r.key, r.value as string]));
 
   const { data: courses } = await supabase
@@ -68,7 +68,8 @@ export default async function Dashboard() {
 
         <ConnectChannels
           telegramChannel={chMap.get("support_telegram")}
-          whatsapp={chMap.get("support_whatsapp")}
+          techWhatsapp={chMap.get("support_whatsapp")}
+          facultyWhatsapp={chMap.get("whatsapp_faculty")}
           alreadyLinked={!!profile?.telegram_chat_id}
         />
 

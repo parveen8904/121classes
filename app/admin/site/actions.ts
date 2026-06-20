@@ -13,6 +13,7 @@ const KEYS = [
   "splash_link",
   "splash_seconds",
   "support_whatsapp",
+  "whatsapp_faculty",
   "support_phone",
   "support_telegram",
   "app_url_web",

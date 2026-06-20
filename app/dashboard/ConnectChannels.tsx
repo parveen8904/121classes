@@ -3,20 +3,33 @@
 import { useState, useTransition } from "react";
 import { ensureTelegramLink } from "./telegram-actions";
 
+// Accept a bare number (919…) or a full URL; always produce a tappable wa.me link.
+function waHref(v?: string): string | null {
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) return v;
+  const digits = v.replace(/\D/g, "");
+  return digits ? `https://wa.me/${digits}` : null;
+}
+
 // "Stay connected" card on the dashboard. We can't silently add students to
 // channels, so we give one-tap join links + a personal bot-connect button.
 export default function ConnectChannels({
   telegramChannel,
-  whatsapp,
+  techWhatsapp,
+  facultyWhatsapp,
   alreadyLinked,
 }: {
   telegramChannel?: string;
-  whatsapp?: string;
+  techWhatsapp?: string;
+  facultyWhatsapp?: string;
   alreadyLinked?: boolean;
 }) {
   const [linked, setLinked] = useState(!!alreadyLinked);
   const [pending, start] = useTransition();
   const [note, setNote] = useState<string | null>(null);
+
+  const techWa = waHref(techWhatsapp);
+  const facultyWa = waHref(facultyWhatsapp);
 
   function connectBot() {
     start(async () => {
@@ -36,7 +49,7 @@ export default function ConnectChannels({
     <div className="card" style={{ marginTop: 18 }}>
       <h3 style={{ marginBottom: 6 }}>📲 Stay connected</h3>
       <p className="muted" style={{ fontSize: ".88rem", marginBottom: 12 }}>
-        Get class alerts and ask doubts on the go.
+        Get class alerts and ask doubts on the go. Reach the right team directly.
       </p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {linked ? (
@@ -49,16 +62,25 @@ export default function ConnectChannels({
         )}
         {telegramChannel && (
           <a className="btn small secondary" href={telegramChannel} target="_blank" rel="noopener noreferrer">
-            📢 Join our channel
+            📢 Subscribe to our Telegram channel (updates)
           </a>
         )}
-        {whatsapp && (
-          <a className="btn small secondary" href={whatsapp} target="_blank" rel="noopener noreferrer"
+        {facultyWa && (
+          <a className="btn small secondary" href={facultyWa} target="_blank" rel="noopener noreferrer"
             style={{ background: "#25D366", color: "#fff" }}>
-            💬 Join WhatsApp
+            👩‍🏫 WhatsApp the Faculty team
+          </a>
+        )}
+        {techWa && (
+          <a className="btn small secondary" href={techWa} target="_blank" rel="noopener noreferrer"
+            style={{ background: "#128C7E", color: "#fff" }}>
+            🛠️ WhatsApp the Technical team
           </a>
         )}
       </div>
+      <p className="muted" style={{ fontSize: ".8rem", marginTop: 10 }}>
+        💡 Each subject also has its own Telegram group — open the subject under <strong>My courses</strong> to join it.
+      </p>
       {note && <p className="muted" style={{ fontSize: ".82rem", marginTop: 10 }}>{note}</p>}
     </div>
   );

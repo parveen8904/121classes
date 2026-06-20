@@ -157,50 +157,30 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
           </p>
         </div>
 
-        {/* Access banner */}
-        <div className="access-banner">
-          {subs.length > 0 ? (
-            <>
-              <div>
-                <div className="lead">✓ Active access</div>
-                <div className="sub">
-                  {accessLabels.join(" · ")}
-                  {wholeCourseSub && ` · until ${fmtDate(wholeCourseSub.ends_at)}`}
-                </div>
+        {/* Quiet active-access line for students who have paid — no marketing. */}
+        {subs.length > 0 && (
+          <div className="access-banner">
+            <div>
+              <div className="lead">✓ Active access</div>
+              <div className="sub">
+                {accessLabels.join(" · ")}
+                {wholeCourseSub && ` · until ${fmtDate(wholeCourseSub.ends_at)}`}
               </div>
-              <div className="access-actions">
-                {wholeCourseSub && (
-                  <form action={setAutoRenew} style={{ margin: 0 }}>
-                    <input type="hidden" name="sub_id" value={wholeCourseSub.id} />
-                    <input type="hidden" name="course_id" value={course.id} />
-                    <input type="hidden" name="on" value={wholeCourseSub.auto_renew ? "false" : "true"} />
-                    <button className="btn small secondary" type="submit">
-                      {wholeCourseSub.auto_renew ? "Cancel auto-renew" : "Turn on auto-renew"}
-                    </button>
-                  </form>
-                )}
-                <Link className="btn small secondary" href={`/learn/${course.id}/plans`}>
-                  View plans
-                </Link>
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <div className="lead">Unlock every topic in {course.title}</div>
-                <div className="sub">
-                  Free sections are open now. Choose a plan to unlock revision videos, tests,
-                  doubt-solving and live classes.
-                </div>
-              </div>
-              <div className="access-actions">
-                <Link className="btn" href={`/learn/${course.id}/plans`}>
-                  View plans →
-                </Link>
-              </div>
-            </>
-          )}
-        </div>
+            </div>
+            <div className="access-actions">
+              {wholeCourseSub && (
+                <form action={setAutoRenew} style={{ margin: 0 }}>
+                  <input type="hidden" name="sub_id" value={wholeCourseSub.id} />
+                  <input type="hidden" name="course_id" value={course.id} />
+                  <input type="hidden" name="on" value={wholeCourseSub.auto_renew ? "false" : "true"} />
+                  <button className="btn small secondary" type="submit">
+                    {wholeCourseSub.auto_renew ? "Cancel auto-renew" : "Turn on auto-renew"}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Subjects → topics */}
         {subjects && subjects.length > 0 ? (

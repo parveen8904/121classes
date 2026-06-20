@@ -38,6 +38,21 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
   const assignedIds = new Set((assigned ?? []).map((a) => a.faculty_id));
   const courseTitle = (subject as { courses?: { title?: string } | null }).courses?.title;
 
+  // Count the classes (lecture videos) in each topic for the list below.
+  const topicIds = (topics ?? []).map((t) => t.id);
+  const classCount = new Map<string, number>();
+  if (topicIds.length) {
+    const { data: classRows } = await supabase
+      .from("sections")
+      .select("topic_id")
+      .in("topic_id", topicIds)
+      .eq("type", "full_class_video");
+    for (const r of classRows ?? []) {
+      const tid = (r as { topic_id: string }).topic_id;
+      classCount.set(tid, (classCount.get(tid) ?? 0) + 1);
+    }
+  }
+
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
       <AdminHero
@@ -189,6 +204,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                   📖 {t.title}
                 </Link>
                 <p className="row-sub">
+                  🎓 {classCount.get(t.id) ?? 0} {(classCount.get(t.id) ?? 0) === 1 ? "class" : "classes"} ·
                   order {t.order_index} · {t.is_published ? "🟢 published" : "⚪ draft"}
                   {t.valid_from_attempt ? ` · from ${t.valid_from_attempt}` : ""}
                 </p>

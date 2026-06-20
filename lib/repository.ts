@@ -18,7 +18,7 @@ export async function getRepositoryContext(
   // --- Source 1: repository_items ---
   const { data: items } = await svc
     .from("repository_items")
-    .select("title, content, subject_id, valid_from, valid_to")
+    .select("title, content, subject_id, topic_id, valid_from, valid_to")
     .eq("is_active", true)
     .not("content", "is", null)
     .order("created_at", { ascending: false });
@@ -48,7 +48,7 @@ export async function getRepositoryContext(
   type Chunk = { subject_id: string | null; topic_id: string | null; text: string };
   const chunks: Chunk[] = [];
 
-  for (const r of itemRows) chunks.push({ subject_id: r.subject_id, topic_id: null, text: `### ${r.title}\n${r.content}` });
+  for (const r of itemRows) chunks.push({ subject_id: r.subject_id, topic_id: (r as { topic_id?: string | null }).topic_id ?? null, text: `### ${r.title}\n${r.content}` });
 
   for (const t of topics ?? []) {
     const subj = (t as { subjects?: { title?: string } | null }).subjects?.title ?? "";

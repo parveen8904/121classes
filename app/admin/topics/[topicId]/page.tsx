@@ -6,7 +6,8 @@ import AdminHero from "../../_components/AdminHero";
 import SectionForm from "./SectionForm";
 import TopicMetaForm, { type TopicMeta } from "./TopicMetaForm";
 import { SECTION_TYPES } from "./sectionTypes";
-import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, convertHandwrittenNotes, approveTypedNotes, rejectTypedNotes } from "./actions";
+import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, convertHandwrittenNotes, approveTypedNotes, rejectTypedNotes, addTopicMaterial, deleteTopicMaterial } from "./actions";
+import PdfUpload from "../../_components/PdfUpload";
 
 const TYPE_LABEL = Object.fromEntries(SECTION_TYPES.map((t) => [t.value, t.label]));
 const PLAN_LABEL: Record<string, string> = { bronze: "Bronze+", silver: "Silver+", gold: "Gold" };
@@ -24,6 +25,13 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
     .single();
 
   if (!topic) notFound();
+
+  // AI-training material attached to this topic (PDFs whose text is extracted).
+  const { data: materials } = await supabase
+    .from("repository_items")
+    .select("id, title, kind, file_url, content")
+    .eq("topic_id", topicId)
+    .order("created_at", { ascending: false });
 
   const { data: sections } = await supabase
     .from("sections")
@@ -50,6 +58,57 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
         </summary>
         <TopicMetaForm action={updateTopicMeta} topic={topic as unknown as TopicMeta} />
       </details>
+
+      {/* AI training material — PDFs whose text the AI learns from for this topic */}
+      {!topic.is_combined && (
+        <details style={{ marginTop: 12 }}>
+          <summary className="btn small secondary as-btn">
+            🧠 AI training material — question bank / ICAI / RTP / past papers ({materials?.length ?? 0})
+          </summary>
+          <div className="form-card" style={{ marginTop: 10 }}>
+            <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
+              Upload the PDFs the AI should learn from for <strong>this topic</strong>. The text is read once and stored — then the AI answers doubts, and builds MCQs &amp; descriptive questions, grounded on it (plus the class transcripts &amp; your important questions).
+            </p>
+            <form action={addTopicMaterial}>
+              <input type="hidden" name="topicId" value={topic.id} />
+              <input type="hidden" name="subjectId" value={topic.subject_id} />
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+                <div>
+                  <label>Type</label>
+                  <select name="kind" defaultValue="question_bank">
+                    <option value="question_bank">📚 Question bank</option>
+                    <option value="icai">🏛️ ICAI material</option>
+                    <option value="rtp">📄 RTP</option>
+                    <option value="past_papers">🗂️ Past exam questions</option>
+                    <option value="book">📕 Book</option>
+                    <option value="notes">📝 Notes</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Name</label>
+                  <input name="title" placeholder="e.g. AS-13 Question Bank" />
+                </div>
+              </div>
+              <PdfUpload name="file_url" folder="repository" label="PDF (text is auto-extracted for the AI)" />
+              <label style={{ marginTop: 6 }}>Or paste text directly</label>
+              <textarea name="content" rows={3} placeholder="Optional — paste text instead of (or in addition to) a PDF." />
+              <button className="btn small" type="submit" style={{ marginTop: 8 }}>Add training material</button>
+            </form>
+            {materials && materials.length > 0 && (
+              <div style={{ display: "grid", gap: 6, marginTop: 12 }}>
+                {materials.map((mt) => (
+                  <div key={mt.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", padding: "6px 10px", background: "var(--bg-soft)", borderRadius: 8 }}>
+                    <span style={{ minWidth: 0, fontSize: ".85rem" }}>
+                      <strong>{mt.title}</strong> <span className="muted">· {mt.kind} · {(mt.content as string | null) ? `${Math.round(String(mt.content).length / 1000)}k chars read ✓` : "⚠️ no text extracted"}</span>
+                    </span>
+                    <DeleteButton action={deleteTopicMaterial} id={mt.id} parentId={topic.id} message="Remove this training material?" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </details>
+      )}
 
       {/* Add a class — right-aligned expander (primary action) */}
       <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>

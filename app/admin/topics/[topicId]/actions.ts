@@ -6,7 +6,44 @@ import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../../_lib/util";
 import { ALL_CONFIG_FIELDS } from "./sectionTypes";
 import { summarizeClass, transcribeHandwriting } from "@/lib/ai";
+import { extractPdfText } from "@/lib/pdf";
+import { createServiceClient } from "@/lib/supabase/service";
 import { notifyFaculty } from "@/lib/notify";
+
+// Attach AI-training material (question bank / ICAI / RTP / past papers / book)
+// to a topic. PDF text is extracted ONCE so the AI is grounded on it for this
+// topic's doubts, MCQs and descriptive questions.
+export async function addTopicMaterial(formData: FormData) {
+  const topicId = str(formData.get("topicId"));
+  const subjectId = str(formData.get("subjectId")) || null;
+  const title = str(formData.get("title"));
+  const kind = str(formData.get("kind")) || "other";
+  const fileUrl = str(formData.get("file_url")) || null;
+  let content = str(formData.get("content"));
+  if (!topicId || (!fileUrl && !content)) return;
+  if (!content && fileUrl && /\.pdf($|\?)/i.test(fileUrl)) {
+    const ex = await extractPdfText(fileUrl);
+    if (ex) content = ex;
+  }
+  await createServiceClient().from("repository_items").insert({
+    title: title || kind,
+    kind,
+    topic_id: topicId,
+    subject_id: subjectId,
+    file_url: fileUrl,
+    content,
+    is_active: true,
+  });
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
+export async function deleteTopicMaterial(formData: FormData) {
+  const id = str(formData.get("id"));
+  const topicId = str(formData.get("topicId"));
+  if (!id) return;
+  await createServiceClient().from("repository_items").delete().eq("id", id);
+  revalidatePath(`/admin/topics/${topicId}`);
+}
 
 function readConfig(formData: FormData): Record<string, string> {
   const config: Record<string, string> = {};

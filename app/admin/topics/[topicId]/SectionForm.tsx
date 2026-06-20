@@ -19,7 +19,7 @@ type Section = {
 // Builds the unique class/revision number the founder described, e.g.
 // AA · 2503 · AS13 · 01 · 01 → AA2503AS130101
 //   AA   = subject code        (2 letters)
-//   2503 = date taught         (DD + MM)
+//   2503 = year + month taught (YY + MM, e.g. 2025-03 → 2503)
 //   AS13 = topic short code
 //   01   = class number   (R<nn> for a revision video)
 //   01   = number within the topic
@@ -30,10 +30,10 @@ function pad2(s: string) {
   const d = (s || "").replace(/\D/g, "");
   return d ? d.padStart(2, "0").slice(-2) : "";
 }
-function ddmm(date: string) {
-  // date is YYYY-MM-DD
-  if (!date || date.length < 10) return "";
-  return date.slice(8, 10) + date.slice(5, 7);
+function yymm(date: string) {
+  // date is YYYY-MM (month picker) → last two digits of year + month, e.g. 2025-03 → 2503
+  if (!date || date.length < 7) return "";
+  return date.slice(2, 4) + date.slice(5, 7);
 }
 
 function AutoNumber({
@@ -54,7 +54,7 @@ function AutoNumber({
   const sub = clean(subjectCode);
   const top = clean(topicCode);
   const code =
-    sub + ddmm(taughtOn) + top + (isRevision ? "R" : "") + pad2(classNo) + (isRevision ? "" : pad2(topicClassNo));
+    sub + yymm(taughtOn) + top + (isRevision ? "R" : "") + pad2(classNo) + (isRevision ? "" : pad2(topicClassNo));
 
   const ready = sub && top && taughtOn && classNo && (isRevision || topicClassNo);
 
@@ -69,8 +69,8 @@ function AutoNumber({
       )}
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: isRevision ? "1.3fr 1fr" : "1.3fr 1fr 1fr", marginTop: 8 }}>
         <div>
-          <label>When was this taught?</label>
-          <input type="date" value={taughtOn} onChange={(e) => setTaughtOn(e.target.value)} />
+          <label>Month taught (year + month)</label>
+          <input type="month" value={taughtOn} onChange={(e) => setTaughtOn(e.target.value)} />
         </div>
         <div>
           <label>{isRevision ? "Revision number" : "Class number"}</label>

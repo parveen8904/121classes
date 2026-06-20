@@ -114,7 +114,7 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
       {/* Specific adders — no confusing "section type" picker */}
       <div style={{ marginTop: 20, display: "grid", gap: 10 }}>
         <details>
-          <summary className="btn as-btn">🎓 Add a class</summary>
+          <summary className="btn secondary as-btn">🎓 Add a class</summary>
           <div className="form-card" style={{ marginTop: 10 }}>
             <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Lecture video + PDF + transcript. The unique number is built for you. Add as many as the topic needs.</p>
             <SectionForm action={createSection} topicId={topic.id} submitLabel="Add class" defaultType="full_class_video" subjectCode={subjectCode} topicCode={topicCode} />

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export default function ResetForm() {
+export default function ResetForm({ logoUrl = "/logo-121.png" }: { logoUrl?: string }) {
   const supabase = createClient();
   const router = useRouter();
 
@@ -38,7 +38,7 @@ export default function ResetForm() {
       <header className="topbar">
         <Link href="/">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-121.png" alt="121 CA Classes" className="brand-logo" />
+          <img src={logoUrl} alt="CA Parveen Sharma" className="brand-logo" />
         </Link>
       </header>
 

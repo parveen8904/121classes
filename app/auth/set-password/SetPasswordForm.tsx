@@ -2,15 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { markHasPassword, claimDevice } from "../session-actions";
 
 // Mandatory one-time password setup. After this, the student always logs in with
 // their password — no more codes.
-export default function SetPasswordForm({ next }: { next: string }) {
+export default function SetPasswordForm({ next, logoUrl = "/logo-121.png" }: { next: string; logoUrl?: string }) {
   const supabase = createClient();
-  const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
@@ -29,14 +27,13 @@ export default function SetPasswordForm({ next }: { next: string }) {
     }
     await markHasPassword();
     await claimDevice();
-    router.push(next);
-    router.refresh();
+    window.location.assign(next);
   }
 
   return (
     <main>
       <header className="topbar">
-        <Link href="/">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/logo-121.png" alt="121 CA Classes" className="brand-logo" /></Link>
+        <Link href="/">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={logoUrl} alt="CA Parveen Sharma" className="brand-logo" /></Link>
       </header>
       <section className="narrow" style={{ paddingTop: 60 }}>
         <div className="card">

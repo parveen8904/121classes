@@ -15,5 +15,7 @@ export default async function SetPasswordPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  return <SetPasswordForm next={searchParams.next || "/dashboard"} />;
+  const { data: lg } = await supabase.from("site_settings").select("value").eq("key", "logo_url").maybeSingle();
+  const logoUrl = (lg?.value as string) || "/logo-121.png";
+  return <SetPasswordForm next={searchParams.next || "/dashboard"} logoUrl={logoUrl} />;
 }

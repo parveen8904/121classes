@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { resendVerification } from "../email-actions";
 
-export default function VerifyPending({ email }: { email: string }) {
+export default function VerifyPending({ email, logoUrl = "/logo-121.png" }: { email: string; logoUrl?: string }) {
   const [pending, start] = useTransition();
   const [note, setNote] = useState<string | null>(null);
 
@@ -20,7 +20,7 @@ export default function VerifyPending({ email }: { email: string }) {
   return (
     <main>
       <header className="topbar">
-        <Link href="/">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/logo-121.png" alt="121 CA Classes" className="brand-logo" /></Link>
+        <Link href="/">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={logoUrl} alt="CA Parveen Sharma" className="brand-logo" /></Link>
       </header>
       <section className="narrow" style={{ paddingTop: 60 }}>
         <div className="card" style={{ textAlign: "center" }}>

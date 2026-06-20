@@ -5,6 +5,7 @@ import SetPassword from "./set-password";
 import ConnectChannels from "./ConnectChannels";
 import WellnessTip from "@/app/components/WellnessTip";
 import TodayPlan from "@/app/components/TodayPlan";
+import { addMyCourse, removeMyCourse } from "@/app/learn/mycourses";
 
 export default async function Dashboard() {
   const supabase = createClient();
@@ -31,6 +32,14 @@ export default async function Dashboard() {
     .select("id, title")
     .eq("is_published", true)
     .order("order_index");
+
+  const { data: myCourseRows } = await supabase
+    .from("my_courses")
+    .select("course_id")
+    .eq("student_id", user.id);
+  const myIds = new Set((myCourseRows ?? []).map((r) => r.course_id as string));
+  const myCourses = (courses ?? []).filter((c) => myIds.has(c.id));
+  const otherCourses = (courses ?? []).filter((c) => !myIds.has(c.id));
 
   // Faculty messages / updates — shown to every student on login.
   const { data: announcements } = await supabase
@@ -99,27 +108,53 @@ export default async function Dashboard() {
           </>
         )}
 
-        <h2 style={{ margin: "32px 0 16px", fontSize: "1.2rem" }}>📚 Your courses</h2>
-        {courses && courses.length > 0 ? (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 10, margin: "32px 0 16px" }}>
+          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>📚 My courses</h2>
+        </div>
+
+        {myCourses.length > 0 ? (
           <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))" }}>
-            {courses.map((c) => (
-              <Link key={c.id} href={`/learn/${c.id}`} style={{ display: "block" }}>
-                <div className="card" style={{ height: "100%" }}>
+            {myCourses.map((c) => (
+              <div key={c.id} className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+                <Link href={`/learn/${c.id}`} style={{ display: "block" }}>
                   <h3>📘 {c.title}</h3>
                   <p className="muted" style={{ fontSize: ".85rem", marginTop: 8 }}>
-                    Open course → subjects, topics &amp; sections →
+                    Open course → subjects, topics &amp; classes →
                   </p>
-                </div>
-              </Link>
+                </Link>
+                <form action={removeMyCourse} style={{ marginTop: "auto", paddingTop: 12 }}>
+                  <input type="hidden" name="course_id" value={c.id} />
+                  <button className="btn small secondary" type="submit">✕ Remove from my courses</button>
+                </form>
+              </div>
             ))}
           </div>
         ) : (
           <div className="card">
-            <p className="muted">
-              📭 No courses published yet — once we add them, they appear here, filtered to your exam
-              attempt. Hang tight! ✨
+            <p className="muted" style={{ margin: 0 }}>
+              📭 You haven&apos;t added any courses yet. Pick one below to add it to your courses.
             </p>
           </div>
+        )}
+
+        {otherCourses.length > 0 && (
+          <details style={{ marginTop: 16 }}>
+            <summary className="btn small">＋ Add a course</summary>
+            <div className="card" style={{ marginTop: 10 }}>
+              <p className="muted" style={{ fontSize: ".85rem", marginTop: 0 }}>
+                Add the courses you&apos;re studying. You can remove any of them anytime.
+              </p>
+              <div style={{ display: "grid", gap: 8 }}>
+                {otherCourses.map((c) => (
+                  <form key={c.id} action={addMyCourse} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 12px", background: "var(--bg-soft)", borderRadius: 8 }}>
+                    <input type="hidden" name="course_id" value={c.id} />
+                    <span style={{ fontWeight: 600 }}>📘 {c.title}</span>
+                    <button className="btn small" type="submit">＋ Add</button>
+                  </form>
+                ))}
+              </div>
+            </div>
+          </details>
         )}
       </section>
     </main>

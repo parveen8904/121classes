@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { topicVisible } from "../_lib/attempt";
 import { setAutoRenew } from "./actions";
+import { addMySubject, removeMySubject } from "../mycourses";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,12 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
       .eq("status", "active")
       .order("ends_at", { ascending: false }),
   ]);
+
+  const { data: mySubjRows } = await supabase
+    .from("my_subjects")
+    .select("subject_id")
+    .eq("student_id", user.id);
+  const mySubjIds = new Set((mySubjRows ?? []).map((r) => r.subject_id as string));
 
   const subjectIds = (subjects ?? []).map((s) => s.id);
   const { data: topics } = subjectIds.length
@@ -152,9 +159,22 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
             );
             return (
               <div key={s.id} className="subj-block">
-                <div className="subj-head">
-                  <h2>{s.title}</h2>
+                <div className="subj-head" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <h2 style={{ margin: 0 }}>{s.title}</h2>
                   {faculty.length > 0 && <span className="subj-faculty">with {faculty.join(", ")}</span>}
+                  {mySubjIds.has(s.id) ? (
+                    <form action={removeMySubject} style={{ marginLeft: "auto" }}>
+                      <input type="hidden" name="subject_id" value={s.id} />
+                      <input type="hidden" name="course_id" value={course.id} />
+                      <button className="btn small secondary" type="submit">✓ In my subjects · Remove</button>
+                    </form>
+                  ) : (
+                    <form action={addMySubject} style={{ marginLeft: "auto" }}>
+                      <input type="hidden" name="subject_id" value={s.id} />
+                      <input type="hidden" name="course_id" value={course.id} />
+                      <button className="btn small" type="submit">＋ Add to my subjects</button>
+                    </form>
+                  )}
                 </div>
                 {subjTopics.length > 0 ? (
                   <div className="topic-grid">

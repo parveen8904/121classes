@@ -14,6 +14,7 @@ export type ConfigField =
   | "starts_at"
   | "recording_url"
   // class-level fields (used by the unified AI repository / planner)
+  | "class_number"
   | "video_ref"
   | "duration_minutes"
   | "notes_hand_url"
@@ -36,6 +37,7 @@ export const ALL_CONFIG_FIELDS: ConfigField[] = [
   "join_url",
   "starts_at",
   "recording_url",
+  "class_number",
   "video_ref",
   "duration_minutes",
   "notes_hand_url",
@@ -59,6 +61,7 @@ export const FIELD_LABELS: Record<ConfigField, string> = {
   join_url: "Join link (Zoom / Google Meet / any)",
   starts_at: "Starts at",
   recording_url: "Recording link (after the class — YouTube/embed)",
+  class_number: "Class number (unique)",
   video_ref: "Video reference number",
   duration_minutes: "Class duration (minutes) — used by the study planner",
   notes_hand_url: "Handwritten notes PDF",
@@ -80,11 +83,11 @@ export const SECTION_TYPES: {
   fields: ConfigField[];
   note?: string;
 }[] = [
-  { value: "revision_video", label: "Revision video", fields: ["revision_round", "bunny_video_id", "bunny_drm", "youtube_url", "embed_url"] },
+  { value: "revision_video", label: "Revision video", fields: ["revision_round", "bunny_video_id", "bunny_drm", "pdf_url", "transcript", "youtube_url", "embed_url"] },
   {
     value: "full_class_video",
     label: "🎓 Class (video + notes + transcript + homework)",
-    fields: ["bunny_video_id", "bunny_drm", "video_ref", "duration_minutes", "notes_hand_url", "notes_typed_url", "transcript", "important_questions", "important_concepts", "homework", "homework_solutions", "youtube_url", "embed_url"],
+    fields: ["class_number", "bunny_video_id", "bunny_drm", "video_ref", "duration_minutes", "notes_hand_url", "notes_typed_url", "transcript", "important_questions", "important_concepts", "homework", "homework_solutions", "youtube_url", "embed_url"],
     note: "A full class: lecture video, handwritten + typed notes, transcript (for AI), the important questions & concepts covered, and homework with solutions. Students also get a discussion thread for doubts.",
   },
   { value: "discussion_video", label: "Discussion / walkthrough video", fields: ["bunny_video_id", "bunny_drm", "youtube_url", "embed_url"] },

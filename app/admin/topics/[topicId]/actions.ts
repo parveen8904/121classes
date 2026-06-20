@@ -80,6 +80,7 @@ export async function updateTopicMeta(formData: FormData) {
   await supabase
     .from("topics")
     .update({
+      topic_code: nn("topic_code"),
       weightage_marks: str(formData.get("weightage_marks")) ? num(formData.get("weightage_marks")) : null,
       importance: parseImportance(str(formData.get("importance"))),
       valid_from_attempt: nn("valid_from_attempt"),

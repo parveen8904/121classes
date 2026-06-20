@@ -6,6 +6,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 export type TopicMeta = {
   id: string;
   is_combined: boolean;
+  topic_code: string | null;
   weightage_marks: number | null;
   importance: Record<string, string> | null;
   valid_from_attempt: string | null;
@@ -44,6 +45,11 @@ export default function TopicMetaForm({
         <input type="checkbox" name="is_combined" defaultChecked={topic.is_combined} onChange={(e) => setCombined(e.target.checked)} />{" "}
         🧩 This is the <strong>combined topic</strong> (covers the whole subject)
       </label>
+
+      <div style={{ marginTop: 8 }}>
+        <label>Topic number / code (unique)</label>
+        <input name="topic_code" defaultValue={topic.topic_code ?? ""} placeholder="e.g. ADV-AS13 or 4.2" />
+      </div>
 
       {/* Basics */}
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr", marginTop: 8 }}>

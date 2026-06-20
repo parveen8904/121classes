@@ -282,7 +282,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
 
   const { data: topic } = await supabase
     .from("topics")
-    .select("id, title, subject_id, weightage_marks, importance, important_qs_rev1, update_coming, update_on, update_for, update_note, subjects(title, course_id)")
+    .select("id, title, subject_id, topic_code, weightage_marks, importance, important_qs_rev1, update_coming, update_on, update_for, update_note, subjects(title, course_id)")
     .eq("id", params.topicId)
     .single();
   if (!topic) notFound();
@@ -381,7 +381,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
         </p>
 
         <div className="learn-hero">
-          <span className="badge">📖 Topic</span>
+          <span className="badge">📖 Topic{(topic as { topic_code?: string | null }).topic_code ? ` ${(topic as { topic_code?: string }).topic_code}` : ""}</span>
           <h1>{topic.title}</h1>
           <p className="meta">
             {sections.length} section{sections.length === 1 ? "" : "s"} · revision, notes, tests &amp;

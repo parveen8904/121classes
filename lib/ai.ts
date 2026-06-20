@@ -330,6 +330,49 @@ export async function classifyJobs(jobs: { title: string; company?: string; snip
   return jobs.map((j) => categorizeJob(j.title, j.snippet));
 }
 
+// Draft the most-important exam questions for a CA topic (first & second
+// revision sets) — a starting point the admin edits. Optionally grounded on the
+// topic's own material.
+export async function draftTopicQuestions(
+  subject: string,
+  topic: string,
+  material?: string,
+): Promise<{ rev1: string[]; rev2: string[] } | null> {
+  const sys =
+    "You are an ICAI exam expert for 121 CA Classes. For the given CA topic, draft the most important exam questions a student must practise, split into a first-revision set (core, must-do) and a second-revision set (final, high-yield / tricky). Indian CA exam style. " +
+    'Respond ONLY as compact JSON, no prose, no code fences: {"rev1":["...","..."],"rev2":["...","..."]} — 6 to 10 questions in each.';
+  const user = `Subject: ${subject}\nTopic: ${topic}` + (material ? `\n\nReference material:\n${material.slice(0, 8000)}` : "");
+  const out = await callClaude(sys, user, 1600, { feature: "draft_topic" });
+  if (!out) return null;
+  try {
+    const j = JSON.parse(out.replace(/```json|```/g, "").trim());
+    const arr = (x: unknown) => (Array.isArray(x) ? x.map((s) => String(s).trim()).filter(Boolean) : []);
+    return { rev1: arr(j.rev1), rev2: arr(j.rev2) };
+  } catch {
+    return null;
+  }
+}
+
+// Draft a class's summary, key concepts, important questions and homework from
+// its material (transcript / OCR'd notes) — an editable starting point.
+export async function draftClassContent(
+  material: string,
+): Promise<{ summary: string; concepts: string[]; questions: string[]; homework: string } | null> {
+  if (!material.trim()) return null;
+  const sys =
+    "From the CA class material below, draft a study breakdown for revision. " +
+    'Respond ONLY as compact JSON, no prose, no code fences: {"summary":"<3-5 sentence overview>","concepts":["<key concept 1>","..."],"questions":["<important question discussed/likely 1>","..."],"homework":"<homework given, or empty>"}.';
+  const out = await callClaude(sys, `Material:\n${material.slice(0, 24000)}`, 1800, { feature: "draft_class" });
+  if (!out) return null;
+  try {
+    const j = JSON.parse(out.replace(/```json|```/g, "").trim());
+    const arr = (x: unknown) => (Array.isArray(x) ? x.map((s) => String(s).trim()).filter(Boolean) : []);
+    return { summary: String(j.summary ?? "").trim(), concepts: arr(j.concepts), questions: arr(j.questions), homework: String(j.homework ?? "").trim() };
+  } catch {
+    return null;
+  }
+}
+
 // Convert a handwritten-notes PDF into clean typed notes (Markdown) using
 // Claude's vision. Run ONCE at admin level; the result goes to faculty for
 // approval before students see it.

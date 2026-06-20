@@ -6,7 +6,8 @@ import AdminHero from "../../_components/AdminHero";
 import SectionForm from "./SectionForm";
 import TopicMetaForm, { type TopicMeta } from "./TopicMetaForm";
 import { SECTION_TYPES } from "./sectionTypes";
-import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, convertHandwrittenNotes, approveTypedNotes, rejectTypedNotes } from "./actions";
+import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, convertHandwrittenNotes, approveTypedNotes, rejectTypedNotes, aiDraftTopic, aiDraftClass } from "./actions";
+import SubmitButton from "@/app/components/SubmitButton";
 
 const TYPE_LABEL = Object.fromEntries(SECTION_TYPES.map((t) => [t.value, t.label]));
 const PLAN_LABEL: Record<string, string> = { bronze: "Bronze+", silver: "Silver+", gold: "Gold" };
@@ -48,6 +49,12 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
         <summary className="btn small secondary as-btn">
           📋 Topic details {topic.is_combined ? "(combined topic)" : ""} — weightage, important questions, materials
         </summary>
+        {!topic.is_combined && (
+          <form action={aiDraftTopic} style={{ marginTop: 10 }}>
+            <input type="hidden" name="topicId" value={topic.id} />
+            <SubmitButton className="btn small secondary" savedLabel="✓ Drafted">🤖 AI-draft important questions (then edit below)</SubmitButton>
+          </form>
+        )}
         <TopicMetaForm action={updateTopicMeta} topic={topic as unknown as TopicMeta} />
       </details>
 
@@ -109,6 +116,13 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                     <Link className="btn small secondary" href={`/admin/subjective/${s.id}`}>
                       Manage questions →
                     </Link>
+                  )}
+                  {s.type === "full_class_video" && (!!(s.config as Record<string, unknown> | null)?.transcript || !!(s.config as Record<string, unknown> | null)?.notes_hand_url) && (
+                    <form action={aiDraftClass} style={{ display: "inline" }}>
+                      <input type="hidden" name="sectionId" value={s.id} />
+                      <input type="hidden" name="topicId" value={topic.id} />
+                      <SubmitButton className="btn small secondary" savedLabel="✓ Drafted">🤖 AI-draft content</SubmitButton>
+                    </form>
                   )}
                   {s.type === "full_class_video" && !!(s.config as Record<string, unknown> | null)?.transcript && (
                     <form action={summarizeClassSection} style={{ display: "inline" }}>

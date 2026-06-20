@@ -5,8 +5,60 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../../_lib/util";
 import { ALL_CONFIG_FIELDS } from "./sectionTypes";
-import { summarizeClass, transcribeHandwriting } from "@/lib/ai";
+import { summarizeClass, transcribeHandwriting, draftTopicQuestions, draftClassContent } from "@/lib/ai";
 import { notifyFaculty } from "@/lib/notify";
+
+// AI-draft the topic's first/second-revision important questions (editable).
+export async function aiDraftTopic(formData: FormData) {
+  const topicId = str(formData.get("topicId"));
+  if (!topicId) return;
+  const supabase = createClient();
+  const { data: t } = await supabase.from("topics").select("title, subjects(title)").eq("id", topicId).maybeSingle();
+  if (!t) return;
+  const subject = (t as { subjects?: { title?: string } | null }).subjects?.title ?? "";
+  // Ground on any class transcripts already entered for this topic.
+  const { data: secs } = await supabase.from("sections").select("config").eq("topic_id", topicId);
+  const material = (secs ?? []).map((s) => String(((s.config ?? {}) as Record<string, unknown>).transcript ?? "")).filter(Boolean).join("\n\n").slice(0, 8000);
+  const draft = await draftTopicQuestions(subject, t.title, material || undefined);
+  if (!draft) return;
+  await supabase.from("topics").update({ important_qs_rev1: draft.rev1.join("\n"), important_qs_rev2: draft.rev2.join("\n") }).eq("id", topicId);
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
+// AI-draft a class's transcript (from handwritten notes), concepts, questions
+// and homework — all editable afterwards.
+export async function aiDraftClass(formData: FormData) {
+  const sectionId = str(formData.get("sectionId"));
+  const topicId = str(formData.get("topicId"));
+  if (!sectionId) return;
+  const supabase = createClient();
+  const { data: sec } = await supabase.from("sections").select("config").eq("id", sectionId).maybeSingle();
+  const config = (sec?.config ?? {}) as Record<string, unknown>;
+  let transcript = String(config.transcript ?? "");
+  // If no transcript yet, OCR the handwritten notes PDF to get the material.
+  if (transcript.trim().length < 50 && config.notes_hand_url) {
+    const ocr = await transcribeHandwriting(String(config.notes_hand_url));
+    if (ocr) transcript = ocr;
+  }
+  if (transcript.trim().length < 50) return;
+  const draft = await draftClassContent(transcript);
+  if (!draft) return;
+  await supabase
+    .from("sections")
+    .update({
+      config: {
+        ...config,
+        transcript,
+        important_concepts: draft.concepts.join("\n"),
+        important_questions: draft.questions.join("\n"),
+        homework: config.homework || draft.homework,
+        ai_summary: draft.summary,
+        ai_key_points: draft.concepts.join("\n"),
+      },
+    })
+    .eq("id", sectionId);
+  revalidatePath(`/admin/topics/${topicId}`);
+}
 
 function readConfig(formData: FormData): Record<string, string> {
   const config: Record<string, string> = {};

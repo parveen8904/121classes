@@ -204,12 +204,14 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                   📖 {t.title}
                 </Link>
                 <p className="row-sub">
-                  🎓 {classCount.get(t.id) ?? 0} {(classCount.get(t.id) ?? 0) === 1 ? "class" : "classes"} ·
                   order {t.order_index} · {t.is_published ? "🟢 published" : "⚪ draft"}
                   {t.valid_from_attempt ? ` · from ${t.valid_from_attempt}` : ""}
                 </p>
               </div>
               <div className="row-actions">
+                <span style={{ fontWeight: 700, fontSize: "1rem", background: "var(--accent)", color: "#fff", padding: "6px 14px", borderRadius: 8, whiteSpace: "nowrap" }}>
+                  🎓 {classCount.get(t.id) ?? 0} {(classCount.get(t.id) ?? 0) === 1 ? "class" : "classes"}
+                </span>
                 <Link className="btn small" href={`/admin/topics/${t.id}`}>
                   Classes →
                 </Link>

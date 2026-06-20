@@ -5,6 +5,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 
 export type TopicMeta = {
   id: string;
+  title: string;
   is_combined: boolean;
   topic_code: string | null;
   weightage_marks: number | null;
@@ -39,6 +40,11 @@ export default function TopicMetaForm({
   return (
     <form action={action} className="form-card" style={{ marginTop: 12 }}>
       <input type="hidden" name="topicId" value={topic.id} />
+
+      <div>
+        <label>Topic name</label>
+        <input name="title" defaultValue={topic.title} placeholder="e.g. AS 13 – Accounting for Investments" required />
+      </div>
 
       <div style={{ marginTop: 8 }}>
         <label>Topic short code — max 6 characters (used to build class numbers)</label>

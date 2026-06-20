@@ -75,10 +75,13 @@ export async function updateTopicMeta(formData: FormData) {
   const topicId = str(formData.get("topicId"));
   if (!topicId) return;
   const nn = (k: string) => str(formData.get(k)) || null;
+  const title = str(formData.get("title"));
   const supabase = createClient();
   await supabase
     .from("topics")
     .update({
+      // keep the existing name if the field is left blank
+      ...(title ? { title } : {}),
       // short code: uppercase, alphanumeric only, capped at 6 chars
       topic_code: str(formData.get("topic_code")).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) || null,
       weightage_marks: str(formData.get("weightage_marks")) ? num(formData.get("weightage_marks")) : null,

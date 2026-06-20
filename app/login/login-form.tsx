@@ -50,15 +50,14 @@ export default function LoginForm() {
 
   async function signup(e: React.FormEvent) {
     e.preventDefault();
-    if (password.length < 6) return err("Password must be at least 6 characters.");
     setLoading(true); setMsg(null);
     const fd = new FormData();
-    fd.set("name", name); fd.set("email", email); fd.set("password", password);
+    fd.set("name", name); fd.set("email", email);
     const r = await registerWithVerification(fd);
     setLoading(false);
     if (!r.ok) return err(r.error || "Could not sign up.");
     setMode("login");
-    ok("Almost there! We've emailed you a verification link. Click it to activate your account, then log in here with your email and password.");
+    ok("Almost there! We've emailed you a verification link. Click it to verify your email — you'll then choose your password and you're in. No need to come back here.");
   }
 
   async function forgot(e: React.FormEvent) {
@@ -88,7 +87,7 @@ export default function LoginForm() {
           </h1>
           <p className="muted" style={{ marginBottom: 20, fontSize: ".9rem" }}>
             {mode === "signup"
-              ? "Sign up with your email — we'll email a link to verify it, then you log in with your password."
+              ? "Just your email — we'll send a verification link. Click it to verify, then you choose your password."
               : mode === "forgot"
               ? "Enter your email and we'll send you a link to set a new password."
               : "Log in with your email and password."}
@@ -118,10 +117,8 @@ export default function LoginForm() {
               <input id="name" type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
               <label htmlFor="semail">Email address</label>
               <input id="semail" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-              <p className="muted" style={{ fontSize: ".78rem", margin: "-6px 0 10px" }}>Use a real email — it's verified and can't be changed later.</p>
-              <label htmlFor="spw">Choose a password</label>
-              <input id="spw" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" />
-              <button className="btn block" disabled={loading} type="submit">{loading ? "Sending…" : "Create account"}</button>
+              <p className="muted" style={{ fontSize: ".78rem", margin: "-6px 0 10px" }}>Use a real email — it's verified and can't be changed later. We&apos;ll email you a link; you&apos;ll set your password after verifying.</p>
+              <button className="btn block" disabled={loading} type="submit">{loading ? "Sending…" : "Send verification link"}</button>
               <p className="muted" style={{ textAlign: "center", marginTop: 16, fontSize: ".88rem" }}>
                 Already have an account? <button type="button" style={linkBtn} onClick={() => { setMode("login"); setMsg(null); }}>Log in</button>
               </p>

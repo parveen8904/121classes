@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendEmail, emailShell, emailConfigured } from "@/lib/notify";
@@ -14,15 +15,17 @@ function baseUrl(): string {
 type Result = { ok: boolean; error?: string };
 
 // New account: create the user (unconfirmed) and email a verification link via
-// OUR Mailgun. The student must click it before they can use the portal.
+// OUR Mailgun. We DON'T ask for a password here — the student picks it after
+// they verify (the link signs them in, then they're sent to "set password").
+// A throwaway password is used only to create the account.
 export async function registerWithVerification(formData: FormData): Promise<Result> {
   const name = String(formData.get("name") || "").trim();
   const email = String(formData.get("email") || "").trim().toLowerCase();
-  const password = String(formData.get("password") || "");
-  if (!email || password.length < 6) return { ok: false, error: "Enter your email and a password of at least 6 characters." };
+  if (!email) return { ok: false, error: "Enter your email address." };
   if (!(await emailConfigured())) return { ok: false, error: "Email isn't set up yet. Please ask the admin to add the Mailgun key." };
 
   const svc = createServiceClient();
+  const password = randomUUID() + randomUUID(); // temporary — replaced when they set their own
   const redirectTo = `${baseUrl()}/auth/callback?next=/dashboard`;
   const { data, error } = await svc.auth.admin.generateLink({
     type: "signup",
@@ -42,12 +45,12 @@ export async function registerWithVerification(formData: FormData): Promise<Resu
   const html = emailShell(
     "Verify your email",
     `<p>Hi ${name || "there"},</p>
-     <p>Welcome to 121 CA Classes! Please confirm your email to activate your account:</p>
+     <p>Welcome to CA Parveen Sharma classes! Please confirm your email to activate your account:</p>
      <p><a href="${link}" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Verify my email</a></p>
      <p style="color:#64748b;font-size:13px">Or paste this link in your browser:<br/>${link}</p>
-     <p>After verifying, log in with your email and password.</p>`,
+     <p>After verifying, you'll choose your password — then you're in.</p>`,
   );
-  const sent = await sendEmail(email, "Verify your email — 121 CA Classes", html);
+  const sent = await sendEmail(email, "Verify your email — CA Parveen Sharma", html);
   if (!sent) return { ok: false, error: "Couldn't send the verification email. Please try again shortly." };
   return { ok: true };
 }

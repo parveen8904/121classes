@@ -49,20 +49,13 @@ function AutoNumber({
 }) {
   const [taughtOn, setTaughtOn] = useState(cfg.taught_on ?? "");
   const [classNo, setClassNo] = useState(cfg.class_no ?? "");
-  const [topicClassNo, setTopicClassNo] = useState(cfg.topic_class_no ?? "");
 
   const sub = clean(subjectCode);
   const top = clean(topicCode);
-  // Order: subject · year+month · topic · TOPIC-class no (2 digits) · CLASS no (3 digits).
-  // Class no is 3 digits (001) since a subject can have 100+ classes; the
-  // within-topic number stays 2 digits. A revision number stays 2 digits.
-  const code =
-    sub +
-    yymm(taughtOn) +
-    top +
-    (isRevision ? "R" + pad(classNo, 2) : pad(topicClassNo, 2) + pad(classNo, 3));
-
-  const ready = sub && top && taughtOn && classNo && (isRevision || topicClassNo);
+  // Revision videos keep a manual revision number. Classes are numbered
+  // automatically from their order (see the resequence step on save).
+  const revCode = sub + yymm(taughtOn) + top + "R" + pad(classNo, 2);
+  const revReady = sub && top && taughtOn && classNo;
 
   return (
     <div style={{ marginBottom: 14, padding: "12px 14px", background: "var(--bg-soft)", borderRadius: 10 }}>
@@ -73,30 +66,33 @@ function AutoNumber({
           {!top ? "Set the topic short code (Topic details above). " : ""}
         </p>
       )}
-      <div style={{ display: "grid", gap: 10, gridTemplateColumns: isRevision ? "1.3fr 1fr" : "1.3fr 1fr 1fr", marginTop: 8 }}>
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: isRevision ? "1.3fr 1fr" : "1fr", marginTop: 8 }}>
         <div>
           <label>Month taught (year + month)</label>
           <input type="month" value={taughtOn} onChange={(e) => setTaughtOn(e.target.value)} />
         </div>
-        {!isRevision && (
+        {isRevision && (
           <div>
-            <label>Topic class no</label>
-            <input inputMode="numeric" value={topicClassNo} onChange={(e) => setTopicClassNo(e.target.value)} placeholder="01" />
+            <label>Revision number</label>
+            <input inputMode="numeric" value={classNo} onChange={(e) => setClassNo(e.target.value)} placeholder="01" />
           </div>
         )}
-        <div>
-          <label>{isRevision ? "Revision number" : "Class no"}</label>
-          <input inputMode="numeric" value={classNo} onChange={(e) => setClassNo(e.target.value)} placeholder={isRevision ? "01" : "001"} />
-        </div>
       </div>
-      <p style={{ margin: "10px 0 0", fontSize: "1.05rem", letterSpacing: ".5px" }}>
-        {ready ? <strong>{code}</strong> : <span className="muted">Fill the boxes above…</span>}
-      </p>
-      {/* raw inputs (so editing pre-fills) + the generated number that flows everywhere */}
+      {isRevision ? (
+        <p style={{ margin: "10px 0 0", fontSize: "1.05rem", letterSpacing: ".5px" }}>
+          {revReady ? <strong>{revCode}</strong> : <span className="muted">Fill the boxes above…</span>}
+        </p>
+      ) : (
+        <p className="muted" style={{ margin: "10px 0 0", fontSize: ".82rem" }}>
+          🔁 The <strong>class number</strong> and <strong>topic class number</strong> are assigned
+          automatically from the order. Set the <strong>Order</strong> above to place this class — the whole
+          subject re-numbers itself. The full unique number appears on the class once you save.
+        </p>
+      )}
+      {/* taught month is submitted; for a revision the manual number + code go too. */}
       <input type="hidden" name="taught_on" value={taughtOn} />
-      <input type="hidden" name="class_no" value={classNo} />
-      <input type="hidden" name="topic_class_no" value={topicClassNo} />
-      <input type="hidden" name="class_number" value={ready ? code : ""} />
+      {isRevision && <input type="hidden" name="class_no" value={classNo} />}
+      {isRevision && <input type="hidden" name="class_number" value={revReady ? revCode : ""} />}
     </div>
   );
 }
@@ -150,7 +146,7 @@ export default function SectionForm({
           </div>
         )}
         <div>
-          <label>Order</label>
+          <label>{showAutoNumber ? "Order (seq.)" : "Order"}</label>
           <input name="order_index" type="number" defaultValue={section?.order_index ?? 0} />
         </div>
       </div>

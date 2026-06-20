@@ -58,6 +58,81 @@ function readMinPlan(formData: FormData): string | null {
   return v === "bronze" || v === "silver" || v === "gold" ? v : null;
 }
 
+// ---- Automatic class numbering -------------------------------------------
+// Classes are numbered by their order, not typed. After any class is added,
+// edited (order changed) or removed, we renumber every class in the subject:
+//   topic class no = position within the topic (1,2,3…)
+//   class no       = running position across the whole subject (1…N)
+// and rebuild each class's unique number. Topics run in their order_index, so
+// topic 1 gets classes 1–7, topic 2 gets 8–12, and so on.
+function cleanCode(s: string) {
+  return (s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+function padNum(n: number, width: number) {
+  return String(n).padStart(width, "0").slice(-width);
+}
+function yymmOf(taughtOn: unknown) {
+  const d = String(taughtOn ?? "");
+  return d.length >= 7 ? d.slice(2, 4) + d.slice(5, 7) : "";
+}
+
+async function resequenceSubjectClasses(subjectId: string) {
+  const svc = createServiceClient();
+  const { data: subject } = await svc.from("subjects").select("code").eq("id", subjectId).maybeSingle();
+  const subCode = cleanCode((subject as { code?: string } | null)?.code ?? "");
+  const { data: tps } = await svc
+    .from("topics")
+    .select("id, order_index, title, topic_code")
+    .eq("subject_id", subjectId)
+    .order("order_index")
+    .order("title");
+  const topicList = tps ?? [];
+  const topicIds = topicList.map((t) => t.id);
+  if (!topicIds.length) return;
+
+  const { data: secs } = await svc
+    .from("sections")
+    .select("id, topic_id, order_index, title, created_at, config")
+    .in("topic_id", topicIds)
+    .eq("type", "full_class_video");
+  const byTopic = new Map<string, { id: string; order_index: number; title: string; created_at: string; config: Record<string, unknown> | null }[]>();
+  for (const s of secs ?? []) {
+    const row = s as { id: string; topic_id: string; order_index: number; title: string; created_at: string; config: Record<string, unknown> | null };
+    if (!byTopic.has(row.topic_id)) byTopic.set(row.topic_id, []);
+    byTopic.get(row.topic_id)!.push({ id: row.id, order_index: row.order_index, title: row.title, created_at: row.created_at, config: row.config });
+  }
+
+  let classNo = 0;
+  const updates: { id: string; config: Record<string, unknown> }[] = [];
+  for (const t of topicList) {
+    const topCode = cleanCode((t as { topic_code?: string }).topic_code ?? "");
+    // Order field first; classes with the same order keep their creation order.
+    const list = (byTopic.get(t.id) ?? []).sort(
+      (a, b) => a.order_index - b.order_index || String(a.created_at).localeCompare(String(b.created_at)),
+    );
+    let topicClassNo = 0;
+    for (const s of list) {
+      classNo++;
+      topicClassNo++;
+      const cfg = (s.config ?? {}) as Record<string, unknown>;
+      const ym = yymmOf(cfg.taught_on);
+      const class_number = subCode && topCode && ym ? `${subCode}${ym}${topCode}${padNum(topicClassNo, 2)}${padNum(classNo, 3)}` : "";
+      updates.push({ id: s.id, config: { ...cfg, class_no: String(classNo), topic_class_no: String(topicClassNo), class_number } });
+    }
+  }
+  // One write per class (config is per-row); small N, runs only on edits.
+  for (const u of updates) {
+    await svc.from("sections").update({ config: u.config }).eq("id", u.id);
+  }
+}
+
+async function resequenceForTopic(topicId: string) {
+  const svc = createServiceClient();
+  const { data: t } = await svc.from("topics").select("subject_id").eq("id", topicId).maybeSingle();
+  const sid = (t as { subject_id?: string } | null)?.subject_id;
+  if (sid) await resequenceSubjectClasses(sid);
+}
+
 // "Hit list" importance per attempt: lines of "attempt | category" → object.
 function parseImportance(raw: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -159,6 +234,7 @@ export async function createSection(formData: FormData) {
     config: readConfig(formData),
     is_published: formData.get("is_published") === "on",
   });
+  if (type === "full_class_video") await resequenceForTopic(topicId);
   revalidatePath(`/admin/topics/${topicId}`);
 }
 
@@ -169,6 +245,14 @@ export async function updateSection(formData: FormData) {
   const type = str(formData.get("type"));
   if (!id || !title || !type) return;
   const supabase = createClient();
+  // Preserve AI-generated keys (class summary, auto-assigned numbers) that the
+  // form doesn't carry, so editing a class doesn't wipe them.
+  const { data: prev } = await supabase.from("sections").select("config").eq("id", id).maybeSingle();
+  const prevCfg = (prev?.config ?? {}) as Record<string, unknown>;
+  const preserved: Record<string, unknown> = {};
+  for (const k of Object.keys(prevCfg)) {
+    if (k.startsWith("ai_") || k === "class_no" || k === "topic_class_no" || k === "class_number") preserved[k] = prevCfg[k];
+  }
   await supabase
     .from("sections")
     .update({
@@ -176,10 +260,11 @@ export async function updateSection(formData: FormData) {
       title,
       order_index: num(formData.get("order_index")),
       min_plan: readMinPlan(formData),
-      config: readConfig(formData),
+      config: { ...preserved, ...readConfig(formData) },
       is_published: formData.get("is_published") === "on",
     })
     .eq("id", id);
+  if (type === "full_class_video") await resequenceForTopic(topicId);
   revalidatePath(`/admin/topics/${topicId}`);
 }
 
@@ -197,6 +282,8 @@ export async function deleteSection(formData: FormData) {
   const topicId = str(formData.get("parentId"));
   const supabase = createClient();
   await supabase.from("sections").delete().eq("id", id);
+  // Renumber the remaining classes so the sequence stays continuous.
+  if (topicId) await resequenceForTopic(topicId);
   revalidatePath(`/admin/topics/${topicId}`);
   redirect(`/admin/topics/${topicId}`);
 }

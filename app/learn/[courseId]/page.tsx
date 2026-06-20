@@ -140,8 +140,6 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
       ? `${s.subjects?.title ?? "Subject"} (${s.plans?.name ?? s.plans?.tier ?? "Plan"})`
       : `Whole course (${s.plans?.name ?? s.plans?.tier ?? "Plan"})`,
   );
-  const topicCount = (topics ?? []).length;
-
   return (
     <main>
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -153,8 +151,8 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
           <span className="badge">📘 Course</span>
           <h1>{course.title}</h1>
           <p className="meta">
-            {(subjects ?? []).length} subject{(subjects ?? []).length === 1 ? "" : "s"} · {topicCount}{" "}
-            topic{topicCount === 1 ? "" : "s"} ·{" "}
+            {(subjects ?? []).length} subject{(subjects ?? []).length === 1 ? "" : "s"}
+            {" · "}
             {target ? `filtered to ${target}` : "set your target attempt to filter content"}
           </p>
         </div>

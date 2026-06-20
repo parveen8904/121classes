@@ -6,6 +6,7 @@ import { videoEmbedSrc } from "../../_lib/media";
 import { bunnyEmbedUrl } from "@/lib/bunny";
 import DoubtBox from "./DoubtBox";
 import ClassDownload from "./ClassDownload";
+import SectionCard from "./SectionCard";
 import DiscussionBoard from "../../section/[sectionId]/DiscussionBoard";
 import Help from "@/app/components/Help";
 
@@ -491,66 +492,73 @@ export default async function LearnTopic({ params }: { params: { topicId: string
         )}
 
         {sections.length > 0 ? (
-          <div className="sec-list" style={{ marginTop: 22 }}>
-            {sections.map((s) => {
-              const locked = !s.unlocked;
-              const planName = s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "a paid";
-              return (
-                <div className={`sec-card${locked ? " lock-card" : ""}`} key={s.id}>
-                  <div className="sec-head">
-                    <span className="sec-ic">{TYPE_ICON[s.type] ?? "📦"}</span>
-                    <div>
-                      <div className="sec-title">{s.title}</div>
-                      <div className="sec-type">{TYPE_LABEL[s.type] ?? s.type}</div>
-                    </div>
-                    {locked && (
-                      <span className="lock-badge" style={{ marginLeft: "auto" }}>
-                        🔒 {s.min_plan ? PLAN_LABEL[s.min_plan] : "Locked"}
-                      </span>
+          <>
+            <p className="muted" style={{ fontSize: ".88rem", marginTop: 22, marginBottom: 8 }}>
+              Tap any item below to open it.
+            </p>
+            <div className="sec-list">
+              {sections.map((s) => {
+                const locked = !s.unlocked;
+                const planName = s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "a paid";
+                const c = (configById.get(s.id) ?? {}) as Record<string, string>;
+                const metaBits: string[] = [];
+                if (s.type === "full_class_video" || s.type === "revision_video") {
+                  if (c.class_number) metaBits.push(c.class_number);
+                  const dur = fmtMins(Number(c.duration_minutes));
+                  if (dur) metaBits.push(`⏱️ ${dur}`);
+                }
+                return (
+                  <SectionCard
+                    key={s.id}
+                    icon={TYPE_ICON[s.type] ?? "📦"}
+                    title={s.title}
+                    typeLabel={TYPE_LABEL[s.type] ?? s.type}
+                    meta={metaBits.join(" · ")}
+                    locked={locked}
+                    lockBadge={locked ? <span className="lock-badge">🔒 {s.min_plan ? PLAN_LABEL[s.min_plan] : "Locked"}</span> : null}
+                  >
+                    {locked ? (
+                      <div className="lock-row">
+                        <span className="txt">
+                          🔒 Locked. Unlock all <strong>{planName}</strong> content for{" "}
+                          <strong>{subject?.title ?? "this subject"}</strong>.
+                        </span>
+                        <Link className="btn small" href={plansHref}>
+                          Unlock →
+                        </Link>
+                      </div>
+                    ) : (
+                      <>
+                        <SectionBody
+                          id={s.id}
+                          type={s.type}
+                          config={configById.get(s.id) ?? null}
+                          watermark={watermarkText}
+                          hasDownload={downloadBySection.has(s.id)}
+                        />
+                        {downloadBySection.has(s.id) && (
+                          <ClassDownload pv={downloadBySection.get(s.id)!} watermark={watermarkText} />
+                        )}
+                        {VIDEO_TYPES.has(s.type) && (
+                          <div style={{ marginTop: 18 }}>
+                            <h3 style={{ fontSize: "1rem", marginBottom: 10 }}>💬 Comments</h3>
+                            <DiscussionBoard
+                              sectionId={s.id}
+                              userId={user.id}
+                              isAdmin={isAdmin}
+                              returnPath={`/learn/topic/${topic.id}`}
+                              promptLabel="Add a comment"
+                              placeholder="Ask a question or share a thought…"
+                            />
+                          </div>
+                        )}
+                      </>
                     )}
-                  </div>
-
-                  {locked ? (
-                    <div className="lock-row">
-                      <span className="txt">
-                        🔒 Locked. Unlock all <strong>{planName}</strong> content for{" "}
-                        <strong>{subject?.title ?? "this subject"}</strong>.
-                      </span>
-                      <Link className="btn small" href={plansHref}>
-                        Unlock →
-                      </Link>
-                    </div>
-                  ) : (
-                    <>
-                      <SectionBody
-                        id={s.id}
-                        type={s.type}
-                        config={configById.get(s.id) ?? null}
-                        watermark={watermarkText}
-                        hasDownload={downloadBySection.has(s.id)}
-                      />
-                      {downloadBySection.has(s.id) && (
-                        <ClassDownload pv={downloadBySection.get(s.id)!} watermark={watermarkText} />
-                      )}
-                      {VIDEO_TYPES.has(s.type) && (
-                        <div style={{ marginTop: 18 }}>
-                          <h3 style={{ fontSize: "1rem", marginBottom: 10 }}>💬 Comments</h3>
-                          <DiscussionBoard
-                            sectionId={s.id}
-                            userId={user.id}
-                            isAdmin={isAdmin}
-                            returnPath={`/learn/topic/${topic.id}`}
-                            promptLabel="Add a comment"
-                            placeholder="Ask a question or share a thought…"
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  </SectionCard>
+                );
+              })}
+            </div>
+          </>
         ) : (
           <div className="card" style={{ marginTop: 22 }}>
             <p className="muted">No sections published in this topic yet.</p>

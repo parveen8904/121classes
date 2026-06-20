@@ -79,7 +79,8 @@ export async function updateTopicMeta(formData: FormData) {
   await supabase
     .from("topics")
     .update({
-      topic_code: nn("topic_code"),
+      // short code: uppercase, alphanumeric only, capped at 6 chars
+      topic_code: str(formData.get("topic_code")).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) || null,
       weightage_marks: str(formData.get("weightage_marks")) ? num(formData.get("weightage_marks")) : null,
       importance: parseImportance(str(formData.get("importance"))),
       valid_from_attempt: nn("valid_from_attempt"),

@@ -41,8 +41,8 @@ export default function TopicMetaForm({
       <input type="hidden" name="topicId" value={topic.id} />
 
       <div style={{ marginTop: 8 }}>
-        <label>Topic short code (used to build class numbers)</label>
-        <input name="topic_code" defaultValue={topic.topic_code ?? ""} placeholder="e.g. AS 13" />
+        <label>Topic short code — max 6 characters (used to build class numbers)</label>
+        <input name="topic_code" defaultValue={topic.topic_code ?? ""} maxLength={6} placeholder="e.g. AS13 or IAS115" style={{ textTransform: "uppercase" }} />
       </div>
 
       {/* Basics */}

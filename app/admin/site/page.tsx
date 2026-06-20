@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../_components/AdminHero";
 import ImageUpload from "../_components/ImageUpload";
+import SubmitButton from "@/app/components/SubmitButton";
 import { updateSiteSettings } from "./actions";
 
 export default async function SiteImagesPage() {
@@ -121,9 +122,9 @@ export default async function SiteImagesPage() {
           </div>
         </div>
 
-        <button className="btn" type="submit" style={{ marginTop: 18 }}>
+        <SubmitButton className="btn" style={{ marginTop: 18 }}>
           Save
-        </button>
+        </SubmitButton>
       </form>
 
       <p className="muted" style={{ fontSize: ".85rem", marginTop: 14 }}>

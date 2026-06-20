@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../../_components/DeleteButton";
 import AdminHero from "../../_components/AdminHero";
 import { fmtMins } from "../../_lib/util";
+import SubmitButton from "@/app/components/SubmitButton";
 import { updateCourse } from "../actions";
 import { createSubject, deleteSubject } from "./actions";
 
@@ -84,9 +85,9 @@ export default async function CourseDetail({ params }: { params: { courseId: str
                 <input id="s-order" name="order_index" type="number" defaultValue={0} />
               </div>
             </div>
-            <button className="btn" type="submit">
+            <SubmitButton className="btn">
               Add subject
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </details>
@@ -117,9 +118,9 @@ export default async function CourseDetail({ params }: { params: { courseId: str
             <label className="remember" style={{ marginTop: 0 }}>
               <input type="checkbox" name="is_test_series" defaultChecked={course.is_test_series} /> This is a Test Series
             </label>
-            <button className="btn small" type="submit">
+            <SubmitButton className="btn small">
               Save changes
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </details>

@@ -8,6 +8,7 @@ import TopicMetaForm, { type TopicMeta } from "./TopicMetaForm";
 import { SECTION_TYPES } from "./sectionTypes";
 import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, addTopicMaterial, deleteTopicMaterial } from "./actions";
 import PdfUpload from "../../_components/PdfUpload";
+import SubmitButton from "@/app/components/SubmitButton";
 import { fmtMins } from "../../_lib/util";
 
 const TYPE_LABEL = Object.fromEntries(SECTION_TYPES.map((t) => [t.value, t.label]));
@@ -102,7 +103,7 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
               <PdfUpload name="file_url" folder="repository" label="PDF (text is auto-extracted for the AI)" />
               <label style={{ marginTop: 6 }}>Or paste text directly</label>
               <textarea name="content" rows={3} placeholder="Optional — paste text instead of (or in addition to) a PDF." />
-              <button className="btn small" type="submit" style={{ marginTop: 8 }}>Add training material</button>
+              <SubmitButton className="btn small" savedLabel="✓ Added" style={{ marginTop: 8 }}>Add training material</SubmitButton>
             </form>
             {materials && materials.length > 0 && (
               <div style={{ display: "grid", gap: 6, marginTop: 12 }}>
@@ -196,7 +197,7 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                     <form action={summarizeClassSection} style={{ display: "inline" }}>
                       <input type="hidden" name="sectionId" value={s.id} />
                       <input type="hidden" name="topicId" value={topic.id} />
-                      <button className="btn small secondary" type="submit">🤖 Class summary (from transcript)</button>
+                      <SubmitButton className="btn small secondary" savedLabel="✓ Done">🤖 Class summary (from transcript)</SubmitButton>
                     </form>
                   )}
                   <form action={toggleSectionPublish} style={{ display: "inline" }}>

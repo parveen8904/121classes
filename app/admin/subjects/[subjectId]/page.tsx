@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../../_components/DeleteButton";
 import AdminHero from "../../_components/AdminHero";
 import { fmtMins } from "../../_lib/util";
+import SubmitButton from "@/app/components/SubmitButton";
 import {
   createTopic,
   deleteTopic,
@@ -156,9 +157,9 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
             <label className="remember" style={{ marginTop: 0 }}>
               <input type="checkbox" name="is_published" /> Published
             </label>
-            <button className="btn" type="submit">
+            <SubmitButton className="btn" savedLabel="✓ Added" closeDetails>
               Add topic
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </details>
@@ -224,9 +225,9 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
               is the per-subject price above. The Telegram group is offered only to students who have this
               subject in their courses.
             </p>
-            <button className="btn" type="submit">
+            <SubmitButton className="btn">
               Save subject
-            </button>
+            </SubmitButton>
           </form>
         </div>
 
@@ -248,9 +249,9 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                   </label>
                 ))}
               </div>
-              <button className="btn" type="submit">
+              <SubmitButton className="btn">
                 Save faculty
-              </button>
+              </SubmitButton>
             </form>
           ) : (
             <p className="muted" style={{ fontSize: ".9rem" }}>

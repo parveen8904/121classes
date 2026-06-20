@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { claimDevice } from "../auth/session-actions";
 import { registerWithVerification, sendPasswordReset } from "../auth/email-actions";
@@ -11,7 +11,6 @@ type Mode = "login" | "signup" | "forgot";
 
 export default function LoginForm() {
   const supabase = createClient();
-  const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") || "/dashboard";
   const reason = params.get("reason");
@@ -42,9 +41,11 @@ export default function LoginForm() {
       return err("Email or password didn't match. New here? Tap “Create account”. Forgot it? Use “Forgot password”.");
     }
     await claimDevice();
-    setLoading(false);
-    router.push(next);
-    router.refresh();
+    // Full-page navigation so the freshly-set auth cookies are applied before
+    // the next page loads. (router.push raced the cookie write and bounced the
+    // user back to the login screen.) Keep `loading` true so the button stays
+    // "Please wait…" until the new page takes over — no flicker back to "Log in".
+    window.location.assign(next);
   }
 
   async function signup(e: React.FormEvent) {

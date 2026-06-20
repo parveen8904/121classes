@@ -109,9 +109,9 @@ export default async function CoursesPage() {
                     <label className="remember" style={{ marginTop: 0 }}>
                       <input type="checkbox" name="is_test_series" defaultChecked={c.is_test_series} /> Test Series
                     </label>
-                    <button className="btn small" type="submit">
+                    <SubmitButton className="btn small">
                       Save changes
-                    </button>
+                    </SubmitButton>
                   </form>
                 </div>
               </details>

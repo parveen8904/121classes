@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import Logo from "@/app/components/Logo";
 import { claimDevice } from "../auth/session-actions";
 import { registerWithVerification, sendPasswordReset } from "../auth/email-actions";
 
@@ -77,7 +78,7 @@ export default function LoginForm() {
   return (
     <main>
       <header className="topbar">
-        <Link href="/">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/logo-cps.png" alt="CA Parveen Sharma" className="brand-logo" /></Link>
+        <Link href="/"><Logo /></Link>
       </header>
 
       <section className="narrow" style={{ paddingTop: 60 }}>

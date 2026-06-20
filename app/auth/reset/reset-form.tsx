@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import Logo from "@/app/components/Logo";
 
 export default function ResetForm() {
   const supabase = createClient();
@@ -37,8 +38,7 @@ export default function ResetForm() {
     <main>
       <header className="topbar">
         <Link href="/">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-cps.png" alt="CA Parveen Sharma" className="brand-logo" />
+          <Logo />
         </Link>
       </header>
 

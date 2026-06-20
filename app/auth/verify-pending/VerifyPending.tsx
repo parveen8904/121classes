@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import Logo from "@/app/components/Logo";
 import { resendVerification } from "../email-actions";
 
 export default function VerifyPending({ email }: { email: string }) {
@@ -20,7 +21,7 @@ export default function VerifyPending({ email }: { email: string }) {
   return (
     <main>
       <header className="topbar">
-        <Link href="/">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/logo-cps.png" alt="CA Parveen Sharma" className="brand-logo" /></Link>
+        <Link href="/"><Logo /></Link>
       </header>
       <section className="narrow" style={{ paddingTop: 60 }}>
         <div className="card" style={{ textAlign: "center" }}>

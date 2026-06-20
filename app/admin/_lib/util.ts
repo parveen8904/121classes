@@ -25,3 +25,12 @@ export function nullable(v: FormDataEntryValue | null): string | null {
   const s = String(v ?? "").trim();
   return s.length ? s : null;
 }
+
+// Minutes -> "1h 30m" / "45m" / "2h" (used for class/topic/subject durations).
+export function fmtMins(mins: number): string {
+  const m = Math.max(0, Math.round(mins || 0));
+  if (!m) return "0m";
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return h ? (r ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
+}

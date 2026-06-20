@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../../_components/DeleteButton";
 import AdminHero from "../../_components/AdminHero";
+import { fmtMins } from "../../_lib/util";
 import { updateCourse } from "../actions";
 import { createSubject, deleteSubject } from "./actions";
 
@@ -24,6 +25,34 @@ export default async function CourseDetail({ params }: { params: { courseId: str
     .eq("course_id", courseId)
     .order("order_index")
     .order("title");
+
+  // Total classes + total duration per subject (sections → topics → subjects).
+  const subjectIds = (subjects ?? []).map((s) => s.id);
+  const classCount = new Map<string, number>();
+  const classMins = new Map<string, number>();
+  if (subjectIds.length) {
+    const { data: topicRows } = await supabase
+      .from("topics")
+      .select("id, subject_id")
+      .in("subject_id", subjectIds);
+    const topicToSubject = new Map<string, string>();
+    for (const t of topicRows ?? []) topicToSubject.set(t.id, (t as { subject_id: string }).subject_id);
+    const topicIds = (topicRows ?? []).map((t) => t.id);
+    if (topicIds.length) {
+      const { data: classRows } = await supabase
+        .from("sections")
+        .select("topic_id, config")
+        .in("topic_id", topicIds)
+        .eq("type", "full_class_video");
+      for (const r of classRows ?? []) {
+        const sid = topicToSubject.get((r as { topic_id: string }).topic_id);
+        if (!sid) continue;
+        classCount.set(sid, (classCount.get(sid) ?? 0) + 1);
+        const d = Number((r as { config?: { duration_minutes?: unknown } }).config?.duration_minutes) || 0;
+        classMins.set(sid, (classMins.get(sid) ?? 0) + d);
+      }
+    }
+  }
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -111,6 +140,9 @@ export default async function CourseDetail({ params }: { params: { courseId: str
                 <p className="row-sub">/{s.slug ?? "—"} · order {s.order_index}</p>
               </div>
               <div className="row-actions">
+                <span style={{ fontWeight: 700, fontSize: ".95rem", background: "var(--bg-soft)", padding: "6px 12px", borderRadius: 8, whiteSpace: "nowrap" }}>
+                  🎓 {classCount.get(s.id) ?? 0} {(classCount.get(s.id) ?? 0) === 1 ? "class" : "classes"} · ⏱️ {fmtMins(classMins.get(s.id) ?? 0)}
+                </span>
                 <Link className="btn small secondary" href={`/admin/subjects/${s.id}`}>
                   Manage →
                 </Link>

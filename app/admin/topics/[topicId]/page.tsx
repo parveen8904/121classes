@@ -8,6 +8,7 @@ import TopicMetaForm, { type TopicMeta } from "./TopicMetaForm";
 import { SECTION_TYPES } from "./sectionTypes";
 import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, addTopicMaterial, deleteTopicMaterial } from "./actions";
 import PdfUpload from "../../_components/PdfUpload";
+import { fmtMins } from "../../_lib/util";
 
 const TYPE_LABEL = Object.fromEntries(SECTION_TYPES.map((t) => [t.value, t.label]));
 const PLAN_LABEL: Record<string, string> = { bronze: "Bronze+", silver: "Silver+", gold: "Gold" };
@@ -44,6 +45,13 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
   const subjectTitle = subjectInfo?.title;
   const subjectCode = subjectInfo?.code ?? "";
   const topicCode = (topic as { topic_code?: string }).topic_code ?? "";
+
+  // Topic totals: number of classes and their combined duration.
+  const classSections = (sections ?? []).filter((s) => s.type === "full_class_video");
+  const topicMins = classSections.reduce(
+    (a, s) => a + (Number((s.config as { duration_minutes?: unknown } | null)?.duration_minutes) || 0),
+    0,
+  );
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -143,7 +151,12 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
         </details>
       </div>
 
-      <h2 className="admin-section-title">🎓 Classes, revision videos &amp; tests</h2>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <h2 className="admin-section-title" style={{ margin: 0 }}>🎓 Classes, revision videos &amp; tests</h2>
+        <span style={{ fontWeight: 700, fontSize: ".95rem", background: "var(--bg-soft)", padding: "6px 12px", borderRadius: 8, whiteSpace: "nowrap" }}>
+          🎓 {classSections.length} {classSections.length === 1 ? "class" : "classes"} · ⏱️ {fmtMins(topicMins)}
+        </span>
+      </div>
       <p className="muted" style={{ fontSize: ".9rem" }}>
         These render in order for students. Expand one to edit it.
       </p>
@@ -231,11 +244,12 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                 const uniqueNo = cfg.class_number as string | undefined;
                 const classNo = cfg.class_no as string | undefined;
                 const topicClassNo = cfg.topic_class_no as string | undefined;
+                const mins = Number(cfg.duration_minutes) || 0;
                 const isRev = s.type === "revision_video";
                 return (
                   <div style={{ marginTop: 14, padding: "10px 14px", background: "var(--bg-soft)", borderRadius: 8, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
                     {uniqueNo ? (
-                      <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: "1.05rem", background: "var(--accent)", color: "#fff", padding: "4px 12px", borderRadius: 6, letterSpacing: ".5px" }}>
+                      <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: "1.05rem", background: "#fff", border: "1px solid var(--border)", padding: "4px 12px", borderRadius: 6, letterSpacing: ".5px" }}>
                         {uniqueNo}
                       </span>
                     ) : (
@@ -244,10 +258,13 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                       </span>
                     )}
                     {!isRev && topicClassNo && (
-                      <span style={{ fontWeight: 600, fontSize: ".9rem" }}>Topic class no <span style={{ color: "var(--accent)" }}>{topicClassNo}</span></span>
+                      <span style={{ fontWeight: 700, fontSize: ".9rem" }}>Topic class no {topicClassNo}</span>
                     )}
                     {classNo && (
-                      <span style={{ fontWeight: 600, fontSize: ".9rem" }}>{isRev ? "Revision no" : "Class no"} <span style={{ color: "var(--accent)" }}>{classNo}</span></span>
+                      <span style={{ fontWeight: 700, fontSize: ".9rem" }}>{isRev ? "Revision no" : "Class no"} {classNo}</span>
+                    )}
+                    {mins > 0 && (
+                      <span style={{ fontWeight: 700, fontSize: ".9rem" }}>⏱️ {fmtMins(mins)}</span>
                     )}
                   </div>
                 );

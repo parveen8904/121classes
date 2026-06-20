@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../../_components/DeleteButton";
 import AdminHero from "../../_components/AdminHero";
+import { fmtMins } from "../../_lib/util";
 import {
   createTopic,
   deleteTopic,
@@ -38,18 +39,21 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
   const assignedIds = new Set((assigned ?? []).map((a) => a.faculty_id));
   const courseTitle = (subject as { courses?: { title?: string } | null }).courses?.title;
 
-  // Count the classes (lecture videos) in each topic for the list below.
+  // Count the classes (lecture videos) and sum their durations per topic.
   const topicIds = (topics ?? []).map((t) => t.id);
   const classCount = new Map<string, number>();
+  const classMins = new Map<string, number>();
   if (topicIds.length) {
     const { data: classRows } = await supabase
       .from("sections")
-      .select("topic_id")
+      .select("topic_id, config")
       .in("topic_id", topicIds)
       .eq("type", "full_class_video");
     for (const r of classRows ?? []) {
       const tid = (r as { topic_id: string }).topic_id;
       classCount.set(tid, (classCount.get(tid) ?? 0) + 1);
+      const d = Number((r as { config?: { duration_minutes?: unknown } }).config?.duration_minutes) || 0;
+      classMins.set(tid, (classMins.get(tid) ?? 0) + d);
     }
   }
 
@@ -209,8 +213,8 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                 </p>
               </div>
               <div className="row-actions">
-                <span style={{ fontWeight: 700, fontSize: "1rem", background: "var(--accent)", color: "#fff", padding: "6px 14px", borderRadius: 8, whiteSpace: "nowrap" }}>
-                  🎓 {classCount.get(t.id) ?? 0} {(classCount.get(t.id) ?? 0) === 1 ? "class" : "classes"}
+                <span style={{ fontWeight: 700, fontSize: ".95rem", background: "var(--bg-soft)", padding: "6px 12px", borderRadius: 8, whiteSpace: "nowrap" }}>
+                  🎓 {classCount.get(t.id) ?? 0} {(classCount.get(t.id) ?? 0) === 1 ? "class" : "classes"} · ⏱️ {fmtMins(classMins.get(t.id) ?? 0)}
                 </span>
                 <Link className="btn small" href={`/admin/topics/${t.id}`}>
                   Classes →

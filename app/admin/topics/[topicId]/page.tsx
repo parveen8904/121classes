@@ -177,12 +177,18 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                             {uniqueNo}
                           </span>
                         )}
-                        {classNo && (
-                          <span className="muted" style={{ fontSize: ".82rem" }}>
-                            {isRev ? "Revision no" : "Class no"} {classNo}
-                            {!isRev && topicClassNo ? ` · Topic-class no ${topicClassNo}` : ""}
-                          </span>
-                        )}
+                        {isRev
+                          ? classNo && (
+                              <span style={{ fontSize: ".85rem", fontWeight: 600 }}>
+                                Revision no <span style={{ color: "var(--accent)" }}>{classNo}</span>
+                              </span>
+                            )
+                          : (topicClassNo || classNo) && (
+                              <span style={{ fontSize: ".85rem", fontWeight: 600, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                                {topicClassNo && <span>Topic class no <span style={{ color: "var(--accent)" }}>{topicClassNo}</span></span>}
+                                {classNo && <span>Class no <span style={{ color: "var(--accent)" }}>{classNo}</span></span>}
+                              </span>
+                            )}
                       </div>
                     );
                   })()}

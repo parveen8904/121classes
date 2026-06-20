@@ -53,13 +53,14 @@ function AutoNumber({
 
   const sub = clean(subjectCode);
   const top = clean(topicCode);
-  // Class number is 3 digits (001) since a subject can have 100+ classes;
-  // the within-topic number stays 2 digits. A revision number stays 2 digits.
+  // Order: subject · year+month · topic · TOPIC-class no (2 digits) · CLASS no (3 digits).
+  // Class no is 3 digits (001) since a subject can have 100+ classes; the
+  // within-topic number stays 2 digits. A revision number stays 2 digits.
   const code =
     sub +
     yymm(taughtOn) +
     top +
-    (isRevision ? "R" + pad(classNo, 2) : pad(classNo, 3) + pad(topicClassNo, 2));
+    (isRevision ? "R" + pad(classNo, 2) : pad(topicClassNo, 2) + pad(classNo, 3));
 
   const ready = sub && top && taughtOn && classNo && (isRevision || topicClassNo);
 
@@ -77,16 +78,16 @@ function AutoNumber({
           <label>Month taught (year + month)</label>
           <input type="month" value={taughtOn} onChange={(e) => setTaughtOn(e.target.value)} />
         </div>
-        <div>
-          <label>{isRevision ? "Revision number" : "Class number"}</label>
-          <input inputMode="numeric" value={classNo} onChange={(e) => setClassNo(e.target.value)} placeholder={isRevision ? "01" : "001"} />
-        </div>
         {!isRevision && (
           <div>
-            <label>No. within topic</label>
+            <label>Topic class no</label>
             <input inputMode="numeric" value={topicClassNo} onChange={(e) => setTopicClassNo(e.target.value)} placeholder="01" />
           </div>
         )}
+        <div>
+          <label>{isRevision ? "Revision number" : "Class no"}</label>
+          <input inputMode="numeric" value={classNo} onChange={(e) => setClassNo(e.target.value)} placeholder={isRevision ? "01" : "001"} />
+        </div>
       </div>
       <p style={{ margin: "10px 0 0", fontSize: "1.05rem", letterSpacing: ".5px" }}>
         {ready ? <strong>{code}</strong> : <span className="muted">Fill the boxes above…</span>}

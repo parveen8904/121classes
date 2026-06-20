@@ -204,9 +204,9 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                     <input type="hidden" name="id" value={s.id} />
                     <input type="hidden" name="topicId" value={topic.id} />
                     <input type="hidden" name="next" value={s.is_published ? "false" : "true"} />
-                    <button className="btn small secondary" type="submit">
+                    <SubmitButton className="btn small secondary">
                       {s.is_published ? "Unpublish" : "Publish"}
-                    </button>
+                    </SubmitButton>
                   </form>
                   <DeleteButton
                     action={deleteSection}

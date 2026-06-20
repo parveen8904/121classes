@@ -1,4 +1,7 @@
-// A tiny form that flips a published flag via a server action.
+import SubmitButton from "@/app/components/SubmitButton";
+
+// A tiny form that flips a published flag via a server action — with a spinner
+// while it runs and a brief "✓ Saved" when done.
 export default function PublishToggle({
   action,
   id,
@@ -12,9 +15,9 @@ export default function PublishToggle({
     <form action={action} style={{ display: "inline" }}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="next" value={published ? "false" : "true"} />
-      <button className="btn small secondary" type="submit">
+      <SubmitButton className="btn small secondary">
         {published ? "Unpublish" : "Publish"}
-      </button>
+      </SubmitButton>
     </form>
   );
 }

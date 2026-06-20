@@ -292,9 +292,9 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                   <input type="hidden" name="id" value={t.id} />
                   <input type="hidden" name="subjectId" value={subject.id} />
                   <input type="hidden" name="next" value={t.is_published ? "false" : "true"} />
-                  <button className="btn small secondary" type="submit">
+                  <SubmitButton className="btn small secondary">
                     {t.is_published ? "Unpublish" : "Publish"}
-                  </button>
+                  </SubmitButton>
                 </form>
                 <DeleteButton
                   action={deleteTopic}

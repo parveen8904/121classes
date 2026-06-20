@@ -87,18 +87,12 @@ export async function updateTopicMeta(formData: FormData) {
       amendments_upto: nn("amendments_upto"),
       important_qs_rev1: nn("important_qs_rev1"),
       important_qs_rev2: nn("important_qs_rev2"),
-      book_pdf_url: nn("book_pdf_url"),
-      icai_material_url: nn("icai_material_url"),
       revision_video_url: nn("revision_video_url"),
-      revision_notes_hand_url: nn("revision_notes_hand_url"),
-      revision_notes_typed_url: nn("revision_notes_typed_url"),
       update_coming: formData.get("update_coming") === "on",
       update_on: nn("update_on"),
       update_for: nn("update_for"),
       update_note: nn("update_note"),
       is_combined: formData.get("is_combined") === "on",
-      revision_paper_url: nn("revision_paper_url"),
-      amendments_pdf_url: nn("amendments_pdf_url"),
     })
     .eq("id", topicId);
   revalidatePath(`/admin/topics/${topicId}`);

@@ -340,6 +340,17 @@ export default async function LearnTopic({ params }: { params: { topicId: string
   const subject = (topic as { subjects?: { title?: string; course_id?: string } | null }).subjects;
   const courseId = subject?.course_id;
 
+  // Topic materials (question bank / ICAI / RTP / past papers / book) — the SAME
+  // PDFs that train the AI are offered to students here. One upload, both uses.
+  const { data: topicMaterials } = await createServiceClient()
+    .from("repository_items")
+    .select("id, title, kind, file_url")
+    .eq("topic_id", topic.id)
+    .eq("is_active", true)
+    .not("file_url", "is", null)
+    .order("created_at", { ascending: false });
+  const MAT_LABEL: Record<string, string> = { question_bank: "📚 Question bank", icai: "🏛️ ICAI material", rtp: "📄 RTP", past_papers: "🗂️ Past papers", book: "📕 Book", notes: "📝 Notes", revision_notes: "🔁 Revision notes", transcript: "🎙️ Transcript", other: "📄 Material" };
+
   // Hit-list importance for the student's own attempt.
   const importance = ((topic as { importance?: Record<string, string> | null }).importance) ?? {};
   const norm = (s: string) => s.toLowerCase().replace(/[_\s]+/g, " ").trim();
@@ -401,6 +412,19 @@ export default async function LearnTopic({ params }: { params: { topicId: string
                 Applicable for: {(topic as { update_for?: string }).update_for}
               </span>
             )}
+          </div>
+        )}
+
+        {topicMaterials && topicMaterials.length > 0 && (
+          <div className="card" style={{ marginTop: 18 }}>
+            <h3 style={{ margin: "0 0 8px" }}>📚 Topic materials</h3>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {topicMaterials.map((mt) => (
+                <a key={mt.id} className="btn small secondary" href={mt.file_url as string} target="_blank" rel="noopener noreferrer">
+                  {MAT_LABEL[mt.kind] ?? "📄"} {mt.title}
+                </a>
+              ))}
+            </div>
           </div>
         )}
 

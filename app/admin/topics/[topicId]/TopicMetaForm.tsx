@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import PdfUpload from "../../_components/PdfUpload";
 import SubmitButton from "@/app/components/SubmitButton";
 
 export type TopicMeta = {
@@ -89,26 +88,18 @@ export default function TopicMetaForm({
           <label style={{ marginTop: 8 }}>Most important questions — second revision * (one per line)</label>
           <textarea name="important_qs_rev2" rows={4} defaultValue={topic.important_qs_rev2 ?? ""} required={!combined} placeholder={"Q1 — ...\nQ2 — ..."} />
 
-          <h4 style={{ margin: "16px 0 4px" }}>📚 Topic materials</h4>
-          <PdfUpload name="book_pdf_url" defaultValue={topic.book_pdf_url ?? ""} label="Book PDF for this topic" />
-          <PdfUpload name="icai_material_url" defaultValue={topic.icai_material_url ?? ""} label="ICAI material PDF" />
-          <label style={{ marginTop: 8 }}>Revision video link</label>
+          <label style={{ marginTop: 12 }}>🔁 Revision video link (optional)</label>
           <input name="revision_video_url" defaultValue={topic.revision_video_url ?? ""} placeholder="YouTube / Bunny / embed link" />
-          <PdfUpload name="revision_notes_hand_url" defaultValue={topic.revision_notes_hand_url ?? ""} label="Revision video notes — handwritten PDF" />
-          <PdfUpload name="revision_notes_typed_url" defaultValue={topic.revision_notes_typed_url ?? ""} label="Revision video notes — typed PDF" />
+          <p className="muted" style={{ fontSize: ".8rem", marginTop: 6 }}>
+            📚 Upload the book / ICAI / RTP / past-paper / question-bank PDFs once in <strong>&ldquo;Topic materials&rdquo;</strong> (above) — they show to students AND train the AI. No separate upload here.
+          </p>
         </>
       )}
 
       {combined && (
-        <>
-          <h4 style={{ margin: "16px 0 4px" }}>🧩 Combined-topic materials (whole subject)</h4>
-          <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
-            Add the 4–5 mock tests and past papers as <strong>sections</strong> below (MCQ / subjective / past-papers types). Add the subject-wide PDFs here:
-          </p>
-          <PdfUpload name="book_pdf_url" defaultValue={topic.book_pdf_url ?? ""} label="Full subject book PDF" />
-          <PdfUpload name="revision_paper_url" defaultValue={topic.revision_paper_url ?? ""} label="ICAI full revision test paper PDF" />
-          <PdfUpload name="amendments_pdf_url" defaultValue={topic.amendments_pdf_url ?? ""} label="Amendments PDF (for the attempt)" />
-        </>
+        <p className="muted" style={{ fontSize: ".82rem", marginTop: 12 }}>
+          🧩 Combined topic: add the 4–5 mock tests &amp; past papers as <strong>sections</strong> below, and upload the subject book / ICAI revision paper / amendments PDFs once in <strong>&ldquo;Topic materials&rdquo;</strong> (above) — shown to students &amp; used by the AI.
+        </p>
       )}
 
       {/* Updated-content notice */}

@@ -59,15 +59,14 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
         <TopicMetaForm action={updateTopicMeta} topic={topic as unknown as TopicMeta} />
       </details>
 
-      {/* AI training material — PDFs whose text the AI learns from for this topic */}
-      {!topic.is_combined && (
-        <details style={{ marginTop: 12 }}>
+      {/* Topic materials — ONE upload that students download AND the AI learns from */}
+      <details style={{ marginTop: 12 }}>
           <summary className="btn small secondary as-btn">
-            🧠 AI training material — question bank / ICAI / RTP / past papers ({materials?.length ?? 0})
+            📚 Topic materials — question bank / ICAI / RTP / past papers / book ({materials?.length ?? 0})
           </summary>
           <div className="form-card" style={{ marginTop: 10 }}>
             <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
-              Upload the PDFs the AI should learn from for <strong>this topic</strong>. The text is read once and stored — then the AI answers doubts, and builds MCQs &amp; descriptive questions, grounded on it (plus the class transcripts &amp; your important questions).
+              Upload once — each PDF is <strong>shown to students to download</strong> AND its text is read so the <strong>AI is trained</strong> on it for this topic (doubts, MCQs &amp; descriptive questions, alongside the class transcripts &amp; your important questions). No need to upload anywhere else.
             </p>
             <form action={addTopicMaterial}>
               <input type="hidden" name="topicId" value={topic.id} />
@@ -108,7 +107,6 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
             )}
           </div>
         </details>
-      )}
 
       {/* Add a class — right-aligned expander (primary action) */}
       <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>

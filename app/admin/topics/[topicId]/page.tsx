@@ -6,7 +6,7 @@ import AdminHero from "../../_components/AdminHero";
 import SectionForm from "./SectionForm";
 import TopicMetaForm, { type TopicMeta } from "./TopicMetaForm";
 import { SECTION_TYPES } from "./sectionTypes";
-import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, convertHandwrittenNotes, approveTypedNotes, rejectTypedNotes, addTopicMaterial, deleteTopicMaterial } from "./actions";
+import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, addTopicMaterial, deleteTopicMaterial } from "./actions";
 import PdfUpload from "../../_components/PdfUpload";
 
 const TYPE_LABEL = Object.fromEntries(SECTION_TYPES.map((t) => [t.value, t.label]));
@@ -163,6 +163,29 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
               >
                 <div>
                   <strong>{s.title}</strong>
+                  {(() => {
+                    const cfg = (s.config as Record<string, unknown> | null) ?? {};
+                    const uniqueNo = cfg.class_number as string | undefined;
+                    const classNo = cfg.class_no as string | undefined;
+                    const topicClassNo = cfg.topic_class_no as string | undefined;
+                    const isRev = s.type === "revision_video";
+                    if (!uniqueNo && !classNo) return null;
+                    return (
+                      <div style={{ marginTop: 6, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                        {uniqueNo && (
+                          <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: "1rem", background: "var(--accent)", color: "#fff", padding: "3px 10px", borderRadius: 6, letterSpacing: ".5px" }}>
+                            {uniqueNo}
+                          </span>
+                        )}
+                        {classNo && (
+                          <span className="muted" style={{ fontSize: ".82rem" }}>
+                            {isRev ? "Revision no" : "Class no"} {classNo}
+                            {!isRev && topicClassNo ? ` · Topic-class no ${topicClassNo}` : ""}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
                     {TYPE_LABEL[s.type] ?? s.type} · {s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "Free"} ·
                     order {s.order_index} · {s.is_published ? "published" : "draft"}
@@ -186,13 +209,6 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                       <button className="btn small secondary" type="submit">🤖 Class summary (from transcript)</button>
                     </form>
                   )}
-                  {!!(s.config as Record<string, unknown> | null)?.notes_hand_url && !((s.config as Record<string, unknown>)?.notes_typed_status) && (
-                    <form action={convertHandwrittenNotes} style={{ display: "inline" }}>
-                      <input type="hidden" name="sectionId" value={s.id} />
-                      <input type="hidden" name="topicId" value={topic.id} />
-                      <button className="btn small secondary" type="submit">✍️→⌨️ Convert notes (AI)</button>
-                    </form>
-                  )}
                   <form action={toggleSectionPublish} style={{ display: "inline" }}>
                     <input type="hidden" name="id" value={s.id} />
                     <input type="hidden" name="topicId" value={topic.id} />
@@ -209,38 +225,6 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                   />
                 </div>
               </div>
-
-              {(() => {
-                const cfg = (s.config as Record<string, unknown> | null) ?? {};
-                const status = cfg.notes_typed_status as string | undefined;
-                if (status === "pending") {
-                  return (
-                    <div style={{ marginTop: 12, padding: "10px 12px", background: "#fef3c7", borderRadius: 8, fontSize: ".88rem" }}>
-                      <strong>⏳ Typed notes awaiting faculty approval</strong>
-                      <p style={{ margin: "4px 0 8px", whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto" }}>{String(cfg.notes_typed_pending ?? "")}</p>
-                      <a className="btn small secondary" href={`/learn/notes/${s.id}/pdf`} target="_blank" rel="noopener noreferrer" style={{ marginBottom: 8, display: "inline-block" }}>
-                        ⬇️ Download as PDF to review
-                      </a>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <form action={approveTypedNotes}>
-                          <input type="hidden" name="sectionId" value={s.id} />
-                          <input type="hidden" name="topicId" value={topic.id} />
-                          <button className="btn small" type="submit">✅ Approve &amp; publish</button>
-                        </form>
-                        <form action={rejectTypedNotes}>
-                          <input type="hidden" name="sectionId" value={s.id} />
-                          <input type="hidden" name="topicId" value={topic.id} />
-                          <button className="btn small secondary" type="submit">✕ Reject</button>
-                        </form>
-                      </div>
-                    </div>
-                  );
-                }
-                if (status === "approved") {
-                  return <p className="muted" style={{ marginTop: 10, fontSize: ".82rem", color: "#16a34a" }}>✅ Typed notes approved &amp; live for students.</p>;
-                }
-                return null;
-              })()}
 
               {(() => {
                 const cfg = (s.config as Record<string, unknown> | null) ?? {};

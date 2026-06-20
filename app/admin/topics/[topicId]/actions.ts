@@ -88,12 +88,10 @@ export async function updateTopicMeta(formData: FormData) {
       amendments_upto: nn("amendments_upto"),
       important_qs_rev1: nn("important_qs_rev1"),
       important_qs_rev2: nn("important_qs_rev2"),
-      revision_video_url: nn("revision_video_url"),
       update_coming: formData.get("update_coming") === "on",
       update_on: nn("update_on"),
       update_for: nn("update_for"),
       update_note: nn("update_note"),
-      is_combined: formData.get("is_combined") === "on",
     })
     .eq("id", topicId);
   revalidatePath(`/admin/topics/${topicId}`);

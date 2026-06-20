@@ -16,6 +16,85 @@ type Section = {
   is_published: boolean;
 };
 
+// Builds the unique class/revision number the founder described, e.g.
+// AA · 2503 · AS13 · 01 · 01 → AA2503AS130101
+//   AA   = subject code        (2 letters)
+//   2503 = date taught         (DD + MM)
+//   AS13 = topic short code
+//   01   = class number   (R<nn> for a revision video)
+//   01   = number within the topic
+function clean(s: string) {
+  return (s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+function pad2(s: string) {
+  const d = (s || "").replace(/\D/g, "");
+  return d ? d.padStart(2, "0").slice(-2) : "";
+}
+function ddmm(date: string) {
+  // date is YYYY-MM-DD
+  if (!date || date.length < 10) return "";
+  return date.slice(8, 10) + date.slice(5, 7);
+}
+
+function AutoNumber({
+  isRevision,
+  subjectCode,
+  topicCode,
+  cfg,
+}: {
+  isRevision: boolean;
+  subjectCode: string;
+  topicCode: string;
+  cfg: Record<string, string>;
+}) {
+  const [taughtOn, setTaughtOn] = useState(cfg.taught_on ?? "");
+  const [classNo, setClassNo] = useState(cfg.class_no ?? "");
+  const [topicClassNo, setTopicClassNo] = useState(cfg.topic_class_no ?? "");
+
+  const sub = clean(subjectCode);
+  const top = clean(topicCode);
+  const code =
+    sub + ddmm(taughtOn) + top + (isRevision ? "R" : "") + pad2(classNo) + (isRevision ? "" : pad2(topicClassNo));
+
+  const ready = sub && top && taughtOn && classNo && (isRevision || topicClassNo);
+
+  return (
+    <div style={{ marginBottom: 14, padding: "12px 14px", background: "var(--bg-soft)", borderRadius: 10 }}>
+      <strong style={{ fontSize: ".9rem" }}>🔢 Unique number — built for you</strong>
+      {(!sub || !top) && (
+        <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0", color: "#b45309" }}>
+          {!sub ? "Set a 2-letter subject code (Subject → settings). " : ""}
+          {!top ? "Set the topic short code (Topic details above). " : ""}
+        </p>
+      )}
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: isRevision ? "1.3fr 1fr" : "1.3fr 1fr 1fr", marginTop: 8 }}>
+        <div>
+          <label>When was this taught?</label>
+          <input type="date" value={taughtOn} onChange={(e) => setTaughtOn(e.target.value)} />
+        </div>
+        <div>
+          <label>{isRevision ? "Revision number" : "Class number"}</label>
+          <input inputMode="numeric" value={classNo} onChange={(e) => setClassNo(e.target.value)} placeholder="01" />
+        </div>
+        {!isRevision && (
+          <div>
+            <label>No. within topic</label>
+            <input inputMode="numeric" value={topicClassNo} onChange={(e) => setTopicClassNo(e.target.value)} placeholder="01" />
+          </div>
+        )}
+      </div>
+      <p style={{ margin: "10px 0 0", fontSize: "1.05rem", letterSpacing: ".5px" }}>
+        {ready ? <strong>{code}</strong> : <span className="muted">Fill the boxes above…</span>}
+      </p>
+      {/* raw inputs (so editing pre-fills) + the generated number that flows everywhere */}
+      <input type="hidden" name="taught_on" value={taughtOn} />
+      <input type="hidden" name="class_no" value={classNo} />
+      <input type="hidden" name="topic_class_no" value={topicClassNo} />
+      <input type="hidden" name="class_number" value={ready ? code : ""} />
+    </div>
+  );
+}
+
 export default function SectionForm({
   action,
   topicId,
@@ -23,6 +102,8 @@ export default function SectionForm({
   submitLabel = "Add section",
   defaultType,
   lockType = true,
+  subjectCode = "",
+  topicCode = "",
 }: {
   action: (formData: FormData) => void | Promise<void>;
   topicId: string;
@@ -30,10 +111,13 @@ export default function SectionForm({
   submitLabel?: string;
   defaultType?: string;
   lockType?: boolean;
+  subjectCode?: string;
+  topicCode?: string;
 }) {
   const [type, setType] = useState(section?.type ?? defaultType ?? "full_class_video");
   const def = SECTION_TYPES.find((t) => t.value === type);
   const cfg = (section?.config ?? {}) as Record<string, string>;
+  const showAutoNumber = type === "full_class_video" || type === "revision_video";
 
   return (
     <form action={action}>
@@ -75,6 +159,10 @@ export default function SectionForm({
           ))}
         </select>
       </div>
+
+      {showAutoNumber && (
+        <AutoNumber isRevision={type === "revision_video"} subjectCode={subjectCode} topicCode={topicCode} cfg={cfg} />
+      )}
 
       {def && def.fields.length > 0 && (
         <div style={{ marginTop: 4 }}>

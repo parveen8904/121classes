@@ -5,7 +5,6 @@ import DeleteButton from "../../_components/DeleteButton";
 import AdminHero from "../../_components/AdminHero";
 import {
   createTopic,
-  addCombinedTopic,
   deleteTopic,
   toggleTopicPublish,
   updateSubjectInline,
@@ -18,7 +17,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, slug, order_index, course_id, gold_price_inr, validity_months, courses(title)")
+    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, courses(title)")
     .eq("id", subjectId)
     .single();
 
@@ -95,10 +94,14 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
           <h3>✏️ Edit subject</h3>
           <form action={updateSubjectInline}>
             <input type="hidden" name="id" value={subject.id} />
-            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 0.7fr" }}>
+            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 0.8fr 1fr 0.7fr" }}>
               <div>
                 <label htmlFor="su-title">Title</label>
                 <input id="su-title" name="title" defaultValue={subject.title} required />
+              </div>
+              <div>
+                <label htmlFor="su-code">Code (2 letters)</label>
+                <input id="su-code" name="code" defaultValue={(subject as { code?: string }).code ?? ""} maxLength={4} placeholder="e.g. AA" style={{ textTransform: "uppercase" }} />
               </div>
               <div>
                 <label htmlFor="su-slug">Slug</label>
@@ -109,6 +112,9 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                 <input id="su-order" name="order_index" type="number" defaultValue={subject.order_index} />
               </div>
             </div>
+            <p className="muted" style={{ fontSize: ".8rem", margin: "2px 0 8px" }}>
+              The 2-letter code (e.g. <strong>AA</strong> for Advanced Accounting) starts every class&apos;s auto-generated unique number.
+            </p>
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr", marginTop: 4 }}>
               <div>
                 <label htmlFor="su-gold">🥇 Gold price (₹) — blank if sold only in a combo</label>
@@ -173,25 +179,16 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
       </details>
 
       {/* Topics */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
-        <h2 className="admin-section-title">📖 Topics</h2>
-        {!topics?.some((t) => (t as { is_combined?: boolean }).is_combined) && (
-          <form action={addCombinedTopic}>
-            <input type="hidden" name="subjectId" value={subject.id} />
-            <button className="btn small secondary" type="submit">🧩 Add combined topic</button>
-          </form>
-        )}
-      </div>
+      <h2 className="admin-section-title">📖 Topics</h2>
       <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
         {topics && topics.length > 0 ? (
           topics.map((t) => (
             <div className="list-row" key={t.id}>
               <div>
                 <Link href={`/admin/topics/${t.id}`} className="row-title">
-                  {(t as { is_combined?: boolean }).is_combined ? "🧩" : "📖"} {t.title}
+                  📖 {t.title}
                 </Link>
                 <p className="row-sub">
-                  {(t as { is_combined?: boolean }).is_combined ? "combined topic · " : ""}
                   order {t.order_index} · {t.is_published ? "🟢 published" : "⚪ draft"}
                   {t.valid_from_attempt ? ` · from ${t.valid_from_attempt}` : ""}
                 </p>

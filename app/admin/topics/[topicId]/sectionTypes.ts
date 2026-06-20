@@ -15,6 +15,9 @@ export type ConfigField =
   | "recording_url"
   // class-level fields (used by the unified AI repository / planner)
   | "class_number"
+  | "taught_on"
+  | "class_no"
+  | "topic_class_no"
   | "video_ref"
   | "duration_minutes"
   | "notes_hand_url"
@@ -38,6 +41,9 @@ export const ALL_CONFIG_FIELDS: ConfigField[] = [
   "starts_at",
   "recording_url",
   "class_number",
+  "taught_on",
+  "class_no",
+  "topic_class_no",
   "video_ref",
   "duration_minutes",
   "notes_hand_url",
@@ -61,7 +67,10 @@ export const FIELD_LABELS: Record<ConfigField, string> = {
   join_url: "Join link (Zoom / Google Meet / any)",
   starts_at: "Starts at",
   recording_url: "Recording link (after the class — YouTube/embed)",
-  class_number: "Number (unique)",
+  class_number: "Unique number (auto-generated)",
+  taught_on: "When was this taught?",
+  class_no: "Class number",
+  topic_class_no: "Class number within this topic",
   video_ref: "Video reference number",
   duration_minutes: "Class duration (minutes) — used by the study planner",
   notes_hand_url: "Handwritten notes PDF",
@@ -83,12 +92,12 @@ export const SECTION_TYPES: {
   fields: ConfigField[];
   note?: string;
 }[] = [
-  { value: "revision_video", label: "Revision video", fields: ["class_number", "revision_round", "bunny_video_id", "bunny_drm", "pdf_url", "transcript", "youtube_url", "embed_url"] },
+  { value: "revision_video", label: "Revision video", fields: ["revision_round", "bunny_video_id", "bunny_drm", "pdf_url", "transcript", "youtube_url", "embed_url"] },
   {
     value: "full_class_video",
     label: "🎓 Class (video + PDF + transcript)",
-    fields: ["class_number", "bunny_video_id", "bunny_drm", "duration_minutes", "notes_hand_url", "notes_typed_url", "transcript", "youtube_url", "embed_url"],
-    note: "A class: number, lecture video, its PDF (handwritten/typed notes) and the transcript. The AI builds the class summary (questions/concepts/homework) from the transcript — no need to type those.",
+    fields: ["bunny_video_id", "bunny_drm", "duration_minutes", "notes_hand_url", "notes_typed_url", "transcript", "youtube_url", "embed_url"],
+    note: "A class: lecture video, its PDF (handwritten/typed notes) and the transcript. The AI builds the class summary (questions/concepts/homework) from the transcript — no need to type those.",
   },
   { value: "discussion_video", label: "Discussion / walkthrough video", fields: ["bunny_video_id", "bunny_drm", "youtube_url", "embed_url"] },
   {

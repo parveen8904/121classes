@@ -34,32 +34,26 @@ export default function TopicMetaForm({
   topic: TopicMeta;
   action: (formData: FormData) => void | Promise<void>;
 }) {
-  const [combined, setCombined] = useState(topic.is_combined);
   const [updateComing, setUpdateComing] = useState(topic.update_coming);
 
   return (
     <form action={action} className="form-card" style={{ marginTop: 12 }}>
       <input type="hidden" name="topicId" value={topic.id} />
 
-      <label className="remember" style={{ marginTop: 0 }}>
-        <input type="checkbox" name="is_combined" defaultChecked={topic.is_combined} onChange={(e) => setCombined(e.target.checked)} />{" "}
-        🧩 This is the <strong>combined topic</strong> (covers the whole subject)
-      </label>
-
       <div style={{ marginTop: 8 }}>
-        <label>Topic number / code (unique)</label>
-        <input name="topic_code" defaultValue={topic.topic_code ?? ""} placeholder="e.g. ADV-AS13 or 4.2" />
+        <label>Topic short code (used to build class numbers)</label>
+        <input name="topic_code" defaultValue={topic.topic_code ?? ""} placeholder="e.g. AS 13" />
       </div>
 
       {/* Basics */}
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr", marginTop: 8 }}>
         <div>
-          <label>Weightage marks (ICAI){combined ? "" : " *"}</label>
-          <input name="weightage_marks" type="number" min={0} defaultValue={topic.weightage_marks ?? ""} required={!combined} placeholder="e.g. 12" />
+          <label>Weightage marks (ICAI) *</label>
+          <input name="weightage_marks" type="number" min={0} defaultValue={topic.weightage_marks ?? ""} placeholder="e.g. 12" />
         </div>
         <div>
-          <label>Applicable from attempt{combined ? "" : " *"}</label>
-          <input name="valid_from_attempt" defaultValue={topic.valid_from_attempt ?? ""} required={!combined} placeholder="e.g. May 2026" />
+          <label>Applicable from attempt *</label>
+          <input name="valid_from_attempt" defaultValue={topic.valid_from_attempt ?? ""} placeholder="e.g. May 2026" />
         </div>
         <div>
           <label>Applicable to attempt</label>
@@ -69,44 +63,27 @@ export default function TopicMetaForm({
       <label style={{ marginTop: 8 }}>Amendments up to</label>
       <input name="amendments_upto" defaultValue={topic.amendments_upto ?? ""} placeholder="e.g. Finance Act 2025" />
 
-      {!combined && (
-        <>
-          <label style={{ marginTop: 8 }}>
-            🎯 Hit list — importance per attempt (one per line, <code>attempt | category</code>)
-          </label>
-          <textarea
-            name="importance"
-            rows={3}
-            defaultValue={Object.entries(topic.importance ?? {}).map(([a, c]) => `${a} | ${c}`).join("\n")}
-            placeholder={"May 2027 | A\nNov 2026 | B"}
-          />
-          <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
-            A = most important / sure-shot, B = important, C = if time permits. Shown prominently to each student for the attempt they&apos;re sitting, and used to order the planner.
-          </p>
-        </>
-      )}
+      <label style={{ marginTop: 8 }}>
+        🎯 Hit list — importance per attempt (one per line, <code>attempt | category</code>)
+      </label>
+      <textarea
+        name="importance"
+        rows={3}
+        defaultValue={Object.entries(topic.importance ?? {}).map(([a, c]) => `${a} | ${c}`).join("\n")}
+        placeholder={"May 2027 | A\nNov 2026 | B"}
+      />
+      <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
+        A = most important / sure-shot, B = important, C = if time permits. Shown prominently to each student for the attempt they&apos;re sitting, and used to order the planner.
+      </p>
 
-      {!combined && (
-        <>
-          <h4 style={{ margin: "16px 0 4px" }}>📌 Important questions</h4>
-          <label>Most important questions — first revision * (one per line)</label>
-          <textarea name="important_qs_rev1" rows={4} defaultValue={topic.important_qs_rev1 ?? ""} required={!combined} placeholder={"Q1 — ...\nQ2 — ..."} />
-          <label style={{ marginTop: 8 }}>Most important questions — second revision * (one per line)</label>
-          <textarea name="important_qs_rev2" rows={4} defaultValue={topic.important_qs_rev2 ?? ""} required={!combined} placeholder={"Q1 — ...\nQ2 — ..."} />
-
-          <label style={{ marginTop: 12 }}>🔁 Revision video link (optional)</label>
-          <input name="revision_video_url" defaultValue={topic.revision_video_url ?? ""} placeholder="YouTube / Bunny / embed link" />
-          <p className="muted" style={{ fontSize: ".8rem", marginTop: 6 }}>
-            📚 Upload the book / ICAI / RTP / past-paper / question-bank PDFs once in <strong>&ldquo;Topic materials&rdquo;</strong> (above) — they show to students AND train the AI. No separate upload here.
-          </p>
-        </>
-      )}
-
-      {combined && (
-        <p className="muted" style={{ fontSize: ".82rem", marginTop: 12 }}>
-          🧩 Combined topic: add the 4–5 mock tests &amp; past papers as <strong>sections</strong> below, and upload the subject book / ICAI revision paper / amendments PDFs once in <strong>&ldquo;Topic materials&rdquo;</strong> (above) — shown to students &amp; used by the AI.
-        </p>
-      )}
+      <h4 style={{ margin: "16px 0 4px" }}>📌 Important questions</h4>
+      <label>Most important questions — first revision (one per line)</label>
+      <textarea name="important_qs_rev1" rows={4} defaultValue={topic.important_qs_rev1 ?? ""} placeholder={"Q1 — ...\nQ2 — ..."} />
+      <label style={{ marginTop: 8 }}>Most important questions — second revision (one per line)</label>
+      <textarea name="important_qs_rev2" rows={4} defaultValue={topic.important_qs_rev2 ?? ""} placeholder={"Q1 — ...\nQ2 — ..."} />
+      <p className="muted" style={{ fontSize: ".8rem", marginTop: 6 }}>
+        📚 Upload the book / ICAI / RTP / past-paper / question-bank PDFs once in <strong>&ldquo;Topic materials&rdquo;</strong> (above) — they show to students AND train the AI. No separate upload here.
+      </p>
 
       {/* Updated-content notice */}
       <h4 style={{ margin: "16px 0 4px" }}>🔔 Updated content notice</h4>

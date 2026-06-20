@@ -19,7 +19,7 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
   const { data: topic } = await supabase
     .from("topics")
     .select(
-      "id, title, subject_id, is_published, is_combined, topic_code, weightage_marks, importance, valid_from_attempt, valid_to_attempt, amendments_upto, important_qs_rev1, important_qs_rev2, book_pdf_url, icai_material_url, revision_video_url, revision_notes_hand_url, revision_notes_typed_url, update_coming, update_on, update_for, update_note, revision_paper_url, amendments_pdf_url, subjects(title)",
+      "id, title, subject_id, is_published, is_combined, topic_code, weightage_marks, importance, valid_from_attempt, valid_to_attempt, amendments_upto, important_qs_rev1, important_qs_rev2, book_pdf_url, icai_material_url, revision_video_url, revision_notes_hand_url, revision_notes_typed_url, update_coming, update_on, update_for, update_note, revision_paper_url, amendments_pdf_url, subjects(title, code)",
     )
     .eq("id", topicId)
     .single();
@@ -40,7 +40,10 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
     .order("order_index")
     .order("title");
 
-  const subjectTitle = (topic as { subjects?: { title?: string } | null }).subjects?.title;
+  const subjectInfo = (topic as { subjects?: { title?: string; code?: string } | null }).subjects;
+  const subjectTitle = subjectInfo?.title;
+  const subjectCode = subjectInfo?.code ?? "";
+  const topicCode = (topic as { topic_code?: string }).topic_code ?? "";
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -52,9 +55,9 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
       />
 
       {/* Topic details — weightage, applicability, important questions, materials */}
-      <details style={{ marginTop: 16 }} open={!topic.weightage_marks}>
+      <details style={{ marginTop: 16 }}>
         <summary className="btn small secondary as-btn">
-          📋 Topic details {topic.is_combined ? "(combined topic)" : ""} — weightage, important questions, materials
+          📋 Topic details — short code, weightage, important questions
         </summary>
         <TopicMetaForm action={updateTopicMeta} topic={topic as unknown as TopicMeta} />
       </details>
@@ -113,15 +116,15 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
         <details>
           <summary className="btn as-btn">🎓 Add a class</summary>
           <div className="form-card" style={{ marginTop: 10 }}>
-            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Lecture video + PDF + transcript + class number. Add as many as the topic needs.</p>
-            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add class" defaultType="full_class_video" />
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Lecture video + PDF + transcript. The unique number is built for you. Add as many as the topic needs.</p>
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add class" defaultType="full_class_video" subjectCode={subjectCode} topicCode={topicCode} />
           </div>
         </details>
         <details>
           <summary className="btn secondary as-btn">🎬 Add a revision video</summary>
           <div className="form-card" style={{ marginTop: 10 }}>
-            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Revision video + PDF + transcript + number. Set its tier (Gold/Silver/Bronze) below.</p>
-            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add revision video" defaultType="revision_video" />
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Revision video + PDF + transcript. The unique number is built for you. Set its tier (Gold/Silver/Bronze) below.</p>
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add revision video" defaultType="revision_video" subjectCode={subjectCode} topicCode={topicCode} />
           </div>
         </details>
         <details>
@@ -278,6 +281,8 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                       is_published: s.is_published,
                     }}
                     submitLabel="Save section"
+                    subjectCode={subjectCode}
+                    topicCode={topicCode}
                   />
                 </div>
               </details>

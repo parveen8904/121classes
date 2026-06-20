@@ -330,49 +330,6 @@ export async function classifyJobs(jobs: { title: string; company?: string; snip
   return jobs.map((j) => categorizeJob(j.title, j.snippet));
 }
 
-// Draft the most-important exam questions for a CA topic (first & second
-// revision sets) — a starting point the admin edits. Optionally grounded on the
-// topic's own material.
-export async function draftTopicQuestions(
-  subject: string,
-  topic: string,
-  material?: string,
-): Promise<{ rev1: string[]; rev2: string[] } | null> {
-  const sys =
-    "You are an ICAI exam expert for 121 CA Classes. For the given CA topic, draft the most important exam questions a student must practise, split into a first-revision set (core, must-do) and a second-revision set (final, high-yield / tricky). Indian CA exam style. " +
-    'Respond ONLY as compact JSON, no prose, no code fences: {"rev1":["...","..."],"rev2":["...","..."]} — 6 to 10 questions in each.';
-  const user = `Subject: ${subject}\nTopic: ${topic}` + (material ? `\n\nReference material:\n${material.slice(0, 8000)}` : "");
-  const out = await callClaude(sys, user, 1600, { feature: "draft_topic" });
-  if (!out) return null;
-  try {
-    const j = JSON.parse(out.replace(/```json|```/g, "").trim());
-    const arr = (x: unknown) => (Array.isArray(x) ? x.map((s) => String(s).trim()).filter(Boolean) : []);
-    return { rev1: arr(j.rev1), rev2: arr(j.rev2) };
-  } catch {
-    return null;
-  }
-}
-
-// Draft a class's summary, key concepts, important questions and homework from
-// its material (transcript / OCR'd notes) — an editable starting point.
-export async function draftClassContent(
-  material: string,
-): Promise<{ summary: string; concepts: string[]; questions: string[]; homework: string } | null> {
-  if (!material.trim()) return null;
-  const sys =
-    "From the CA class material below, draft a study breakdown for revision. " +
-    'Respond ONLY as compact JSON, no prose, no code fences: {"summary":"<3-5 sentence overview>","concepts":["<key concept 1>","..."],"questions":["<important question discussed/likely 1>","..."],"homework":"<homework given, or empty>"}.';
-  const out = await callClaude(sys, `Material:\n${material.slice(0, 24000)}`, 1800, { feature: "draft_class" });
-  if (!out) return null;
-  try {
-    const j = JSON.parse(out.replace(/```json|```/g, "").trim());
-    const arr = (x: unknown) => (Array.isArray(x) ? x.map((s) => String(s).trim()).filter(Boolean) : []);
-    return { summary: String(j.summary ?? "").trim(), concepts: arr(j.concepts), questions: arr(j.questions), homework: String(j.homework ?? "").trim() };
-  } catch {
-    return null;
-  }
-}
-
 // Convert a handwritten-notes PDF into clean typed notes (Markdown) using
 // Claude's vision. Run ONCE at admin level; the result goes to faculty for
 // approval before students see it.
@@ -421,24 +378,38 @@ export async function transcribeHandwriting(pdfUrl: string): Promise<string | nu
   }
 }
 
-// Read a class transcript and summarise it: overview, how many questions were
-// solved, the homework given, and the key concepts. Run ONCE at upload time.
-export async function summarizeClass(
-  transcript: string,
-): Promise<{ summary: string; questions_count: number; homework: string; key_points: string[] } | null> {
+// Class summary built STRICTLY from the uploaded transcript (no outside
+// knowledge): what was discussed, the concepts, how many homework questions
+// were solved in class, and the homework set for next class. One-time; shown to
+// students.
+export type ClassSummary = {
+  summary: string;
+  questions_discussed: string[];
+  concepts_discussed: string[];
+  homework_covered_count: number;
+  homework_next: string;
+};
+export async function summarizeClass(transcript: string): Promise<ClassSummary | null> {
   if (!transcript.trim()) return null;
   const sys =
-    "You are an academic assistant for 121 CA Classes. From the class transcript below, produce a concise study summary for revision. " +
-    'Respond ONLY as compact JSON, no prose, no code fences: {"summary":"<3-5 sentence overview of what the class covered>","questions_count":<number of questions/problems solved in the class>,"homework":"<the homework given to students, or empty string>","key_points":["<important concept/standard/section 1>","<concept 2>", "..."]}.';
-  const text = await callClaude(sys, `Transcript:\n${transcript.slice(0, 24000)}`, 900, { feature: "summarize" });
+    "You summarise a CA class for students using ONLY the transcript provided — never add outside knowledge. " +
+    "Respond ONLY as compact JSON, no prose, no code fences: " +
+    '{"summary":"<3-5 sentence overview of what this class covered>",' +
+    '"questions_discussed":["<question/problem discussed in class 1>","..."],' +
+    '"concepts_discussed":["<concept/standard/section discussed 1>","..."],' +
+    '"homework_covered_count":<how many homework/practice questions were SOLVED during the class>,' +
+    '"homework_next":"<the homework given in this class for the next class, or empty string>"}.';
+  const text = await callClaude(sys, `Transcript:\n${transcript.slice(0, 24000)}`, 1200, { feature: "summarize" });
   if (!text) return null;
   try {
     const j = JSON.parse(text.replace(/```json|```/g, "").trim());
+    const arr = (x: unknown) => (Array.isArray(x) ? x.map((s) => String(s).trim()).filter(Boolean) : []);
     return {
       summary: String(j.summary ?? "").trim(),
-      questions_count: Number(j.questions_count) || 0,
-      homework: String(j.homework ?? "").trim(),
-      key_points: Array.isArray(j.key_points) ? j.key_points.map((x: unknown) => String(x).trim()).filter(Boolean) : [],
+      questions_discussed: arr(j.questions_discussed),
+      concepts_discussed: arr(j.concepts_discussed),
+      homework_covered_count: Number(j.homework_covered_count) || 0,
+      homework_next: String(j.homework_next ?? "").trim(),
     };
   } catch {
     return null;

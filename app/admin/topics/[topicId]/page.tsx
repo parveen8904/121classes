@@ -6,8 +6,7 @@ import AdminHero from "../../_components/AdminHero";
 import SectionForm from "./SectionForm";
 import TopicMetaForm, { type TopicMeta } from "./TopicMetaForm";
 import { SECTION_TYPES } from "./sectionTypes";
-import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, convertHandwrittenNotes, approveTypedNotes, rejectTypedNotes, aiDraftTopic, aiDraftClass } from "./actions";
-import SubmitButton from "@/app/components/SubmitButton";
+import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, convertHandwrittenNotes, approveTypedNotes, rejectTypedNotes } from "./actions";
 
 const TYPE_LABEL = Object.fromEntries(SECTION_TYPES.map((t) => [t.value, t.label]));
 const PLAN_LABEL: Record<string, string> = { bronze: "Bronze+", silver: "Silver+", gold: "Gold" };
@@ -49,12 +48,6 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
         <summary className="btn small secondary as-btn">
           📋 Topic details {topic.is_combined ? "(combined topic)" : ""} — weightage, important questions, materials
         </summary>
-        {!topic.is_combined && (
-          <form action={aiDraftTopic} style={{ marginTop: 10 }}>
-            <input type="hidden" name="topicId" value={topic.id} />
-            <SubmitButton className="btn small secondary" savedLabel="✓ Drafted">🤖 AI-draft important questions (then edit below)</SubmitButton>
-          </form>
-        )}
         <TopicMetaForm action={updateTopicMeta} topic={topic as unknown as TopicMeta} />
       </details>
 
@@ -117,18 +110,11 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                       Manage questions →
                     </Link>
                   )}
-                  {s.type === "full_class_video" && (!!(s.config as Record<string, unknown> | null)?.transcript || !!(s.config as Record<string, unknown> | null)?.notes_hand_url) && (
-                    <form action={aiDraftClass} style={{ display: "inline" }}>
-                      <input type="hidden" name="sectionId" value={s.id} />
-                      <input type="hidden" name="topicId" value={topic.id} />
-                      <SubmitButton className="btn small secondary" savedLabel="✓ Drafted">🤖 AI-draft content</SubmitButton>
-                    </form>
-                  )}
                   {s.type === "full_class_video" && !!(s.config as Record<string, unknown> | null)?.transcript && (
                     <form action={summarizeClassSection} style={{ display: "inline" }}>
                       <input type="hidden" name="sectionId" value={s.id} />
                       <input type="hidden" name="topicId" value={topic.id} />
-                      <button className="btn small secondary" type="submit">🤖 Summarize (AI)</button>
+                      <button className="btn small secondary" type="submit">🤖 Class summary (from transcript)</button>
                     </form>
                   )}
                   {!!(s.config as Record<string, unknown> | null)?.notes_hand_url && !((s.config as Record<string, unknown>)?.notes_typed_status) && (
@@ -192,17 +178,18 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
                 if (!cfg.ai_summary) return null;
                 return (
                   <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--bg-soft)", borderRadius: 8, fontSize: ".88rem" }}>
-                    <strong>🤖 AI class summary</strong>
+                    <strong>🤖 Class summary (from your transcript — shown to students)</strong>
                     <p style={{ margin: "4px 0 6px" }}>{String(cfg.ai_summary)}</p>
-                    <p className="muted" style={{ margin: 0, fontSize: ".82rem" }}>
-                      ❓ {Number(cfg.ai_questions_count) || 0} questions solved
-                      {cfg.ai_homework ? ` · 📚 Homework: ${String(cfg.ai_homework)}` : ""}
-                    </p>
-                    {cfg.ai_key_points ? (
-                      <p className="muted" style={{ margin: "4px 0 0", fontSize: ".82rem" }}>
-                        🔑 Key concepts: {String(cfg.ai_key_points).split("\n").filter(Boolean).join(" · ")}
-                      </p>
+                    {cfg.ai_concepts_discussed ? (
+                      <p className="muted" style={{ margin: "2px 0", fontSize: ".82rem" }}>🔑 Concepts discussed: {String(cfg.ai_concepts_discussed).split("\n").filter(Boolean).join(" · ")}</p>
                     ) : null}
+                    {cfg.ai_questions_discussed ? (
+                      <p className="muted" style={{ margin: "2px 0", fontSize: ".82rem" }}>❓ Questions discussed: {String(cfg.ai_questions_discussed).split("\n").filter(Boolean).join(" · ")}</p>
+                    ) : null}
+                    <p className="muted" style={{ margin: "2px 0", fontSize: ".82rem" }}>
+                      📝 {Number(cfg.ai_homework_count) || 0} homework questions solved in class
+                      {cfg.ai_homework_next ? ` · 📚 Homework for next class: ${String(cfg.ai_homework_next)}` : ""}
+                    </p>
                   </div>
                 );
               })()}

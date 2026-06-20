@@ -137,6 +137,24 @@ function SectionBody({
             <p style={{ margin: "4px 0 0", whiteSpace: "pre-wrap" }}>{c.homework}</p>
           </div>
         )}
+        {c.ai_summary && (
+          <details style={{ marginTop: 12 }}>
+            <summary style={{ cursor: "pointer", color: "var(--accent)" }}>📋 Class summary</summary>
+            <div style={{ marginTop: 8, fontSize: ".9rem" }}>
+              <p style={{ marginTop: 0 }}>{c.ai_summary}</p>
+              {c.ai_concepts_discussed && (
+                <p style={{ margin: "6px 0" }}><strong>🔑 Concepts covered:</strong> {String(c.ai_concepts_discussed).split("\n").filter(Boolean).join(" · ")}</p>
+              )}
+              {c.ai_questions_discussed && (
+                <p style={{ margin: "6px 0" }}><strong>❓ Questions discussed:</strong> {String(c.ai_questions_discussed).split("\n").filter(Boolean).join(" · ")}</p>
+              )}
+              <p style={{ margin: "6px 0 0" }}>
+                <strong>📝 {Number(c.ai_homework_count) || 0} homework questions</strong> solved in class
+                {c.ai_homework_next ? <> · <strong>Homework for next class:</strong> {c.ai_homework_next}</> : null}
+              </p>
+            </div>
+          </details>
+        )}
         {c.notes_typed_status === "approved" && c.notes_typed_text && (
           <details style={{ marginTop: 12 }}>
             <summary style={{ cursor: "pointer", color: "var(--accent)" }}>⌨️ Typed notes (faculty-approved)</summary>

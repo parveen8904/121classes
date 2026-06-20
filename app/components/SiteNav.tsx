@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 import MobileMenu from "./MobileMenu";
+import AuthCta from "./AuthCta";
 
 const NAV_LINKS = [
   { href: "/courses", label: "Courses" },
@@ -13,6 +15,12 @@ const NAV_LINKS = [
 ];
 
 export default async function SiteNav() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const signedIn = !!user;
+
   return (
     <nav className="lp-nav">
       <div className="lp-nav-inner">
@@ -26,10 +34,8 @@ export default async function SiteNav() {
             </Link>
           ))}
           <ThemeToggle />
-          <Link className="btn hide-sm" href="/login">
-            Log in
-          </Link>
-          <MobileMenu links={NAV_LINKS} />
+          <AuthCta initialSignedIn={signedIn} />
+          <MobileMenu links={NAV_LINKS} initialSignedIn={signedIn} />
         </div>
       </div>
     </nav>

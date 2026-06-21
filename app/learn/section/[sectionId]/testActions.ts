@@ -185,6 +185,12 @@ export async function gradeMcqAttempt(input: {
     answers: input.answers ?? {},
     report: { rank: res.rank, weakConcepts: res.weakConcepts, classesToRedo: res.classesToRedo },
   });
+  await supabase.from("student_activity").insert({
+    student_id: user.id,
+    kind: "test_submitted",
+    section_id: input.sectionId,
+    detail: { score: res.score, total: res.total },
+  });
 
   // Email the report to the student (best-effort — never block grading on it).
   try {

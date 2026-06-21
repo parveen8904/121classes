@@ -35,5 +35,10 @@ export async function askSubjectDoubt(input: {
     ai_answer: answer,
     status: answer ? "answered" : "open",
   });
+  await supabase.from("student_activity").insert({
+    student_id: user.id,
+    kind: "doubt",
+    detail: { subject_id: input.subjectId, answered: !!answer },
+  });
   return { ok: true, answer, limited: false };
 }

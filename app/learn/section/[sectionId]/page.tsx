@@ -9,6 +9,7 @@ import McqSection from "./McqSection";
 import SubjectiveSection from "./SubjectiveSection";
 import DiscussionBoard from "./DiscussionBoard";
 import ClassDownload from "../../topic/[topicId]/ClassDownload";
+import WatchTracker from "./WatchTracker";
 
 export const dynamic = "force-dynamic";
 
@@ -96,10 +97,7 @@ export default async function SectionPage({
         </div>
 
         {src ? (
-          <div className="video-frame" style={{ marginTop: 16 }}>
-            <iframe src={src} allow="encrypted-media; fullscreen" allowFullScreen title="Video" />
-            {watermark && <span className="vwm">{watermark}</span>}
-          </div>
+          <WatchTracker src={src} sectionId={section.id} durationSeconds={(Number(c.duration_minutes) || 0) * 60} topicId={section.topic_id} watermark={watermark} />
         ) : dl ? (
           <p className="muted" style={{ marginTop: 16 }}>📥 This class is available to download and watch securely in the desktop app.</p>
         ) : (

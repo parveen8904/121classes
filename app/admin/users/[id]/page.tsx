@@ -42,6 +42,31 @@ export default async function UserDetail({
     .order("created_at", { ascending: false });
   const subs = (subsData ?? []) as unknown as SubRow[];
 
+  // Watch progress + activity log (what the student is doing — for planning).
+  const { data: watch } = await supabase
+    .from("class_watch")
+    .select("video_seconds, real_seconds, duration_seconds, completed, last_watched_at, sections(title, topics(title))")
+    .eq("student_id", u.id)
+    .order("last_watched_at", { ascending: false })
+    .limit(60);
+  const { data: activity } = await supabase
+    .from("student_activity")
+    .select("kind, detail, created_at, sections(title)")
+    .eq("student_id", u.id)
+    .order("created_at", { ascending: false })
+    .limit(40);
+  const fmtSecs = (s: number) => {
+    const m = Math.round((s || 0) / 60);
+    if (m < 60) return `${m}m`;
+    return `${Math.floor(m / 60)}h ${m % 60}m`;
+  };
+  const fmtWhen = (d: string) => new Date(d).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  const ACT_LABEL: Record<string, string> = { class_open: "▶️ Opened a class", class_complete: "✅ Finished a class", test_submitted: "🧠 Gave a test", doubt: "💬 Asked a doubt", plan_built: "🗓️ Built a plan" };
+  type WatchRow = { video_seconds: number; real_seconds: number; duration_seconds: number; completed: boolean; last_watched_at: string; sections: { title: string; topics: { title: string } | null } | null };
+  type ActRow = { kind: string; detail: Record<string, unknown> | null; created_at: string; sections: { title: string } | null };
+  const watchRows = (watch ?? []) as unknown as WatchRow[];
+  const actRows = (activity ?? []) as unknown as ActRow[];
+
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 820 }}>
       <AdminHero
@@ -153,6 +178,36 @@ export default async function UserDetail({
           Save user
         </button>
       </form>
+
+      <h2 className="admin-section-title">📺 Watch progress ({watchRows.length})</h2>
+      <p className="muted" style={{ fontSize: ".85rem" }}>Per class: how far through the video vs the real time spent. A real time much bigger than the video length means breaks / gaps.</p>
+      <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+        {watchRows.length > 0 ? watchRows.map((w, i) => {
+          const pct = w.duration_seconds > 0 ? Math.min(100, Math.round((w.video_seconds / w.duration_seconds) * 100)) : 0;
+          const gap = w.real_seconds - w.video_seconds;
+          return (
+            <div className="card" key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <div>
+                <strong>{w.completed ? "✅ " : ""}{w.sections?.title ?? "Class"}</strong>
+                <span className="muted" style={{ fontSize: ".78rem" }}>{w.sections?.topics?.title ? ` · ${w.sections.topics.title}` : ""} · last {fmtWhen(w.last_watched_at)}</span>
+              </div>
+              <span className="muted" style={{ fontSize: ".82rem", whiteSpace: "nowrap" }}>
+                ▶️ {pct}% ({fmtSecs(w.video_seconds)}/{fmtSecs(w.duration_seconds)}) · ⏱️ spent {fmtSecs(w.real_seconds)}{gap > 120 ? ` · 🐢 +${fmtSecs(gap)} gaps` : ""}
+              </span>
+            </div>
+          );
+        }) : <p className="muted">No classes watched yet.</p>}
+      </div>
+
+      <h2 className="admin-section-title">🧾 Activity log ({actRows.length})</h2>
+      <div style={{ marginTop: 12, display: "grid", gap: 6 }}>
+        {actRows.length > 0 ? actRows.map((a, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", fontSize: ".85rem", padding: "4px 0", borderBottom: "1px solid var(--border)" }}>
+            <span>{ACT_LABEL[a.kind] ?? a.kind}{a.sections?.title ? ` — ${a.sections.title}` : ""}{a.detail && typeof a.detail.score !== "undefined" ? ` (${a.detail.score}/${a.detail.total})` : ""}</span>
+            <span className="muted">{fmtWhen(a.created_at)}</span>
+          </div>
+        )) : <p className="muted">No activity yet.</p>}
+      </div>
 
       <h2 className="admin-section-title">🎟️ Subscriptions</h2>
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>

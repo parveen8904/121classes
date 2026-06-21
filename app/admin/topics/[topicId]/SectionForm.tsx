@@ -256,7 +256,7 @@ export default function SectionForm({
           <input type="checkbox" name="is_published" defaultChecked={section?.is_published ?? false} /> Published
         </label>
       </div>
-      <SubmitButton className="btn">{submitLabel}</SubmitButton>
+      <SubmitButton className="btn" closeDetails>{submitLabel}</SubmitButton>
     </form>
   );
 }

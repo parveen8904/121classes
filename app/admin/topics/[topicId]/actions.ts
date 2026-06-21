@@ -253,18 +253,26 @@ export async function createSection(formData: FormData) {
   const type = str(formData.get("type"));
   if (!topicId || !title || !type) return;
   const supabase = createClient();
-  await supabase.from("sections").insert({
-    topic_id: topicId,
-    type,
-    title,
-    group_id: str(formData.get("group_id")) || null,
-    order_index: num(formData.get("order_index")),
-    min_plan: readMinPlan(formData),
-    config: readConfig(formData),
-    is_published: formData.get("is_published") === "on",
-  });
+  const { data: created } = await supabase
+    .from("sections")
+    .insert({
+      topic_id: topicId,
+      type,
+      title,
+      group_id: str(formData.get("group_id")) || null,
+      order_index: num(formData.get("order_index")),
+      min_plan: readMinPlan(formData),
+      config: readConfig(formData),
+      is_published: formData.get("is_published") === "on",
+    })
+    .select("id")
+    .single();
   if (type === "full_class_video") await resequenceForTopic(topicId);
   revalidatePath(`/admin/topics/${topicId}`);
+  // A test is created empty — take the admin straight to where they upload /
+  // generate its questions, instead of leaving an empty shell on the topic page.
+  if (created && type === "mcq_test") redirect(`/admin/mcq/${created.id}`);
+  if (created && type === "subjective_test") redirect(`/admin/subjective/${created.id}`);
 }
 
 export async function updateSection(formData: FormData) {

@@ -211,16 +211,30 @@ export default async function TopicDetail({
           </div>
         </details>
         <details>
-          <summary className="btn secondary as-btn">🧠 Add the topic MCQ test</summary>
+          <summary className="btn secondary as-btn">🎞️ Add a video</summary>
           <div className="form-card" style={{ marginTop: 10 }}>
-            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Creates the MCQ test for this topic. Add/generate its questions after creating.</p>
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>A standalone video (e.g. a walkthrough). Upload the video and pick its Section.</p>
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add video" defaultType="discussion_video" subjectCode={subjectCode} topicCode={topicCode} groups={groupList} />
+          </div>
+        </details>
+        <details>
+          <summary className="btn secondary as-btn">📄 Add a PDF / notes</summary>
+          <div className="form-card" style={{ marginTop: 10 }}>
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Upload a PDF (notes, material) into a Section — no video needed.</p>
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add PDF" defaultType="pdf" groups={groupList} />
+          </div>
+        </details>
+        <details>
+          <summary className="btn secondary as-btn">🧠 Add an MCQ test</summary>
+          <div className="form-card" style={{ marginTop: 10 }}>
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Creates the MCQ test and takes you straight to the page to <strong>upload or generate</strong> its questions.</p>
             <SectionForm action={createSection} topicId={topic.id} submitLabel="Add MCQ test" defaultType="mcq_test" groups={groupList} />
           </div>
         </details>
         <details>
-          <summary className="btn secondary as-btn">✍️ Add the topic descriptive test</summary>
+          <summary className="btn secondary as-btn">✍️ Add a descriptive test</summary>
           <div className="form-card" style={{ marginTop: 10 }}>
-            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Creates the descriptive test for this topic. Upload its questions &amp; solutions after creating.</p>
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Creates the descriptive test and takes you straight to the page to upload its questions &amp; solutions.</p>
             <SectionForm action={createSection} topicId={topic.id} submitLabel="Add descriptive test" defaultType="subjective_test" groups={groupList} />
           </div>
         </details>

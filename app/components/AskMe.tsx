@@ -41,8 +41,8 @@ export default function AskMe({ signedIn }: { signedIn?: boolean }) {
 
   return (
     <>
-      <button className="askme-fab" onClick={() => setOpen(true)} aria-label="Ask a website or portal question">
-        💬 Ask queries
+      <button className="askme-fab" onClick={() => setOpen(true)} aria-label="Ask me">
+        💬 Ask me
       </button>
 
       {open && (
@@ -69,7 +69,7 @@ export default function AskMe({ signedIn }: { signedIn?: boolean }) {
               </div>
             ) : (
               <>
-                <h3 style={{ margin: "0 0 4px" }}>💬 Ask queries</h3>
+                <h3 style={{ margin: "0 0 4px" }}>💬 Ask me</h3>
                 <p className="muted" style={{ fontSize: ".85rem", marginBottom: 12 }}>
                   Questions about the website or portal — courses, plans, live sessions, login or any technical issue.
                   <br />For a <strong>CA subject doubt</strong>, use the <strong>“Ask your doubts”</strong> button on your subject page.

@@ -248,6 +248,16 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                     <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0 0" }}>
                       ⚡ Instant reply from your class material. Not satisfied? Send it to the faculty on WhatsApp or email.
                     </p>
+                    {facultyContacts.length > 0 && (
+                      <p className="muted" style={{ fontSize: ".74rem", margin: "4px 0 0" }}>
+                        {facultyContacts.map((f, i) => (
+                          <span key={i}>
+                            👩‍🏫 {f.full_name}{f.phone ? ` · 📞 ${f.phone}` : ""}{f.email ? ` · ✉️ ${f.email}` : ""}
+                            {i < facultyContacts.length - 1 ? "  |  " : ""}
+                          </span>
+                        ))}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {mySubjIds.has(s.id) && (s as { telegram_group_url?: string | null }).telegram_group_url && (

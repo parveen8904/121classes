@@ -147,7 +147,9 @@ export default async function TopicDetail({
         </details>
 
       {/* Specific adders — no confusing "section type" picker */}
-      <div style={{ marginTop: 20, display: "grid", gap: 10 }}>
+      <h2 className="admin-section-title">➕ Add a section to this topic</h2>
+      <p className="muted" style={{ fontSize: ".9rem" }}>Pick what to add — a class, a revision video, or the topic&apos;s MCQ / descriptive test.</p>
+      <div style={{ marginTop: 8, display: "grid", gap: 10 }}>
         <details>
           <summary className="btn secondary as-btn">🎓 Add a class</summary>
           <div className="form-card" style={{ marginTop: 10 }}>
@@ -185,29 +187,20 @@ export default async function TopicDetail({
         </span>
       </div>
       <p className="muted" style={{ fontSize: ".9rem" }}>
-        These render in order for students. Expand one to edit it.
+        These render in order for students. Tap a section to open its controls, AI summary and the <strong>Edit</strong> form (rename, video, PDF, tier…).
       </p>
 
-      <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
+      <div style={{ marginTop: 16, display: "grid", gap: 8 }}>
         {sections && sections.length > 0 ? (
           sections.map((s) => (
-            <div className="card" key={s.id}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  flexWrap: "wrap",
-                }}
-              >
-                <div>
-                  <strong>{s.title}</strong>
-                  <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
-                    {TYPE_LABEL[s.type] ?? s.type} · {s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "Free"} ·
-                    order {s.order_index} · {s.is_published ? "published" : "draft"}
-                  </p>
-                </div>
+            <details className="card" key={s.id}>
+              <summary style={{ cursor: "pointer", display: "flex", gap: 10, alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap" }}>
+                <strong>{s.title}</strong>
+                <span className="muted" style={{ fontSize: ".8rem" }}>
+                  {TYPE_LABEL[s.type] ?? s.type} · {s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "Free"} · order {s.order_index} · {s.is_published ? "🟢 published" : "⚪ draft"}
+                </span>
+              </summary>
+              <div style={{ marginTop: 12 }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   {s.type === "mcq_test" && (
                     <Link className="btn small" href={`/admin/mcq/${s.id}`}>
@@ -293,11 +286,9 @@ export default async function TopicDetail({
                 );
               })()}
 
-              <details style={{ marginTop: 14 }}>
-                <summary style={{ cursor: "pointer", color: "var(--accent)", fontSize: ".9rem" }}>
-                  Edit section
-                </summary>
-                <div style={{ marginTop: 14 }}>
+              <div style={{ marginTop: 16 }}>
+                <strong style={{ fontSize: ".9rem" }}>✏️ Edit this section (rename, video, PDF, tier…)</strong>
+                <div style={{ marginTop: 10 }}>
                   <SectionForm
                     action={updateSection}
                     topicId={topic.id}
@@ -315,8 +306,8 @@ export default async function TopicDetail({
                     topicCode={topicCode}
                   />
                 </div>
-              </details>
-            </div>
+              </div>
+            </details>
           ))
         ) : (
           <p className="muted">No sections yet. Add the first one above.</p>

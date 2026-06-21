@@ -17,19 +17,22 @@ export default function McqForm({
   questions,
   minutesPerQuestion = 1,
   topicId,
+  lockedResult = null,
 }: {
   sectionId: string;
   questions: Question[];
   minutesPerQuestion?: number;
   topicId?: string;
+  lockedResult?: (McqResult & { alreadyDone?: boolean }) | null;
 }) {
   const totalSeconds = Math.max(1, Math.round(questions.length * minutesPerQuestion * 60));
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [current, setCurrent] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<McqResult | null>(null);
+  // A student gets ONE attempt — if they already took it, we start on the report.
+  const [result, setResult] = useState<(McqResult & { alreadyDone?: boolean }) | null>(lockedResult);
   const [secondsLeft, setSecondsLeft] = useState(totalSeconds);
-  const submittedRef = useRef(false);
+  const submittedRef = useRef(!!lockedResult);
 
   const submit = useCallback(
     async (auto = false) => {
@@ -69,6 +72,11 @@ export default function McqForm({
     return (
       <div style={{ display: "grid", gap: 16 }}>
         <div className="card" style={{ border: "2px solid var(--accent)" }}>
+          {result.alreadyDone && (
+            <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
+              📌 You have already taken this test once. Each test can be attempted only once — here is your report.
+            </p>
+          )}
           <h3 style={{ marginTop: 0 }}>{pct >= 60 ? "🎉 Well done!" : "📝 Keep practising!"}</h3>
           <p style={{ fontSize: "1.5rem", fontWeight: 800, margin: "8px 0" }}>
             {result.score} / {result.total} <span className="muted" style={{ fontSize: "1rem" }}>({pct}%)</span>

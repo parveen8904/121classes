@@ -33,21 +33,19 @@ export type McqResult = {
   classesToRedo?: string[];
 };
 
-export async function gradeMcqAttempt(input: {
-  sectionId: string;
-  answers: Record<string, number>;
-}): Promise<McqResult> {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false };
-
-  // correct_index is fetched server-side only — never sent to the browser before grading.
+// Build the graded result (score, review, rank, weak concepts, redo classes)
+// from a set of answers — pure read, no insert. Reused for live grading and for
+// showing a student their one previous attempt.
+async function buildMcqResult(
+  supabase: ReturnType<typeof createClient>,
+  sectionId: string,
+  userId: string,
+  answers: Record<string, number>,
+): Promise<McqResult> {
   const { data: questions } = await supabase
     .from("mcq_questions")
     .select("id, question, options, correct_index, order_index, concept, source_class_no")
-    .eq("section_id", input.sectionId)
+    .eq("section_id", sectionId)
     .order("order_index");
   const qs = questions ?? [];
   if (!qs.length) return { ok: false };
@@ -59,7 +57,7 @@ export async function gradeMcqAttempt(input: {
   const weak = new Set<string>();
   const redo = new Set<string>();
   for (const q of qs) {
-    const chosen = input.answers?.[q.id];
+    const chosen = answers?.[q.id];
     const isCorrect = chosen === q.correct_index;
     if (isCorrect) score += 1;
     else {
@@ -81,14 +79,6 @@ export async function gradeMcqAttempt(input: {
   }
   const total = qs.length;
 
-  await supabase.from("mcq_attempts").insert({
-    student_id: user.id,
-    section_id: input.sectionId,
-    score,
-    total,
-    answers: input.answers ?? {},
-  });
-
   // Leaderboard rank = how many students scored strictly higher (best attempt) + 1.
   // We return only the rank number — never the total number of test-takers.
   let rank = 1;
@@ -96,27 +86,79 @@ export async function gradeMcqAttempt(input: {
     const { data: all } = await createServiceClient()
       .from("mcq_attempts")
       .select("student_id, score")
-      .eq("section_id", input.sectionId);
+      .eq("section_id", sectionId);
     const best = new Map<string, number>();
     for (const a of all ?? []) {
       const sid = a.student_id as string;
       best.set(sid, Math.max(best.get(sid) ?? 0, (a.score as number) ?? 0));
     }
-    const myBest = Math.max(best.get(user.id) ?? 0, score);
-    for (const [sid, s] of best) if (sid !== user.id && s > myBest) rank += 1;
+    const myBest = Math.max(best.get(userId) ?? 0, score);
+    for (const [sid, s] of best) if (sid !== userId && s > myBest) rank += 1;
   } catch {
     rank = 1;
   }
 
-  return {
-    ok: true,
-    score,
-    total,
-    review,
-    rank,
-    weakConcepts: [...weak],
-    classesToRedo: [...redo].sort((a, b) => Number(a) - Number(b)),
-  };
+  return { ok: true, score, total, review, rank, weakConcepts: [...weak], classesToRedo: [...redo].sort((a, b) => Number(a) - Number(b)) };
+}
+
+// A student may take each topic test only ONCE. Returns their existing result if
+// they've already attempted it (so the page shows the report, not the test).
+export async function getMyMcqResult(sectionId: string): Promise<(McqResult & { alreadyDone: true }) | null> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: prior } = await supabase
+    .from("mcq_attempts")
+    .select("answers")
+    .eq("student_id", user.id)
+    .eq("section_id", sectionId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!prior) return null;
+  const res = await buildMcqResult(supabase, sectionId, user.id, (prior.answers as Record<string, number>) ?? {});
+  return { ...res, alreadyDone: true };
+}
+
+export async function gradeMcqAttempt(input: {
+  sectionId: string;
+  answers: Record<string, number>;
+}): Promise<McqResult & { alreadyDone?: boolean }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+
+  // Only one attempt per student per test — if they've already taken it, return
+  // that result instead of recording a new one.
+  const { data: prior } = await supabase
+    .from("mcq_attempts")
+    .select("answers")
+    .eq("student_id", user.id)
+    .eq("section_id", input.sectionId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (prior) {
+    const res = await buildMcqResult(supabase, input.sectionId, user.id, (prior.answers as Record<string, number>) ?? {});
+    return { ...res, alreadyDone: true };
+  }
+
+  const res = await buildMcqResult(supabase, input.sectionId, user.id, input.answers ?? {});
+  if (!res.ok) return res;
+
+  await supabase.from("mcq_attempts").insert({
+    student_id: user.id,
+    section_id: input.sectionId,
+    score: res.score,
+    total: res.total,
+    answers: input.answers ?? {},
+  });
+
+  return res;
 }
 
 export async function submitSubjective(input: {

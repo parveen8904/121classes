@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import McqForm from "./McqForm";
+import { getMyMcqResult } from "./testActions";
 
 export default async function McqSection({
   section,
@@ -24,6 +25,9 @@ export default async function McqSection({
     options: (q.options as string[]) ?? [],
   }));
 
+  // One attempt per student — if they've already taken it, show their report.
+  const lockedResult = await getMyMcqResult(section.id);
+
   return (
     <main>
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 980 }}>
@@ -38,7 +42,7 @@ export default async function McqSection({
 
         <div style={{ marginTop: 22 }}>
           {questions.length > 0 ? (
-            <McqForm sectionId={section.id} questions={questions} minutesPerQuestion={minutesPerQuestion} topicId={section.topic_id} />
+            <McqForm sectionId={section.id} questions={questions} minutesPerQuestion={minutesPerQuestion} topicId={section.topic_id} lockedResult={lockedResult} />
           ) : (
             <div className="card">
               <p className="muted">📭 No questions added to this test yet.</p>

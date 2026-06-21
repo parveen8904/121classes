@@ -3,9 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { aiConfigured } from "@/lib/ai";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
-import { addMcq, deleteMcq, generateMcqsFromTranscript, attachSectionPdf } from "./actions";
+import { addMcq, updateMcq, bulkAddMcq, deleteMcq, generateMcqsFromTranscript, attachSectionPdf } from "./actions";
 import PdfUpload from "../../_components/PdfUpload";
 import SubmitButton from "@/app/components/SubmitButton";
+import { getMcqExplanations } from "@/lib/answers";
 
 export default async function McqAdminPage({ params }: { params: { sectionId: string } }) {
   const supabase = createClient();
@@ -23,6 +24,7 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
     .eq("section_id", section.id)
     .order("order_index");
   const ai = await aiConfigured();
+  const explain = await getMcqExplanations((questions ?? []).map((q) => q.id));
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -88,8 +90,29 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
         </div>
       </details>
 
+      {/* Bulk upload — no AI. Admin pastes many questions at once. */}
+      <details style={{ marginTop: 14 }}>
+        <summary className="btn small secondary as-btn">📥 Bulk add questions (paste — no AI)</summary>
+        <div className="form-card" style={{ marginTop: 10 }}>
+          <h3>📥 Paste multiple questions</h3>
+          <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
+            One question per block, a <strong>blank line between blocks</strong>. First line = the question, then the options
+            (one per line). Put a <strong>*</strong> in front of the correct option. These add to <strong>this</strong> test.
+          </p>
+          <form action={bulkAddMcq}>
+            <input type="hidden" name="section_id" value={section.id} />
+            <textarea
+              name="bulk"
+              rows={10}
+              placeholder={"Under AS 13, investments are classified as?\n*Current and long-term investments\nFixed and floating investments\nTrade and non-trade only\nQuoted and unquoted only\n\nThe cost of a current investment includes?\n*Purchase price plus acquisition charges\nPurchase price only\nMarket value on balance sheet date\nFace value of the investment"}
+            />
+            <button className="btn small" type="submit" style={{ marginTop: 8 }}>Add these questions</button>
+          </form>
+        </div>
+      </details>
+
       <div className="form-card" style={{ marginTop: 14 }}>
-        <h3>➕ Add a question</h3>
+        <h3>➕ Add a single question</h3>
         <form action={addMcq}>
           <input type="hidden" name="section_id" value={section.id} />
           <label>Question</label>
@@ -111,31 +134,48 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
         </form>
       </div>
 
-      <h2 className="admin-section-title">📋 Questions</h2>
-      <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+      <h2 className="admin-section-title">📋 Questions ({(questions ?? []).length})</h2>
+      <p className="muted" style={{ fontSize: ".9rem" }}>Tap a question to review the correct/wrong answers + explanations and edit anything.</p>
+      <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
         {questions && questions.length > 0 ? (
-          questions.map((q, i) => (
-            <div className="card" key={q.id}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <strong>
-                  {i + 1}. {q.question}
-                  {(q.source_class_no || q.concept) && (
-                    <span className="muted" style={{ fontWeight: 400, fontSize: ".8rem" }}>
-                      {q.source_class_no ? ` · Class ${q.source_class_no}` : ""}{q.concept ? ` · ${q.concept}` : ""}
-                    </span>
-                  )}
-                </strong>
-                <DeleteButton action={deleteMcq} id={q.id} parentId={section.id} message="Delete this question?" />
-              </div>
-              <ul className="muted" style={{ fontSize: ".9rem", marginTop: 8, paddingLeft: 18 }}>
-                {((q.options as string[]) ?? []).map((o, oi) => (
-                  <li key={oi} style={oi === q.correct_index ? { color: "var(--accent)", fontWeight: 700 } : undefined}>
-                    {o} {oi === q.correct_index ? "✓" : ""}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))
+          questions.map((q, i) => {
+            const opts = ((q.options as string[]) ?? []);
+            const ex = explain.get(q.id);
+            return (
+              <details className="card" key={q.id}>
+                <summary style={{ cursor: "pointer", display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <strong>{i + 1}. {q.question}</strong>
+                  <span className="muted" style={{ fontSize: ".8rem" }}>
+                    ✓ {opts[q.correct_index] ?? "?"}{q.source_class_no ? ` · Class ${q.source_class_no}` : ""}{q.concept ? ` · ${q.concept}` : ""}
+                  </span>
+                </summary>
+                <form action={updateMcq} style={{ marginTop: 12 }}>
+                  <input type="hidden" name="id" value={q.id} />
+                  <input type="hidden" name="section_id" value={section.id} />
+                  <label>Question</label>
+                  <input name="question" defaultValue={q.question} required />
+                  <p className="muted" style={{ fontSize: ".82rem", margin: "8px 0 4px" }}>Pick the correct option; the reason lines power the student&apos;s report.</p>
+                  {[0, 1, 2, 3].map((oi) => (
+                    <div key={oi} style={{ display: "grid", gridTemplateColumns: "auto 1fr 1.4fr", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                      <label className="remember" style={{ margin: 0 }}>
+                        <input type="radio" name="correct" value={oi} defaultChecked={oi === q.correct_index} /> ✓
+                      </label>
+                      <input name={`opt${oi}`} defaultValue={opts[oi] ?? ""} placeholder={`Option ${oi + 1}`} />
+                      <input name={`why${oi}`} defaultValue={ex?.ww?.[oi] ?? ""} placeholder={`Why option ${oi + 1} is right/wrong`} />
+                    </div>
+                  ))}
+                  <label>Why the correct answer is correct (overall)</label>
+                  <input name="why_correct" defaultValue={ex?.wc ?? ""} placeholder="One-line explanation of the correct answer" />
+                  <label>Concept tested (optional)</label>
+                  <input name="concept" defaultValue={q.concept ?? ""} placeholder="e.g. Cost of a current investment" />
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <SubmitButton className="btn small" closeDetails>Save changes</SubmitButton>
+                    <DeleteButton action={deleteMcq} id={q.id} parentId={section.id} message="Delete this question?" />
+                  </div>
+                </form>
+              </details>
+            );
+          })
         ) : (
           <div className="card">
             <p className="muted">📭 No questions yet — add your first above.</p>

@@ -98,7 +98,10 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
       const cfg = (r as { config?: { duration_minutes?: unknown; class_no?: unknown } }).config ?? {};
       const d = Number(cfg.duration_minutes) || 0;
       if (type === "full_class_video") {
-        inc(sumClasses, sid); inc(sumClassMins, sid, d);
+        // Don't count ≤100-min "part" continuations (e.g. 7B) as extra classes.
+        const isPart = /[A-Za-z]/.test(String(cfg.class_no ?? ""));
+        inc(sumClassMins, sid, d);
+        if (!isPart) inc(sumClasses, sid);
         const no = parseInt(String(cfg.class_no ?? "").replace(/\D/g, ""), 10);
         if (Number.isFinite(no) && no > 0) {
           const cur = topicRange.get(tid);

@@ -86,7 +86,9 @@ function AutoNumber({
         <p className="muted" style={{ margin: "10px 0 0", fontSize: ".82rem" }}>
           🔁 The <strong>class number</strong> and <strong>topic class number</strong> are assigned
           automatically from the order. Set the <strong>Order</strong> above to place this class — the whole
-          subject re-numbers itself. The full unique number appears on the class once you save.
+          subject re-numbers itself. A class of <strong>100 minutes or less</strong> is added as a
+          <strong> part (B, C…)</strong> of the previous class instead of a new number, so the class count
+          stays clean. The full unique number appears once you save.
         </p>
       )}
       {/* taught month is submitted; for a revision the manual number + code go too. */}

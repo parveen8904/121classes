@@ -47,8 +47,12 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
   const subjectCode = subjectInfo?.code ?? "";
   const topicCode = (topic as { topic_code?: string }).topic_code ?? "";
 
-  // Topic totals: number of classes and their combined duration.
+  // Topic totals: number of classes (excluding ≤100-min "part" continuations
+  // like 7B) and their combined duration (including the parts).
   const classSections = (sections ?? []).filter((s) => s.type === "full_class_video");
+  const mainClassCount = classSections.filter(
+    (s) => !/[A-Za-z]/.test(String((s.config as { class_no?: unknown } | null)?.class_no ?? "")),
+  ).length;
   const topicMins = classSections.reduce(
     (a, s) => a + (Number((s.config as { duration_minutes?: unknown } | null)?.duration_minutes) || 0),
     0,
@@ -155,7 +159,7 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <h2 className="admin-section-title" style={{ margin: 0 }}>🎓 Classes, revision videos &amp; tests</h2>
         <span style={{ fontWeight: 700, fontSize: ".95rem", background: "var(--bg-soft)", padding: "6px 12px", borderRadius: 8, whiteSpace: "nowrap" }}>
-          🎓 {classSections.length} {classSections.length === 1 ? "class" : "classes"} · ⏱️ {fmtMins(topicMins)}
+          🎓 {mainClassCount} {mainClassCount === 1 ? "class" : "classes"} · ⏱️ {fmtMins(topicMins)}
         </span>
       </div>
       <p className="muted" style={{ fontSize: ".9rem" }}>

@@ -102,7 +102,11 @@ async function resequenceSubjectClasses(subjectId: string) {
     byTopic.get(row.topic_id)!.push({ id: row.id, order_index: row.order_index, title: row.title, created_at: row.created_at, config: row.config });
   }
 
-  let classNo = 0;
+  // A class > 100 min (or the first class of a topic, or one with no duration
+  // set) gets its own NEW number. A class of 100 min or less is treated as a
+  // continuation of the previous class — same number with a letter suffix
+  // (B, C, …) — so a topic split into short clips doesn't inflate the count.
+  let subjectMain = 0;
   const updates: { id: string; config: Record<string, unknown> }[] = [];
   for (const t of topicList) {
     const topCode = cleanCode((t as { topic_code?: string }).topic_code ?? "");
@@ -110,14 +114,31 @@ async function resequenceSubjectClasses(subjectId: string) {
     const list = (byTopic.get(t.id) ?? []).sort(
       (a, b) => a.order_index - b.order_index || String(a.created_at).localeCompare(String(b.created_at)),
     );
-    let topicClassNo = 0;
+    let topicMain = 0;
+    let partIdx = 0; // 0 = currently on a main class; first continuation → "B"
     for (const s of list) {
-      classNo++;
-      topicClassNo++;
       const cfg = (s.config ?? {}) as Record<string, unknown>;
+      const dur = Number(cfg.duration_minutes) || 0;
+      const isShort = dur > 0 && dur <= 100;
+      const isFirstInTopic = topicMain === 0;
+      let suffix = "";
+      if (isShort && !isFirstInTopic) {
+        partIdx++;
+        suffix = String.fromCharCode(65 + partIdx); // 1→B, 2→C, …
+      } else {
+        subjectMain++;
+        topicMain++;
+        partIdx = 0;
+      }
       const ym = yymmOf(cfg.taught_on);
-      const class_number = subCode && topCode && ym ? `${subCode}${ym}${topCode}${padNum(topicClassNo, 2)}${padNum(classNo, 3)}` : "";
-      updates.push({ id: s.id, config: { ...cfg, class_no: String(classNo), topic_class_no: String(topicClassNo), class_number } });
+      const class_number =
+        subCode && topCode && ym
+          ? `${subCode}${ym}${topCode}${padNum(topicMain, 2)}${padNum(subjectMain, 3)}${suffix}`
+          : "";
+      updates.push({
+        id: s.id,
+        config: { ...cfg, class_no: String(subjectMain) + suffix, topic_class_no: String(topicMain) + suffix, class_number },
+      });
     }
   }
   // One write per class (config is per-row); small N, runs only on edits.

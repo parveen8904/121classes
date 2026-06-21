@@ -97,7 +97,14 @@ export default async function SectionPage({
         </div>
 
         {src ? (
-          <WatchTracker src={src} sectionId={section.id} durationSeconds={(Number(c.duration_minutes) || 0) * 60} topicId={section.topic_id} watermark={watermark} />
+          <WatchTracker
+            src={src}
+            provider={c.bunny_video_id ? "bunny" : c.youtube_url ? "youtube" : "embed"}
+            sectionId={section.id}
+            durationSeconds={(Number(c.duration_minutes) || 0) * 60}
+            topicId={section.topic_id}
+            watermark={watermark}
+          />
         ) : dl ? (
           <p className="muted" style={{ marginTop: 16 }}>📥 This class is available to download and watch securely in the desktop app.</p>
         ) : (

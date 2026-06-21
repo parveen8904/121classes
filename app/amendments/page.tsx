@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { bunnyEmbedUrl } from "@/lib/bunny";
@@ -55,7 +56,8 @@ export default async function AmendmentsPage() {
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 820 }}>
-      <div className="learn-hero">
+      <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+        <div className="learn-hero">
         <span className="badge">📜 Amendments &amp; updates</span>
         <h1>Amendments &amp; updates</h1>
         <p className="meta">Everything that applies to your attempt — amendments, updates, the video and notes. Change the attempt to see another batch.</p>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import OfflineDownloads from "./OfflineDownloads";
@@ -25,7 +26,8 @@ export default async function DownloadsPage() {
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
-      <div className="learn-hero">
+      <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+        <div className="learn-hero">
         <span className="badge">📥 Offline</span>
         <h1>Download &amp; watch offline <Help text="Tap Download on a class to save it to this device, then Play offline anytime — no internet needed. Videos are encrypted and show your name as a watermark. Works in the desktop app." /></h1>
         <p className="meta">Save your classes to this device and play them without internet — encrypted &amp; watermarked. 🔐</p>

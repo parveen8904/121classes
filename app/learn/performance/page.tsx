@@ -100,6 +100,7 @@ export default async function PerformancePage() {
   return (
     <main>
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 820 }}>
+        <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
         <div className="learn-hero">
           <span className="badge">📊 Performance</span>
           <h1>My performance <Help text="Your saved test scores and feedback. 'Better than X% of students' shows your rank among everyone who took the same test. The 'Rewatch' links take you to the classes for topics you got wrong." /></h1>

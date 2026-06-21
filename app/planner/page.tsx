@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -102,7 +103,8 @@ export default async function PlannerPage() {
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 920 }}>
-      <div className="learn-hero" style={{ marginBottom: 18 }}>
+      <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+        <div className="learn-hero" style={{ marginBottom: 18 }}>
         <span className="badge">🗓️ Study Planner</span>
         <h1>Study planner &amp; diary</h1>
         <p className="meta">

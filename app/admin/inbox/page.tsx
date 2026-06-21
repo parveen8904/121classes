@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
+import AdminHero from "../_components/AdminHero";
 import { markQuestionDone, replyToQuestion } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -47,8 +48,13 @@ export default async function AdminInbox() {
 
   return (
     <section className="container" style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 900 }}>
-      <h1 style={{ fontSize: "1.4rem" }}>📥 Inbox</h1>
-      <p className="muted" style={{ marginBottom: 24 }}>
+      <AdminHero
+        badge="📥 Inbox"
+        title="Inbox"
+        subtitle="Student questions and class reminders. Reply or mark done. ✅"
+        back={{ href: "/admin", label: "Admin" }}
+      />
+      <p className="muted" style={{ marginBottom: 24, marginTop: 16 }}>
         Questions from the &ldquo;Ask me&rdquo; button and &ldquo;Notify me&rdquo; sign-ups.
       </p>
 

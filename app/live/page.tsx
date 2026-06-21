@@ -78,7 +78,8 @@ export default async function LivePage() {
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
-      <div className="learn-hero">
+      <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+        <div className="learn-hero">
         <span className="badge">📡 Live classes</span>
         <h1>Live classes</h1>
         <p className="meta">Join live sessions with CA Parveen Sharma &amp; team — and catch recordings after. 🎥</p>

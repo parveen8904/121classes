@@ -108,7 +108,8 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
-      <div className="learn-hero">
+      <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+        <div className="learn-hero">
         <span className="badge">🎓 Career Corner</span>
         <h1>Career corner</h1>
         <p className="meta">Articleship, placements, interviews and opportunities — guidance from CA Parveen Sharma &amp; team.</p>

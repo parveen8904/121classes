@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SetPassword from "./set-password";
 import MyCourses from "./MyCourses";
+import FacultyContacts from "./FacultyContacts";
 import { announcementKindLabel } from "@/lib/announcements";
 import WellnessTip from "@/app/components/WellnessTip";
 import TodayPlan from "@/app/components/TodayPlan";
@@ -35,6 +36,12 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
   const myIds = new Set((myCourseRows ?? []).map((r) => r.course_id as string));
   const myCourses = (courses ?? []).filter((c) => myIds.has(c.id));
   const otherCourses = (courses ?? []).filter((c) => !myIds.has(c.id));
+
+  // Faculty contacts — name + phone/email, shown to every student.
+  const { data: faculty } = await supabase
+    .from("faculties")
+    .select("id, full_name, phone, email, photo_url")
+    .order("full_name");
 
   // Faculty messages / updates — shown to every student on login.
   const { data: announcements } = await supabase
@@ -136,6 +143,8 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
             </div>
           </>
         )}
+
+        <FacultyContacts faculty={faculty ?? []} />
 
         <MyCourses courses={myCourses.map((c) => ({ id: c.id, title: c.title }))} />
 

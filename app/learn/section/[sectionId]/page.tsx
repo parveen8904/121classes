@@ -113,6 +113,13 @@ export default async function SectionPage({
 
         {dl && <ClassDownload pv={dl} watermark={watermark} />}
 
+        {(c.description || c.link_url) && (
+          <div style={{ marginTop: 14 }}>
+            {c.description && <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{c.description}</p>}
+            {c.link_url && <a className="btn small secondary" href={c.link_url} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8, display: "inline-block" }}>🔗 Open link</a>}
+          </div>
+        )}
+
         {/* Notes — handwritten notes shown prominently as asked. */}
         {(c.notes_hand_url || c.notes_typed_url || c.pdf_url || c.homework_solutions) && (
           <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>

@@ -288,7 +288,13 @@ export default function SectionForm({
         </p>
       )}
 
-        <label className="remember" style={{ marginTop: 0 }}>
+      {/* Universal: a description + a link, shown to students for ANY content. */}
+      <label>📝 Description (optional — shown to students)</label>
+      <textarea name="description" rows={2} defaultValue={cfg.description ?? ""} placeholder="A short note shown under this content for students" />
+      <label>🔗 Link (optional — becomes a clickable link for students)</label>
+      <input name="link_url" defaultValue={cfg.link_url ?? ""} placeholder="https://…" />
+
+        <label className="remember" style={{ marginTop: 8 }}>
           <input type="checkbox" name="is_published" defaultChecked={section?.is_published ?? false} /> Published
         </label>
       </div>

@@ -26,7 +26,9 @@ export type ConfigField =
   | "important_questions"
   | "important_concepts"
   | "homework"
-  | "homework_solutions";
+  | "homework_solutions"
+  | "description"
+  | "link_url";
 
 export const ALL_CONFIG_FIELDS: ConfigField[] = [
   "revision_round",
@@ -53,6 +55,8 @@ export const ALL_CONFIG_FIELDS: ConfigField[] = [
   "important_concepts",
   "homework",
   "homework_solutions",
+  "description",
+  "link_url",
 ];
 
 export const FIELD_LABELS: Record<ConfigField, string> = {
@@ -80,10 +84,12 @@ export const FIELD_LABELS: Record<ConfigField, string> = {
   important_concepts: "Important concepts covered (one per line)",
   homework: "Homework (questions for this class)",
   homework_solutions: "Homework solutions PDF",
+  description: "Description (shown to students under this content)",
+  link_url: "Link (becomes a clickable link for students)",
 };
 
 // Long-text fields rendered as a textarea; PDF fields rendered with the uploader.
-export const TEXTAREA_FIELDS: ConfigField[] = ["body", "transcript", "important_questions", "important_concepts", "homework"];
+export const TEXTAREA_FIELDS: ConfigField[] = ["body", "transcript", "important_questions", "important_concepts", "homework", "description"];
 export const PDF_FIELDS: ConfigField[] = ["pdf_url", "notes_hand_url", "notes_typed_url", "homework_solutions"];
 
 export const SECTION_TYPES: {

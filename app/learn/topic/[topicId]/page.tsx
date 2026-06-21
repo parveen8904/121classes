@@ -542,6 +542,13 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     if (s.type === "full_class_video") rightLabel = classNoLabel.get(s.id);
     else if (s.type === "revision_video" && c.class_no) rightLabel = `Revision ${c.class_no}`;
     const hasSummary = s.type === "full_class_video" && !!c.ai_summary && !locked;
+    // Universal description + link, shown to students for any content.
+    const descLink = (c.description || c.link_url) ? (
+      <div style={{ marginTop: 8 }}>
+        {c.description && <p className="muted" style={{ margin: 0, fontSize: ".85rem", whiteSpace: "pre-wrap" }}>{c.description}</p>}
+        {c.link_url && <a href={c.link_url} target="_blank" rel="noopener noreferrer" className="btn small secondary" style={{ marginTop: 6, display: "inline-block" }}>🔗 Open link</a>}
+      </div>
+    ) : null;
     // Unlocked videos open on their OWN focused page (only that class is shown);
     // students come back to this topic for the other classes.
     if (!locked && VIDEO_TYPES.has(s.type)) {
@@ -556,6 +563,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
           <div style={{ minWidth: 0 }}>
             <div className="sec-title">{s.title}</div>
             <div className="sec-type">{TYPE_LABEL[s.type] ?? s.type}{dur ? ` · ⏱️ ${dur}` : ""}</div>
+            {c.description && <div className="muted" style={{ fontSize: ".8rem", marginTop: 2, whiteSpace: "pre-wrap" }}>{c.description}</div>}
           </div>
           <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
             {rightLabel && <span style={{ fontSize: "1.12rem", fontWeight: 700, whiteSpace: "nowrap" }}>{rightLabel}</span>}
@@ -598,6 +606,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
               watermark={watermarkText}
               hasDownload={downloadBySection.has(s.id)}
             />
+            {descLink}
             {downloadBySection.has(s.id) && (
               <ClassDownload pv={downloadBySection.get(s.id)!} watermark={watermarkText} />
             )}

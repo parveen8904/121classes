@@ -131,3 +131,38 @@ export async function deleteAnnouncement(formData: FormData) {
   await supabase.from("announcements").delete().eq("id", id);
   revalidatePath("/admin/announcements");
 }
+
+// --- bulk actions: act on every ticked row at once -----------------------
+function bulkIds(formData: FormData): string[] {
+  return formData.getAll("ids").map(String).map((s) => s.trim()).filter(Boolean);
+}
+
+export async function bulkPublish(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const ids = bulkIds(formData);
+  if (ids.length) {
+    await createServiceClient()
+      .from("announcements")
+      .update({ is_published: true, published_at: new Date().toISOString() })
+      .in("id", ids);
+  }
+  revalidatePath("/admin/announcements");
+}
+
+export async function bulkUnpublish(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const ids = bulkIds(formData);
+  if (ids.length) {
+    await createServiceClient().from("announcements").update({ is_published: false }).in("id", ids);
+  }
+  revalidatePath("/admin/announcements");
+}
+
+export async function bulkDelete(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const ids = bulkIds(formData);
+  if (ids.length) {
+    await createServiceClient().from("announcements").delete().in("id", ids);
+  }
+  revalidatePath("/admin/announcements");
+}

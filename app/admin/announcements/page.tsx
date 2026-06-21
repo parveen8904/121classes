@@ -2,7 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../_components/DeleteButton";
 import AdminHero from "../_components/AdminHero";
 import { getSecret } from "@/lib/secrets";
-import { createAnnouncement, updateAnnouncement, deleteAnnouncement, saveGovtFeeds, fetchGovtFeedsNow, saveFeedKeywords, broadcastAnnouncement } from "./actions";
+import { createAnnouncement, updateAnnouncement, deleteAnnouncement, saveGovtFeeds, fetchGovtFeedsNow, saveFeedKeywords, broadcastAnnouncement, bulkPublish, bulkUnpublish, bulkDelete } from "./actions";
+import BulkBar from "./BulkBar";
 import SubmitButton from "@/app/components/SubmitButton";
 import { ANNOUNCEMENT_KINDS as KINDS, ANNOUNCEMENT_KIND_LABEL as KIND_LABEL } from "@/lib/announcements";
 
@@ -107,18 +108,24 @@ export default async function AnnouncementsPage({
       </div>
 
       <h2 className="admin-section-title">📋 All announcements ({(items ?? []).length})</h2>
-      <p className="muted" style={{ fontSize: ".9rem" }}>Tap one to open and edit it; it collapses again after you save.</p>
+      <p className="muted" style={{ fontSize: ".9rem" }}>Tick items to publish / unpublish / remove several at once, or tap one to open and edit it.</p>
+
+      {items && items.length > 0 && <BulkBar publish={bulkPublish} unpublish={bulkUnpublish} remove={bulkDelete} />}
+
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
         {items && items.length > 0 ? (
           items.map((a) => (
-            <details className="card" key={a.id}>
-              <summary style={{ cursor: "pointer", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                <strong>{a.title}</strong>
-                <span className="muted" style={{ fontSize: ".82rem" }}>
-                  {KIND_LABEL[a.kind] ?? a.kind} · {a.is_published ? "🟢 published" : "⚪ draft"}
-                  {a.broadcast_at ? " · 📢 broadcast" : ""}
-                </span>
-              </summary>
+            <div className="card" key={a.id}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <input type="checkbox" name="ids" value={a.id} form="bulkForm" aria-label="Select" style={{ width: 18, height: 18, flexShrink: 0 }} />
+                <details style={{ flex: 1, minWidth: 0 }}>
+                  <summary style={{ cursor: "pointer", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <strong>{a.title}</strong>
+                    <span className="muted" style={{ fontSize: ".82rem" }}>
+                      {KIND_LABEL[a.kind] ?? a.kind} · {a.is_published ? "🟢 published" : "⚪ draft"}
+                      {a.broadcast_at ? " · 📢 broadcast" : ""}
+                    </span>
+                  </summary>
               <form action={updateAnnouncement} style={{ marginTop: 12 }}>
                 <input type="hidden" name="id" value={a.id} />
                 <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 2fr" }}>
@@ -138,10 +145,7 @@ export default async function AnnouncementsPage({
                 <label className="remember" style={{ marginTop: 0 }}>
                   <input type="checkbox" name="is_published" defaultChecked={a.is_published} /> Published
                 </label>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <SubmitButton className="btn small" closeDetails>Save</SubmitButton>
-                  <DeleteButton action={deleteAnnouncement} id={a.id} message="Delete this announcement?" />
-                </div>
+                <SubmitButton className="btn small" closeDetails>Save changes</SubmitButton>
               </form>
               {/* Broadcast to students — separate form (can't nest forms). */}
               <form action={broadcastAnnouncement} style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
@@ -155,7 +159,10 @@ export default async function AnnouncementsPage({
                     : "Posts to the Telegram channel now and queues a push for the mobile app. Publish it first."}
                 </p>
               </form>
-            </details>
+                </details>
+                <DeleteButton action={deleteAnnouncement} id={a.id} label="🗑️ Remove" message="Remove this announcement? This cannot be undone." />
+              </div>
+            </div>
           ))
         ) : (
           <p className="muted">No announcements yet. Add the first one above.</p>

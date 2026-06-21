@@ -505,6 +505,31 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     if (s.type === "full_class_video") rightLabel = classNoLabel.get(s.id);
     else if (s.type === "revision_video" && c.class_no) rightLabel = `Revision ${c.class_no}`;
     const hasSummary = s.type === "full_class_video" && !!c.ai_summary && !locked;
+    // Unlocked videos open on their OWN focused page (only that class is shown);
+    // students come back to this topic for the other classes.
+    if (!locked && VIDEO_TYPES.has(s.type)) {
+      return (
+        <Link
+          key={s.id}
+          href={`/learn/section/${s.id}`}
+          className="sec-card"
+          style={{ display: "flex", alignItems: "center", gap: 14, color: "var(--text)" }}
+        >
+          <span className="sec-ic">{TYPE_ICON[s.type] ?? "📦"}</span>
+          <div style={{ minWidth: 0 }}>
+            <div className="sec-title">{s.title}</div>
+            <div className="sec-type">{TYPE_LABEL[s.type] ?? s.type}{dur ? ` · ⏱️ ${dur}` : ""}</div>
+          </div>
+          <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
+            {rightLabel && <span style={{ fontSize: "1.12rem", fontWeight: 700, whiteSpace: "nowrap" }}>{rightLabel}</span>}
+            {hasSummary && (
+              <span style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>📋 Summary</span>
+            )}
+            <span aria-hidden style={{ opacity: 0.6, fontWeight: 700 }}>▸</span>
+          </span>
+        </Link>
+      );
+    }
     return (
       <SectionCard
         key={s.id}

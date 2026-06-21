@@ -23,14 +23,12 @@ export default async function PortalHeader() {
   const links = [
     { href: "/dashboard", label: "🏠 Dashboard" },
     { href: "/live", label: "📡 Live" },
-    { href: "/learn/downloads", label: "📥 Downloads" },
     { href: "/planner", label: "🗓️ Planner" },
     { href: "/learn/performance", label: "📊 Performance" },
     { href: "/amendments", label: "📜 Amendments" },
     { href: "/career", label: "🎓 Career" },
+    { href: "/resources", label: "📚 Resources" },
     { href: "/inbox", label: "📥 Inbox" },
-    { href: "/community", label: "💬 Community" },
-    { href: "/books", label: "📦 Books" },
     { href: "/dashboard/profile", label: "👤 Profile" },
     ...(isAdmin ? [{ href: "/admin", label: "🛠️ Admin" }] : []),
   ];

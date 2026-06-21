@@ -393,6 +393,9 @@ export async function summarizeClass(transcript: string): Promise<ClassSummary |
   if (!transcript.trim()) return null;
   const sys =
     "You summarise a CA class for students using ONLY the transcript provided — never add outside knowledge. " +
+    "Cover ONLY the academic content — concepts, standards, sections, questions and homework. " +
+    "NEVER mention dates, days of the week, festivals, holidays, greetings, small talk, attendance, " +
+    "technical/audio issues, or any other noise; ignore all such chatter in the transcript. " +
     "Respond ONLY as compact JSON, no prose, no code fences: " +
     '{"summary":"<3-5 sentence overview of what this class covered>",' +
     '"questions_discussed":["<question/problem discussed in class 1>","..."],' +

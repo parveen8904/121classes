@@ -14,6 +14,11 @@ export async function addMyCourse(formData: FormData) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
+  // One level only: don't add a second, different course/level. To switch level,
+  // the student changes it in their Profile (which replaces the shelf).
+  const { data: myC } = await supabase.from("my_courses").select("course_id").eq("student_id", user.id);
+  const ids = (myC ?? []).map((r) => r.course_id as string);
+  if (ids.length > 0 && !ids.includes(courseId)) return;
   await supabase.from("my_courses").upsert(
     { student_id: user.id, course_id: courseId },
     { onConflict: "student_id,course_id" },
@@ -43,6 +48,13 @@ export async function addMySubject(formData: FormData) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
+
+  // Level restriction: a student stays on ONE course/level. If they already have
+  // a course on their shelf, they can only add subjects from THAT course — not
+  // from a different level (e.g. an Intermediate student can't add a Final subject).
+  const { data: myC } = await supabase.from("my_courses").select("course_id").eq("student_id", user.id);
+  const myCourseIds = (myC ?? []).map((r) => r.course_id as string);
+  if (myCourseIds.length > 0 && courseId && !myCourseIds.includes(courseId)) return;
   await supabase.from("my_subjects").upsert(
     { student_id: user.id, subject_id: subjectId },
     { onConflict: "student_id,subject_id" },

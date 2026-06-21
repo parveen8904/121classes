@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SubmitButton from "@/app/components/SubmitButton";
 import AttemptPicker from "@/app/components/AttemptPicker";
+import CourseSubjectsPicker from "./CourseSubjectsPicker";
 import { updateProfile } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,16 @@ export default async function ProfilePage({ searchParams }: { searchParams: { sa
     )
     .eq("id", user.id)
     .single();
+
+  // Course (level) + subjects the student has opted for.
+  const [{ data: courses }, { data: subjects }, { data: myCourseRows }, { data: mySubjectRows }] = await Promise.all([
+    supabase.from("courses").select("id, title").eq("is_published", true).order("order_index").order("title"),
+    supabase.from("subjects").select("id, title, course_id").order("order_index").order("title"),
+    supabase.from("my_courses").select("course_id").eq("student_id", user.id),
+    supabase.from("my_subjects").select("subject_id").eq("student_id", user.id),
+  ]);
+  const currentCourseId = (myCourseRows ?? [])[0]?.course_id ?? "";
+  const currentSubjectIds = (mySubjectRows ?? []).map((r) => r.subject_id as string);
 
   return (
     <main>
@@ -63,6 +74,16 @@ export default async function ProfilePage({ searchParams }: { searchParams: { sa
                 The attempt you&apos;re preparing for — pick the month and year.
               </p>
             </div>
+          </div>
+
+          <div className="card" style={{ marginTop: 16 }}>
+            <h3 style={{ marginBottom: 14 }}>Your course &amp; subjects</h3>
+            <CourseSubjectsPicker
+              courses={courses ?? []}
+              subjects={(subjects ?? []) as { id: string; title: string; course_id: string }[]}
+              currentCourseId={currentCourseId}
+              currentSubjectIds={currentSubjectIds}
+            />
           </div>
 
           <div className="card" style={{ marginTop: 16 }}>

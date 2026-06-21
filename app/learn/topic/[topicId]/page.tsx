@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { videoEmbedSrc } from "../../_lib/media";
+import { attemptRank } from "../../_lib/attempt";
 import { bunnyEmbedUrl } from "@/lib/bunny";
 import DoubtBox from "./DoubtBox";
 import ClassDownload from "./ClassDownload";
@@ -412,6 +413,28 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     .order("created_at", { ascending: false });
   const MAT_LABEL: Record<string, string> = { question_bank: "📚 Question bank", icai: "🏛️ ICAI material", rtp: "📄 RTP", past_papers: "🗂️ Past papers", book: "📕 Book", notes: "📝 Notes", revision_notes: "🔁 Revision notes", transcript: "🎙️ Transcript", other: "📄 Material" };
 
+  // Amendments & updates for THIS topic, filtered to the student's attempt.
+  const { data: amendRows } = await createServiceClient()
+    .from("amendments")
+    .select("id, title, body, discussion, bunny_video_id, bunny_drm, youtube_url, embed_url, notes_hand_url, valid_from_attempt, valid_to_attempt")
+    .eq("topic_id", topic.id)
+    .eq("is_published", true)
+    .order("order_index");
+  const myAttemptRank = attemptRank(wmProfile?.target_attempt ?? null);
+  const topicAmendments = (amendRows ?? []).filter((a) => {
+    if (myAttemptRank === null) return true;
+    const f = attemptRank(a.valid_from_attempt);
+    const e = attemptRank(a.valid_to_attempt);
+    if (f !== null && myAttemptRank < f) return false;
+    if (e !== null && myAttemptRank > e) return false;
+    return true;
+  }).map((a) => ({
+    ...a,
+    videoSrc: a.bunny_video_id
+      ? bunnyEmbedUrl(a.bunny_video_id, a.bunny_drm !== "off")
+      : videoEmbedSrc({ youtube_url: a.youtube_url ?? undefined, embed_url: a.embed_url ?? undefined } as Record<string, unknown>),
+  }));
+
   // Continuous class numbers across the whole subject (matching the course-page
   // ranges): topic 1 → Class 1..10, topic 2 → Class 11..15, etc. ≤100-min "part"
   // continuations (class_no like 7B) share the previous number with their suffix.
@@ -697,6 +720,37 @@ export default async function LearnTopic({ params }: { params: { topicId: string
                 <a key={mt.id} className="btn small secondary" href={mt.file_url as string} target="_blank" rel="noopener noreferrer">
                   {MAT_LABEL[mt.kind] ?? "📄"} {mt.title}
                 </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {topicAmendments.length > 0 && (
+          <div className="card" style={{ marginTop: 18, border: "2px solid var(--accent)" }}>
+            <h3 style={{ margin: "0 0 10px" }}>📜 Amendments &amp; updates for your attempt</h3>
+            <div style={{ display: "grid", gap: 12 }}>
+              {topicAmendments.map((a) => (
+                <div key={a.id} style={{ padding: "10px 12px", background: "var(--bg-soft)", borderRadius: 8 }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+                    <strong>{a.title}</strong>
+                    {a.valid_from_attempt && <span className="badge">📅 From {a.valid_from_attempt}{a.valid_to_attempt ? ` to ${a.valid_to_attempt}` : " onwards"}</span>}
+                  </div>
+                  {a.body && <p style={{ whiteSpace: "pre-wrap", margin: "6px 0 0" }}>{a.body}</p>}
+                  {a.videoSrc && (
+                    <div className="video-frame" style={{ marginTop: 10 }}>
+                      <iframe src={a.videoSrc} allow="encrypted-media; fullscreen" allowFullScreen title={a.title} />
+                    </div>
+                  )}
+                  {a.notes_hand_url && (
+                    <a className="btn small secondary" href={a.notes_hand_url} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8, display: "inline-block" }}>✍️ Handwritten notes (PDF)</a>
+                  )}
+                  {a.discussion && (
+                    <details style={{ marginTop: 8 }}>
+                      <summary style={{ cursor: "pointer", color: "var(--accent)" }}>🗣️ Discussion</summary>
+                      <p style={{ whiteSpace: "pre-wrap", marginTop: 6 }}>{a.discussion}</p>
+                    </details>
+                  )}
+                </div>
               ))}
             </div>
           </div>

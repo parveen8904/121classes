@@ -15,6 +15,9 @@ export default async function McqSection({
     .eq("section_id", section.id)
     .order("order_index");
 
+  const { data: cfgRow } = await supabase.from("sections").select("config").eq("id", section.id).maybeSingle();
+  const minutesPerQuestion = Number((cfgRow?.config as Record<string, unknown> | null)?.minutes_per_question) || 1;
+
   const questions = (data ?? []).map((q) => ({
     id: q.id,
     question: q.question,
@@ -23,7 +26,7 @@ export default async function McqSection({
 
   return (
     <main>
-      <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
+      <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 980 }}>
         <p className="crumb">
           <Link href={`/learn/topic/${section.topic_id}`}>← Back to topic</Link>
         </p>
@@ -35,7 +38,7 @@ export default async function McqSection({
 
         <div style={{ marginTop: 22 }}>
           {questions.length > 0 ? (
-            <McqForm sectionId={section.id} questions={questions} />
+            <McqForm sectionId={section.id} questions={questions} minutesPerQuestion={minutesPerQuestion} topicId={section.topic_id} />
           ) : (
             <div className="card">
               <p className="muted">📭 No questions added to this test yet.</p>

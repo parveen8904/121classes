@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { aiConfigured, gradeSubjective, answerDoubtFromMaterial, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getMcqExplanations } from "@/lib/answers";
@@ -18,12 +19,24 @@ export type McqReview = {
   isCorrect: boolean;
   whyCorrect: string;
   whyChosenWrong: string;
+  concept: string;
+  sourceClassNo: string;
+};
+
+export type McqResult = {
+  ok: boolean;
+  score?: number;
+  total?: number;
+  review?: McqReview[];
+  rank?: number; // leaderboard position; we never reveal how many took the test
+  weakConcepts?: string[];
+  classesToRedo?: string[];
 };
 
 export async function gradeMcqAttempt(input: {
   sectionId: string;
   answers: Record<string, number>;
-}): Promise<{ ok: boolean; score?: number; total?: number; review?: McqReview[] }> {
+}): Promise<McqResult> {
   const supabase = createClient();
   const {
     data: { user },
@@ -33,7 +46,7 @@ export async function gradeMcqAttempt(input: {
   // correct_index is fetched server-side only — never sent to the browser before grading.
   const { data: questions } = await supabase
     .from("mcq_questions")
-    .select("id, question, options, correct_index, order_index")
+    .select("id, question, options, correct_index, order_index, concept, source_class_no")
     .eq("section_id", input.sectionId)
     .order("order_index");
   const qs = questions ?? [];
@@ -43,10 +56,16 @@ export async function gradeMcqAttempt(input: {
 
   let score = 0;
   const review: McqReview[] = [];
+  const weak = new Set<string>();
+  const redo = new Set<string>();
   for (const q of qs) {
     const chosen = input.answers?.[q.id];
     const isCorrect = chosen === q.correct_index;
     if (isCorrect) score += 1;
+    else {
+      if (q.concept) weak.add(q.concept as string);
+      if (q.source_class_no) redo.add(String(q.source_class_no));
+    }
     const ex = explain.get(q.id);
     review.push({
       question: q.question,
@@ -56,6 +75,8 @@ export async function gradeMcqAttempt(input: {
       isCorrect,
       whyCorrect: ex?.wc ?? "",
       whyChosenWrong: !isCorrect && ex?.ww && typeof chosen === "number" ? ex.ww[chosen] ?? "" : "",
+      concept: (q.concept as string) ?? "",
+      sourceClassNo: q.source_class_no ? String(q.source_class_no) : "",
     });
   }
   const total = qs.length;
@@ -68,7 +89,34 @@ export async function gradeMcqAttempt(input: {
     answers: input.answers ?? {},
   });
 
-  return { ok: true, score, total, review };
+  // Leaderboard rank = how many students scored strictly higher (best attempt) + 1.
+  // We return only the rank number — never the total number of test-takers.
+  let rank = 1;
+  try {
+    const { data: all } = await createServiceClient()
+      .from("mcq_attempts")
+      .select("student_id, score")
+      .eq("section_id", input.sectionId);
+    const best = new Map<string, number>();
+    for (const a of all ?? []) {
+      const sid = a.student_id as string;
+      best.set(sid, Math.max(best.get(sid) ?? 0, (a.score as number) ?? 0));
+    }
+    const myBest = Math.max(best.get(user.id) ?? 0, score);
+    for (const [sid, s] of best) if (sid !== user.id && s > myBest) rank += 1;
+  } catch {
+    rank = 1;
+  }
+
+  return {
+    ok: true,
+    score,
+    total,
+    review,
+    rank,
+    weakConcepts: [...weak],
+    classesToRedo: [...redo].sort((a, b) => Number(a) - Number(b)),
+  };
 }
 
 export async function submitSubjective(input: {

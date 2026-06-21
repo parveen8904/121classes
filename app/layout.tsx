@@ -67,7 +67,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           phone={m.get("support_phone")}
           telegram={m.get("support_telegram")}
         />
-        <AskMe signedIn={signedIn} facultyWhatsapp={m.get("whatsapp_faculty") ?? undefined} />
+        <AskMe signedIn={signedIn} />
         <RegisterSW />
       </body>
     </html>

@@ -154,7 +154,7 @@ export async function notifyFaculty(title: string, body: string): Promise<void> 
     /* ignore */
   }
   try {
-    const facultyEmail = (await getSecret("FACULTY_EMAIL")) || "help@121caclasses.com";
+    const facultyEmail = (await getSecret("FACULTY_EMAIL")) || "mail@caparveensharma.com";
     await sendEmail(facultyEmail, `🔔 ${title}`, emailShell(title, body.replace(/\n/g, "<br/>")));
   } catch {
     /* ignore */

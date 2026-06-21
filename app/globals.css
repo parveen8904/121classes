@@ -170,6 +170,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
   0%, 100% { box-shadow: 0 8px 24px rgba(79,70,229,.40); }
   50% { box-shadow: 0 8px 32px rgba(124,58,237,.75); }
 }
+.askdoubts-flash { animation: askdoubtsFlash 1.8s ease-in-out infinite; }
+.askdoubts-flash:hover { filter: brightness(1.07); transform: translateY(-1px); }
+@keyframes askdoubtsFlash {
+  0%, 100% { box-shadow: 0 4px 14px rgba(124,58,237,.35); transform: scale(1); }
+  50% { box-shadow: 0 8px 26px rgba(124,58,237,.75); transform: scale(1.03); }
+}
 .askme-overlay {
   position: fixed; inset: 0; z-index: 210; display: flex; align-items: center; justify-content: center;
   background: rgba(2,6,23,.6); padding: 20px;

@@ -69,6 +69,7 @@ export async function getRepositoryContext(
       if (c.important_questions) parts.push(`Important questions: ${c.important_questions}`);
       if (c.homework) parts.push(`Homework: ${c.homework}`);
       if (c.transcript) parts.push(`Transcript:\n${c.transcript}`);
+      if (c.ai_pdf_text) parts.push(`PDF content:\n${c.ai_pdf_text}`);
       if (parts.length) lines.push(`— ${s.title} —\n${parts.join("\n")}`);
     }
     if (lines.length) chunks.push({ subject_id: t.subject_id, topic_id: t.id, text: `${head}\n${lines.join("\n")}` });

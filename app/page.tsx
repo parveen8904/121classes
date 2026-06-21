@@ -666,7 +666,7 @@ export default async function Home() {
             <h3>Reach us</h3>
             <p style={{ marginTop: 10 }}>📧 <a className="grad" href="mailto:mail@caparveensharma.com">mail@caparveensharma.com</a></p>
             <p style={{ marginTop: 8 }}>📍 W 6/30, DLF Phase 3, Gurugram</p>
-            <p style={{ marginTop: 8 }}>🌐 121caclasses.com</p>
+            <p style={{ marginTop: 8 }}>🌐 caparveensharma.com</p>
             <p style={{ marginTop: 16 }}>
               <a className="btn" href="mailto:mail@caparveensharma.com?subject=Enquiry%20from%20caparveensharma.com">Email us</a>
             </p>

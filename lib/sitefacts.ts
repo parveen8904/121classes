@@ -45,7 +45,7 @@ export async function getSiteFacts(): Promise<string> {
     lines.push("UPCOMING LIVE CLASSES: none scheduled right now — check the Calendar page; tap “Notify me” to be told when the next one is set.");
   }
 
-  lines.push("CONTACT: help@121caclasses.com · Office: W 6/30, DLF Phase 3, Gurugram.");
+  lines.push("CONTACT: mail@caparveensharma.com · Office: W 6/30, DLF Phase 3, Gurugram.");
   if (s.get("support_telegram")) lines.push("TELEGRAM CHANNEL: " + s.get("support_telegram"));
   if (s.get("support_whatsapp")) lines.push("WHATSAPP: " + s.get("support_whatsapp"));
   lines.push("HOW IT WORKS: students sign up with email + password; courses have Bronze (free)/Silver/Gold plans; classes can be downloaded & watched offline in the desktop app; tests, doubts and notes are inside each topic.");

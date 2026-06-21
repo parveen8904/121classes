@@ -4,16 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { topicVisible } from "../_lib/attempt";
 import { setAutoRenew } from "./actions";
 import { addMySubject, removeMySubject } from "../mycourses";
+import AskDoubts from "./AskDoubts";
 
 export const dynamic = "force-dynamic";
 
 type SubjectFacultyRow = { faculties: { full_name: string; phone: string | null; email: string | null } | null };
-
-// wa.me needs full international digits; assume +91 for bare 10-digit numbers.
-function waHref(phone: string): string {
-  const d = phone.replace(/\D/g, "");
-  return `https://wa.me/${d.length === 10 ? `91${d}` : d}`;
-}
 
 function fmtDate(s: string | null): string {
   if (!s) return "—";
@@ -242,20 +237,18 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                       </form>
                     )}
                   </div>
-                  {facultyContacts.length > 0 && (
-                    <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-                      {facultyContacts.map((f, i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <span style={{ fontWeight: 600 }}>👩‍🏫 {f.full_name}</span>
-                          {f.phone && <span className="muted" style={{ fontSize: ".85rem" }}>📱 {f.phone}</span>}
-                          {f.phone && <a className="btn small" href={waHref(f.phone)} target="_blank" rel="noopener noreferrer" style={{ background: "#25D366", color: "#fff" }}>💬 WhatsApp</a>}
-                          {f.email && <span className="muted" style={{ fontSize: ".85rem" }}>✉️ {f.email}</span>}
-                          {f.email && <a className="btn small secondary" href={`mailto:${f.email}`}>Email</a>}
-                        </div>
-                      ))}
-                      <p className="muted" style={{ fontSize: ".8rem", margin: 0 }}>🙏 Please WhatsApp your message to the faculty — kindly avoid calling.</p>
-                    </div>
-                  )}
+                  {/* Ask your doubts — AI answers instantly; faculty only if not satisfied. */}
+                  <div style={{ marginTop: 12 }}>
+                    <AskDoubts
+                      subjectId={s.id}
+                      subjectTitle={s.title}
+                      facultyPhone={facultyContacts.find((f) => f.phone)?.phone ?? null}
+                      facultyEmail={facultyContacts.find((f) => f.email)?.email ?? null}
+                    />
+                    <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0 0" }}>
+                      ⚡ Instant reply from your class material. Not satisfied? Send it to the faculty on WhatsApp or email.
+                    </p>
+                  </div>
                 </div>
                 {mySubjIds.has(s.id) && (s as { telegram_group_url?: string | null }).telegram_group_url && (
                   <a

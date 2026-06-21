@@ -247,12 +247,24 @@ export async function summarizeClassSection(formData: FormData) {
   redirect(`/admin/topics/${topicId}?summary=ok`);
 }
 
+// Auto-index content PDFs for the AI repository — attached PDFs + typed notes,
+// but NOT handwritten notes. Extracted once on save into config.ai_pdf_text.
+async function extractContentPdfs(cfg: Record<string, unknown>): Promise<string> {
+  const urls = [cfg.pdf_url, cfg.notes_typed_url].map((u) => String(u ?? "")).filter(Boolean);
+  if (!urls.length) return "";
+  const texts = await Promise.all(urls.map((u) => extractPdfText(u)));
+  return texts.filter(Boolean).join("\n\n").slice(0, 20000);
+}
+
 export async function createSection(formData: FormData) {
   const topicId = str(formData.get("topicId"));
   const title = str(formData.get("title"));
   const type = str(formData.get("type"));
   if (!topicId || !title || !type) return;
   const supabase = createClient();
+  const config = readConfig(formData) as Record<string, unknown>;
+  const pdfText = await extractContentPdfs(config);
+  if (pdfText) config.ai_pdf_text = pdfText;
   const { data: created } = await supabase
     .from("sections")
     .insert({
@@ -262,7 +274,7 @@ export async function createSection(formData: FormData) {
       group_id: str(formData.get("group_id")) || null,
       order_index: num(formData.get("order_index")),
       min_plan: readMinPlan(formData),
-      config: readConfig(formData),
+      config,
       is_published: formData.get("is_published") === "on",
     })
     .select("id")
@@ -290,6 +302,10 @@ export async function updateSection(formData: FormData) {
   for (const k of Object.keys(prevCfg)) {
     if (k.startsWith("ai_") || k === "class_no" || k === "topic_class_no" || k === "class_number") preserved[k] = prevCfg[k];
   }
+  const config = { ...preserved, ...readConfig(formData) } as Record<string, unknown>;
+  const pdfText = await extractContentPdfs(config);
+  if (pdfText) config.ai_pdf_text = pdfText;
+  else delete config.ai_pdf_text;
   await supabase
     .from("sections")
     .update({
@@ -298,7 +314,7 @@ export async function updateSection(formData: FormData) {
       group_id: str(formData.get("group_id")) || null,
       order_index: num(formData.get("order_index")),
       min_plan: readMinPlan(formData),
-      config: { ...preserved, ...readConfig(formData) },
+      config,
       is_published: formData.get("is_published") === "on",
     })
     .eq("id", id);

@@ -132,6 +132,15 @@ export async function deleteAnnouncement(formData: FormData) {
   revalidatePath("/admin/announcements");
 }
 
+// Set just the category on one row (the always-visible inline dropdown).
+export async function setAnnouncementCategory(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("announcements").update({ kind: readKind(formData) }).eq("id", id);
+  revalidatePath("/admin/announcements");
+}
+
 // --- bulk actions: act on every ticked row at once -----------------------
 function bulkIds(formData: FormData): string[] {
   return formData.getAll("ids").map(String).map((s) => s.trim()).filter(Boolean);

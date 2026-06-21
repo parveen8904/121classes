@@ -234,7 +234,11 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
                     <span className="badge">{announcementKindLabel(a.kind)}</span>
                     <strong>{a.title}</strong>
                   </div>
-                  {a.body && <p className="muted" style={{ fontSize: ".9rem", marginTop: 6 }}>{a.body}</p>}
+                  {a.body && (
+                    <p className="muted" style={{ fontSize: ".9rem", marginTop: 6, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      {a.body}
+                    </p>
+                  )}
                   {a.link_url && (
                     <a href={a.link_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".88rem" }}>
                       Read more →

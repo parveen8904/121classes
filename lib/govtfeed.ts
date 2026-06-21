@@ -14,9 +14,10 @@ export type FeedItem = { title: string; link: string; body: string; kind: string
 function decode(s: string): string {
   return s
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">") // un-escape any escaped tags first…
+    .replace(/<[^>]+>/g, " ")                    // …then strip ALL tags (real + previously-escaped)
+    .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/https?:\/\/\S+/g, " ")             // drop stray raw URLs (Google-News blobs)
     .replace(/\s+/g, " ")
     .trim();
 }

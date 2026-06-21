@@ -2,8 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../_components/DeleteButton";
 import AdminHero from "../_components/AdminHero";
 import { getSecret } from "@/lib/secrets";
-import { createAnnouncement, updateAnnouncement, deleteAnnouncement, saveGovtFeeds, fetchGovtFeedsNow, saveFeedKeywords, broadcastAnnouncement, bulkPublish, bulkUnpublish, bulkDelete } from "./actions";
+import { createAnnouncement, updateAnnouncement, deleteAnnouncement, saveGovtFeeds, fetchGovtFeedsNow, saveFeedKeywords, broadcastAnnouncement, bulkPublish, bulkUnpublish, bulkDelete, setAnnouncementCategory } from "./actions";
 import BulkBar from "./BulkBar";
+import CategoryQuickSelect from "./CategoryQuickSelect";
 import SubmitButton from "@/app/components/SubmitButton";
 import { ANNOUNCEMENT_KINDS as KINDS, ANNOUNCEMENT_KIND_LABEL as KIND_LABEL } from "@/lib/announcements";
 
@@ -160,6 +161,10 @@ export default async function AnnouncementsPage({
                 </p>
               </form>
                 </details>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8, paddingLeft: 28 }}>
+                <span className="muted" style={{ fontSize: ".8rem" }}>Category:</span>
+                <CategoryQuickSelect id={a.id} value={a.kind} action={setAnnouncementCategory} />
                 <DeleteButton action={deleteAnnouncement} id={a.id} label="🗑️ Remove" message="Remove this announcement? This cannot be undone." />
               </div>
             </div>

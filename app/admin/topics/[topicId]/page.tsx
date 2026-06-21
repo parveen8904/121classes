@@ -210,8 +210,8 @@ export default async function TopicDetail({
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   {s.type === "mcq_test" && (
-                    <Link className="btn small secondary" href={`/admin/mcq/${s.id}`}>
-                      Manage MCQs →
+                    <Link className="btn small" href={`/admin/mcq/${s.id}`}>
+                      🧠 Add / generate questions →
                     </Link>
                   )}
                   {s.type === "subjective_test" && (

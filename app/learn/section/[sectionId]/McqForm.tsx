@@ -106,6 +106,10 @@ export default function McqForm({
               </ul>
             </div>
           )}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+            <a className="btn small secondary" href={`/learn/section/${sectionId}/paper`} target="_blank" rel="noopener noreferrer">⬇️ Question paper (PDF)</a>
+            <a className="btn small secondary" href={`/learn/section/${sectionId}/answers`} target="_blank" rel="noopener noreferrer">⬇️ Answer key + explanations (PDF)</a>
+          </div>
         </div>
 
         {(result.review ?? []).map((r, i) => (

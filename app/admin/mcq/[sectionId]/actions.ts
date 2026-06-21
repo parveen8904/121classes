@@ -205,9 +205,11 @@ export async function generateChapterTest(formData: FormData) {
   const sectionId = str(formData.get("section_id"));
   if (!sectionId) return;
   const replace = formData.get("replace") === "on";
+  // Each topic test has 10–30 questions; admin chooses the number (default 20).
+  const target = Math.max(10, Math.min(30, num(formData.get("count")) || 20));
   const supabase = createClient();
 
-  const { data: sec } = await supabase.from("sections").select("topic_id, topics(title)").eq("id", sectionId).maybeSingle();
+  const { data: sec } = await supabase.from("sections").select("topic_id, topics(title), config").eq("id", sectionId).maybeSingle();
   const topicId = (sec as { topic_id?: string } | null)?.topic_id;
   const topicTitle = (sec as { topics?: { title?: string } | null } | null)?.topics?.title ?? "";
   if (!topicId) return;
@@ -224,13 +226,11 @@ export async function generateChapterTest(formData: FormData) {
     .filter((cf) => String(cf.ai_summary ?? "").trim() || String(cf.transcript ?? "").trim());
   if (!blocks.length) return;
 
-  if (replace) await supabase.from("mcq_questions").delete().eq("section_id", sectionId);
-  let base = 0;
-  if (!replace) {
-    const { count } = await supabase.from("mcq_questions").select("id", { count: "exact", head: true }).eq("section_id", sectionId);
-    base = count ?? 0;
-  }
-
+  // Spread `target` questions across the classes (a few per class), then pick
+  // round-robin so every class is represented up to the chosen total.
+  const perClass = Math.max(1, Math.min(8, Math.ceil(target / blocks.length)));
+  type Item = Awaited<ReturnType<typeof generateMcqs>> extends (infer U)[] | null ? U : never;
+  const genByClass: { classNo: string; items: NonNullable<Item>[] }[] = [];
   for (const cf of blocks) {
     const classNo = String(cf.class_no ?? cf.topic_class_no ?? "");
     const ctx = [
@@ -240,32 +240,56 @@ export async function generateChapterTest(formData: FormData) {
       !cf.ai_summary && cf.transcript ? String(cf.transcript).slice(0, 12000) : "",
     ].filter(Boolean).join("\n\n");
     if (ctx.length < 30) continue;
-
-    const items = await generateMcqs(ctx, 2, topicTitle || undefined);
-    if (!items || !items.length) continue;
-
-    const { data: inserted } = await supabase
-      .from("mcq_questions")
-      .insert(
-        items.map((q, i) => ({
-          section_id: sectionId,
-          question: q.question,
-          options: q.options,
-          correct_index: q.correct_index,
-          order_index: base + i,
-          concept: q.concept || null,
-          source_class_no: classNo || null,
-        })),
-      )
-      .select("id, order_index");
-
-    const byOrder = new Map(items.map((q, i) => [base + i, q]));
-    for (const r of inserted ?? []) {
-      const it = byOrder.get(r.order_index);
-      if (it) await saveMcqExplanation(r.id, it.why_correct, it.why_wrong);
-    }
-    base += items.length;
+    const items = await generateMcqs(ctx, perClass, topicTitle || undefined);
+    if (items && items.length) genByClass.push({ classNo, items: items as NonNullable<Item>[] });
   }
+  if (!genByClass.length) return;
+
+  const selected: { classNo: string; q: NonNullable<Item> }[] = [];
+  for (let i = 0; selected.length < target; i++) {
+    let added = false;
+    for (const g of genByClass) {
+      if (g.items[i]) {
+        selected.push({ classNo: g.classNo, q: g.items[i] });
+        added = true;
+        if (selected.length >= target) break;
+      }
+    }
+    if (!added) break;
+  }
+  if (!selected.length) return;
+
+  if (replace) await supabase.from("mcq_questions").delete().eq("section_id", sectionId);
+  let base = 0;
+  if (!replace) {
+    const { count } = await supabase.from("mcq_questions").select("id", { count: "exact", head: true }).eq("section_id", sectionId);
+    base = count ?? 0;
+  }
+
+  const { data: inserted } = await supabase
+    .from("mcq_questions")
+    .insert(
+      selected.map((s, i) => ({
+        section_id: sectionId,
+        question: s.q.question,
+        options: s.q.options,
+        correct_index: s.q.correct_index,
+        order_index: base + i,
+        concept: s.q.concept || null,
+        source_class_no: s.classNo || null,
+      })),
+    )
+    .select("id, order_index");
+
+  const byOrder = new Map(selected.map((s, i) => [base + i, s.q]));
+  for (const r of inserted ?? []) {
+    const it = byOrder.get(r.order_index);
+    if (it) await saveMcqExplanation(r.id, it.why_correct, it.why_wrong);
+  }
+
+  // Remember the chosen count on the section.
+  const cfg = ((sec as { config?: Record<string, unknown> } | null)?.config ?? {}) as Record<string, unknown>;
+  await supabase.from("sections").update({ config: { ...cfg, question_count: target } }).eq("id", sectionId);
   revalidatePath(`/admin/mcq/${sectionId}`);
 }
 

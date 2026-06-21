@@ -17,6 +17,7 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
     .maybeSingle();
   if (!section) notFound();
   const refPdf = ((section.config ?? {}) as Record<string, string>).pdf_url ?? "";
+  const qCount = Number((section.config as Record<string, unknown> | null)?.question_count) || 20;
 
   const { data: questions } = await supabase
     .from("mcq_questions")
@@ -47,16 +48,18 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
         <div className="form-card" style={{ marginTop: 18 }}>
           <h3>🤖 Generate the chapter test — 2 MCQs per class</h3>
           <p className="muted" style={{ fontSize: ".82rem", marginTop: 0, marginBottom: 10 }}>
-            Reads every published class in this topic and writes <strong>2 questions per class</strong> (with the correct/wrong
-            reasons, concept and source class), saving them here. Run <strong>once</strong> — students take the saved test with
-            no further AI. Use the tick to re-generate from scratch.
+            Reads every published class in this topic and writes questions across all classes (with the correct/wrong reasons,
+            concept and source class), saving them here. Run <strong>once</strong> — students take the saved test with no further
+            AI. Use the tick to re-generate from scratch.
           </p>
           <form action={generateChapterTest}>
             <input type="hidden" name="section_id" value={section.id} />
-            <label className="remember" style={{ marginTop: 0 }}>
+            <label htmlFor="q-count">Number of questions (10–30)</label>
+            <input id="q-count" name="count" type="number" min={10} max={30} defaultValue={qCount} style={{ maxWidth: 140 }} />
+            <label className="remember" style={{ marginTop: 8 }}>
               <input type="checkbox" name="replace" /> ♻️ Replace all existing questions (otherwise add to them)
             </label>
-            <SubmitButton className="btn" savedLabel="✓ Generated">Generate 2 per class</SubmitButton>
+            <SubmitButton className="btn" savedLabel="✓ Generated">Generate questions</SubmitButton>
           </form>
         </div>
       )}
@@ -152,6 +155,13 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
           </button>
         </form>
       </div>
+
+      {(questions ?? []).length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 18 }}>
+          <a className="btn small secondary" href={`/learn/section/${section.id}/paper`} target="_blank" rel="noopener noreferrer">⬇️ Question paper (PDF)</a>
+          <a className="btn small secondary" href={`/learn/section/${section.id}/answers`} target="_blank" rel="noopener noreferrer">⬇️ Answer key + explanations (PDF)</a>
+        </div>
+      )}
 
       <h2 className="admin-section-title">📋 Questions ({(questions ?? []).length})</h2>
       <p className="muted" style={{ fontSize: ".9rem" }}>Tap a question to review the correct/wrong answers + explanations and edit anything.</p>

@@ -27,7 +27,11 @@ function reportEmailHtml(res: McqResult, title: string, link: string): string {
     parts.push(li(`Q${i + 1} ${mark} ${esc(r.question)} — Answer: ${esc(correct)}${why ? ` — ${esc(why)}` : ""}`));
   }
   parts.push(`</ul>`);
-  parts.push(`<p><a href="${link}">View / print your full report</a></p>`);
+  parts.push(
+    `<p><a href="${link}">View your full report</a> &nbsp;•&nbsp; ` +
+      `<a href="${link}/paper">⬇️ Question paper (PDF)</a> &nbsp;•&nbsp; ` +
+      `<a href="${link}/answers">⬇️ Answer key (PDF)</a></p>`,
+  );
   return emailShell(`📝 Your test report — ${title}`, parts.join(""));
 }
 

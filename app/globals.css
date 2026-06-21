@@ -160,11 +160,16 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 /* "Ask me" floating widget (every page) */
 .askme-fab {
   position: fixed; left: 18px; bottom: 18px; z-index: 120;
-  background: var(--accent); color: #fff;
-  border: none; border-radius: 999px; padding: 11px 18px; font-weight: 700; font-size: .9rem;
-  cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.2);
+  background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff;
+  border: none; border-radius: 999px; padding: 14px 22px; font-weight: 800; font-size: 1rem;
+  cursor: pointer; box-shadow: 0 8px 24px rgba(79,70,229,.45);
+  animation: askmePulse 2.4s ease-in-out infinite;
 }
-.askme-fab:hover { filter: brightness(1.05); }
+.askme-fab:hover { filter: brightness(1.06); transform: translateY(-1px); }
+@keyframes askmePulse {
+  0%, 100% { box-shadow: 0 8px 24px rgba(79,70,229,.40); }
+  50% { box-shadow: 0 8px 32px rgba(124,58,237,.75); }
+}
 .askme-overlay {
   position: fixed; inset: 0; z-index: 210; display: flex; align-items: center; justify-content: center;
   background: rgba(2,6,23,.6); padding: 20px;

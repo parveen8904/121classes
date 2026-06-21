@@ -45,13 +45,6 @@ const whatsNew = [
   { tag: "Live class", title: "Weekly doubt-solving webinar", desc: "Join the live session every weekend with CA Parveen Sharma — recordings posted after." },
 ];
 
-const resources = [
-  { icon: "🗒️", title: "Free Notes", desc: "Topic summaries and quick-revision sheets." },
-  { icon: "🧮", title: "Question Banks", desc: "Chapter-wise practice with model answers." },
-  { icon: "🗂️", title: "Past Papers", desc: "Previous attempts with marks and weightage." },
-  { icon: "🌐", title: "Industry & Macro", desc: "What is happening in the economy, explained simply." },
-];
-
 const testimonials = [
   { who: "A. Sharma", role: "CA Inter student", quote: "Parveen Sir&apos;s teaching and the personalized attention made all the difference." },
   { who: "R. Mehta", role: "CA Foundation", quote: "Clear, no-nonsense classes and the AI checking gave me feedback fast." },
@@ -516,24 +509,6 @@ export default async function Home() {
             See the step-by-step guide →
           </Link>
         </p>
-      </section>
-
-      {/* RESOURCES */}
-      <section className="section" id="resources">
-        <div className="section-head">
-          <div className="eyebrow">Resources</div>
-          <h2>Free resources</h2>
-          <p>Notes, question banks, past papers and what is happening in the world.</p>
-        </div>
-        <div className="grid grid-4">
-          {resources.map((r) => (
-            <div className="tile" key={r.title}>
-              <div className="ic">{r.icon}</div>
-              <h3>{r.title}</h3>
-              <p>{r.desc}</p>
-            </div>
-          ))}
-        </div>
       </section>
 
       {/* RESULTS / TOPPERS */}

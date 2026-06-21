@@ -17,7 +17,7 @@ const getSupportLinks = unstable_cache(
     const { data } = await createServiceClient()
       .from("site_settings")
       .select("key, value")
-      .in("key", ["support_whatsapp", "support_phone", "support_telegram"]);
+      .in("key", ["support_whatsapp", "support_phone", "support_telegram", "whatsapp_faculty"]);
     return Object.fromEntries((data ?? []).map((r) => [r.key, r.value as string | null]));
   },
   ["layout-support-links"],
@@ -67,7 +67,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           phone={m.get("support_phone")}
           telegram={m.get("support_telegram")}
         />
-        <AskMe signedIn={signedIn} />
+        <AskMe signedIn={signedIn} facultyWhatsapp={m.get("whatsapp_faculty") ?? undefined} />
         <RegisterSW />
       </body>
     </html>

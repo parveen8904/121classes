@@ -8,7 +8,16 @@ import { askQuestion } from "@/app/actions/engagement";
 // questions (faculty, schedule, next live class, contact) from site facts, and
 // CA subject doubts from the AI repository. Anything it can't answer goes to
 // faculty (and the student is told).
-export default function AskMe({ signedIn }: { signedIn?: boolean }) {
+// Build a wa.me link from a bare number or URL (assume +91 for a bare 10-digit).
+function waHref(v?: string): string | null {
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) return v;
+  const d = v.replace(/\D/g, "");
+  if (!d) return null;
+  return `https://wa.me/${d.length === 10 ? `91${d}` : d}`;
+}
+
+export default function AskMe({ signedIn, facultyWhatsapp }: { signedIn?: boolean; facultyWhatsapp?: string }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [email, setEmail] = useState("");
@@ -41,8 +50,8 @@ export default function AskMe({ signedIn }: { signedIn?: boolean }) {
 
   return (
     <>
-      <button className="askme-fab" onClick={() => setOpen(true)} aria-label="Ask me a question">
-        💬 Ask me
+      <button className="askme-fab" onClick={() => setOpen(true)} aria-label="Ask the AI a question">
+        🤖 Ask AI — instant answer
       </button>
 
       {open && (
@@ -56,9 +65,18 @@ export default function AskMe({ signedIn }: { signedIn?: boolean }) {
                 {answer ? (
                   <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{answer}</p>
                 ) : (
-                  <p className="muted" style={{ lineHeight: 1.6 }}>
-                    ✅ Good question! I&apos;ve sent it to CA Parveen Sharma&apos;s team and they&apos;ll get back to you{email || signedIn ? "" : " (add your email next time so we can reply)"} soon.
-                  </p>
+                  <>
+                    <p className="muted" style={{ lineHeight: 1.6 }}>
+                      ✅ Good question! I&apos;ve sent it to CA Parveen Sharma&apos;s team and they&apos;ll get back to you{email || signedIn ? "" : " (add your email next time so we can reply)"} soon.
+                    </p>
+                    {/* Faculty contact appears ONLY here — when the AI couldn't answer. */}
+                    {waHref(facultyWhatsapp) && (
+                      <a className="btn block" href={waHref(facultyWhatsapp)!} target="_blank" rel="noopener noreferrer"
+                        style={{ background: "#25D366", color: "#fff", marginTop: 10 }}>
+                        💬 WhatsApp the faculty about this
+                      </a>
+                    )}
+                  </>
                 )}
                 <p className="muted" style={{ fontSize: ".75rem", marginTop: 12 }}>
                   AI assistant · guided by CA Parveen Sharma&apos;s team. Double-check anything important.

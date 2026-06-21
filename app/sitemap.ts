@@ -9,7 +9,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/test-series",
     "/results",
     "/books",
-    "/resources",
     "/career",
     "/privacy",
     "/terms",

@@ -27,7 +27,6 @@ export default async function PortalHeader() {
     { href: "/learn/performance", label: "📊 Performance" },
     { href: "/amendments", label: "📜 Amendments" },
     { href: "/career", label: "🎓 Career" },
-    { href: "/resources", label: "📚 Resources" },
     { href: "/inbox", label: "📥 Inbox" },
     { href: "/dashboard/profile", label: "👤 Profile" },
     ...(isAdmin ? [{ href: "/admin", label: "🛠️ Admin" }] : []),

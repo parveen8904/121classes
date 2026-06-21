@@ -56,7 +56,6 @@ export default async function SiteFooter() {
           <h4>Explore</h4>
           <Link href="/#courses">Courses</Link>
           <Link href="/#books">Books</Link>
-          <Link href="/#resources">Resources</Link>
           <Link href="/#whats-new">What&apos;s New</Link>
           <Link href="/#team">Team</Link>
         </div>

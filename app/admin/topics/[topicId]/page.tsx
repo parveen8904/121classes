@@ -164,23 +164,26 @@ export default async function TopicDetail({
       </p>
       <div style={{ display: "grid", gap: 8 }}>
         {groupList.map((g, i) => (
-          <div className="card" key={g.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <form action={renameTopicGroup} style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, minWidth: 220 }}>
-              <input type="hidden" name="id" value={g.id} />
-              <input type="hidden" name="topicId" value={topic.id} />
-              <input name="name" defaultValue={g.name} style={{ flex: 1 }} />
-              <SubmitButton className="btn small" savedLabel="✓">Rename</SubmitButton>
-            </form>
-            <form action={moveTopicGroup} style={{ display: "inline" }}>
-              <input type="hidden" name="id" value={g.id} /><input type="hidden" name="topicId" value={topic.id} /><input type="hidden" name="dir" value="up" />
-              <button className="btn small secondary" type="submit" disabled={i === 0}>↑</button>
-            </form>
-            <form action={moveTopicGroup} style={{ display: "inline" }}>
-              <input type="hidden" name="id" value={g.id} /><input type="hidden" name="topicId" value={topic.id} /><input type="hidden" name="dir" value="down" />
-              <button className="btn small secondary" type="submit" disabled={i === groupList.length - 1}>↓</button>
-            </form>
-            <DeleteButton action={deleteTopicGroup} id={g.id} parentId={topic.id} message="Delete this section? Its content stays but becomes Unsorted." />
-          </div>
+          <details className="card" key={g.id}>
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>📚 {g.name}</summary>
+            <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <form action={renameTopicGroup} style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, minWidth: 220 }}>
+                <input type="hidden" name="id" value={g.id} />
+                <input type="hidden" name="topicId" value={topic.id} />
+                <input name="name" defaultValue={g.name} style={{ flex: 1 }} />
+                <SubmitButton className="btn small" savedLabel="✓" closeDetails>Rename</SubmitButton>
+              </form>
+              <form action={moveTopicGroup} style={{ display: "inline" }}>
+                <input type="hidden" name="id" value={g.id} /><input type="hidden" name="topicId" value={topic.id} /><input type="hidden" name="dir" value="up" />
+                <button className="btn small secondary" type="submit" disabled={i === 0}>↑</button>
+              </form>
+              <form action={moveTopicGroup} style={{ display: "inline" }}>
+                <input type="hidden" name="id" value={g.id} /><input type="hidden" name="topicId" value={topic.id} /><input type="hidden" name="dir" value="down" />
+                <button className="btn small secondary" type="submit" disabled={i === groupList.length - 1}>↓</button>
+              </form>
+              <DeleteButton action={deleteTopicGroup} id={g.id} parentId={topic.id} message="Delete this section? Its content stays but becomes Unsorted." />
+            </div>
+          </details>
         ))}
         {groupList.length === 0 && <p className="muted" style={{ fontSize: ".85rem", margin: 0 }}>No sections yet — create your first one below.</p>}
       </div>

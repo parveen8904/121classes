@@ -85,7 +85,7 @@ export default async function Home() {
     .limit(6);
   const { data: liveUpcoming } = await supabase
     .from("live_sessions")
-    .select("id, title, audience, starts_at")
+    .select("id, title, audience, starts_at, faculties(full_name)")
     .eq("is_published", true)
     .gte("starts_at", new Date(Date.now() - 2 * 3600 * 1000).toISOString())
     .lte("starts_at", new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString())
@@ -455,10 +455,11 @@ export default async function Home() {
                 <div className="ic">📡</div>
                 <h3>{s.title}</h3>
                 <p className="muted">
-                  {s.audience ? s.audience + " · " : ""}
                   {s.starts_at
                     ? new Date(s.starts_at).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })
                     : "Time to be announced"}
+                  {(s as { faculties?: { full_name?: string } | null }).faculties?.full_name ? ` · by ${(s as { faculties?: { full_name?: string } }).faculties!.full_name}` : ""}
+                  {s.audience ? ` · ${s.audience}` : ""}
                 </p>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
                   <Link className="btn small secondary" href="/live">Details / Join</Link>

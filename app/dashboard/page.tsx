@@ -84,12 +84,14 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
   const liveToday: LiveToday[] = [];
   const { data: liveSessions } = await supabase
     .from("live_sessions")
-    .select("title, audience, starts_at, join_url")
+    .select("title, audience, starts_at, join_url, faculties(full_name)")
     .eq("is_published", true)
     .gte("starts_at", dayStart.toISOString())
     .lte("starts_at", dayEnd.toISOString());
   for (const s of liveSessions ?? []) {
-    liveToday.push({ title: s.title as string, whenISO: s.starts_at as string, joinUrl: (s.join_url as string) ?? null, where: (s.audience as string) ?? null, href: "/live" });
+    const fac = (s as { faculties?: { full_name?: string } | null }).faculties?.full_name;
+    const where = [fac ? `by ${fac}` : null, (s.audience as string) || null].filter(Boolean).join(" · ") || null;
+    liveToday.push({ title: s.title as string, whenISO: s.starts_at as string, joinUrl: (s.join_url as string) ?? null, where, href: "/live" });
   }
   if (optedSubjectIds.size > 0) {
     const { data: optTopics } = await supabase.from("topics").select("id, title").in("subject_id", [...optedSubjectIds]);

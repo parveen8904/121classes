@@ -16,6 +16,7 @@ export async function createLiveSession(formData: FormData) {
     title,
     description: nullable(formData.get("description")),
     audience: nullable(formData.get("audience")),
+    faculty_id: str(formData.get("faculty_id")) || null,
     starts_at: str(formData.get("starts_at")) ? new Date(str(formData.get("starts_at"))).toISOString() : null,
     duration_mins: num(formData.get("duration_mins"), 60),
     join_url: nullable(formData.get("join_url")),

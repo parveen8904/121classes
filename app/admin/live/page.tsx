@@ -38,8 +38,10 @@ export default async function AdminLivePage({
   const svc = createServiceClient();
   const { data: sessions } = await svc
     .from("live_sessions")
-    .select("id, title, audience, starts_at, join_url, recording_url, is_published")
+    .select("id, title, audience, starts_at, join_url, recording_url, is_published, faculty_id")
     .order("starts_at", { ascending: false });
+  const { data: faculties } = await svc.from("faculties").select("id, full_name").order("full_name");
+  const facList = (faculties ?? []) as { id: string; full_name: string }[];
 
   const rows = ((data ?? []) as unknown as LiveRow[]).map((r) => {
     const c = (r.config ?? {}) as Record<string, string>;
@@ -100,6 +102,11 @@ export default async function AdminLivePage({
                 <input name="audience" placeholder="CA Final FR batch / All students" />
               </div>
             </div>
+            <label>Faculty taking the class</label>
+            <select name="faculty_id" defaultValue="">
+              <option value="">— select faculty —</option>
+              {facList.map((f) => <option key={f.id} value={f.id}>{f.full_name}</option>)}
+            </select>
             <label>Description (optional)</label>
             <input name="description" placeholder="What the session covers" />
             <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1.2fr 0.6fr 1.4fr" }}>

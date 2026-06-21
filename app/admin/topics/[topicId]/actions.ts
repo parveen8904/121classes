@@ -257,6 +257,7 @@ export async function createSection(formData: FormData) {
     topic_id: topicId,
     type,
     title,
+    group_id: str(formData.get("group_id")) || null,
     order_index: num(formData.get("order_index")),
     min_plan: readMinPlan(formData),
     config: readConfig(formData),
@@ -286,6 +287,7 @@ export async function updateSection(formData: FormData) {
     .update({
       type,
       title,
+      group_id: str(formData.get("group_id")) || null,
       order_index: num(formData.get("order_index")),
       min_plan: readMinPlan(formData),
       config: { ...preserved, ...readConfig(formData) },
@@ -293,6 +295,55 @@ export async function updateSection(formData: FormData) {
     })
     .eq("id", id);
   if (type === "full_class_video") await resequenceForTopic(topicId);
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
+// ----- Sections (named content groups inside a topic) -----
+export async function createTopicGroup(formData: FormData) {
+  const topicId = str(formData.get("topicId"));
+  const name = str(formData.get("name"));
+  if (!topicId || !name) return;
+  const supabase = createClient();
+  const { count } = await supabase.from("topic_groups").select("id", { count: "exact", head: true }).eq("topic_id", topicId);
+  await supabase.from("topic_groups").insert({ topic_id: topicId, name, order_index: count ?? 0 });
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
+export async function renameTopicGroup(formData: FormData) {
+  const id = str(formData.get("id"));
+  const topicId = str(formData.get("topicId"));
+  const name = str(formData.get("name"));
+  if (!id || !name) return;
+  const supabase = createClient();
+  await supabase.from("topic_groups").update({ name }).eq("id", id);
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
+// Deleting a section keeps its content — items just become "unsorted" (group_id
+// goes null via the FK), so nothing is lost.
+export async function deleteTopicGroup(formData: FormData) {
+  const id = str(formData.get("id"));
+  const topicId = str(formData.get("parentId")) || str(formData.get("topicId"));
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("topic_groups").delete().eq("id", id);
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
+export async function moveTopicGroup(formData: FormData) {
+  const id = str(formData.get("id"));
+  const topicId = str(formData.get("topicId"));
+  const dir = str(formData.get("dir")); // "up" | "down"
+  if (!id || !topicId) return;
+  const supabase = createClient();
+  const { data: groups } = await supabase.from("topic_groups").select("id, order_index").eq("topic_id", topicId).order("order_index").order("created_at");
+  const list = groups ?? [];
+  const i = list.findIndex((g) => g.id === id);
+  if (i < 0) return;
+  const j = dir === "up" ? i - 1 : i + 1;
+  if (j < 0 || j >= list.length) return;
+  await supabase.from("topic_groups").update({ order_index: list[j].order_index }).eq("id", list[i].id);
+  await supabase.from("topic_groups").update({ order_index: list[i].order_index }).eq("id", list[j].id);
   revalidatePath(`/admin/topics/${topicId}`);
 }
 

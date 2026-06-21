@@ -6,7 +6,7 @@ import AdminHero from "../../_components/AdminHero";
 import SectionForm from "./SectionForm";
 import TopicMetaForm, { type TopicMeta } from "./TopicMetaForm";
 import { SECTION_TYPES } from "./sectionTypes";
-import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, addTopicMaterial, deleteTopicMaterial } from "./actions";
+import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, addTopicMaterial, deleteTopicMaterial, createTopicGroup, renameTopicGroup, deleteTopicGroup, moveTopicGroup } from "./actions";
 import PdfUpload from "../../_components/PdfUpload";
 import SubmitButton from "@/app/components/SubmitButton";
 import { fmtMins } from "../../_lib/util";
@@ -43,10 +43,20 @@ export default async function TopicDetail({
 
   const { data: sections } = await supabase
     .from("sections")
-    .select("id, type, title, order_index, min_plan, config, is_published")
+    .select("id, type, title, order_index, min_plan, config, is_published, group_id")
     .eq("topic_id", topicId)
     .order("order_index")
     .order("title");
+
+  // "Sections" = named content groups the admin creates inside the topic.
+  const { data: groups } = await supabase
+    .from("topic_groups")
+    .select("id, name, order_index")
+    .eq("topic_id", topicId)
+    .order("order_index")
+    .order("created_at");
+  const groupList = groups ?? [];
+  const groupName = new Map(groupList.map((g) => [g.id, g.name]));
 
   const subjectInfo = (topic as { subjects?: { title?: string; code?: string } | null }).subjects;
   const subjectTitle = subjectInfo?.title;
@@ -147,35 +157,71 @@ export default async function TopicDetail({
         </details>
 
       {/* Specific adders — no confusing "section type" picker */}
-      <h2 className="admin-section-title">➕ Add a section to this topic</h2>
-      <p className="muted" style={{ fontSize: ".9rem" }}>Pick what to add — a class, a revision video, or the topic&apos;s MCQ / descriptive test.</p>
+      {/* SECTIONS = named content groups the admin creates inside the topic. */}
+      <h2 className="admin-section-title">📚 Sections</h2>
+      <p className="muted" style={{ fontSize: ".9rem" }}>
+        A <strong>Section</strong> is a named container (e.g. &ldquo;Classes&rdquo;, &ldquo;Revision Round 1&rdquo;, &ldquo;Updates&rdquo;). Create your sections here, then add content (a class, video, PDF or test) into a section below.
+      </p>
+      <div style={{ display: "grid", gap: 8 }}>
+        {groupList.map((g, i) => (
+          <div className="card" key={g.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <form action={renameTopicGroup} style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, minWidth: 220 }}>
+              <input type="hidden" name="id" value={g.id} />
+              <input type="hidden" name="topicId" value={topic.id} />
+              <input name="name" defaultValue={g.name} style={{ flex: 1 }} />
+              <SubmitButton className="btn small" savedLabel="✓">Rename</SubmitButton>
+            </form>
+            <form action={moveTopicGroup} style={{ display: "inline" }}>
+              <input type="hidden" name="id" value={g.id} /><input type="hidden" name="topicId" value={topic.id} /><input type="hidden" name="dir" value="up" />
+              <button className="btn small secondary" type="submit" disabled={i === 0}>↑</button>
+            </form>
+            <form action={moveTopicGroup} style={{ display: "inline" }}>
+              <input type="hidden" name="id" value={g.id} /><input type="hidden" name="topicId" value={topic.id} /><input type="hidden" name="dir" value="down" />
+              <button className="btn small secondary" type="submit" disabled={i === groupList.length - 1}>↓</button>
+            </form>
+            <DeleteButton action={deleteTopicGroup} id={g.id} parentId={topic.id} message="Delete this section? Its content stays but becomes Unsorted." />
+          </div>
+        ))}
+        {groupList.length === 0 && <p className="muted" style={{ fontSize: ".85rem", margin: 0 }}>No sections yet — create your first one below.</p>}
+      </div>
+      <form action={createTopicGroup} className="form-card" style={{ marginTop: 10 }}>
+        <input type="hidden" name="topicId" value={topic.id} />
+        <label htmlFor="g-name">New section name</label>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input id="g-name" name="name" placeholder="e.g. Revision Round 1" required style={{ flex: 1 }} />
+          <SubmitButton className="btn" savedLabel="✓ Added">Add section</SubmitButton>
+        </div>
+      </form>
+
+      <h2 className="admin-section-title">➕ Add content to a section</h2>
+      <p className="muted" style={{ fontSize: ".9rem" }}>Pick what to add — a class, a revision video, or a test — and choose which Section it goes in.</p>
       <div style={{ marginTop: 8, display: "grid", gap: 10 }}>
         <details>
           <summary className="btn secondary as-btn">🎓 Add a class</summary>
           <div className="form-card" style={{ marginTop: 10 }}>
             <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Lecture video + PDF + transcript. The unique number is built for you. Add as many as the topic needs.</p>
-            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add class" defaultType="full_class_video" subjectCode={subjectCode} topicCode={topicCode} />
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add class" defaultType="full_class_video" subjectCode={subjectCode} topicCode={topicCode} groups={groupList} />
           </div>
         </details>
         <details>
           <summary className="btn secondary as-btn">🎬 Add a revision video</summary>
           <div className="form-card" style={{ marginTop: 10 }}>
             <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Revision video + PDF + transcript. The unique number is built for you. Set its tier (Gold/Silver/Bronze) below.</p>
-            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add revision video" defaultType="revision_video" subjectCode={subjectCode} topicCode={topicCode} />
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add revision video" defaultType="revision_video" subjectCode={subjectCode} topicCode={topicCode} groups={groupList} />
           </div>
         </details>
         <details>
           <summary className="btn secondary as-btn">🧠 Add the topic MCQ test</summary>
           <div className="form-card" style={{ marginTop: 10 }}>
             <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Creates the MCQ test for this topic. Add/generate its questions after creating.</p>
-            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add MCQ test" defaultType="mcq_test" />
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add MCQ test" defaultType="mcq_test" groups={groupList} />
           </div>
         </details>
         <details>
           <summary className="btn secondary as-btn">✍️ Add the topic descriptive test</summary>
           <div className="form-card" style={{ marginTop: 10 }}>
             <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Creates the descriptive test for this topic. Upload its questions &amp; solutions after creating.</p>
-            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add descriptive test" defaultType="subjective_test" />
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add descriptive test" defaultType="subjective_test" groups={groupList} />
           </div>
         </details>
       </div>
@@ -187,7 +233,7 @@ export default async function TopicDetail({
         </span>
       </div>
       <p className="muted" style={{ fontSize: ".9rem" }}>
-        These render in order for students. Tap a section to open its controls, AI summary and the <strong>Edit</strong> form (rename, video, PDF, tier…).
+        These are the individual items inside your sections. Tap an item to open its controls, AI summary and the <strong>Edit</strong> form (rename, change its Section, video, PDF, tier…).
       </p>
 
       <div style={{ marginTop: 16, display: "grid", gap: 8 }}>
@@ -197,7 +243,7 @@ export default async function TopicDetail({
               <summary style={{ cursor: "pointer", display: "flex", gap: 10, alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap" }}>
                 <strong>{s.title}</strong>
                 <span className="muted" style={{ fontSize: ".8rem" }}>
-                  {TYPE_LABEL[s.type] ?? s.type} · {s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "Free"} · order {s.order_index} · {s.is_published ? "🟢 published" : "⚪ draft"}
+                  📚 {(s.group_id && groupName.get(s.group_id)) || "Unsorted"} · {TYPE_LABEL[s.type] ?? s.type} · {s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "Free"} · order {s.order_index} · {s.is_published ? "🟢 published" : "⚪ draft"}
                 </span>
               </summary>
               <div style={{ marginTop: 12 }}>
@@ -300,10 +346,12 @@ export default async function TopicDetail({
                       min_plan: s.min_plan,
                       config: s.config as Record<string, unknown> | null,
                       is_published: s.is_published,
+                      group_id: (s as { group_id?: string | null }).group_id ?? null,
                     }}
                     submitLabel="Save section"
                     subjectCode={subjectCode}
                     topicCode={topicCode}
+                    groups={groupList}
                   />
                 </div>
               </div>

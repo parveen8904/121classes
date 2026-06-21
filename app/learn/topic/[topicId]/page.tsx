@@ -344,19 +344,21 @@ export default async function LearnTopic({ params }: { params: { topicId: string
   const watermarkText = [wmProfile?.full_name, user.email ?? wmProfile?.phone].filter(Boolean).join(" · ");
 
   const configById = new Map<string, Record<string, unknown> | null>();
+  const sectionGroupId = new Map<string, string | null>(); // section item → its Section (group)
   let sections: SectionMeta[] = [];
 
   if (isAdmin) {
     // Service client → every published section, fully unlocked, with its content.
     const { data: rows } = await createServiceClient()
       .from("sections")
-      .select("id, type, title, order_index, min_plan, config")
+      .select("id, type, title, order_index, min_plan, config, group_id")
       .eq("topic_id", topic.id)
       .eq("is_published", true)
       .order("order_index")
       .order("title");
     for (const r of rows ?? []) {
       configById.set(r.id, r.config as Record<string, unknown> | null);
+      sectionGroupId.set(r.id, (r as { group_id?: string | null }).group_id ?? null);
       sections.push({ id: r.id, type: r.type, title: r.title, order_index: r.order_index, min_plan: r.min_plan, unlocked: true });
     }
   } else {
@@ -364,17 +366,29 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     const { data: metas, error: metaErr } = await supabase.rpc("list_topic_sections", { p_topic: topic.id });
     const { data: accessRows } = await supabase
       .from("sections")
-      .select("id, type, title, order_index, min_plan, is_published, config")
+      .select("id, type, title, order_index, min_plan, is_published, config, group_id")
       .eq("topic_id", topic.id)
       .eq("is_published", true)
       .order("order_index")
       .order("title");
-    for (const r of accessRows ?? []) configById.set(r.id, r.config as Record<string, unknown> | null);
+    for (const r of accessRows ?? []) {
+      configById.set(r.id, r.config as Record<string, unknown> | null);
+      sectionGroupId.set(r.id, (r as { group_id?: string | null }).group_id ?? null);
+    }
     sections =
       !metaErr && metas
         ? (metas as SectionMeta[])
         : (accessRows ?? []).map((r) => ({ id: r.id, type: r.type, title: r.title, order_index: r.order_index, min_plan: r.min_plan, unlocked: true }));
   }
+
+  // Named Sections (content groups) the admin created for this topic.
+  const { data: topicGroups } = await createServiceClient()
+    .from("topic_groups")
+    .select("id, name, order_index")
+    .eq("topic_id", topic.id)
+    .order("order_index")
+    .order("created_at");
+  const groupList = topicGroups ?? [];
 
   // Encrypted classes the student may download, keyed by section (for the
   // "Download for offline" button on the class).
@@ -693,8 +707,20 @@ export default async function LearnTopic({ params }: { params: { topicId: string
             <p className="muted" style={{ fontSize: ".88rem", marginTop: 22, marginBottom: 8 }}>
               Tap any item below to open it.
             </p>
+            {/* Admin-created Sections (named content groups), in order. */}
+            {groupList.map((g) => {
+              const items = sections.filter((s) => sectionGroupId.get(s.id) === g.id);
+              if (!items.length) return null;
+              return (
+                <div key={g.id}>
+                  {sectionGroupBanner(`📚 ${g.name}`, items.length)}
+                  <div className="sec-list">{items.map(renderSection)}</div>
+                </div>
+              );
+            })}
+            {/* Anything not put in a Section yet → grouped by type as a fallback. */}
             {SECTION_GROUP_ORDER.map((label) => {
-              const items = sections.filter((s) => groupFor(s) === label);
+              const items = sections.filter((s) => !sectionGroupId.get(s.id) && groupFor(s) === label);
               if (!items.length) return null;
               return (
                 <div key={label}>

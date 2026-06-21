@@ -14,6 +14,7 @@ type Section = {
   min_plan: string | null;
   config: Record<string, unknown> | null;
   is_published: boolean;
+  group_id?: string | null;
 };
 
 // Builds the unique class/revision number the founder described, e.g.
@@ -108,6 +109,7 @@ export default function SectionForm({
   lockType = true,
   subjectCode = "",
   topicCode = "",
+  groups = [],
 }: {
   action: (formData: FormData) => void | Promise<void>;
   topicId: string;
@@ -117,6 +119,7 @@ export default function SectionForm({
   lockType?: boolean;
   subjectCode?: string;
   topicCode?: string;
+  groups?: { id: string; name: string }[];
 }) {
   const [type, setType] = useState(section?.type ?? defaultType ?? "full_class_video");
   const def = SECTION_TYPES.find((t) => t.value === type);
@@ -163,15 +166,26 @@ export default function SectionForm({
         </div>
       </div>
 
-      <div>
-        <label>Minimum plan</label>
-        <select name="min_plan" defaultValue={section?.min_plan ?? ""}>
-          {PLAN_OPTIONS.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.label}
-            </option>
-          ))}
-        </select>
+      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
+        <div>
+          <label>Minimum plan</label>
+          <select name="min_plan" defaultValue={section?.min_plan ?? ""}>
+            {PLAN_OPTIONS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label>Section (group)</label>
+          <select name="group_id" defaultValue={section?.group_id ?? ""}>
+            <option value="">— Unsorted —</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {showAutoNumber && (

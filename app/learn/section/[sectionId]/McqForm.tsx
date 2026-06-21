@@ -87,20 +87,24 @@ export default function McqForm({
             <span style={{ color: "#dc2626" }}>❌ {wrong.length} wrong</span>
           </div>
           {(result.weakConcepts?.length ?? 0) > 0 && (
-            <p style={{ margin: "12px 0 0" }}>
-              <strong>🔎 Concepts to revise:</strong> {result.weakConcepts!.join(" · ")}
-            </p>
+            <div style={{ margin: "12px 0 0" }}>
+              <strong>🔎 Concepts to revise:</strong>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+                {result.weakConcepts!.map((c) => <li key={c}>{c}</li>)}
+              </ul>
+            </div>
           )}
           {(result.classesToRedo?.length ?? 0) > 0 && (
-            <p style={{ margin: "8px 0 0" }}>
-              <strong>↩️ Classes to do again:</strong>{" "}
-              {result.classesToRedo!.map((cn, i) => (
-                <span key={cn}>
-                  {topicId ? <Link href={`/learn/topic/${topicId}`} style={{ color: "var(--accent)", fontWeight: 700 }}>Class {cn}</Link> : `Class ${cn}`}
-                  {i < result.classesToRedo!.length - 1 ? ", " : ""}
-                </span>
-              ))}
-            </p>
+            <div style={{ margin: "8px 0 0" }}>
+              <strong>↩️ Classes to study again:</strong>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+                {result.classesToRedo!.map((cn) => (
+                  <li key={cn}>
+                    {topicId ? <Link href={`/learn/topic/${topicId}`} style={{ color: "var(--accent)", fontWeight: 700 }}>Class {cn}</Link> : `Class ${cn}`}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
 

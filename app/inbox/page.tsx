@@ -90,6 +90,37 @@ export default async function StudentInbox() {
     });
   }
 
+  // MCQ test reports → inbox (score + rank + concepts/classes to revise, bullets).
+  const { data: mcqAttempts } = await svc
+    .from("mcq_attempts")
+    .select("id, section_id, score, total, report, created_at")
+    .eq("student_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  const mcqSecIds = [...new Set((mcqAttempts ?? []).map((m) => m.section_id))];
+  const { data: mcqSecs } = mcqSecIds.length
+    ? await svc.from("sections").select("id, title").in("id", mcqSecIds)
+    : { data: [] as { id: string; title: string }[] };
+  const mcqSecMap = new Map((mcqSecs ?? []).map((s) => [s.id, s.title]));
+  for (const m of mcqAttempts ?? []) {
+    const rep = (m.report ?? {}) as { rank?: number; weakConcepts?: string[]; classesToRedo?: string[] };
+    const fb: string[] = [];
+    if (rep.rank) fb.push(`🏆 Your rank: #${rep.rank}`);
+    if (rep.weakConcepts?.length) fb.push(`🔎 Concepts to revise:\n• ${rep.weakConcepts.join("\n• ")}`);
+    if (rep.classesToRedo?.length) fb.push(`↩️ Classes to study again:\n• ${rep.classesToRedo.map((c) => `Class ${c}`).join("\n• ")}`);
+    messages.push({
+      id: "test:" + m.id,
+      kind: "paper",
+      when: m.created_at,
+      title: `🧠 ${mcqSecMap.get(m.section_id) ?? "MCQ test"} — your report`,
+      status: "graded",
+      score: typeof m.score === "number" ? m.score : null,
+      max: m.total,
+      feedback: fb.join("\n\n") || "Open the test from the topic page to see your full question-by-question review.",
+      shareText: `${mcqSecMap.get(m.section_id) ?? "MCQ test"} — ${m.score}/${m.total}`,
+    });
+  }
+
   messages.sort((a, b) => (a.when < b.when ? 1 : -1));
 
   const [recs] = await Promise.all([getStudyRecommendations(user.id)]);

@@ -101,6 +101,7 @@ export async function generateMcqsFromTranscript(formData: FormData) {
         options: q.options,
         correct_index: q.correct_index,
         order_index: base + i,
+        concept: q.concept || null,
       })),
     )
     .select("id, order_index");
@@ -195,6 +196,76 @@ export async function bulkAddMcq(formData: FormData) {
       order_index: base + i,
     })),
   );
+  revalidatePath(`/admin/mcq/${sectionId}`);
+}
+
+// "2 MCQs per class for the whole topic" — the standard chapter test. Runs once
+// (AI), tagging each question with its source class + concept; stored statically.
+export async function generateChapterTest(formData: FormData) {
+  const sectionId = str(formData.get("section_id"));
+  if (!sectionId) return;
+  const replace = formData.get("replace") === "on";
+  const supabase = createClient();
+
+  const { data: sec } = await supabase.from("sections").select("topic_id, topics(title)").eq("id", sectionId).maybeSingle();
+  const topicId = (sec as { topic_id?: string } | null)?.topic_id;
+  const topicTitle = (sec as { topics?: { title?: string } | null } | null)?.topics?.title ?? "";
+  if (!topicId) return;
+
+  const { data: classes } = await supabase
+    .from("sections")
+    .select("config")
+    .eq("topic_id", topicId)
+    .eq("type", "full_class_video")
+    .eq("is_published", true)
+    .order("order_index");
+  const blocks = (classes ?? [])
+    .map((c) => (c.config ?? {}) as Record<string, unknown>)
+    .filter((cf) => String(cf.ai_summary ?? "").trim() || String(cf.transcript ?? "").trim());
+  if (!blocks.length) return;
+
+  if (replace) await supabase.from("mcq_questions").delete().eq("section_id", sectionId);
+  let base = 0;
+  if (!replace) {
+    const { count } = await supabase.from("mcq_questions").select("id", { count: "exact", head: true }).eq("section_id", sectionId);
+    base = count ?? 0;
+  }
+
+  for (const cf of blocks) {
+    const classNo = String(cf.class_no ?? cf.topic_class_no ?? "");
+    const ctx = [
+      cf.ai_summary ? `Summary:\n${cf.ai_summary}` : "",
+      cf.ai_concepts_discussed ? `Concepts:\n${cf.ai_concepts_discussed}` : "",
+      cf.ai_questions_discussed ? `Questions covered:\n${cf.ai_questions_discussed}` : "",
+      !cf.ai_summary && cf.transcript ? String(cf.transcript).slice(0, 12000) : "",
+    ].filter(Boolean).join("\n\n");
+    if (ctx.length < 30) continue;
+
+    const items = await generateMcqs(ctx, 2, topicTitle || undefined);
+    if (!items || !items.length) continue;
+
+    const { data: inserted } = await supabase
+      .from("mcq_questions")
+      .insert(
+        items.map((q, i) => ({
+          section_id: sectionId,
+          question: q.question,
+          options: q.options,
+          correct_index: q.correct_index,
+          order_index: base + i,
+          concept: q.concept || null,
+          source_class_no: classNo || null,
+        })),
+      )
+      .select("id, order_index");
+
+    const byOrder = new Map(items.map((q, i) => [base + i, q]));
+    for (const r of inserted ?? []) {
+      const it = byOrder.get(r.order_index);
+      if (it) await saveMcqExplanation(r.id, it.why_correct, it.why_wrong);
+    }
+    base += items.length;
+  }
   revalidatePath(`/admin/mcq/${sectionId}`);
 }
 

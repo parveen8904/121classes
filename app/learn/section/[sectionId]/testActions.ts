@@ -6,7 +6,30 @@ import { aiConfigured, gradeSubjective, answerDoubtFromMaterial, NEED_FACULTY } 
 import { getRepositoryContext } from "@/lib/repository";
 import { getMcqExplanations } from "@/lib/answers";
 import { dailyDoubtLimitReached } from "@/lib/limits";
-import { notifyFaculty } from "@/lib/notify";
+import { notifyFaculty, sendEmail, emailShell } from "@/lib/notify";
+
+const SITE_URL = "https://caparveensharma.com";
+
+// Build the student's performance report as a bullet-point email (no AI).
+function reportEmailHtml(res: McqResult, title: string, link: string): string {
+  const pct = res.total ? Math.round(((res.score ?? 0) / res.total) * 100) : 0;
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const li = (s: string) => `<li>${esc(s)}</li>`;
+  const parts: string[] = [];
+  parts.push(`<p><strong>Score: ${res.score}/${res.total} (${pct}%)</strong> &nbsp;•&nbsp; 🏆 Rank: #${res.rank ?? 1}</p>`);
+  if (res.weakConcepts?.length) parts.push(`<p><strong>🔎 Concepts to revise</strong></p><ul>${res.weakConcepts.map(li).join("")}</ul>`);
+  if (res.classesToRedo?.length) parts.push(`<p><strong>↩️ Classes to study again</strong></p><ul>${res.classesToRedo.map((c) => li(`Class ${c}`)).join("")}</ul>`);
+  parts.push(`<p><strong>📋 Question review</strong></p><ul>`);
+  for (const [i, r] of (res.review ?? []).entries()) {
+    const mark = r.isCorrect ? "✅" : "❌";
+    const correct = r.options[r.correctIndex] ?? "";
+    const why = r.isCorrect ? r.whyCorrect : (r.whyChosenWrong ? `${r.whyChosenWrong} ` : "") + (r.whyCorrect ? `Correct: ${r.whyCorrect}` : "");
+    parts.push(li(`Q${i + 1} ${mark} ${esc(r.question)} — Answer: ${esc(correct)}${why ? ` — ${esc(why)}` : ""}`));
+  }
+  parts.push(`</ul>`);
+  parts.push(`<p><a href="${link}">View / print your full report</a></p>`);
+  return emailShell(`📝 Your test report — ${title}`, parts.join(""));
+}
 
 // Per-question review shown AFTER submit. For a correct answer we show why it's
 // correct; for a wrong one we explain only the chosen wrong option + the correct
@@ -156,7 +179,19 @@ export async function gradeMcqAttempt(input: {
     score: res.score,
     total: res.total,
     answers: input.answers ?? {},
+    report: { rank: res.rank, weakConcepts: res.weakConcepts, classesToRedo: res.classesToRedo },
   });
+
+  // Email the report to the student (best-effort — never block grading on it).
+  try {
+    if (user.email) {
+      const { data: sec } = await supabase.from("sections").select("title").eq("id", input.sectionId).maybeSingle();
+      const title = sec?.title ?? "Test";
+      await sendEmail(user.email, `📝 Your test report — ${title}`, reportEmailHtml(res, title, `${SITE_URL}/learn/section/${input.sectionId}`));
+    }
+  } catch {
+    /* email failure must not fail the submission */
+  }
 
   return res;
 }

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { aiConfigured } from "@/lib/ai";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
-import { addMcq, updateMcq, bulkAddMcq, deleteMcq, generateMcqsFromTranscript, attachSectionPdf } from "./actions";
+import { addMcq, updateMcq, bulkAddMcq, deleteMcq, generateMcqsFromTranscript, generateChapterTest, attachSectionPdf } from "./actions";
 import PdfUpload from "../../_components/PdfUpload";
 import SubmitButton from "@/app/components/SubmitButton";
 import { getMcqExplanations } from "@/lib/answers";
@@ -42,9 +42,28 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
         <SubmitButton className="btn small" style={{ marginTop: 8 }}>Save PDF</SubmitButton>
       </form>
 
+      {/* Standard rule: 2 MCQs per class for the whole topic, once. */}
+      {ai && (
+        <div className="form-card" style={{ marginTop: 18 }}>
+          <h3>🤖 Generate the chapter test — 2 MCQs per class</h3>
+          <p className="muted" style={{ fontSize: ".82rem", marginTop: 0, marginBottom: 10 }}>
+            Reads every published class in this topic and writes <strong>2 questions per class</strong> (with the correct/wrong
+            reasons, concept and source class), saving them here. Run <strong>once</strong> — students take the saved test with
+            no further AI. Use the tick to re-generate from scratch.
+          </p>
+          <form action={generateChapterTest}>
+            <input type="hidden" name="section_id" value={section.id} />
+            <label className="remember" style={{ marginTop: 0 }}>
+              <input type="checkbox" name="replace" /> ♻️ Replace all existing questions (otherwise add to them)
+            </label>
+            <SubmitButton className="btn" savedLabel="✓ Generated">Generate 2 per class</SubmitButton>
+          </form>
+        </div>
+      )}
+
       {/* AI generation — run once, questions are stored & served statically */}
       <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-        <summary className="btn as-btn">🤖 Generate from transcript (AI)</summary>
+        <summary className="btn as-btn">🤖 Generate from a pasted transcript (AI)</summary>
         <div className="form-card" style={{ marginTop: 12, width: "100%" }}>
           <h3>🤖 Generate MCQs with AI</h3>
           {ai ? (

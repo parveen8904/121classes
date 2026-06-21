@@ -101,13 +101,14 @@ async function callClaude(system: string, user: string, maxTokens = 1024, opts: 
 const ASSISTANT_SYSTEM =
   "You are the AI study assistant for 121 CA Classes, the CA-coaching venture of CA Parveen Sharma. " +
   "You help Indian CA (Foundation/Intermediate/Final) students with clear, accurate, exam-focused explanations. " +
-  "Be concise and step-by-step, use Indian accounting/tax/law context, and reference relevant standards or sections where useful. " +
+  "ALWAYS answer in short bullet points (never paragraphs) and keep the WHOLE answer under 100 words. " +
+  "Use Indian accounting/tax/law context, and reference relevant standards or sections where useful. " +
   "If a question is outside the CA syllabus or you are unsure, say so and suggest asking the faculty. " +
   "You assist under CA Parveen Sharma's guidance — never claim to be a human teacher.";
 
 export async function answerDoubt(question: string, context?: string): Promise<string | null> {
   const user = (context ? `Topic context: ${context}\n\n` : "") + `Student's doubt: ${question}`;
-  return callClaude(ASSISTANT_SYSTEM, user, 1024, { model: await fastModel(), feature: "doubt" });
+  return callClaude(ASSISTANT_SYSTEM, user, 260, { model: await fastModel(), feature: "doubt" });
 }
 
 // Sentinel the model returns when the repository doesn't cover the question.
@@ -118,7 +119,8 @@ const REPO_SYSTEM =
   "USING ONLY the study material provided below (transcripts, books, ICAI material). " +
   "Do not use outside knowledge. If the material does not contain enough to answer confidently, " +
   `reply with exactly "${NEED_FACULTY}" and nothing else. ` +
-  "Otherwise answer clearly and step-by-step in Indian CA exam context, citing the relevant part of the material.";
+  "Otherwise answer in short bullet points (never paragraphs), keeping the WHOLE answer under 100 words, " +
+  "in Indian CA exam context, citing the relevant part of the material.";
 
 // Answer strictly from the repository material. Returns the answer, the literal
 // NEED_FACULTY sentinel (escalate to faculty), or null if AI/material unavailable.
@@ -128,7 +130,7 @@ export async function answerDoubtFromMaterial(
 ): Promise<string | null> {
   if (!material.trim()) return null;
   const user = `STUDY MATERIAL:\n${material}\n\nSTUDENT QUESTION:\n${question}`;
-  return callClaude(REPO_SYSTEM, user, 1024, { model: await fastModel(), feature: "doubt" });
+  return callClaude(REPO_SYSTEM, user, 260, { model: await fastModel(), feature: "doubt" });
 }
 
 // From a student's recent questions, pull the specific CA topics/standards they
@@ -184,8 +186,9 @@ const ASSIST_SYSTEM =
   "You are the friendly assistant for 121 CA Classes (CA Parveen Sharma). You answer two kinds of questions:\n" +
   "1) PORTAL/LOGISTICS (faculty names, courses, when classes or live sessions start, contact, plans, how to do something on the site) — answer ONLY from the SITE INFO section.\n" +
   "2) CA SUBJECT DOUBTS — answer ONLY from the STUDY MATERIAL section.\n" +
-  "Be concise, warm and specific. If a subject doubt is not covered by the study material, reply exactly with " +
-  `"${NEED_FACULTY}". For portal questions, if the SITE INFO doesn't contain the answer, say you're not sure and point them to help@121caclasses.com. Never invent facts.`;
+  "Answer in short bullet points (never paragraphs), warm and specific, keeping the WHOLE answer under 100 words. " +
+  "If a subject doubt is not covered by the study material, reply exactly with " +
+  `"${NEED_FACULTY}". For portal questions, if the SITE INFO doesn't contain the answer, say you're not sure and point them to mail@caparveensharma.com. Never invent facts.`;
 
 // The "Ask me" assistant: handles both portal questions (from site facts) and
 // CA doubts (from repository material) in one call. Returns the answer or the
@@ -196,7 +199,7 @@ export async function answerAssistant(
   material: string,
 ): Promise<string | null> {
   const user = `SITE INFO:\n${siteFacts}\n\nSTUDY MATERIAL:\n${material || "(none provided)"}\n\nQUESTION:\n${question}`;
-  return callClaude(ASSIST_SYSTEM, user, 900, { model: await fastModel(), feature: "ask_me" });
+  return callClaude(ASSIST_SYSTEM, user, 260, { model: await fastModel(), feature: "ask_me" });
 }
 
 // Pre-generate MCQs from a class transcript (token-frugal: run ONCE at upload
@@ -207,7 +210,7 @@ export async function generateMcqs(
   count: number,
   topic?: string,
 ): Promise<
-  { question: string; options: string[]; correct_index: number; why_correct: string; why_wrong: string[] }[] | null
+  { question: string; options: string[]; correct_index: number; why_correct: string; why_wrong: string[]; concept: string }[] | null
 > {
   const n = Math.max(1, Math.min(25, Math.round(count) || 10));
   const system =
@@ -215,9 +218,10 @@ export async function generateMcqs(
     `From the lecture transcript, write exactly ${n} exam-style multiple-choice questions for Indian CA students` +
     (topic ? ` on "${topic}"` : "") +
     `. Each question has exactly 4 options with ONE correct answer. Test conceptual understanding and application (not trivia); use Indian accounting/tax/law context and reference standards/sections where useful. ` +
-    `For EACH question also explain WHY the correct option is correct, and for EACH option a short reason WHY it is right or wrong (one line each, same order as options). ` +
-    `Respond ONLY as compact JSON, no prose, no code fences: ` +
-    `{"questions":[{"question":"...","options":["...","...","...","..."],"correct_index":0,"why_correct":"...","why_options":["why opt1","why opt2","why opt3","why opt4"]}]} ` +
+    `Tag each question with the single "concept" it tests. ` +
+    `For EACH question also explain WHY the correct option is correct, and for EACH option a short reason WHY it is right or wrong. Keep EVERY explanation to ONE short line under 25 words (no paragraphs). ` +
+    `Respond ONLY as compact JSON, no prose, no code fences, ASCII punctuation only: ` +
+    `{"questions":[{"concept":"...","question":"...","options":["...","...","...","..."],"correct_index":0,"why_correct":"...","why_options":["why opt1","why opt2","why opt3","why opt4"]}]} ` +
     `where correct_index is the 0-based index of the correct option and why_options has one reason per option in the same order.`;
   const user = `Transcript:\n${transcript.slice(0, 24000)}`;
   const text = await callClaude(system, user, 6000, { feature: "generate_mcq" });
@@ -227,10 +231,11 @@ export async function generateMcqs(
     const arr = Array.isArray(json) ? json : json.questions;
     if (!Array.isArray(arr)) return null;
     return arr
-      .map((q: { question?: unknown; options?: unknown; correct_index?: unknown; why_correct?: unknown; why_options?: unknown }) => {
+      .map((q: { question?: unknown; options?: unknown; correct_index?: unknown; why_correct?: unknown; why_options?: unknown; concept?: unknown }) => {
         const options = (Array.isArray(q.options) ? q.options : []).map((o) => String(o).trim()).filter(Boolean);
         const why_wrong = (Array.isArray(q.why_options) ? q.why_options : []).map((o) => String(o ?? "").trim());
         return {
+          concept: String(q.concept ?? "").trim(),
           question: String(q.question ?? "").trim(),
           options,
           correct_index: Number.isInteger(q.correct_index) ? (q.correct_index as number) : 0,
@@ -397,7 +402,7 @@ export async function summarizeClass(transcript: string): Promise<ClassSummary |
     "NEVER mention dates, days of the week, festivals, holidays, greetings, small talk, attendance, " +
     "technical/audio issues, or any other noise; ignore all such chatter in the transcript. " +
     "Respond ONLY as compact JSON, no prose, no code fences: " +
-    '{"summary":"<3-5 sentence overview of what this class covered>",' +
+    '{"summary":"<3-5 short bullet points of what this class covered — each bullet on its own line starting with \\"- \\"; NO paragraphs>",' +
     '"questions_discussed":["<question/problem discussed in class 1>","..."],' +
     '"concepts_discussed":["<concept/standard/section discussed 1>","..."],' +
     '"homework_covered_count":<how many homework/practice questions were SOLVED during the class>,' +

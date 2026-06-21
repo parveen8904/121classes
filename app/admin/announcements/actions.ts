@@ -28,12 +28,62 @@ export async function saveGovtFeeds(formData: FormData) {
   redirect("/admin/announcements?feeds=saved");
 }
 
-// Pull new items now (also runs automatically on a schedule).
+// Pull new items now (also runs automatically every hour).
 export async function fetchGovtFeedsNow() {
   if (!(await isAdmin())) return;
   const { added } = await ingestGovtFeeds();
   revalidatePath("/admin/announcements");
   redirect(`/admin/announcements?fetched=${added}`);
+}
+
+// Save the keyword list that builds the auto Google-News feeds (newline/comma
+// separated). Also lets the founder set where the hourly digest is emailed.
+export async function saveFeedKeywords(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const svc = createServiceClient();
+  const now = new Date().toISOString();
+  const rows = [
+    { key: "FEED_KEYWORDS", value: str(formData.get("feed_keywords")).trim(), updated_at: now },
+    { key: "FEED_NOISE", value: str(formData.get("feed_noise")).trim(), updated_at: now },
+    { key: "FEED_DIGEST_EMAIL", value: str(formData.get("feed_digest_email")).trim(), updated_at: now },
+  ];
+  await svc.from("app_secrets").upsert(rows, { onConflict: "key" });
+  clearSecretCache();
+  redirect("/admin/announcements?feeds=saved");
+}
+
+// Broadcast a published announcement to students: queues a push for the (future)
+// mobile app AND posts it to the Telegram channel now, so it reaches students
+// today. Marks the announcement as broadcast so the button shows it was sent.
+export async function broadcastAnnouncement(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  const { data: a } = await svc
+    .from("announcements")
+    .select("id, title, body, link_url, is_published")
+    .eq("id", id)
+    .maybeSingle();
+  if (!a || !a.is_published) {
+    redirect("/admin/announcements?bcast=unpublished");
+  }
+
+  // Post to the Telegram channel right now (reaches every member in one call).
+  const { sendTelegramChannel } = await import("@/lib/notify");
+  const tgText = a.body ? `${a.title}\n\n${a.body}` : a.title;
+  const tgOk = await sendTelegramChannel(tgText, a.link_url ?? undefined);
+
+  const nowISO = new Date().toISOString();
+  await svc.from("broadcasts").insert([
+    { announcement_id: a.id, title: a.title, body: a.body, link_url: a.link_url, channel: "telegram", status: tgOk ? "sent" : "failed", sent_at: tgOk ? nowISO : null },
+    // Queued for the mobile app's push service to pick up once it exists.
+    { announcement_id: a.id, title: a.title, body: a.body, link_url: a.link_url, channel: "push", status: "queued" },
+  ]);
+  await svc.from("announcements").update({ broadcast_at: nowISO }).eq("id", a.id);
+
+  revalidatePath("/admin/announcements");
+  redirect(`/admin/announcements?bcast=${tgOk ? "sent" : "queued"}`);
 }
 
 const KINDS = ["amendment", "whats_new", "student_corner", "industry", "macro"];

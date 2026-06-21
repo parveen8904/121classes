@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../_components/DeleteButton";
 import AdminHero from "../_components/AdminHero";
 import { getSecret } from "@/lib/secrets";
-import { createAnnouncement, updateAnnouncement, deleteAnnouncement, saveGovtFeeds, fetchGovtFeedsNow } from "./actions";
+import { createAnnouncement, updateAnnouncement, deleteAnnouncement, saveGovtFeeds, fetchGovtFeedsNow, saveFeedKeywords, broadcastAnnouncement } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
 import { ANNOUNCEMENT_KINDS as KINDS, ANNOUNCEMENT_KIND_LABEL as KIND_LABEL } from "@/lib/announcements";
 
@@ -21,15 +21,18 @@ function KindSelect({ name, value }: { name: string; value?: string }) {
 export default async function AnnouncementsPage({
   searchParams,
 }: {
-  searchParams: { feeds?: string; fetched?: string };
+  searchParams: { feeds?: string; fetched?: string; bcast?: string };
 }) {
   const supabase = createClient();
   const { data: items } = await supabase
     .from("announcements")
-    .select("id, kind, title, body, link_url, is_published, published_at")
+    .select("id, kind, title, body, link_url, is_published, published_at, broadcast_at")
     .order("published_at", { ascending: false });
   const pendingCount = (items ?? []).filter((i) => !i.is_published).length;
   const govtFeeds = await getSecret("GOVT_FEEDS");
+  const feedKeywords = await getSecret("FEED_KEYWORDS");
+  const feedNoise = await getSecret("FEED_NOISE");
+  const feedDigestEmail = await getSecret("FEED_DIGEST_EMAIL");
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -40,25 +43,42 @@ export default async function AnnouncementsPage({
         back={{ href: "/admin", label: "Admin" }}
       />
 
-      {searchParams.feeds === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Feed sources saved.</div>}
+      {searchParams.feeds === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Feed settings saved.</div>}
       {searchParams.fetched !== undefined && <div className="notice ok" style={{ marginTop: 16 }}>✅ Fetched {searchParams.fetched} new item(s) — they&apos;re below as unpublished, awaiting your approval.</div>}
+      {searchParams.bcast === "sent" && <div className="notice ok" style={{ marginTop: 16 }}>📢 Broadcast sent to the Telegram channel + queued for the mobile app.</div>}
+      {searchParams.bcast === "queued" && <div className="notice ok" style={{ marginTop: 16 }}>📢 Queued for the mobile app. (Telegram not configured, so nothing sent there yet.)</div>}
+      {searchParams.bcast === "unpublished" && <div className="notice" style={{ marginTop: 16 }}>⚠️ Publish the announcement first, then broadcast it.</div>}
 
-      {/* GOVT / ICAI AUTO-FEED */}
+      {/* AUTO-FEED — keyword driven */}
       <div className="form-card" style={{ marginTop: 18 }}>
-        <h3>🏛️ Government / ICAI auto-feed</h3>
+        <h3>📰 Auto news feed (ICAI / NFRA / MCA / RBI / IFRS …)</h3>
         <p className="muted" style={{ fontSize: ".85rem", marginBottom: 10 }}>
-          Paste <strong>RSS/Atom feed URLs</strong> (one per line) from ICAI / government sites. New items are pulled
-          automatically and appear below as <strong>unpublished</strong> — they only go live when you tick
-          &ldquo;Published&rdquo; (your approval). {pendingCount > 0 && <strong>{pendingCount} item(s) awaiting approval.</strong>}
+          Every hour we search Google News for these <strong>keywords</strong>, drop the noise, save what&apos;s left as
+          <strong> drafts</strong>, and <strong>email you a digest</strong> so you can approve from your phone. Nothing
+          reaches students until you tick &ldquo;Published&rdquo;. {pendingCount > 0 && <strong>{pendingCount} item(s) awaiting your approval below.</strong>}
         </p>
-        <form action={saveGovtFeeds}>
-          <textarea name="govt_feeds" rows={3} defaultValue={govtFeeds}
-            placeholder={"https://icai.org/…/rss\nhttps://incometax.gov.in/…/feed"} />
-          <button className="btn small" type="submit" style={{ marginTop: 8 }}>Save feed sources</button>
+        <form action={saveFeedKeywords}>
+          <label htmlFor="kw">Keywords to watch (comma or new line)</label>
+          <textarea id="kw" name="feed_keywords" rows={2} defaultValue={feedKeywords}
+            placeholder="Ind AS, ICAI, NFRA, MCA, RBI, IFRS, IASB, IAS, Indian accounting standards" />
+          <label htmlFor="noise" style={{ marginTop: 8 }}>Noise to ignore (exam results, toppers, vacancies …)</label>
+          <textarea id="noise" name="feed_noise" rows={2} defaultValue={feedNoise}
+            placeholder="topper, result, vacancy, admit card, congratulations" />
+          <label htmlFor="digest" style={{ marginTop: 8 }}>Email the hourly digest to</label>
+          <input id="digest" name="feed_digest_email" type="email" defaultValue={feedDigestEmail} placeholder="you@example.com" />
+          <button className="btn small" type="submit" style={{ marginTop: 8 }}>Save feed settings</button>
         </form>
         <form action={fetchGovtFeedsNow} style={{ marginTop: 8 }}>
           <button className="btn small secondary" type="submit">⤵️ Fetch new items now</button>
         </form>
+        <details style={{ marginTop: 10 }}>
+          <summary className="muted" style={{ fontSize: ".82rem", cursor: "pointer" }}>Extra feed URLs (optional)</summary>
+          <form action={saveGovtFeeds} style={{ marginTop: 8 }}>
+            <textarea name="govt_feeds" rows={2} defaultValue={govtFeeds}
+              placeholder={"https://example.org/…/rss"} />
+            <button className="btn small" type="submit" style={{ marginTop: 8 }}>Save extra feeds</button>
+          </form>
+        </details>
       </div>
 
       <div className="form-card" style={{ marginTop: 24 }}>
@@ -96,6 +116,7 @@ export default async function AnnouncementsPage({
                 <strong>{a.title}</strong>
                 <span className="muted" style={{ fontSize: ".82rem" }}>
                   {KIND_LABEL[a.kind] ?? a.kind} · {a.is_published ? "🟢 published" : "⚪ draft"}
+                  {a.broadcast_at ? " · 📢 broadcast" : ""}
                 </span>
               </summary>
               <form action={updateAnnouncement} style={{ marginTop: 12 }}>
@@ -121,6 +142,18 @@ export default async function AnnouncementsPage({
                   <SubmitButton className="btn small" closeDetails>Save</SubmitButton>
                   <DeleteButton action={deleteAnnouncement} id={a.id} message="Delete this announcement?" />
                 </div>
+              </form>
+              {/* Broadcast to students — separate form (can't nest forms). */}
+              <form action={broadcastAnnouncement} style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                <input type="hidden" name="id" value={a.id} />
+                <SubmitButton className="btn small secondary" savedLabel="📢 Sent">
+                  {a.broadcast_at ? "📢 Broadcast again to students" : "📢 Send to students (mobile + Telegram)"}
+                </SubmitButton>
+                <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
+                  {a.broadcast_at
+                    ? `Last broadcast ${new Date(a.broadcast_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}.`
+                    : "Posts to the Telegram channel now and queues a push for the mobile app. Publish it first."}
+                </p>
               </form>
             </details>
           ))

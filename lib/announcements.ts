@@ -2,11 +2,11 @@
 // shown as a labelled badge to students, so they know whether a post is an
 // amendment, a general update, industry news, a macro note, etc.
 export const ANNOUNCEMENT_KINDS = [
+  { value: "student_corner", label: "Student update" },
+  { value: "industry", label: "Industry news" },
+  { value: "macro", label: "Macro / Economy" },
   { value: "amendment", label: "Amendment" },
   { value: "whats_new", label: "Update" },
-  { value: "student_corner", label: "Student corner" },
-  { value: "industry", label: "Industry" },
-  { value: "macro", label: "Macro" },
 ] as const;
 
 export const ANNOUNCEMENT_KIND_LABEL: Record<string, string> = Object.fromEntries(

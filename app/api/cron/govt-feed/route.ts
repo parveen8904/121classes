@@ -1,13 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ingestGovtFeeds } from "@/lib/govtfeed";
 import { ingestJobs, sendPlacementDigest } from "@/lib/jobsfeed";
 import { getSecret } from "@/lib/secrets";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// Scheduled (Vercel cron) + safe to call manually. Pulls new govt/ICAI feed
-// items into PENDING announcements for faculty approval.
+// DAILY cron — placement jobs digest + cost alerts. (The govt/ICAI news feed
+// runs hourly in /api/cron/feed-hourly so new items reach the founder fast.)
 export async function GET(req: NextRequest) {
   const secret = await getSecret("CRON_SECRET");
   if (secret) {
@@ -17,12 +16,11 @@ export async function GET(req: NextRequest) {
     if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const result = await ingestGovtFeeds();
   const jobs = await ingestJobs();
   if (jobs.items?.length) await sendPlacementDigest(jobs.items);
   const { maybeBunnyAlert } = await import("@/lib/bunny");
   await maybeBunnyAlert();
   const { maybeStorageAlert } = await import("@/lib/costalerts");
   await maybeStorageAlert();
-  return NextResponse.json({ ok: true, feeds: result, jobs: { added: jobs.added, checked: jobs.checked } });
+  return NextResponse.json({ ok: true, jobs: { added: jobs.added, checked: jobs.checked } });
 }

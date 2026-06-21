@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import SubmitButton from "@/app/components/SubmitButton";
 import { updateProfile } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -104,9 +105,9 @@ export default async function ProfilePage({ searchParams }: { searchParams: { sa
             </div>
           </div>
 
-          <button className="btn" type="submit" style={{ marginTop: 18 }}>
+          <SubmitButton className="btn" style={{ marginTop: 18 }}>
             Save profile
-          </button>
+          </SubmitButton>
         </form>
       </section>
     </main>

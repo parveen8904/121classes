@@ -11,6 +11,7 @@ export default function SectionCard({
   typeLabel,
   meta,
   rightLabel,
+  summaryChip,
   lockBadge,
   locked,
   children,
@@ -20,6 +21,7 @@ export default function SectionCard({
   typeLabel: string;
   meta?: string;
   rightLabel?: string;
+  summaryChip?: boolean;
   lockBadge?: ReactNode;
   locked?: boolean;
   children: ReactNode;
@@ -49,6 +51,11 @@ export default function SectionCard({
         <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
           {/* Class/revision number — same font + boldness as the title (.sec-title). */}
           {rightLabel && <span style={{ fontSize: "1.12rem", fontWeight: 700, lineHeight: 1.2, whiteSpace: "nowrap" }}>{rightLabel}</span>}
+          {summaryChip && (
+            <span style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>
+              📋 Summary
+            </span>
+          )}
           {lockBadge}
           <span aria-hidden style={{ opacity: 0.6, fontSize: ".9rem", fontWeight: 700 }}>{open ? "▾" : "▸"}</span>
         </span>

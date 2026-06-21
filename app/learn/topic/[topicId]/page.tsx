@@ -76,18 +76,20 @@ const TYPE_ICON: Record<string, string> = {
 };
 
 // Sections are shown grouped under small banners so classes, revision videos,
-// tests etc. don't blur together. Order here = display order of the groups.
-const SECTION_GROUPS: { label: string; types: string[] }[] = [
-  { label: "🎓 Classes", types: ["full_class_video"] },
-  { label: "🎬 Revision videos", types: ["revision_video"] },
-  { label: "🎞️ Discussion & live videos", types: ["discussion_video", "live_class"] },
-  { label: "📚 Homework", types: ["homework"] },
-  { label: "📑 Notes & PDFs", types: ["pdf", "past_papers", "rich_text"] },
-  { label: "🧠 MCQ tests", types: ["mcq_test"] },
-  { label: "✍️ Descriptive tests", types: ["subjective_test"] },
-  { label: "🗣️ Discussion & doubts", types: ["discussion", "ask_doubt", "custom"] },
+// tests etc. don't blur together. Revision videos split into First / Second
+// rounds; a group only appears when it has content. Order = display order.
+const SECTION_GROUP_ORDER = [
+  "🎓 Classes",
+  "🎬 Revision — first",
+  "🎬 Revision — second",
+  "🎞️ Discussion & live videos",
+  "📚 Homework",
+  "📑 Notes & PDFs",
+  "🧠 MCQ tests",
+  "✍️ Descriptive tests",
+  "🗣️ Discussion & doubts",
+  "📦 More",
 ];
-const GROUPED_TYPES = new Set(SECTION_GROUPS.flatMap((g) => g.types));
 
 function SectionBody({
   id,
@@ -174,6 +176,12 @@ function SectionBody({
           <div style={{ marginTop: 12 }}>
             <strong style={{ fontSize: ".9rem" }}>📚 Homework</strong>
             <p style={{ margin: "4px 0 0", whiteSpace: "pre-wrap" }}>{c.homework}</p>
+          </div>
+        )}
+        {c.ai_homework_next && (
+          <div style={{ marginTop: 12, background: "var(--bg-soft)", borderLeft: "3px solid var(--accent)", padding: "10px 12px", borderRadius: 8 }}>
+            <strong style={{ fontSize: ".9rem" }}>📚 Homework for the next class</strong>
+            <p style={{ margin: "4px 0 0", whiteSpace: "pre-wrap" }}>{c.ai_homework_next}</p>
           </div>
         )}
         {c.ai_summary && (
@@ -452,6 +460,38 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     ? `/learn/${courseId}/plans?subject=${topic.subject_id}`
     : "/dashboard";
 
+  // Which banner group a section belongs to (revision videos split by round).
+  const groupFor = (s: SectionMeta): string => {
+    const c = (configById.get(s.id) ?? {}) as Record<string, string>;
+    switch (s.type) {
+      case "full_class_video":
+        return "🎓 Classes";
+      case "revision_video": {
+        const r = String(c.revision_round ?? "").toLowerCase();
+        return r.includes("2") || r.includes("sec") ? "🎬 Revision — second" : "🎬 Revision — first";
+      }
+      case "discussion_video":
+      case "live_class":
+        return "🎞️ Discussion & live videos";
+      case "homework":
+        return "📚 Homework";
+      case "pdf":
+      case "past_papers":
+      case "rich_text":
+        return "📑 Notes & PDFs";
+      case "mcq_test":
+        return "🧠 MCQ tests";
+      case "subjective_test":
+        return "✍️ Descriptive tests";
+      case "discussion":
+      case "ask_doubt":
+      case "custom":
+        return "🗣️ Discussion & doubts";
+      default:
+        return "📦 More";
+    }
+  };
+
   const renderSection = (s: SectionMeta) => {
     const locked = !s.unlocked;
     const planName = s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "a paid";
@@ -464,6 +504,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     let rightLabel: string | undefined;
     if (s.type === "full_class_video") rightLabel = classNoLabel.get(s.id);
     else if (s.type === "revision_video" && c.class_no) rightLabel = `Revision ${c.class_no}`;
+    const hasSummary = s.type === "full_class_video" && !!c.ai_summary && !locked;
     return (
       <SectionCard
         key={s.id}
@@ -472,6 +513,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
         typeLabel={TYPE_LABEL[s.type] ?? s.type}
         meta={dur ? `⏱️ ${dur}` : ""}
         rightLabel={rightLabel}
+        summaryChip={hasSummary}
         locked={locked}
         lockBadge={locked ? <span className="lock-badge">🔒 {s.min_plan ? PLAN_LABEL[s.min_plan] : "Locked"}</span> : null}
       >
@@ -626,26 +668,16 @@ export default async function LearnTopic({ params }: { params: { topicId: string
             <p className="muted" style={{ fontSize: ".88rem", marginTop: 22, marginBottom: 8 }}>
               Tap any item below to open it.
             </p>
-            {SECTION_GROUPS.map((g) => {
-              const items = sections.filter((s) => g.types.includes(s.type));
+            {SECTION_GROUP_ORDER.map((label) => {
+              const items = sections.filter((s) => groupFor(s) === label);
               if (!items.length) return null;
               return (
-                <div key={g.label}>
-                  {sectionGroupBanner(g.label, items.length)}
+                <div key={label}>
+                  {sectionGroupBanner(label, items.length)}
                   <div className="sec-list">{items.map(renderSection)}</div>
                 </div>
               );
             })}
-            {(() => {
-              const rest = sections.filter((s) => !GROUPED_TYPES.has(s.type));
-              if (!rest.length) return null;
-              return (
-                <div>
-                  {sectionGroupBanner("📦 More", rest.length)}
-                  <div className="sec-list">{rest.map(renderSection)}</div>
-                </div>
-              );
-            })()}
           </>
         ) : (
           <div className="card" style={{ marginTop: 22 }}>

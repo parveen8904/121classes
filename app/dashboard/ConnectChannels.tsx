@@ -46,33 +46,34 @@ export default function ConnectChannels({
   }
 
   return (
-    <div className="card" style={{ marginTop: 18 }}>
-      <h3 style={{ marginBottom: 6 }}>📲 Stay connected</h3>
-      <p className="muted" style={{ fontSize: ".88rem", marginBottom: 12 }}>
-        Get class alerts and ask doubts on the go. Reach the right team directly.
+    <div className="card" style={{ marginTop: 18, border: "2px solid var(--accent)", background: "var(--bg-soft)" }}>
+      <h3 style={{ marginBottom: 6, fontSize: "1.2rem" }}>🤝 Join our community</h3>
+      <p className="muted" style={{ fontSize: ".9rem", marginBottom: 14 }}>
+        Subscribe to the Telegram channel for updates, and reach our Faculty and Technical teams on WhatsApp.
+        Every subject also has its own Telegram group — open the subject under <strong>My courses</strong> to join it.
       </p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {linked ? (
           <span className="badge" style={{ color: "#22c55e", borderColor: "#22c55e" }}>✅ Telegram connected</span>
         ) : (
-          <button className="btn small" type="button" disabled={pending} onClick={connectBot}
+          <button className="btn" type="button" disabled={pending} onClick={connectBot}
             style={{ background: "#229ED9" }}>
             {pending ? "…" : "✈️ Connect Telegram (doubts & alerts)"}
           </button>
         )}
         {telegramChannel && (
-          <a className="btn small secondary" href={telegramChannel} target="_blank" rel="noopener noreferrer">
+          <a className="btn secondary" href={telegramChannel} target="_blank" rel="noopener noreferrer">
             📢 Subscribe to our Telegram channel (updates)
           </a>
         )}
         {facultyWa && (
-          <a className="btn small secondary" href={facultyWa} target="_blank" rel="noopener noreferrer"
+          <a className="btn secondary" href={facultyWa} target="_blank" rel="noopener noreferrer"
             style={{ background: "#25D366", color: "#fff" }}>
             👩‍🏫 WhatsApp the Faculty team
           </a>
         )}
         {techWa && (
-          <a className="btn small secondary" href={techWa} target="_blank" rel="noopener noreferrer"
+          <a className="btn secondary" href={techWa} target="_blank" rel="noopener noreferrer"
             style={{ background: "#128C7E", color: "#fff" }}>
             🛠️ WhatsApp the Technical team
           </a>

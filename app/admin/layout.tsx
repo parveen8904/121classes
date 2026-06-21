@@ -8,13 +8,15 @@ import PortalFooter from "@/app/components/PortalFooter";
 export const dynamic = "force-dynamic";
 
 const ADMIN_LINKS: [string, string][] = [
+  ["🏠 Dashboard", "/admin"],
   ["📘 Courses", "/admin/courses"],
   ["👥 Users", "/admin/users"],
   ["👩‍🏫 Faculty", "/admin/faculty"],
   ["📣 Announcements", "/admin/announcements"],
+  ["📜 Amendments", "/admin/amendments"],
   ["📥 Inbox", "/admin/inbox"],
   ["📚 AI Repository", "/admin/repository"],
-  ["🧭 Career & Amendments", "/admin/content"],
+  ["🎓 Career", "/admin/content"],
   ["🗄️ Storage", "/admin/storage"],
   ["🔌 Integrations", "/admin/integrations"],
   ["🎟️ Enrolment", "/admin/enrolment"],

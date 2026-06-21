@@ -7,7 +7,7 @@ import WellnessTip from "@/app/components/WellnessTip";
 import TodayPlan from "@/app/components/TodayPlan";
 import { addMyCourse, removeMyCourse } from "@/app/learn/mycourses";
 
-export default async function Dashboard() {
+export default async function Dashboard({ searchParams }: { searchParams: { saved?: string } }) {
   const supabase = createClient();
   const {
     data: { user },
@@ -61,6 +61,10 @@ export default async function Dashboard() {
           {user.email ?? user.phone} · 🎯 Target attempt:{" "}
           {profile?.target_attempt ?? "not set"}
         </p>
+
+        {searchParams?.saved === "profile" && (
+          <div className="notice ok" style={{ marginTop: 14 }}>✅ Profile saved.</div>
+        )}
 
         <div style={{ marginTop: 20 }}>
           <SetPassword />

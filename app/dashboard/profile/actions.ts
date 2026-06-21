@@ -30,5 +30,6 @@ export async function updateProfile(formData: FormData) {
 
   revalidatePath("/dashboard/profile");
   revalidatePath("/dashboard");
-  redirect("/dashboard/profile?saved=1");
+  // Saving closes the profile form and returns to the dashboard with a confirmation.
+  redirect("/dashboard?saved=profile");
 }

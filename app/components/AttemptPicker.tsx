@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
+// CA exams are held only in these four months.
+const MONTHS = ["January", "May", "September", "November"];
 
 // A standard attempt picker: pick a month + a year → produces "May 2026".
 // Drop-in for any form field — submits a single hidden input under `name`.

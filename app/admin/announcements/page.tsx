@@ -12,6 +12,7 @@ const KINDS = [
   { value: "industry", label: "Industry" },
   { value: "macro", label: "Macro" },
 ];
+const KIND_LABEL: Record<string, string> = Object.fromEntries(KINDS.map((k) => [k.value, k.label]));
 
 function KindSelect({ name, value }: { name: string; value?: string }) {
   return (
@@ -92,11 +93,19 @@ export default async function AnnouncementsPage({
         </form>
       </div>
 
-      <div style={{ marginTop: 24, display: "grid", gap: 12 }}>
+      <h2 className="admin-section-title">📋 All announcements ({(items ?? []).length})</h2>
+      <p className="muted" style={{ fontSize: ".9rem" }}>Tap one to open and edit it; it collapses again after you save.</p>
+      <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
         {items && items.length > 0 ? (
           items.map((a) => (
-            <div className="card" key={a.id}>
-              <form action={updateAnnouncement}>
+            <details className="card" key={a.id}>
+              <summary style={{ cursor: "pointer", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <strong>{a.title}</strong>
+                <span className="muted" style={{ fontSize: ".82rem" }}>
+                  {KIND_LABEL[a.kind] ?? a.kind} · {a.is_published ? "🟢 published" : "⚪ draft"}
+                </span>
+              </summary>
+              <form action={updateAnnouncement} style={{ marginTop: 12 }}>
                 <input type="hidden" name="id" value={a.id} />
                 <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 2fr" }}>
                   <div>
@@ -116,13 +125,11 @@ export default async function AnnouncementsPage({
                   <input type="checkbox" name="is_published" defaultChecked={a.is_published} /> Published
                 </label>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button className="btn small" type="submit">
-                    Save
-                  </button>
+                  <SubmitButton className="btn small" closeDetails>Save</SubmitButton>
                   <DeleteButton action={deleteAnnouncement} id={a.id} message="Delete this announcement?" />
                 </div>
               </form>
-            </div>
+            </details>
           ))
         ) : (
           <p className="muted">No announcements yet. Add the first one above.</p>

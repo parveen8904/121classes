@@ -29,7 +29,7 @@ export default async function SiteFooter() {
             Office: W 6/30, DLF Phase 3, Gurugram
           </p>
           <p className="muted" style={{ marginTop: 4, fontSize: ".82rem" }}>
-            📧 <a className="grad" href="mailto:help@121caclasses.com">help@121caclasses.com</a>
+            📧 <a className="grad" href="mailto:mail@caparveensharma.com">mail@caparveensharma.com</a>
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
             {telegram && (

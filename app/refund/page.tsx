@@ -55,7 +55,7 @@ export default function Refund() {
 
         <h2>6. How to request a refund</h2>
         <p>
-          Email <a className="grad" href="mailto:help@121caclasses.com">help@121caclasses.com</a> with
+          Email <a className="grad" href="mailto:mail@caparveensharma.com">mail@caparveensharma.com</a> with
           your registered name, order or account details, and the reason for your request. We aim to
           respond within 3 business days.
         </p>

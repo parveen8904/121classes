@@ -99,7 +99,7 @@ export default function Privacy() {
         <p>
           <strong>121 CA Classes</strong> (a venture of CA Parveen Sharma)<br />
           W 6/30, DLF Phase 3, Gurugram, Haryana, India<br />
-          Email: <a className="grad" href="mailto:help@121caclasses.com">help@121caclasses.com</a>
+          Email: <a className="grad" href="mailto:mail@caparveensharma.com">mail@caparveensharma.com</a>
         </p>
 
         <p className="muted" style={{ marginTop: 24, fontSize: ".82rem" }}>

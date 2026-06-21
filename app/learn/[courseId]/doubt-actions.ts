@@ -10,7 +10,7 @@ import { dailyDoubtLimitReached } from "@/lib/limits";
 export async function askSubjectDoubt(input: {
   subjectId: string;
   question: string;
-}): Promise<{ ok: boolean; answer: string | null }> {
+}): Promise<{ ok: boolean; answer: string | null; limited?: boolean }> {
   const supabase = createClient();
   const {
     data: { user },
@@ -19,12 +19,21 @@ export async function askSubjectDoubt(input: {
   const question = (input.question ?? "").trim();
   if (question.length < 3) return { ok: false, answer: null };
 
+  // Max 20 AI queries per student per day (shared counter across doubts + Ask me).
+  if (await dailyDoubtLimitReached(user.id)) return { ok: true, answer: null, limited: true };
+
   let answer: string | null = null;
-  const limited = await dailyDoubtLimitReached(user.id);
-  if (!limited && (await aiConfigured())) {
+  if (await aiConfigured()) {
     const material = await getRepositoryContext(input.subjectId, 12000, { query: question });
     const raw = await answerDoubtFromMaterial(question, material);
     if (raw && raw.trim() !== NEED_FACULTY) answer = raw;
   }
-  return { ok: true, answer };
+  // Log so it counts toward the daily limit and shows in the student's inbox.
+  await supabase.from("doubts").insert({
+    student_id: user.id,
+    question,
+    ai_answer: answer,
+    status: answer ? "answered" : "open",
+  });
+  return { ok: true, answer, limited: false };
 }

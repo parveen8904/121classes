@@ -29,14 +29,24 @@ export default function AskDoubts({
   const [q, setQ] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
   const [asked, setAsked] = useState(false);
+  const [limited, setLimited] = useState(false);
   const [pending, start] = useTransition();
 
   const wa = waHref(facultyPhone);
+
+  function close() {
+    setOpen(false);
+    setAsked(false);
+    setAnswer(null);
+    setLimited(false);
+    setQ("");
+  }
 
   function submit() {
     start(async () => {
       const r = await askSubjectDoubt({ subjectId, question: q });
       setAnswer(r.ok ? r.answer : null);
+      setLimited(!!r.limited);
       setAsked(true);
     });
   }
@@ -49,22 +59,30 @@ export default function AskDoubts({
         className="askdoubts-flash"
         style={{
           border: "none",
-          borderRadius: 12,
-          padding: "12px 18px",
-          fontWeight: 800,
-          fontSize: "1rem",
+          borderRadius: 999,
+          padding: "8px 14px",
+          fontWeight: 700,
+          fontSize: ".85rem",
           color: "#fff",
           cursor: "pointer",
-          background: "linear-gradient(135deg,#7c3aed,#4f46e5)",
+          background: "#16a34a",
         }}
       >
-        💬 Ask your doubts — instant reply
+        💬 Ask your doubts
       </button>
     );
   }
 
   return (
-    <div className="card" style={{ marginTop: 4, border: "2px solid var(--accent)" }}>
+    <div className="card" style={{ marginTop: 4, border: "2px solid var(--accent)", position: "relative" }}>
+      <button
+        type="button"
+        onClick={close}
+        aria-label="Close"
+        style={{ position: "absolute", top: 8, right: 10, background: "none", border: "none", fontSize: "1.3rem", lineHeight: 1, cursor: "pointer", color: "var(--muted)" }}
+      >
+        ×
+      </button>
       {!asked ? (
         <>
           <strong>💬 Ask your doubt — {subjectTitle}</strong>
@@ -82,12 +100,14 @@ export default function AskDoubts({
             <button className="btn" type="button" disabled={pending || q.trim().length < 3} onClick={submit}>
               {pending ? "Thinking…" : "Get instant reply ⚡"}
             </button>
-            <button className="btn secondary" type="button" onClick={() => setOpen(false)}>Close</button>
+            <button className="btn secondary" type="button" onClick={close}>Close</button>
           </div>
         </>
       ) : (
         <>
-          {answer ? (
+          {limited ? (
+            <p className="muted" style={{ marginTop: 0, marginRight: 24 }}>🙏 You&apos;ve reached today&apos;s limit of 20 questions. Continue tomorrow, or send this doubt to the faculty below.</p>
+          ) : answer ? (
             <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, marginTop: 0 }}>{answer}</p>
           ) : (
             <p className="muted" style={{ marginTop: 0 }}>I couldn&apos;t answer this from your class material — please send it to the faculty below.</p>

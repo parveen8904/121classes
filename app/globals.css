@@ -160,21 +160,17 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 /* "Ask me" floating widget (every page) */
 .askme-fab {
   position: fixed; left: 18px; bottom: 18px; z-index: 120;
-  background: linear-gradient(135deg,#7c3aed,#4f46e5); color: #fff;
-  border: none; border-radius: 999px; padding: 14px 22px; font-weight: 800; font-size: 1rem;
-  cursor: pointer; box-shadow: 0 8px 24px rgba(79,70,229,.45);
-  animation: askmePulse 2.4s ease-in-out infinite;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 999px; padding: 9px 15px; font-weight: 700; font-size: .85rem;
+  cursor: pointer; box-shadow: 0 3px 10px rgba(0,0,0,.18);
 }
-.askme-fab:hover { filter: brightness(1.06); transform: translateY(-1px); }
-@keyframes askmePulse {
-  0%, 100% { box-shadow: 0 8px 24px rgba(79,70,229,.40); }
-  50% { box-shadow: 0 8px 32px rgba(124,58,237,.75); }
-}
-.askdoubts-flash { animation: askdoubtsFlash 1.8s ease-in-out infinite; }
-.askdoubts-flash:hover { filter: brightness(1.07); transform: translateY(-1px); }
+.askme-fab:hover { filter: brightness(1.05); }
+/* Small, subtle green flash for the subject "Ask your doubts" button. */
+.askdoubts-flash { animation: askdoubtsFlash 2s ease-in-out infinite; }
+.askdoubts-flash:hover { filter: brightness(1.06); }
 @keyframes askdoubtsFlash {
-  0%, 100% { box-shadow: 0 4px 14px rgba(124,58,237,.35); transform: scale(1); }
-  50% { box-shadow: 0 8px 26px rgba(124,58,237,.75); transform: scale(1.03); }
+  0%, 100% { box-shadow: 0 2px 8px rgba(22,163,74,.35); }
+  50% { box-shadow: 0 3px 14px rgba(22,163,74,.70); }
 }
 .askme-overlay {
   position: fixed; inset: 0; z-index: 210; display: flex; align-items: center; justify-content: center;

@@ -110,6 +110,7 @@ export default function SectionForm({
   subjectCode = "",
   topicCode = "",
   groups = [],
+  kindMode = false,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   topicId: string;
@@ -120,10 +121,31 @@ export default function SectionForm({
   subjectCode?: string;
   topicCode?: string;
   groups?: { id: string; name: string }[];
+  kindMode?: boolean;
 }) {
-  const [type, setType] = useState(section?.type ?? defaultType ?? "full_class_video");
-  const def = SECTION_TYPES.find((t) => t.value === type);
+  // A "video" content item can be a detailed class, a revision-round video, or a
+  // plain video — the Kind decides the underlying type + numbering.
+  const KIND_TO_TYPE: Record<string, string> = {
+    class: "full_class_video",
+    rev1: "revision_video",
+    rev2: "revision_video",
+    video: "discussion_video",
+  };
   const cfg = (section?.config ?? {}) as Record<string, string>;
+  const initKind =
+    section
+      ? section.type === "full_class_video"
+        ? "class"
+        : section.type === "revision_video"
+          ? cfg.revision_round === "Second"
+            ? "rev2"
+            : "rev1"
+          : "video"
+      : "class";
+  const [kind, setKind] = useState(initKind);
+  const [typeState, setTypeState] = useState(section?.type ?? defaultType ?? "full_class_video");
+  const type = kindMode ? KIND_TO_TYPE[kind] : typeState;
+  const def = SECTION_TYPES.find((t) => t.value === type);
   const showAutoNumber = type === "full_class_video" || type === "revision_video";
   const isAdd = !section;
   const [resetN, setResetN] = useState(0);
@@ -141,17 +163,31 @@ export default function SectionForm({
       <input type="hidden" name="topicId" value={topicId} />
       <div key={resetN}>
 
-      <div style={{ display: "grid", gap: 14, gridTemplateColumns: lockType ? "3fr 0.7fr" : "2fr 1.3fr 0.7fr" }}>
+      <div style={{ display: "grid", gap: 14, gridTemplateColumns: lockType && !kindMode ? "3fr 0.7fr" : "2fr 1.3fr 0.7fr" }}>
         <div>
           <label>Title</label>
-          <input name="title" defaultValue={section?.title ?? ""} placeholder="e.g. First revision" required />
+          <input name="title" defaultValue={section?.title ?? ""} placeholder="e.g. AS 13 — Class 1" required />
         </div>
-        {lockType ? (
+        {kindMode ? (
+          <div>
+            <label>Kind (sets the numbering)</label>
+            <select value={kind} onChange={(e) => setKind(e.target.value)}>
+              <option value="class">🎓 Detailed class (auto 1, 2, 3…)</option>
+              <option value="rev1">🎬 Revision — Round 1 (R1)</option>
+              <option value="rev2">🎬 Revision — Round 2 (R2)</option>
+              <option value="video">🎞️ Plain video (no number)</option>
+            </select>
+            <input type="hidden" name="type" value={type} />
+            {(kind === "rev1" || kind === "rev2") && (
+              <input type="hidden" name="revision_round" value={kind === "rev2" ? "Second" : "First"} />
+            )}
+          </div>
+        ) : lockType ? (
           <input type="hidden" name="type" value={type} />
         ) : (
           <div>
             <label>Type</label>
-            <select name="type" value={type} onChange={(e) => setType(e.target.value)}>
+            <select name="type" value={type} onChange={(e) => setTypeState(e.target.value)}>
               {SECTION_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
@@ -194,7 +230,7 @@ export default function SectionForm({
 
       {def && def.fields.length > 0 && (
         <div style={{ marginTop: 4 }}>
-          {def.fields.map((f: ConfigField) =>
+          {def.fields.filter((f) => !(kindMode && f === "revision_round")).map((f: ConfigField) =>
             f === "bunny_video_id" ? (
               <BunnyUploader key={f} name={f} defaultValue={cfg[f] ?? ""} />
             ) : PDF_FIELDS.includes(f) ? (

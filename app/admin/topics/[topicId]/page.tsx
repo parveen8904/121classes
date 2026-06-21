@@ -194,33 +194,19 @@ export default async function TopicDetail({
       </form>
 
       <h2 className="admin-section-title">➕ Add content to a section</h2>
-      <p className="muted" style={{ fontSize: ".9rem" }}>Pick what to add — a class, a revision video, or a test — and choose which Section it goes in.</p>
+      <p className="muted" style={{ fontSize: ".9rem" }}>Content is one of four kinds — a <strong>video</strong>, a <strong>PDF</strong>, an <strong>MCQ test</strong> or a <strong>descriptive test</strong>. Pick the Section it goes into in each form.</p>
       <div style={{ marginTop: 8, display: "grid", gap: 10 }}>
         <details>
-          <summary className="btn secondary as-btn">🎓 Add a class</summary>
+          <summary className="btn secondary as-btn">🎥 Add a video</summary>
           <div className="form-card" style={{ marginTop: 10 }}>
-            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Lecture video + PDF + transcript. The unique number is built for you. Add as many as the topic needs.</p>
-            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add class" defaultType="full_class_video" subjectCode={subjectCode} topicCode={topicCode} groups={groupList} />
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Upload the video (+ PDF/notes). Choose its <strong>Kind</strong>: a detailed class is auto-numbered 1, 2, 3…; a Revision Round 1 / 2 video is numbered R1 / R2; a plain video gets no number.</p>
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add video" defaultType="full_class_video" kindMode subjectCode={subjectCode} topicCode={topicCode} groups={groupList} />
           </div>
         </details>
         <details>
-          <summary className="btn secondary as-btn">🎬 Add a revision video</summary>
+          <summary className="btn secondary as-btn">📄 Add a PDF</summary>
           <div className="form-card" style={{ marginTop: 10 }}>
-            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Revision video + PDF + transcript. The unique number is built for you. Set its tier (Gold/Silver/Bronze) below.</p>
-            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add revision video" defaultType="revision_video" subjectCode={subjectCode} topicCode={topicCode} groups={groupList} />
-          </div>
-        </details>
-        <details>
-          <summary className="btn secondary as-btn">🎞️ Add a video</summary>
-          <div className="form-card" style={{ marginTop: 10 }}>
-            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>A standalone video (e.g. a walkthrough). Upload the video and pick its Section.</p>
-            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add video" defaultType="discussion_video" subjectCode={subjectCode} topicCode={topicCode} groups={groupList} />
-          </div>
-        </details>
-        <details>
-          <summary className="btn secondary as-btn">📄 Add a PDF / notes</summary>
-          <div className="form-card" style={{ marginTop: 10 }}>
-            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Upload a PDF (notes, material) into a Section — no video needed.</p>
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Upload a PDF (notes / material) into a Section — no video needed.</p>
             <SectionForm action={createSection} topicId={topic.id} submitLabel="Add PDF" defaultType="pdf" groups={groupList} />
           </div>
         </details>
@@ -241,7 +227,7 @@ export default async function TopicDetail({
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        <h2 className="admin-section-title" style={{ margin: 0 }}>🎓 Classes, revision videos &amp; tests</h2>
+        <h2 className="admin-section-title" style={{ margin: 0 }}>📦 Content in this topic</h2>
         <span style={{ fontWeight: 700, fontSize: ".95rem", background: "var(--bg-soft)", padding: "6px 12px", borderRadius: 8, whiteSpace: "nowrap" }}>
           🎓 {mainClassCount} {mainClassCount === 1 ? "class" : "classes"} · ⏱️ {fmtMins(topicMins)}
         </span>
@@ -366,6 +352,7 @@ export default async function TopicDetail({
                     subjectCode={subjectCode}
                     topicCode={topicCode}
                     groups={groupList}
+                    kindMode={["full_class_video", "revision_video", "discussion_video"].includes(s.type)}
                   />
                 </div>
               </div>

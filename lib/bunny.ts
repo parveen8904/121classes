@@ -44,6 +44,35 @@ export async function maybeBunnyAlert() {
   await svc.from("site_settings").upsert({ key: flagKey, value: "1" }, { onConflict: "key" });
 }
 
+// Create a Bunny Stream video and have Bunny FETCH it from a URL (server-side,
+// so the big file never streams through us). Returns the new video GUID. Used by
+// the Zoom recording webhook to auto-import a finished class recording.
+export async function bunnyImportFromUrl(title: string, url: string): Promise<string | null> {
+  const apiKey = await getSecret("BUNNY_STREAM_API_KEY");
+  const lib = (await getSecret("BUNNY_LIBRARY_ID")) || process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID || "682810";
+  if (!apiKey || !url) return null;
+  try {
+    const cr = await fetch(`https://video.bunnycdn.com/library/${lib}/videos`, {
+      method: "POST",
+      headers: { AccessKey: apiKey, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ title: title.slice(0, 200) }),
+      cache: "no-store",
+    });
+    if (!cr.ok) return null;
+    const guid = (await cr.json())?.guid as string | undefined;
+    if (!guid) return null;
+    await fetch(`https://video.bunnycdn.com/library/${lib}/videos/${guid}/fetch`, {
+      method: "POST",
+      headers: { AccessKey: apiKey, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ url }),
+      cache: "no-store",
+    });
+    return guid;
+  } catch {
+    return null;
+  }
+}
+
 // Build a Bunny Stream embed URL. SERVER-ONLY (signs with the secret token key).
 // If BUNNY_STREAM_TOKEN_KEY is set, produces a signed URL that works with Bunny
 // "Token Authentication" ON (secure). If not set, returns the plain embed

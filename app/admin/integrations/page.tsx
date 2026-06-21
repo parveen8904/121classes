@@ -161,6 +161,7 @@ export default async function IntegrationsPage({
           <KeyField name="BUNNY_STREAM_API_KEY" label="Bunny Stream API key (video uploads)" placeholder="from dash.bunny.net → Stream → API" />
           <KeyField name="BUNNY_LIBRARY_ID" label="Bunny Library ID (optional)" placeholder="e.g. 682810" />
           <KeyField name="BUNNY_ACCOUNT_API_KEY" label="Bunny ACCOUNT API key (for live cost on Costs page)" placeholder="dash.bunny.net → Account → API" />
+          <KeyField name="ZOOM_WEBHOOK_SECRET_TOKEN" label="Zoom webhook secret token (auto-import class recordings to Bunny)" placeholder="Zoom app → Feature → Event Subscriptions → Secret Token" />
           <KeyField name="SERPAPI_KEY" label="Google Jobs (SerpAPI) key — placement" placeholder="from serpapi.com" />
           <KeyField name="JOOBLE_API_KEY" label="Jooble key (free fallback) — placement" placeholder="from jooble.org/api/about" />
           <KeyField name="MAILGUN_API_KEY" label="Mailgun API key" placeholder="key-…" />
@@ -184,6 +185,12 @@ export default async function IntegrationsPage({
           <KeyField name="R2_PUBLIC_BASE" label="R2 Public URL (custom domain or r2.dev)" placeholder="https://files.121caclasses.com" />
           <SubmitButton className="btn" style={{ marginTop: 6 }}>Save keys</SubmitButton>
         </form>
+        <p className="muted" style={{ fontSize: ".82rem", marginTop: 12 }}>
+          🎥 <strong>Zoom auto-record:</strong> in your Zoom <em>Server-to-Server OAuth</em> app → <em>Feature → Event Subscriptions</em>, add the event
+          <strong> &ldquo;Recording Completed&rdquo;</strong> with the webhook URL
+          <code> https://caparveensharma.com/api/zoom/recording</code>, then paste that app&apos;s <strong>Secret Token</strong> above.
+          After a live class, Zoom&apos;s cloud recording is then auto-imported into Bunny and attached to that class (matched by the Zoom join link).
+        </p>
       </div>
 
       {/* PUBLIC LINKS */}

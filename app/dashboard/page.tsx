@@ -114,12 +114,6 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
         >
           {[
             {
-              href: "/planner",
-              emoji: "🗓️",
-              title: "Build my plan",
-              desc: "Your study planner — plan how to finish the course, aim for a rank, and time your revisions.",
-            },
-            {
               href: "/amendments",
               emoji: "📜",
               title: "Know your amendments and updates",

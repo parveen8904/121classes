@@ -8,41 +8,51 @@ import { removeMyCourse } from "@/app/learn/mycourses";
 // only appear in "Manage" mode, so the normal view stays clean. Adding courses
 // is handled separately (the "＋ Add a course" expander below this).
 export default function MyCourses({ courses }: { courses: { id: string; title: string }[] }) {
-  const [managing, setManaging] = useState(false);
+  const [managingIds, setManagingIds] = useState<Set<string>>(new Set());
+  const toggle = (id: string) =>
+    setManagingIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 10, margin: "32px 0 16px" }}>
-        <h2 style={{ margin: 0, fontSize: "1.2rem" }}>📚 My courses</h2>
-        {courses.length > 0 && (
-          <button
-            type="button"
-            className="btn small secondary"
-            onClick={() => setManaging((m) => !m)}
-          >
-            {managing ? "✓ Done" : "⚙️ Manage"}
-          </button>
-        )}
-      </div>
+      <h2 style={{ margin: "32px 0 16px", fontSize: "1.2rem" }}>📚 My courses</h2>
 
       {courses.length > 0 ? (
         <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))" }}>
-          {courses.map((c) => (
-            <div key={c.id} className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-              <Link href={`/learn/${c.id}`} style={{ display: "block" }}>
-                <h3>📘 {c.title}</h3>
-                <p className="muted" style={{ fontSize: ".85rem", marginTop: 8 }}>
-                  Open course → subjects, topics &amp; classes →
+          {courses.map((c) => {
+            const managing = managingIds.has(c.id);
+            return (
+              <div key={c.id} className="card" style={{ height: "100%", display: "flex", flexDirection: "column", gap: 6 }}>
+                {/* Clear, obviously-clickable course link */}
+                <Link
+                  href={`/learn/${c.id}`}
+                  style={{ color: "var(--accent)", fontWeight: 800, fontSize: "1.2rem", textDecoration: "underline" }}
+                >
+                  📘 {c.title} →
+                </Link>
+                <p className="muted" style={{ fontSize: ".85rem", margin: 0 }}>
+                  Tap the name above to open subjects, topics &amp; classes.
                 </p>
-              </Link>
-              {managing && (
-                <form action={removeMyCourse} style={{ marginTop: "auto", paddingTop: 12 }}>
-                  <input type="hidden" name="course_id" value={c.id} />
-                  <button className="btn small secondary" type="submit">✕ Remove from my courses</button>
-                </form>
-              )}
-            </div>
-          ))}
+                <div style={{ marginTop: "auto", paddingTop: 10 }}>
+                  {managing ? (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <form action={removeMyCourse}>
+                        <input type="hidden" name="course_id" value={c.id} />
+                        <button className="btn small secondary" type="submit">✕ Remove from my courses</button>
+                      </form>
+                      <button type="button" className="btn small secondary" onClick={() => toggle(c.id)}>Done</button>
+                    </div>
+                  ) : (
+                    <button type="button" className="btn small secondary" onClick={() => toggle(c.id)}>⚙️ Manage</button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="card">

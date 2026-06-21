@@ -88,7 +88,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   const sumRev = new Map<string, number>(), sumRevMins = new Map<string, number>();
   const sumMcq = new Map<string, number>(), sumDesc = new Map<string, number>();
   const subjMaterials = new Map<string, Set<string>>();
-  const topicRange = new Map<string, { min: number; max: number }>();
+  const topicClassCount = new Map<string, number>(); // non-part classes per topic
   const inc = (m: Map<string, number>, k: string, by = 1) => m.set(k, (m.get(k) ?? 0) + by);
   if (topicIds2.length) {
     const { data: secRows } = await supabase
@@ -107,12 +107,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
         // Don't count ≤100-min "part" continuations (e.g. 7B) as extra classes.
         const isPart = /[A-Za-z]/.test(String(cfg.class_no ?? ""));
         inc(sumClassMins, sid, d);
-        if (!isPart) inc(sumClasses, sid);
-        const no = parseInt(String(cfg.class_no ?? "").replace(/\D/g, ""), 10);
-        if (Number.isFinite(no) && no > 0) {
-          const cur = topicRange.get(tid);
-          topicRange.set(tid, { min: Math.min(cur?.min ?? no, no), max: Math.max(cur?.max ?? no, no) });
-        }
+        if (!isPart) { inc(sumClasses, sid); inc(topicClassCount, tid); }
       } else if (type === "revision_video") { inc(sumRev, sid); inc(sumRevMins, sid, d); }
       else if (type === "mcq_test") inc(sumMcq, sid);
       else if (type === "subjective_test") inc(sumDesc, sid);
@@ -134,6 +129,25 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   const MAT_LABEL: Record<string, string> = { book: "📕 Books", question_bank: "📚 Question bank", icai: "🏛️ ICAI", rtp: "📄 RTP", mtp: "📄 MTP", past_papers: "🗂️ Past papers", notes: "📝 Notes" };
 
   const target = profile?.target_attempt ?? null;
+
+  // Continuous class numbering across a subject's topics, in display order:
+  // topic 1 → "Classes 1 to 10", topic 2 → "Classes 11 to 15", etc. Based on how
+  // many (non-part) classes each topic has, so it doesn't depend on stored class_no.
+  const topicClassRange = new Map<string, { start: number; end: number }>();
+  for (const s of subjects ?? []) {
+    const ordered = (topics ?? []).filter(
+      (t) => t.subject_id === s.id && topicVisible(target, t.valid_from_attempt, t.valid_to_attempt),
+    );
+    let running = 0;
+    for (const t of ordered) {
+      const cnt = topicClassCount.get(t.id) ?? 0;
+      if (cnt > 0) {
+        topicClassRange.set(t.id, { start: running + 1, end: running + cnt });
+        running += cnt;
+      }
+    }
+  }
+
   type Sub = {
     id: string;
     ends_at: string | null;
@@ -156,14 +170,15 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
           <Link href="/dashboard">← Dashboard</Link>
         </p>
 
-        <div className="learn-hero">
+        {/* Compact course header — the subject banners below are the prominent part. */}
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
           <span className="badge">📘 Course</span>
-          <h1>{course.title}</h1>
-          <p className="meta">
+          <h1 style={{ fontSize: "1.25rem", margin: 0 }}>{course.title}</h1>
+          <span className="muted" style={{ fontSize: ".82rem" }}>
             {(subjects ?? []).length} subject{(subjects ?? []).length === 1 ? "" : "s"}
             {" · "}
             {target ? `filtered to ${target}` : "set your target attempt to filter content"}
-          </p>
+          </span>
         </div>
 
         {/* Quiet active-access line for students who have paid — no marketing. */}
@@ -206,35 +221,42 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
             );
             return (
               <div key={s.id} className="subj-block">
-                <div className="subj-head" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <h2 style={{ margin: 0 }}>{s.title}</h2>
-                  {faculty.length > 0 && <span className="subj-faculty">with {faculty.join(", ")}</span>}
-                  {mySubjIds.has(s.id) ? (
-                    <form action={removeMySubject} style={{ marginLeft: "auto" }}>
-                      <input type="hidden" name="subject_id" value={s.id} />
-                      <input type="hidden" name="course_id" value={course.id} />
-                      <button className="btn small secondary" type="submit">✓ In my subjects · Remove</button>
-                    </form>
-                  ) : (
-                    <form action={addMySubject} style={{ marginLeft: "auto" }}>
-                      <input type="hidden" name="subject_id" value={s.id} />
-                      <input type="hidden" name="course_id" value={course.id} />
-                      <button className="btn small" type="submit">＋ Add to my subjects</button>
-                    </form>
+                {/* Prominent subject banner — carries the faculty contact. */}
+                <div style={{ border: "2px solid var(--accent)", background: "var(--bg-soft)", borderRadius: 12, padding: "16px 18px", marginBottom: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                    <div>
+                      <h2 style={{ margin: 0, fontSize: "1.6rem" }}>{s.title}</h2>
+                      {faculty.length > 0 && <span className="subj-faculty">with {faculty.join(", ")}</span>}
+                    </div>
+                    {mySubjIds.has(s.id) ? (
+                      <form action={removeMySubject} style={{ margin: 0 }}>
+                        <input type="hidden" name="subject_id" value={s.id} />
+                        <input type="hidden" name="course_id" value={course.id} />
+                        <button className="btn small secondary" type="submit">✓ In my subjects · Remove</button>
+                      </form>
+                    ) : (
+                      <form action={addMySubject} style={{ margin: 0 }}>
+                        <input type="hidden" name="subject_id" value={s.id} />
+                        <input type="hidden" name="course_id" value={course.id} />
+                        <button className="btn small" type="submit">＋ Add to my subjects</button>
+                      </form>
+                    )}
+                  </div>
+                  {facultyContacts.length > 0 && (
+                    <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+                      {facultyContacts.map((f, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 600 }}>👩‍🏫 {f.full_name}</span>
+                          {f.phone && <span className="muted" style={{ fontSize: ".85rem" }}>📱 {f.phone}</span>}
+                          {f.phone && <a className="btn small" href={waHref(f.phone)} target="_blank" rel="noopener noreferrer" style={{ background: "#25D366", color: "#fff" }}>💬 WhatsApp</a>}
+                          {f.email && <span className="muted" style={{ fontSize: ".85rem" }}>✉️ {f.email}</span>}
+                          {f.email && <a className="btn small secondary" href={`mailto:${f.email}`}>Email</a>}
+                        </div>
+                      ))}
+                      <p className="muted" style={{ fontSize: ".8rem", margin: 0 }}>🙏 Please WhatsApp your message to the faculty — kindly avoid calling.</p>
+                    </div>
                   )}
                 </div>
-                {facultyContacts.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                    {facultyContacts.map((f, i) => (
-                      <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                        <span className="muted" style={{ fontSize: ".82rem" }}>👩‍🏫 {f.full_name}:</span>
-                        {f.phone && <a className="btn small secondary" href={`tel:${f.phone}`}>📞 {f.phone}</a>}
-                        {f.phone && <a className="btn small secondary" href={waHref(f.phone)} target="_blank" rel="noopener noreferrer" style={{ background: "#25D366", color: "#fff" }}>💬 WhatsApp</a>}
-                        {f.email && <a className="btn small secondary" href={`mailto:${f.email}`}>✉️ Email</a>}
-                      </span>
-                    ))}
-                  </div>
-                )}
                 {mySubjIds.has(s.id) && (s as { telegram_group_url?: string | null }).telegram_group_url && (
                   <a
                     className="btn small secondary"
@@ -267,29 +289,32 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                   );
                 })()}
                 {subjTopics.length > 0 ? (
-                  <div className="topic-grid">
-                    {subjTopics.map((t) => (
-                      <Link key={t.id} href={`/learn/topic/${t.id}`} style={{ display: "block" }}>
-                        <div className="topic-card">
-                          <h3 style={{ fontSize: "1.08rem" }}>{t.title}</h3>
-                          {(() => {
-                            const r = topicRange.get(t.id);
-                            if (!r) return null;
-                            return (
-                              <p className="muted" style={{ fontSize: ".78rem", fontWeight: 600 }}>
-                                🎓 {r.min === r.max ? `Class ${r.min}` : `Classes ${r.min}–${r.max}`}
-                              </p>
-                            );
-                          })()}
-                          {t.valid_from_attempt && (
-                            <p className="muted" style={{ fontSize: ".78rem" }}>
-                              From {t.valid_from_attempt}
-                            </p>
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {subjTopics.map((t) => {
+                      const r = topicClassRange.get(t.id);
+                      return (
+                        <Link
+                          key={t.id}
+                          href={`/learn/topic/${t.id}`}
+                          className="card"
+                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, color: "var(--text)" }}
+                        >
+                          <span style={{ fontSize: "1.08rem", fontWeight: 700 }}>
+                            {t.title}
+                            {t.valid_from_attempt && (
+                              <span className="muted" style={{ fontSize: ".78rem", fontWeight: 400, marginLeft: 8 }}>
+                                From {t.valid_from_attempt}
+                              </span>
+                            )}
+                          </span>
+                          {r && (
+                            <span style={{ fontSize: "1.08rem", fontWeight: 700, whiteSpace: "nowrap" }}>
+                              {r.start === r.end ? `Class ${r.start}` : `Classes ${r.start} to ${r.end}`}
+                            </span>
                           )}
-                          <span className="go">Open topic →</span>
-                        </div>
-                      </Link>
-                    ))}
+                        </Link>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="muted" style={{ fontSize: ".9rem", marginTop: 10 }}>

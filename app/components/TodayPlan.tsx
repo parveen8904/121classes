@@ -16,10 +16,10 @@ export default async function TodayPlan() {
 
   if (!schedule.length) {
     return (
-      <div className="card" style={{ marginTop: 18 }}>
-        <strong>🗓️ No study plan yet</strong>
-        <p className="muted" style={{ fontSize: ".88rem", margin: "4px 0 10px" }}>Build a day-by-day plan with your exam date and self-study hours.</p>
-        <Link className="btn small" href="/planner">Build my plan →</Link>
+      <div className="card" style={{ marginTop: 18, borderColor: "var(--accent)" }}>
+        <strong>🗓️ Build your own plan</strong>
+        <p className="muted" style={{ fontSize: ".88rem", margin: "4px 0 10px" }}>Plan how to finish the course, aim for a rank and time your revisions — a day-by-day plan from your exam date and self-study hours.</p>
+        <Link className="btn small" href="/planner">Build your own plan →</Link>
       </div>
     );
   }
@@ -32,7 +32,7 @@ export default async function TodayPlan() {
     <div className="card" style={{ marginTop: 18, borderColor: "var(--accent)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
         <strong>🗓️ Today&apos;s plan</strong>
-        <Link href="/planner" style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".85rem" }}>Full plan →</Link>
+        <Link href="/planner" style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".85rem" }}>Build your own plan →</Link>
       </div>
       {todays.length ? (
         <div style={{ display: "grid", gap: 4, marginTop: 8 }}>

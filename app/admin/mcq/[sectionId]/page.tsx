@@ -19,7 +19,7 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
 
   const { data: questions } = await supabase
     .from("mcq_questions")
-    .select("id, question, options, correct_index, order_index")
+    .select("id, question, options, correct_index, order_index, concept, source_class_no")
     .eq("section_id", section.id)
     .order("order_index");
   const ai = await aiConfigured();
@@ -119,6 +119,11 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                 <strong>
                   {i + 1}. {q.question}
+                  {(q.source_class_no || q.concept) && (
+                    <span className="muted" style={{ fontWeight: 400, fontSize: ".8rem" }}>
+                      {q.source_class_no ? ` · Class ${q.source_class_no}` : ""}{q.concept ? ` · ${q.concept}` : ""}
+                    </span>
+                  )}
                 </strong>
                 <DeleteButton action={deleteMcq} id={q.id} parentId={section.id} message="Delete this question?" />
               </div>

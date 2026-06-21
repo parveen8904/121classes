@@ -5,6 +5,7 @@ import DeleteButton from "../../_components/DeleteButton";
 import AdminHero from "../../_components/AdminHero";
 import { fmtMins } from "../../_lib/util";
 import SubmitButton from "@/app/components/SubmitButton";
+import AttemptPicker from "@/app/components/AttemptPicker";
 import {
   createTopic,
   deleteTopic,
@@ -156,9 +157,9 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                 <input id="t-order" name="order_index" type="number" defaultValue={0} />
               </div>
             </div>
-            <div style={{ maxWidth: 320 }}>
-              <label htmlFor="t-from">Applies from attempt (optional)</label>
-              <input id="t-from" name="valid_from_attempt" placeholder="e.g. MAY_2026 — blank = all attempts" />
+            <div style={{ maxWidth: 360 }}>
+              <label>Applies from attempt (optional — blank = all attempts)</label>
+              <AttemptPicker name="valid_from_attempt" allowNone />
             </div>
             <label className="remember" style={{ marginTop: 0 }}>
               <input type="checkbox" name="is_published" /> Published

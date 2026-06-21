@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import SubmitButton from "@/app/components/SubmitButton";
+import AttemptPicker from "@/app/components/AttemptPicker";
 
 export type TopicMeta = {
   id: string;
@@ -52,18 +53,18 @@ export default function TopicMetaForm({
       </div>
 
       {/* Basics */}
-      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr", marginTop: 8 }}>
-        <div>
-          <label>Weightage marks (ICAI) *</label>
-          <input name="weightage_marks" type="number" min={0} defaultValue={topic.weightage_marks ?? ""} placeholder="e.g. 12" />
-        </div>
+      <div style={{ marginTop: 8 }}>
+        <label>Weightage marks (ICAI) *</label>
+        <input name="weightage_marks" type="number" min={0} defaultValue={topic.weightage_marks ?? ""} placeholder="e.g. 12" style={{ maxWidth: 160 }} />
+      </div>
+      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr", marginTop: 8 }}>
         <div>
           <label>Applicable from attempt *</label>
-          <input name="valid_from_attempt" defaultValue={topic.valid_from_attempt ?? ""} placeholder="e.g. May 2026" />
+          <AttemptPicker name="valid_from_attempt" defaultValue={topic.valid_from_attempt ?? ""} />
         </div>
         <div>
-          <label>Applicable to attempt</label>
-          <input name="valid_to_attempt" defaultValue={topic.valid_to_attempt ?? ""} placeholder="(optional)" />
+          <label>Applicable to attempt (optional)</label>
+          <AttemptPicker name="valid_to_attempt" defaultValue={topic.valid_to_attempt ?? ""} allowNone />
         </div>
       </div>
       <label style={{ marginTop: 8 }}>Amendments up to</label>

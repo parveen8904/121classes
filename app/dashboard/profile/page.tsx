@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SubmitButton from "@/app/components/SubmitButton";
+import AttemptPicker from "@/app/components/AttemptPicker";
 import { updateProfile } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -55,14 +56,12 @@ export default async function ProfilePage({ searchParams }: { searchParams: { sa
                 <input id="phone" name="phone" defaultValue={p?.phone ?? ""} placeholder="10-digit mobile" />
               </div>
             </div>
-            <div style={{ maxWidth: 320 }}>
-              <label htmlFor="target_attempt">Target exam attempt</label>
-              <input
-                id="target_attempt"
-                name="target_attempt"
-                defaultValue={p?.target_attempt ?? ""}
-                placeholder="e.g. MAY_2026"
-              />
+            <div style={{ maxWidth: 360 }}>
+              <label>Target exam attempt</label>
+              <AttemptPicker name="target_attempt" defaultValue={p?.target_attempt ?? ""} />
+              <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
+                The attempt you&apos;re preparing for — pick the month and year.
+              </p>
             </div>
           </div>
 

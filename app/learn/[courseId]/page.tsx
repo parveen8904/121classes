@@ -301,9 +301,9 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                         >
                           <span style={{ fontSize: "1.08rem", fontWeight: 700 }}>
                             {t.title}
-                            {t.valid_from_attempt && (
+                            {(t as { amendments_upto?: string | null }).amendments_upto && (
                               <span className="muted" style={{ fontSize: ".78rem", fontWeight: 400, marginLeft: 8 }}>
-                                From {t.valid_from_attempt}
+                                📝 Amended up to {(t as { amendments_upto?: string }).amendments_upto}
                               </span>
                             )}
                           </span>

@@ -103,12 +103,12 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
 
         <WellnessTip />
 
-        {/* Three quick actions — same size, neutral (uncoloured) cards with emojis. */}
+        {/* Two bold, colourful quick-action cards (Gen-Z style). */}
         <div
           style={{
             display: "grid",
-            gap: 12,
-            gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))",
+            gap: 14,
+            gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
             marginTop: 18,
           }}
         >
@@ -116,25 +116,37 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
             {
               href: "/amendments",
               emoji: "📜",
-              title: "Know your amendments and updates",
-              desc: "The latest amendments and updates for your exams.",
+              title: "Know your amendments & updates",
+              desc: "Stay exam-ready with the latest amendments and updates ✨",
+              bg: "linear-gradient(135deg,#7c3aed,#4f46e5)",
             },
             {
               href: "/career",
-              emoji: "🎓",
-              title: "Get placements for articleship and job",
-              desc: "Openings and help for articleship and jobs.",
+              emoji: "💼",
+              title: "Get placements — articleship & job",
+              desc: "Live openings + help to land your articleship & job 🚀",
+              bg: "linear-gradient(135deg,#f97316,#ec4899)",
             },
           ].map((a) => (
             <Link
               key={a.href}
               href={a.href}
-              className="card"
-              style={{ display: "flex", flexDirection: "column", height: "100%" }}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
+                background: a.bg,
+                color: "#fff",
+                borderRadius: 18,
+                padding: "20px 22px",
+                textDecoration: "none",
+                boxShadow: "0 10px 28px rgba(79,70,229,.25)",
+              }}
             >
-              <span style={{ fontSize: "1.8rem", lineHeight: 1 }}>{a.emoji}</span>
-              <strong style={{ display: "block", marginTop: 8, fontSize: ".98rem" }}>{a.title}</strong>
-              <span className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>{a.desc}</span>
+              <span style={{ fontSize: "2.2rem", lineHeight: 1 }}>{a.emoji}</span>
+              <strong style={{ display: "block", marginTop: 10, fontSize: "1.1rem", color: "#fff" }}>{a.title}</strong>
+              <span style={{ fontSize: ".85rem", marginTop: 6, color: "rgba(255,255,255,.92)" }}>{a.desc}</span>
+              <span style={{ marginTop: "auto", paddingTop: 12, fontWeight: 800, color: "#fff" }}>Open →</span>
             </Link>
           ))}
         </div>

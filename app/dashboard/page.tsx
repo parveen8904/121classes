@@ -118,14 +118,14 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
               emoji: "📜",
               title: "Know your amendments & updates",
               desc: "Stay exam-ready with the latest amendments and updates ✨",
-              bg: "linear-gradient(135deg,#7c3aed,#4f46e5)",
+              bg: "linear-gradient(135deg,#0d9488,#10b981)",
             },
             {
               href: "/career",
               emoji: "💼",
               title: "Get placements — articleship & job",
               desc: "Live openings + help to land your articleship & job 🚀",
-              bg: "linear-gradient(135deg,#f97316,#ec4899)",
+              bg: "linear-gradient(135deg,#0f766e,#0d9488)",
             },
           ].map((a) => (
             <Link
@@ -140,7 +140,7 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
                 borderRadius: 18,
                 padding: "20px 22px",
                 textDecoration: "none",
-                boxShadow: "0 10px 28px rgba(79,70,229,.25)",
+                boxShadow: "0 8px 22px rgba(13,148,136,.22)",
               }}
             >
               <span style={{ fontSize: "2.2rem", lineHeight: 1 }}>{a.emoji}</span>

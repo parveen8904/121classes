@@ -220,6 +220,9 @@ export async function summarizeClassSection(formData: FormData) {
   const supabase = createClient();
   const { data: sec } = await supabase.from("sections").select("config").eq("id", sectionId).maybeSingle();
   const config = (sec?.config ?? {}) as Record<string, unknown>;
+  // Cache-first: if this class already has a saved summary, reuse it — never
+  // spend AI again. (The student/admin views read the saved copy directly.)
+  if (String(config.ai_summary ?? "").trim()) redirect(`/admin/topics/${topicId}?summary=exists`);
   const transcript = String(config.transcript ?? "");
   // Give the admin a real reason when nothing appears, instead of a silent no-op:
   //  · empty  → no/too-short transcript on this class

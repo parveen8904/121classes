@@ -37,11 +37,38 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
   const myCourses = (courses ?? []).filter((c) => myIds.has(c.id));
   const otherCourses = (courses ?? []).filter((c) => !myIds.has(c.id));
 
-  // Faculty contacts — name + phone/email, shown to every student.
-  const { data: faculty } = await supabase
-    .from("faculties")
-    .select("id, full_name, phone, email, photo_url")
-    .order("full_name");
+  // Faculty contacts — only the faculty teaching the subjects this student has
+  // opted for (their own subjects, plus all subjects of the courses on their
+  // shelf), not the whole faculty roster.
+  const { data: mySubjectRows } = await supabase
+    .from("my_subjects")
+    .select("subject_id")
+    .eq("student_id", user.id);
+  const optedSubjectIds = new Set((mySubjectRows ?? []).map((r) => r.subject_id as string));
+  if (myIds.size > 0) {
+    const { data: courseSubjects } = await supabase
+      .from("subjects")
+      .select("id")
+      .in("course_id", [...myIds]);
+    (courseSubjects ?? []).forEach((s) => optedSubjectIds.add(s.id as string));
+  }
+
+  let faculty: { id: string; full_name: string; phone: string | null; email: string | null; photo_url: string | null }[] = [];
+  if (optedSubjectIds.size > 0) {
+    const { data: sf } = await supabase
+      .from("subject_faculty")
+      .select("faculty_id")
+      .in("subject_id", [...optedSubjectIds]);
+    const facIds = [...new Set((sf ?? []).map((r) => r.faculty_id as string))];
+    if (facIds.length > 0) {
+      const { data: facs } = await supabase
+        .from("faculties")
+        .select("id, full_name, phone, email, photo_url")
+        .in("id", facIds)
+        .order("full_name");
+      faculty = facs ?? [];
+    }
+  }
 
   // Faculty messages / updates — shown to every student on login.
   const { data: announcements } = await supabase

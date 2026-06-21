@@ -7,7 +7,13 @@ import { addMySubject, removeMySubject } from "../mycourses";
 
 export const dynamic = "force-dynamic";
 
-type SubjectFacultyRow = { faculties: { full_name: string } | null };
+type SubjectFacultyRow = { faculties: { full_name: string; phone: string | null; email: string | null } | null };
+
+// wa.me needs full international digits; assume +91 for bare 10-digit numbers.
+function waHref(phone: string): string {
+  const d = phone.replace(/\D/g, "");
+  return `https://wa.me/${d.length === 10 ? `91${d}` : d}`;
+}
 
 function fmtDate(s: string | null): string {
   if (!s) return "—";
@@ -45,7 +51,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   const [{ data: subjects }, { data: subscription }] = await Promise.all([
     supabase
       .from("subjects")
-      .select("id, title, order_index, telegram_group_url, subject_faculty(faculties(full_name))")
+      .select("id, title, order_index, telegram_group_url, subject_faculty(faculties(full_name, phone, email))")
       .eq("course_id", course.id)
       .order("order_index")
       .order("title"),
@@ -188,9 +194,11 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
         {/* Subjects → topics */}
         {subjects && subjects.length > 0 ? (
           subjects.map((s) => {
-            const faculty = ((s.subject_faculty ?? []) as unknown as SubjectFacultyRow[])
-              .map((sf) => sf.faculties?.full_name)
-              .filter(Boolean);
+            const facultyRows = ((s.subject_faculty ?? []) as unknown as SubjectFacultyRow[])
+              .map((sf) => sf.faculties)
+              .filter((f): f is NonNullable<SubjectFacultyRow["faculties"]> => !!f);
+            const faculty = facultyRows.map((f) => f.full_name).filter(Boolean);
+            const facultyContacts = facultyRows.filter((f) => f.phone || f.email);
             const subjTopics = (topics ?? []).filter(
               (t) =>
                 t.subject_id === s.id &&
@@ -215,6 +223,18 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                     </form>
                   )}
                 </div>
+                {facultyContacts.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                    {facultyContacts.map((f, i) => (
+                      <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span className="muted" style={{ fontSize: ".82rem" }}>👩‍🏫 {f.full_name}:</span>
+                        {f.phone && <a className="btn small secondary" href={`tel:${f.phone}`}>📞 {f.phone}</a>}
+                        {f.phone && <a className="btn small secondary" href={waHref(f.phone)} target="_blank" rel="noopener noreferrer" style={{ background: "#25D366", color: "#fff" }}>💬 WhatsApp</a>}
+                        {f.email && <a className="btn small secondary" href={`mailto:${f.email}`}>✉️ Email</a>}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {mySubjIds.has(s.id) && (s as { telegram_group_url?: string | null }).telegram_group_url && (
                   <a
                     className="btn small secondary"

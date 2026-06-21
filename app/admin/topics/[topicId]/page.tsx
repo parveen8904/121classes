@@ -76,6 +76,9 @@ export default async function TopicDetail({
       {searchParams?.summary === "ok" && (
         <div className="notice ok" style={{ marginTop: 16 }}>✅ Class summary generated — see it under the class below.</div>
       )}
+      {searchParams?.summary === "exists" && (
+        <div className="notice ok" style={{ marginTop: 16 }}>✅ This class already has a saved summary (shown below) — no AI was used.</div>
+      )}
       {searchParams?.summary === "empty" && (
         <div className="notice" style={{ marginTop: 16, background: "rgba(234,179,8,0.12)", color: "#fde047" }}>⚠️ That class has no transcript yet (or it&apos;s too short). Add the transcript to the class first, then generate the summary.</div>
       )}

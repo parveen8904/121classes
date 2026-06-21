@@ -33,6 +33,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/announcements",
   },
   {
+    icon: "📜",
+    title: "Amendments & updates",
+    desc: "Post amendments by course/subject/topic with video, notes & the attempts they apply to.",
+    href: "/admin/amendments",
+  },
+  {
     icon: "🎟️",
     title: "Enrolment",
     desc: "Grant course access (single or bulk) for any tier/duration; revoke & extend.",

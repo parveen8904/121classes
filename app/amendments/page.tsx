@@ -1,11 +1,27 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import AmendmentPicker from "./AmendmentPicker";
+import { bunnyEmbedUrl } from "@/lib/bunny";
+import { videoEmbedSrc } from "@/app/learn/_lib/media";
+import AmendmentsView, { type AmendItem } from "./AmendmentsView";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Know Your Amendments — 121 CA Classes" };
+export const metadata = { title: "Amendments & Updates — CA Parveen Sharma" };
 
-const ATTEMPTS = ["May 2026", "Nov 2026", "May 2027", "Nov 2027"];
+type Row = {
+  id: string;
+  title: string;
+  body: string | null;
+  discussion: string | null;
+  subject_id: string | null;
+  topic_id: string | null;
+  bunny_video_id: string | null;
+  bunny_drm: string | null;
+  youtube_url: string | null;
+  embed_url: string | null;
+  notes_hand_url: string | null;
+  valid_from_attempt: string | null;
+  valid_to_attempt: string | null;
+};
 
 export default async function AmendmentsPage() {
   const supabase = createClient();
@@ -13,47 +29,40 @@ export default async function AmendmentsPage() {
   if (!user) redirect("/login?next=/amendments");
 
   const { data: prof } = await supabase.from("profiles").select("target_attempt").eq("id", user.id).maybeSingle();
-  const raw = (prof?.target_attempt || "").replace(/_/g, " ").toUpperCase();
-  const myAttempt = ATTEMPTS.find((a) => a.toUpperCase() === raw) || ATTEMPTS[0];
+  const myAttempt = (prof?.target_attempt || "").replace(/_/g, " ").trim();
 
-  const { data } = await supabase.from("site_settings").select("key, value").like("key", "amend:%");
-  const map: Record<string, { cutoff?: string; applicable?: string; expected?: string; pdf?: string }> = {};
-  for (const r of data ?? []) {
-    try { map[(r.key as string).slice(6)] = JSON.parse(r.value as string); } catch {}
-  }
+  const [{ data: rows }, { data: subjects }, { data: topics }] = await Promise.all([
+    supabase.from("amendments").select("*").eq("is_published", true).order("valid_from_attempt").order("order_index"),
+    supabase.from("subjects").select("id, title"),
+    supabase.from("topics").select("id, title"),
+  ]);
+  const subjName = new Map((subjects ?? []).map((s) => [s.id, s.title]));
+  const topicName = new Map((topics ?? []).map((t) => [t.id, t.title]));
 
-  const { data: announcements } = await supabase
-    .from("announcements")
-    .select("id, title, body, link_url, published_at")
-    .eq("kind", "amendment")
-    .eq("is_published", true)
-    .order("published_at", { ascending: false })
-    .limit(8);
+  const items: AmendItem[] = ((rows ?? []) as Row[]).map((a) => ({
+    id: a.id,
+    title: a.title,
+    body: a.body,
+    discussion: a.discussion,
+    validFrom: a.valid_from_attempt,
+    validTo: a.valid_to_attempt,
+    notesHandUrl: a.notes_hand_url,
+    videoSrc: a.bunny_video_id
+      ? bunnyEmbedUrl(a.bunny_video_id, a.bunny_drm !== "off")
+      : videoEmbedSrc({ youtube_url: a.youtube_url ?? undefined, embed_url: a.embed_url ?? undefined } as Record<string, unknown>),
+    tag: a.topic_id ? (topicName.get(a.topic_id) ?? null) : a.subject_id ? (subjName.get(a.subject_id) ?? null) : null,
+  }));
 
   return (
-    <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
+    <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 820 }}>
       <div className="learn-hero">
-        <span className="badge">📜 Amendments</span>
-        <h1>Know your amendments</h1>
-        <p className="meta">Select your attempt to see exactly what applies, the cut-off date, and what&apos;s expected.</p>
+        <span className="badge">📜 Amendments &amp; updates</span>
+        <h1>Amendments &amp; updates</h1>
+        <p className="meta">Everything that applies to your attempt — amendments, updates, the video and notes. Change the attempt to see another batch.</p>
       </div>
-
-      <AmendmentPicker attempts={ATTEMPTS} data={map} initial={myAttempt} />
-
-      {(announcements ?? []).length > 0 && (
-        <>
-          <h3 style={{ marginTop: 24, fontSize: "1rem" }}>📣 Latest amendment updates</h3>
-          <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-            {(announcements ?? []).map((a) => (
-              <div className="card" key={a.id}>
-                <strong>{a.title}</strong>
-                {a.body && <p className="muted" style={{ fontSize: ".88rem", marginTop: 4 }}>{a.body}</p>}
-                {a.link_url && <a href={a.link_url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".85rem" }}>Read more →</a>}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      <div style={{ marginTop: 20 }}>
+        <AmendmentsView items={items} defaultAttempt={myAttempt} />
+      </div>
     </section>
   );
 }

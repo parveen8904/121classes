@@ -20,6 +20,7 @@ export default function LoginForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
 
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(
     reason === "elsewhere"
@@ -101,7 +102,13 @@ export default function LoginForm() {
               <label htmlFor="email">Email address</label>
               <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
               <label htmlFor="pw">Password</label>
-              <input id="pw" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your password" />
+              <div style={{ position: "relative" }}>
+                <input id="pw" type={showPw ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your password" style={{ paddingRight: 60 }} />
+                <button type="button" onClick={() => setShowPw((s) => !s)} aria-label={showPw ? "Hide password" : "Show password"}
+                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--accent)", fontWeight: 700, fontSize: ".8rem", cursor: "pointer" }}>
+                  {showPw ? "Hide" : "Show"}
+                </button>
+              </div>
               <button className="btn block" disabled={loading} type="submit">{loading ? "Please wait…" : "Log in"}</button>
               <p className="muted" style={{ textAlign: "center", marginTop: 16, fontSize: ".88rem" }}>
                 New here? <button type="button" style={linkBtn} onClick={() => { setMode("signup"); setMsg(null); }}>Create account</button>

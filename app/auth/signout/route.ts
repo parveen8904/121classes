@@ -9,7 +9,9 @@ export async function GET(request: NextRequest) {
   await supabase.auth.signOut();
   cookies().delete("dsid");
   const reason = new URL(request.url).searchParams.get("reason");
-  const url = new URL("/login", request.url);
+  // Forced sign-out (e.g. used on another device) → /login with the reason;
+  // a normal sign-out returns to the landing page.
+  const url = reason ? new URL("/login", request.url) : new URL("/", request.url);
   if (reason) url.searchParams.set("reason", reason);
   return NextResponse.redirect(url);
 }

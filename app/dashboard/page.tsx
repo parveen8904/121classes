@@ -3,9 +3,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SetPassword from "./set-password";
 import ConnectChannels from "./ConnectChannels";
+import MyCourses from "./MyCourses";
 import WellnessTip from "@/app/components/WellnessTip";
 import TodayPlan from "@/app/components/TodayPlan";
-import { addMyCourse, removeMyCourse } from "@/app/learn/mycourses";
+import { addMyCourse } from "@/app/learn/mycourses";
 
 export default async function Dashboard({ searchParams }: { searchParams: { saved?: string } }) {
   const supabase = createClient();
@@ -131,34 +132,7 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
           </>
         )}
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 10, margin: "32px 0 16px" }}>
-          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>📚 My courses</h2>
-        </div>
-
-        {myCourses.length > 0 ? (
-          <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))" }}>
-            {myCourses.map((c) => (
-              <div key={c.id} className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-                <Link href={`/learn/${c.id}`} style={{ display: "block" }}>
-                  <h3>📘 {c.title}</h3>
-                  <p className="muted" style={{ fontSize: ".85rem", marginTop: 8 }}>
-                    Open course → subjects, topics &amp; classes →
-                  </p>
-                </Link>
-                <form action={removeMyCourse} style={{ marginTop: "auto", paddingTop: 12 }}>
-                  <input type="hidden" name="course_id" value={c.id} />
-                  <button className="btn small secondary" type="submit">✕ Remove from my courses</button>
-                </form>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="card">
-            <p className="muted" style={{ margin: 0 }}>
-              📭 You haven&apos;t added any courses yet. Pick one below to add it to your courses.
-            </p>
-          </div>
-        )}
+        <MyCourses courses={myCourses.map((c) => ({ id: c.id, title: c.title }))} />
 
         {otherCourses.length > 0 && (
           <details style={{ marginTop: 16 }}>

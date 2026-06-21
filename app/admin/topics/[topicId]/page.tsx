@@ -14,7 +14,13 @@ import { fmtMins } from "../../_lib/util";
 const TYPE_LABEL = Object.fromEntries(SECTION_TYPES.map((t) => [t.value, t.label]));
 const PLAN_LABEL: Record<string, string> = { bronze: "Bronze+", silver: "Silver+", gold: "Gold" };
 
-export default async function TopicDetail({ params }: { params: { topicId: string } }) {
+export default async function TopicDetail({
+  params,
+  searchParams,
+}: {
+  params: { topicId: string };
+  searchParams?: { summary?: string };
+}) {
   const supabase = createClient();
   const { topicId } = params;
 
@@ -66,6 +72,19 @@ export default async function TopicDetail({ params }: { params: { topicId: strin
         subtitle="Add the sections students will see — videos, PDFs, homework, discussion and tests. 🎬📑"
         back={{ href: `/admin/subjects/${topic.subject_id}`, label: subjectTitle ?? "Subject" }}
       />
+
+      {searchParams?.summary === "ok" && (
+        <div className="notice ok" style={{ marginTop: 16 }}>✅ Class summary generated — see it under the class below.</div>
+      )}
+      {searchParams?.summary === "empty" && (
+        <div className="notice" style={{ marginTop: 16, background: "rgba(234,179,8,0.12)", color: "#fde047" }}>⚠️ That class has no transcript yet (or it&apos;s too short). Add the transcript to the class first, then generate the summary.</div>
+      )}
+      {searchParams?.summary === "failed" && (
+        <div className="notice err" style={{ marginTop: 16 }}>
+          ❌ The AI couldn&apos;t generate the summary. This usually means the Anthropic API has no credit balance —
+          add credits at <strong>console.anthropic.com → Plans &amp; Billing</strong>, then try again. (The same applies to all AI features.)
+        </div>
+      )}
 
       {/* Topic details — weightage, applicability, important questions, materials */}
       <details style={{ marginTop: 16 }}>

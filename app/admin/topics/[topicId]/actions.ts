@@ -221,9 +221,12 @@ export async function summarizeClassSection(formData: FormData) {
   const { data: sec } = await supabase.from("sections").select("config").eq("id", sectionId).maybeSingle();
   const config = (sec?.config ?? {}) as Record<string, unknown>;
   const transcript = String(config.transcript ?? "");
-  if (transcript.trim().length < 50) return;
+  // Give the admin a real reason when nothing appears, instead of a silent no-op:
+  //  · empty  → no/too-short transcript on this class
+  //  · failed → the AI call didn't return (usually no Anthropic credit, or key issue)
+  if (transcript.trim().length < 50) redirect(`/admin/topics/${topicId}?summary=empty`);
   const result = await summarizeClass(transcript);
-  if (!result) return;
+  if (!result) redirect(`/admin/topics/${topicId}?summary=failed`);
   await supabase
     .from("sections")
     .update({
@@ -238,6 +241,7 @@ export async function summarizeClassSection(formData: FormData) {
     })
     .eq("id", sectionId);
   revalidatePath(`/admin/topics/${topicId}`);
+  redirect(`/admin/topics/${topicId}?summary=ok`);
 }
 
 export async function createSection(formData: FormData) {

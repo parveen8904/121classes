@@ -62,7 +62,8 @@ export default function ConnectChannels({
           </button>
         )}
         {telegramChannel && (
-          <a className="btn secondary" href={telegramChannel} target="_blank" rel="noopener noreferrer">
+          <a className="btn" href={telegramChannel} target="_blank" rel="noopener noreferrer"
+            style={{ background: "#229ED9", color: "#fff" }}>
             📢 Subscribe to our Telegram channel (updates)
           </a>
         )}

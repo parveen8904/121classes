@@ -10,6 +10,8 @@ export async function createFaculty(formData: FormData) {
   const supabase = createClient();
   await supabase.from("faculties").insert({
     full_name,
+    phone: nullable(formData.get("phone")),
+    email: nullable(formData.get("email")),
     photo_url: nullable(formData.get("photo_url")),
     bio: nullable(formData.get("bio")),
   });
@@ -25,6 +27,8 @@ export async function updateFaculty(formData: FormData) {
     .from("faculties")
     .update({
       full_name,
+      phone: nullable(formData.get("phone")),
+      email: nullable(formData.get("email")),
       photo_url: nullable(formData.get("photo_url")),
       bio: nullable(formData.get("bio")),
     })

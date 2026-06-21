@@ -81,10 +81,28 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
 
         <WellnessTip />
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+        {/* Know your amendments & updates — shown prominently as the primary action. */}
+        <Link
+          href="/amendments"
+          className="btn"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            marginTop: 18,
+            width: "100%",
+            fontSize: "1.05rem",
+            fontWeight: 800,
+            padding: "14px 18px",
+          }}
+        >
+          📜 Know your amendments and updates →
+        </Link>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
           <Link className="btn small secondary" href="/planner">🗓️ Study planner</Link>
-          <Link className="btn small secondary" href="/amendments">📜 Know your amendments</Link>
-          <Link className="btn small secondary" href="/career">🎓 Career corner</Link>
+          <Link className="btn small secondary" href="/career">🎓 Get placements for articleship and job</Link>
         </div>
 
         {announcements && announcements.length > 0 && (

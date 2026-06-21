@@ -75,6 +75,20 @@ const TYPE_ICON: Record<string, string> = {
   custom: "📦",
 };
 
+// Sections are shown grouped under small banners so classes, revision videos,
+// tests etc. don't blur together. Order here = display order of the groups.
+const SECTION_GROUPS: { label: string; types: string[] }[] = [
+  { label: "🎓 Classes", types: ["full_class_video"] },
+  { label: "🎬 Revision videos", types: ["revision_video"] },
+  { label: "🎞️ Discussion & live videos", types: ["discussion_video", "live_class"] },
+  { label: "📚 Homework", types: ["homework"] },
+  { label: "📑 Notes & PDFs", types: ["pdf", "past_papers", "rich_text"] },
+  { label: "🧠 MCQ tests", types: ["mcq_test"] },
+  { label: "✍️ Descriptive tests", types: ["subjective_test"] },
+  { label: "🗣️ Discussion & doubts", types: ["discussion", "ask_doubt", "custom"] },
+];
+const GROUPED_TYPES = new Set(SECTION_GROUPS.flatMap((g) => g.types));
+
 function SectionBody({
   id,
   type,
@@ -376,6 +390,50 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     .order("created_at", { ascending: false });
   const MAT_LABEL: Record<string, string> = { question_bank: "📚 Question bank", icai: "🏛️ ICAI material", rtp: "📄 RTP", past_papers: "🗂️ Past papers", book: "📕 Book", notes: "📝 Notes", revision_notes: "🔁 Revision notes", transcript: "🎙️ Transcript", other: "📄 Material" };
 
+  // Continuous class numbers across the whole subject (matching the course-page
+  // ranges): topic 1 → Class 1..10, topic 2 → Class 11..15, etc. ≤100-min "part"
+  // continuations (class_no like 7B) share the previous number with their suffix.
+  const classNoLabel = new Map<string, string>();
+  {
+    const svc = createServiceClient();
+    const { data: subjTopics } = await svc
+      .from("topics")
+      .select("id, order_index, title")
+      .eq("subject_id", topic.subject_id)
+      .order("order_index")
+      .order("title");
+    const orderedTopicIds = (subjTopics ?? []).map((t) => t.id);
+    if (orderedTopicIds.length) {
+      const { data: classRows } = await svc
+        .from("sections")
+        .select("id, topic_id, order_index, title, config")
+        .in("topic_id", orderedTopicIds)
+        .eq("type", "full_class_video")
+        .eq("is_published", true)
+        .order("order_index")
+        .order("title");
+      const byTopic = new Map<string, { id: string; config: Record<string, unknown> | null }[]>();
+      for (const r of classRows ?? []) {
+        const arr = byTopic.get(r.topic_id as string) ?? [];
+        arr.push({ id: r.id as string, config: r.config as Record<string, unknown> | null });
+        byTopic.set(r.topic_id as string, arr);
+      }
+      let running = 0;
+      for (const tid of orderedTopicIds) {
+        for (const r of byTopic.get(tid) ?? []) {
+          const cfg = (r.config ?? {}) as Record<string, unknown>;
+          const suffix = String(cfg.class_no ?? "").replace(/[^A-Za-z]/g, "");
+          if (suffix) {
+            classNoLabel.set(r.id, `Class ${running}${suffix}`); // part continuation (e.g. 7B)
+          } else {
+            running += 1;
+            classNoLabel.set(r.id, `Class ${running}`);
+          }
+        }
+      }
+    }
+  }
+
   // Hit-list importance for the student's own attempt.
   const importance = ((topic as { importance?: Record<string, string> | null }).importance) ?? {};
   const norm = (s: string) => s.toLowerCase().replace(/[_\s]+/g, " ").trim();
@@ -393,6 +451,78 @@ export default async function LearnTopic({ params }: { params: { topicId: string
   const plansHref = courseId
     ? `/learn/${courseId}/plans?subject=${topic.subject_id}`
     : "/dashboard";
+
+  const renderSection = (s: SectionMeta) => {
+    const locked = !s.unlocked;
+    const planName = s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "a paid";
+    const c = (configById.get(s.id) ?? {}) as Record<string, string>;
+    const dur =
+      s.type === "full_class_video" || s.type === "revision_video"
+        ? fmtMins(Number(c.duration_minutes))
+        : "";
+    // Class / revision number shown on the right, in the title's font + weight.
+    let rightLabel: string | undefined;
+    if (s.type === "full_class_video") rightLabel = classNoLabel.get(s.id);
+    else if (s.type === "revision_video" && c.class_no) rightLabel = `Revision ${c.class_no}`;
+    return (
+      <SectionCard
+        key={s.id}
+        icon={TYPE_ICON[s.type] ?? "📦"}
+        title={s.title}
+        typeLabel={TYPE_LABEL[s.type] ?? s.type}
+        meta={dur ? `⏱️ ${dur}` : ""}
+        rightLabel={rightLabel}
+        locked={locked}
+        lockBadge={locked ? <span className="lock-badge">🔒 {s.min_plan ? PLAN_LABEL[s.min_plan] : "Locked"}</span> : null}
+      >
+        {locked ? (
+          <div className="lock-row">
+            <span className="txt">
+              🔒 Locked. Unlock all <strong>{planName}</strong> content for{" "}
+              <strong>{subject?.title ?? "this subject"}</strong>.
+            </span>
+            <Link className="btn small" href={plansHref}>
+              Unlock →
+            </Link>
+          </div>
+        ) : (
+          <>
+            <SectionBody
+              id={s.id}
+              type={s.type}
+              config={configById.get(s.id) ?? null}
+              watermark={watermarkText}
+              hasDownload={downloadBySection.has(s.id)}
+            />
+            {downloadBySection.has(s.id) && (
+              <ClassDownload pv={downloadBySection.get(s.id)!} watermark={watermarkText} />
+            )}
+            {VIDEO_TYPES.has(s.type) && (
+              <div style={{ marginTop: 18 }}>
+                <h3 style={{ fontSize: "1rem", marginBottom: 10 }}>💬 Comments</h3>
+                <DiscussionBoard
+                  sectionId={s.id}
+                  userId={user.id}
+                  isAdmin={isAdmin}
+                  returnPath={`/learn/topic/${topic.id}`}
+                  promptLabel="Add a comment"
+                  placeholder="Ask a question or share a thought…"
+                />
+              </div>
+            )}
+          </>
+        )}
+      </SectionCard>
+    );
+  };
+
+  const sectionGroupBanner = (label: string, count: number) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "28px 0 12px" }}>
+      <span style={{ fontWeight: 800, fontSize: "1.05rem" }}>{label}</span>
+      <span className="muted" style={{ fontSize: ".8rem" }}>({count})</span>
+      <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
+    </div>
+  );
 
   return (
     <main>
@@ -496,68 +626,26 @@ export default async function LearnTopic({ params }: { params: { topicId: string
             <p className="muted" style={{ fontSize: ".88rem", marginTop: 22, marginBottom: 8 }}>
               Tap any item below to open it.
             </p>
-            <div className="sec-list">
-              {sections.map((s) => {
-                const locked = !s.unlocked;
-                const planName = s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "a paid";
-                const c = (configById.get(s.id) ?? {}) as Record<string, string>;
-                const metaBits: string[] = [];
-                if (s.type === "full_class_video" || s.type === "revision_video") {
-                  if (c.class_number) metaBits.push(c.class_number);
-                  const dur = fmtMins(Number(c.duration_minutes));
-                  if (dur) metaBits.push(`⏱️ ${dur}`);
-                }
-                return (
-                  <SectionCard
-                    key={s.id}
-                    icon={TYPE_ICON[s.type] ?? "📦"}
-                    title={s.title}
-                    typeLabel={TYPE_LABEL[s.type] ?? s.type}
-                    meta={metaBits.join(" · ")}
-                    locked={locked}
-                    lockBadge={locked ? <span className="lock-badge">🔒 {s.min_plan ? PLAN_LABEL[s.min_plan] : "Locked"}</span> : null}
-                  >
-                    {locked ? (
-                      <div className="lock-row">
-                        <span className="txt">
-                          🔒 Locked. Unlock all <strong>{planName}</strong> content for{" "}
-                          <strong>{subject?.title ?? "this subject"}</strong>.
-                        </span>
-                        <Link className="btn small" href={plansHref}>
-                          Unlock →
-                        </Link>
-                      </div>
-                    ) : (
-                      <>
-                        <SectionBody
-                          id={s.id}
-                          type={s.type}
-                          config={configById.get(s.id) ?? null}
-                          watermark={watermarkText}
-                          hasDownload={downloadBySection.has(s.id)}
-                        />
-                        {downloadBySection.has(s.id) && (
-                          <ClassDownload pv={downloadBySection.get(s.id)!} watermark={watermarkText} />
-                        )}
-                        {VIDEO_TYPES.has(s.type) && (
-                          <div style={{ marginTop: 18 }}>
-                            <h3 style={{ fontSize: "1rem", marginBottom: 10 }}>💬 Comments</h3>
-                            <DiscussionBoard
-                              sectionId={s.id}
-                              userId={user.id}
-                              isAdmin={isAdmin}
-                              returnPath={`/learn/topic/${topic.id}`}
-                              promptLabel="Add a comment"
-                              placeholder="Ask a question or share a thought…"
-                            />
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </SectionCard>
-                );
-              })}
-            </div>
+            {SECTION_GROUPS.map((g) => {
+              const items = sections.filter((s) => g.types.includes(s.type));
+              if (!items.length) return null;
+              return (
+                <div key={g.label}>
+                  {sectionGroupBanner(g.label, items.length)}
+                  <div className="sec-list">{items.map(renderSection)}</div>
+                </div>
+              );
+            })}
+            {(() => {
+              const rest = sections.filter((s) => !GROUPED_TYPES.has(s.type));
+              if (!rest.length) return null;
+              return (
+                <div>
+                  {sectionGroupBanner("📦 More", rest.length)}
+                  <div className="sec-list">{rest.map(renderSection)}</div>
+                </div>
+              );
+            })()}
           </>
         ) : (
           <div className="card" style={{ marginTop: 22 }}>

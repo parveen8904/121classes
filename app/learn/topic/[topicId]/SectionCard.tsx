@@ -10,6 +10,7 @@ export default function SectionCard({
   title,
   typeLabel,
   meta,
+  rightLabel,
   lockBadge,
   locked,
   children,
@@ -18,6 +19,7 @@ export default function SectionCard({
   title: string;
   typeLabel: string;
   meta?: string;
+  rightLabel?: string;
   lockBadge?: ReactNode;
   locked?: boolean;
   children: ReactNode;
@@ -44,7 +46,9 @@ export default function SectionCard({
           <div className="sec-title">{title}</div>
           <div className="sec-type">{typeLabel}{meta ? ` · ${meta}` : ""}</div>
         </div>
-        <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+        <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
+          {/* Class/revision number — same font + boldness as the title (.sec-title). */}
+          {rightLabel && <span style={{ fontSize: "1.12rem", fontWeight: 700, lineHeight: 1.2, whiteSpace: "nowrap" }}>{rightLabel}</span>}
           {lockBadge}
           <span aria-hidden style={{ opacity: 0.6, fontSize: ".9rem", fontWeight: 700 }}>{open ? "▾" : "▸"}</span>
         </span>

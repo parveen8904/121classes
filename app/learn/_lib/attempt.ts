@@ -17,14 +17,18 @@ export function attemptRank(a?: string | null): number | null {
   return null;
 }
 
-// Topics are shown to every student by default — the attempt window must never
-// hide a topic (founder directive, 2026-06-21). We keep the signature and the
-// attemptRank helper so the validity dates can still be displayed, but visibility
-// is always permissive.
+// A topic is visible to a student if their target attempt falls within the
+// topic's validity window. Unset target or unparseable bounds are permissive.
 export function topicVisible(
-  _target?: string | null,
-  _from?: string | null,
-  _to?: string | null,
+  target: string | null | undefined,
+  from?: string | null,
+  to?: string | null,
 ): boolean {
+  const t = attemptRank(target ?? null);
+  if (t === null) return true; // no target set → show everything
+  const f = attemptRank(from);
+  const e = attemptRank(to);
+  if (f !== null && t < f) return false;
+  if (e !== null && t > e) return false;
   return true;
 }

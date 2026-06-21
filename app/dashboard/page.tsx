@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SetPassword from "./set-password";
-import ConnectChannels from "./ConnectChannels";
 import MyCourses from "./MyCourses";
+import { announcementKindLabel } from "@/lib/announcements";
 import WellnessTip from "@/app/components/WellnessTip";
 import TodayPlan from "@/app/components/TodayPlan";
 import { addMyCourse } from "@/app/learn/mycourses";
@@ -21,12 +21,6 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
     .select("full_name, role, target_attempt, telegram_chat_id")
     .eq("id", user.id)
     .single();
-
-  const { data: chSettings } = await supabase
-    .from("site_settings")
-    .select("key, value")
-    .in("key", ["support_telegram", "support_whatsapp", "whatsapp_faculty"]);
-  const chMap = new Map((chSettings ?? []).map((r) => [r.key, r.value as string]));
 
   const { data: courses } = await supabase
     .from("courses")
@@ -71,39 +65,50 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
           <SetPassword />
         </div>
 
-        <ConnectChannels
-          telegramChannel={chMap.get("support_telegram")}
-          techWhatsapp={chMap.get("support_whatsapp")}
-          facultyWhatsapp={chMap.get("whatsapp_faculty")}
-          alreadyLinked={!!profile?.telegram_chat_id}
-        />
-
         <TodayPlan />
 
         <WellnessTip />
 
-        {/* Know your amendments & updates — shown prominently as the primary action. */}
-        <Link
-          href="/amendments"
-          className="btn"
+        {/* Three quick actions — same size, neutral (uncoloured) cards with emojis. */}
+        <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
+            display: "grid",
+            gap: 12,
+            gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))",
             marginTop: 18,
-            width: "100%",
-            fontSize: "1.05rem",
-            fontWeight: 800,
-            padding: "14px 18px",
           }}
         >
-          📜 Know your amendments and updates →
-        </Link>
-
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-          <Link className="btn small secondary" href="/planner">🗓️ Study planner</Link>
-          <Link className="btn small secondary" href="/career">🎓 Get placements for articleship and job</Link>
+          {[
+            {
+              href: "/planner",
+              emoji: "🗓️",
+              title: "Build my plan",
+              desc: "Your study planner — plan how to finish the course, aim for a rank, and time your revisions.",
+            },
+            {
+              href: "/amendments",
+              emoji: "📜",
+              title: "Know your amendments and updates",
+              desc: "The latest amendments and updates for your exams.",
+            },
+            {
+              href: "/career",
+              emoji: "🎓",
+              title: "Get placements for articleship and job",
+              desc: "Openings and help for articleship and jobs.",
+            },
+          ].map((a) => (
+            <Link
+              key={a.href}
+              href={a.href}
+              className="card"
+              style={{ display: "flex", flexDirection: "column", height: "100%" }}
+            >
+              <span style={{ fontSize: "1.8rem", lineHeight: 1 }}>{a.emoji}</span>
+              <strong style={{ display: "block", marginTop: 8, fontSize: ".98rem" }}>{a.title}</strong>
+              <span className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>{a.desc}</span>
+            </Link>
+          ))}
         </div>
 
         {announcements && announcements.length > 0 && (
@@ -117,7 +122,7 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
                   style={{ borderColor: a.kind === "amendment" ? "var(--accent)" : "var(--border)" }}
                 >
                   <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
-                    <span className="badge">{a.kind === "amendment" ? "Amendment" : "Update"}</span>
+                    <span className="badge">{announcementKindLabel(a.kind)}</span>
                     <strong>{a.title}</strong>
                   </div>
                   {a.body && <p className="muted" style={{ fontSize: ".9rem", marginTop: 6 }}>{a.body}</p>}

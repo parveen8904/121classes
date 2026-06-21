@@ -4,15 +4,7 @@ import AdminHero from "../_components/AdminHero";
 import { getSecret } from "@/lib/secrets";
 import { createAnnouncement, updateAnnouncement, deleteAnnouncement, saveGovtFeeds, fetchGovtFeedsNow } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
-
-const KINDS = [
-  { value: "amendment", label: "Amendment" },
-  { value: "whats_new", label: "What's new" },
-  { value: "student_corner", label: "Student corner" },
-  { value: "industry", label: "Industry" },
-  { value: "macro", label: "Macro" },
-];
-const KIND_LABEL: Record<string, string> = Object.fromEntries(KINDS.map((k) => [k.value, k.label]));
+import { ANNOUNCEMENT_KINDS as KINDS, ANNOUNCEMENT_KIND_LABEL as KIND_LABEL } from "@/lib/announcements";
 
 function KindSelect({ name, value }: { name: string; value?: string }) {
   return (
@@ -74,8 +66,9 @@ export default async function AnnouncementsPage({
         <form action={createAnnouncement}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 2fr" }}>
             <div>
-              <label htmlFor="a-kind">Kind</label>
+              <label htmlFor="a-kind">Category</label>
               <KindSelect name="kind" />
+              <p className="muted" style={{ fontSize: ".78rem", margin: "4px 0 0" }}>Students see this as a labelled badge (Update / Industry / Macro / Amendment …).</p>
             </div>
             <div>
               <label htmlFor="a-title">Title</label>
@@ -109,7 +102,7 @@ export default async function AnnouncementsPage({
                 <input type="hidden" name="id" value={a.id} />
                 <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 2fr" }}>
                   <div>
-                    <label>Kind</label>
+                    <label>Category</label>
                     <KindSelect name="kind" value={a.kind} />
                   </div>
                   <div>

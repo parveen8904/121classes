@@ -75,6 +75,44 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
     }
   }
 
+  // 📡 Live classes TODAY — standalone sessions + topic live-classes in the
+  // student's opted subjects, that start today.
+  const nowD = new Date();
+  const dayStart = new Date(nowD); dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(nowD); dayEnd.setHours(23, 59, 59, 999);
+  type LiveToday = { title: string; whenISO: string; joinUrl: string | null; where: string | null; href?: string };
+  const liveToday: LiveToday[] = [];
+  const { data: liveSessions } = await supabase
+    .from("live_sessions")
+    .select("title, audience, starts_at, join_url")
+    .eq("is_published", true)
+    .gte("starts_at", dayStart.toISOString())
+    .lte("starts_at", dayEnd.toISOString());
+  for (const s of liveSessions ?? []) {
+    liveToday.push({ title: s.title as string, whenISO: s.starts_at as string, joinUrl: (s.join_url as string) ?? null, where: (s.audience as string) ?? null, href: "/live" });
+  }
+  if (optedSubjectIds.size > 0) {
+    const { data: optTopics } = await supabase.from("topics").select("id, title").in("subject_id", [...optedSubjectIds]);
+    const topicTitle = new Map((optTopics ?? []).map((t) => [t.id as string, t.title as string]));
+    const tIds = (optTopics ?? []).map((t) => t.id as string);
+    if (tIds.length) {
+      const { data: liveSecs } = await supabase
+        .from("sections")
+        .select("id, title, topic_id, config")
+        .in("topic_id", tIds)
+        .eq("type", "live_class")
+        .eq("is_published", true);
+      for (const sec of liveSecs ?? []) {
+        const cfg = (sec.config ?? {}) as Record<string, string>;
+        const sa = cfg.starts_at ? new Date(cfg.starts_at) : null;
+        if (sa && sa >= dayStart && sa <= dayEnd) {
+          liveToday.push({ title: sec.title as string, whenISO: cfg.starts_at, joinUrl: cfg.join_url ?? null, where: topicTitle.get(sec.topic_id as string) ?? null, href: `/learn/section/${sec.id}` });
+        }
+      }
+    }
+  }
+  liveToday.sort((a, b) => (a.whenISO < b.whenISO ? -1 : 1));
+
   // Faculty messages / updates — shown to every student on login.
   const { data: announcements } = await supabase
     .from("announcements")
@@ -98,6 +136,30 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
 
         {searchParams?.saved === "profile" && (
           <div className="notice ok" style={{ marginTop: 14 }}>✅ Profile saved.</div>
+        )}
+
+        {liveToday.length > 0 && (
+          <div className="card" style={{ marginTop: 16, border: "2px solid #ef4444" }}>
+            <strong style={{ fontSize: "1.05rem" }}>📡 Live classes today</strong>
+            <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+              {liveToday.map((l, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <div>
+                    <strong>{l.title}</strong>
+                    <span className="muted" style={{ fontSize: ".82rem" }}>
+                      {" · "}🕒 {new Date(l.whenISO).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}
+                      {l.where ? ` · ${l.where}` : ""}
+                    </span>
+                  </div>
+                  {l.joinUrl ? (
+                    <a className="btn small" href={l.joinUrl} target="_blank" rel="noopener noreferrer" style={{ background: "#ef4444" }}>▶️ Join live</a>
+                  ) : l.href ? (
+                    <Link className="btn small secondary" href={l.href}>Open</Link>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         <div style={{ marginTop: 20 }}>

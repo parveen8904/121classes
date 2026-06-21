@@ -44,13 +44,18 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
     .from("my_subjects")
     .select("subject_id")
     .eq("student_id", user.id);
-  const optedSubjectIds = new Set((mySubjectRows ?? []).map((r) => r.subject_id as string));
+  // Scope to the ACTIVE level only — subjects remembered from other levels are
+  // ignored here so the dashboard stays single-level.
+  const myAllSubjectIds = (mySubjectRows ?? []).map((r) => r.subject_id as string);
+  const optedSubjectIds = new Set<string>();
   if (myIds.size > 0) {
     const { data: courseSubjects } = await supabase
       .from("subjects")
       .select("id")
       .in("course_id", [...myIds]);
-    (courseSubjects ?? []).forEach((s) => optedSubjectIds.add(s.id as string));
+    const activeCourseSubs = new Set((courseSubjects ?? []).map((s) => s.id as string));
+    for (const sid of myAllSubjectIds) if (activeCourseSubs.has(sid)) optedSubjectIds.add(sid);
+    if (optedSubjectIds.size === 0) activeCourseSubs.forEach((s) => optedSubjectIds.add(s));
   }
 
   let faculty: { id: string; full_name: string; phone: string | null; email: string | null; photo_url: string | null }[] = [];

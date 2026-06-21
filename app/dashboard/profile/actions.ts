@@ -29,19 +29,13 @@ export async function updateProfile(formData: FormData) {
     .eq("id", user.id);
 
   // Course (level) only — subjects are chosen on the dashboard. Picking a course
-  // makes it the single course on the shelf, and any subjects from a DIFFERENT
-  // level are dropped (so the student stays on one level).
+  // makes it the single ACTIVE course/level. We DON'T delete the subjects from
+  // other levels: each level's subject choices are remembered, so if the student
+  // ever switches back to a level, its subjects are restored automatically.
   const courseId = str(formData.get("course_id"));
   if (courseId) {
     await supabase.from("my_courses").delete().eq("student_id", user.id);
     await supabase.from("my_courses").insert({ student_id: user.id, course_id: courseId });
-    const { data: courseSubs } = await supabase.from("subjects").select("id").eq("course_id", courseId);
-    const validIds = (courseSubs ?? []).map((s) => s.id as string);
-    const { data: mySubs } = await supabase.from("my_subjects").select("subject_id").eq("student_id", user.id);
-    const toRemove = (mySubs ?? []).map((r) => r.subject_id as string).filter((sid) => !validIds.includes(sid));
-    if (toRemove.length) {
-      await supabase.from("my_subjects").delete().eq("student_id", user.id).in("subject_id", toRemove);
-    }
   }
 
   revalidatePath("/dashboard/profile");

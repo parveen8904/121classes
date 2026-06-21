@@ -330,7 +330,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
 
   const { data: topic } = await supabase
     .from("topics")
-    .select("id, title, subject_id, topic_code, weightage_marks, importance, important_qs_rev1, important_qs_rev2, valid_from_attempt, valid_to_attempt, amendments_upto, update_coming, update_on, update_for, update_note, subjects(title, course_id)")
+    .select("id, title, subject_id, topic_code, weightage_marks, importance, important_qs_rev1, important_qs_rev2, valid_from_attempt, valid_to_attempt, amendments_upto, application_notes, update_coming, update_on, update_for, update_note, subjects(title, course_id)")
     .eq("id", params.topicId)
     .single();
   if (!topic) notFound();
@@ -654,6 +654,13 @@ export default async function LearnTopic({ params }: { params: { topicId: string
         {catStyle && (
           <div style={{ marginTop: 16, background: catStyle.bg, color: catStyle.fg, padding: "10px 14px", borderRadius: 8, fontWeight: 700 }}>
             🎯 {catStyle.label}{myAttempt ? ` — for your ${String(myAttempt).replace(/_/g, " ")} attempt` : ""}
+          </div>
+        )}
+
+        {(topic as { application_notes?: string | null }).application_notes && (
+          <div style={{ marginTop: 16, background: "rgba(234,179,8,0.14)", border: "2px solid #eab308", padding: "12px 14px", borderRadius: 10 }}>
+            <strong>📌 Application notes — please read carefully</strong>
+            <p style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{(topic as { application_notes?: string }).application_notes}</p>
           </div>
         )}
 

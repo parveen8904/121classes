@@ -14,6 +14,7 @@ export type TopicMeta = {
   valid_from_attempt: string | null;
   valid_to_attempt: string | null;
   amendments_upto: string | null;
+  application_notes: string | null;
   important_qs_rev1: string | null;
   important_qs_rev2: string | null;
   book_pdf_url: string | null;
@@ -69,6 +70,9 @@ export default function TopicMetaForm({
       </div>
       <label style={{ marginTop: 8 }}>Amendments up to</label>
       <input name="amendments_upto" defaultValue={topic.amendments_upto ?? ""} placeholder="e.g. Finance Act 2025" />
+
+      <label style={{ marginTop: 8 }}>📌 Application notes — shown prominently to students (e.g. for an updated version of this topic)</label>
+      <textarea name="application_notes" rows={3} defaultValue={topic.application_notes ?? ""} placeholder="e.g. This topic was updated for Sep 2028 — please read: the treatment of forex investments has changed…" />
 
       <label style={{ marginTop: 8 }}>
         🎯 Hit list — importance per attempt (one per line, <code>attempt | category</code>)

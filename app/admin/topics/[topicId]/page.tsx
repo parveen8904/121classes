@@ -27,7 +27,7 @@ export default async function TopicDetail({
   const { data: topic } = await supabase
     .from("topics")
     .select(
-      "id, title, subject_id, is_published, is_combined, topic_code, weightage_marks, importance, valid_from_attempt, valid_to_attempt, amendments_upto, important_qs_rev1, important_qs_rev2, book_pdf_url, icai_material_url, revision_video_url, revision_notes_hand_url, revision_notes_typed_url, update_coming, update_on, update_for, update_note, revision_paper_url, amendments_pdf_url, subjects(title, code)",
+      "id, title, subject_id, is_published, is_combined, topic_code, weightage_marks, importance, valid_from_attempt, valid_to_attempt, amendments_upto, application_notes, important_qs_rev1, important_qs_rev2, book_pdf_url, icai_material_url, revision_video_url, revision_notes_hand_url, revision_notes_typed_url, update_coming, update_on, update_for, update_note, revision_paper_url, amendments_pdf_url, subjects(title, code)",
     )
     .eq("id", topicId)
     .single();
@@ -225,6 +225,13 @@ export default async function TopicDetail({
           <div className="form-card" style={{ marginTop: 10 }}>
             <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Creates the descriptive test and takes you straight to the page to upload its questions &amp; solutions.</p>
             <SectionForm action={createSection} topicId={topic.id} submitLabel="Add descriptive test" defaultType="subjective_test" groups={groupList} />
+          </div>
+        </details>
+        <details>
+          <summary className="btn secondary as-btn">📡 Add a live class</summary>
+          <div className="form-card" style={{ marginTop: 10 }}>
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>A live class taken over <strong>Zoom</strong> (join link + start time) and/or <strong>YouTube</strong> (recording link). Pick the Section it goes into.</p>
+            <SectionForm action={createSection} topicId={topic.id} submitLabel="Add live class" defaultType="live_class" groups={groupList} />
           </div>
         </details>
       </div>

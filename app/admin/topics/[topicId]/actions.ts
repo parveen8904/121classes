@@ -185,6 +185,7 @@ export async function updateTopicMeta(formData: FormData) {
       valid_from_attempt: nn("valid_from_attempt"),
       valid_to_attempt: nn("valid_to_attempt"),
       amendments_upto: nn("amendments_upto"),
+      application_notes: nn("application_notes"),
       important_qs_rev1: nn("important_qs_rev1"),
       important_qs_rev2: nn("important_qs_rev2"),
       update_coming: formData.get("update_coming") === "on",

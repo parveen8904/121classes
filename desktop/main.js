@@ -140,7 +140,7 @@ async function checkForUpdate() {
     const { response } = await dialog.showMessageBox({
       type: "info",
       title: "Update available",
-      message: `A new version of 121 CA Classes (v${latest}) is available.`,
+      message: `A new version of CA Parveen Sharma (v${latest}) is available.`,
       detail: (info.notes ? info.notes + "\n\n" : "") +
         "Click Download to get the latest version, then open the file and replace the app.",
       buttons: ["Download", "Later"],

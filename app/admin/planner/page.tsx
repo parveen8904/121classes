@@ -41,6 +41,11 @@ export default async function PlannerSettingsPage({ searchParams }: { searchPara
 
       {searchParams.saved && <div className="notice ok" style={{ marginTop: 16 }}>✅ Saved.</div>}
 
+      <a href="/admin/planner/preview" className="card" style={{ marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none" }}>
+        <span><strong>🧪 Preview a generated plan</strong> <span className="muted">— pick a subject + dates and see the day-by-day output</span></span>
+        <span style={{ fontWeight: 800, color: "var(--accent)" }}>Open →</span>
+      </a>
+
       <h2 className="admin-section-title" style={{ marginTop: 22 }}>📚 Per-subject — exhaustive window</h2>
       <p className="muted" style={{ fontSize: ".85rem" }}>How long before the exam the detailed-classes stage starts, its maximum length, and the target the engine tries to hit (by speeding up videos).</p>
       <div style={{ display: "grid", gap: 12, marginTop: 8 }}>

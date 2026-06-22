@@ -12,6 +12,7 @@ export default function SetPasswordForm({ next }: { next: string }) {
   const supabase = createClient();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -46,10 +47,16 @@ export default function SetPasswordForm({ next }: { next: string }) {
           {err && <div className="notice err">{err}</div>}
           <form onSubmit={submit}>
             <label htmlFor="np">New password</label>
-            <input id="np" type="password" required value={password}
-              onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" />
+            <div style={{ position: "relative" }}>
+              <input id="np" type={showPw ? "text" : "password"} required value={password}
+                onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" style={{ paddingRight: 60 }} />
+              <button type="button" onClick={() => setShowPw((s) => !s)} aria-label={showPw ? "Hide password" : "Show password"}
+                style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--accent)", fontWeight: 700, fontSize: ".8rem", cursor: "pointer" }}>
+                {showPw ? "Hide" : "Show"}
+              </button>
+            </div>
             <label htmlFor="cp">Confirm password</label>
-            <input id="cp" type="password" required value={confirm}
+            <input id="cp" type={showPw ? "text" : "password"} required value={confirm}
               onChange={(e) => setConfirm(e.target.value)} placeholder="Re-type your password" />
             <button className="btn block" disabled={busy} type="submit">
               {busy ? "Saving…" : "Save password & continue"}

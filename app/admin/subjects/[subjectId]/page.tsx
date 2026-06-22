@@ -293,7 +293,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                   🎓 {classCount.get(t.id) ?? 0} {(classCount.get(t.id) ?? 0) === 1 ? "class" : "classes"} · ⏱️ {fmtMins(classMins.get(t.id) ?? 0)}
                 </span>
                 <Link className="btn small" href={`/admin/topics/${t.id}`}>
-                  Classes →
+                  Content →
                 </Link>
                 <form action={toggleTopicPublish} style={{ display: "inline" }}>
                   <input type="hidden" name="id" value={t.id} />

@@ -8,7 +8,7 @@ import { updateProfile } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage({ searchParams }: { searchParams: { saved?: string } }) {
+export default async function ProfilePage({ searchParams }: { searchParams: { saved?: string; need?: string } }) {
   const supabase = createClient();
   const {
     data: { user },
@@ -48,6 +48,12 @@ export default async function ProfilePage({ searchParams }: { searchParams: { sa
         {searchParams.saved && (
           <div className="notice ok" style={{ marginTop: 18 }}>
             Saved. Thank you!
+          </div>
+        )}
+
+        {searchParams.need === "profile" && (
+          <div className="notice" style={{ marginTop: 18, background: "rgba(234,179,8,0.14)", border: "2px solid #eab308", color: "var(--text)" }}>
+            ⚠️ Before adding a subject, please set your <strong>target exam attempt</strong> and your <strong>course / level</strong> below, then tap <strong>Save profile</strong>. We use these to tailor your classes, amendments, study plan and tests to your attempt.
           </div>
         )}
 

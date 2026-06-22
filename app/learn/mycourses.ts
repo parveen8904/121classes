@@ -1,8 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { str } from "../admin/_lib/util";
+
+// A student must declare their exam ATTEMPT (and, by picking a course, their
+// LEVEL) before adding any course/subject — so all content (amendments, plan,
+// tests) is moderated to their needs. If the attempt isn't set, send them to the
+// profile page to fill the mandatory fields first.
+async function ensureProfileReady(supabase: ReturnType<typeof createClient>, userId: string) {
+  const { data: prof } = await supabase.from("profiles").select("target_attempt").eq("id", userId).maybeSingle();
+  if (!prof?.target_attempt || !String(prof.target_attempt).trim()) {
+    redirect("/dashboard/profile?need=profile");
+  }
+}
 
 // A student's personal "My Courses" shelf. These pick rows DON'T grant content
 // access (paid plans still gate premium sections) — they organise the student's
@@ -14,6 +26,7 @@ export async function addMyCourse(formData: FormData) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
+  await ensureProfileReady(supabase, user.id);
   // One level only: don't add a second, different course/level. To switch level,
   // the student changes it in their Profile (which replaces the shelf).
   const { data: myC } = await supabase.from("my_courses").select("course_id").eq("student_id", user.id);
@@ -48,6 +61,7 @@ export async function addMySubject(formData: FormData) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
+  await ensureProfileReady(supabase, user.id);
 
   // Level restriction: a student stays on ONE course/level. If they already have
   // a course on their shelf, they can only add subjects from THAT course — not

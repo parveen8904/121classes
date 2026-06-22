@@ -26,7 +26,7 @@ export default async function SiteFooter() {
             A venture by <strong>CA Parveen Sharma</strong>.
           </p>
           <p className="muted" style={{ marginTop: 8, fontSize: ".82rem" }}>
-            Office: W 6/30, DLF Phase 3, Gurugram
+            Office: W6 Sector 24, DLF Phase 3, Gurugram 122010
           </p>
           <p className="muted" style={{ marginTop: 4, fontSize: ".82rem" }}>
             📧 <a className="grad" href="mailto:mail@caparveensharma.com">mail@caparveensharma.com</a>
@@ -72,7 +72,7 @@ export default async function SiteFooter() {
       <div className="copy">
         &copy; 2026 CA Parveen Sharma · caparveensharma.com · All rights reserved.
         <br />
-        Site built by Dmeter Inc, Texas.
+        Site by: Dmeter Inc.
       </div>
     </footer>
   );

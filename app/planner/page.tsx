@@ -8,7 +8,7 @@ import { generatePlan } from "@/lib/planner/engine";
 import SubmitButton from "@/app/components/SubmitButton";
 import RemarkBox from "./RemarkBox";
 import PrintButton from "./PrintButton";
-import { savePlanSetup, clearPlan, emailMyPlan } from "./actions";
+import { savePlanSetup, clearPlan, emailMyPlan, markClassDone, rebalanceFromToday } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Study planner — 121 CA Classes" };
@@ -18,7 +18,7 @@ const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN",
 
 type Setup = PlanSetup;
 
-export default async function PlannerPage({ searchParams }: { searchParams: { new?: string; emailed?: string } }) {
+export default async function PlannerPage({ searchParams }: { searchParams: { new?: string; emailed?: string; rebalanced?: string } }) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/planner");
@@ -111,6 +111,13 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
                 <div><label style={{ fontSize: ".76rem" }}>Revision 2</label><input type="number" name="d_rr2" min={1} defaultValue={setup?.stageDays?.rr2 ?? ""} placeholder="10" /></div>
                 <div><label style={{ fontSize: ".76rem" }}>Final</label><input type="number" name="d_rr3" min={1} defaultValue={setup?.stageDays?.rr3 ?? ""} placeholder="5" /></div>
               </div>
+              <label className="remember" style={{ marginTop: 10 }}>
+                <input type="checkbox" name="sundays_on" defaultChecked={!!setup?.sundaysOn} /> Study on Sundays too (no weekly rest day)
+              </label>
+              <label style={{ marginTop: 8 }}>Holidays — days to skip (yyyy-mm-dd, comma/space separated)</label>
+              <textarea name="holidays" rows={2} defaultValue={(setup?.holidays ?? []).join(", ")} placeholder="2026-01-26, 2026-03-14" />
+              <label style={{ marginTop: 8 }}>Extra working days — e.g. a Sunday you&apos;ll study (yyyy-mm-dd)</label>
+              <textarea name="extra_days" rows={2} defaultValue={(setup?.extraDays ?? []).join(", ")} placeholder="2026-02-15" />
               {pickTopics && pickTopics.length > 0 ? (
                 <div style={{ marginTop: 10 }}>
                   <label>Or tick exact topics for the exhaustive stage (overrides the scope above)</label>
@@ -164,15 +171,17 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
 
   // Group into ONE box per date (a date may hold more than one class); break
   // rows stay standalone. Each date gets a single remarks box.
+  type Line = { task: string; meta: string; sectionId?: string };
   type Grp =
-    | { kind: "date"; stageLabel: string; date: string; weekday: string; isTest: boolean; lines: { task: string; meta: string }[] }
+    | { kind: "date"; stageLabel: string; date: string; weekday: string; isTest: boolean; lines: Line[] }
     | { kind: "break"; stageLabel: string; task: string };
   const groups: Grp[] = [];
   for (const dRow of plan.days) {
     if (dRow.stage === "break") { groups.push({ kind: "break", stageLabel: dRow.stageLabel, task: dRow.task }); continue; }
+    const line: Line = { task: dRow.task, meta: dRow.meta, sectionId: dRow.sectionId };
     const last = groups[groups.length - 1];
-    if (last && last.kind === "date" && last.date === dRow.date) last.lines.push({ task: dRow.task, meta: dRow.meta });
-    else groups.push({ kind: "date", stageLabel: dRow.stageLabel, date: dRow.date, weekday: dRow.weekday, isTest: dRow.status === "test", lines: [{ task: dRow.task, meta: dRow.meta }] });
+    if (last && last.kind === "date" && last.date === dRow.date) last.lines.push(line);
+    else groups.push({ kind: "date", stageLabel: dRow.stageLabel, date: dRow.date, weekday: dRow.weekday, isTest: dRow.status === "test", lines: [line] });
   }
 
   return (
@@ -183,10 +192,12 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
       <p className="muted">Exam {fmt(setup.examDate)} · watching at {setup.speed}× · {plan.totals.classCount} classes left</p>
 
       {searchParams.emailed && <div className="notice ok no-print" style={{ marginTop: 12 }}>📧 Your plan has been emailed to you.</div>}
+      {searchParams.rebalanced && <div className="notice ok no-print" style={{ marginTop: 12 }}>🔄 Plan re-balanced from today — remaining work spread over the days left.</div>}
 
       <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
         <PrintButton />
         <form action={emailMyPlan}><button type="submit" className="btn small secondary">📧 Email me my plan</button></form>
+        <form action={rebalanceFromToday}><button type="submit" className="btn small secondary">🔄 Re-balance from today</button></form>
       </div>
 
       <div className="card" style={{ marginTop: 16, border: "2px solid var(--accent)" }}>
@@ -255,6 +266,14 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
                       {g.lines.map((l, j) => (
                         <div key={j} style={{ marginBottom: j < g.lines.length - 1 ? 8 : 0 }}>
                           <strong>{l.task}</strong><br /><span style={{ fontStyle: "italic", fontSize: 12, color: "var(--muted)" }}>{l.meta}</span>
+                          {l.sectionId && (completedIds.has(l.sectionId) ? (
+                            <span style={{ color: "#16a34a", fontSize: 11, marginLeft: 6 }}>✓ done</span>
+                          ) : (
+                            <form action={markClassDone} style={{ display: "inline" }} className="no-print">
+                              <input type="hidden" name="sectionId" value={l.sectionId} />
+                              <button type="submit" className="btn small secondary" style={{ marginLeft: 6, padding: "0 6px", fontSize: 11 }}>mark done</button>
+                            </form>
+                          ))}
                         </div>
                       ))}
                     </td>

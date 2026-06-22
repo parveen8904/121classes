@@ -7,6 +7,7 @@ export type PlanSetup = {
   revisions?: number; exhaustiveScope?: Scope; pickedTopicIds?: string[];
   revScope1?: Exclude<Scope, "skip">; revScope2?: Exclude<Scope, "skip">;
   stageDays?: { exhaustive?: number; rr1?: number; rr2?: number; rr3?: number };
+  holidays?: string[]; extraDays?: string[]; sundaysOn?: boolean;
 };
 
 // Copy the student's saved choices onto a freshly loaded engine input.
@@ -18,6 +19,9 @@ export function applySetup(input: PlanInput, s: PlanSetup): PlanInput {
   input.revScope1 = s.revScope1;
   input.revScope2 = s.revScope2;
   input.stageDays = s.stageDays;
+  input.holidays = s.holidays;
+  input.extraDays = s.extraDays;
+  input.sundaysOn = s.sundaysOn;
   return input;
 }
 
@@ -62,7 +66,7 @@ export async function loadPlanInput(opts: {
   const topicIds = sorted.map((t) => t.id as string);
 
   const secs = topicIds.length
-    ? (await svc.from("sections").select("topic_id, type, config").in("topic_id", topicIds).eq("is_published", true)).data ?? []
+    ? (await svc.from("sections").select("id, topic_id, type, config").in("topic_id", topicIds).eq("is_published", true)).data ?? []
     : [];
 
   const classes: ClassItem[] = [];
@@ -71,7 +75,7 @@ export async function loadPlanInput(opts: {
   for (const t of sorted) {
     const mine = secs.filter((s) => s.topic_id === t.id);
     const cls = mine.filter((s) => s.type === "full_class_video").sort((a, b) => classNo(a.config) - classNo(b.config));
-    cls.forEach((s, i) => classes.push({ topicId: t.id as string, topicTitle: t.title as string, importance: impLetter(t.importance), label: `Class ${classNo(s.config) || i + 1}`, minutes: dur(s.config) || 60 }));
+    cls.forEach((s, i) => classes.push({ sectionId: s.id as string, topicId: t.id as string, topicTitle: t.title as string, importance: impLetter(t.importance), label: `Class ${classNo(s.config) || i + 1}`, minutes: dur(s.config) || 60 }));
     const classTotal = cls.reduce((x, s) => x + (dur(s.config) || 60), 0);
     for (const s of mine.filter((s) => s.type === "revision_video")) {
       revisions.push({ topicTitle: t.title as string, minutes: dur(s.config) || Math.round(classTotal * 0.25) || 30 });

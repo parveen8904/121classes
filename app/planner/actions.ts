@@ -32,31 +32,29 @@ export async function savePlanSetup(formData: FormData) {
   const revs = Number(formData.get("revisions"));
   const num = (k: string) => { const v = Number(formData.get(k)); return Number.isFinite(v) && v > 0 ? v : undefined; };
   const sc = (k: string, allowSkip: boolean) => { const v = String(formData.get(k) || "all"); return (allowSkip ? ["all", "ab", "a", "skip"] : ["all", "ab", "a"]).includes(v) ? v : "all"; };
-  const setup = {
+  const dlist = (k: string) => String(formData.get(k) || "").split(/[\s,]+/).map((s) => s.trim()).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
+  const setup: PlanSetup = {
     subjectId: String(formData.get("subject") || ""),
     startDate: String(formData.get("start") || ""),
     examDate: String(formData.get("exam") || ""),
     speed: Number(formData.get("speed")) || 1.2,
     doneClasses: Math.max(0, Number(formData.get("done")) || 0),
     revisions: revs === 1 || revs === 2 ? revs : 3,
-    exhaustiveScope: sc("ex_scope", true),
+    exhaustiveScope: sc("ex_scope", true) as PlanSetup["exhaustiveScope"],
     pickedTopicIds: formData.getAll("pick").map(String).filter(Boolean),
-    revScope1: sc("rev1_scope", false),
-    revScope2: sc("rev2_scope", false),
+    revScope1: sc("rev1_scope", false) as PlanSetup["revScope1"],
+    revScope2: sc("rev2_scope", false) as PlanSetup["revScope2"],
     stageDays: { exhaustive: num("d_ex"), rr1: num("d_rr1"), rr2: num("d_rr2"), rr3: num("d_rr3") },
+    holidays: dlist("holidays"),
+    extraDays: dlist("extra_days"),
+    sundaysOn: formData.get("sundays_on") === "on",
   };
   if (!setup.subjectId || !setup.startDate || !setup.examDate) return;
 
   let schedule: SchedEntry[] = [];
   const input = await loadPlanInput({ subjectId: setup.subjectId, startDate: setup.startDate, examDate: setup.examDate, doneClasses: setup.doneClasses });
   if (input) {
-    input.chosenSpeed = setup.speed;
-    input.revisionRounds = setup.revisions;
-    input.exhaustiveScope = setup.exhaustiveScope as any;
-    input.pickedTopicIds = setup.pickedTopicIds;
-    input.revScope1 = setup.revScope1 as any;
-    input.revScope2 = setup.revScope2 as any;
-    input.stageDays = setup.stageDays;
+    applySetup(input, setup);
     schedule = toSchedule(generatePlan(input));
   }
 
@@ -104,6 +102,47 @@ export async function emailMyPlan() {
   );
   await sendEmail(to, `Your study plan — ${input.subjectTitle}`, html);
   redirect("/planner?emailed=1");
+}
+
+// Mark one class complete by hand (in case it was watched elsewhere).
+export async function markClassDone(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const sectionId = String(formData.get("sectionId") || "");
+  if (!sectionId) return;
+  const { data: existing } = await supabase.from("class_watch").select("id").eq("student_id", user.id).eq("section_id", sectionId).maybeSingle();
+  if (existing) await supabase.from("class_watch").update({ completed: true, last_watched_at: new Date().toISOString() }).eq("id", existing.id);
+  else await supabase.from("class_watch").insert({ student_id: user.id, section_id: sectionId, completed: true });
+  revalidatePath("/planner");
+}
+
+// Re-balance: restart the plan from today, counting already-completed classes as
+// done, so missed days don't pile up — the remaining work spreads over the days left.
+export async function rebalanceFromToday() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: planRow } = await supabase.from("study_plans").select("setup").eq("user_id", user.id).maybeSingle();
+  const setup = planRow?.setup as PlanSetup | null;
+  if (!setup?.subjectId) return;
+
+  const base = await loadPlanInput({ subjectId: setup.subjectId, startDate: setup.startDate, examDate: setup.examDate });
+  if (!base) return;
+  const { data: cw } = await supabase.from("class_watch").select("section_id").eq("student_id", user.id).eq("completed", true);
+  const completed = new Set((cw ?? []).map((r) => r.section_id as string));
+  const scope = setup.exhaustiveScope ?? "all";
+  const picked = setup.pickedTopicIds && setup.pickedTopicIds.length ? new Set(setup.pickedTopicIds) : null;
+  const scoped = scope === "skip" ? [] : picked ? base.classes.filter((c) => picked.has(c.topicId)) : base.classes.filter((c) => (scope === "a" ? c.importance === "A" : scope === "ab" ? c.importance === "A" || c.importance === "B" : true));
+  const doneCount = scoped.filter((c) => completed.has(c.sectionId)).length;
+
+  const newSetup: PlanSetup = { ...setup, startDate: new Date().toISOString().slice(0, 10), doneClasses: doneCount };
+  let schedule: SchedEntry[] = [];
+  const input = await loadPlanInput({ subjectId: newSetup.subjectId, startDate: newSetup.startDate, examDate: newSetup.examDate, doneClasses: newSetup.doneClasses });
+  if (input) { applySetup(input, newSetup); schedule = toSchedule(generatePlan(input)); }
+  await supabase.from("study_plans").update({ setup: newSetup, schedule, updated_at: new Date().toISOString() }).eq("user_id", user.id);
+  revalidatePath("/planner");
+  redirect("/planner?rebalanced=1");
 }
 
 export async function clearPlan() {

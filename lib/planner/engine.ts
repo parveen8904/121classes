@@ -15,7 +15,7 @@ export type PlannerConfig = {
   rr3: { days: number; daily_hours: number; video_speed: number };
 };
 export type SubjectParams = { start_months_before_exam: number; max_months: number; target_months: number };
-export type ClassItem = { topicId: string; topicTitle: string; importance: string; label: string; minutes: number };
+export type ClassItem = { sectionId: string; topicId: string; topicTitle: string; importance: string; label: string; minutes: number };
 export type RevItem = { topicTitle: string; minutes: number };
 export type TopicMIQ = { topicTitle: string; rev1: string[]; rev2: string[] };
 export type TopicMeta = { topicId: string; title: string; importance: string };
@@ -39,12 +39,15 @@ export type PlanInput = {
   revScope1?: Exclude<Scope, "skip">;
   revScope2?: Exclude<Scope, "skip">;
   stageDays?: { exhaustive?: number; rr1?: number; rr2?: number; rr3?: number };
+  holidays?: string[]; // yyyy-mm-dd to skip entirely
+  extraDays?: string[]; // yyyy-mm-dd to force as working days (e.g. a Sunday)
+  sundaysOn?: boolean; // study on Sundays in the exhaustive stage too
 };
 
 export type PlanDay = {
   date: string; weekday: string;
   stage: "exhaustive" | "rr1" | "rr2" | "rr3" | "break";
-  stageLabel: string; topic: string | null; task: string; meta: string; sunday: boolean; status: "ok" | "test" | "note";
+  stageLabel: string; topic: string | null; task: string; meta: string; sunday: boolean; status: "ok" | "test" | "note"; sectionId?: string;
 };
 
 export type Plan = {
@@ -63,7 +66,6 @@ const isSun = (x: Date) => x.getDay() === 0;
 const wd = (x: Date) => x.toLocaleDateString("en-IN", { weekday: "short" });
 const fmtDay = (x: Date) => x.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 function hm(mins: number) { const m = Math.round(mins); const h = Math.floor(m / 60); const r = m % 60; return h > 0 ? (r > 0 ? `${h}h ${r}m` : `${h}h`) : `${r}m`; }
-function workingDays(from: Date, to: Date) { let n = 0; for (let c = new Date(from); c < to; c = addDays(c, 1)) if (!isSun(c)) n++; return n; }
 function inScope(importance: string, scope: Scope): boolean {
   const imp = (importance || "").toUpperCase();
   if (scope === "a") return imp === "A";
@@ -77,6 +79,19 @@ export function generatePlan(input: PlanInput): Plan {
   const start = d(input.startDate);
   const hwFactor = 1 - cfg.exhaustive_homework_pct / 100;
   const ladder = Array.from(new Set([cfg.base_speed, 1.5, cfg.max_speed])).sort((a, b) => a - b);
+
+  // Working-day rule for the exhaustive stage: holidays off, Sundays off unless
+  // the student turned them on or added that date as an extra working day.
+  const holidaySet = new Set(input.holidays ?? []);
+  const extraSet = new Set(input.extraDays ?? []);
+  const sundaysOn = !!input.sundaysOn;
+  const isWork = (x: Date): boolean => {
+    const k = iso(x);
+    if (holidaySet.has(k)) return false;
+    if (extraSet.has(k)) return true;
+    return sundaysOn ? true : !isSun(x);
+  };
+  const countWork = (from: Date, to: Date): number => { let n = 0; for (let c = new Date(from); c < to; c = addDays(c, 1)) if (isWork(c)) n++; return n; };
 
   const rounds = input.revisionRounds === 1 || input.revisionRounds === 2 ? input.revisionRounds : 3;
   const includeR1 = rounds >= 2;
@@ -114,7 +129,7 @@ export function generatePlan(input: PlanInput): Plan {
   const remaining = scopedClasses.slice(done);
   const totalClassMin = remaining.reduce((s, c) => s + c.minutes, 0);
 
-  const availWorkingDays = workingDays(start, exhaustiveDeadline);
+  const availWorkingDays = countWork(start, exhaustiveDeadline);
   const exCap = sd.exhaustive && sd.exhaustive > 0 ? Math.min(Math.round(sd.exhaustive), availWorkingDays) : availWorkingDays;
   const availToTarget = exCap * cfg.exhaustive_daily_hours * 60 * hwFactor;
 
@@ -137,10 +152,13 @@ export function generatePlan(input: PlanInput): Plan {
   let exDaysUsed = 0;
   let guard = 0;
   while (i < remaining.length && cur < exhaustiveDeadline && guard++ < 6000) {
-    if (isSun(cur)) {
-      const uniq = [...new Set(weeklyDone)];
-      days.push({ date: iso(cur), weekday: wd(cur), stage: "exhaustive", stageLabel: "Stage 1 · Exhaustive", topic: null, task: uniq.length ? `Deep test — ${uniq.join(", ")}` : "Deep test (catch-up day)", meta: "MCQ + descriptive test in app", sunday: true, status: "test" });
-      weeklyDone.length = 0; cur = addDays(cur, 1); continue;
+    if (!isWork(cur)) {
+      if (isSun(cur) && !holidaySet.has(iso(cur))) {
+        const uniq = [...new Set(weeklyDone)];
+        days.push({ date: iso(cur), weekday: wd(cur), stage: "exhaustive", stageLabel: "Stage 1 · Exhaustive", topic: null, task: uniq.length ? `Deep test — ${uniq.join(", ")}` : "Deep test (catch-up day)", meta: "MCQ + descriptive test in app", sunday: true, status: "test" });
+        weeklyDone.length = 0;
+      }
+      cur = addDays(cur, 1); continue;
     }
     if (exDaysUsed >= exCap) break;
     exDaysUsed++;
@@ -152,7 +170,7 @@ export function generatePlan(input: PlanInput): Plan {
       if (placed > 0 && eff > budget + 0.5) break;
       const topicCol: string | null = c.topicTitle !== lastShownTopic ? c.topicTitle : null;
       if (topicCol) lastShownTopic = topicCol;
-      days.push({ date: iso(cur), weekday: wd(cur), stage: "exhaustive", stageLabel: "Stage 1 · Exhaustive", topic: topicCol, task: `${c.label} · ${c.topicTitle}`, meta: `${hm(c.minutes)} · watch at ${speed}× · do homework if any`, sunday: false, status: "ok" });
+      days.push({ date: iso(cur), weekday: wd(cur), stage: "exhaustive", stageLabel: "Stage 1 · Exhaustive", topic: topicCol, task: `${c.label} · ${c.topicTitle}`, meta: `${hm(c.minutes)} · watch at ${speed}× · do homework if any`, sunday: false, status: "ok", sectionId: c.sectionId });
       budget -= eff; placed++;
       if (!weeklyDone.includes(c.topicTitle)) weeklyDone.push(c.topicTitle);
       i++;

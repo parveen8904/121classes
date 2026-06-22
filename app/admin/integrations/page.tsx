@@ -97,9 +97,10 @@ export default async function IntegrationsPage({
         back={{ href: "/admin", label: "Admin" }}
       />
 
-      {searchParams.tg === "set" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Telegram webhook connected.</div>}
-      {searchParams.tg === "fail" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ Couldn&apos;t connect the webhook — check the bot token.</div>}
+      {searchParams.tg === "set" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Telegram connected — bot verified, username saved, webhook registered. Students can now tap &ldquo;Connect Telegram&rdquo; on their dashboard.</div>}
+      {searchParams.tg === "fail" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ Token is valid but the webhook didn&apos;t register — try again in a moment.</div>}
       {searchParams.tg === "notoken" && <div className="notice err" style={{ marginTop: 16 }}>Add your Telegram bot token below first.</div>}
+      {searchParams.tg === "badtoken" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ That bot token isn&apos;t valid. Get a real one from @BotFather (it looks like <code>123456789:AA…</code>, ~46 chars) and paste it in the Telegram bot token field below.</div>}
       {searchParams.links === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Links saved.</div>}
       {searchParams.keys === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Keys saved.</div>}
       {searchParams.mailtest && <div className={`notice ${searchParams.mailtest.startsWith("✅") ? "ok" : "err"}`} style={{ marginTop: 16 }}>{searchParams.mailtest}</div>}

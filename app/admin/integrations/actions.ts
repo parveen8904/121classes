@@ -19,16 +19,28 @@ async function requireAdmin() {
   return data?.role === "admin";
 }
 
-// Point the Telegram bot at our webhook (one click).
+// One-click connect: validate the token (getMe), auto-save the @username, then
+// point the bot at our webhook. Don't call redirect() inside try/catch — it
+// throws internally and would be swallowed by the catch.
 export async function connectTelegramWebhook() {
   if (!(await requireAdmin())) return;
-  if (!(await telegramConfigured())) redirect("/admin/integrations?tg=notoken");
+  const token = await getSecret("TELEGRAM_BOT_TOKEN");
+  if (!token) redirect("/admin/integrations?tg=notoken");
+  const svc = createServiceClient();
+
+  let username: string | null = null;
+  try {
+    const me = await fetch(`https://api.telegram.org/bot${token}/getMe`, { cache: "no-store" }).then((r) => r.json());
+    if (me?.ok && me?.result?.username) username = String(me.result.username);
+  } catch { /* handled below */ }
+  if (!username) redirect("/admin/integrations?tg=badtoken");
+  await svc.from("app_secrets").upsert({ key: "TELEGRAM_BOT_USERNAME", value: username }, { onConflict: "key" });
+  clearSecretCache();
 
   const host = headers().get("host");
   const proto = headers().get("x-forwarded-proto") || "https";
   const webhookUrl = `${proto}://${host}/api/telegram/webhook`;
   const secret = await getSecret("TELEGRAM_WEBHOOK_SECRET");
-  const token = await getSecret("TELEGRAM_BOT_TOKEN");
   const params: Record<string, string> = { url: webhookUrl };
   if (secret) params.secret_token = secret;
 

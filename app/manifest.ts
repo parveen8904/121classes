@@ -3,8 +3,8 @@ import type { MetadataRoute } from "next";
 // Web App Manifest — makes the site installable as a PWA (home screen / desktop).
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "121 CA Classes",
-    short_name: "CA Classes",
+    name: "CA Parveen Sharma",
+    short_name: "CA Parveen Sharma",
     description:
       "Personalized, AI-enabled CA coaching by CA Parveen Sharma — classes, tests, notes and doubt-solving.",
     start_url: "/dashboard",

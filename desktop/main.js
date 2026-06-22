@@ -9,7 +9,7 @@ const { pipeline } = require("node:stream/promises");
 const { Readable, Transform } = require("node:stream");
 const { pathToFileURL } = require("node:url");
 
-const WEB = process.env.CA_WEB || "https://www.121caclasses.com";
+const WEB = process.env.CA_WEB || "https://caparveensharma.com";
 const tmpToWipe = [];
 const decrypted = new Map(); // id -> decrypted temp path (cached per session)
 

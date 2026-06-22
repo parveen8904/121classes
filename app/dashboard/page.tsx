@@ -228,7 +228,7 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
                 <div
                   key={a.id}
                   className="card"
-                  style={{ borderColor: a.kind === "amendment" ? "var(--accent)" : "var(--border)" }}
+                  style={{ border: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}
                 >
                   <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
                     <span className="badge">{announcementKindLabel(a.kind)}</span>

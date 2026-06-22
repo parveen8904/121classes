@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { aiConfigured } from "@/lib/ai";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
-import { addMcq, updateMcq, bulkAddMcq, deleteMcq, generateMcqsFromTranscript, generateChapterTest, attachSectionPdf } from "./actions";
+import { addMcq, updateMcq, bulkAddMcq, deleteMcq, generateMcqsFromTranscript, generateChapterTest, attachSectionPdf, importMcqsFromPdf } from "./actions";
 import PdfUpload from "../../_components/PdfUpload";
 import SubmitButton from "@/app/components/SubmitButton";
 import { getMcqExplanations } from "@/lib/answers";
@@ -18,6 +18,9 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
   if (!section) notFound();
   const refPdf = ((section.config ?? {}) as Record<string, string>).pdf_url ?? "";
   const qCount = Number((section.config as Record<string, unknown> | null)?.question_count) || 20;
+  const imp = (section.config as Record<string, unknown> | null)?.mcq_import as
+    | { imported?: number; skipped?: number; total?: number; error?: string }
+    | undefined;
 
   const { data: questions } = await supabase
     .from("mcq_questions")
@@ -36,7 +39,43 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
         back={{ href: `/admin/topics/${section.topic_id}`, label: "Topic" }}
       />
 
-      {/* Attach a reference PDF (question paper / answer key) */}
+      {/* PRIMARY PATH: upload your own MCQ test as a PDF — AI digitises it ONCE. */}
+      {ai && (
+        <div className="form-card" style={{ marginTop: 14, border: "2px solid var(--accent)" }}>
+          <h3>📄➡️🧠 Upload your MCQ test (PDF) — added to the engine once</h3>
+          <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
+            Upload your own question paper as a PDF — <strong>your questions, your answers, your solutions</strong>. AI reads it
+            <strong> once</strong> and turns it into a test here; it never solves or changes any answer (a wrong answer is kept as you marked it).
+            Students then take it and get the <strong>same auto-graded report</strong> as every other test, with <strong>no further AI</strong>.
+            Any question with no answer marked in the PDF is skipped (never guessed) so you can add the answer and re-upload.
+          </p>
+          {imp && (imp.imported || imp.skipped || imp.error) ? (
+            <p
+              className="notice"
+              style={{
+                margin: "0 0 10px",
+                background: imp.error ? "rgba(239,68,68,.12)" : "rgba(34,197,94,.12)",
+                color: imp.error ? "#dc2626" : "#16a34a",
+                fontSize: ".85rem",
+              }}
+            >
+              {imp.error
+                ? `⚠️ ${imp.error}`
+                : `✅ Last import: ${imp.imported} question${imp.imported === 1 ? "" : "s"} added${imp.skipped ? ` · ${imp.skipped} skipped (no answer marked in the PDF)` : ""}.`}
+            </p>
+          ) : null}
+          <form action={importMcqsFromPdf}>
+            <input type="hidden" name="section_id" value={section.id} />
+            <PdfUpload name="pdf_url" defaultValue={refPdf} label="📄 Your MCQ test PDF (questions + your marked answers)" />
+            <label className="remember" style={{ marginTop: 8 }}>
+              <input type="checkbox" name="replace" defaultChecked /> ♻️ Replace any existing questions in this test
+            </label>
+            <SubmitButton className="btn" style={{ marginTop: 8 }} savedLabel="✓ Imported">Read PDF &amp; add questions</SubmitButton>
+          </form>
+        </div>
+      )}
+
+      {/* Attach a reference PDF (question paper / answer key) — without importing. */}
       <form action={attachSectionPdf} className="form-card" style={{ marginTop: 14 }}>
         <input type="hidden" name="section_id" value={section.id} />
         <PdfUpload name="pdf_url" defaultValue={refPdf} label="📄 Attach a PDF (question paper / answer key) — shown to students" />
@@ -124,8 +163,7 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
           </p>
           <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
             Optional (improves the student&apos;s report): add a line <strong>Concept: …</strong> and/or <strong>Why: …</strong> to any block.
-            <strong> Concept</strong> feeds &ldquo;concepts to revise&rdquo;; <strong>Why</strong> is shown as the correct-answer reason. Even without
-            these, CA Parveen Sharma&apos;s AI note in the report analyses what the student got wrong.
+            <strong> Concept</strong> feeds &ldquo;concepts to revise&rdquo;; <strong>Why</strong> is shown to the student as the correct-answer solution.
           </p>
           <form action={bulkAddMcq}>
             <input type="hidden" name="section_id" value={section.id} />

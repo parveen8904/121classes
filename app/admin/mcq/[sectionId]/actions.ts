@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { str, num, nullable } from "../../_lib/util";
-import { generateMcqs } from "@/lib/ai";
+import { generateMcqs, extractMcqsFromPdf } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { saveMcqExplanation } from "@/lib/answers";
 
@@ -16,6 +16,77 @@ export async function attachSectionPdf(formData: FormData) {
   const { data: sec } = await supabase.from("sections").select("config").eq("id", sectionId).maybeSingle();
   const config = (sec?.config ?? {}) as Record<string, unknown>;
   await supabase.from("sections").update({ config: { ...config, pdf_url: url } }).eq("id", sectionId);
+  revalidatePath(`/admin/mcq/${sectionId}`);
+}
+
+// Upload YOUR OWN MCQ test as a PDF — AI reads it ONCE and converts it into
+// engine questions. Your questions, your marked answers, your solutions are kept
+// EXACTLY as in the PDF (nothing is solved or changed). After this, students take
+// the test from the stored questions and get the standard report — no further AI.
+// Questions whose answer the PDF does not mark are skipped (never guessed) and
+// reported back so you can add the answer and re-import.
+export async function importMcqsFromPdf(formData: FormData) {
+  const sectionId = str(formData.get("section_id"));
+  const pdfUrl = str(formData.get("pdf_url"));
+  if (!sectionId || !pdfUrl) return;
+  const replace = formData.get("replace") === "on";
+
+  const supabase = createClient();
+  const { data: sec } = await supabase.from("sections").select("config").eq("id", sectionId).maybeSingle();
+  const cfg = (sec?.config ?? {}) as Record<string, unknown>;
+
+  const items = await extractMcqsFromPdf(pdfUrl);
+  // Only questions the PDF actually marks an answer for can be graded — never invent one.
+  const valid = (items ?? []).filter((q) => q.correct_index >= 0 && q.correct_index < q.options.length);
+  const skipped = (items ?? []).length - valid.length;
+
+  const summary = {
+    imported: 0,
+    skipped,
+    total: (items ?? []).length,
+    error: items === null ? "Could not read the PDF (is AI switched on, and the file a readable PDF?)" : "",
+  };
+
+  if (!valid.length) {
+    await supabase.from("sections").update({ config: { ...cfg, pdf_url: pdfUrl, mcq_import: summary } }).eq("id", sectionId);
+    revalidatePath(`/admin/mcq/${sectionId}`);
+    return;
+  }
+
+  if (replace) await supabase.from("mcq_questions").delete().eq("section_id", sectionId);
+  let base = 0;
+  if (!replace) {
+    const { count } = await supabase.from("mcq_questions").select("id", { count: "exact", head: true }).eq("section_id", sectionId);
+    base = count ?? 0;
+  }
+
+  const { data: inserted } = await supabase
+    .from("mcq_questions")
+    .insert(
+      valid.map((q, i) => ({
+        section_id: sectionId,
+        question: q.question,
+        options: q.options,
+        correct_index: q.correct_index,
+        order_index: base + i,
+        concept: q.concept || null,
+      })),
+    )
+    .select("id, order_index");
+
+  // Store the teacher's own solution (unchanged) as the correct-answer explanation.
+  const byOrder = new Map(valid.map((q, i) => [base + i, q]));
+  for (const r of inserted ?? []) {
+    const q = byOrder.get(r.order_index as number);
+    if (q?.solution) await saveMcqExplanation(r.id as string, q.solution, []);
+  }
+
+  summary.imported = valid.length;
+  // Keep the original PDF attached (students can see it) + remember the import result.
+  await supabase
+    .from("sections")
+    .update({ config: { ...cfg, pdf_url: pdfUrl, mcq_import: summary, question_count: (base + valid.length) } })
+    .eq("id", sectionId);
   revalidatePath(`/admin/mcq/${sectionId}`);
 }
 

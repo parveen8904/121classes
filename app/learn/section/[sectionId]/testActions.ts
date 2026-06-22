@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { aiConfigured, gradeSubjective, answerDoubtFromMaterial, mcqReportComment, NEED_FACULTY } from "@/lib/ai";
+import { aiConfigured, gradeSubjective, answerDoubtFromMaterial, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getMcqExplanations } from "@/lib/answers";
 import { dailyDoubtLimitReached } from "@/lib/limits";
@@ -17,7 +17,6 @@ function reportEmailHtml(res: McqResult, title: string, link: string): string {
   const li = (s: string) => `<li>${esc(s)}</li>`;
   const parts: string[] = [];
   parts.push(`<p><strong>Score: ${res.score}/${res.total} (${pct}%)</strong> &nbsp;•&nbsp; 🏆 Rank: #${res.rank ?? 1}</p>`);
-  if (res.aiComment) parts.push(`<p><strong>🧑‍🏫 CA Parveen Sharma's note</strong></p><p>${esc(res.aiComment).replace(/\n/g, "<br>")}</p>`);
   if (res.weakConcepts?.length) parts.push(`<p><strong>🔎 Concepts to revise</strong></p><ul>${res.weakConcepts.map(li).join("")}</ul>`);
   if (res.classesToRedo?.length) parts.push(`<p><strong>↩️ Classes to study again</strong></p><ul>${res.classesToRedo.map((c) => li(`Class ${c}`)).join("")}</ul>`);
   parts.push(`<p><strong>📋 Question review</strong></p><ul>`);
@@ -59,7 +58,6 @@ export type McqResult = {
   rank?: number; // leaderboard position; we never reveal how many took the test
   weakConcepts?: string[];
   classesToRedo?: string[];
-  aiComment?: string; // CA Parveen Sharma's personalised note (generated once, stored on the attempt)
 };
 
 // Build the graded result (score, review, rank, weak concepts, redo classes)
@@ -140,7 +138,7 @@ export async function getMyMcqResult(sectionId: string): Promise<(McqResult & { 
   if (!user) return null;
   const { data: prior } = await supabase
     .from("mcq_attempts")
-    .select("answers, report")
+    .select("answers")
     .eq("student_id", user.id)
     .eq("section_id", sectionId)
     .order("created_at", { ascending: true })
@@ -148,8 +146,7 @@ export async function getMyMcqResult(sectionId: string): Promise<(McqResult & { 
     .maybeSingle();
   if (!prior) return null;
   const res = await buildMcqResult(supabase, sectionId, user.id, (prior.answers as Record<string, number>) ?? {});
-  const storedComment = ((prior.report ?? {}) as { aiComment?: string }).aiComment;
-  return { ...res, aiComment: storedComment ?? res.aiComment, alreadyDone: true };
+  return { ...res, alreadyDone: true };
 }
 
 export async function gradeMcqAttempt(input: {
@@ -166,7 +163,7 @@ export async function gradeMcqAttempt(input: {
   // that result instead of recording a new one.
   const { data: prior } = await supabase
     .from("mcq_attempts")
-    .select("answers, report")
+    .select("answers")
     .eq("student_id", user.id)
     .eq("section_id", input.sectionId)
     .order("created_at", { ascending: true })
@@ -174,34 +171,11 @@ export async function gradeMcqAttempt(input: {
     .maybeSingle();
   if (prior) {
     const res = await buildMcqResult(supabase, input.sectionId, user.id, (prior.answers as Record<string, number>) ?? {});
-    const storedComment = ((prior.report ?? {}) as { aiComment?: string }).aiComment;
-    return { ...res, aiComment: storedComment ?? res.aiComment, alreadyDone: true };
+    return { ...res, alreadyDone: true };
   }
 
   const res = await buildMcqResult(supabase, input.sectionId, user.id, input.answers ?? {});
   if (!res.ok) return res;
-
-  const { data: sec } = await supabase.from("sections").select("title").eq("id", input.sectionId).maybeSingle();
-  const title = sec?.title ?? "Test";
-
-  // CA Parveen Sharma's personalised note — generated ONCE here (from the wrong
-  // questions), stored on the attempt, and reused on every re-view (no re-spend).
-  try {
-    if (await aiConfigured() && (res.review?.length ?? 0) > 0) {
-      const wrong = (res.review ?? [])
-        .filter((r) => !r.isCorrect)
-        .map((r) => ({
-          question: r.question,
-          correctAnswer: r.options[r.correctIndex] ?? "",
-          chosenAnswer: r.chosenIndex >= 0 ? r.options[r.chosenIndex] ?? "" : "",
-          concept: r.concept || undefined,
-        }));
-      const comment = await mcqReportComment({ title, score: res.score ?? 0, total: res.total ?? 0, wrong });
-      if (comment) res.aiComment = comment;
-    }
-  } catch {
-    /* AI note is best-effort — never block grading on it */
-  }
 
   await supabase.from("mcq_attempts").insert({
     student_id: user.id,
@@ -209,7 +183,7 @@ export async function gradeMcqAttempt(input: {
     score: res.score,
     total: res.total,
     answers: input.answers ?? {},
-    report: { rank: res.rank, weakConcepts: res.weakConcepts, classesToRedo: res.classesToRedo, aiComment: res.aiComment },
+    report: { rank: res.rank, weakConcepts: res.weakConcepts, classesToRedo: res.classesToRedo },
   });
   await supabase.from("student_activity").insert({
     student_id: user.id,
@@ -221,6 +195,8 @@ export async function gradeMcqAttempt(input: {
   // Email the report to the student (best-effort — never block grading on it).
   try {
     if (user.email) {
+      const { data: sec } = await supabase.from("sections").select("title").eq("id", input.sectionId).maybeSingle();
+      const title = sec?.title ?? "Test";
       await sendEmail(user.email, `📝 Your test report — ${title}`, reportEmailHtml(res, title, `${SITE_URL}/learn/section/${input.sectionId}`));
     }
   } catch {

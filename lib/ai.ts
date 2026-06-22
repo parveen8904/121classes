@@ -249,38 +249,6 @@ export async function generateMcqs(
   }
 }
 
-// A short, personalised note for a student's MCQ test report — written in CA
-// Parveen Sharma's encouraging-but-honest mentor voice, based ONLY on the
-// questions they got wrong. Generated ONCE at grading time and stored on the
-// attempt, so re-views cost no further tokens. Returns null when AI is off.
-export async function mcqReportComment(input: {
-  title: string;
-  score: number;
-  total: number;
-  wrong: { question: string; correctAnswer: string; chosenAnswer: string; concept?: string }[];
-}): Promise<string | null> {
-  const pct = input.total ? Math.round((input.score / input.total) * 100) : 0;
-  const wrongText = input.wrong.length
-    ? input.wrong
-        .map(
-          (w, i) =>
-            `${i + 1}. ${w.question}\n   Correct answer: ${w.correctAnswer}\n   Student chose: ${w.chosenAnswer || "(left blank)"}` +
-            (w.concept ? `\n   Concept: ${w.concept}` : ""),
-        )
-        .join("\n")
-    : "(none — every question was correct)";
-  const sys =
-    "You are CA Parveen Sharma, giving a short performance note to YOUR CA student on their chapter MCQ test. " +
-    "Speak directly to the student ('you'). Base the note ONLY on the test data provided — never invent mistakes or topics they did not get wrong. " +
-    "Cover, in this order: (1) one line on the overall score — warm if good, honestly motivating if weak; " +
-    "(2) the specific concepts / accounting standards / sections they must revise, taken from the questions they got wrong; " +
-    "(3) one concrete next step (e.g. which class to re-watch or what to practise). " +
-    "Use Indian CA exam context. Reply ALWAYS as 3–5 short bullet points, each on its own line starting with '- ', warm and motivating, under 110 words total. " +
-    "Never claim to be a human other than CA Parveen Sharma's own guidance.";
-  const user = `Test: ${input.title}\nScore: ${input.score}/${input.total} (${pct}%)\n\nQuestions answered WRONG:\n${wrongText}`;
-  return callClaude(sys, user, 320, { model: await fastModel(), feature: "mcq_report" });
-}
-
 // Pre-generate descriptive (subjective) exam questions from a transcript.
 export async function generateSubjectiveQuestions(
   transcript: string,
@@ -410,6 +378,87 @@ export async function transcribeHandwriting(pdfUrl: string): Promise<string | nu
       .join("\n")
       .trim();
     return text || null;
+  } catch {
+    return null;
+  }
+}
+
+// Read a teacher-supplied MCQ test PDF and convert it into engine questions —
+// ONCE, at upload. This is pure DIGITISATION: it extracts exactly what the PDF
+// contains and NEVER solves, judges, corrects, adds, removes or rewords anything.
+// The correct option is whatever the document marks as the answer (the teacher's
+// own answer key) — even if that answer is wrong, it is kept as-is. Any solution
+// text in the PDF is copied faithfully. Returns null when AI is off / PDF unreadable.
+export type ExtractedMcq = {
+  question: string;
+  options: string[];
+  correct_index: number; // 0-based into options; -1 if the PDF marks no answer
+  concept: string;
+  solution: string;
+};
+export async function extractMcqsFromPdf(pdfUrl: string): Promise<ExtractedMcq[] | null> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey || !pdfUrl) return null;
+  const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
+  const sys =
+    "You DIGITISE a multiple-choice test that the teacher (CA Parveen Sharma) has ALREADY written, with the correct answers ALREADY marked. " +
+    "Your ONLY job is faithful extraction. You MUST NOT solve the questions, MUST NOT judge, correct or change the marked answer, and MUST NOT add, remove, reword or 'fix' any question, option, answer or solution — even if you believe an answer is wrong, keep EXACTLY what the teacher wrote and marked. " +
+    "Identify the correct option only from how the document marks it (a tick/✓/star, bold, underline, 'Ans:', 'Answer:', or a separate answer key). " +
+    "If a question has NO answer marked anywhere in the document, set correct_index to -1 (do NOT guess an answer). " +
+    "If the document provides a solution/explanation for a question, copy it faithfully into 'solution' (keep it concise but do not invent); otherwise leave 'solution' empty. " +
+    "If a topic/concept/standard/section is stated for a question, put it in 'concept'; otherwise leave it empty. " +
+    "Respond ONLY as compact JSON, no prose, no code fences: " +
+    '{"questions":[{"question":"...","options":["...","...","...","..."],"correct_index":0,"concept":"","solution":""}]} ' +
+    "where correct_index is the 0-based index into options of the answer the document marks.";
+  try {
+    const pdfRes = await fetch(pdfUrl, { cache: "no-store" });
+    if (!pdfRes.ok) return null;
+    const b64 = Buffer.from(await pdfRes.arrayBuffer()).toString("base64");
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        max_tokens: 8000,
+        system: sys,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } },
+              { type: "text", text: "Extract every MCQ from this test exactly as written, with the answer the document marks." },
+            ],
+          },
+        ],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("import_mcq_pdf", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    const text = (data.content ?? [])
+      .filter((b: { type: string }) => b.type === "text")
+      .map((b: { text: string }) => b.text)
+      .join("\n")
+      .trim();
+    if (!text) return null;
+    const json = JSON.parse(text.replace(/```json|```/g, "").trim());
+    const arr = Array.isArray(json) ? json : json.questions;
+    if (!Array.isArray(arr)) return null;
+    return arr
+      .map((q: { question?: unknown; options?: unknown; correct_index?: unknown; concept?: unknown; solution?: unknown }) => {
+        const options = (Array.isArray(q.options) ? q.options : []).map((o) => String(o).trim()).filter(Boolean);
+        const ci = Number.isInteger(q.correct_index) ? (q.correct_index as number) : -1;
+        return {
+          question: String(q.question ?? "").trim(),
+          options,
+          correct_index: ci,
+          concept: String(q.concept ?? "").trim(),
+          solution: String(q.solution ?? "").trim(),
+        };
+      })
+      .filter((q) => q.question && q.options.length >= 2);
   } catch {
     return null;
   }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/service";
+import CountUp from "@/app/components/CountUp";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -42,7 +43,7 @@ export default async function PlacementsPage() {
             Live job &amp; articleship openings, AI mock interviews, a CV builder and direct firm links — all in one place, updated every day.
           </p>
           <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap", margin: "8px 0 22px" }}>
-            <Stat n={`${openings}+`} l="live openings now" />
+            <div style={{ textAlign: "center" }}><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}><CountUp value={openings} suffix="+" /></div><div style={{ fontSize: ".8rem", opacity: 0.92 }}>live openings now</div></div>
             <Stat n="20+" l="top firms linked" />
             <Stat n="24×7" l="apply anytime" />
           </div>

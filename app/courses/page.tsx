@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/service";
+import CountUp from "@/app/components/CountUp";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -102,9 +103,9 @@ export default async function CoursesPage() {
             day-by-day study plan, AI doubts on WhatsApp/Telegram, tests with reports, revisions &amp; amendments to your exam.
           </p>
           <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap" }}>
-            <div><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}>{(subjects ?? []).length}</div><div style={{ fontSize: ".8rem", opacity: .92 }}>subjects</div></div>
-            <div><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}>{totalClasses}+</div><div style={{ fontSize: ".8rem", opacity: .92 }}>classes</div></div>
-            <div><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}>{Math.round(totalMinutes / 60)}+</div><div style={{ fontSize: ".8rem", opacity: .92 }}>hours of teaching</div></div>
+            <div><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}><CountUp value={(subjects ?? []).length} /></div><div style={{ fontSize: ".8rem", opacity: .92 }}>subjects</div></div>
+            <div><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}><CountUp value={totalClasses} suffix="+" /></div><div style={{ fontSize: ".8rem", opacity: .92 }}>classes</div></div>
+            <div><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}><CountUp value={Math.round(totalMinutes / 60)} suffix="+" /></div><div style={{ fontSize: ".8rem", opacity: .92 }}>hours of teaching</div></div>
           </div>
         </div>
 

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import CountUp from "@/app/components/CountUp";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -55,7 +56,7 @@ export default async function ResultsPage() {
         <p style={{ maxWidth: 620, margin: "0 auto", fontSize: "1.02rem", color: "rgba(255,255,255,.95)" }}>
           Real rank-holders mentored by <strong>CA Parveen Sharma &amp; team</strong> — with disciplined plans, doubt-solving and revision that actually work. 🎯
         </p>
-        {results.length > 0 && <div style={{ fontSize: "2rem", fontWeight: 800, marginTop: 16 }}>{results.length}+ <span style={{ fontSize: ".9rem", fontWeight: 500, opacity: .92 }}>success stories</span></div>}
+        {results.length > 0 && <div style={{ fontSize: "2rem", fontWeight: 800, marginTop: 16 }}><CountUp value={results.length} suffix="+" /> <span style={{ fontSize: ".9rem", fontWeight: 500, opacity: .92 }}>success stories</span></div>}
       </div>
 
       {results.length === 0 ? (

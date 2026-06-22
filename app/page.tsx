@@ -3,6 +3,7 @@ import SiteNav from "./components/SiteNav";
 import SiteFooter from "./components/SiteFooter";
 import AnnouncementSplash from "./components/AnnouncementSplash";
 import NotifyButton from "./components/NotifyButton";
+import CountUp from "./components/CountUp";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -85,6 +86,16 @@ export default async function Home() {
     .lte("starts_at", new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString())
     .order("starts_at")
     .limit(6);
+  const [{ count: classCount }, { count: resultCount }, { count: openingCount }] = await Promise.all([
+    supabase.from("sections").select("id", { count: "exact", head: true }).eq("kind", "full_class_video").eq("is_published", true),
+    supabase.from("results").select("id", { count: "exact", head: true }).eq("is_published", true),
+    supabase.from("job_listings").select("id", { count: "exact", head: true }).eq("status", "approved"),
+  ]);
+  const heroStats = [
+    { n: classCount ?? 0, suffix: "+", label: "recorded classes" },
+    { n: resultCount ?? 0, suffix: "+", label: "success stories" },
+    { n: openingCount ?? 0, suffix: "+", label: "live job openings" },
+  ].filter((s) => s.n > 0);
   const {
     data: { user: landingUser },
   } = await supabase.auth.getUser();
@@ -124,6 +135,37 @@ export default async function Home() {
           <Link className="btn" href="/login">Get started — it&apos;s free to join</Link>
           <Link className="btn secondary" href="/#mentor">Meet CA Parveen Sharma</Link>
         </div>
+        {heroStats.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              gap: 14,
+              justifyContent: "center",
+              flexWrap: "wrap",
+              margin: "30px auto 0",
+              maxWidth: 760,
+            }}
+          >
+            {heroStats.map((s) => (
+              <div
+                key={s.label}
+                style={{
+                  flex: "1 1 180px",
+                  background: "linear-gradient(135deg,#0d9488,#10b981)",
+                  color: "#fff",
+                  borderRadius: 18,
+                  padding: "18px 16px",
+                  boxShadow: "0 10px 30px -12px rgba(13,148,136,.55)",
+                }}
+              >
+                <div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}>
+                  <CountUp value={s.n} suffix={s.suffix} />
+                </div>
+                <div style={{ fontSize: ".82rem", fontWeight: 600, opacity: 0.95, marginTop: 4 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
         <p
           style={{
             display: "inline-block",

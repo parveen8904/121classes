@@ -23,6 +23,17 @@ export default async function TelegramAdminPage({ searchParams }: { searchParams
 
       {searchParams.sent && <div className="notice ok" style={{ marginTop: 16 }}>✅ Sent.</div>}
 
+      <div className="card" style={{ marginTop: 16, background: "var(--bg-soft,#f8fafc)" }}>
+        <strong>Setup, in order</strong>
+        <ol style={{ fontSize: ".85rem", margin: "8px 0 0", paddingLeft: 20, lineHeight: 1.6 }}>
+          <li>Create each subject&apos;s Telegram group.</li>
+          <li>Add <strong>@Caclassesbot</strong> to the group and make it an <strong>admin</strong>.</li>
+          <li>Type any message in the group — it then appears below under &ldquo;Groups the bot is in.&rdquo;</li>
+          <li>Pick its subject in the dropdown and click <strong>Link</strong>.</li>
+          <li>(For the channel: add the bot as admin of your channel — the channel ID is already set.)</li>
+        </ol>
+      </div>
+
       {/* Doubt-answering policy */}
       <form action={saveTelegramSettings} className="form-card" style={{ marginTop: 18 }}>
         <h3>🔒 Who can ask the bot doubts</h3>

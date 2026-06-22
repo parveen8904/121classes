@@ -29,15 +29,14 @@ const aiPoints = [
 ];
 
 const courses = [
-  { icon: "📘", title: "CA Intermediate — Accounting", desc: "Concept classes, revisions, AS-wise coverage and full question practice." },
-  { icon: "📗", title: "CA Intermediate — Law", desc: "Section-wise lectures, amendment updates and exam-focused revision." },
-  { icon: "📙", title: "CA Foundation", desc: "Build strong fundamentals across all four papers with guided practice." },
+  { icon: "📘", title: "CA Intermediate — Advanced Accounting", desc: "Concept classes, revisions, full question practice and amendments — taught by CA Parveen Sharma." },
+  { icon: "📗", title: "CA Final — Financial Reporting", desc: "In-depth Ind AS coverage, concept classes, revisions and exam-focused practice — taught by CA Parveen Sharma." },
 ];
 
 const whatsNew = [
-  { tag: "Amendments", title: "May 2026 amendments updated", desc: "All applicable amendments till the May 2026 attempt are now live across topics." },
-  { tag: "New videos", title: "AS 24 revision videos added", desc: "First and second revision videos for Discontinuing Operations are up." },
-  { tag: "Live class", title: "Weekly doubt-solving webinar", desc: "Join the live session every weekend with CA Parveen Sharma — recordings posted after." },
+  { tag: "Amendments", title: "Latest amendments updated", desc: "All applicable amendments for your attempt are kept up to date across topics." },
+  { tag: "New videos", title: "Fresh revision videos added", desc: "New concept and revision videos are added regularly across the syllabus." },
+  { tag: "Live class", title: "Weekly doubt-solving session", desc: "Join the live session with CA Parveen Sharma — recordings posted after." },
 ];
 
 const testimonials = [

@@ -655,7 +655,7 @@ export default async function Home() {
             ["A plan from day one to exam day", "A day-by-day roadmap so no student is ever unsure what to study next."],
             ["My teaching, available 24×7", "AI doubt-solving & paper checking trained only on ICAI material and my classes — under my guidance, never replacing me."],
             ["Beyond results, into careers", "Placements, interview prep, CVs and firm connections — from student to Chartered Accountant."],
-            ["Every paper, level & device", "Foundation to Final, on web, desktop & mobile — for every sincere aspirant, in every corner of India."],
+            ["Mastery of my subjects, on every device", "Advanced Accounting (CA Intermediate) & Financial Reporting (CA Final) — deep, exam-focused teaching on web, desktop & mobile, for every sincere aspirant across India."],
           ].map(([t, d]) => (
             <li key={t} style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px" }}>
               <span style={{ color: "var(--accent)", fontWeight: 800, fontSize: "1.2rem", lineHeight: 1.3 }}>✓</span>

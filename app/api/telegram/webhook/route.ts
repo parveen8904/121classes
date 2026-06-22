@@ -115,6 +115,7 @@ export async function POST(req: NextRequest) {
         page_path: "telegram",
         question: text,
         status: answer ? "answered" : "open",
+        telegram_chat_id: chatId,
       })
       .select("id")
       .single();

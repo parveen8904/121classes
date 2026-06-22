@@ -22,12 +22,14 @@ export async function replyToQuestion(formData: FormData) {
 
   const { data: q } = await svc
     .from("page_questions")
-    .select("id, email, user_id, page_path, question")
+    .select("id, email, user_id, page_path, question, telegram_chat_id")
     .eq("id", id)
     .maybeSingle();
   if (!q) return;
 
-  let chatId: string | null = null;
+  // Reply to the linked student's Telegram if known, else to the chat the
+  // question was asked from (covers unlinked askers), else email.
+  let chatId: string | null = (q.telegram_chat_id as string) ?? null;
   let email: string | null = q.email;
   if (q.user_id) {
     const { data: prof } = await svc
@@ -35,7 +37,7 @@ export async function replyToQuestion(formData: FormData) {
       .select("telegram_chat_id, email")
       .eq("id", q.user_id)
       .maybeSingle();
-    chatId = prof?.telegram_chat_id ?? null;
+    chatId = prof?.telegram_chat_id ?? chatId;
     email = email || prof?.email || null;
   }
 

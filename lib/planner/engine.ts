@@ -1,8 +1,9 @@
 // Study-plan scheduling engine (pure — no I/O). Given a subject's content +
-// the planner config + a start/exam date, it lays out the backward timeline,
-// distributes the detailed classes across the exhaustive window using the speed
-// ladder to hit the 4-month target, runs a feasibility check, and emits the
-// day-by-day rows for all four stages. Loading lives in load.ts.
+// the planner config + a start/exam date + the student's chosen speed, it lays
+// out the backward timeline, packs WHOLE classes (one per row, never split or
+// crammed) into the exhaustive window, recommends a faster speed when the
+// schedule is tight, runs a feasibility check, and emits day-by-day rows for
+// all four stages. Loading lives in load.ts.
 
 export type RR = { start_months_before: number; days: number; daily_hours: number; video_pct: number; video_speed: number };
 export type PlannerConfig = {
@@ -29,6 +30,7 @@ export type PlanInput = {
   revisions: RevItem[];
   miq: TopicMIQ[];
   doneClasses?: number;
+  chosenSpeed?: number; // the speed the student wants to watch at
 };
 
 export type PlanDay = {
@@ -45,7 +47,7 @@ export type PlanDay = {
 
 export type Plan = {
   timeline: { exhaustiveStart: string; exhaustiveEnd: string; rr1: [string, string]; rr2: [string, string]; rr3: [string, string] };
-  feasibility: { fits: boolean; speed: number; requiredHours: number; availableHours: number; shortfallHours: number; startedLate: boolean; messages: string[] };
+  feasibility: { fits: boolean; speed: number; recommendedSpeed: number | null; requiredHours: number; availableHours: number; shortfallHours: number; startedLate: boolean; messages: string[] };
   days: PlanDay[];
   totals: { classHours: number; revisionHours: number; classCount: number };
 };
@@ -63,8 +65,6 @@ function hm(mins: number) {
   const m = Math.round(mins); const h = Math.floor(m / 60); const r = m % 60;
   return h > 0 ? (r > 0 ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
 }
-
-// working (class) minutes available between two dates, Sundays excluded
 function availMinutes(from: Date, to: Date, dailyHours: number, hwFactor: number) {
   let mins = 0;
   for (let c = new Date(from); c < to; c = addDays(c, 1)) if (!isSun(c)) mins += dailyHours * 60 * hwFactor;
@@ -83,7 +83,6 @@ export function generatePlan(input: PlanInput): Plan {
   const hwFactor = 1 - cfg.exhaustive_homework_pct / 100;
   const ladder = Array.from(new Set([cfg.base_speed, 1.5, cfg.max_speed])).sort((a, b) => a - b);
 
-  // Backward timeline for the revision rounds
   const rr1Start = addMonths(E, -cfg.rr1.start_months_before);
   const rr1End = addDays(rr1Start, cfg.rr1.days - 1);
   const rr2Start = addMonths(E, -cfg.rr2.start_months_before);
@@ -91,7 +90,6 @@ export function generatePlan(input: PlanInput): Plan {
   const rr3End = E;
   const rr3Start = addDays(E, -(cfg.rr3.days - 1));
 
-  // Exhaustive content + speed ladder against the 4-month target window
   const done = Math.max(0, input.doneClasses ?? 0);
   const classes = input.classes;
   const remaining = classes.slice(done);
@@ -99,26 +97,26 @@ export function generatePlan(input: PlanInput): Plan {
   const targetEnd = minDate(addMonths(start, input.params.target_months), rr1Start);
   const availToTarget = availMinutes(start, targetEnd, cfg.exhaustive_daily_hours, hwFactor);
 
-  let speed = ladder[ladder.length - 1];
-  let fits = false;
-  for (const s of ladder) { if (totalClassMin / s <= availToTarget) { speed = s; fits = true; break; } }
+  // Student-chosen speed; recommend a faster one if it won't fit the target.
+  const speed = input.chosenSpeed && input.chosenSpeed > 0 ? input.chosenSpeed : cfg.base_speed;
+  const fitsChosen = totalClassMin / speed <= availToTarget;
+  let recommendedSpeed: number | null = null;
+  if (!fitsChosen) for (const s of ladder) if (s > speed && totalClassMin / s <= availToTarget) { recommendedSpeed = s; break; }
 
   const requiredHours = totalClassMin / speed / 60;
   const availableHours = availToTarget / 60;
   const shortfallHours = Math.max(0, requiredHours - availableHours);
   const startedLate = start > addMonths(E, -input.params.start_months_before_exam);
 
-  // Distribute classes day by day across the exhaustive window
+  // Pack WHOLE classes into days (one class per row, never split). A class that
+  // alone exceeds a day's budget still gets its own day.
   const days: PlanDay[] = [];
-  let idx = done;
-  let remainMin = idx < classes.length ? classes[idx].minutes / speed : 0;
+  let i = done;
   let cur = new Date(start);
   let lastShownTopic: string | null = null;
   const weeklyDone: string[] = [];
   let guard = 0;
-  const hardStop = rr1Start;
-
-  while (idx < classes.length && cur < hardStop && guard++ < 4000) {
+  while (i < classes.length && cur < rr1Start && guard++ < 6000) {
     if (isSun(cur)) {
       const uniq = [...new Set(weeklyDone)];
       days.push({ date: iso(cur), weekday: wd(cur), stage: "exhaustive", stageLabel: "Stage 1 · Exhaustive", topic: null,
@@ -126,31 +124,26 @@ export function generatePlan(input: PlanInput): Plan {
       weeklyDone.length = 0;
       cur = addDays(cur, 1); continue;
     }
-    let budget = cfg.exhaustive_daily_hours * 60 * hwFactor;
-    const dayStartTopic = classes[idx].topicTitle;
-    const labels: string[] = [];
-    let watched = 0;
-    while (idx < classes.length && budget > 0.5) {
-      const c = classes[idx];
-      const take = Math.min(budget, remainMin);
-      budget -= take; remainMin -= take; watched += take;
-      if (!labels.includes(c.label)) labels.push(c.label);
-      if (remainMin <= 0.5) {
-        if (!weeklyDone.includes(c.topicTitle)) weeklyDone.push(c.topicTitle);
-        idx++;
-        remainMin = idx < classes.length ? classes[idx].minutes / speed : 0;
-      } else break; // class continues tomorrow
+    let budget = cfg.exhaustive_daily_hours * 60 * hwFactor; // wall-clock minutes
+    let placed = 0;
+    while (i < classes.length) {
+      const c = classes[i];
+      const eff = c.minutes / speed; // wall-clock time at chosen speed
+      if (placed > 0 && eff > budget + 0.5) break; // doesn't fit today
+      const topicCol: string | null = c.topicTitle !== lastShownTopic ? c.topicTitle : null;
+      if (topicCol) lastShownTopic = topicCol;
+      days.push({ date: iso(cur), weekday: wd(cur), stage: "exhaustive", stageLabel: "Stage 1 · Exhaustive", topic: topicCol,
+        task: `${c.label} · ${c.topicTitle}`, meta: `${hm(c.minutes)} · watch at ${speed}× · do homework if any`, sunday: false, status: "ok" });
+      budget -= eff; placed++;
+      if (!weeklyDone.includes(c.topicTitle)) weeklyDone.push(c.topicTitle);
+      i++;
+      if (budget <= 0.5) break;
     }
-    const topicCol: string | null = dayStartTopic !== lastShownTopic ? dayStartTopic : null;
-    if (topicCol) lastShownTopic = topicCol;
-    days.push({ date: iso(cur), weekday: wd(cur), stage: "exhaustive", stageLabel: "Stage 1 · Exhaustive", topic: topicCol,
-      task: labels.join(", "), meta: `${hm(watched)} · watch at ${speed}× · do homework if any`, sunday: false, status: "ok" });
     cur = addDays(cur, 1);
   }
   const exhaustiveEnd = addDays(cur, -1);
-  const overflow = idx < classes.length; // ran into RR1 before finishing
+  const overflow = i < classes.length;
 
-  // helper to add a single "study other subjects" break row for a date range
   const breakRow = (from: Date, to: Date, why: string) => {
     if (to <= from) return;
     days.push({ date: iso(from), weekday: wd(from), stage: "break", stageLabel: "Between stages", topic: null,
@@ -158,57 +151,48 @@ export function generatePlan(input: PlanInput): Plan {
   };
   breakRow(addDays(exhaustiveEnd, 1), rr1Start, "margin before revision");
 
-  // Revision rounds — spread topics (with their MIQs / revision videos) across the days
   const miqByTopic = new Map(input.miq.map((m) => [m.topicTitle, m]));
   const topicsInOrder = [...new Set(classes.map((c) => c.topicTitle))];
-  const fillRound = (from: Date, to: Date, stage: "rr1" | "rr2" | "rr3", stageLabel: string, vSpeed: number, vPct: number | null, restLabel: string, useRev2: boolean) => {
-    const total = workingDaysInclusive(from, to);
+  const fillRound = (from: Date, to: Date, stage: "rr1" | "rr2" | "rr3", stageLabel: string, vSpeed: number, checklist: boolean, restLabel: string, useRev2: boolean) => {
     let dayNo = 0;
     for (let c = new Date(from); c <= to; c = addDays(c, 1)) {
       const topic = topicsInOrder.length ? topicsInOrder[dayNo % topicsInOrder.length] : "All topics";
-      const miqRow = miqByTopic.get(topic);
-      const qs = (useRev2 ? miqRow?.rev2 : miqRow?.rev1) ?? [];
+      const qs = (useRev2 ? miqByTopic.get(topic)?.rev2 : miqByTopic.get(topic)?.rev1) ?? [];
       const qLabel = qs.length ? ` · do ${qs.slice(0, 6).join(", ")}` : "";
-      const task = vPct !== null
-        ? `${topic} — revision video + ${restLabel}${qLabel}`
-        : `Checklist: marked MIQs → quick pass earlier MIQs → revision videos → Mock 3 → re-check RTP`;
-      const meta = vPct !== null ? `videos ${vPct}% at ${vSpeed}× · rest on ${restLabel}` : `final push at ${vSpeed}× · 11h/day`;
-      days.push({ date: iso(c), weekday: wd(c), stage, stageLabel, topic: vPct !== null ? topic : "All topics", task, meta, sunday: isSun(c), status: "ok" });
+      const task = checklist
+        ? "Checklist: marked MIQs → quick pass earlier MIQs → revision videos → Mock 3 → re-check RTP"
+        : `${topic} — revision video + ${restLabel}${qLabel}`;
+      const meta = checklist ? `final push at ${vSpeed}× · ${cfg.rr3.daily_hours}h/day` : `watch revision video at ${vSpeed}×`;
+      days.push({ date: iso(c), weekday: wd(c), stage, stageLabel, topic: checklist ? "All topics" : topic, task, meta, sunday: isSun(c), status: "ok" });
       dayNo++;
     }
-    return total;
   };
 
   if (!overflow) {
-    fillRound(rr1Start, rr1End, "rr1", "Stage 2 · Revision round 1", cfg.rr1.video_speed, cfg.rr1.video_pct, "RTP / MTP / past papers / Mock 1", false);
+    fillRound(rr1Start, rr1End, "rr1", "Stage 2 · Revision round 1", cfg.rr1.video_speed, false, "RTP / MTP / past papers / Mock 1", false);
     breakRow(addDays(rr1End, 1), rr2Start, "between revision rounds");
-    fillRound(rr2Start, rr2End, "rr2", "Stage 3 · Revision round 2", cfg.rr2.video_speed, cfg.rr2.video_pct, "Mock 2", true);
+    fillRound(rr2Start, rr2End, "rr2", "Stage 3 · Revision round 2", cfg.rr2.video_speed, false, "Mock 2", true);
     breakRow(addDays(rr2End, 1), rr3Start, "between revision rounds");
-    fillRound(rr3Start, rr3End, "rr3", "Stage 4 · Revision round 3", cfg.rr3.video_speed, null, "", true);
+    fillRound(rr3Start, rr3End, "rr3", "Stage 4 · Revision round 3", cfg.rr3.video_speed, true, "", true);
   }
 
-  // Feasibility messaging
   const messages: string[] = [];
-  if (overflow) messages.push("The classes don't finish before Revision Round 1 even at top speed — add hours/days or start earlier.");
   if (startedLate) messages.push(`You're starting later than the recommended ${input.params.start_months_before_exam} months before the exam.`);
-  if (!fits && !overflow) {
+  if (fitsChosen && !overflow) {
+    messages.push(`Fits at ${speed}× — classes finish around ${fmtDay(exhaustiveEnd)}, with margin before Revision Round 1.`);
+  } else if (recommendedSpeed) {
+    messages.push(`Tight at ${speed}×. Watch at ${recommendedSpeed}× to finish on time and save days.`);
+  } else {
     const wDays = Math.max(1, workingDays(start, targetEnd));
     const extraPerDay = shortfallHours / wDays;
     const extraDays = Math.ceil((shortfallHours * 60) / (cfg.exhaustive_daily_hours * 60 * hwFactor));
-    messages.push(`Short by ~${Math.round(shortfallHours)}h to hit the ${input.params.target_months}-month target. Fix: about +${extraPerDay.toFixed(1)} h/day, OR work ~${extraDays} extra days (e.g. Sundays), OR start earlier.`);
+    messages.push(`Even at ${cfg.max_speed}× you're short ~${Math.round(shortfallHours)}h. Add about +${extraPerDay.toFixed(1)} h/day, OR ~${extraDays} extra days (e.g. Sundays), OR start earlier.`);
   }
-  if (fits && !overflow) messages.push(`Fits at ${speed}× — classes finish around ${fmtDay(exhaustiveEnd)}, with margin before Revision Round 1.`);
 
   return {
     timeline: { exhaustiveStart: iso(start), exhaustiveEnd: iso(exhaustiveEnd), rr1: [iso(rr1Start), iso(rr1End)], rr2: [iso(rr2Start), iso(rr2End)], rr3: [iso(rr3Start), iso(rr3End)] },
-    feasibility: { fits: fits && !overflow, speed, requiredHours: Math.round(requiredHours), availableHours: Math.round(availableHours), shortfallHours: Math.round(shortfallHours), startedLate, messages },
+    feasibility: { fits: fitsChosen && !overflow, speed, recommendedSpeed, requiredHours: Math.round(requiredHours), availableHours: Math.round(availableHours), shortfallHours: Math.round(shortfallHours), startedLate, messages },
     days,
     totals: { classHours: Math.round(totalClassMin / 60), revisionHours: Math.round(input.revisions.reduce((s, r) => s + r.minutes, 0) / 60), classCount: remaining.length },
   };
-}
-
-function workingDaysInclusive(from: Date, to: Date) {
-  let n = 0;
-  for (let c = new Date(from); c <= to; c = addDays(c, 1)) n++;
-  return n;
 }

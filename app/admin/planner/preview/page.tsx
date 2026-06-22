@@ -9,7 +9,7 @@ export const metadata = { title: "Plan preview — Admin" };
 
 const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
-export default async function PlanPreviewPage({ searchParams }: { searchParams: { subject?: string; start?: string; exam?: string; done?: string; speed?: string } }) {
+export default async function PlanPreviewPage({ searchParams }: { searchParams: { subject?: string; start?: string; exam?: string; done?: string; speed?: string; rev?: string } }) {
   const supabase = createClient();
   const { data: subjects } = await supabase.from("subjects").select("id, title, code").order("code");
 
@@ -20,6 +20,7 @@ export default async function PlanPreviewPage({ searchParams }: { searchParams: 
         const input = await loadPlanInput({ subjectId: sp.subject!, startDate: sp.start!, examDate: sp.exam!, doneClasses: Number(sp.done) || 0 });
         if (!input) return null;
         input.chosenSpeed = Number(sp.speed) || undefined;
+        input.revisionRounds = Number(sp.rev) || undefined;
         return generatePlan(input);
       })()
     : null;
@@ -47,6 +48,14 @@ export default async function PlanPreviewPage({ searchParams }: { searchParams: 
             <option value="2">2×</option>
           </select>
         </div>
+        <div>
+          <label>Revision rounds</label>
+          <select name="rev" defaultValue={sp.rev ?? "3"}>
+            <option value="3">3</option>
+            <option value="2">2</option>
+            <option value="1">1</option>
+          </select>
+        </div>
         <button className="btn" type="submit">Generate preview</button>
       </form>
 
@@ -62,11 +71,14 @@ export default async function PlanPreviewPage({ searchParams }: { searchParams: 
             <ul style={{ fontSize: ".85rem", margin: "8px 0 0", paddingLeft: 18 }}>
               {plan.feasibility.messages.map((m, i) => <li key={i}>{m}</li>)}
             </ul>
-            {plan.feasibility.recommendedSpeed && (
-              <a className="btn small" href={`?subject=${sp.subject}&start=${sp.start}&exam=${sp.exam}&done=${sp.done ?? 0}&speed=${plan.feasibility.recommendedSpeed}`} style={{ marginTop: 10, display: "inline-block" }}>
-                Try {plan.feasibility.recommendedSpeed}× →
-              </a>
-            )}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+              {plan.feasibility.recommendedSpeed && (
+                <a className="btn small" href={`?subject=${sp.subject}&start=${sp.start}&exam=${sp.exam}&done=${sp.done ?? 0}&rev=${sp.rev ?? 3}&speed=${plan.feasibility.recommendedSpeed}`}>Try {plan.feasibility.recommendedSpeed}× →</a>
+              )}
+              {plan.feasibility.recommendedRounds && (
+                <a className="btn small" href={`?subject=${sp.subject}&start=${sp.start}&exam=${sp.exam}&done=${sp.done ?? 0}&speed=${sp.speed ?? 1.2}&rev=${plan.feasibility.recommendedRounds}`}>Try {plan.feasibility.recommendedRounds} revision round(s) →</a>
+              )}
+            </div>
           </div>
 
           <p className="muted" style={{ fontSize: ".82rem", marginTop: 12 }}>

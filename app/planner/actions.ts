@@ -29,12 +29,14 @@ export async function savePlanSetup(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
+  const revs = Number(formData.get("revisions"));
   const setup = {
     subjectId: String(formData.get("subject") || ""),
     startDate: String(formData.get("start") || ""),
     examDate: String(formData.get("exam") || ""),
     speed: Number(formData.get("speed")) || 1.2,
     doneClasses: Math.max(0, Number(formData.get("done")) || 0),
+    revisions: revs === 1 || revs === 2 ? revs : 3,
   };
   if (!setup.subjectId || !setup.startDate || !setup.examDate) return;
 
@@ -42,6 +44,7 @@ export async function savePlanSetup(formData: FormData) {
   const input = await loadPlanInput({ subjectId: setup.subjectId, startDate: setup.startDate, examDate: setup.examDate, doneClasses: setup.doneClasses });
   if (input) {
     input.chosenSpeed = setup.speed;
+    input.revisionRounds = setup.revisions;
     schedule = toSchedule(generatePlan(input));
   }
 

@@ -14,7 +14,7 @@ export const metadata = { title: "Study planner — 121 CA Classes" };
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
-type Setup = { subjectId: string; startDate: string; examDate: string; speed: number; doneClasses: number };
+type Setup = { subjectId: string; startDate: string; examDate: string; speed: number; doneClasses: number; revisions?: number };
 
 export default async function PlannerPage({ searchParams }: { searchParams: { new?: string } }) {
   const supabase = createClient();
@@ -65,6 +65,15 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
               <input type="number" name="done" min={0} defaultValue={setup?.doneClasses ?? 0} />
             </div>
           </div>
+          <div>
+            <label>How many revision rounds?</label>
+            <select name="revisions" defaultValue={String(setup?.revisions ?? 3)}>
+              <option value="3">3 — full (Revision 1 + 2 + final)</option>
+              <option value="2">2 — drop the middle round (Revision 1 + final)</option>
+              <option value="1">1 — final revision only (most time for classes)</option>
+            </select>
+            <p className="muted" style={{ fontSize: ".78rem", margin: "4px 0 0" }}>Short on time? Fewer revisions frees up days for your detailed classes.</p>
+          </div>
           <SubmitButton className="btn" savedLabel="✓ Building…">Generate my plan</SubmitButton>
         </form>
         {setup?.subjectId && <p className="muted" style={{ fontSize: ".82rem", marginTop: 10 }}>Your watched classes stay tracked automatically when you regenerate.</p>}
@@ -82,6 +91,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
     );
   }
   input.chosenSpeed = setup.speed;
+  input.revisionRounds = setup.revisions;
   const plan = generatePlan(input);
   const subjectTitle = (subjOpts ?? []).find((s) => s.id === setup.subjectId)?.title ?? input.subjectTitle;
 

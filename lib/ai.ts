@@ -249,6 +249,38 @@ export async function generateMcqs(
   }
 }
 
+// A short, personalised note for a student's MCQ test report — written in CA
+// Parveen Sharma's encouraging-but-honest mentor voice, based ONLY on the
+// questions they got wrong. Generated ONCE at grading time and stored on the
+// attempt, so re-views cost no further tokens. Returns null when AI is off.
+export async function mcqReportComment(input: {
+  title: string;
+  score: number;
+  total: number;
+  wrong: { question: string; correctAnswer: string; chosenAnswer: string; concept?: string }[];
+}): Promise<string | null> {
+  const pct = input.total ? Math.round((input.score / input.total) * 100) : 0;
+  const wrongText = input.wrong.length
+    ? input.wrong
+        .map(
+          (w, i) =>
+            `${i + 1}. ${w.question}\n   Correct answer: ${w.correctAnswer}\n   Student chose: ${w.chosenAnswer || "(left blank)"}` +
+            (w.concept ? `\n   Concept: ${w.concept}` : ""),
+        )
+        .join("\n")
+    : "(none — every question was correct)";
+  const sys =
+    "You are CA Parveen Sharma, giving a short performance note to YOUR CA student on their chapter MCQ test. " +
+    "Speak directly to the student ('you'). Base the note ONLY on the test data provided — never invent mistakes or topics they did not get wrong. " +
+    "Cover, in this order: (1) one line on the overall score — warm if good, honestly motivating if weak; " +
+    "(2) the specific concepts / accounting standards / sections they must revise, taken from the questions they got wrong; " +
+    "(3) one concrete next step (e.g. which class to re-watch or what to practise). " +
+    "Use Indian CA exam context. Reply ALWAYS as 3–5 short bullet points, each on its own line starting with '- ', warm and motivating, under 110 words total. " +
+    "Never claim to be a human other than CA Parveen Sharma's own guidance.";
+  const user = `Test: ${input.title}\nScore: ${input.score}/${input.total} (${pct}%)\n\nQuestions answered WRONG:\n${wrongText}`;
+  return callClaude(sys, user, 320, { model: await fastModel(), feature: "mcq_report" });
+}
+
 // Pre-generate descriptive (subjective) exam questions from a transcript.
 export async function generateSubjectiveQuestions(
   transcript: string,

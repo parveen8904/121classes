@@ -116,17 +116,23 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
       <details style={{ marginTop: 14 }}>
         <summary className="btn small secondary as-btn">📥 Bulk add questions (paste — no AI)</summary>
         <div className="form-card" style={{ marginTop: 10 }}>
-          <h3>📥 Paste multiple questions</h3>
+          <h3>📥 Paste / upload your own questions</h3>
           <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
             One question per block, a <strong>blank line between blocks</strong>. First line = the question, then the options
-            (one per line). Put a <strong>*</strong> in front of the correct option. These add to <strong>this</strong> test.
+            (one per line). Put a <strong>*</strong> in front of the correct option. These add to <strong>this</strong> test, and
+            students take &amp; get auto-graded on them just like AI questions.
+          </p>
+          <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
+            Optional (improves the student&apos;s report): add a line <strong>Concept: …</strong> and/or <strong>Why: …</strong> to any block.
+            <strong> Concept</strong> feeds &ldquo;concepts to revise&rdquo;; <strong>Why</strong> is shown as the correct-answer reason. Even without
+            these, CA Parveen Sharma&apos;s AI note in the report analyses what the student got wrong.
           </p>
           <form action={bulkAddMcq}>
             <input type="hidden" name="section_id" value={section.id} />
             <textarea
               name="bulk"
               rows={10}
-              placeholder={"Under AS 13, investments are classified as?\n*Current and long-term investments\nFixed and floating investments\nTrade and non-trade only\nQuoted and unquoted only\n\nThe cost of a current investment includes?\n*Purchase price plus acquisition charges\nPurchase price only\nMarket value on balance sheet date\nFace value of the investment"}
+              placeholder={"Under AS 13, investments are classified as?\n*Current and long-term investments\nFixed and floating investments\nTrade and non-trade only\nQuoted and unquoted only\nConcept: AS 13 — classification of investments\nWhy: AS 13 splits investments into current and long-term.\n\nThe cost of a current investment includes?\n*Purchase price plus acquisition charges\nPurchase price only\nMarket value on balance sheet date\nFace value of the investment"}
             />
             <button className="btn small" type="submit" style={{ marginTop: 8 }}>Add these questions</button>
           </form>

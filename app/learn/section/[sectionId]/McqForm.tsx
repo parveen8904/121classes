@@ -86,6 +86,12 @@ export default function McqForm({
             <span style={{ color: "#16a34a" }}>✅ {right.length} correct</span>
             <span style={{ color: "#dc2626" }}>❌ {wrong.length} wrong</span>
           </div>
+          {result.aiComment && (
+            <div style={{ margin: "14px 0 0", padding: "12px 14px", borderRadius: 12, background: "var(--bg-soft)", border: "1px solid var(--accent)" }}>
+              <strong>🧑‍🏫 CA Parveen Sharma&apos;s note</strong>
+              <div style={{ whiteSpace: "pre-wrap", marginTop: 6, fontSize: ".92rem", lineHeight: 1.6 }}>{result.aiComment}</div>
+            </div>
+          )}
           {(result.weakConcepts?.length ?? 0) > 0 && (
             <div style={{ margin: "12px 0 0" }}>
               <strong>🔎 Concepts to revise:</strong>

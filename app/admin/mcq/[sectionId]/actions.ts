@@ -149,7 +149,10 @@ export async function updateMcq(formData: FormData) {
 
 // Bulk-add questions WITHOUT AI. Paste one question per block (blank line between
 // blocks): first line = question, following lines = options, mark the correct one
-// with a leading "*". Options may be prefixed "A)" etc.
+// with a leading "*". Options may be prefixed "A)" etc. Two OPTIONAL lines per
+// block (anywhere after the question) enrich the student's report:
+//   Concept: <concept/standard/section>   → feeds "concepts to revise"
+//   Why: <one-line explanation>           → shown as the correct-answer reason
 export async function bulkAddMcq(formData: FormData) {
   const sectionId = str(formData.get("section_id"));
   const raw = str(formData.get("bulk"));
@@ -163,7 +166,13 @@ export async function bulkAddMcq(formData: FormData) {
       const question = lines[0].replace(/^Q\s*[:.)-]\s*/i, "").trim();
       const options: string[] = [];
       let correctIndex = 0;
+      let concept = "";
+      let why = "";
       for (const l of lines.slice(1)) {
+        const mConcept = l.match(/^concept\s*[:\-]\s*(.+)$/i);
+        if (mConcept) { concept = mConcept[1].trim(); continue; }
+        const mWhy = l.match(/^(?:why|explanation|reason)\s*[:\-]\s*(.+)$/i);
+        if (mWhy) { why = mWhy[1].trim(); continue; }
         const isCorrect = /^\*/.test(l) || /\(correct\)\s*$/i.test(l);
         const text = l
           .replace(/^\*\s*/, "")
@@ -176,9 +185,9 @@ export async function bulkAddMcq(formData: FormData) {
         }
       }
       if (!question || options.length < 2) return null;
-      return { question, options, correct_index: correctIndex };
+      return { question, options, correct_index: correctIndex, concept, why };
     })
-    .filter(Boolean) as { question: string; options: string[]; correct_index: number }[];
+    .filter(Boolean) as { question: string; options: string[]; correct_index: number; concept: string; why: string }[];
   if (!parsed.length) return;
 
   const supabase = createClient();
@@ -187,15 +196,26 @@ export async function bulkAddMcq(formData: FormData) {
     .select("id", { count: "exact", head: true })
     .eq("section_id", sectionId);
   const base = count ?? 0;
-  await supabase.from("mcq_questions").insert(
-    parsed.map((q, i) => ({
-      section_id: sectionId,
-      question: q.question,
-      options: q.options,
-      correct_index: q.correct_index,
-      order_index: base + i,
-    })),
-  );
+  const { data: inserted } = await supabase
+    .from("mcq_questions")
+    .insert(
+      parsed.map((q, i) => ({
+        section_id: sectionId,
+        question: q.question,
+        options: q.options,
+        correct_index: q.correct_index,
+        order_index: base + i,
+        concept: q.concept || null,
+      })),
+    )
+    .select("id, order_index");
+
+  // Save any provided "Why" lines as the correct-answer explanation (no AI).
+  const byOrder = new Map(parsed.map((q, i) => [base + i, q]));
+  for (const r of inserted ?? []) {
+    const q = byOrder.get(r.order_index as number);
+    if (q?.why) await saveMcqExplanation(r.id as string, q.why, []);
+  }
   revalidatePath(`/admin/mcq/${sectionId}`);
 }
 

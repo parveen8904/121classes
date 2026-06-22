@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { loadPlanInput } from "@/lib/planner/load";
 import { generatePlan } from "@/lib/planner/engine";
 import SubmitButton from "@/app/components/SubmitButton";
+import RemarkBox from "./RemarkBox";
 import { savePlanSetup, clearPlan } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -27,8 +28,9 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
     ? await supabase.from("subjects").select("id, title").in("course_id", courseIds).order("order_index")
     : await supabase.from("subjects").select("id, title").order("title");
 
-  const { data: planRow } = await supabase.from("study_plans").select("setup").eq("user_id", user.id).maybeSingle();
+  const { data: planRow } = await supabase.from("study_plans").select("setup, remarks").eq("user_id", user.id).maybeSingle();
   const setup = (planRow?.setup ?? null) as Setup | null;
+  const remarks = (planRow?.remarks ?? {}) as Record<string, string>;
   const showForm = !setup?.subjectId || searchParams.new === "1";
 
   if (showForm) {
@@ -110,6 +112,19 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
   const delta = done - targetByToday;
   const todays = plan.days.filter((day) => day.date === today && day.stage !== "break");
 
+  // Group into ONE box per date (a date may hold more than one class); break
+  // rows stay standalone. Each date gets a single remarks box.
+  type Grp =
+    | { kind: "date"; stageLabel: string; date: string; weekday: string; isTest: boolean; lines: { task: string; meta: string }[] }
+    | { kind: "break"; stageLabel: string; task: string };
+  const groups: Grp[] = [];
+  for (const dRow of plan.days) {
+    if (dRow.stage === "break") { groups.push({ kind: "break", stageLabel: dRow.stageLabel, task: dRow.task }); continue; }
+    const last = groups[groups.length - 1];
+    if (last && last.kind === "date" && last.date === dRow.date) last.lines.push({ task: dRow.task, meta: dRow.meta });
+    else groups.push({ kind: "date", stageLabel: dRow.stageLabel, date: dRow.date, weekday: dRow.weekday, isTest: dRow.status === "test", lines: [{ task: dRow.task, meta: dRow.meta }] });
+  }
+
   return (
     <main className="container" style={{ paddingTop: 36, paddingBottom: 60, maxWidth: 900 }}>
       <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
@@ -161,27 +176,32 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
       </div>
 
       <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 13 }}>
-        <colgroup><col style={{ width: "118px" }} /><col /><col style={{ width: "150px" }} /></colgroup>
+        <colgroup><col style={{ width: "110px" }} /><col /><col style={{ width: "210px" }} /></colgroup>
         <thead><tr style={{ textAlign: "left", color: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
-          <th style={{ padding: "6px" }}>Date &amp; day</th><th style={{ padding: "6px" }}>Target</th><th style={{ padding: "6px" }}>Topic</th>
+          <th style={{ padding: "6px" }}>Date &amp; day</th><th style={{ padding: "6px" }}>Target</th><th style={{ padding: "6px" }}>Remarks</th>
         </tr></thead>
         <tbody style={{ verticalAlign: "top" }}>
-          {plan.days.map((row, i) => {
-            const header = i === 0 || plan.days[i - 1].stageLabel !== row.stageLabel;
-            const isToday = row.date === today;
+          {groups.map((g, i) => {
+            const header = i === 0 || groups[i - 1].stageLabel !== g.stageLabel;
             return (
               <Fragment key={i}>
-                {header && <tr><td colSpan={3} style={{ padding: "10px 6px 4px", fontWeight: 500, color: "var(--accent)" }}>{row.stageLabel}</td></tr>}
-                {row.stage === "break" ? (
+                {header && <tr><td colSpan={3} style={{ padding: "10px 6px 4px", fontWeight: 500, color: "var(--accent)" }}>{g.stageLabel}</td></tr>}
+                {g.kind === "break" ? (
                   <tr style={{ borderBottom: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 6px", color: "var(--muted)" }}>—</td>
-                    <td style={{ padding: "8px 6px", fontStyle: "italic", color: "var(--muted)" }} colSpan={2}>{row.task}</td>
+                    <td style={{ padding: "8px 6px", fontStyle: "italic", color: "var(--muted)" }} colSpan={2}>{g.task}</td>
                   </tr>
                 ) : (
-                  <tr style={{ borderBottom: "1px solid var(--border)", background: isToday ? "color-mix(in srgb, var(--accent) 12%, transparent)" : row.status === "test" ? "var(--bg-soft,#f8fafc)" : undefined }}>
-                    <td style={{ padding: "8px 6px" }}>{row.weekday}<br /><span style={{ color: "var(--muted)" }}>{fmt(row.date)}</span></td>
-                    <td style={{ padding: "8px 6px" }}><strong>{row.task}</strong><br /><span style={{ fontStyle: "italic", fontSize: 12, color: "var(--muted)" }}>{row.meta}</span></td>
-                    <td style={{ padding: "8px 6px", fontWeight: row.topic ? 500 : 400, color: row.topic ? undefined : "var(--muted)" }}>{row.topic ?? ""}</td>
+                  <tr style={{ borderBottom: "1px solid var(--border)", background: g.date === today ? "color-mix(in srgb, var(--accent) 12%, transparent)" : g.isTest ? "var(--bg-soft,#f8fafc)" : undefined }}>
+                    <td style={{ padding: "8px 6px" }}>{g.weekday}<br /><span style={{ color: "var(--muted)" }}>{fmt(g.date)}</span></td>
+                    <td style={{ padding: "8px 6px" }}>
+                      {g.lines.map((l, j) => (
+                        <div key={j} style={{ marginBottom: j < g.lines.length - 1 ? 8 : 0 }}>
+                          <strong>{l.task}</strong><br /><span style={{ fontStyle: "italic", fontSize: 12, color: "var(--muted)" }}>{l.meta}</span>
+                        </div>
+                      ))}
+                    </td>
+                    <td style={{ padding: "8px 6px" }}><RemarkBox date={g.date} initial={remarks[g.date] ?? ""} /></td>
                   </tr>
                 )}
               </Fragment>

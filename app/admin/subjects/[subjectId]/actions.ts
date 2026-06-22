@@ -10,7 +10,7 @@ export async function createTopic(formData: FormData) {
   const title = str(formData.get("title"));
   if (!subjectId || !title) return;
   const supabase = createClient();
-  await supabase.from("topics").insert({
+  const { data: created } = await supabase.from("topics").insert({
     subject_id: subjectId,
     title,
     slug: str(formData.get("slug")) || slugify(title),
@@ -20,7 +20,12 @@ export async function createTopic(formData: FormData) {
     valid_to_attempt: null,
     amendments_upto: null,
     is_published: formData.get("is_published") === "on",
-  });
+  }).select("id").single();
+  // Auto-create the standard sections so a new topic is never blank.
+  if (created?.id) {
+    const { ensureGroupsForTopic } = await import("@/lib/sectionTemplate");
+    await ensureGroupsForTopic(created.id as string);
+  }
   revalidatePath(`/admin/subjects/${subjectId}`);
 }
 

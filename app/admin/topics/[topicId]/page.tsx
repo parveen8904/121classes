@@ -6,7 +6,7 @@ import AdminHero from "../../_components/AdminHero";
 import SectionForm from "./SectionForm";
 import TopicMetaForm, { type TopicMeta } from "./TopicMetaForm";
 import { SECTION_TYPES } from "./sectionTypes";
-import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, addTopicMaterial, deleteTopicMaterial, createTopicGroup, renameTopicGroup, deleteTopicGroup, moveTopicGroup } from "./actions";
+import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, addTopicMaterial, deleteTopicMaterial, createTopicGroup, renameTopicGroup, deleteTopicGroup, moveTopicGroup, applyStandardSections } from "./actions";
 import PdfUpload from "../../_components/PdfUpload";
 import SubmitButton from "@/app/components/SubmitButton";
 import { fmtMins } from "../../_lib/util";
@@ -190,10 +190,15 @@ export default async function TopicDetail({
       <form action={createTopicGroup} className="form-card" style={{ marginTop: 10 }}>
         <input type="hidden" name="topicId" value={topic.id} />
         <label htmlFor="g-name">New section name</label>
+        <p className="muted" style={{ fontSize: ".78rem", margin: "2px 0 6px" }}>📌 Sections are <strong>standard for every topic, subject and course</strong> — adding, renaming or removing one here applies to all topics automatically.</p>
         <div style={{ display: "flex", gap: 8 }}>
           <input id="g-name" name="name" placeholder="e.g. Revision Round 1" required style={{ flex: 1 }} />
-          <SubmitButton className="btn" savedLabel="✓ Added">Add section</SubmitButton>
+          <SubmitButton className="btn" savedLabel="✓ Added everywhere">Add section</SubmitButton>
         </div>
+      </form>
+      <form action={applyStandardSections} style={{ marginTop: 8 }}>
+        <input type="hidden" name="topicId" value={topic.id} />
+        <SubmitButton className="btn small secondary" savedLabel="✓ Applied">↻ Re-apply standard sections to all topics</SubmitButton>
       </form>
 
       <h2 className="admin-section-title">➕ Add content to a section</h2>

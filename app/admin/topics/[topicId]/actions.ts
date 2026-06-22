@@ -323,14 +323,22 @@ export async function updateSection(formData: FormData) {
   revalidatePath(`/admin/topics/${topicId}`);
 }
 
-// ----- Sections (named content groups inside a topic) -----
+// ----- Sections (named content groups). STANDARD across every topic/subject/
+// course: creating one adds it to the template + all topics; rename/delete
+// propagate by name so the set stays uniform everywhere. -----
 export async function createTopicGroup(formData: FormData) {
   const topicId = str(formData.get("topicId"));
   const name = str(formData.get("name"));
-  if (!topicId || !name) return;
-  const supabase = createClient();
-  const { count } = await supabase.from("topic_groups").select("id", { count: "exact", head: true }).eq("topic_id", topicId);
-  await supabase.from("topic_groups").insert({ topic_id: topicId, name, order_index: count ?? 0 });
+  if (!name) return;
+  const { addSectionEverywhere } = await import("@/lib/sectionTemplate");
+  await addSectionEverywhere(name);
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
+export async function applyStandardSections(formData: FormData) {
+  const topicId = str(formData.get("topicId"));
+  const { applyTemplateToAllTopics } = await import("@/lib/sectionTemplate");
+  await applyTemplateToAllTopics();
   revalidatePath(`/admin/topics/${topicId}`);
 }
 
@@ -340,18 +348,26 @@ export async function renameTopicGroup(formData: FormData) {
   const name = str(formData.get("name"));
   if (!id || !name) return;
   const supabase = createClient();
-  await supabase.from("topic_groups").update({ name }).eq("id", id);
+  const { data: g } = await supabase.from("topic_groups").select("name").eq("id", id).maybeSingle();
+  if (g?.name) {
+    const { renameSectionEverywhere } = await import("@/lib/sectionTemplate");
+    await renameSectionEverywhere(g.name as string, name);
+  }
   revalidatePath(`/admin/topics/${topicId}`);
 }
 
-// Deleting a section keeps its content — items just become "unsorted" (group_id
-// goes null via the FK), so nothing is lost.
+// Deleting a section removes it from EVERY topic + the template; the content
+// items just become "unsorted" (group_id goes null via the FK), so nothing is lost.
 export async function deleteTopicGroup(formData: FormData) {
   const id = str(formData.get("id"));
   const topicId = str(formData.get("parentId")) || str(formData.get("topicId"));
   if (!id) return;
   const supabase = createClient();
-  await supabase.from("topic_groups").delete().eq("id", id);
+  const { data: g } = await supabase.from("topic_groups").select("name").eq("id", id).maybeSingle();
+  if (g?.name) {
+    const { deleteSectionEverywhere } = await import("@/lib/sectionTemplate");
+    await deleteSectionEverywhere(g.name as string);
+  }
   revalidatePath(`/admin/topics/${topicId}`);
 }
 

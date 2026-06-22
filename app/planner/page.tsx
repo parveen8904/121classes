@@ -195,8 +195,9 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
       {searchParams.rebalanced && <div className="notice ok no-print" style={{ marginTop: 12 }}>🔄 Plan re-balanced from today — remaining work spread over the days left.</div>}
 
       <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+        <a className="btn small secondary" href="/api/plan-pdf">⬇️ Download PDF</a>
         <PrintButton />
-        <form action={emailMyPlan}><button type="submit" className="btn small secondary">📧 Email me my plan</button></form>
+        <form action={emailMyPlan}><button type="submit" className="btn small secondary">📧 Email me my plan (PDF)</button></form>
         <form action={rebalanceFromToday}><button type="submit" className="btn small secondary">🔄 Re-balance from today</button></form>
       </div>
 

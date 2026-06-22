@@ -94,13 +94,20 @@ export async function emailMyPlan() {
     .map((d) => `<tr><td style="padding:4px 8px;border-bottom:1px solid #eee;white-space:nowrap;color:#555">${d.weekday} ${d.date}</td><td style="padding:4px 8px;border-bottom:1px solid #eee"><strong>${esc(d.task)}</strong><br><span style="color:#666;font-size:12px">${esc(d.meta)}</span></td></tr>`)
     .join("");
 
-  const { sendEmail, emailShell } = await import("@/lib/notify");
-  const cta = `<a href="https://caparveensharma.com/planner" style="display:inline-block;background:#0d9488;color:#fff;text-decoration:none;font-weight:700;padding:11px 20px;border-radius:8px">Open my planner &amp; download PDF →</a>`;
+  const { sendEmail, sendEmailWithAttachment, emailShell } = await import("@/lib/notify");
+  const cta = `<a href="https://caparveensharma.com/planner" style="display:inline-block;background:#0d9488;color:#fff;text-decoration:none;font-weight:700;padding:11px 20px;border-radius:8px">Open my planner →</a>`;
   const html = emailShell(
     `Your study plan — ${esc(input.subjectTitle)}`,
-    `<p>Exam on <strong>${setup.examDate}</strong>. Open your planner anytime to see today's target, track progress, and download it as a PDF.</p><p style="margin:14px 0">${cta}</p><table style="width:100%;border-collapse:collapse;font-size:13px">${rows}</table>`,
+    `<p>Exam on <strong>${setup.examDate}</strong>. Your full plan is attached as a PDF. Open your planner anytime to see today's target and track progress.</p><p style="margin:14px 0">${cta}</p><table style="width:100%;border-collapse:collapse;font-size:13px">${rows}</table>`,
   );
-  await sendEmail(to, `Your study plan — ${input.subjectTitle}`, html);
+  const subject = `Your study plan — ${input.subjectTitle}`;
+  let attached = false;
+  try {
+    const { renderPlanPdf } = await import("@/lib/planner/pdf");
+    const buf = await renderPlanPdf(plan, { subjectTitle: input.subjectTitle, examDate: setup.examDate });
+    attached = await sendEmailWithAttachment(to, subject, html, { filename: "study-plan.pdf", content: buf, contentType: "application/pdf" });
+  } catch { attached = false; }
+  if (!attached) await sendEmail(to, subject, html);
   redirect("/planner?emailed=1");
 }
 

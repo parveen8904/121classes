@@ -5,7 +5,7 @@
 export default function PrintButton() {
   return (
     <button type="button" className="btn small secondary no-print" onClick={() => window.print()}>
-      ⬇️ Download / print PDF
+      🖨️ Print
     </button>
   );
 }

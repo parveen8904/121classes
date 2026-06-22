@@ -90,6 +90,41 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
   }
 }
 
+// Send an email with a file attachment (e.g. a generated PDF) via Mailgun
+// multipart. Returns false (no-op) if the provider isn't configured.
+export async function sendEmailWithAttachment(
+  to: string,
+  subject: string,
+  html: string,
+  attachment: { filename: string; content: Buffer; contentType: string },
+): Promise<boolean> {
+  const apiKey = await getSecret("MAILGUN_API_KEY");
+  const domain = await getSecret("MAILGUN_DOMAIN");
+  if (!apiKey || !domain || !to) return false;
+  const from = (await getSecret("NOTIFY_FROM_EMAIL")) || `121 CA Classes <no-reply@${domain}>`;
+  const region = (await getSecret("MAILGUN_REGION")).toLowerCase();
+  const apiBase = region === "eu" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
+  try {
+    const form = new FormData();
+    form.set("from", from);
+    form.set("to", to);
+    form.set("subject", subject);
+    form.set("html", html);
+    const replyTo = await getSecret("NOTIFY_REPLY_TO");
+    if (replyTo) form.set("h:Reply-To", replyTo);
+    form.set("attachment", new Blob([new Uint8Array(attachment.content)], { type: attachment.contentType }), attachment.filename);
+    const res = await fetch(`${apiBase}/v3/${domain}/messages`, {
+      method: "POST",
+      headers: { Authorization: "Basic " + Buffer.from(`api:${apiKey}`).toString("base64") },
+      body: form,
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // Interakt WhatsApp (best-effort — needs a pre-approved template on their side).
 export async function sendWhatsApp(
   phone: string,

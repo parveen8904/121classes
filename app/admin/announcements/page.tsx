@@ -127,6 +127,11 @@ export default async function AnnouncementsPage({
                       {a.broadcast_at ? " · 📢 broadcast" : ""}
                     </span>
                   </summary>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
+                <span className="muted" style={{ fontSize: ".8rem" }}>Category:</span>
+                <CategoryQuickSelect id={a.id} value={a.kind} action={setAnnouncementCategory} />
+                <DeleteButton action={deleteAnnouncement} id={a.id} label="🗑️ Remove" message="Remove this announcement? This cannot be undone." />
+              </div>
               <form action={updateAnnouncement} style={{ marginTop: 12 }}>
                 <input type="hidden" name="id" value={a.id} />
                 <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 2fr" }}>
@@ -161,11 +166,6 @@ export default async function AnnouncementsPage({
                 </p>
               </form>
                 </details>
-              </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8, paddingLeft: 28 }}>
-                <span className="muted" style={{ fontSize: ".8rem" }}>Category:</span>
-                <CategoryQuickSelect id={a.id} value={a.kind} action={setAnnouncementCategory} />
-                <DeleteButton action={deleteAnnouncement} id={a.id} label="🗑️ Remove" message="Remove this announcement? This cannot be undone." />
               </div>
             </div>
           ))

@@ -39,13 +39,21 @@ export default async function CostsPage() {
 
   // --- Bunny live billing (this month's charges) + cap settings ---
   const bunnyBill = await getBunnyBilling();
-  const { data: costCfg } = await svc.from("site_settings").select("key, value").in("key", ["bunny_cap_usd", "supabase_storage_cap_mb", "cost_alert_email"]);
+  const { data: costCfg } = await svc.from("site_settings").select("key, value").in("key", ["bunny_cap_usd", "supabase_storage_cap_mb", "cost_alert_email", "supabase_plan_usd", "vercel_plan_usd"]);
   const cfg = new Map((costCfg ?? []).map((r) => [r.key, r.value as string]));
   const bunnyCap = Number(cfg.get("bunny_cap_usd")) || 0;
   const bunnyOver = bunnyBill && bunnyCap > 0 && bunnyBill.thisMonth >= bunnyCap;
   const storageCapMb = Number(cfg.get("supabase_storage_cap_mb")) || 0;
   const storageMbVal = storageBytes >= 0 ? storageBytes / (1024 * 1024) : 0;
   const storageOver = storageCapMb > 0 && storageBytes >= 0 && storageMbVal >= storageCapMb;
+
+  // Flat monthly plan bases (Supabase + Vercel don't expose a live-cost API, but
+  // with spend caps on these are effectively fixed). Editable below; defaults
+  // match the founder's current plans.
+  const supabasePlan = cfg.get("supabase_plan_usd") != null ? Number(cfg.get("supabase_plan_usd")) : 25;
+  const vercelPlan = cfg.get("vercel_plan_usd") != null ? Number(cfg.get("vercel_plan_usd")) : 20;
+  const bunnyMonth = bunnyBill?.thisMonth ?? 0;
+  const totalMonth = aiMonth + bunnyMonth + supabasePlan + vercelPlan;
 
   // --- Bunny videos vs YouTube (usage proxy) ---
   const { data: secs } = await svc.from("sections").select("config").limit(5000);
@@ -74,6 +82,15 @@ export default async function CostsPage() {
         subtitle="AI is tracked exactly here. For Bunny, Cloudflare & Supabase, see the usage we can measure plus a one-tap link to the provider's own bill."
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {/* Total this month */}
+      <div style={{ marginTop: 18, background: "linear-gradient(135deg,#0d9488,#10b981)", color: "#fff", borderRadius: 14, padding: "18px 20px" }}>
+        <div style={{ fontSize: ".85rem", opacity: 0.92 }}>Estimated total for {monthLabel}</div>
+        <div style={{ fontSize: "2rem", fontWeight: 800, margin: "4px 0" }}>{money(totalMonth)}</div>
+        <div style={{ fontSize: ".8rem", opacity: 0.92 }}>
+          AI {money(aiMonth)} (exact) · Bunny {money(bunnyMonth)} (live) · Supabase {money(supabasePlan)} + Vercel {money(vercelPlan)} (plan base) · R2 free
+        </div>
+      </div>
 
       {bunnyOver && (
         <div style={{ marginTop: 16, background: "#fee2e2", color: "#b91c1c", padding: "12px 14px", borderRadius: 8, fontWeight: 700 }}>
@@ -106,10 +123,11 @@ export default async function CostsPage() {
         <div style={card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <strong>🗄️ Supabase (database + files)</strong>
+            <span className="badge">Pro · plan base</span>
           </div>
-          <div style={stat}>{storageBytes >= 0 ? mb(storageBytes) : "—"}</div>
+          <div style={stat}>{money(supabasePlan)}</div>
           <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>
-            {storageFiles >= 0 ? `${storageFiles} files stored · ` : ""}Free tier: 1 GB files, 500 MB database, 5 GB transfer/mo.
+            Flat with spend cap on. {storageFiles >= 0 ? `${storageFiles} files · ${mb(storageBytes)} stored.` : ""} No public live-cost API — see bill for exact.
           </p>
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
             <a className="btn small secondary" href={`https://supabase.com/dashboard/org/${SUPABASE_ORG}/billing`} target="_blank" rel="noopener noreferrer">View bill ↗</a>
@@ -121,10 +139,10 @@ export default async function CostsPage() {
         <div style={card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <strong>▲ Vercel (hosting)</strong>
-            <span className="badge">Pro</span>
+            <span className="badge">Pro · plan base</span>
           </div>
-          <div style={stat}>—</div>
-          <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>Pro base ~$20/mo. Set a spending limit in Vercel → Settings → Billing. Live ₹ figures are on Vercel.</p>
+          <div style={stat}>{money(vercelPlan)}</div>
+          <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>Flat Pro base. Set a spending limit in Vercel → Settings → Billing. No public live-cost API — see bill for exact.</p>
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
             <a className="btn small secondary" href="https://vercel.com/dashboard/usage" target="_blank" rel="noopener noreferrer">Usage ↗</a>
             <a className="btn small secondary" href="https://vercel.com/account/billing" target="_blank" rel="noopener noreferrer">Billing ↗</a>
@@ -179,6 +197,14 @@ export default async function CostsPage() {
           <div>
             <label>Alert email</label>
             <input name="cost_alert_email" type="email" defaultValue={cfg.get("cost_alert_email") ?? ""} placeholder="you@example.com" />
+          </div>
+          <div>
+            <label>Supabase plan (USD/mo)</label>
+            <input name="supabase_plan_usd" type="number" min={0} step={1} defaultValue={cfg.get("supabase_plan_usd") ?? "25"} placeholder="25" />
+          </div>
+          <div>
+            <label>Vercel plan (USD/mo)</label>
+            <input name="vercel_plan_usd" type="number" min={0} step={1} defaultValue={cfg.get("vercel_plan_usd") ?? "20"} placeholder="20" />
           </div>
         </div>
         <SubmitButton className="btn" style={{ marginTop: 10 }}>Save budget alerts</SubmitButton>

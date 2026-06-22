@@ -27,6 +27,21 @@ export default function PdfUpload({
     setBusy(true);
     try {
       const ct = file.type || "application/pdf";
+      const MB = file.size / (1024 * 1024);
+
+      // Small PDFs (notes, materials) go to Supabase Storage directly — fast and
+      // reliable. Only big files (e.g. full books) use Cloudflare R2.
+      if (MB <= 50) {
+        const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
+        const { error } = await supabase.storage.from("media").upload(path, file, { upsert: false, contentType: ct });
+        if (error) { alert("Upload failed: " + error.message); return; }
+        const { data } = supabase.storage.from("media").getPublicUrl(path);
+        setUrl(data.publicUrl);
+        setFileName(file.name);
+        return;
+      }
+
+      // Large file → R2 presigned PUT (needs R2 configured + CORS on the bucket).
       const res = await fetch("/api/upload-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -35,32 +50,12 @@ export default function PdfUpload({
       const dest = await res.json();
       if (dest.provider === "r2" && dest.uploadUrl) {
         const put = await fetch(dest.uploadUrl, { method: "PUT", headers: { "Content-Type": ct }, body: file });
-        if (!put.ok) { alert("Upload failed (R2): " + put.status); return; }
+        if (!put.ok) { alert(`Upload failed (R2): ${put.status}. For this ${MB.toFixed(0)} MB file, R2 must be set up with CORS for this site.`); return; }
         setUrl(dest.publicUrl);
         setFileName(file.name);
         return;
       }
-      // Supabase free-tier caps a single file at 50 MB. Big book PDFs need R2.
-      const MB = file.size / (1024 * 1024);
-      if (MB > 50) {
-        alert(
-          `This PDF is ${MB.toFixed(0)} MB. The current storage limit is 50 MB per file.\n\n` +
-            `For large books, ask the admin to enable Cloudflare R2 (Integrations → it removes the size limit), or compress/split the PDF.`,
-        );
-        return;
-      }
-      const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
-      const { error } = await supabase.storage
-        .from("media")
-        .upload(path, file, { upsert: false, contentType: ct });
-      if (error) {
-        const big = MB > 45;
-        alert("Upload failed: " + error.message + (big ? `\n\n(This file is ${MB.toFixed(0)} MB — large PDFs need Cloudflare R2; ask admin to enable it.)` : ""));
-        return;
-      }
-      const { data } = supabase.storage.from("media").getPublicUrl(path);
-      setUrl(data.publicUrl);
-      setFileName(file.name);
+      alert(`This PDF is ${MB.toFixed(0)} MB — too big for Supabase (50 MB limit). Enable Cloudflare R2 for large files, or compress/split the PDF.`);
     } finally {
       setBusy(false);
       e.target.value = "";

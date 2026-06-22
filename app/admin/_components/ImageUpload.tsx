@@ -28,18 +28,7 @@ export default function ImageUpload({
     try {
       const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
       const ct = file.type || "image/jpeg";
-      const res = await fetch("/api/upload-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder, ext, contentType: ct }),
-      });
-      const dest = await res.json();
-      if (dest.provider === "r2" && dest.uploadUrl) {
-        const put = await fetch(dest.uploadUrl, { method: "PUT", headers: { "Content-Type": ct }, body: file });
-        if (!put.ok) { alert("Upload failed (R2): " + put.status); return; }
-        setUrl(dest.publicUrl);
-        return;
-      }
+      // Images are small — always go straight to Supabase Storage.
       const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const { error } = await supabase.storage
         .from("media")

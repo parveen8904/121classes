@@ -10,7 +10,8 @@ function impRank(imp: unknown): number {
   return m[String(v ?? "").toUpperCase()] ?? 4;
 }
 const dur = (cfg: any) => Number(cfg?.duration_minutes) || 0;
-const classNo = (cfg: any) => Number(cfg?.topic_class_no ?? cfg?.class_no ?? 0);
+// Use the FINAL (continuous) class number, not the within-topic number.
+const classNo = (cfg: any) => Number(cfg?.class_no ?? cfg?.topic_class_no ?? 0);
 
 // Build the engine input for one subject from the live content + planner config.
 export async function loadPlanInput(opts: {

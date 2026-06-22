@@ -1,128 +1,184 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import Planner, { type PlanItem } from "./Planner";
+import { loadPlanInput } from "@/lib/planner/load";
+import { generatePlan } from "@/lib/planner/engine";
+import SubmitButton from "@/app/components/SubmitButton";
+import { savePlanSetup, clearPlan } from "./actions";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Study Planner — 121 CA Classes" };
+export const metadata = { title: "Study planner — 121 CA Classes" };
 
-export default async function PlannerPage() {
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+
+type Setup = { subjectId: string; startDate: string; examDate: string; speed: number; doneClasses: number };
+
+export default async function PlannerPage({ searchParams }: { searchParams: { new?: string } }) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/planner");
 
-  const { data: prof } = await supabase.from("profiles").select("target_attempt").eq("id", user.id).maybeSingle();
-  const targetAttempt = String(prof?.target_attempt || "").replace(/_/g, " ");
+  const { data: myCourses } = await supabase.from("my_courses").select("course_id").eq("student_id", user.id);
+  const courseIds = (myCourses ?? []).map((r) => r.course_id as string);
+  const { data: subjOpts } = courseIds.length
+    ? await supabase.from("subjects").select("id, title").in("course_id", courseIds).order("order_index")
+    : await supabase.from("subjects").select("id, title").order("title");
 
-  const { data: plan } = await supabase.from("study_plans").select("setup, schedule, remind").eq("user_id", user.id).maybeSingle();
-  const initial = plan ? { setup: plan.setup, schedule: plan.schedule, remind: plan.remind } : null;
+  const { data: planRow } = await supabase.from("study_plans").select("setup").eq("user_id", user.id).maybeSingle();
+  const setup = (planRow?.setup ?? null) as Setup | null;
+  const showForm = !setup?.subjectId || searchParams.new === "1";
 
-  const { data: cfgRow } = await supabase.from("site_settings").select("value").eq("key", "planner_config").maybeSingle();
-  let config: Record<string, number> = {};
-  try { config = JSON.parse((cfgRow?.value as string) || "{}"); } catch {}
+  if (showForm) {
+    return (
+      <main className="container" style={{ paddingTop: 36, paddingBottom: 60, maxWidth: 720 }}>
+        <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+        <span className="badge">🗓️ Study planner</span>
+        <h1 style={{ margin: "12px 0 4px" }}>Build your study plan</h1>
+        <p className="muted">Pick your subject and dates — we&apos;ll lay out exactly what to do each day, through to exam day.</p>
 
+        <form action={savePlanSetup} className="form-card" style={{ marginTop: 18, display: "grid", gap: 14 }}>
+          <div>
+            <label>Subject</label>
+            <select name="subject" defaultValue={setup?.subjectId ?? ""} required>
+              <option value="" disabled>Choose your subject…</option>
+              {(subjOpts ?? []).map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+            </select>
+          </div>
+          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
+            <div><label>Start date</label><input type="date" name="start" defaultValue={setup?.startDate ?? todayISO()} required /></div>
+            <div><label>Exam date</label><input type="date" name="exam" defaultValue={setup?.examDate ?? ""} required /></div>
+          </div>
+          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
+            <div>
+              <label>Watch classes at</label>
+              <select name="speed" defaultValue={String(setup?.speed ?? 1.2)}>
+                <option value="1.2">1.2× (relaxed)</option>
+                <option value="1.5">1.5×</option>
+                <option value="2">2× (fastest)</option>
+              </select>
+            </div>
+            <div>
+              <label>Classes already done</label>
+              <input type="number" name="done" min={0} defaultValue={setup?.doneClasses ?? 0} />
+            </div>
+          </div>
+          <SubmitButton className="btn" savedLabel="✓ Building…">Generate my plan</SubmitButton>
+        </form>
+        {setup?.subjectId && <p className="muted" style={{ fontSize: ".82rem", marginTop: 10 }}>Your watched classes stay tracked automatically when you regenerate.</p>}
+      </main>
+    );
+  }
+
+  const input = await loadPlanInput({ subjectId: setup.subjectId, startDate: setup.startDate, examDate: setup.examDate, doneClasses: setup.doneClasses });
+  if (!input) {
+    return (
+      <main className="container" style={{ paddingTop: 36, paddingBottom: 60, maxWidth: 720 }}>
+        <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+        <div className="notice" style={{ marginTop: 12 }}>We couldn&apos;t build your plan — this subject has no published classes yet. <Link href="/planner?new=1">Pick another subject →</Link></div>
+      </main>
+    );
+  }
+  input.chosenSpeed = setup.speed;
+  const plan = generatePlan(input);
+  const subjectTitle = (subjOpts ?? []).find((s) => s.id === setup.subjectId)?.title ?? input.subjectTitle;
+
+  const { data: cw } = await supabase.from("class_watch").select("section_id").eq("student_id", user.id).eq("completed", true);
+  const completedIds = new Set((cw ?? []).map((r) => r.section_id as string));
   const svc = createServiceClient();
+  const { data: subjTopics } = await svc.from("topics").select("id").eq("subject_id", setup.subjectId);
+  const tIds = (subjTopics ?? []).map((t) => t.id as string);
+  const { data: subjClasses } = tIds.length ? await svc.from("sections").select("id").eq("type", "full_class_video").in("topic_id", tIds) : { data: [] as { id: string }[] };
+  const watched = (subjClasses ?? []).filter((s) => completedIds.has(s.id as string)).length;
+  const done = Math.max(watched, setup.doneClasses);
 
-  // Syllabus checklist for our students — published, regular topics (the
-  // combined topic is a subject-wide bundle, not a study unit).
-  const { data: topics } = await svc
-    .from("topics")
-    .select("id, title, order_index, subject_id, importance, weightage_marks, important_qs_rev1, important_qs_rev2, subjects(title)")
-    .eq("is_published", true)
-    .eq("is_combined", false)
-    .order("order_index")
-    .limit(400);
-
-  // Order by the hit list for the student's attempt (A→B→C); within the same
-  // category, heavier (higher ICAI weightage) topics come first so they get
-  // studied sooner and more revision runway. Falls back to exhaustive order.
-  const normAtt = (s: string) => s.toLowerCase().replace(/[_\s]+/g, " ").trim();
-  const catRank = (imp: Record<string, string> | null | undefined) => {
-    if (!imp) return 9;
-    const hit = Object.entries(imp).find(([a]) => normAtt(a) === normAtt(targetAttempt));
-    const c = hit?.[1]?.toUpperCase();
-    return c === "A" ? 0 : c === "B" ? 1 : c === "C" ? 2 : c ? 3 : 9;
-  };
-  const ordered = [...(topics ?? [])]
-    .map((t, i) => ({ t, i }))
-    .sort((a, b) => {
-      const r = catRank(a.t.importance as Record<string, string>) - catRank(b.t.importance as Record<string, string>);
-      if (r !== 0) return r;
-      const w = (Number(b.t.weightage_marks) || 0) - (Number(a.t.weightage_marks) || 0);
-      if (w !== 0) return w;
-      return a.i - b.i;
-    })
-    .map((x) => x.t);
-
-  const items: PlanItem[] = ordered.map((t) => ({
-    id: t.id,
-    title: t.title,
-    subjectId: (t as { subject_id?: string | null }).subject_id ?? null,
-    subject: (t as { subjects?: { title?: string } | null }).subjects?.title ?? "General",
-  }));
-
-  // Per-topic durations + important-question counts come from the classes
-  // (sections) and the topic's revision question lists.
-  const topicIds = items.map((i) => i.id);
-  const { data: secRows } = topicIds.length
-    ? await svc.from("sections").select("topic_id, config").in("topic_id", topicIds).eq("is_published", true)
-    : { data: [] as { topic_id: string; config: Record<string, unknown> | null }[] };
-  const lineCount = (v: unknown) => (v ? String(v).split("\n").map((s) => s.trim()).filter(Boolean).length : 0);
-
-  const durByTopic = new Map<string, number>();
-  const importantQByTopic = new Map<string, number>();
-  for (const s of secRows ?? []) {
-    const cfg = (s.config ?? {}) as Record<string, unknown>;
-    durByTopic.set(s.topic_id, (durByTopic.get(s.topic_id) || 0) + (Number(cfg.duration_minutes) || 0));
-    importantQByTopic.set(s.topic_id, (importantQByTopic.get(s.topic_id) || 0) + lineCount(cfg.important_questions));
-  }
-  const durations = items.map((i) => durByTopic.get(i.id) || 0);
-
-  // Master Qs (exhaustive) = questions discussed in the classes; first-revision
-  // Qs = the topic's first-revision important-question list. Aggregated by
-  // subject for the planner's distribution.
-  const subjectMaster: Record<string, number> = {};
-  const subjectRev: Record<string, number> = {};
-  for (const t of topics ?? []) {
-    const subj = (t as { subjects?: { title?: string } | null }).subjects?.title ?? "General";
-    subjectMaster[subj] = (subjectMaster[subj] || 0) + (importantQByTopic.get(t.id) || 0);
-    subjectRev[subj] = (subjectRev[subj] || 0) + lineCount((t as { important_qs_rev1?: string }).important_qs_rev1);
-  }
-
-  // Student test performance (avg MCQ score %) — feeds the pace column.
-  const { data: myMcq } = await svc.from("mcq_attempts").select("score, total").eq("student_id", user.id);
-  let testPerf = -1; // -1 = no tests yet
-  const scored = (myMcq ?? []).filter((a) => (a.total ?? 0) > 0);
-  if (scored.length) {
-    const ratio = scored.reduce((s, a) => s + (a.score ?? 0) / (a.total as number), 0) / scored.length;
-    testPerf = Math.round(ratio * 100);
-  }
+  const today = todayISO();
+  const classRowsByToday = plan.days.filter((day) => day.stage === "exhaustive" && day.status === "ok" && day.date <= today).length;
+  const targetByToday = setup.doneClasses + classRowsByToday;
+  const delta = done - targetByToday;
+  const todays = plan.days.filter((day) => day.date === today && day.stage !== "break");
 
   return (
-    <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 920 }}>
+    <main className="container" style={{ paddingTop: 36, paddingBottom: 60, maxWidth: 900 }}>
       <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
-        <div className="learn-hero" style={{ marginBottom: 18 }}>
-        <span className="badge">🗓️ Study Planner</span>
-        <h1>Study planner &amp; diary</h1>
-        <p className="meta">
-          Tell us your exam date and how you&apos;re studying — we&apos;ll build a day-by-day plan in stages
-          (study, first revision, and a last revision of your must-do questions in the final 5 days) with tests and mock exams so you finish on time
-          {targetAttempt ? ` for ${targetAttempt}` : ""}. ✍️
+      <span className="badge">🗓️ Study planner</span>
+      <h1 style={{ margin: "12px 0 2px" }}>{subjectTitle}</h1>
+      <p className="muted">Exam {fmt(setup.examDate)} · watching at {setup.speed}× · {plan.totals.classCount} classes left</p>
+
+      <div className="card" style={{ marginTop: 16, border: "2px solid var(--accent)" }}>
+        <strong style={{ fontSize: "1.1rem" }}>🎯 Today&apos;s target</strong>
+        {todays.length ? (
+          <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+            {todays.map((day, i) => (
+              <div key={i}>
+                <strong>{day.task}</strong>
+                <div className="muted" style={{ fontStyle: "italic", fontSize: ".82rem" }}>{day.meta}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted" style={{ marginTop: 8 }}>No class scheduled today — revise, or study your other subjects.</p>
+        )}
+      </div>
+
+      <div className="card" style={{ marginTop: 12, borderColor: delta < 0 ? "#ef4444" : "#16a34a" }}>
+        <strong style={{ color: delta < 0 ? "#b91c1c" : "#16a34a" }}>
+          {delta < 0 ? `⚠️ ${Math.abs(delta)} class(es) behind` : delta > 0 ? `🚀 ${delta} class(es) ahead` : "✅ On track"}
+        </strong>
+        <p className="muted" style={{ fontSize: ".85rem", margin: "6px 0 0" }}>
+          You&apos;ve completed <strong>{done}</strong> classes; by today the plan expects about <strong>{targetByToday}</strong>.
+          {delta < 0 ? " Catch up the pending classes above, add hours, or regenerate with more time." : ""}
         </p>
       </div>
-      <Planner
-        items={items}
-        signedIn={!!user}
-        initial={initial as never}
-        config={config as never}
-        durations={durations}
-        subjectMaster={subjectMaster}
-        subjectRev={subjectRev}
-        testPerf={testPerf}
-      />
-    </section>
+
+      {plan.feasibility.messages.length > 0 && (
+        <div className="card" style={{ marginTop: 12, background: plan.feasibility.fits ? undefined : "#fef2f2" }}>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: ".88rem" }}>
+            {plan.feasibility.messages.map((m, i) => <li key={i}>{m}</li>)}
+          </ul>
+          {plan.feasibility.recommendedSpeed && (
+            <Link className="btn small" href="/planner?new=1" style={{ marginTop: 8, display: "inline-block" }}>Change speed / dates →</Link>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 10, alignItems: "center", margin: "20px 0 8px", flexWrap: "wrap" }}>
+        <h2 style={{ fontSize: "1.15rem", margin: 0 }}>📅 Full plan</h2>
+        <Link href="/planner?new=1" className="btn small secondary">Change / regenerate</Link>
+        <form action={clearPlan}><button className="btn small secondary" type="submit">Delete plan</button></form>
+      </div>
+
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 13 }}>
+        <colgroup><col style={{ width: "118px" }} /><col /><col style={{ width: "150px" }} /></colgroup>
+        <thead><tr style={{ textAlign: "left", color: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
+          <th style={{ padding: "6px" }}>Date &amp; day</th><th style={{ padding: "6px" }}>Target</th><th style={{ padding: "6px" }}>Topic</th>
+        </tr></thead>
+        <tbody style={{ verticalAlign: "top" }}>
+          {plan.days.map((row, i) => {
+            const header = i === 0 || plan.days[i - 1].stageLabel !== row.stageLabel;
+            const isToday = row.date === today;
+            return (
+              <Fragment key={i}>
+                {header && <tr><td colSpan={3} style={{ padding: "10px 6px 4px", fontWeight: 500, color: "var(--accent)" }}>{row.stageLabel}</td></tr>}
+                {row.stage === "break" ? (
+                  <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={{ padding: "8px 6px", color: "var(--muted)" }}>—</td>
+                    <td style={{ padding: "8px 6px", fontStyle: "italic", color: "var(--muted)" }} colSpan={2}>{row.task}</td>
+                  </tr>
+                ) : (
+                  <tr style={{ borderBottom: "1px solid var(--border)", background: isToday ? "color-mix(in srgb, var(--accent) 12%, transparent)" : row.status === "test" ? "var(--bg-soft,#f8fafc)" : undefined }}>
+                    <td style={{ padding: "8px 6px" }}>{row.weekday}<br /><span style={{ color: "var(--muted)" }}>{fmt(row.date)}</span></td>
+                    <td style={{ padding: "8px 6px" }}><strong>{row.task}</strong><br /><span style={{ fontStyle: "italic", fontSize: 12, color: "var(--muted)" }}>{row.meta}</span></td>
+                    <td style={{ padding: "8px 6px", fontWeight: row.topic ? 500 : 400, color: row.topic ? undefined : "var(--muted)" }}>{row.topic ?? ""}</td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </main>
   );
 }

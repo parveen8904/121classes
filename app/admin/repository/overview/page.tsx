@@ -34,7 +34,8 @@ export default async function RepositoryOverview() {
     let classes = 0, pdfs = 0, transcripts = 0;
     for (const s of secs) {
       const c = (s.config ?? {}) as Record<string, unknown>;
-      if (s.type === "full_class_video") classes++;
+      // Don't count "part" continuations (e.g. 7B) as separate classes.
+      if (s.type === "full_class_video" && !/[A-Za-z]/.test(String(c.class_no ?? ""))) classes++;
       if (has(c.pdf_url)) pdfs++;
       if (has(c.notes_hand_url)) pdfs++;
       if (has(c.notes_typed_url)) pdfs++;

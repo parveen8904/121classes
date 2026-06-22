@@ -44,12 +44,17 @@ export default async function CourseDetail({ params }: { params: { courseId: str
         .from("sections")
         .select("topic_id, config")
         .in("topic_id", topicIds)
-        .eq("type", "full_class_video");
+        .eq("type", "full_class_video")
+        .eq("is_published", true);
       for (const r of classRows ?? []) {
         const sid = topicToSubject.get((r as { topic_id: string }).topic_id);
         if (!sid) continue;
-        classCount.set(sid, (classCount.get(sid) ?? 0) + 1);
-        const d = Number((r as { config?: { duration_minutes?: unknown } }).config?.duration_minutes) || 0;
+        const cfg = (r as { config?: { duration_minutes?: unknown; class_no?: unknown } }).config ?? {};
+        // A "part" class (e.g. 7B) continues the previous one — don't count it as
+        // a separate class, so the class count reads lower (and consistent everywhere).
+        const isPart = /[A-Za-z]/.test(String(cfg.class_no ?? ""));
+        if (!isPart) classCount.set(sid, (classCount.get(sid) ?? 0) + 1);
+        const d = Number(cfg.duration_minutes) || 0;
         classMins.set(sid, (classMins.get(sid) ?? 0) + d);
       }
     }

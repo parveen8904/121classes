@@ -85,13 +85,17 @@ export default async function Home() {
     .lte("starts_at", new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString())
     .order("starts_at")
     .limit(6);
-  const [{ count: classCount }, { count: resultCount }, { count: openingCount }] = await Promise.all([
-    supabase.from("sections").select("id", { count: "exact", head: true }).eq("kind", "full_class_video").eq("is_published", true),
+  const [{ data: classRows }, { count: resultCount }, { count: openingCount }] = await Promise.all([
+    supabase.from("sections").select("config").eq("type", "full_class_video").eq("is_published", true),
     supabase.from("results").select("id", { count: "exact", head: true }).eq("is_published", true),
     supabase.from("job_listings").select("id", { count: "exact", head: true }).eq("status", "approved"),
   ]);
+  // Count main classes only — a "part" continuation (e.g. 7B) isn't a separate class.
+  const classCount = (classRows ?? []).filter(
+    (r) => !/[A-Za-z]/.test(String((r.config as { class_no?: unknown } | null)?.class_no ?? "")),
+  ).length;
   const heroStats = [
-    { n: classCount ?? 0, suffix: "+", label: "recorded classes" },
+    { n: classCount, suffix: "+", label: "recorded classes" },
     { n: resultCount ?? 0, suffix: "+", label: "success stories" },
     { n: openingCount ?? 0, suffix: "+", label: "live job openings" },
   ].filter((s) => s.n > 0);

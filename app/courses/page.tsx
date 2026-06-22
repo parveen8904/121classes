@@ -66,7 +66,8 @@ export default async function CoursesPage() {
     const st = sid ? stats.get(sid) : null;
     if (!st) continue;
     const c = (sec.config ?? {}) as any;
-    if (sec.type === "full_class_video") { st.classes++; st.minutes += dur(c); }
+    // "Part" continuations (e.g. 7B) add their minutes but aren't a separate class.
+    if (sec.type === "full_class_video") { if (!/[A-Za-z]/.test(String(c.class_no ?? ""))) st.classes++; st.minutes += dur(c); }
     else if (sec.type === "revision_video") st.revisions++;
     else if (sec.type === "mcq_test" || sec.type === "subjective_test") st.tests++;
     if (sec.type === "pdf" || c.notes_hand_url || c.notes_typed_url || c.pdf_url) st.notes++;

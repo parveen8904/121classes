@@ -281,6 +281,14 @@ export async function createSection(formData: FormData) {
     .select("id")
     .single();
   if (type === "full_class_video") await resequenceForTopic(topicId);
+  // Auto-announce new published content to the subject's Telegram group + channel.
+  if (created && formData.get("is_published") === "on" && type !== "mcq_test" && type !== "subjective_test") {
+    try {
+      const { data: t } = await supabase.from("topics").select("subject_id, title").eq("id", topicId).maybeSingle();
+      const { announceToSubject } = await import("@/lib/telegramBroadcast");
+      await announceToSubject((t?.subject_id as string) ?? null, `🆕 New: ${title} — ${t?.title ?? ""}`, `https://caparveensharma.com/learn/topic/${topicId}`);
+    } catch { /* ignore */ }
+  }
   revalidatePath(`/admin/topics/${topicId}`);
   // A test is created empty — take the admin straight to where they upload /
   // generate its questions, instead of leaving an empty shell on the topic page.

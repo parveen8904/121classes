@@ -74,6 +74,8 @@ export async function broadcastAnnouncement(formData: FormData) {
   const { sendTelegramChannel } = await import("@/lib/notify");
   const tgText = a.body ? `${a.title}\n\n${a.body}` : a.title;
   const tgOk = await sendTelegramChannel(tgText, a.link_url ?? undefined);
+  // Also drop it into every linked subject group.
+  try { const { postToAllGroups } = await import("@/lib/telegramBroadcast"); await postToAllGroups(tgText, a.link_url ?? undefined); } catch { /* ignore */ }
 
   const nowISO = new Date().toISOString();
   await svc.from("broadcasts").insert([

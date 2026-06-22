@@ -28,6 +28,12 @@ export async function createAmendment(formData: FormData) {
   const p = payload(formData);
   if (!p.title) return;
   await createClient().from("amendments").insert(p);
+  if (p.is_published) {
+    try {
+      const { announceToSubject } = await import("@/lib/telegramBroadcast");
+      await announceToSubject(p.subject_id, `📜 New amendment: ${p.title}`, "https://caparveensharma.com/amendments");
+    } catch { /* ignore */ }
+  }
   revalidatePath("/admin/amendments");
 }
 

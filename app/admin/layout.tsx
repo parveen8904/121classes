@@ -20,6 +20,7 @@ const ADMIN_LINKS: [string, string][] = [
   ["🎓 Career", "/admin/content"],
   ["🗄️ Storage", "/admin/storage"],
   ["🔌 Integrations", "/admin/integrations"],
+  ["✈️ Telegram", "/admin/telegram"],
   ["🎟️ Enrolment", "/admin/enrolment"],
   ["💳 Plans", "/admin/plans"],
   ["📦 Books", "/admin/books"],

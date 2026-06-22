@@ -25,12 +25,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  const svc = createServiceClient();
+
+  // Bot added to / present in a group → capture the group's chat id so the admin
+  // can link it to a subject and auto-post there. (allowed_updates includes my_chat_member.)
+  const cm = update?.my_chat_member;
+  if (cm?.chat?.id && (cm.chat.type === "group" || cm.chat.type === "supergroup")) {
+    const status = cm?.new_chat_member?.status;
+    if (status === "member" || status === "administrator") {
+      await svc.from("telegram_groups").upsert(
+        { chat_id: String(cm.chat.id), title: cm.chat.title ?? "Group", last_seen_at: new Date().toISOString() },
+        { onConflict: "chat_id" },
+      );
+    } else if (status === "left" || status === "kicked") {
+      await svc.from("telegram_groups").delete().eq("chat_id", String(cm.chat.id));
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   const msg = update?.message ?? update?.edited_message;
   const chatId: string | undefined = msg?.chat?.id ? String(msg.chat.id) : undefined;
   const text: string = (msg?.text ?? "").trim();
+  // Also capture group chat id from any message in a group (belt-and-suspenders).
+  if (chatId && (msg?.chat?.type === "group" || msg?.chat?.type === "supergroup")) {
+    await svc.from("telegram_groups").upsert(
+      { chat_id: chatId, title: msg.chat.title ?? "Group", last_seen_at: new Date().toISOString() },
+      { onConflict: "chat_id" },
+    );
+  }
   if (!chatId || !text) return NextResponse.json({ ok: true });
-
-  const svc = createServiceClient();
 
   // 1) Account linking via deep link: /start <code>
   if (text.startsWith("/start")) {

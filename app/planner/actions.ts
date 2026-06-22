@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { loadPlanInput } from "@/lib/planner/load";
+import { loadPlanInput, applySetup, type PlanSetup } from "@/lib/planner/load";
 import { generatePlan, type Plan } from "@/lib/planner/engine";
 import type { SchedEntry } from "@/lib/plan";
 
@@ -30,6 +30,8 @@ export async function savePlanSetup(formData: FormData) {
   if (!user) return;
 
   const revs = Number(formData.get("revisions"));
+  const num = (k: string) => { const v = Number(formData.get(k)); return Number.isFinite(v) && v > 0 ? v : undefined; };
+  const sc = (k: string, allowSkip: boolean) => { const v = String(formData.get(k) || "all"); return (allowSkip ? ["all", "ab", "a", "skip"] : ["all", "ab", "a"]).includes(v) ? v : "all"; };
   const setup = {
     subjectId: String(formData.get("subject") || ""),
     startDate: String(formData.get("start") || ""),
@@ -37,6 +39,11 @@ export async function savePlanSetup(formData: FormData) {
     speed: Number(formData.get("speed")) || 1.2,
     doneClasses: Math.max(0, Number(formData.get("done")) || 0),
     revisions: revs === 1 || revs === 2 ? revs : 3,
+    exhaustiveScope: sc("ex_scope", true),
+    pickedTopicIds: formData.getAll("pick").map(String).filter(Boolean),
+    revScope1: sc("rev1_scope", false),
+    revScope2: sc("rev2_scope", false),
+    stageDays: { exhaustive: num("d_ex"), rr1: num("d_rr1"), rr2: num("d_rr2"), rr3: num("d_rr3") },
   };
   if (!setup.subjectId || !setup.startDate || !setup.examDate) return;
 
@@ -45,6 +52,11 @@ export async function savePlanSetup(formData: FormData) {
   if (input) {
     input.chosenSpeed = setup.speed;
     input.revisionRounds = setup.revisions;
+    input.exhaustiveScope = setup.exhaustiveScope as any;
+    input.pickedTopicIds = setup.pickedTopicIds;
+    input.revScope1 = setup.revScope1 as any;
+    input.revScope2 = setup.revScope2 as any;
+    input.stageDays = setup.stageDays;
     schedule = toSchedule(generatePlan(input));
   }
 
@@ -71,8 +83,7 @@ export async function emailMyPlan() {
 
   const input = await loadPlanInput({ subjectId: setup.subjectId, startDate: setup.startDate, examDate: setup.examDate, doneClasses: setup.doneClasses });
   if (!input) return;
-  input.chosenSpeed = setup.speed;
-  input.revisionRounds = setup.revisions;
+  applySetup(input, setup as PlanSetup);
   const plan = generatePlan(input);
 
   const { data: prof } = await supabase.from("profiles").select("email").eq("id", user.id).maybeSingle();

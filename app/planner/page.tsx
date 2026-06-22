@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { loadPlanInput } from "@/lib/planner/load";
+import { loadPlanInput, applySetup, type PlanSetup } from "@/lib/planner/load";
 import { generatePlan } from "@/lib/planner/engine";
 import SubmitButton from "@/app/components/SubmitButton";
 import RemarkBox from "./RemarkBox";
@@ -16,7 +16,7 @@ export const metadata = { title: "Study planner — 121 CA Classes" };
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
-type Setup = { subjectId: string; startDate: string; examDate: string; speed: number; doneClasses: number; revisions?: number };
+type Setup = PlanSetup;
 
 export default async function PlannerPage({ searchParams }: { searchParams: { new?: string; emailed?: string } }) {
   const supabase = createClient();
@@ -35,6 +35,10 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
   const showForm = !setup?.subjectId || searchParams.new === "1";
 
   if (showForm) {
+    const { data: pickTopics } = setup?.subjectId
+      ? await supabase.from("topics").select("id, title").eq("subject_id", setup.subjectId).eq("is_combined", false).order("order_index")
+      : { data: [] as { id: string; title: string }[] };
+    const pickedSet = new Set(setup?.pickedTopicIds ?? []);
     return (
       <main className="container" style={{ paddingTop: 36, paddingBottom: 60, maxWidth: 720 }}>
         <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
@@ -77,6 +81,52 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
             </select>
             <p className="muted" style={{ fontSize: ".78rem", margin: "4px 0 0" }}>Short on time? Fewer revisions frees up days for your detailed classes.</p>
           </div>
+          <div>
+            <label>Detailed classes (exhaustive) — which topics?</label>
+            <select name="ex_scope" defaultValue={setup?.exhaustiveScope ?? "all"}>
+              <option value="all">All topics</option>
+              <option value="ab">Important only — A + B</option>
+              <option value="a">Most important only — A</option>
+              <option value="skip">Skip — I&apos;ve already done the detailed classes</option>
+            </select>
+            <p className="muted" style={{ fontSize: ".78rem", margin: "4px 0 0" }}>Re-attempt? Choose A-only for a quick brush-up, or Skip to go straight to revision.</p>
+          </div>
+          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
+            <div>
+              <label>Revision 1 covers</label>
+              <select name="rev1_scope" defaultValue={setup?.revScope1 ?? "all"}><option value="all">All topics</option><option value="ab">A + B</option><option value="a">A only</option></select>
+            </div>
+            <div>
+              <label>Revision 2 covers</label>
+              <select name="rev2_scope" defaultValue={setup?.revScope2 ?? "all"}><option value="all">All topics</option><option value="ab">A + B</option><option value="a">A only</option></select>
+            </div>
+          </div>
+          <details>
+            <summary className="muted" style={{ cursor: "pointer", fontSize: ".85rem" }}>Advanced — stage lengths &amp; pick exact topics</summary>
+            <div style={{ marginTop: 10 }}>
+              <label>Stage lengths (days) — leave blank for the standard</label>
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))" }}>
+                <div><label style={{ fontSize: ".76rem" }}>Exhaustive</label><input type="number" name="d_ex" min={1} defaultValue={setup?.stageDays?.exhaustive ?? ""} placeholder="auto" /></div>
+                <div><label style={{ fontSize: ".76rem" }}>Revision 1</label><input type="number" name="d_rr1" min={1} defaultValue={setup?.stageDays?.rr1 ?? ""} placeholder="20" /></div>
+                <div><label style={{ fontSize: ".76rem" }}>Revision 2</label><input type="number" name="d_rr2" min={1} defaultValue={setup?.stageDays?.rr2 ?? ""} placeholder="10" /></div>
+                <div><label style={{ fontSize: ".76rem" }}>Final</label><input type="number" name="d_rr3" min={1} defaultValue={setup?.stageDays?.rr3 ?? ""} placeholder="5" /></div>
+              </div>
+              {pickTopics && pickTopics.length > 0 ? (
+                <div style={{ marginTop: 10 }}>
+                  <label>Or tick exact topics for the exhaustive stage (overrides the scope above)</label>
+                  <div style={{ maxHeight: 200, overflow: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
+                    {pickTopics.map((t) => (
+                      <label key={t.id} style={{ display: "block", fontSize: ".85rem", padding: "2px 0" }}>
+                        <input type="checkbox" name="pick" value={t.id} defaultChecked={pickedSet.has(t.id)} /> {t.title}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="muted" style={{ fontSize: ".78rem", marginTop: 8 }}>Want to tick exact topics? Generate once, then reopen — this subject&apos;s topics will appear here.</p>
+              )}
+            </div>
+          </details>
           <SubmitButton className="btn" savedLabel="✓ Building…">Generate my plan</SubmitButton>
         </form>
         {setup?.subjectId && <p className="muted" style={{ fontSize: ".82rem", marginTop: 10 }}>Your watched classes stay tracked automatically when you regenerate.</p>}
@@ -93,8 +143,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
       </main>
     );
   }
-  input.chosenSpeed = setup.speed;
-  input.revisionRounds = setup.revisions;
+  applySetup(input, setup);
   const plan = generatePlan(input);
   const subjectTitle = (subjOpts ?? []).find((s) => s.id === setup.subjectId)?.title ?? input.subjectTitle;
 

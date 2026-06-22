@@ -1,13 +1,37 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import type { PlanInput, ClassItem, RevItem, TopicMIQ } from "./engine";
+import type { PlanInput, ClassItem, RevItem, TopicMIQ, TopicMeta, Scope } from "./engine";
+
+// The saved study_plans.setup shape.
+export type PlanSetup = {
+  subjectId: string; startDate: string; examDate: string; speed: number; doneClasses: number;
+  revisions?: number; exhaustiveScope?: Scope; pickedTopicIds?: string[];
+  revScope1?: Exclude<Scope, "skip">; revScope2?: Exclude<Scope, "skip">;
+  stageDays?: { exhaustive?: number; rr1?: number; rr2?: number; rr3?: number };
+};
+
+// Copy the student's saved choices onto a freshly loaded engine input.
+export function applySetup(input: PlanInput, s: PlanSetup): PlanInput {
+  input.chosenSpeed = s.speed;
+  input.revisionRounds = s.revisions;
+  input.exhaustiveScope = s.exhaustiveScope;
+  input.pickedTopicIds = s.pickedTopicIds;
+  input.revScope1 = s.revScope1;
+  input.revScope2 = s.revScope2;
+  input.stageDays = s.stageDays;
+  return input;
+}
 
 function parseQs(t: string | null | undefined): string[] {
   return (t ?? "").split(/[\r\n,]+/).map((s) => s.trim()).filter(Boolean);
 }
-function impRank(imp: unknown): number {
+function impLetter(imp: unknown): string {
   const v = imp && typeof imp === "object" ? (Object.values(imp as Record<string, unknown>)[0] as string) : null;
+  const u = String(v ?? "").toUpperCase();
+  return u === "A" || u === "B" || u === "C" ? u : "";
+}
+function impRank(imp: unknown): number {
   const m: Record<string, number> = { A: 1, B: 2, C: 3 };
-  return m[String(v ?? "").toUpperCase()] ?? 4;
+  return m[impLetter(imp)] ?? 4;
 }
 const dur = (cfg: any) => Number(cfg?.duration_minutes) || 0;
 // Use the FINAL (continuous) class number, not the within-topic number.
@@ -43,10 +67,11 @@ export async function loadPlanInput(opts: {
 
   const classes: ClassItem[] = [];
   const revisions: RevItem[] = [];
+  const topicsMeta: TopicMeta[] = sorted.map((t) => ({ topicId: t.id as string, title: t.title as string, importance: impLetter(t.importance) }));
   for (const t of sorted) {
     const mine = secs.filter((s) => s.topic_id === t.id);
     const cls = mine.filter((s) => s.type === "full_class_video").sort((a, b) => classNo(a.config) - classNo(b.config));
-    cls.forEach((s, i) => classes.push({ topicTitle: t.title as string, label: `Class ${classNo(s.config) || i + 1}`, minutes: dur(s.config) || 60 }));
+    cls.forEach((s, i) => classes.push({ topicId: t.id as string, topicTitle: t.title as string, importance: impLetter(t.importance), label: `Class ${classNo(s.config) || i + 1}`, minutes: dur(s.config) || 60 }));
     const classTotal = cls.reduce((x, s) => x + (dur(s.config) || 60), 0);
     for (const s of mine.filter((s) => s.type === "revision_video")) {
       revisions.push({ topicTitle: t.title as string, minutes: dur(s.config) || Math.round(classTotal * 0.25) || 30 });
@@ -68,6 +93,7 @@ export async function loadPlanInput(opts: {
     classes,
     revisions,
     miq,
+    topics: topicsMeta,
     doneClasses: opts.doneClasses,
   };
 }

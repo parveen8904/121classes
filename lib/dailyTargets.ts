@@ -1,9 +1,9 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendTelegramMessage } from "@/lib/notify";
-import { loadPlanInput } from "@/lib/planner/load";
+import { loadPlanInput, applySetup, type PlanSetup } from "@/lib/planner/load";
 import { generatePlan } from "@/lib/planner/engine";
 
-type Setup = { subjectId: string; startDate: string; examDate: string; speed: number; doneClasses: number; revisions?: number };
+type Setup = PlanSetup;
 
 // Once a day, message each student (with a plan + linked Telegram) their target
 // for today plus a delay warning if they're behind. Deduped via the
@@ -30,8 +30,7 @@ export async function runDailyTargets(): Promise<{ sent: number }> {
 
     const input = await loadPlanInput({ subjectId: setup.subjectId, startDate: setup.startDate, examDate: setup.examDate, doneClasses: setup.doneClasses });
     if (!input) continue;
-    input.chosenSpeed = setup.speed;
-    input.revisionRounds = setup.revisions;
+    applySetup(input, setup);
     const plan = generatePlan(input);
 
     const todays = plan.days.filter((d) => d.date === today && d.stage !== "break");

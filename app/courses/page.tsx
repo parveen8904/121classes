@@ -1,72 +1,183 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "Courses — CA Parveen Sharma",
+  description: "Advanced Accounting & Financial Reporting — fully guided: classes, day-by-day planner, AI doubt-solving on WhatsApp/Telegram, tests with performance reports, revisions, notes and amendments updated to your exam.",
+};
 
-type SubjectFaculty = { faculties: { full_name: string } | null };
-type SubjectRow = { id: string; title: string; subject_faculty: SubjectFaculty[] | null };
-type CourseRow = { id: string; title: string; subjects: SubjectRow[] | null };
+const dur = (c: any) => Number(c?.duration_minutes) || 0;
+const hrs = (mins: number) => {
+  const h = Math.round(mins / 60);
+  return h > 0 ? `${h} hr${h === 1 ? "" : "s"}` : `${mins} min`;
+};
+
+type Stat = { classes: number; minutes: number; revisions: number; tests: number; notes: number; topics: number; amendments: number; attempts: string[]; faculty: string[]; course: string };
 
 export default async function CoursesPage() {
-  const supabase = createClient();
-  const { data } = await supabase
-    .from("courses")
-    .select("id, title, subjects(id, title, subject_faculty(faculties(full_name)))")
-    .eq("is_published", true)
-    .eq("is_test_series", false)
-    .order("order_index");
+  const svc = createServiceClient();
 
-  const courses = (data ?? []) as unknown as CourseRow[];
+  const { data: courses } = await svc.from("courses").select("id, title").eq("is_published", true).eq("is_test_series", false);
+  const courseIds = (courses ?? []).map((c) => c.id as string);
+  const courseTitle = new Map((courses ?? []).map((c) => [c.id as string, c.title as string]));
+
+  const { data: subjects } = courseIds.length
+    ? await svc.from("subjects").select("id, title, code, course_id, subject_faculty(faculties(full_name))").in("course_id", courseIds).order("order_index")
+    : { data: [] as any[] };
+
+  const subjectIds = (subjects ?? []).map((s) => s.id as string);
+  const { data: topics } = subjectIds.length
+    ? await svc.from("topics").select("id, subject_id").eq("is_published", true).eq("is_combined", false).in("subject_id", subjectIds)
+    : { data: [] as any[] };
+  const topicSubject = new Map((topics ?? []).map((t) => [t.id as string, t.subject_id as string]));
+  const topicIds = (topics ?? []).map((t) => t.id as string);
+
+  const { data: sections } = topicIds.length
+    ? await svc.from("sections").select("topic_id, type, config").eq("is_published", true).in("topic_id", topicIds)
+    : { data: [] as any[] };
+
+  const { data: amendments } = subjectIds.length
+    ? await svc.from("amendments").select("subject_id, valid_from_attempt").eq("is_published", true).in("subject_id", subjectIds)
+    : { data: [] as any[] };
+
+  const { data: results } = await svc.from("results").select("student_name, headline, attempt, marks, photo_url, quote").eq("is_published", true).order("order_index").limit(8);
+
+  // Aggregate per subject.
+  const stats = new Map<string, Stat>();
+  for (const s of subjects ?? []) {
+    const faculty = [...new Set(((s as any).subject_faculty ?? []).map((sf: any) => sf.faculties?.full_name).filter(Boolean))] as string[];
+    stats.set(s.id as string, { classes: 0, minutes: 0, revisions: 0, tests: 0, notes: 0, topics: 0, amendments: 0, attempts: [], faculty, course: courseTitle.get(s.course_id as string) || "" });
+  }
+  for (const t of topics ?? []) { const st = stats.get(t.subject_id as string); if (st) st.topics++; }
+  for (const sec of sections ?? []) {
+    const sid = topicSubject.get(sec.topic_id as string);
+    const st = sid ? stats.get(sid) : null;
+    if (!st) continue;
+    const c = (sec.config ?? {}) as any;
+    if (sec.type === "full_class_video") { st.classes++; st.minutes += dur(c); }
+    else if (sec.type === "revision_video") st.revisions++;
+    else if (sec.type === "mcq_test" || sec.type === "subjective_test") st.tests++;
+    if (sec.type === "pdf" || c.notes_hand_url || c.notes_typed_url || c.pdf_url) st.notes++;
+  }
+  for (const a of amendments ?? []) {
+    const st = stats.get(a.subject_id as string);
+    if (!st) continue;
+    st.amendments++;
+    const att = (a.valid_from_attempt as string) || "";
+    if (att && !st.attempts.includes(att)) st.attempts.push(att);
+  }
+
+  const FEATURES = [
+    { i: "🗓️", t: "Day-by-day study plan", d: "A personal plan to exam day — classes, revisions & tests — that auto-adjusts to your pace and downloads as a PDF." },
+    { i: "🤖", t: "Ask doubts anywhere, 24×7", d: "Ask on WhatsApp, Telegram or email — answered instantly by AI from the actual class material, and escalated to CA Parveen Sharma when needed." },
+    { i: "🧠", t: "MCQ + descriptive tests", d: "Chapter tests with a performance report: your rank, weak concepts and exactly which classes to redo." },
+    { i: "🔁", t: "3 structured revision rounds", d: "Revision videos + the most-important-questions list, sped up round by round, right up to the exam." },
+    { i: "📜", t: "Amendments to your exam", d: "Every amendment kept updated and tagged to the exact attempt it applies to — never study an outdated topic." },
+    { i: "📝", t: "Notes, PDFs, RTP & MTP", d: "Typed + handwritten notes, ICAI RTP/MTP and past papers, organised topic by topic." },
+    { i: "📈", t: "Progress tracking", d: "We track your pace, gaps and regularity so you always know if you're on track — or what to catch up." },
+  ];
 
   return (
-    <section className="section">
-      <div className="section-head">
-        <span className="eyebrow">📚 Courses</span>
-        <h2>Our courses</h2>
-        <p>
-          Structured, attempt-wise CA coaching by <strong>CA Parveen Sharma &amp; team</strong> —
-          concept classes, revisions, tests and AI-assisted doubt-solving.
-        </p>
-      </div>
-
-      {courses.length > 0 ? (
-        <div className="grid grid-3">
-          {courses.map((c) => {
-            const faculty = [
-              ...new Set(
-                (c.subjects ?? []).flatMap((s) =>
-                  (s.subject_faculty ?? []).map((sf) => sf.faculties?.full_name).filter(Boolean),
-                ),
-              ),
-            ] as string[];
-            return (
-              <div className="tile" key={c.id}>
-                <div className="ic">📘</div>
-                <h3>{c.title}</h3>
-                <p className="muted" style={{ fontSize: ".88rem", marginTop: 8 }}>
-                  {(c.subjects ?? []).length} subject{(c.subjects ?? []).length === 1 ? "" : "s"}
-                  {(c.subjects ?? []).length > 0 && ": "}
-                  {(c.subjects ?? []).map((s) => s.title).slice(0, 5).join(", ")}
-                </p>
-                {faculty.length > 0 && (
-                  <p className="muted" style={{ fontSize: ".82rem", marginTop: 8 }}>
-                    👨‍🏫 {faculty.join(", ")}
-                  </p>
-                )}
-                <p style={{ marginTop: 14 }}>
-                  <Link className="btn small" href="/login">
-                    Enrol / view →
-                  </Link>
-                </p>
-              </div>
-            );
-          })}
+    <>
+      <section className="section">
+        <div className="section-head">
+          <span className="eyebrow">📚 Courses</span>
+          <h2>Pass with a plan, not just classes</h2>
+          <p>
+            Advanced Accounting &amp; Financial Reporting by <strong>CA Parveen Sharma &amp; team</strong> — concept classes,
+            a day-by-day study plan, AI doubt-solving on WhatsApp/Telegram, tests with performance reports, revisions and
+            amendments kept current to your exam. Everything in one guided package.
+          </p>
         </div>
-      ) : (
-        <p className="muted" style={{ textAlign: "center" }}>
-          📭 Courses are being published — please check back soon.
-        </p>
+
+        {(subjects ?? []).length > 0 ? (
+          <div className="grid grid-3">
+            {(subjects ?? []).map((s) => {
+              const st = stats.get(s.id as string)!;
+              const chips: { label: string; value: string }[] = [
+                { label: "Classes", value: String(st.classes) },
+                { label: "Class hours", value: hrs(st.minutes) },
+                { label: "Topics", value: String(st.topics) },
+                { label: "Tests", value: String(st.tests) },
+                { label: "Notes & PDFs", value: String(st.notes) },
+                { label: "Revision videos", value: String(st.revisions) },
+              ];
+              return (
+                <div className="tile" key={s.id} style={{ textAlign: "left" }}>
+                  <div className="ic">📘</div>
+                  <h3 style={{ marginBottom: 2 }}>{s.title}</h3>
+                  <p className="muted" style={{ fontSize: ".84rem", margin: 0 }}>
+                    {st.course}{st.faculty.length ? ` · 👨‍🏫 ${st.faculty.join(", ")}` : ""}
+                  </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, margin: "14px 0" }}>
+                    {chips.map((c) => (
+                      <div key={c.label} style={{ background: "var(--bg-soft,#f6f7f9)", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+                        <div style={{ fontSize: "1.15rem", fontWeight: 800 }}>{c.value}</div>
+                        <div className="muted" style={{ fontSize: ".72rem" }}>{c.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 4px" }}>
+                    📜 {st.amendments} amendment{st.amendments === 1 ? "" : "s"} — kept updated{st.attempts.length ? ` (applicable for ${st.attempts.slice(0, 3).join(", ")})` : " to your exam"}.
+                  </p>
+                  <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
+                    Includes the study planner, AI doubts, tests &amp; performance reports.
+                  </p>
+                  <p style={{ marginTop: 12 }}>
+                    <Link className="btn small" href="/login">Start this subject →</Link>
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="muted" style={{ textAlign: "center" }}>📭 Courses are being published — please check back soon.</p>
+        )}
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <span className="eyebrow">✨ What's built in</span>
+          <h2>Everything in your package</h2>
+          <p>Not just video classes — a complete system that guides you from your first class to the exam hall.</p>
+        </div>
+        <div className="grid grid-3">
+          {FEATURES.map((f) => (
+            <div className="tile" key={f.t} style={{ textAlign: "left" }}>
+              <div className="ic">{f.i}</div>
+              <h3 style={{ fontSize: "1.05rem" }}>{f.t}</h3>
+              <p className="muted" style={{ fontSize: ".88rem" }}>{f.d}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {(results ?? []).length > 0 && (
+        <section className="section">
+          <div className="section-head">
+            <span className="eyebrow">🏆 Results</span>
+            <h2>Our students&apos; results</h2>
+          </div>
+          <div className="grid grid-3">
+            {(results ?? []).map((r, i) => (
+              <div className="tile" key={i} style={{ textAlign: "left" }}>
+                <h3 style={{ fontSize: "1.05rem", marginBottom: 2 }}>{r.student_name}</h3>
+                <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>{[r.headline, r.attempt, r.marks].filter(Boolean).join(" · ")}</p>
+                {r.quote && <p style={{ fontSize: ".9rem", marginTop: 8, fontStyle: "italic" }}>&ldquo;{r.quote}&rdquo;</p>}
+              </div>
+            ))}
+          </div>
+        </section>
       )}
-    </section>
+
+      <section className="section" style={{ textAlign: "center" }}>
+        <h2>Ready to start?</h2>
+        <p className="muted" style={{ maxWidth: 560, margin: "8px auto 16px" }}>
+          Create your account, pick your subject, and your day-by-day plan + doubt-solving are ready instantly.
+        </p>
+        <Link className="btn" href="/login">Get started →</Link>
+      </section>
+    </>
   );
 }

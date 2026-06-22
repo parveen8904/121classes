@@ -133,7 +133,7 @@ export default async function Home() {
         </p>
         <div className="cta-row">
           <Link className="btn" href="/login">Get started — it&apos;s free to join</Link>
-          <Link className="btn secondary" href="/#mentor">Meet CA Parveen Sharma</Link>
+          <Link className="btn" href="/#mentor" style={{ background: "var(--accent-2)" }}>Meet CA Parveen Sharma</Link>
         </div>
         {heroStats.length > 0 && (
           <div
@@ -199,7 +199,7 @@ export default async function Home() {
       {latestHighlight && (
         <div className="container" style={{ marginTop: -10, marginBottom: 10, maxWidth: 1140 }}>
           <Link href={latestHighlight.link_url || "/#whats-new"} style={{ display: "block" }}>
-            <div className="leadline" style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center", flexWrap: "wrap", maxWidth: "none", width: "100%" }}>
+            <div className="leadline" style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center", flexWrap: "wrap", maxWidth: "none", width: "100%", border: "1px solid var(--accent)" }}>
               <span className="badge">📣 {KIND_LABEL[latestHighlight.kind] ?? "Latest"}</span>
               <span>{latestHighlight.title}</span>
               <span style={{ color: "var(--accent)", fontWeight: 700 }}>→</span>

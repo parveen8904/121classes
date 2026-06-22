@@ -12,12 +12,14 @@ export async function updateProfile(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const targetAttempt = nullable(formData.get("target_attempt"));
+
   await supabase
     .from("profiles")
     .update({
       full_name: str(formData.get("full_name")) || null,
       phone: nullable(formData.get("phone")),
-      target_attempt: nullable(formData.get("target_attempt")),
+      target_attempt: targetAttempt,
       address_line1: nullable(formData.get("address_line1")),
       address_line2: nullable(formData.get("address_line2")),
       city: nullable(formData.get("city")),
@@ -40,6 +42,15 @@ export async function updateProfile(formData: FormData) {
 
   revalidatePath("/dashboard/profile");
   revalidatePath("/dashboard");
+
+  // Attempt AND course/level are mandatory. If either is still missing, keep what
+  // was entered but bounce back to the profile asking for the missing ones.
+  const { data: myC } = await supabase.from("my_courses").select("course_id").eq("student_id", user.id);
+  const hasCourse = courseId || (myC ?? []).length > 0;
+  if (!targetAttempt || !String(targetAttempt).trim() || !hasCourse) {
+    redirect("/dashboard/profile?need=fields");
+  }
+
   // Saving closes the profile form and returns to the dashboard with a confirmation.
   redirect("/dashboard?saved=profile");
 }

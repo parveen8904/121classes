@@ -51,9 +51,9 @@ export default async function ProfilePage({ searchParams }: { searchParams: { sa
           </div>
         )}
 
-        {searchParams.need === "profile" && (
+        {searchParams.need && (
           <div className="notice" style={{ marginTop: 18, background: "rgba(234,179,8,0.14)", border: "2px solid #eab308", color: "var(--text)" }}>
-            ⚠️ Before adding a subject, please set your <strong>target exam attempt</strong> and your <strong>course / level</strong> below, then tap <strong>Save profile</strong>. We use these to tailor your classes, amendments, study plan and tests to your attempt.
+            ⚠️ Both your <strong>target exam attempt</strong> and your <strong>course / level</strong> are required. Please set them below, then tap <strong>Save profile</strong>. We use these to tailor your classes, amendments, study plan and tests to your attempt.
           </div>
         )}
 

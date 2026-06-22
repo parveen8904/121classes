@@ -13,7 +13,9 @@ const INR = 85;
 const money = (usd: number) => `$${usd.toFixed(2)} · ₹${Math.round(usd * INR)}`;
 const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
-const PROJECT = "ydpkcmyjkekvfwnnvphn";
+// Live project (Mumbai) + the org that holds the Pro billing.
+const SUPABASE_PROJECT = "xmeltwyfvzhhurtcjfiu";
+const SUPABASE_ORG = "rnrmaxczwrbrcxoqimaa";
 
 export default async function CostsPage() {
   const svc = createServiceClient();
@@ -109,7 +111,24 @@ export default async function CostsPage() {
           <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>
             {storageFiles >= 0 ? `${storageFiles} files stored · ` : ""}Free tier: 1 GB files, 500 MB database, 5 GB transfer/mo.
           </p>
-          <a className="btn small secondary" href={`https://supabase.com/dashboard/project/${PROJECT}/settings/billing`} target="_blank" rel="noopener noreferrer" style={{ marginTop: 10 }}>View usage &amp; bill ↗</a>
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <a className="btn small secondary" href={`https://supabase.com/dashboard/org/${SUPABASE_ORG}/billing`} target="_blank" rel="noopener noreferrer">View bill ↗</a>
+            <a className="btn small secondary" href={`https://supabase.com/dashboard/project/${SUPABASE_PROJECT}/reports/database`} target="_blank" rel="noopener noreferrer">Usage ↗</a>
+          </div>
+        </div>
+
+        {/* Vercel */}
+        <div style={card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <strong>▲ Vercel (hosting)</strong>
+            <span className="badge">Pro</span>
+          </div>
+          <div style={stat}>—</div>
+          <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>Pro base ~$20/mo. Set a spending limit in Vercel → Settings → Billing. Live ₹ figures are on Vercel.</p>
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <a className="btn small secondary" href="https://vercel.com/dashboard/usage" target="_blank" rel="noopener noreferrer">Usage ↗</a>
+            <a className="btn small secondary" href="https://vercel.com/account/billing" target="_blank" rel="noopener noreferrer">Billing ↗</a>
+          </div>
         </div>
 
         {/* Bunny */}

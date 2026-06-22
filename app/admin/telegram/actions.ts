@@ -16,6 +16,19 @@ async function isAdmin(): Promise<boolean> {
   return data?.role === "admin";
 }
 
+// Toggle: only answer doubts from connected (linked) students.
+export async function saveTelegramSettings(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const svc = createServiceClient();
+  await svc.from("site_settings").upsert(
+    { key: "telegram_connected_only", value: formData.get("connected_only") === "on" ? "1" : "" },
+    { onConflict: "key" },
+  );
+  const { clearSecretCache } = await import("@/lib/secrets");
+  clearSecretCache();
+  revalidatePath("/admin/telegram");
+}
+
 // Link a captured Telegram group to a subject (one chat = one subject).
 export async function linkGroupToSubject(formData: FormData) {
   if (!(await isAdmin())) return;

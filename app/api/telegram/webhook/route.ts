@@ -87,6 +87,16 @@ export async function POST(req: NextRequest) {
     .eq("telegram_chat_id", chatId)
     .maybeSingle();
 
+  // Optional gate: only answer doubts from connected (linked) students. When on,
+  // an unlinked chatter is asked to connect first — making joining worthwhile.
+  if (!who.data?.id && (await getSecret("telegram_connected_only")) === "1") {
+    await sendTelegramMessage(
+      chatId,
+      "🔒 Please connect your 121 CA Classes account first — tap “Connect Telegram” on your dashboard. Once connected, I'll answer your doubts right here.",
+    );
+    return NextResponse.json({ ok: true });
+  }
+
   let answer: string | null = null;
   if (await aiConfigured()) {
     const material = await getRepositoryContext(null, 12000, { query: text });

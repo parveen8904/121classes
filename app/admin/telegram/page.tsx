@@ -2,7 +2,7 @@ import AdminHero from "../_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import SubmitButton from "@/app/components/SubmitButton";
-import { linkGroupToSubject, sendTelegramManual } from "./actions";
+import { linkGroupToSubject, sendTelegramManual, saveTelegramSettings } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Telegram broadcast — Admin" };
@@ -14,6 +14,7 @@ export default async function TelegramAdminPage({ searchParams }: { searchParams
     svc.from("telegram_groups").select("chat_id, title, added_at").order("added_at", { ascending: false }),
   ]);
   const channelId = await getSecret("TELEGRAM_CHANNEL_ID");
+  const connectedOnly = (await getSecret("telegram_connected_only")) === "1";
   const subjectByChat = new Map((subjects ?? []).filter((s) => s.telegram_group_chat_id).map((s) => [s.telegram_group_chat_id as string, s.title as string]));
 
   return (
@@ -21,6 +22,18 @@ export default async function TelegramAdminPage({ searchParams }: { searchParams
       <AdminHero badge="✈️ Telegram" title="Telegram broadcast" subtitle="Link subject groups, then post to the channel or any group — manually or automatically." back={{ href: "/admin", label: "Admin" }} />
 
       {searchParams.sent && <div className="notice ok" style={{ marginTop: 16 }}>✅ Sent.</div>}
+
+      {/* Doubt-answering policy */}
+      <form action={saveTelegramSettings} className="form-card" style={{ marginTop: 18 }}>
+        <h3>🔒 Who can ask the bot doubts</h3>
+        <label className="remember" style={{ margin: 0 }}>
+          <input type="checkbox" name="connected_only" defaultChecked={connectedOnly} /> Only answer doubts from <strong>connected</strong> students
+        </label>
+        <p className="muted" style={{ fontSize: ".8rem", margin: "6px 0 10px" }}>
+          When on, anyone who hasn&apos;t connected their account is asked to connect first — so students join to use the bot. When off, the bot answers everyone.
+        </p>
+        <SubmitButton className="btn small" savedLabel="✓ Saved">Save</SubmitButton>
+      </form>
 
       {/* Manual send */}
       <div className="form-card" style={{ marginTop: 18 }}>

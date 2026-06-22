@@ -49,8 +49,8 @@ export async function registerWithVerification(formData: FormData): Promise<Resu
     `<p>Hi ${name || "there"},</p>
      <p>Welcome to CA Parveen Sharma classes! Please confirm your email to activate your account:</p>
      <p><a href="${link}" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Verify my email</a></p>
-     <p style="color:#64748b;font-size:13px">Or paste this link in your browser:<br/>${link}</p>
-     <p>After verifying, you'll choose your password — then you're in.</p>`,
+     <p>After verifying, you'll choose your password — then you're in.</p>
+     <p style="color:#94a3b8;font-size:12px">Didn't sign up? You can safely ignore this email.</p>`,
   );
   const sent = await sendEmail(email, "Verify your email — CA Parveen Sharma", html);
   if (!sent) return { ok: false, error: "Couldn't send the verification email. Please try again shortly." };
@@ -71,8 +71,7 @@ export async function resendVerification(formData: FormData): Promise<Result> {
   const html = emailShell(
     "Verify your email",
     `<p>Click below to verify your email and sign in:</p>
-     <p><a href="${link}" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Verify &amp; sign in</a></p>
-     <p style="color:#64748b;font-size:13px">Or paste this link:<br/>${link}</p>`,
+     <p><a href="${link}" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Verify &amp; sign in</a></p>`,
   );
   const sent = await sendEmail(email, "Verify your email — 121 CA Classes", html);
   return sent ? { ok: true } : { ok: false, error: "Couldn't send the email." };
@@ -94,7 +93,6 @@ export async function sendPasswordReset(formData: FormData): Promise<Result> {
       "Reset your password",
       `<p>We received a request to reset your 121 CA Classes password.</p>
        <p><a href="${link}" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Set a new password</a></p>
-       <p style="color:#64748b;font-size:13px">Or paste this link:<br/>${link}</p>
        <p>If you didn't request this, you can ignore this email.</p>`,
     );
     await sendEmail(email, "Reset your password — 121 CA Classes", html);

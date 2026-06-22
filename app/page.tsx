@@ -394,6 +394,20 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* PLACEMENTS */}
+      <section className="section" id="placements">
+        <div style={{ background: "linear-gradient(135deg,#0d9488,#10b981)", color: "#fff", borderRadius: 22, padding: "34px 26px", textAlign: "center" }}>
+          <span style={{ display: "inline-block", background: "rgba(255,255,255,.18)", padding: "4px 12px", borderRadius: 999, fontSize: ".8rem", fontWeight: 700 }}>🚀 Placements</span>
+          <h2 style={{ color: "#fff", margin: "12px 0 8px" }}>From student to CA — we get you hired</h2>
+          <p style={{ maxWidth: 600, margin: "0 auto 18px", color: "rgba(255,255,255,.95)" }}>
+            Live CA &amp; articleship openings, AI mock interviews, a CV builder and direct links to top firms — updated every day.
+          </p>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            <Link className="btn" href="/placements" style={{ background: "#fff", color: "#0d9488", fontWeight: 800 }}>Explore placements →</Link>
+          </div>
+        </div>
+      </section>
+
       {/* WHAT'S NEW */}
       <section className="section alt" id="whats-new">
         <div className="section-head">

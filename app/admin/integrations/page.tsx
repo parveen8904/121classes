@@ -84,7 +84,7 @@ export default async function IntegrationsPage({
   const { data: links } = await svc
     .from("site_settings")
     .select("key, value")
-    .in("key", ["support_telegram", "support_whatsapp", "support_instagram"]);
+    .in("key", ["support_telegram", "whatsapp_channel", "support_whatsapp", "support_instagram"]);
   const L = new Map((links ?? []).map((r) => [r.key, r.value as string]));
   const webhookOk = !!health?.webhookUrl;
 
@@ -198,10 +198,12 @@ export default async function IntegrationsPage({
       <div className="form-card" style={{ marginTop: 18 }}>
         <h3>🔗 Public links (footer &amp; dashboard buttons)</h3>
         <form action={saveLinks}>
-          <label>Telegram channel link</label>
-          <input name="support_telegram" defaultValue={L.get("support_telegram") || ""} placeholder="https://t.me/caparveen" />
-          <label>WhatsApp channel / chat link</label>
-          <input name="support_whatsapp" defaultValue={L.get("support_whatsapp") || ""} placeholder="https://whatsapp.com/channel/…" />
+          <label>Telegram channel link (students follow)</label>
+          <input name="support_telegram" defaultValue={L.get("support_telegram") || ""} placeholder="https://t.me/yourchannel" />
+          <label>WhatsApp channel link (students follow)</label>
+          <input name="whatsapp_channel" defaultValue={L.get("whatsapp_channel") || ""} placeholder="https://whatsapp.com/channel/…" />
+          <label>WhatsApp help / support number (optional)</label>
+          <input name="support_whatsapp" defaultValue={L.get("support_whatsapp") || ""} placeholder="https://wa.me/91… or 9198…" />
           <label>Instagram link</label>
           <input name="support_instagram" defaultValue={L.get("support_instagram") || ""} placeholder="https://instagram.com/…" />
           <SubmitButton className="btn" style={{ marginTop: 14 }}>Save links</SubmitButton>

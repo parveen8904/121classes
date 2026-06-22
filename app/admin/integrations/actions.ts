@@ -65,6 +65,7 @@ export async function saveLinks(formData: FormData) {
   const svc = createServiceClient();
   const rows = [
     { key: "support_telegram", value: str(formData.get("support_telegram")) },
+    { key: "whatsapp_channel", value: str(formData.get("whatsapp_channel")) },
     { key: "support_whatsapp", value: str(formData.get("support_whatsapp")) },
     { key: "support_instagram", value: str(formData.get("support_instagram")) },
   ];

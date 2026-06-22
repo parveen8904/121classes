@@ -112,6 +112,17 @@ export default function PostsManager({ posts, actions }: { posts: Post[]; action
                     </span>
                   </summary>
 
+                  {a.link_url && (
+                    <p style={{ margin: "12px 0 0" }}>
+                      <a href={a.link_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".9rem", wordBreak: "break-word" }}>
+                        🔗 Open &amp; read the full article →
+                      </a>
+                    </p>
+                  )}
+                  {a.body && (
+                    <p className="muted" style={{ fontSize: ".88rem", lineHeight: 1.5, margin: "8px 0 0" }}>{a.body}</p>
+                  )}
+
                   <form action={actions.updateAnnouncement} style={{ marginTop: 12 }}>
                     <input type="hidden" name="id" value={a.id} />
                     <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 2fr" }}>

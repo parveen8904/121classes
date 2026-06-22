@@ -33,12 +33,6 @@ const courses = [
   { icon: "📙", title: "CA Foundation", desc: "Build strong fundamentals across all four papers with guided practice." },
 ];
 
-const books = [
-  { icon: "📕", title: "Accounting — Question Bank", price: "₹499" },
-  { icon: "📒", title: "Law — Compact Notes", price: "₹399" },
-  { icon: "📓", title: "Full Revision Set", price: "₹899" },
-];
-
 const whatsNew = [
   { tag: "Amendments", title: "May 2026 amendments updated", desc: "All applicable amendments till the May 2026 attempt are now live across topics." },
   { tag: "New videos", title: "AS 24 revision videos added", desc: "First and second revision videos for Discontinuing Operations are up." },
@@ -397,27 +391,6 @@ export default async function Home() {
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
           <Link className="btn" href="/build-your-plan">See how it works →</Link>
           <Link className="btn secondary" href="/planner">Build my plan</Link>
-        </div>
-      </section>
-
-      {/* BOOKS */}
-      <section className="section" id="books">
-        <div className="section-head">
-          <div className="eyebrow">Book Store</div>
-          <h2>Books &amp; study material</h2>
-          <p>Order physical books with free shipping across India.</p>
-        </div>
-        <div className="grid grid-3">
-          {books.map((b) => (
-            <div className="tile book" key={b.title}>
-              <div className="cover">{b.icon}</div>
-              <h3>{b.title}</h3>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
-                <span className="price">{b.price}</span>
-                <Link className="btn small" href="/login">Buy</Link>
-              </div>
-            </div>
-          ))}
         </div>
       </section>
 

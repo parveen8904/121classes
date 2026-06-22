@@ -12,6 +12,7 @@ function fields(formData: FormData) {
     marks: nullable(formData.get("marks")),
     quote: nullable(formData.get("quote")),
     photo_url: nullable(formData.get("photo_url")),
+    level: nullable(formData.get("level")),
     order_index: num(formData.get("order_index")),
     is_published: formData.get("is_published") === "on",
   };
@@ -24,6 +25,7 @@ export async function createResult(formData: FormData) {
   await supabase.from("results").insert(f);
   revalidatePath("/admin/results");
   revalidatePath("/results");
+  revalidatePath("/courses");
   revalidatePath("/");
 }
 
@@ -35,6 +37,7 @@ export async function updateResult(formData: FormData) {
   await supabase.from("results").update(f).eq("id", id);
   revalidatePath("/admin/results");
   revalidatePath("/results");
+  revalidatePath("/courses");
   revalidatePath("/");
 }
 
@@ -44,5 +47,6 @@ export async function deleteResult(formData: FormData) {
   await supabase.from("results").delete().eq("id", id);
   revalidatePath("/admin/results");
   revalidatePath("/results");
+  revalidatePath("/courses");
   revalidatePath("/");
 }

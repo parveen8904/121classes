@@ -9,7 +9,7 @@ export default async function ResultsAdminPage() {
   const supabase = createClient();
   const { data: results } = await supabase
     .from("results")
-    .select("id, student_name, headline, attempt, marks, quote, photo_url, order_index, is_published")
+    .select("id, student_name, headline, attempt, marks, quote, photo_url, level, order_index, is_published")
     .order("order_index")
     .order("created_at", { ascending: false });
 
@@ -51,6 +51,12 @@ export default async function ResultsAdminPage() {
               <input name="order_index" type="number" defaultValue={0} />
             </div>
           </div>
+          <label>Level (which course card it shows on)</label>
+          <select name="level" defaultValue="">
+            <option value="">Both / general</option>
+            <option value="CA Final">CA Final</option>
+            <option value="CA Intermediate">CA Intermediate</option>
+          </select>
           <label>Quote (optional)</label>
           <textarea name="quote" rows={2} placeholder="A line from the student…" />
           <ImageUpload name="photo_url" folder="results" label="Student photo (optional)" />
@@ -93,6 +99,12 @@ export default async function ResultsAdminPage() {
                     <input name="order_index" type="number" defaultValue={r.order_index} />
                   </div>
                 </div>
+                <label>Level (which course card it shows on)</label>
+                <select name="level" defaultValue={(r as { level?: string }).level ?? ""}>
+                  <option value="">Both / general</option>
+                  <option value="CA Final">CA Final</option>
+                  <option value="CA Intermediate">CA Intermediate</option>
+                </select>
                 <label>Quote</label>
                 <textarea name="quote" rows={2} defaultValue={r.quote ?? ""} />
                 <ImageUpload name="photo_url" defaultValue={r.photo_url ?? ""} folder="results" label="Student photo" />

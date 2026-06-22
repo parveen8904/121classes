@@ -41,7 +41,16 @@ export default async function CoursesPage() {
     ? await svc.from("amendments").select("subject_id, valid_from_attempt").eq("is_published", true).in("subject_id", subjectIds)
     : { data: [] as any[] };
 
-  const { data: results } = await svc.from("results").select("student_name, headline, attempt, marks, photo_url, quote").eq("is_published", true).order("order_index").limit(8);
+  const { data: results } = await svc.from("results").select("student_name, headline, attempt, marks, photo_url, quote, level").eq("is_published", true).order("order_index").limit(60);
+
+  // Top result photos grouped by level (CA Final / CA Intermediate) for the cards.
+  const photosByLevel = new Map<string, { photo_url: string; student_name: string; headline: string }[]>();
+  for (const r of results ?? []) {
+    if (!r.photo_url) continue;
+    const lvl = (r.level as string) || "";
+    const arr = photosByLevel.get(lvl) ?? [];
+    if (arr.length < 10) { arr.push({ photo_url: r.photo_url as string, student_name: r.student_name as string, headline: (r.headline as string) ?? "" }); photosByLevel.set(lvl, arr); }
+  }
 
   // Aggregate per subject.
   const stats = new Map<string, Stat>();
@@ -104,6 +113,7 @@ export default async function CoursesPage() {
           <div className="grid grid-3">
             {(subjects ?? []).map((s) => {
               const st = stats.get(s.id as string)!;
+              const pics = photosByLevel.get(st.course) ?? [];
               const chips: { label: string; value: string }[] = [
                 { label: "Classes", value: String(st.classes) },
                 { label: "Class hours", value: hrs(st.minutes) },
@@ -114,6 +124,18 @@ export default async function CoursesPage() {
               ];
               return (
                 <div className="tile" key={s.id} style={{ textAlign: "left" }}>
+                  {pics.length > 0 && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        {pics.map((p, idx) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img key={idx} src={p.photo_url} alt={p.student_name} title={p.headline ? `${p.student_name} — ${p.headline}` : p.student_name}
+                            style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--bg,#fff)", marginLeft: idx === 0 ? 0 : -10, boxShadow: "0 0 0 1px var(--border)" }} />
+                        ))}
+                      </div>
+                      <div className="muted" style={{ fontSize: ".78rem", marginTop: 6 }}>🏆 Our {st.course} rank-holders &amp; toppers</div>
+                    </div>
+                  )}
                   <div className="ic">📘</div>
                   <h3 style={{ marginBottom: 2 }}>{s.title}</h3>
                   <p className="muted" style={{ fontSize: ".84rem", margin: 0 }}>

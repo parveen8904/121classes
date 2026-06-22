@@ -46,7 +46,7 @@ export async function replyToQuestion(formData: FormData) {
   if (chatId) {
     delivered = await sendTelegramMessage(
       chatId,
-      `💬 Reply from CA Parveen Sharma's team:\n\nYour question: ${q.question}\n\n${reply}`,
+      `💬 Reply from CA Parveen Sharma:\n\nYour question: ${q.question}\n\n${reply}`,
     );
   }
   if (!delivered && email) {

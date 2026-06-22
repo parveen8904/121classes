@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
     if (raw && raw.trim() !== NEED_FACULTY) answer = raw;
   }
   if (answer) {
-    await sendTelegramMessage(chatId, answer + "\n\n— Guided by CA Parveen Sharma's team.");
+    await sendTelegramMessage(chatId, answer + "\n\n— CA Parveen Sharma");
   } else {
     await sendTelegramMessage(
       chatId,

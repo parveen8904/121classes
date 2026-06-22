@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SetPassword from "./set-password";
+import ConnectTelegram from "./ConnectTelegram";
 import MyCourses from "./MyCourses";
 import FacultyContacts from "./FacultyContacts";
 import { announcementKindLabel } from "@/lib/announcements";
@@ -167,6 +168,8 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
         <div style={{ marginTop: 20 }}>
           <SetPassword />
         </div>
+
+        <ConnectTelegram />
 
         <TodayPlan />
 

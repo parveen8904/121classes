@@ -646,12 +646,25 @@ export default async function Home() {
       <section className="section alt" id="vision">
         <div className="section-head">
           <div className="eyebrow">Vision</div>
-          <h2>Our vision</h2>
+          <h2>My vision for the next 5 years</h2>
+          <p>Taught directly by <span className="grad">CA Parveen Sharma</span> — personal, disciplined and result-driven.</p>
         </div>
-        <p className="muted" style={{ maxWidth: 760, margin: "0 auto", textAlign: "center", fontSize: "1.1rem" }}>
-          To bring <span className="grad">CA Parveen Sharma&apos;s</span> highly personalised,
-          result-oriented teaching to every aspirant in India — clearing the clutter with
-          top-notch coaching, helped (not replaced) by AI.
+        <ul style={{ listStyle: "none", maxWidth: 720, margin: "0 auto", display: "grid", gap: 14, padding: 0 }}>
+          {[
+            ["One-to-one, at scale", "Teach every student as if they are my only student — never just a number."],
+            ["A plan from day one to exam day", "A day-by-day roadmap so no student is ever unsure what to study next."],
+            ["My teaching, available 24×7", "AI doubt-solving & paper checking trained only on ICAI material and my classes — under my guidance, never replacing me."],
+            ["Beyond results, into careers", "Placements, interview prep, CVs and firm connections — from student to Chartered Accountant."],
+            ["Every paper, level & device", "Foundation to Final, on web, desktop & mobile — for every sincere aspirant, in every corner of India."],
+          ].map(([t, d]) => (
+            <li key={t} style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px" }}>
+              <span style={{ color: "var(--accent)", fontWeight: 800, fontSize: "1.2rem", lineHeight: 1.3 }}>✓</span>
+              <span><strong>{t}</strong> — <span className="muted">{d}</span></span>
+            </li>
+          ))}
+        </ul>
+        <p style={{ maxWidth: 720, margin: "22px auto 0", textAlign: "center", fontWeight: 600 }}>
+          So that any student, anywhere in India, can be personally mentored by <span className="grad">CA Parveen Sharma</span>.
         </p>
       </section>
 

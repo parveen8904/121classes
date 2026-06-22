@@ -254,7 +254,7 @@ export default async function TopicDetail({
       <div style={{ marginTop: 16, display: "grid", gap: 8 }}>
         {sections && sections.length > 0 ? (
           sections.map((s) => (
-            <details className="card" key={s.id}>
+            <details className="card" key={s.id} open={s.type === "subjective_test" || s.type === "mcq_test"}>
               <summary style={{ cursor: "pointer", display: "flex", gap: 10, alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap" }}>
                 <strong>{s.title}</strong>
                 <span className="muted" style={{ fontSize: ".8rem" }}>

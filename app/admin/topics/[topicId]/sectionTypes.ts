@@ -123,8 +123,8 @@ export const SECTION_TYPES: {
   { value: "past_papers", label: "Past papers", fields: ["pdf_url", "body"] },
   { value: "live_class", label: "Live class (Zoom/Meet)", fields: ["join_url", "starts_at", "zoom_webinar_id", "recording_url"] },
   { value: "ask_doubt", label: "Ask a doubt (AI)", fields: [], note: "No config — renders the AI doubt box for students." },
-  { value: "mcq_test", label: "MCQ test", fields: [], note: "Questions are added later (Phase 7)." },
-  { value: "subjective_test", label: "Subjective test", fields: [], note: "Questions are added later (Phase 7)." },
+  { value: "mcq_test", label: "MCQ test", fields: [], note: "Give it a title and save. Then click '🧠 Add / generate questions' on the section to add MCQs (paste, upload a PDF, or generate)." },
+  { value: "subjective_test", label: "Descriptive test (timed paper / typed Q&A)", fields: [], note: "Give it a title and save. Then click '📝 Set up paper / questions (timed test)' on the new section to upload the question + solution PDFs and set the time + marks." },
   { value: "custom", label: "Custom section", fields: ["body", "bunny_video_id", "youtube_url", "embed_url", "pdf_url"] },
 ];
 

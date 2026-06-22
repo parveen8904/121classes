@@ -63,6 +63,24 @@ Developer **Team** (you have the account) so it can run on real devices.
 2. On [Play Console](https://play.google.com/console): create the app, upload the
    `.aab`, add screenshots + description, complete the questionnaires, submit.
 
+## Phase 2 — secure offline download (built)
+
+The `plugins/offline-classes/` Capacitor plugin gives the app the same offline
+ability as the desktop app:
+- **download** — streams the encrypted class to app storage (`<id>.enc`) with progress.
+- **decrypt** — AES-256-CBC decrypt to a temp file, **only while playing**; the key
+  is fetched per-play from the server (`getOfflineKey`) and never stored on the device.
+
+It's wired automatically: `npm install` (the plugin is a local `file:` dependency)
+then `npx cap sync` registers it into both iOS and Android. The website's existing
+Downloads page detects the app and uses it — no website change needed at build time.
+
+> ⚠️ **This native code has not been run on a device yet** (it can only be compiled
+> on your Mac with Xcode/Android Studio). After your first `cap sync` + run, test:
+> download a class → Play. If playing the decrypted local file inside the
+> webview is blocked on iOS, the fix is a small native full-screen player method —
+> tell me and I'll add it.
+
 ## Update the app later
 
 Because the app loads the live website, **most updates ship instantly** when you

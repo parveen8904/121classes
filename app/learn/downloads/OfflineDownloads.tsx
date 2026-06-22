@@ -21,6 +21,19 @@ type Native = {
   onProgress: (cb: (d: { id: string; received: number; total: number }) => void) => void;
 };
 
+// Capacitor (mobile app) plugin shape — accessed via the injected window.Capacitor.
+type CapPlugin = {
+  download: (o: { id: string; url: string; expectedSize?: number }) => Promise<{ path: string }>;
+  isDownloaded: (o: { id: string; expectedSize?: number }) => Promise<{ value: boolean }>;
+  decrypt: (o: { id: string; keyB64: string; ivB64?: string | null; alg?: string | null }) => Promise<{ path: string }>;
+  addListener: (eventName: string, cb: (d: { id: string; received: number; total: number }) => void) => unknown;
+};
+type CapGlobal = {
+  isNativePlatform?: () => boolean;
+  convertFileSrc?: (path: string) => string;
+  Plugins?: { OfflineClasses?: CapPlugin };
+};
+
 export default function OfflineDownloads({
   classes,
   watermark,
@@ -31,20 +44,54 @@ export default function OfflineDownloads({
   const [native, setNative] = useState<Native | null>(null);
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [ready, setReady] = useState<Record<string, boolean>>({});
+  // Mobile plays inline in this overlay (desktop opens its own player window).
+  const [playerSrc, setPlayerSrc] = useState<string | null>(null);
 
   useEffect(() => {
-    const n = (window as unknown as { native?: Native }).native;
-    if (!n) return;
-    setNative(n);
-    n.onProgress(({ id, received, total }) => {
-      const pct = total ? Math.floor((received * 100) / total) : 0;
-      setLabels((l) => ({ ...l, [id]: pct >= 100 ? "Downloaded ✓" : `Downloading… ${pct}%` }));
-    });
-    (async () => {
-      const r: Record<string, boolean> = {};
-      for (const c of classes) r[c.id] = await n.isDownloaded(c.id, c.byte_size ?? undefined);
-      setReady(r);
-    })();
+    const w = window as unknown as { native?: Native; Capacitor?: CapGlobal };
+
+    // 1) Desktop app (Electron) — existing bridge.
+    const electron = w.native;
+    if (electron) {
+      setNative(electron);
+      electron.onProgress(({ id, received, total }) => {
+        const pct = total ? Math.floor((received * 100) / total) : 0;
+        setLabels((l) => ({ ...l, [id]: pct >= 100 ? "Downloaded ✓" : `Downloading… ${pct}%` }));
+      });
+      (async () => {
+        const r: Record<string, boolean> = {};
+        for (const c of classes) r[c.id] = await electron.isDownloaded(c.id, c.byte_size ?? undefined);
+        setReady(r);
+      })();
+      return;
+    }
+
+    // 2) Mobile app (Capacitor) — adapt the OfflineClasses plugin to the same shape.
+    const cap = w.Capacitor;
+    const plugin = cap?.Plugins?.OfflineClasses;
+    if (cap?.isNativePlatform?.() && plugin) {
+      const adapter: Native = {
+        download: (id, url, size) => plugin.download({ id, url, expectedSize: size }).then((r) => r.path),
+        isDownloaded: (id, size) => plugin.isDownloaded({ id, expectedSize: size }).then((r) => r.value),
+        onProgress: (cb) => { plugin.addListener("downloadProgress", cb); },
+        play: async (id, keyB64, ivB64, alg, _wm) => {
+          const { path } = await plugin.decrypt({ id, keyB64, ivB64, alg });
+          const src = cap.convertFileSrc ? cap.convertFileSrc(path) : path;
+          setPlayerSrc(src);
+          return true;
+        },
+      };
+      setNative(adapter);
+      adapter.onProgress(({ id, received, total }) => {
+        const pct = total ? Math.floor((received * 100) / total) : 0;
+        setLabels((l) => ({ ...l, [id]: pct >= 100 ? "Downloaded ✓" : `Downloading… ${pct}%` }));
+      });
+      (async () => {
+        const r: Record<string, boolean> = {};
+        for (const c of classes) r[c.id] = await adapter.isDownloaded(c.id, c.byte_size ?? undefined);
+        setReady(r);
+      })();
+    }
   }, [classes]);
 
   async function download(c: Klass) {
@@ -82,14 +129,14 @@ export default function OfflineDownloads({
   if (!native) {
     return (
       <div className="card" style={{ maxWidth: 560, margin: "0 auto", textAlign: "center" }}>
-        <div style={{ fontSize: "2.2rem" }}>🖥️</div>
+        <div style={{ fontSize: "2.2rem" }}>📥</div>
         <h3 style={{ margin: "8px 0" }}>Download classes to watch offline</h3>
         <p className="muted">
-          Offline downloads are available in the <strong>Mac / Windows desktop app</strong>. Open this same page
-          inside the app to download your classes and play them without internet.
+          Offline downloads work inside the <strong>app</strong> — the <strong>Mac / Windows desktop app</strong> or the
+          <strong> iPhone / Android app</strong>. Open this same page inside the app to download your classes and play them without internet.
         </p>
-        <a className="btn" href="/help" style={{ marginTop: 12 }}>
-          Get the desktop app →
+        <a className="btn" href="/download" style={{ marginTop: 12 }}>
+          Get the app →
         </a>
       </div>
     );
@@ -124,6 +171,28 @@ export default function OfflineDownloads({
           ))
         )}
       </div>
+
+      {/* Mobile inline secure player (decrypted temp file via the native plugin). */}
+      {playerSrc && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "#000", zIndex: 1000, display: "flex", flexDirection: "column" }}
+        >
+          <button
+            type="button"
+            onClick={() => setPlayerSrc(null)}
+            style={{ position: "absolute", top: 12, right: 12, zIndex: 2, background: "rgba(0,0,0,.6)", color: "#fff", border: "1px solid rgba(255,255,255,.4)", borderRadius: 8, padding: "6px 12px", fontWeight: 700 }}
+          >
+            ✕ Close
+          </button>
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <video src={playerSrc} controls autoPlay playsInline style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
+          {watermark && (
+            <span style={{ position: "absolute", bottom: 16, left: 16, color: "rgba(255,255,255,.55)", fontSize: ".8rem", pointerEvents: "none", textShadow: "0 1px 2px #000" }}>
+              {watermark}
+            </span>
+          )}
+        </div>
+      )}
     </>
   );
 }

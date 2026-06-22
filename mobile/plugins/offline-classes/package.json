@@ -1,0 +1,32 @@
+{
+  "name": "offline-classes",
+  "version": "1.0.0",
+  "description": "Secure offline download + AES decrypt-on-play for CA Parveen Sharma classes (Capacitor).",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
+  },
+  "devDependencies": {
+    "@capacitor/core": "^6.1.2",
+    "typescript": "^5.4.5"
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^6.0.0"
+  },
+  "files": [
+    "dist/",
+    "ios/",
+    "android/",
+    "OfflineClasses.podspec"
+  ]
+}

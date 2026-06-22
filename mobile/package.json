@@ -12,7 +12,8 @@
   "dependencies": {
     "@capacitor/android": "^6.1.2",
     "@capacitor/core": "^6.1.2",
-    "@capacitor/ios": "^6.1.2"
+    "@capacitor/ios": "^6.1.2",
+    "offline-classes": "file:plugins/offline-classes"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

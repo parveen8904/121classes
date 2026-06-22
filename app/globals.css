@@ -328,7 +328,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 .section-head h2 { font-size: clamp(1.7rem, 3.5vw, 2.4rem); margin: 8px 0 10px; }
 .section-head p { color: var(--muted); }
 .section.alt { background: var(--bg-soft); max-width: none; }
-.section.alt > * { max-width: 1140px; margin-left: auto; margin-right: auto; }
+.section.alt > * { max-width: 1092px; margin-left: auto; margin-right: auto; }
 
 .grid { display: grid; gap: 22px; }
 .grid-3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }

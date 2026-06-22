@@ -67,7 +67,7 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
   const apiKey = await getSecret("MAILGUN_API_KEY");
   const domain = await getSecret("MAILGUN_DOMAIN");
   if (!apiKey || !domain || !to) return false;
-  const from = (await getSecret("NOTIFY_FROM_EMAIL")) || `121 CA Classes <no-reply@${domain}>`;
+  const from = (await getSecret("NOTIFY_FROM_EMAIL")) || `CA Parveen Sharma <no-reply@${domain}>`;
   // EU-region Mailgun domains MUST use the EU API host, or sends silently fail.
   const region = (await getSecret("MAILGUN_REGION")).toLowerCase();
   const apiBase = region === "eu" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
@@ -101,7 +101,7 @@ export async function sendEmailWithAttachment(
   const apiKey = await getSecret("MAILGUN_API_KEY");
   const domain = await getSecret("MAILGUN_DOMAIN");
   if (!apiKey || !domain || !to) return false;
-  const from = (await getSecret("NOTIFY_FROM_EMAIL")) || `121 CA Classes <no-reply@${domain}>`;
+  const from = (await getSecret("NOTIFY_FROM_EMAIL")) || `CA Parveen Sharma <no-reply@${domain}>`;
   const region = (await getSecret("MAILGUN_REGION")).toLowerCase();
   const apiBase = region === "eu" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
   try {

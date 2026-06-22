@@ -519,6 +519,7 @@ export async function extractMcqsFromPdf(pdfUrl: string): Promise<ExtractedMcq[]
 // handwriting (vision), matches it to the official solution and ICAI marking
 // conventions, and returns per-question marks + improvement points + concepts to
 // revise. It never invents answers the student didn't write. null when off/unreadable.
+export type PaperAnnotation = { page: number; y: number; kind: "right" | "wrong" | "partial" | "tip"; note: string };
 export type DescriptiveGrade = {
   awarded: number;
   total: number;
@@ -526,6 +527,7 @@ export type DescriptiveGrade = {
   per_question: { q: string; awarded: number; max: number; comment: string }[];
   improvements: string[];
   concepts_to_revise: string[];
+  annotations: PaperAnnotation[];
   unreadable: boolean;
 };
 export async function gradeDescriptivePaper(
@@ -556,8 +558,9 @@ export async function gradeDescriptivePaper(
         : "Use the marks indicated for each question in the paper/solution. ") +
       "For EACH question: the marks awarded, the max marks, and a one-line comment. Then overall: improvement points (where marks were lost / what went wrong) and the specific concepts / accounting standards / sections the student got wrong and must revise. " +
       "If part of the handwriting is genuinely unreadable, grade what you can, set \"unreadable\":true, and say so — NEVER invent answers the student did not write. " +
+      "ALSO return \"annotations\": marks to place directly on the STUDENT's pages. For each, give the 1-based page number of the student's answer book, an approximate vertical position y (0.0 = top of that page, 1.0 = bottom), a kind (\"right\" = correct step, \"wrong\" = mistake, \"partial\" = partly right, \"tip\" = improvement/concept), and a SHORT note (under 12 words — the concept, the mistake, or the fix). Aim for 1–4 annotations per page, placed near where each point occurs. " +
       "Respond ONLY as compact JSON, no prose, no code fences: " +
-      '{"awarded":<number>,"total":<number>,"summary":"<one-line overall>","per_question":[{"q":"Q1","awarded":4,"max":6,"comment":"..."}],"improvements":["..."],"concepts_to_revise":["..."],"unreadable":false}.';
+      '{"awarded":<number>,"total":<number>,"summary":"<one-line overall>","per_question":[{"q":"Q1","awarded":4,"max":6,"comment":"..."}],"improvements":["..."],"concepts_to_revise":["..."],"annotations":[{"page":1,"y":0.25,"kind":"wrong","note":"AS 13 cost excludes brokerage"}],"unreadable":false}.';
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
@@ -600,6 +603,17 @@ export async function gradeDescriptivePaper(
           comment: String(p.comment ?? "").trim(),
         }))
       : [];
+    const validKinds = new Set(["right", "wrong", "partial", "tip"]);
+    const annotations: PaperAnnotation[] = Array.isArray(j.annotations)
+      ? j.annotations
+          .map((a: { page?: unknown; y?: unknown; kind?: unknown; note?: unknown }) => ({
+            page: Math.max(1, Math.round(Number(a.page) || 1)),
+            y: Math.min(1, Math.max(0, Number(a.y) || 0)),
+            kind: (validKinds.has(String(a.kind)) ? String(a.kind) : "tip") as PaperAnnotation["kind"],
+            note: String(a.note ?? "").trim(),
+          }))
+          .filter((a: PaperAnnotation) => a.note)
+      : [];
     return {
       awarded: Number.isFinite(Number(j.awarded)) ? Number(j.awarded) : pq.reduce((s: number, p: { awarded: number }) => s + p.awarded, 0),
       total: Number(j.total) || totalMarks || pq.reduce((s: number, p: { max: number }) => s + p.max, 0),
@@ -607,6 +621,7 @@ export async function gradeDescriptivePaper(
       per_question: pq,
       improvements: arr(j.improvements),
       concepts_to_revise: arr(j.concepts_to_revise),
+      annotations,
       unreadable: Boolean(j.unreadable),
     };
   } catch {

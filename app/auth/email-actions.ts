@@ -1,16 +1,12 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendEmail, emailShell, emailConfigured } from "@/lib/notify";
 
-function baseUrl(): string {
-  const h = headers();
-  const host = h.get("host") || "www.121caclasses.com";
-  const proto = h.get("x-forwarded-proto") || "https";
-  return `${proto}://${host}`;
-}
+// Always build auth links on the canonical domain (not whichever alias the user
+// happened to open), so verify/reset links are consistently caparveensharma.com.
+const SITE_URL = "https://caparveensharma.com";
 
 type Result = { ok: boolean; error?: string };
 
@@ -43,7 +39,7 @@ export async function registerWithVerification(formData: FormData): Promise<Resu
 
   // Verify via our own server-side route (token_hash flow), which sets the
   // session and sends them straight to "set your password".
-  const link = `${baseUrl()}/auth/confirm?token_hash=${tokenHash}&type=signup&next=/auth/set-password`;
+  const link = `${SITE_URL}/auth/confirm?token_hash=${tokenHash}&type=signup&next=/auth/set-password`;
   const html = emailShell(
     "Verify your email",
     `<p>Hi ${name || "there"},</p>
@@ -67,13 +63,13 @@ export async function resendVerification(formData: FormData): Promise<Result> {
   const { data, error } = await svc.auth.admin.generateLink({ type: "magiclink", email });
   const tokenHash = data?.properties?.hashed_token;
   if (error || !tokenHash) return { ok: false, error: "Couldn't generate a new link." };
-  const link = `${baseUrl()}/auth/confirm?token_hash=${tokenHash}&type=magiclink&next=/auth/set-password`;
+  const link = `${SITE_URL}/auth/confirm?token_hash=${tokenHash}&type=magiclink&next=/auth/set-password`;
   const html = emailShell(
     "Verify your email",
     `<p>Click below to verify your email and sign in:</p>
      <p><a href="${link}" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Verify &amp; sign in</a></p>`,
   );
-  const sent = await sendEmail(email, "Verify your email — 121 CA Classes", html);
+  const sent = await sendEmail(email, "Verify your email — CA Parveen Sharma", html);
   return sent ? { ok: true } : { ok: false, error: "Couldn't send the email." };
 }
 
@@ -87,15 +83,15 @@ export async function sendPasswordReset(formData: FormData): Promise<Result> {
   const svc = createServiceClient();
   const { data } = await svc.auth.admin.generateLink({ type: "recovery", email });
   const tokenHash = data?.properties?.hashed_token;
-  const link = tokenHash ? `${baseUrl()}/auth/confirm?token_hash=${tokenHash}&type=recovery&next=/auth/reset-password` : "";
+  const link = tokenHash ? `${SITE_URL}/auth/confirm?token_hash=${tokenHash}&type=recovery&next=/auth/reset-password` : "";
   if (link) {
     const html = emailShell(
       "Reset your password",
-      `<p>We received a request to reset your 121 CA Classes password.</p>
+      `<p>We received a request to reset the password for your CA Parveen Sharma account.</p>
        <p><a href="${link}" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Set a new password</a></p>
        <p>If you didn't request this, you can ignore this email.</p>`,
     );
-    await sendEmail(email, "Reset your password — 121 CA Classes", html);
+    await sendEmail(email, "Reset your password — CA Parveen Sharma", html);
   }
   return { ok: true };
 }

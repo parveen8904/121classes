@@ -198,6 +198,7 @@ export default function DescriptivePaper(props: Props) {
           {r.summary && <p style={{ margin: "4px 0 0" }}>{r.summary}</p>}
           {r.unreadable && <p className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>⚠️ Part of the handwriting was hard to read — if marks look off, ask the faculty to review.</p>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+            {attempt.annotatedUrl && <a className="btn small" href={attempt.annotatedUrl} target="_blank" rel="noopener noreferrer">📝 My checked copy (marks &amp; notes)</a>}
             {attempt.fileUrl && <a className="btn small secondary" href={attempt.fileUrl} target="_blank" rel="noopener noreferrer">📄 My uploaded answers</a>}
             {solutionPdf && <a className="btn small secondary" href={solutionPdf} target="_blank" rel="noopener noreferrer">✅ Official solution (PDF)</a>}
           </div>

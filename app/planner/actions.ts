@@ -56,6 +56,45 @@ export async function savePlanSetup(formData: FormData) {
   redirect("/planner");
 }
 
+function esc(s: string): string {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Email the student their full plan + a link to open it and download as PDF.
+export async function emailMyPlan() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: planRow } = await supabase.from("study_plans").select("setup").eq("user_id", user.id).maybeSingle();
+  const setup = planRow?.setup as { subjectId: string; startDate: string; examDate: string; speed: number; doneClasses: number; revisions?: number } | null;
+  if (!setup?.subjectId) return;
+
+  const input = await loadPlanInput({ subjectId: setup.subjectId, startDate: setup.startDate, examDate: setup.examDate, doneClasses: setup.doneClasses });
+  if (!input) return;
+  input.chosenSpeed = setup.speed;
+  input.revisionRounds = setup.revisions;
+  const plan = generatePlan(input);
+
+  const { data: prof } = await supabase.from("profiles").select("email").eq("id", user.id).maybeSingle();
+  const to = (prof?.email as string) || user.email;
+  if (!to) return;
+
+  const rows = plan.days
+    .filter((d) => d.stage !== "break")
+    .slice(0, 400)
+    .map((d) => `<tr><td style="padding:4px 8px;border-bottom:1px solid #eee;white-space:nowrap;color:#555">${d.weekday} ${d.date}</td><td style="padding:4px 8px;border-bottom:1px solid #eee"><strong>${esc(d.task)}</strong><br><span style="color:#666;font-size:12px">${esc(d.meta)}</span></td></tr>`)
+    .join("");
+
+  const { sendEmail, emailShell } = await import("@/lib/notify");
+  const cta = `<a href="https://caparveensharma.com/planner" style="display:inline-block;background:#0d9488;color:#fff;text-decoration:none;font-weight:700;padding:11px 20px;border-radius:8px">Open my planner &amp; download PDF →</a>`;
+  const html = emailShell(
+    `Your study plan — ${esc(input.subjectTitle)}`,
+    `<p>Exam on <strong>${setup.examDate}</strong>. Open your planner anytime to see today's target, track progress, and download it as a PDF.</p><p style="margin:14px 0">${cta}</p><table style="width:100%;border-collapse:collapse;font-size:13px">${rows}</table>`,
+  );
+  await sendEmail(to, `Your study plan — ${input.subjectTitle}`, html);
+  redirect("/planner?emailed=1");
+}
+
 export async function clearPlan() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();

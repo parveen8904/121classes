@@ -7,7 +7,8 @@ import { loadPlanInput } from "@/lib/planner/load";
 import { generatePlan } from "@/lib/planner/engine";
 import SubmitButton from "@/app/components/SubmitButton";
 import RemarkBox from "./RemarkBox";
-import { savePlanSetup, clearPlan } from "./actions";
+import PrintButton from "./PrintButton";
+import { savePlanSetup, clearPlan, emailMyPlan } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Study planner — 121 CA Classes" };
@@ -17,7 +18,7 @@ const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN",
 
 type Setup = { subjectId: string; startDate: string; examDate: string; speed: number; doneClasses: number; revisions?: number };
 
-export default async function PlannerPage({ searchParams }: { searchParams: { new?: string } }) {
+export default async function PlannerPage({ searchParams }: { searchParams: { new?: string; emailed?: string } }) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/planner");
@@ -132,6 +133,13 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
       <h1 style={{ margin: "12px 0 2px" }}>{subjectTitle}</h1>
       <p className="muted">Exam {fmt(setup.examDate)} · watching at {setup.speed}× · {plan.totals.classCount} classes left</p>
 
+      {searchParams.emailed && <div className="notice ok no-print" style={{ marginTop: 12 }}>📧 Your plan has been emailed to you.</div>}
+
+      <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+        <PrintButton />
+        <form action={emailMyPlan}><button type="submit" className="btn small secondary">📧 Email me my plan</button></form>
+      </div>
+
       <div className="card" style={{ marginTop: 16, border: "2px solid var(--accent)" }}>
         <strong style={{ fontSize: "1.1rem" }}>🎯 Today&apos;s target</strong>
         {todays.length ? (
@@ -171,8 +179,8 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
 
       <div style={{ display: "flex", gap: 10, alignItems: "center", margin: "20px 0 8px", flexWrap: "wrap" }}>
         <h2 style={{ fontSize: "1.15rem", margin: 0 }}>📅 Full plan</h2>
-        <Link href="/planner?new=1" className="btn small secondary">Change / regenerate</Link>
-        <form action={clearPlan}><button className="btn small secondary" type="submit">Delete plan</button></form>
+        <Link href="/planner?new=1" className="btn small secondary no-print">Change / regenerate</Link>
+        <form action={clearPlan} className="no-print"><button className="btn small secondary" type="submit">Delete plan</button></form>
       </div>
 
       <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 13 }}>

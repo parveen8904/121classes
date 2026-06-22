@@ -22,5 +22,7 @@ export async function GET(req: NextRequest) {
   await maybeBunnyAlert();
   const { maybeStorageAlert } = await import("@/lib/costalerts");
   await maybeStorageAlert();
-  return NextResponse.json({ ok: true, jobs: { added: jobs.added, checked: jobs.checked } });
+  const { runDailyTargets } = await import("@/lib/dailyTargets");
+  const targets = await runDailyTargets();
+  return NextResponse.json({ ok: true, jobs: { added: jobs.added, checked: jobs.checked }, dailyTargets: targets.sent });
 }

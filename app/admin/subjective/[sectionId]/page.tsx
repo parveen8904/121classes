@@ -7,6 +7,10 @@ import { addSubjective, updateSubjective, deleteSubjective, generateSubjectiveFr
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../../_components/PdfUpload";
 
+export const dynamic = "force-dynamic";
+// Saving may call AI to read the time/marks off the paper — allow time.
+export const maxDuration = 60;
+
 type Rubric = { point: string; marks: number }[];
 const rubricToText = (r: Rubric | null | undefined) => (r ?? []).map((x) => `${x.point} | ${x.marks}`).join("\n");
 const LEVELS = ["Easy", "Medium", "Hard", "Exam-level"];
@@ -23,7 +27,7 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
   const refPdf = (cfg.pdf_url as string) ?? "";
   const paperQ = (cfg.paper_question_pdf as string) ?? "";
   const paperS = (cfg.paper_solution_pdf as string) ?? "";
-  const paperDur = Number(cfg.paper_duration_minutes) || 30;
+  const paperDur = Number(cfg.paper_duration_minutes) || 0;
   const paperMarks = Number(cfg.paper_total_marks) || 0;
   const paperInstr = (cfg.paper_instructions as string) ?? "";
 
@@ -37,48 +41,57 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
       <AdminHero
-        badge="✍️ Subjective test"
+        badge="📝 Descriptive test"
         title={section.title}
-        subtitle={
-          ai
-            ? "Add written questions — student answers are graded by AI (paper-checking). 🤖"
-            : "Add written questions. Connect an AI key to auto-grade, or review answers yourself. ✍️"
-        }
+        subtitle="Just upload your question paper and your model-answer PDF. Students solve on paper, upload photos, and AI checks their handwriting against your answers — marks, comments and a checked copy."
         back={{ href: `/admin/topics/${section.topic_id}`, label: "Topic" }}
       />
 
-      {/* PAPER MODE: timed handwritten paper — upload question + solution PDFs. */}
+      {/* THE WHOLE TEST: two PDFs. Time + marks are read off the paper. */}
       <div className="form-card" style={{ marginTop: 14, border: "2px solid var(--accent)" }}>
-        <h3>📝 Timed paper (handwritten upload &amp; auto-checking)</h3>
+        <h3>📝 Upload your test — just 2 PDFs</h3>
         <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
-          Upload your <strong>question paper PDF</strong> and your <strong>solution PDF</strong>, and set the time.
-          The student gets the question paper, a countdown (your time + 10 minutes to upload), then photographs &amp; uploads
-          their handwritten answers. AI reads the handwriting, grades it against <strong>your solution</strong>, and shows marks +
-          improvement comments. Leave the question PDF empty to keep this a normal typed Q&amp;A test.
-          {paperQ ? <strong style={{ color: "#16a34a" }}> ✅ Paper mode is ON.</strong> : null}
+          Upload the <strong>question paper</strong> and the <strong>model answers</strong> — that&apos;s all. We read the
+          <strong> time allowed</strong> and <strong>marks</strong> off the paper, give students that time + 10 minutes to upload their
+          handwritten answers, and AI grades them against your model answers (marks, comments &amp; a checked copy).
+          {paperQ ? <strong style={{ color: "#16a34a" }}> ✅ This test is live.</strong> : null}
         </p>
         <form action={savePaperConfig}>
           <input type="hidden" name="section_id" value={section.id} />
-          <PdfUpload name="paper_question_pdf" defaultValue={paperQ} label="📄 Question paper PDF (students download this)" />
+          <PdfUpload name="paper_question_pdf" defaultValue={paperQ} label="📄 Question paper (PDF)" />
           <div style={{ marginTop: 10 }}>
-            <PdfUpload name="paper_solution_pdf" defaultValue={paperS} label="✅ Solution / answer-key PDF (used to grade — also shown after submit)" />
+            <PdfUpload name="paper_solution_pdf" defaultValue={paperS} label="✅ Model answers (PDF)" />
           </div>
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr", marginTop: 10 }}>
-            <div>
-              <label>Scheduled time (minutes)</label>
-              <input name="paper_duration_minutes" type="number" min={1} defaultValue={paperDur} />
-              <p className="muted" style={{ fontSize: ".75rem", margin: "2px 0 0" }}>Students get this + 10 min to upload (e.g. 30 → 40 min total).</p>
+          <details style={{ marginTop: 10 }}>
+            <summary className="muted" style={{ cursor: "pointer", fontSize: ".85rem" }}>⏱️ Time &amp; marks — optional (we read them from the paper)</summary>
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr", marginTop: 10 }}>
+              <div>
+                <label>Time (minutes)</label>
+                <input name="paper_duration_minutes" type="number" min={1} defaultValue={paperDur || ""} placeholder="auto from paper" />
+                <p className="muted" style={{ fontSize: ".75rem", margin: "2px 0 0" }}>Students get this + 10 min to upload.</p>
+              </div>
+              <div>
+                <label>Total marks</label>
+                <input name="paper_total_marks" type="number" min={0} defaultValue={paperMarks || ""} placeholder="auto from paper" />
+              </div>
             </div>
-            <div>
-              <label>Total marks (optional)</label>
-              <input name="paper_total_marks" type="number" min={0} defaultValue={paperMarks || ""} placeholder="e.g. 30" />
-            </div>
-          </div>
-          <label style={{ marginTop: 10 }}>Extra instructions to students (optional)</label>
-          <textarea name="paper_instructions" rows={3} defaultValue={paperInstr} placeholder="e.g. Attempt all questions. Show full working. Write neatly." />
-          <SubmitButton className="btn" style={{ marginTop: 8 }} savedLabel="✓ Saved">Save paper</SubmitButton>
+            <label style={{ marginTop: 10 }}>Extra instructions to students (optional)</label>
+            <textarea name="paper_instructions" rows={2} defaultValue={paperInstr} placeholder="e.g. Attempt all questions. Show full working. Write neatly." />
+          </details>
+          <SubmitButton className="btn" style={{ marginTop: 10 }} savedLabel="✓ Saved">Save test</SubmitButton>
         </form>
+        {paperQ && (
+          <p className="muted" style={{ fontSize: ".82rem", marginTop: 10 }}>
+            Currently: ⏱️ <strong>{paperDur} min</strong> to solve (+10 to upload){paperMarks ? <> · 🏆 <strong>{paperMarks} marks</strong></> : null}
+            {paperS ? "" : " · ⚠️ add the model-answers PDF so AI can grade"}. Students can take it now.
+          </p>
+        )}
       </div>
+
+      {/* Everything below is the OLD typed question-by-question test — optional. */}
+      <details style={{ marginTop: 18 }}>
+        <summary className="muted" style={{ cursor: "pointer" }}>⚙️ Advanced (optional): build a typed question-by-question test instead</summary>
+        <div style={{ marginTop: 12 }}>
 
       {/* Attach a reference PDF (question paper / answer key) — for typed Q&A tests. */}
       <form action={attachSectionPdf} className="form-card" style={{ marginTop: 14 }}>
@@ -210,6 +223,8 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
           </div>
         )}
       </div>
+        </div>
+      </details>
     </section>
   );
 }

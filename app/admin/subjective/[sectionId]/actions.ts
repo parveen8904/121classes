@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../../_lib/util";
-import { generateSubjectiveQuestions } from "@/lib/ai";
+import { generateSubjectiveQuestions, detectPaperMeta } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 
 // PAPER MODE: upload a question PDF + solution PDF and set the scheduled time and
@@ -15,15 +15,31 @@ export async function savePaperConfig(formData: FormData) {
   const supabase = createClient();
   const { data: sec } = await supabase.from("sections").select("config").eq("id", sectionId).maybeSingle();
   const config = (sec?.config ?? {}) as Record<string, unknown>;
+
+  const questionPdf = str(formData.get("paper_question_pdf")) || null;
+  const solutionPdf = str(formData.get("paper_solution_pdf")) || null;
+  let duration = num(formData.get("paper_duration_minutes")) || 0; // 0 = "read it from the paper"
+  let marks = num(formData.get("paper_total_marks")) || 0; // 0 = "read it from the paper"
+
+  // The teacher just uploads two PDFs — we read the time + marks off the paper.
+  if (questionPdf && (duration <= 0 || marks <= 0)) {
+    const meta = await detectPaperMeta(questionPdf);
+    if (meta) {
+      if (duration <= 0 && meta.minutes) duration = meta.minutes;
+      if (marks <= 0 && meta.totalMarks) marks = meta.totalMarks;
+    }
+  }
+  if (duration <= 0) duration = 180; // safe default (a full 3-hour paper) if nothing was printed/entered
+
   await supabase
     .from("sections")
     .update({
       config: {
         ...config,
-        paper_question_pdf: str(formData.get("paper_question_pdf")) || null,
-        paper_solution_pdf: str(formData.get("paper_solution_pdf")) || null,
-        paper_duration_minutes: Math.max(1, num(formData.get("paper_duration_minutes")) || 30),
-        paper_total_marks: Math.max(0, num(formData.get("paper_total_marks")) || 0),
+        paper_question_pdf: questionPdf,
+        paper_solution_pdf: solutionPdf,
+        paper_duration_minutes: Math.max(1, duration),
+        paper_total_marks: Math.max(0, marks),
         paper_instructions: str(formData.get("paper_instructions")) || null,
       },
     })

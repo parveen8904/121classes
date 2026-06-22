@@ -629,6 +629,56 @@ export async function gradeDescriptivePaper(
   }
 }
 
+// Read the "time allowed" and "maximum marks" printed on a question-paper PDF, so
+// the teacher doesn't have to type them. Returns nulls for anything not clearly
+// printed. One cheap call at upload time. Gated with the descriptive toggle.
+export async function detectPaperMeta(questionPdfUrl: string): Promise<{ minutes: number | null; totalMarks: number | null } | null> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey || !questionPdfUrl) return null;
+  if ((await aiDisabledSet()).has("grade_descriptive")) return null;
+  const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
+  try {
+    const r = await fetch(questionPdfUrl, { cache: "no-store" });
+    if (!r.ok) return null;
+    const b64 = Buffer.from(await r.arrayBuffer()).toString("base64");
+    const sys =
+      "You are reading a CA exam/test question paper. Find the TIME ALLOWED and the MAXIMUM MARKS if printed on it (usually near the top). " +
+      "Convert hours to minutes (e.g. '3 Hours' → 180; '1½ hours' → 90). If a value is not clearly printed, use null — do not guess. " +
+      'Respond ONLY as compact JSON, no prose: {"minutes":<total minutes or null>,"total_marks":<maximum marks or null>}.';
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        max_tokens: 200,
+        system: sys,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } },
+              { type: "text", text: "Extract the time allowed (in minutes) and the maximum marks." },
+            ],
+          },
+        ],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("grade_descriptive", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    const text = (data.content ?? []).filter((b: { type: string }) => b.type === "text").map((b: { text: string }) => b.text).join("\n").trim();
+    if (!text) return null;
+    const j = JSON.parse(text.replace(/```json|```/g, "").trim());
+    const minutes = Number(j.minutes);
+    const total = Number(j.total_marks);
+    return { minutes: Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes) : null, totalMarks: Number.isFinite(total) && total > 0 ? Math.round(total) : null };
+  } catch {
+    return null;
+  }
+}
+
 // Class summary built STRICTLY from the uploaded transcript (no outside
 // knowledge): what was discussed, the concepts, how many homework questions
 // were solved in class, and the homework set for next class. One-time; shown to

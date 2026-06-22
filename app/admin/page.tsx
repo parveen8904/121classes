@@ -39,6 +39,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/amendments",
   },
   {
+    icon: "🗓️",
+    title: "Study planner",
+    desc: "Set the rules the day-by-day study plan engine follows (stages, hours, speeds).",
+    href: "/admin/planner",
+  },
+  {
     icon: "🎟️",
     title: "Enrolment",
     desc: "Grant course access (single or bulk) for any tier/duration; revoke & extend.",

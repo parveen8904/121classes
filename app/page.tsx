@@ -384,6 +384,22 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* BUILD YOUR PLAN */}
+      <section className="section" id="build-your-plan">
+        <div className="section-head">
+          <div className="eyebrow">🗓️ Build your plan</div>
+          <h2>Your own day-by-day study plan to exam day</h2>
+          <p>
+            Pick your subject, start date &amp; exam date — get a personal plan that tells you exactly what to study each day,
+            tracks your progress, and adjusts when you fall behind. <strong>Disciplined, targeted &amp; mentored</strong> by CA Parveen Sharma &amp; team.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+          <Link className="btn" href="/build-your-plan">See how it works →</Link>
+          <Link className="btn secondary" href="/planner">Build my plan</Link>
+        </div>
+      </section>
+
       {/* BOOKS */}
       <section className="section" id="books">
         <div className="section-head">

@@ -76,6 +76,7 @@ export default async function CoursesPage() {
     { i: "📜", t: "Amendments to your exam", d: "Every amendment kept updated and tagged to the exact attempt it applies to — never study an outdated topic." },
     { i: "📝", t: "Notes, PDFs, RTP & MTP", d: "Typed + handwritten notes, ICAI RTP/MTP and past papers, organised topic by topic." },
     { i: "📈", t: "Progress tracking", d: "We track your pace, gaps and regularity so you always know if you're on track — or what to catch up." },
+    { i: "📦", t: "Books + downloads, any device", d: "Printed hardcopy books delivered to you, downloadable PDFs, and classes you can download & watch on Windows, Mac, laptop, iPhone or Android." },
   ];
 
   return (
@@ -89,6 +90,14 @@ export default async function CoursesPage() {
             a day-by-day study plan, AI doubt-solving on WhatsApp/Telegram, tests with performance reports, revisions and
             amendments kept current to your exam. Everything in one guided package.
           </p>
+        </div>
+
+        <div className="card" style={{ maxWidth: 860, margin: "0 auto 26px", border: "2px solid var(--accent)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, textAlign: "center" }}>
+            <div><div style={{ fontSize: "1.6rem" }}>📦</div><strong>Hardcopy books included</strong><div className="muted" style={{ fontSize: ".82rem" }}>Printed books delivered to your door, along with the classes.</div></div>
+            <div><div style={{ fontSize: "1.6rem" }}>📥</div><strong>Download the PDFs</strong><div className="muted" style={{ fontSize: ".82rem" }}>Notes &amp; materials available to download and keep.</div></div>
+            <div><div style={{ fontSize: "1.6rem" }}>📱</div><strong>Watch on any device</strong><div className="muted" style={{ fontSize: ".82rem" }}>Download &amp; play classes on Windows, Mac, laptop, iPhone &amp; Android.</div></div>
+          </div>
         </div>
 
         {(subjects ?? []).length > 0 ? (

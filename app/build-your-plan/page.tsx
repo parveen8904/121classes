@@ -64,15 +64,19 @@ export default function BuildYourPlanPage() {
           <h2>Four stages, planned backwards from your exam</h2>
           <p>The engine works backward from your exam date, orders topics by importance, and fits the classes into your time — speeding up the videos only as much as needed, and warning you (with fixes) if it&apos;s tight.</p>
         </div>
-        <div className="grid grid-2" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
-          {STAGES.map((s) => (
-            <div className="tile" key={s.n} style={{ textAlign: "left" }}>
-              <div className="ic">{s.n}</div>
-              <h3 style={{ fontSize: "1.05rem" }}>{s.t}</h3>
-              <p className="muted" style={{ fontSize: ".88rem" }}>{s.d}</p>
-            </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "stretch", justifyContent: "center", flexWrap: "wrap", maxWidth: 900, margin: "0 auto" }}>
+          {STAGES.map((s, i) => (
+            <Fragment key={s.n}>
+              <div style={{ flex: "1 1 180px", minWidth: 160, maxWidth: 220, textAlign: "center" }}>
+                <div style={{ width: 46, height: 46, borderRadius: "50%", background: "var(--accent)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "1.1rem", margin: "0 auto 10px" }}>{s.n}</div>
+                <h3 style={{ fontSize: "1rem", margin: "0 0 4px" }}>{s.t}</h3>
+                <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>{s.d}</p>
+              </div>
+              {i < STAGES.length - 1 && <div aria-hidden="true" style={{ alignSelf: "flex-start", marginTop: 12, color: "var(--accent)", fontSize: "1.5rem", fontWeight: 700 }}>→</div>}
+            </Fragment>
           ))}
         </div>
+        <p className="muted" style={{ textAlign: "center", fontSize: ".82rem", marginTop: 12 }}>↩ The whole timeline is laid out backwards from your exam date.</p>
       </section>
 
       <section className="section">

@@ -154,6 +154,18 @@ export default function PostsManager({ posts, actions }: { posts: Post[]; action
                       {a.broadcast_at ? "📢 Broadcast again to students" : "📢 Send to students (mobile + Telegram)"}
                     </SubmitButton>
                   </form>
+
+                  <button
+                    type="button"
+                    className="btn small secondary"
+                    style={{ marginTop: 12 }}
+                    onClick={(e) => {
+                      const d = (e.currentTarget as HTMLElement).closest("details");
+                      if (d) (d as HTMLDetailsElement).open = false;
+                    }}
+                  >
+                    ✕ Close
+                  </button>
                 </details>
               </div>
             </div>

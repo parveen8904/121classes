@@ -9,6 +9,12 @@ const INR = 85;
 // The layout already guards admin access, so this is just the hub.
 const PANELS: { icon: string; title: string; desc: string; href?: string; phase?: string }[] = [
   {
+    icon: "🧭",
+    title: "Control sheet",
+    desc: "Per subject & topic: what's uploaded (classes, notes, transcripts, MCQ/descriptive tests, MTP/RTP/papers, amendments) and what's missing.",
+    href: "/admin/control-sheet",
+  },
+  {
     icon: "📘",
     title: "Courses & content",
     desc: "Create courses → subjects → topics → sections, including homework & discussion.",

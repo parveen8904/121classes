@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { aiConfigured } from "@/lib/ai";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
-import { addSubjective, updateSubjective, deleteSubjective, generateSubjectiveFromTranscript, attachSectionPdf } from "./actions";
+import { addSubjective, updateSubjective, deleteSubjective, generateSubjectiveFromTranscript, attachSectionPdf, savePaperConfig } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../../_components/PdfUpload";
 
@@ -19,7 +19,13 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
     .eq("id", params.sectionId)
     .maybeSingle();
   if (!section) notFound();
-  const refPdf = ((section.config ?? {}) as Record<string, string>).pdf_url ?? "";
+  const cfg = (section.config ?? {}) as Record<string, unknown>;
+  const refPdf = (cfg.pdf_url as string) ?? "";
+  const paperQ = (cfg.paper_question_pdf as string) ?? "";
+  const paperS = (cfg.paper_solution_pdf as string) ?? "";
+  const paperDur = Number(cfg.paper_duration_minutes) || 30;
+  const paperMarks = Number(cfg.paper_total_marks) || 0;
+  const paperInstr = (cfg.paper_instructions as string) ?? "";
 
   const { data: questions } = await supabase
     .from("subjective_questions")
@@ -41,10 +47,43 @@ export default async function SubjectiveAdminPage({ params }: { params: { sectio
         back={{ href: `/admin/topics/${section.topic_id}`, label: "Topic" }}
       />
 
-      {/* Attach a reference PDF (question paper / answer key) */}
+      {/* PAPER MODE: timed handwritten paper — upload question + solution PDFs. */}
+      <div className="form-card" style={{ marginTop: 14, border: "2px solid var(--accent)" }}>
+        <h3>📝 Timed paper (handwritten upload &amp; auto-checking)</h3>
+        <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
+          Upload your <strong>question paper PDF</strong> and your <strong>solution PDF</strong>, and set the time.
+          The student gets the question paper, a countdown (your time + 10 minutes to upload), then photographs &amp; uploads
+          their handwritten answers. AI reads the handwriting, grades it against <strong>your solution</strong>, and shows marks +
+          improvement comments. Leave the question PDF empty to keep this a normal typed Q&amp;A test.
+          {paperQ ? <strong style={{ color: "#16a34a" }}> ✅ Paper mode is ON.</strong> : null}
+        </p>
+        <form action={savePaperConfig}>
+          <input type="hidden" name="section_id" value={section.id} />
+          <PdfUpload name="paper_question_pdf" defaultValue={paperQ} label="📄 Question paper PDF (students download this)" />
+          <div style={{ marginTop: 10 }}>
+            <PdfUpload name="paper_solution_pdf" defaultValue={paperS} label="✅ Solution / answer-key PDF (used to grade — also shown after submit)" />
+          </div>
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr", marginTop: 10 }}>
+            <div>
+              <label>Scheduled time (minutes)</label>
+              <input name="paper_duration_minutes" type="number" min={1} defaultValue={paperDur} />
+              <p className="muted" style={{ fontSize: ".75rem", margin: "2px 0 0" }}>Students get this + 10 min to upload (e.g. 30 → 40 min total).</p>
+            </div>
+            <div>
+              <label>Total marks (optional)</label>
+              <input name="paper_total_marks" type="number" min={0} defaultValue={paperMarks || ""} placeholder="e.g. 30" />
+            </div>
+          </div>
+          <label style={{ marginTop: 10 }}>Extra instructions to students (optional)</label>
+          <textarea name="paper_instructions" rows={3} defaultValue={paperInstr} placeholder="e.g. Attempt all questions. Show full working. Write neatly." />
+          <SubmitButton className="btn" style={{ marginTop: 8 }} savedLabel="✓ Saved">Save paper</SubmitButton>
+        </form>
+      </div>
+
+      {/* Attach a reference PDF (question paper / answer key) — for typed Q&A tests. */}
       <form action={attachSectionPdf} className="form-card" style={{ marginTop: 14 }}>
         <input type="hidden" name="section_id" value={section.id} />
-        <PdfUpload name="pdf_url" defaultValue={refPdf} label="📄 Attach a PDF (question paper / answer key) — shown to students" />
+        <PdfUpload name="pdf_url" defaultValue={refPdf} label="📄 Attach a reference PDF (for typed Q&A tests) — shown to students" />
         <SubmitButton className="btn small" style={{ marginTop: 8 }}>Save PDF</SubmitButton>
       </form>
 

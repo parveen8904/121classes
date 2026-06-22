@@ -25,12 +25,19 @@ export default function McqForm({
   topicId?: string;
   lockedResult?: (McqResult & { alreadyDone?: boolean }) | null;
 }) {
-  const totalSeconds = Math.max(1, Math.round(questions.length * minutesPerQuestion * 60));
+  // Time limit = ~1 min per question, rounded UP to the next multiple of 5 minutes
+  // (always rounding up) so the test fits a clean scheduled slot.
+  const rawMinutes = Math.max(1, Math.ceil(questions.length * (minutesPerQuestion || 1)));
+  const limitMinutes = Math.ceil(rawMinutes / 5) * 5;
+  const totalSeconds = limitMinutes * 60;
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [current, setCurrent] = useState(0);
   const [busy, setBusy] = useState(false);
   // A student gets ONE attempt — if they already took it, we start on the report.
   const [result, setResult] = useState<(McqResult & { alreadyDone?: boolean }) | null>(lockedResult);
+  // Timer only starts once the student taps "Start" (so reading the instructions
+  // doesn't eat into their time). Already-attempted → straight to the report.
+  const [started, setStarted] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(totalSeconds);
   const submittedRef = useRef(!!lockedResult);
 
@@ -55,14 +62,14 @@ export default function McqForm({
 
   // Countdown — auto-submits (without further checking) when time runs out.
   useEffect(() => {
-    if (result) return;
+    if (!started || result) return;
     if (secondsLeft <= 0) {
       submit(true);
       return;
     }
     const t = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
     return () => clearTimeout(t);
-  }, [secondsLeft, result, submit]);
+  }, [started, secondsLeft, result, submit]);
 
   // ---------- RESULT / PERFORMANCE REPORT ----------
   if (result) {
@@ -153,6 +160,29 @@ export default function McqForm({
             )}
           </div>
         ))}
+      </div>
+    );
+  }
+
+  // ---------- INSTRUCTIONS / START GATE ----------
+  if (!started) {
+    return (
+      <div className="card" style={{ border: "2px solid var(--accent)" }}>
+        <h3 style={{ marginTop: 0 }}>🧠 Before you begin</h3>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontWeight: 700, margin: "6px 0 10px" }}>
+          <span>📋 {questions.length} question{questions.length === 1 ? "" : "s"}</span>
+          <span>⏱️ Time limit: {limitMinutes} minutes</span>
+        </div>
+        <ol style={{ margin: "0 0 0 18px", padding: 0, display: "grid", gap: 6, fontSize: ".92rem" }}>
+          <li>Each question has one correct option — tap to select it.</li>
+          <li>Use <strong>Next / Previous</strong> or the number grid to move around; you can change any answer until you submit.</li>
+          <li>The timer (<strong>{limitMinutes} minutes</strong>) starts when you tap Start and is shown at the top throughout.</li>
+          <li>When time runs out, the test <strong>auto-submits</strong> — any unanswered questions are left blank.</li>
+          <li>You get <strong>one attempt</strong>. Submit when you&apos;re done to see your score, rank and answer review.</li>
+        </ol>
+        <button className="btn block" type="button" onClick={() => setStarted(true)} style={{ marginTop: 12 }}>
+          ▶️ Start test ({limitMinutes} min)
+        </button>
       </div>
     );
   }

@@ -17,7 +17,8 @@ export async function aiConfigured(): Promise<boolean> {
 export const AI_TOGGLES: { key: string; label: string; desc: string }[] = [
   { key: "doubt", label: "Answer student doubts", desc: "AI replies to doubts on class pages & Telegram (otherwise sent to faculty)." },
   { key: "ask_me", label: "“Ask me” assistant", desc: "The website / portal help box." },
-  { key: "grade", label: "Evaluate descriptive answers", desc: "AI marks subjective answers (otherwise faculty reviews them)." },
+  { key: "grade", label: "Evaluate typed descriptive answers", desc: "AI marks typed subjective answers (otherwise faculty reviews them)." },
+  { key: "grade_descriptive", label: "Evaluate handwritten paper (PDF)", desc: "AI reads a student's uploaded handwritten answer PDF and grades it against your solution PDF." },
   { key: "generate_mcq", label: "Generate MCQ tests", desc: "Create MCQs from a transcript / the AI repository." },
   { key: "import_mcq_pdf", label: "Read uploaded MCQ PDFs", desc: "Digitise your own MCQ test PDFs into the engine." },
   { key: "generate_subjective", label: "Generate descriptive tests", desc: "Create long-form questions from a transcript." },
@@ -508,6 +509,106 @@ export async function extractMcqsFromPdf(pdfUrl: string): Promise<ExtractedMcq[]
         };
       })
       .filter((q) => q.question && q.options.length >= 2);
+  } catch {
+    return null;
+  }
+}
+
+// Grade a student's HANDWRITTEN answer paper (PDF of photos) against the
+// teacher's official solution PDF — ONCE, when they submit. Claude reads the
+// handwriting (vision), matches it to the official solution and ICAI marking
+// conventions, and returns per-question marks + improvement points + concepts to
+// revise. It never invents answers the student didn't write. null when off/unreadable.
+export type DescriptiveGrade = {
+  awarded: number;
+  total: number;
+  summary: string;
+  per_question: { q: string; awarded: number; max: number; comment: string }[];
+  improvements: string[];
+  concepts_to_revise: string[];
+  unreadable: boolean;
+};
+export async function gradeDescriptivePaper(
+  studentPdfUrl: string,
+  solutionPdfUrl: string,
+  totalMarks?: number | null,
+): Promise<DescriptiveGrade | null> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey || !studentPdfUrl || !solutionPdfUrl) return null;
+  if ((await aiDisabledSet()).has("grade_descriptive")) return null;
+  const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
+  try {
+    const [stu, sol] = await Promise.all([
+      fetch(studentPdfUrl, { cache: "no-store" }),
+      fetch(solutionPdfUrl, { cache: "no-store" }),
+    ]);
+    if (!stu.ok || !sol.ok) return null;
+    const [stuB64, solB64] = await Promise.all([
+      stu.arrayBuffer().then((b) => Buffer.from(b).toString("base64")),
+      sol.arrayBuffer().then((b) => Buffer.from(b).toString("base64")),
+    ]);
+    const sys =
+      "You are CA Parveen Sharma's examiner checking a CA descriptive (subjective) answer paper. " +
+      "You are given TWO PDFs: FIRST the STUDENT'S HANDWRITTEN answer book (read the handwriting carefully — it may be untidy or rotated), and SECOND the teacher's OFFICIAL SOLUTION / answer key. " +
+      "Grade the student's answers ONLY against the official solution and standard ICAI marking conventions. Mark question-by-question, fairly but exam-strict — give partial marks for partially-correct steps. " +
+      (totalMarks
+        ? `The paper is out of ${totalMarks} total marks; distribute marks across the questions sensibly. `
+        : "Use the marks indicated for each question in the paper/solution. ") +
+      "For EACH question: the marks awarded, the max marks, and a one-line comment. Then overall: improvement points (where marks were lost / what went wrong) and the specific concepts / accounting standards / sections the student got wrong and must revise. " +
+      "If part of the handwriting is genuinely unreadable, grade what you can, set \"unreadable\":true, and say so — NEVER invent answers the student did not write. " +
+      "Respond ONLY as compact JSON, no prose, no code fences: " +
+      '{"awarded":<number>,"total":<number>,"summary":"<one-line overall>","per_question":[{"q":"Q1","awarded":4,"max":6,"comment":"..."}],"improvements":["..."],"concepts_to_revise":["..."],"unreadable":false}.';
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4000,
+        system: sys,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "STUDENT'S HANDWRITTEN ANSWER BOOK (grade this):" },
+              { type: "document", source: { type: "base64", media_type: "application/pdf", data: stuB64 } },
+              { type: "text", text: "OFFICIAL SOLUTION / ANSWER KEY (grade against this):" },
+              { type: "document", source: { type: "base64", media_type: "application/pdf", data: solB64 } },
+              { type: "text", text: "Grade the student's paper now and return the JSON." },
+            ],
+          },
+        ],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("grade_descriptive", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    const text = (data.content ?? [])
+      .filter((b: { type: string }) => b.type === "text")
+      .map((b: { text: string }) => b.text)
+      .join("\n")
+      .trim();
+    if (!text) return null;
+    const j = JSON.parse(text.replace(/```json|```/g, "").trim());
+    const arr = (x: unknown) => (Array.isArray(x) ? x.map((s) => String(s).trim()).filter(Boolean) : []);
+    const pq = Array.isArray(j.per_question)
+      ? j.per_question.map((p: { q?: unknown; awarded?: unknown; max?: unknown; comment?: unknown }) => ({
+          q: String(p.q ?? "").trim(),
+          awarded: Number(p.awarded) || 0,
+          max: Number(p.max) || 0,
+          comment: String(p.comment ?? "").trim(),
+        }))
+      : [];
+    return {
+      awarded: Number.isFinite(Number(j.awarded)) ? Number(j.awarded) : pq.reduce((s: number, p: { awarded: number }) => s + p.awarded, 0),
+      total: Number(j.total) || totalMarks || pq.reduce((s: number, p: { max: number }) => s + p.max, 0),
+      summary: String(j.summary ?? "").trim(),
+      per_question: pq,
+      improvements: arr(j.improvements),
+      concepts_to_revise: arr(j.concepts_to_revise),
+      unreadable: Boolean(j.unreadable),
+    };
   } catch {
     return null;
   }

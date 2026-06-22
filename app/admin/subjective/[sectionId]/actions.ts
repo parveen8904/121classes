@@ -6,6 +6,31 @@ import { str, num } from "../../_lib/util";
 import { generateSubjectiveQuestions } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 
+// PAPER MODE: upload a question PDF + solution PDF and set the scheduled time and
+// total marks. When a question PDF is present, students get the timed download →
+// solve → upload-handwritten-PDF flow (graded by AI against the solution PDF).
+export async function savePaperConfig(formData: FormData) {
+  const sectionId = str(formData.get("section_id"));
+  if (!sectionId) return;
+  const supabase = createClient();
+  const { data: sec } = await supabase.from("sections").select("config").eq("id", sectionId).maybeSingle();
+  const config = (sec?.config ?? {}) as Record<string, unknown>;
+  await supabase
+    .from("sections")
+    .update({
+      config: {
+        ...config,
+        paper_question_pdf: str(formData.get("paper_question_pdf")) || null,
+        paper_solution_pdf: str(formData.get("paper_solution_pdf")) || null,
+        paper_duration_minutes: Math.max(1, num(formData.get("paper_duration_minutes")) || 30),
+        paper_total_marks: Math.max(0, num(formData.get("paper_total_marks")) || 0),
+        paper_instructions: str(formData.get("paper_instructions")) || null,
+      },
+    })
+    .eq("id", sectionId);
+  revalidatePath(`/admin/subjective/${sectionId}`);
+}
+
 // Marking scheme: one line per point, "point text | marks".
 function parseRubric(raw: string): { point: string; marks: number }[] {
   return raw

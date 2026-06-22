@@ -12,6 +12,8 @@ import ClassDownload from "../../topic/[topicId]/ClassDownload";
 import WatchTracker from "./WatchTracker";
 
 export const dynamic = "force-dynamic";
+// Descriptive-paper grading reads two PDFs with Claude vision — allow time.
+export const maxDuration = 60;
 
 type Downloadable = { id: string; section_id: string | null; storage_url: string; iv_b64: string | null; alg: string | null; byte_size: number | null };
 

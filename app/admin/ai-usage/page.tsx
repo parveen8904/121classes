@@ -1,7 +1,8 @@
 import AdminHero from "../_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
-import { saveAiSettings } from "./actions";
+import { saveAiSettings, saveAiFeatures } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
+import { AI_TOGGLES, aiConfigured } from "@/lib/ai";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "AI usage & cost — Admin" };
@@ -39,9 +40,17 @@ export default async function AiUsagePage() {
   const { data: settingRows } = await svc
     .from("site_settings")
     .select("key, value")
-    .in("key", ["ai_monthly_cap_usd", "ai_alert_email", "ai_doubt_daily_limit"]);
+    .in("key", ["ai_monthly_cap_usd", "ai_alert_email", "ai_doubt_daily_limit", "ai_disabled_features"]);
   const cfg = new Map((settingRows ?? []).map((r) => [r.key, r.value as string]));
   const cap = Number(cfg.get("ai_monthly_cap_usd")) || 0;
+  let disabledSet = new Set<string>();
+  try {
+    const arr = JSON.parse(cfg.get("ai_disabled_features") || "[]");
+    if (Array.isArray(arr)) disabledSet = new Set(arr.map(String));
+  } catch {
+    /* ignore bad json */
+  }
+  const aiOn = await aiConfigured();
 
   const all = rows ?? [];
   let monthCost = 0, monthCalls = 0, monthIn = 0, monthOut = 0, todayCost = 0;
@@ -119,6 +128,32 @@ export default async function AiUsagePage() {
         <p className="muted" style={{ fontSize: ".8rem", marginTop: 6 }}>
           You get one email the first time monthly spend crosses the cap. Over the daily limit, a student&apos;s doubts are still saved and answered by faculty — just not by AI.
         </p>
+      </form>
+
+      <h2 className="admin-section-title" style={{ marginTop: 28 }}>AI features — switch on / off</h2>
+      <p className="muted" style={{ fontSize: ".85rem", marginTop: 0 }}>
+        Turn any AI service off to control cost. When off, that feature simply doesn&apos;t call AI — the app still works
+        (e.g. doubts go to faculty, descriptive answers wait for faculty review). Already-generated content (MCQs, summaries) is unaffected.
+      </p>
+      {!aiOn && (
+        <div className="notice" style={{ background: "rgba(239,68,68,.12)", color: "#dc2626", fontSize: ".85rem" }}>
+          ⚠️ No <code>ANTHROPIC_API_KEY</code> is set, so ALL AI is currently off regardless of these switches.
+        </div>
+      )}
+      <form action={saveAiFeatures} className="form-card" style={{ marginTop: 8 }}>
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))" }}>
+          {AI_TOGGLES.map((t) => (
+            <label key={t.key} className="remember" style={{ alignItems: "flex-start", gap: 10, margin: 0, padding: "10px 12px", background: "var(--bg-soft)", borderRadius: 10 }}>
+              <input type="checkbox" name={`ai_on_${t.key}`} defaultChecked={!disabledSet.has(t.key)} style={{ marginTop: 3 }} />
+              <span>
+                <strong style={{ fontSize: ".92rem" }}>{t.label}</strong>
+                <span className="muted" style={{ display: "block", fontSize: ".78rem", marginTop: 2 }}>{t.desc}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <SubmitButton className="btn" style={{ marginTop: 12 }}>Save AI features</SubmitButton>
+        <p className="muted" style={{ fontSize: ".78rem", marginTop: 6 }}>Ticked = on. Changes take effect within ~30 seconds.</p>
       </form>
 
       <h2 className="admin-section-title" style={{ marginTop: 28 }}>By feature — {monthLabel}</h2>

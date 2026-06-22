@@ -31,46 +31,6 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
   const { data } = await supabase.from("site_settings").select("key, value").in("key", ["career_articleship", "career_placement", "career_resources", "career_jobs", "career_links", "career_cities"]);
   const m = new Map((data ?? []).map((r) => [r.key, r.value as string]));
 
-  // Quick "browse & apply directly" links — admin-set, else sensible defaults
-  // covering Google Jobs, Naukri, Monster/foundit, Indeed, ICAI, CAclubindia.
-  const DEFAULT_LINKS = [
-    "Google Jobs — CA jobs | https://www.google.com/search?q=chartered+accountant+jobs+in+india&ibp=htl;jobs",
-    "Google Jobs — CA articleship | https://www.google.com/search?q=ca+articleship+jobs+in+india&ibp=htl;jobs",
-    "Naukri — CA jobs | https://www.naukri.com/chartered-accountant-jobs",
-    "Naukri — CA articleship | https://www.naukri.com/ca-articleship-jobs",
-    "Monster/foundit — CA | https://www.foundit.in/srp/results?query=chartered%20accountant",
-    "Indeed — CA | https://in.indeed.com/jobs?q=chartered+accountant",
-    "ICAI Jobs Portal | https://cajobs.icai.org/",
-    "CAclubindia — Jobs | https://www.caclubindia.com/jobs/",
-    "LinkedIn — CA jobs | https://www.linkedin.com/jobs/chartered-accountant-jobs/",
-    // Top CA / audit firms in India — careers pages
-    "Deloitte India — Careers | https://www2.deloitte.com/in/en/careers/careers.html",
-    "PwC India — Careers | https://www.pwc.in/careers.html",
-    "EY India — Careers | https://www.ey.com/en_in/careers",
-    "KPMG India — Careers | https://kpmg.com/in/en/home/careers.html",
-    "Grant Thornton Bharat — Careers | https://www.grantthornton.in/careers/",
-    "BDO India — Careers | https://www.bdo.in/en-gb/careers",
-    "RSM India — Careers | https://www.rsm.global/india/careers",
-    // Well-known mid-size / regional Indian CA firms (Google search → their careers)
-    "Nangia Andersen | https://www.google.com/search?q=Nangia+Andersen+careers+chartered+accountant",
-    "Walker Chandiok | https://www.google.com/search?q=Walker+Chandiok+careers+chartered+accountant",
-    "S.R. Dinodia & Co. | https://www.google.com/search?q=S+R+Dinodia+%26+Co+careers",
-    "Lodha & Co. | https://www.google.com/search?q=Lodha+%26+Co+chartered+accountants+careers",
-    "T. R. Chadha & Co. | https://www.google.com/search?q=T+R+Chadha+%26+Co+careers",
-    "ASA & Associates | https://www.google.com/search?q=ASA+%26+Associates+LLP+careers",
-    "S.S. Kothari Mehta | https://www.google.com/search?q=S+S+Kothari+Mehta+%26+Co+careers",
-    "Khimji Kunverji & Co. | https://www.google.com/search?q=Khimji+Kunverji+%26+Co+careers",
-  ];
-  const linkLines = (m.get("career_links") || "").split("\n").map((l) => l.trim()).filter(Boolean);
-  const browseLinks = (linkLines.length ? linkLines : DEFAULT_LINKS)
-    .map((l) => { const [label, url] = l.split("|").map((s) => s.trim()); return { label, url }; })
-    .filter((x) => x.label && /^https?:\/\//.test(x.url || ""));
-
-  // City-wise quick filter → Google Jobs for CA roles in that city. Admin-editable.
-  const DEFAULT_CITIES = ["Delhi", "Gurgaon", "Noida", "Mumbai", "Pune", "Bengaluru", "Hyderabad", "Chennai", "Kolkata", "Ahmedabad", "Jaipur"];
-  const adminCities = (m.get("career_cities") || "").split(/[,\n]/).map((c) => c.trim()).filter(Boolean);
-  const CITIES = adminCities.length ? adminCities : DEFAULT_CITIES;
-  const cityLink = (c: string) => `https://www.google.com/search?q=${encodeURIComponent(`chartered accountant jobs in ${c}`)}&ibp=htl;jobs`;
   const any = ["career_articleship", "career_placement", "career_resources", "career_jobs"].some((k) => (m.get(k) || "").trim());
   const jobs = (m.get("career_jobs") || "").split("\n").map((l) => l.trim()).filter(Boolean);
 
@@ -121,27 +81,6 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
         <Link className="btn secondary" href="/career/interview">🎤 AI mock interview</Link>
       </div>
 
-      {/* Browse & apply directly on job portals + CA firm sites */}
-      {browseLinks.length > 0 && (
-        <div className="card" style={{ marginTop: 18 }}>
-          <h3 style={{ margin: "0 0 4px" }}>🔎 Browse openings &amp; walk-ins (apply directly)</h3>
-          <p className="muted" style={{ fontSize: ".84rem", marginTop: 0, marginBottom: 10 }}>
-            Live CA / articleship openings and walk-ins on Google Jobs, Naukri, Monster, ICAI &amp; firm sites — opens the source so you apply directly.
-          </p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {browseLinks.map((l, i) => (
-              <a key={i} className="btn small secondary" href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>
-            ))}
-          </div>
-
-          <p style={{ fontSize: ".84rem", fontWeight: 600, margin: "14px 0 6px" }}>📍 CA jobs by city</p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {CITIES.map((c) => (
-              <a key={c} className="btn small secondary" href={cityLink(c)} target="_blank" rel="noopener noreferrer">{c} ↗</a>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* City filter */}
       {cities.length > 1 && (

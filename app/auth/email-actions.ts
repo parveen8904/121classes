@@ -26,14 +26,14 @@ export async function registerWithVerification(formData: FormData): Promise<Resu
 
   const svc = createServiceClient();
   const password = randomUUID() + randomUUID(); // temporary — replaced when they set their own
-  const redirectTo = `${baseUrl()}/auth/callback?next=/dashboard`;
   const { data, error } = await svc.auth.admin.generateLink({
     type: "signup",
     email,
     password,
-    options: { data: { full_name: name }, redirectTo },
+    options: { data: { full_name: name } },
   });
-  if (error || !data?.properties?.action_link) {
+  const tokenHash = data?.properties?.hashed_token;
+  if (error || !tokenHash) {
     const msg = (error?.message || "").toLowerCase();
     if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
       return { ok: false, error: "An account with this email already exists. Please log in, or use “Forgot password”." };
@@ -41,7 +41,9 @@ export async function registerWithVerification(formData: FormData): Promise<Resu
     return { ok: false, error: error?.message || "Could not start sign-up. Please try again." };
   }
 
-  const link = data.properties.action_link;
+  // Verify via our own server-side route (token_hash flow), which sets the
+  // session and sends them straight to "set your password".
+  const link = `${baseUrl()}/auth/confirm?token_hash=${tokenHash}&type=signup&next=/auth/set-password`;
   const html = emailShell(
     "Verify your email",
     `<p>Hi ${name || "there"},</p>
@@ -62,10 +64,10 @@ export async function resendVerification(formData: FormData): Promise<Result> {
   if (!email) return { ok: false, error: "Missing email." };
   if (!(await emailConfigured())) return { ok: false, error: "Email isn't set up yet." };
   const svc = createServiceClient();
-  const redirectTo = `${baseUrl()}/auth/callback?next=/dashboard`;
-  const { data, error } = await svc.auth.admin.generateLink({ type: "magiclink", email, options: { redirectTo } });
-  const link = data?.properties?.action_link;
-  if (error || !link) return { ok: false, error: "Couldn't generate a new link." };
+  const { data, error } = await svc.auth.admin.generateLink({ type: "magiclink", email });
+  const tokenHash = data?.properties?.hashed_token;
+  if (error || !tokenHash) return { ok: false, error: "Couldn't generate a new link." };
+  const link = `${baseUrl()}/auth/confirm?token_hash=${tokenHash}&type=magiclink&next=/auth/set-password`;
   const html = emailShell(
     "Verify your email",
     `<p>Click below to verify your email and sign in:</p>
@@ -84,9 +86,9 @@ export async function sendPasswordReset(formData: FormData): Promise<Result> {
   if (!(await emailConfigured())) return { ok: false, error: "Email isn't set up yet. Please ask the admin to add the Mailgun key." };
 
   const svc = createServiceClient();
-  const redirectTo = `${baseUrl()}/auth/callback?next=/auth/reset-password`;
-  const { data } = await svc.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo } });
-  const link = data?.properties?.action_link;
+  const { data } = await svc.auth.admin.generateLink({ type: "recovery", email });
+  const tokenHash = data?.properties?.hashed_token;
+  const link = tokenHash ? `${baseUrl()}/auth/confirm?token_hash=${tokenHash}&type=recovery&next=/auth/reset-password` : "";
   if (link) {
     const html = emailShell(
       "Reset your password",

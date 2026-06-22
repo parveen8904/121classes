@@ -9,6 +9,51 @@ export async function aiConfigured(): Promise<boolean> {
   return Boolean(await getSecret("ANTHROPIC_API_KEY"));
 }
 
+// ----- Per-feature on/off switches (admin cost control) -----
+// The admin can disable individual AI services from Admin → AI usage & cost.
+// Disabled feature keys are stored as a JSON array in
+// site_settings.ai_disabled_features. A disabled feature's AI call returns null,
+// so the app falls back gracefully (e.g. "faculty will review"). Default: all on.
+export const AI_TOGGLES: { key: string; label: string; desc: string }[] = [
+  { key: "doubt", label: "Answer student doubts", desc: "AI replies to doubts on class pages & Telegram (otherwise sent to faculty)." },
+  { key: "ask_me", label: "“Ask me” assistant", desc: "The website / portal help box." },
+  { key: "grade", label: "Evaluate descriptive answers", desc: "AI marks subjective answers (otherwise faculty reviews them)." },
+  { key: "generate_mcq", label: "Generate MCQ tests", desc: "Create MCQs from a transcript / the AI repository." },
+  { key: "import_mcq_pdf", label: "Read uploaded MCQ PDFs", desc: "Digitise your own MCQ test PDFs into the engine." },
+  { key: "generate_subjective", label: "Generate descriptive tests", desc: "Create long-form questions from a transcript." },
+  { key: "suggested_answer", label: "Suggested model answers", desc: "Draft a full-marks model answer." },
+  { key: "summarize", label: "Class summaries", desc: "Summarise a class from its transcript." },
+  { key: "transcribe", label: "Handwritten notes → typed", desc: "Convert a handwritten-notes PDF into typed notes." },
+  { key: "recommend", label: "Study recommendations", desc: "Personalised topic recommendations." },
+  { key: "interview", label: "AI mock interview", desc: "Career-corner interview practice." },
+  { key: "cv", label: "CV summary polish", desc: "Improve a CV summary / objective." },
+];
+
+let _aiDisabled: { at: number; set: Set<string> } | null = null;
+async function aiDisabledSet(): Promise<Set<string>> {
+  const now = Date.now();
+  if (_aiDisabled && now - _aiDisabled.at < 30000) return _aiDisabled.set;
+  try {
+    const { data } = await createServiceClient()
+      .from("site_settings")
+      .select("value")
+      .eq("key", "ai_disabled_features")
+      .maybeSingle();
+    const arr = JSON.parse((data?.value as string) || "[]");
+    const set = new Set<string>(Array.isArray(arr) ? arr.map(String) : []);
+    _aiDisabled = { at: now, set };
+    return set;
+  } catch {
+    return _aiDisabled?.set ?? new Set<string>();
+  }
+}
+
+// True when AI is configured AND this feature isn't switched off by the admin.
+export async function aiFeatureEnabled(feature: string): Promise<boolean> {
+  if (!(await aiConfigured())) return false;
+  return !(await aiDisabledSet()).has(feature);
+}
+
 // Cheaper model for high-frequency student calls (doubts / ask-me). Override
 // via the ANTHROPIC_MODEL_FAST secret. Defaults to Haiku (~3x cheaper).
 async function fastModel(): Promise<string> {
@@ -66,6 +111,8 @@ type CallOpts = { model?: string; feature?: string };
 async function callClaude(system: string, user: string, maxTokens = 1024, opts: CallOpts = {}): Promise<string | null> {
   const apiKey = await getSecret("ANTHROPIC_API_KEY");
   if (!apiKey) return null;
+  // Admin kill-switch: a disabled feature makes no AI call at all.
+  if (opts.feature && opts.feature !== "other" && (await aiDisabledSet()).has(opts.feature)) return null;
   const model = opts.model || (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -341,6 +388,7 @@ export async function classifyJobs(jobs: { title: string; company?: string; snip
 export async function transcribeHandwriting(pdfUrl: string): Promise<string | null> {
   const apiKey = await getSecret("ANTHROPIC_API_KEY");
   if (!apiKey || !pdfUrl) return null;
+  if ((await aiDisabledSet()).has("transcribe")) return null;
   const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
   try {
     const pdfRes = await fetch(pdfUrl, { cache: "no-store" });
@@ -399,6 +447,7 @@ export type ExtractedMcq = {
 export async function extractMcqsFromPdf(pdfUrl: string): Promise<ExtractedMcq[] | null> {
   const apiKey = await getSecret("ANTHROPIC_API_KEY");
   if (!apiKey || !pdfUrl) return null;
+  if ((await aiDisabledSet()).has("import_mcq_pdf")) return null;
   const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
   const sys =
     "You DIGITISE a multiple-choice test that the teacher (CA Parveen Sharma) has ALREADY written, with the correct answers ALREADY marked. " +

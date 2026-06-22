@@ -85,7 +85,7 @@ export default async function CoursesPage() {
     { i: "📜", t: "Amendments to your exam", d: "Every amendment kept updated and tagged to the exact attempt it applies to — never study an outdated topic." },
     { i: "📝", t: "Notes, PDFs, RTP & MTP", d: "Typed + handwritten notes, ICAI RTP/MTP and past papers, organised topic by topic." },
     { i: "📈", t: "Progress tracking", d: "We track your pace, gaps and regularity so you always know if you're on track — or what to catch up." },
-    { i: "📦", t: "Books + downloads, any device", d: "Printed hardcopy books delivered to you, downloadable PDFs, and classes you can download & watch on Windows, Mac, laptop, iPhone or Android." },
+    { i: "📦", t: "Books, PDFs & offline classes", d: "Printed hardcopy books delivered to you, downloadable PDF notes, streaming on any browser, and offline class downloads in our desktop app (Windows & Mac) — mobile apps coming soon." },
   ];
 
   return (
@@ -105,7 +105,7 @@ export default async function CoursesPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, textAlign: "center" }}>
             <div><div style={{ fontSize: "1.6rem" }}>📦</div><strong>Hardcopy books included</strong><div className="muted" style={{ fontSize: ".82rem" }}>Printed books delivered to your door, along with the classes.</div></div>
             <div><div style={{ fontSize: "1.6rem" }}>📥</div><strong>Download the PDFs</strong><div className="muted" style={{ fontSize: ".82rem" }}>Notes &amp; materials available to download and keep.</div></div>
-            <div><div style={{ fontSize: "1.6rem" }}>📱</div><strong>Watch on any device</strong><div className="muted" style={{ fontSize: ".82rem" }}>Download &amp; play classes on Windows, Mac, laptop, iPhone &amp; Android.</div></div>
+            <div><div style={{ fontSize: "1.6rem" }}>📱</div><strong>Stream anywhere, download offline</strong><div className="muted" style={{ fontSize: ".82rem" }}>Watch in any browser; download &amp; watch offline in our desktop app (Windows &amp; Mac). iOS &amp; Android apps coming soon.</div></div>
           </div>
         </div>
 

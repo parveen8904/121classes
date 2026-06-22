@@ -1,14 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ingestGovtFeeds, sendFeedDigest } from "@/lib/govtfeed";
+import { ingestGovtFeeds, maybeSendDailyFeedDigest } from "@/lib/govtfeed";
 import { getSecret } from "@/lib/secrets";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// HOURLY cron (Vercel) — pulls new CA / accounting-standards news from the
-// keyword feeds into PENDING announcements, then emails the founder a digest of
-// just what was found this hour so he can approve from his phone. Deduped by
-// link, so an hour with nothing new sends no email.
+// Runs hourly (Vercel cron + GitHub Action). It pulls new CA / accounting-
+// standards news into PENDING announcements every hour, but emails the founder
+// only ONCE every ~24 hours — a single digest of everything found that day, so
+// his inbox stays simple. Deduped by link. Only auto-pulled feed items are ever
+// emailed; manually added announcements are untouched.
 export async function GET(req: NextRequest) {
   const secret = await getSecret("CRON_SECRET");
   if (secret) {
@@ -19,6 +20,6 @@ export async function GET(req: NextRequest) {
   }
 
   const result = await ingestGovtFeeds();
-  if (result.items.length) await sendFeedDigest(result.items);
-  return NextResponse.json({ ok: true, added: result.added, checked: result.checked });
+  const digest = await maybeSendDailyFeedDigest();
+  return NextResponse.json({ ok: true, added: result.added, checked: result.checked, emailed: digest.sent });
 }

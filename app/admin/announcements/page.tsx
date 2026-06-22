@@ -1,12 +1,10 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import DeleteButton from "../_components/DeleteButton";
 import AdminHero from "../_components/AdminHero";
 import { getSecret } from "@/lib/secrets";
-import { createAnnouncement, updateAnnouncement, deleteAnnouncement, saveGovtFeeds, fetchGovtFeedsNow, saveFeedKeywords, broadcastAnnouncement, bulkPublish, bulkUnpublish, bulkDelete, setAnnouncementCategory } from "./actions";
-import BulkBar from "./BulkBar";
-import CategoryQuickSelect from "./CategoryQuickSelect";
+import { createAnnouncement, saveGovtFeeds, fetchGovtFeedsNow, saveFeedKeywords, sendDigestNow } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
-import { ANNOUNCEMENT_KINDS as KINDS, ANNOUNCEMENT_KIND_LABEL as KIND_LABEL } from "@/lib/announcements";
+import { ANNOUNCEMENT_KINDS as KINDS } from "@/lib/announcements";
 
 function KindSelect({ name, value }: { name: string; value?: string }) {
   return (
@@ -23,14 +21,12 @@ function KindSelect({ name, value }: { name: string; value?: string }) {
 export default async function AnnouncementsPage({
   searchParams,
 }: {
-  searchParams: { feeds?: string; fetched?: string; bcast?: string };
+  searchParams: { feeds?: string; fetched?: string; digest?: string };
 }) {
   const supabase = createClient();
-  const { data: items } = await supabase
-    .from("announcements")
-    .select("id, kind, title, body, link_url, is_published, published_at, broadcast_at")
-    .order("published_at", { ascending: false });
-  const pendingCount = (items ?? []).filter((i) => !i.is_published).length;
+  const { data: rows } = await supabase.from("announcements").select("id, is_published");
+  const total = (rows ?? []).length;
+  const pendingCount = (rows ?? []).filter((i) => !i.is_published).length;
   const govtFeeds = await getSecret("GOVT_FEEDS");
   const feedKeywords = await getSecret("FEED_KEYWORDS");
   const feedNoise = await getSecret("FEED_NOISE");
@@ -46,18 +42,27 @@ export default async function AnnouncementsPage({
       />
 
       {searchParams.feeds === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Feed settings saved.</div>}
-      {searchParams.fetched !== undefined && <div className="notice ok" style={{ marginTop: 16 }}>✅ Fetched {searchParams.fetched} new item(s) — they&apos;re below as unpublished, awaiting your approval.</div>}
-      {searchParams.bcast === "sent" && <div className="notice ok" style={{ marginTop: 16 }}>📢 Broadcast sent to the Telegram channel + queued for the mobile app.</div>}
-      {searchParams.bcast === "queued" && <div className="notice ok" style={{ marginTop: 16 }}>📢 Queued for the mobile app. (Telegram not configured, so nothing sent there yet.)</div>}
-      {searchParams.bcast === "unpublished" && <div className="notice" style={{ marginTop: 16 }}>⚠️ Publish the announcement first, then broadcast it.</div>}
+      {searchParams.fetched !== undefined && <div className="notice ok" style={{ marginTop: 16 }}>✅ Fetched {searchParams.fetched} new item(s) — see them under &ldquo;All posts&rdquo;, awaiting your approval.</div>}
+      {searchParams.digest !== undefined && (
+        <div className="notice ok" style={{ marginTop: 16 }}>
+          {Number(searchParams.digest) > 0 ? `✉️ Digest emailed with ${searchParams.digest} pending item(s).` : "No pending feed items to email right now."}
+        </div>
+      )}
+
+      {/* Link to the full posts manager */}
+      <Link href="/admin/announcements/posts" className="card" style={{ marginTop: 18, display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none" }}>
+        <span><strong>📋 Manage all posts</strong> <span className="muted">— select, publish, categorise or remove ({total} total{pendingCount > 0 ? `, ${pendingCount} pending` : ""})</span></span>
+        <span style={{ fontWeight: 800, color: "var(--accent)" }}>Open →</span>
+      </Link>
 
       {/* AUTO-FEED — keyword driven */}
       <div className="form-card" style={{ marginTop: 18 }}>
         <h3>📰 Auto news feed (ICAI / NFRA / MCA / RBI / IFRS …)</h3>
         <p className="muted" style={{ fontSize: ".85rem", marginBottom: 10 }}>
-          Every hour we search Google News for these <strong>keywords</strong>, drop the noise, save what&apos;s left as
-          <strong> drafts</strong>, and <strong>email you a digest</strong> so you can approve from your phone. Nothing
-          reaches students until you tick &ldquo;Published&rdquo;. {pendingCount > 0 && <strong>{pendingCount} item(s) awaiting your approval below.</strong>}
+          We search Google News for these <strong>keywords</strong> every hour, drop the noise, and save what&apos;s left as
+          <strong> drafts</strong>. Once every <strong>24 hours</strong> you get a <strong>single email</strong> listing that
+          day&apos;s finds, so you can approve from your phone. Nothing reaches students until you tick &ldquo;Published&rdquo;.
+          {pendingCount > 0 && <strong> {pendingCount} item(s) awaiting approval.</strong>}
         </p>
         <form action={saveFeedKeywords}>
           <label htmlFor="kw">Keywords to watch (comma or new line)</label>
@@ -66,13 +71,18 @@ export default async function AnnouncementsPage({
           <label htmlFor="noise" style={{ marginTop: 8 }}>Noise to ignore (exam results, toppers, vacancies …)</label>
           <textarea id="noise" name="feed_noise" rows={2} defaultValue={feedNoise}
             placeholder="topper, result, vacancy, admit card, congratulations" />
-          <label htmlFor="digest" style={{ marginTop: 8 }}>Email the hourly digest to</label>
+          <label htmlFor="digest" style={{ marginTop: 8 }}>Email the daily digest to</label>
           <input id="digest" name="feed_digest_email" type="email" defaultValue={feedDigestEmail} placeholder="you@example.com" />
           <button className="btn small" type="submit" style={{ marginTop: 8 }}>Save feed settings</button>
         </form>
-        <form action={fetchGovtFeedsNow} style={{ marginTop: 8 }}>
-          <button className="btn small secondary" type="submit">⤵️ Fetch new items now</button>
-        </form>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+          <form action={fetchGovtFeedsNow}>
+            <button className="btn small secondary" type="submit">⤵️ Fetch new items now</button>
+          </form>
+          <form action={sendDigestNow}>
+            <button className="btn small secondary" type="submit">✉️ Email me the pending items now</button>
+          </form>
+        </div>
         <details style={{ marginTop: 10 }}>
           <summary className="muted" style={{ fontSize: ".82rem", cursor: "pointer" }}>Extra feed URLs (optional)</summary>
           <form action={saveGovtFeeds} style={{ marginTop: 8 }}>
@@ -106,72 +116,6 @@ export default async function AnnouncementsPage({
           </label>
           <SubmitButton className="btn" savedLabel="✓ Added">Add announcement</SubmitButton>
         </form>
-      </div>
-
-      <h2 className="admin-section-title">📋 All announcements ({(items ?? []).length})</h2>
-      <p className="muted" style={{ fontSize: ".9rem" }}>Tick items to publish / unpublish / remove several at once, or tap one to open and edit it.</p>
-
-      {items && items.length > 0 && <BulkBar publish={bulkPublish} unpublish={bulkUnpublish} remove={bulkDelete} />}
-
-      <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-        {items && items.length > 0 ? (
-          items.map((a) => (
-            <div className="card" key={a.id}>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <input type="checkbox" name="ids" value={a.id} form="bulkForm" aria-label="Select" style={{ width: 18, height: 18, flexShrink: 0 }} />
-                <details style={{ flex: 1, minWidth: 0 }}>
-                  <summary style={{ cursor: "pointer", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                    <strong>{a.title}</strong>
-                    <span className="muted" style={{ fontSize: ".82rem" }}>
-                      {KIND_LABEL[a.kind] ?? a.kind} · {a.is_published ? "🟢 published" : "⚪ draft"}
-                      {a.broadcast_at ? " · 📢 broadcast" : ""}
-                    </span>
-                  </summary>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
-                <span className="muted" style={{ fontSize: ".8rem" }}>Category:</span>
-                <CategoryQuickSelect id={a.id} value={a.kind} action={setAnnouncementCategory} />
-                <DeleteButton action={deleteAnnouncement} id={a.id} label="🗑️ Remove" message="Remove this announcement? This cannot be undone." />
-              </div>
-              <form action={updateAnnouncement} style={{ marginTop: 12 }}>
-                <input type="hidden" name="id" value={a.id} />
-                <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 2fr" }}>
-                  <div>
-                    <label>Category</label>
-                    <KindSelect name="kind" value={a.kind} />
-                  </div>
-                  <div>
-                    <label>Title</label>
-                    <input name="title" defaultValue={a.title} required />
-                  </div>
-                </div>
-                <label>Body</label>
-                <textarea name="body" rows={3} defaultValue={a.body ?? ""} />
-                <label>Link URL</label>
-                <input name="link_url" defaultValue={a.link_url ?? ""} />
-                <label className="remember" style={{ marginTop: 0 }}>
-                  <input type="checkbox" name="is_published" defaultChecked={a.is_published} /> Published
-                </label>
-                <SubmitButton className="btn small" closeDetails>Save changes</SubmitButton>
-              </form>
-              {/* Broadcast to students — separate form (can't nest forms). */}
-              <form action={broadcastAnnouncement} style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-                <input type="hidden" name="id" value={a.id} />
-                <SubmitButton className="btn small secondary" savedLabel="📢 Sent">
-                  {a.broadcast_at ? "📢 Broadcast again to students" : "📢 Send to students (mobile + Telegram)"}
-                </SubmitButton>
-                <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
-                  {a.broadcast_at
-                    ? `Last broadcast ${new Date(a.broadcast_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}.`
-                    : "Posts to the Telegram channel now and queues a push for the mobile app. Publish it first."}
-                </p>
-              </form>
-                </details>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="muted">No announcements yet. Add the first one above.</p>
-        )}
       </div>
     </section>
   );

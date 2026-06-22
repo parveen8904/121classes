@@ -33,6 +33,7 @@ export async function fetchGovtFeedsNow() {
   if (!(await isAdmin())) return;
   const { added } = await ingestGovtFeeds();
   revalidatePath("/admin/announcements");
+  revalidatePath("/admin/announcements/posts");
   redirect(`/admin/announcements?fetched=${added}`);
 }
 
@@ -83,7 +84,17 @@ export async function broadcastAnnouncement(formData: FormData) {
   await svc.from("announcements").update({ broadcast_at: nowISO }).eq("id", a.id);
 
   revalidatePath("/admin/announcements");
+  revalidatePath("/admin/announcements/posts");
   redirect(`/admin/announcements?bcast=${tgOk ? "sent" : "queued"}`);
+}
+
+// Force-send the feed digest right now (the "email me the pending items" button),
+// ignoring the once-a-day guard — so the founder can confirm email is working.
+export async function sendDigestNow() {
+  if (!(await isAdmin())) return;
+  const { maybeSendDailyFeedDigest } = await import("@/lib/govtfeed");
+  const { sent } = await maybeSendDailyFeedDigest({ force: true });
+  redirect(`/admin/announcements?digest=${sent}`);
 }
 
 const KINDS = ["amendment", "whats_new", "student_corner", "industry", "macro"];
@@ -105,6 +116,7 @@ export async function createAnnouncement(formData: FormData) {
     is_published: formData.get("is_published") === "on",
   });
   revalidatePath("/admin/announcements");
+  revalidatePath("/admin/announcements/posts");
 }
 
 export async function updateAnnouncement(formData: FormData) {
@@ -123,6 +135,7 @@ export async function updateAnnouncement(formData: FormData) {
     })
     .eq("id", id);
   revalidatePath("/admin/announcements");
+  revalidatePath("/admin/announcements/posts");
 }
 
 export async function deleteAnnouncement(formData: FormData) {
@@ -130,6 +143,7 @@ export async function deleteAnnouncement(formData: FormData) {
   const supabase = createClient();
   await supabase.from("announcements").delete().eq("id", id);
   revalidatePath("/admin/announcements");
+  revalidatePath("/admin/announcements/posts");
 }
 
 // Set just the category on one row (the always-visible inline dropdown).
@@ -139,6 +153,7 @@ export async function setAnnouncementCategory(formData: FormData) {
   if (!id) return;
   await createServiceClient().from("announcements").update({ kind: readKind(formData) }).eq("id", id);
   revalidatePath("/admin/announcements");
+  revalidatePath("/admin/announcements/posts");
 }
 
 // --- bulk actions: act on every ticked row at once -----------------------
@@ -156,6 +171,7 @@ export async function bulkPublish(formData: FormData) {
       .in("id", ids);
   }
   revalidatePath("/admin/announcements");
+  revalidatePath("/admin/announcements/posts");
 }
 
 export async function bulkUnpublish(formData: FormData) {
@@ -165,6 +181,7 @@ export async function bulkUnpublish(formData: FormData) {
     await createServiceClient().from("announcements").update({ is_published: false }).in("id", ids);
   }
   revalidatePath("/admin/announcements");
+  revalidatePath("/admin/announcements/posts");
 }
 
 export async function bulkDelete(formData: FormData) {
@@ -174,4 +191,5 @@ export async function bulkDelete(formData: FormData) {
     await createServiceClient().from("announcements").delete().in("id", ids);
   }
   revalidatePath("/admin/announcements");
+  revalidatePath("/admin/announcements/posts");
 }

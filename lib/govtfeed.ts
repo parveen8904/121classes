@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { getSecret } from "@/lib/secrets";
+import { getSecret, clearSecretCache } from "@/lib/secrets";
 import { sendEmail, emailShell } from "@/lib/notify";
 import { ANNOUNCEMENT_KIND_LABEL } from "@/lib/announcements";
 
@@ -119,6 +119,7 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
         body: it.body || null,
         link_url: it.link,
         is_published: false, // pending faculty approval
+        from_feed: true,
       });
       if (!error) added.push(it);
     }
@@ -153,4 +154,43 @@ export async function sendFeedDigest(items: FeedItem[]): Promise<void> {
     `<p>New regulatory / accounting-standards news was found and saved as <strong>drafts</strong> (a suggested category is shown on each). Nothing is visible to students until you approve it.</p>${rows}<p style="margin-top:16px">${cta}</p>`,
   );
   await sendEmail(to, `🆕 ${n} CA update${n > 1 ? "s" : ""} to review — 121 CA Classes`, html);
+}
+
+// ONE digest email per ~24h covering all RSS-feed drafts not yet emailed. This
+// only ever concerns auto-pulled feed items (from_feed = true); manually added
+// announcements never trigger email. Called on every hourly fetch but the time
+// guard ensures at most one email a day. Pass {force:true} to send right now
+// (the "email me the pending items now" button) ignoring the guard + the flag.
+const DIGEST_INTERVAL_MS = 20 * 3600 * 1000;
+
+export async function maybeSendDailyFeedDigest(opts?: { force?: boolean }): Promise<{ sent: number }> {
+  const svc = createServiceClient();
+  if (!opts?.force) {
+    const lastRaw = await getSecret("feed_digest_last_sent");
+    const last = lastRaw ? Date.parse(lastRaw) : 0;
+    if (Number.isFinite(last) && last > 0 && Date.now() - last < DIGEST_INTERVAL_MS) return { sent: 0 };
+  }
+
+  let query = svc
+    .from("announcements")
+    .select("id, kind, title, body, link_url")
+    .eq("from_feed", true)
+    .eq("is_published", false)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (!opts?.force) query = query.eq("digest_emailed", false);
+
+  const { data: rows } = await query;
+  if (!rows || rows.length === 0) return { sent: 0 };
+
+  await sendFeedDigest(
+    rows.map((r) => ({ title: r.title as string, link: (r.link_url as string) || "", body: (r.body as string) || "", kind: r.kind as string })),
+  );
+  await svc.from("announcements").update({ digest_emailed: true }).in("id", rows.map((r) => r.id));
+  await svc.from("app_secrets").upsert(
+    { key: "feed_digest_last_sent", value: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { onConflict: "key" },
+  );
+  clearSecretCache();
+  return { sent: rows.length };
 }

@@ -8,6 +8,7 @@ import { generatePlan } from "@/lib/planner/engine";
 import SubmitButton from "@/app/components/SubmitButton";
 import RemarkBox from "./RemarkBox";
 import PrintButton from "./PrintButton";
+import TopicPicker from "./TopicPicker";
 import { savePlanSetup, clearPlan, emailMyPlan, markClassDone, rebalanceFromToday } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -35,10 +36,12 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
   const showForm = !setup?.subjectId || searchParams.new === "1";
 
   if (showForm) {
-    const { data: pickTopics } = setup?.subjectId
-      ? await supabase.from("topics").select("id, title").eq("subject_id", setup.subjectId).eq("is_combined", false).order("order_index")
-      : { data: [] as { id: string; title: string }[] };
-    const pickedSet = new Set(setup?.pickedTopicIds ?? []);
+    const subjIds = (subjOpts ?? []).map((s) => s.id as string);
+    const { data: allTopics } = subjIds.length
+      ? await supabase.from("topics").select("id, title, subject_id").in("subject_id", subjIds).eq("is_combined", false).order("order_index")
+      : { data: [] as { id: string; title: string; subject_id: string }[] };
+    const topicsBySubject: Record<string, { id: string; title: string }[]> = {};
+    for (const t of allTopics ?? []) (topicsBySubject[t.subject_id as string] ??= []).push({ id: t.id as string, title: t.title as string });
     return (
       <main className="container" style={{ paddingTop: 36, paddingBottom: 60, maxWidth: 720 }}>
         <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
@@ -47,13 +50,12 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
         <p className="muted">Pick your subject and dates — we&apos;ll lay out exactly what to do each day, through to exam day.</p>
 
         <form action={savePlanSetup} className="form-card" style={{ marginTop: 18, display: "grid", gap: 14 }}>
-          <div>
-            <label>Subject</label>
-            <select name="subject" defaultValue={setup?.subjectId ?? ""} required>
-              <option value="" disabled>Choose your subject…</option>
-              {(subjOpts ?? []).map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
-            </select>
-          </div>
+          <TopicPicker
+            subjects={(subjOpts ?? []).map((s) => ({ id: s.id as string, title: s.title as string }))}
+            topicsBySubject={topicsBySubject}
+            defaultSubjectId={setup?.subjectId ?? ""}
+            pickedIds={setup?.pickedTopicIds ?? []}
+          />
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
             <div><label>Start date</label><input type="date" name="start" defaultValue={setup?.startDate ?? todayISO()} required /></div>
             <div><label>Exam date</label><input type="date" name="exam" defaultValue={setup?.examDate ?? ""} required /></div>
@@ -118,20 +120,6 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
               <textarea name="holidays" rows={2} defaultValue={(setup?.holidays ?? []).join(", ")} placeholder="2026-01-26, 2026-03-14" />
               <label style={{ marginTop: 8 }}>Extra working days — e.g. a Sunday you&apos;ll study (yyyy-mm-dd)</label>
               <textarea name="extra_days" rows={2} defaultValue={(setup?.extraDays ?? []).join(", ")} placeholder="2026-02-15" />
-              {pickTopics && pickTopics.length > 0 ? (
-                <div style={{ marginTop: 10 }}>
-                  <label>Or tick exact topics for the exhaustive stage (overrides the scope above)</label>
-                  <div style={{ maxHeight: 200, overflow: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
-                    {pickTopics.map((t) => (
-                      <label key={t.id} style={{ display: "block", fontSize: ".85rem", padding: "2px 0" }}>
-                        <input type="checkbox" name="pick" value={t.id} defaultChecked={pickedSet.has(t.id)} /> {t.title}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="muted" style={{ fontSize: ".78rem", marginTop: 8 }}>Want to tick exact topics? Generate once, then reopen — this subject&apos;s topics will appear here.</p>
-              )}
             </div>
           </details>
           <SubmitButton className="btn" savedLabel="✓ Building…">Generate my plan</SubmitButton>

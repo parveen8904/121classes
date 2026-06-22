@@ -188,7 +188,11 @@ export function generatePlan(input: PlanInput): Plan {
   };
 
   const miqByTopic = new Map(input.miq.map((m) => [m.topicTitle, m]));
+  const pickedTitles = picked ? input.topics.filter((t) => picked.has(t.topicId)).map((t) => t.title) : null;
   const topicNames = (sc: Scope): string[] => {
+    // Hand-picked topics (if any) drive revision too, so a student revises exactly
+    // what they studied; otherwise fall back to the scope filter.
+    if (pickedTitles && pickedTitles.length) return pickedTitles;
     const f = input.topics.filter((t) => inScope(t.importance, sc)).map((t) => t.title);
     return f.length ? f : input.topics.map((t) => t.title);
   };

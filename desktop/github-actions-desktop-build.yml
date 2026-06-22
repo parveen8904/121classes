@@ -1,0 +1,82 @@
+# ============================================================================
+# HOW TO USE THIS FILE (one-time, ~2 minutes):
+#   1. On GitHub, open this repo → "Actions" tab → "New workflow" →
+#      "set up a workflow yourself".
+#   2. Name the file:  desktop-build.yml
+#   3. Delete the sample content, paste EVERYTHING below the line of ===, commit.
+#   4. Done. To build installers later: GitHub → Actions → "Build desktop apps"
+#      → "Run workflow"  (or push a tag like v2.0.1 to auto-build + publish a Release).
+#
+# (It lives here because the access token used by the assistant can't push files
+#  into .github/workflows/ — so you add it once through the GitHub website.)
+# ============================================================================
+
+name: Build desktop apps
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # config.js is git-ignored, so CI writes it. These are PUBLIC values
+      # (the anon key is the publishable key) — safe to keep here.
+      - name: Write config.js (Mumbai)
+        shell: bash
+        run: |
+          cat > config.js <<'EOF'
+          globalThis.APP_CONFIG = {
+            API_BASE: "https://caparveensharma.com",
+            SUPABASE_URL: "https://xmeltwyfvzhhurtcjfiu.supabase.co",
+            SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtZWx0d3lmdnpoaHVydGNqZml1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5NTg3MTgsImV4cCI6MjA5NzUzNDcxOH0.CEKC82Y8ekWadwfCznwngLGgc-Iljbl4ABVr5qXY1dQ",
+          };
+          EOF
+
+      - name: Install deps
+        run: npm install
+
+      - name: Build (Mac)
+        if: runner.os == 'macOS'
+        run: npm run dist:mac
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: npm run dist:win
+
+      # Attach the installers to a GitHub Release (only when you push a tag).
+      - name: Publish to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            desktop/dist/*.dmg
+            desktop/dist/*.exe
+
+      # Always keep the installers as downloadable run artifacts too.
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.os }}
+          path: |
+            desktop/dist/*.dmg
+            desktop/dist/*.exe
+          if-no-files-found: ignore

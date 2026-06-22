@@ -12,6 +12,7 @@ const hrs = (mins: number) => {
   const h = Math.round(mins / 60);
   return h > 0 ? `${h} hr${h === 1 ? "" : "s"}` : `${mins} min`;
 };
+const GRAD = "linear-gradient(135deg,#0d9488,#10b981)";
 
 type Stat = { classes: number; minutes: number; revisions: number; tests: number; notes: number; topics: number; amendments: number; attempts: string[]; faculty: string[]; course: string };
 
@@ -76,6 +77,8 @@ export default async function CoursesPage() {
     const att = (a.valid_from_attempt as string) || "";
     if (att && !st.attempts.includes(att)) st.attempts.push(att);
   }
+  let totalClasses = 0, totalMinutes = 0;
+  for (const st of stats.values()) { totalClasses += st.classes; totalMinutes += st.minutes; }
 
   const FEATURES = [
     { i: "🗓️", t: "Day-by-day study plan", d: "A personal plan to exam day — classes, revisions & tests — that auto-adjusts to your pace and downloads as a PDF." },
@@ -91,14 +94,18 @@ export default async function CoursesPage() {
   return (
     <>
       <section className="section">
-        <div className="section-head">
-          <span className="eyebrow">📚 Courses</span>
-          <h2>Pass with a plan, not just classes</h2>
-          <p>
-            Advanced Accounting &amp; Financial Reporting by <strong>CA Parveen Sharma &amp; team</strong> — concept classes,
-            a day-by-day study plan, AI doubt-solving on WhatsApp/Telegram, tests with performance reports, revisions and
-            amendments kept current to your exam. Everything in one guided package.
+        <div style={{ background: GRAD, color: "#fff", borderRadius: 22, padding: "40px 28px", textAlign: "center", marginBottom: 22 }}>
+          <span style={{ display: "inline-block", background: "rgba(255,255,255,.18)", padding: "4px 12px", borderRadius: 999, fontSize: ".8rem", fontWeight: 700 }}>📚 Courses</span>
+          <h1 style={{ color: "#fff", fontSize: "2rem", margin: "14px 0 8px" }}>Pass with a plan, not just classes</h1>
+          <p style={{ maxWidth: 640, margin: "0 auto 20px", fontSize: "1.02rem", color: "rgba(255,255,255,.95)" }}>
+            Advanced Accounting &amp; Financial Reporting by <strong>CA Parveen Sharma &amp; team</strong> — concept classes, a
+            day-by-day study plan, AI doubts on WhatsApp/Telegram, tests with reports, revisions &amp; amendments to your exam.
           </p>
+          <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap" }}>
+            <div><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}>{(subjects ?? []).length}</div><div style={{ fontSize: ".8rem", opacity: .92 }}>subjects</div></div>
+            <div><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}>{totalClasses}+</div><div style={{ fontSize: ".8rem", opacity: .92 }}>classes</div></div>
+            <div><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}>{Math.round(totalMinutes / 60)}+</div><div style={{ fontSize: ".8rem", opacity: .92 }}>hours of teaching</div></div>
+          </div>
         </div>
 
         <div className="card" style={{ maxWidth: 860, margin: "0 auto 26px", border: "2px solid var(--accent)" }}>

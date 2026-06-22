@@ -7,6 +7,8 @@ export const metadata = {
   description: "A personal, day-by-day study plan to exam day — disciplined, targeted and mentored. Daily targets, revision rounds, most-important-questions, doubt-solving on WhatsApp/Telegram, and progress tracking.",
 };
 
+const GRAD = "linear-gradient(135deg,#0d9488,#10b981)";
+
 const STAGES = [
   { n: "1", t: "Exhaustive", d: "Detailed classes, topic by topic in order of importance — with homework and weekly deep tests." },
   { n: "2", t: "Revision 1", d: "Revision videos + RTP/MTP, past papers and your most-important-questions." },
@@ -44,17 +46,14 @@ export default function BuildYourPlanPage() {
   return (
     <>
       <section className="section">
-        <div className="section-head">
-          <span className="eyebrow">🗓️ Build your plan</span>
-          <h2>Your own day-by-day plan to exam day</h2>
-          <p>
-            Tell us your subject, start date and exam date — and get a personal, day-by-day study plan that knows exactly
-            what you should do today, keeps you on track, and adjusts the moment life happens. Disciplined, targeted, and
-            mentored by <strong>CA Parveen Sharma &amp; team</strong>.
+        <div style={{ background: GRAD, color: "#fff", borderRadius: 22, padding: "40px 28px", textAlign: "center" }}>
+          <span style={{ display: "inline-block", background: "rgba(255,255,255,.18)", padding: "4px 12px", borderRadius: 999, fontSize: ".8rem", fontWeight: 700 }}>🗓️ Build your plan</span>
+          <h1 style={{ color: "#fff", fontSize: "2rem", margin: "14px 0 8px" }}>Your own day-by-day plan to exam day</h1>
+          <p style={{ maxWidth: 620, margin: "0 auto 20px", fontSize: "1.02rem", color: "rgba(255,255,255,.95)" }}>
+            Tell us your subject, start date &amp; exam date — get a personal plan that knows exactly what to do today, keeps you
+            on track, and adjusts the moment life happens. Disciplined, targeted &amp; mentored.
           </p>
-        </div>
-        <div style={{ textAlign: "center" }}>
-          <Link className="btn" href="/planner">Build my plan →</Link>
+          <Link className="btn" href="/planner" style={{ background: "#fff", color: "#0d9488", fontWeight: 800 }}>Build my plan →</Link>
         </div>
       </section>
 

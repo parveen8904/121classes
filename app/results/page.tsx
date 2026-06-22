@@ -8,6 +8,8 @@ export const metadata = {
 
 type Result = { id: string; student_name: string; headline: string | null; attempt: string | null; marks: string | null; quote: string | null; photo_url: string | null; level: string | null };
 
+const GRAD = "linear-gradient(135deg,#0d9488,#10b981)";
+
 const initials = (n: string) => n.split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
 
 function Card({ r }: { r: Result }) {
@@ -47,10 +49,13 @@ export default async function ResultsPage() {
 
   return (
     <section className="section">
-      <div className="section-head">
-        <span className="eyebrow">🏆 Results</span>
-        <h2>Our students. Our pride.</h2>
-        <p>Real rank-holders and successes mentored by <strong>CA Parveen Sharma &amp; team</strong> — with disciplined plans, doubt-solving and revision that actually work.</p>
+      <div style={{ background: GRAD, color: "#fff", borderRadius: 22, padding: "40px 28px", textAlign: "center", marginBottom: 8 }}>
+        <span style={{ display: "inline-block", background: "rgba(255,255,255,.18)", padding: "4px 12px", borderRadius: 999, fontSize: ".8rem", fontWeight: 700 }}>🏆 Results</span>
+        <h1 style={{ color: "#fff", fontSize: "2rem", margin: "14px 0 8px" }}>Our students. Our pride.</h1>
+        <p style={{ maxWidth: 620, margin: "0 auto", fontSize: "1.02rem", color: "rgba(255,255,255,.95)" }}>
+          Real rank-holders mentored by <strong>CA Parveen Sharma &amp; team</strong> — with disciplined plans, doubt-solving and revision that actually work. 🎯
+        </p>
+        {results.length > 0 && <div style={{ fontSize: "2rem", fontWeight: 800, marginTop: 16 }}>{results.length}+ <span style={{ fontSize: ".9rem", fontWeight: 500, opacity: .92 }}>success stories</span></div>}
       </div>
 
       {results.length === 0 ? (

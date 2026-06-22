@@ -269,8 +269,8 @@ export default async function TopicDetail({
                     </Link>
                   )}
                   {s.type === "subjective_test" && (
-                    <Link className="btn small secondary" href={`/admin/subjective/${s.id}`}>
-                      Manage questions →
+                    <Link className="btn small" href={`/admin/subjective/${s.id}`}>
+                      📝 Set up paper / questions (timed test) →
                     </Link>
                   )}
                   {s.type === "full_class_video" && !!(s.config as Record<string, unknown> | null)?.transcript && (

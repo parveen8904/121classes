@@ -479,6 +479,29 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     }
   }
 
+  // Durations for EVERY published section in this topic — including locked ones —
+  // so the duration on each class and the topic total are the true catalog figures
+  // for all students (content stays locked; only the minutes are shown).
+  const durById = new Map<string, number>();
+  let topicTotalMins = 0;
+  let topicMainClasses = 0;
+  {
+    const { data: durRows } = await createServiceClient()
+      .from("sections")
+      .select("id, type, config")
+      .eq("topic_id", topic.id)
+      .eq("is_published", true);
+    for (const r of durRows ?? []) {
+      const cfg = ((r as { config?: Record<string, unknown> | null }).config ?? {}) as Record<string, unknown>;
+      const d = Number(cfg.duration_minutes) || 0;
+      durById.set(r.id as string, d);
+      if ((r as { type?: string }).type === "full_class_video") {
+        topicTotalMins += d;
+        if (!/[A-Za-z]/.test(String(cfg.class_no ?? ""))) topicMainClasses += 1;
+      }
+    }
+  }
+
   // Hit-list importance for the student's own attempt.
   const importance = ((topic as { importance?: Record<string, string> | null }).importance) ?? {};
   const norm = (s: string) => s.toLowerCase().replace(/[_\s]+/g, " ").trim();
@@ -533,9 +556,10 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     const locked = !s.unlocked;
     const planName = s.min_plan ? PLAN_LABEL[s.min_plan] ?? s.min_plan : "a paid";
     const c = (configById.get(s.id) ?? {}) as Record<string, string>;
+    const durMin = durById.get(s.id) ?? Number(c.duration_minutes) ?? 0;
     const dur =
       s.type === "full_class_video" || s.type === "revision_video"
-        ? fmtMins(Number(c.duration_minutes))
+        ? fmtMins(durMin)
         : "";
     // Class / revision number shown on the right, in the title's font + weight.
     let rightLabel: string | undefined;
@@ -652,6 +676,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
           <span className="badge">📖 Topic{(topic as { topic_code?: string | null }).topic_code ? ` ${(topic as { topic_code?: string }).topic_code}` : ""}</span>
           <h1>{topic.title}</h1>
           <p className="meta">
+            {topicMainClasses > 0 && <>🎓 {topicMainClasses} {topicMainClasses === 1 ? "class" : "classes"} · ⏱️ {fmtMins(topicTotalMins)} · </>}
             {sections.length} section{sections.length === 1 ? "" : "s"} · revision, notes, tests &amp;
             doubt-solving
             {(topic as { weightage_marks?: number | null }).weightage_marks

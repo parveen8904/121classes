@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { topicVisible } from "../_lib/attempt";
 import { setAutoRenew } from "./actions";
 import { addMySubject, removeMySubject } from "../mycourses";
@@ -85,8 +86,14 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   const subjMaterials = new Map<string, Set<string>>();
   const topicClassCount = new Map<string, number>(); // non-part classes per topic
   const inc = (m: Map<string, number>, k: string, by = 1) => m.set(k, (m.get(k) ?? 0) + by);
+  // Catalog totals (classes / hours / tests) are the SAME for everyone — they
+  // describe what the subject contains, not what this student has unlocked. So we
+  // count via the service client (all published sections), never RLS (which would
+  // show a not-yet-subscribed student only the free preview). Access to the actual
+  // content is still enforced when a class is opened.
+  const svc = createServiceClient();
   if (topicIds2.length) {
-    const { data: secRows } = await supabase
+    const { data: secRows } = await svc
       .from("sections")
       .select("topic_id, type, config")
       .in("topic_id", topicIds2)
@@ -107,7 +114,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
       else if (type === "mcq_test") inc(sumMcq, sid);
       else if (type === "subjective_test") inc(sumDesc, sid);
     }
-    const { data: matRows } = await supabase
+    const { data: matRows } = await svc
       .from("repository_items")
       .select("topic_id, kind")
       .in("topic_id", topicIds2)

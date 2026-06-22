@@ -158,7 +158,10 @@ export default async function CostsPage() {
           {bunnyBill ? (
             <>
               <div style={stat}>{money(bunnyBill.thisMonth)}</div>
-              <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>This month&apos;s Bunny charges · balance {money(bunnyBill.balance)} · {bunnyVideos} videos ({youtubeVideos} on free YouTube).</p>
+              <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 6px" }}>Used this month · {bunnyVideos} videos ({youtubeVideos} on free YouTube).</p>
+              <div style={{ fontWeight: 700, fontSize: ".9rem", color: bunnyBill.balance < 5 ? "#b91c1c" : "#16a34a" }}>
+                💳 Credits left: {money(bunnyBill.balance)}{bunnyBill.balance < 5 ? " — running low, top up soon" : ""}
+              </div>
             </>
           ) : (
             <>

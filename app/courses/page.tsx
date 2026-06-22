@@ -99,7 +99,7 @@ export default async function CoursesPage() {
           <span style={{ display: "inline-block", background: "rgba(255,255,255,.18)", padding: "4px 12px", borderRadius: 999, fontSize: ".8rem", fontWeight: 700 }}>📚 Courses</span>
           <h1 style={{ color: "#fff", fontSize: "2rem", margin: "14px 0 8px" }}>Pass with a plan, not just classes</h1>
           <p style={{ maxWidth: 640, margin: "0 auto 20px", fontSize: "1.02rem", color: "rgba(255,255,255,.95)" }}>
-            Advanced Accounting &amp; Financial Reporting by <strong>CA Parveen Sharma &amp; team</strong> — concept classes, a
+            Advanced Accounting &amp; Financial Reporting by <strong>CA Parveen Sharma</strong> — concept classes, a
             day-by-day study plan, AI doubts on WhatsApp/Telegram, tests with reports, revisions &amp; amendments to your exam.
           </p>
           <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap" }}>

@@ -19,7 +19,7 @@ const KIND_LABEL: Record<string, string> = {
 const stats = [
   { num: "20+", lbl: "Years teaching CA" },
   { num: "50,000+", lbl: "Students mentored" },
-  { num: "1-on-1", lbl: "Personalized focus" },
+  { num: "1-on-1", lbl: "Personalised focus" },
 ];
 
 const aiPoints = [
@@ -41,7 +41,7 @@ const whatsNew = [
 ];
 
 const testimonials = [
-  { who: "A. Sharma", role: "CA Inter student", quote: "Parveen Sir&apos;s teaching and the personalized attention made all the difference." },
+  { who: "A. Sharma", role: "CA Inter student", quote: "Parveen Sir&apos;s teaching and the personalised attention made all the difference." },
   { who: "R. Mehta", role: "CA Foundation", quote: "Clear, no-nonsense classes and the AI checking gave me feedback fast." },
   { who: "S. Iyer", role: "CA Inter student", quote: "Felt like true 1-to-1 mentoring — exactly what I needed to clear my paper." },
 ];
@@ -127,7 +127,7 @@ export default async function Home() {
           India&apos;s most renowned faculty.
         </h1>
         <p className="sub">
-          Highly personalized, result-oriented 1-to-1 coaching led by Parveen Sharma —
+          Highly personalised, result-oriented 1-to-1 coaching led by Parveen Sharma —
           with AI-assisted paper checking and doubt-solving <strong>under his
           guidance</strong>. Top-notch teaching that clears the clutter.
         </p>
@@ -269,7 +269,7 @@ export default async function Home() {
           <div>
             <div className="ribbon">Your mentor · 30+ years teaching CA</div>
             <h2>CA Parveen Sharma</h2>
-            <div className="role">Founder &amp; Lead Faculty · 121 CA Classes</div>
+            <div className="role">Founder &amp; Lead Faculty · Personalised Learning</div>
             <p className="muted">
               CA Parveen Sharma is one of India&apos;s most renowned Accountancy educators,
               deeply respected by CA students across the country.
@@ -387,8 +387,8 @@ export default async function Home() {
       <section className="section alt" id="courses">
         <div className="section-head">
           <div className="eyebrow">Courses</div>
-          <h2>Courses by CA Parveen Sharma &amp; his team</h2>
-          <p>Taught by <strong>CA Parveen Sharma &amp; his team</strong> — structured, attempt-wise content.</p>
+          <h2>Courses by CA Parveen Sharma</h2>
+          <p>Taught by <strong>CA Parveen Sharma</strong> — structured, attempt-wise content.</p>
         </div>
         <div className="grid grid-3">
           {dbCourses && dbCourses.length > 0
@@ -397,7 +397,7 @@ export default async function Home() {
                   <div className="ic">📘</div>
                   <h3>{c.title}</h3>
                   <p className="muted" style={{ marginTop: 10, fontSize: ".82rem" }}>
-                    👨‍🏫 Taught by CA Parveen Sharma &amp; team
+                    👨‍🏫 Taught by CA Parveen Sharma
                   </p>
                   <p style={{ marginTop: 12 }}>
                     <Link className="btn secondary small" href="/courses">View course</Link>
@@ -631,11 +631,11 @@ export default async function Home() {
       <section className="section" id="about">
         <div className="section-head">
           <div className="eyebrow">About Us</div>
-          <h2>About 121 CA Classes</h2>
+          <h2>About Personalised Learning</h2>
         </div>
         <p className="muted" style={{ maxWidth: 760, margin: "0 auto", textAlign: "center" }}>
-          121 CA Classes is a venture by <strong>CA Parveen Sharma</strong>, built around one
-          idea — highly personalized, result-oriented preparation. Top-notch teaching by
+          Personalised Learning is a venture by <strong>CA Parveen Sharma</strong>, built around one
+          idea — highly personalised, result-oriented preparation. Top-notch teaching by
           Parveen Sharma is paired with AI-assisted paper checking and doubt-solving
           (under his guidance) and attempt-wise content, so you study only what matters,
           at your own pace.
@@ -649,7 +649,7 @@ export default async function Home() {
           <h2>Our vision</h2>
         </div>
         <p className="muted" style={{ maxWidth: 760, margin: "0 auto", textAlign: "center", fontSize: "1.1rem" }}>
-          To bring <span className="grad">CA Parveen Sharma&apos;s</span> highly personalized,
+          To bring <span className="grad">CA Parveen Sharma&apos;s</span> highly personalised,
           result-oriented teaching to every aspirant in India — clearing the clutter with
           top-notch coaching, helped (not replaced) by AI.
         </p>

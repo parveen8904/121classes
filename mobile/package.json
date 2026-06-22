@@ -1,0 +1,21 @@
+{
+  "name": "caps-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CA Parveen Sharma — iOS & Android app (Capacitor).",
+  "scripts": {
+    "sync": "cap sync",
+    "open:ios": "cap open ios",
+    "open:android": "cap open android",
+    "assets": "capacitor-assets generate --iconBackgroundColor #0c1413 --splashBackgroundColor #0c1413"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/ios": "^6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.1.2"
+  }
+}

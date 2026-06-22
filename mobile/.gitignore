@@ -1,0 +1,14 @@
+# Capacitor / Node
+node_modules/
+www/.DS_Store
+
+# Native projects are generated on your Mac with `npx cap add ios/android`.
+# They're large and machine-specific, so we don't commit them here.
+ios/
+android/
+
+# Build outputs
+dist/
+*.ipa
+*.apk
+*.aab

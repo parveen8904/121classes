@@ -1,0 +1,16 @@
+# Fly.io config for the worker. It has no web server (it's a background bot),
+# so there's no [http_service]. Deploy with:  fly launch --no-deploy  then
+# set secrets and  fly deploy.
+#
+#   fly secrets set DISCORD_BOT_TOKEN=... SUPABASE_URL=... \
+#     SUPABASE_SERVICE_ROLE_KEY=... TELEGRAM_BOT_TOKEN=...
+#
+app = "ca-discord-worker"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

@@ -17,22 +17,34 @@ live via Supabase Realtime; website/Telegram → Discord is handled by the main 
 3. In the website: Admin → Integrations → **Subject groups** → set each subject's
    **Discord channel id** (right-click the channel → Copy Channel ID).
 
-## Deploy (pick one always-on host — free tiers exist)
-**Railway / Render / Fly.io** (recommended) or any small VPS.
-
-Environment variables:
+## The 4 environment variables (needed on every host)
 - `DISCORD_BOT_TOKEN` — same bot token as the website.
 - `SUPABASE_URL` — `https://xmeltwyfvzhhurtcjfiu.supabase.co`
-- `SUPABASE_SERVICE_ROLE_KEY` — Supabase → Project Settings → API → service_role key (keep secret).
+- `SUPABASE_SERVICE_ROLE_KEY` — Supabase → Project Settings → API → **service_role** key (keep secret).
 - `TELEGRAM_BOT_TOKEN` — same Telegram bot token (so Discord messages relay to Telegram).
 
-Then:
+## Deploy — pick ONE host
+
+### Option A — Railway (easiest, ~$5 hobby credit/mo)
+1. railway.app → **New Project → Deploy from GitHub repo** → pick this repo.
+2. In the service **Settings → Root Directory** set `discord-worker`.
+3. **Variables** → add the 4 env vars above. Deploy. (Railway auto-detects Node and the Dockerfile.)
+
+### Option B — Fly.io (has a small free allowance)
 ```bash
-npm install
-npm start
+cd discord-worker
+fly launch --no-deploy          # accept the existing fly.toml
+fly secrets set DISCORD_BOT_TOKEN=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... TELEGRAM_BOT_TOKEN=...
+fly deploy
 ```
-On Railway/Render: set the start command to `npm start`, add the 4 env vars, deploy.
-The log should print: `Discord worker ready as <bot>; watching N channel(s).`
+
+### Option C — Render (simplest UI, but background workers are paid ~$7/mo)
+Render → **New → Blueprint** → pick this repo (uses `render.yaml`). Add the 4 env vars when prompted.
+
+### Verify
+Whatever you pick, the logs should print:
+`Discord worker ready as <bot>; watching N channel(s).`
+If N is 0, set the subjects' **Discord channel id** in Admin → Integrations first.
 
 ## Notes
 - The service_role key bypasses RLS — only put it in the worker's server env, never in client code.

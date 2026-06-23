@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Logo from "./Logo";
+import SocialLinks from "./SocialLinks";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function SiteFooter() {
@@ -13,12 +14,7 @@ export default async function SiteFooter() {
   const youtube = s.get("support_youtube") || "";
   const twitter = s.get("support_twitter") || "";
   const facebook = s.get("support_facebook") || "";
-  const socials: { href: string; label: string; emoji: string; bg: string }[] = [
-    { href: youtube, label: "YouTube", emoji: "▶️", bg: "#FF0000" },
-    { href: instagram, label: "Instagram", emoji: "📸", bg: "linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)" },
-    { href: twitter, label: "X", emoji: "𝕏", bg: "#000000" },
-    { href: facebook, label: "Facebook", emoji: "f", bg: "#1877F2" },
-  ].filter((x) => x.href);
+  const hasSocials = !!(instagram || youtube || twitter || facebook);
 
   return (
     <footer className="lp-footer">
@@ -39,15 +35,10 @@ export default async function SiteFooter() {
             📧 <a className="grad" href="mailto:mail@caparveensharma.com">mail@caparveensharma.com</a>
           </p>
           {/* Social media */}
-          {socials.length > 0 && (
+          {hasSocials && (
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14, alignItems: "center" }}>
               <span className="muted" style={{ fontSize: ".8rem" }}>Follow us:</span>
-              {socials.map((sx) => (
-                <a key={sx.label} href={sx.href} target="_blank" rel="noopener noreferrer" aria-label={sx.label} title={sx.label}
-                  style={{ width: 34, height: 34, borderRadius: "50%", background: sx.bg, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: ".95rem", textDecoration: "none" }}>
-                  {sx.emoji}
-                </a>
-              ))}
+              <SocialLinks youtube={youtube} instagram={instagram} twitter={twitter} facebook={facebook} />
             </div>
           )}
         </div>

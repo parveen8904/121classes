@@ -84,7 +84,7 @@ export default async function IntegrationsPage({
   const { data: links } = await svc
     .from("site_settings")
     .select("key, value")
-    .in("key", ["support_telegram", "whatsapp_channel", "support_whatsapp", "support_instagram"]);
+    .in("key", ["support_telegram", "support_discord", "whatsapp_channel", "support_whatsapp", "support_instagram", "support_youtube", "support_twitter", "support_facebook"]);
   const L = new Map((links ?? []).map((r) => [r.key, r.value as string]));
   const webhookOk = !!health?.webhookUrl;
 
@@ -158,6 +158,7 @@ export default async function IntegrationsPage({
           <KeyField name="TELEGRAM_BOT_TOKEN" label="Telegram bot token" placeholder="123456:ABC-DEF…" />
           <KeyField name="TELEGRAM_BOT_USERNAME" label="Telegram bot username (no @)" placeholder="my121bot" />
           <KeyField name="TELEGRAM_CHANNEL_ID" label="Telegram channel (for broadcasts)" placeholder="@caparveen" />
+          <KeyField name="DISCORD_WEBHOOK_URL" label="Discord channel webhook (for broadcasts)" placeholder="Discord → Server → channel → Edit → Integrations → Webhooks → New → Copy URL" />
           <KeyField name="ANTHROPIC_API_KEY" label="Anthropic (AI) key" placeholder="sk-ant-…" />
           <KeyField name="BUNNY_STREAM_API_KEY" label="Bunny Stream API key (video uploads)" placeholder="from dash.bunny.net → Stream → API" />
           <KeyField name="BUNNY_LIBRARY_ID" label="Bunny Library ID (optional)" placeholder="e.g. 682810" />
@@ -200,12 +201,21 @@ export default async function IntegrationsPage({
         <form action={saveLinks}>
           <label>Telegram channel link (students follow)</label>
           <input name="support_telegram" defaultValue={L.get("support_telegram") || ""} placeholder="https://t.me/yourchannel" />
+          <label>Discord server invite (students join)</label>
+          <input name="support_discord" defaultValue={L.get("support_discord") || ""} placeholder="https://discord.gg/…" />
           <label>WhatsApp channel link (students follow)</label>
           <input name="whatsapp_channel" defaultValue={L.get("whatsapp_channel") || ""} placeholder="https://whatsapp.com/channel/…" />
           <label>WhatsApp help / support number (optional)</label>
           <input name="support_whatsapp" defaultValue={L.get("support_whatsapp") || ""} placeholder="https://wa.me/91… or 9198…" />
+          <h4 style={{ margin: "16px 0 4px" }}>Social media (footer)</h4>
+          <label>YouTube link</label>
+          <input name="support_youtube" defaultValue={L.get("support_youtube") || ""} placeholder="https://youtube.com/@…" />
           <label>Instagram link</label>
           <input name="support_instagram" defaultValue={L.get("support_instagram") || ""} placeholder="https://instagram.com/…" />
+          <label>X (Twitter) link</label>
+          <input name="support_twitter" defaultValue={L.get("support_twitter") || ""} placeholder="https://x.com/…" />
+          <label>Facebook link</label>
+          <input name="support_facebook" defaultValue={L.get("support_facebook") || ""} placeholder="https://facebook.com/…" />
           <SubmitButton className="btn" style={{ marginTop: 14 }}>Save links</SubmitButton>
         </form>
       </div>

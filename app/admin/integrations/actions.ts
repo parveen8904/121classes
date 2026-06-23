@@ -65,9 +65,13 @@ export async function saveLinks(formData: FormData) {
   const svc = createServiceClient();
   const rows = [
     { key: "support_telegram", value: str(formData.get("support_telegram")) },
+    { key: "support_discord", value: str(formData.get("support_discord")) },
     { key: "whatsapp_channel", value: str(formData.get("whatsapp_channel")) },
     { key: "support_whatsapp", value: str(formData.get("support_whatsapp")) },
     { key: "support_instagram", value: str(formData.get("support_instagram")) },
+    { key: "support_youtube", value: str(formData.get("support_youtube")) },
+    { key: "support_twitter", value: str(formData.get("support_twitter")) },
+    { key: "support_facebook", value: str(formData.get("support_facebook")) },
   ];
   for (const r of rows) {
     await svc.from("site_settings").upsert({ key: r.key, value: r.value }, { onConflict: "key" });
@@ -80,6 +84,7 @@ const SECRET_KEYS = [
   "TELEGRAM_BOT_TOKEN",
   "TELEGRAM_BOT_USERNAME",
   "TELEGRAM_CHANNEL_ID",
+  "DISCORD_WEBHOOK_URL",
   "ANTHROPIC_API_KEY",
   "MAILGUN_API_KEY",
   "MAILGUN_DOMAIN",

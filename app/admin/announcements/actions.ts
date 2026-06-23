@@ -76,10 +76,14 @@ export async function broadcastAnnouncement(formData: FormData) {
   const tgOk = await sendTelegramChannel(tgText, a.link_url ?? undefined);
   // Also drop it into every linked subject group.
   try { const { postToAllGroups } = await import("@/lib/telegramBroadcast"); await postToAllGroups(tgText, a.link_url ?? undefined); } catch { /* ignore */ }
+  // Post to the Discord server channel too (if a webhook is configured).
+  const { postToDiscord } = await import("@/lib/discord");
+  const dcOk = await postToDiscord(tgText, a.link_url ?? undefined);
 
   const nowISO = new Date().toISOString();
   await svc.from("broadcasts").insert([
     { announcement_id: a.id, title: a.title, body: a.body, link_url: a.link_url, channel: "telegram", status: tgOk ? "sent" : "failed", sent_at: tgOk ? nowISO : null },
+    { announcement_id: a.id, title: a.title, body: a.body, link_url: a.link_url, channel: "discord", status: dcOk ? "sent" : "failed", sent_at: dcOk ? nowISO : null },
     // Queued for the mobile app's push service to pick up once it exists.
     { announcement_id: a.id, title: a.title, body: a.body, link_url: a.link_url, channel: "push", status: "queued" },
   ]);

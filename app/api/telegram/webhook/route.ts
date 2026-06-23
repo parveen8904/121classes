@@ -6,6 +6,7 @@ import { getRepositoryContext } from "@/lib/repository";
 import { getSecret } from "@/lib/secrets";
 import { moderateMessage } from "@/lib/moderation";
 import { tgDeleteMessage } from "@/lib/telegramGroup";
+import { discordSendToChannel } from "@/lib/discord";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
       { onConflict: "chat_id" },
     );
     if (msg?.message_id && text) {
-      const { data: subj } = await svc.from("subjects").select("id").eq("telegram_group_chat_id", chatId).maybeSingle();
+      const { data: subj } = await svc.from("subjects").select("id, discord_channel_id").eq("telegram_group_chat_id", chatId).maybeSingle();
       const fromId = msg?.from?.id ? String(msg.from.id) : null;
       const fromName = [msg?.from?.first_name, msg?.from?.last_name].filter(Boolean).join(" ") || msg?.from?.username || "Member";
       const mod = moderateMessage(text);
@@ -86,6 +87,11 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
       if (mod.flagged && gm?.id) {
         await svc.from("message_moderation_log").insert({ message_id: gm.id, action: "auto_hidden", reason: mod.reasons.join(", ") });
+      }
+      // Bridge to Discord (clean messages only) — bot-authored, so no echo loop.
+      const dc = (subj as { discord_channel_id?: string | null } | null)?.discord_channel_id;
+      if (!mod.flagged && dc) {
+        await discordSendToChannel(dc, `👤 ${fromName}: ${text}`);
       }
     }
     return NextResponse.json({ ok: true });

@@ -84,14 +84,21 @@ export async function registerDiscordCommand() {
   }
 }
 
-// Set the Telegram GROUP link for one subject (chosen from the dropdown).
+// Set a subject's group links/ids: Telegram join link, Telegram chat id (for the
+// bot to post), and Discord channel id (for the bot/worker). All optional.
 export async function saveSubjectGroup(formData: FormData) {
   if (!(await requireAdmin())) return;
   const subjectId = str(formData.get("subject_id"));
-  const url = str(formData.get("group_url"));
   if (!subjectId) redirect("/admin/integrations?links=saved");
   const svc = createServiceClient();
-  await svc.from("subjects").update({ telegram_group_url: url || null }).eq("id", subjectId);
+  await svc
+    .from("subjects")
+    .update({
+      telegram_group_url: str(formData.get("group_url")) || null,
+      telegram_group_chat_id: str(formData.get("telegram_group_chat_id")) || null,
+      discord_channel_id: str(formData.get("discord_channel_id")) || null,
+    })
+    .eq("id", subjectId);
   redirect("/admin/integrations?links=saved");
 }
 

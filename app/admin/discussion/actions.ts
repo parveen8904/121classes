@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { tgDeleteMessage, tgRestrictUser } from "@/lib/telegramGroup";
+import { discordDeleteChannelMessage } from "@/lib/discord";
 import { str } from "../_lib/util";
 
 async function adminId(): Promise<string | null> {
@@ -31,8 +32,11 @@ export async function hideMessage(formData: FormData) {
   if (!me) return;
   const id = str(formData.get("id"));
   const svc = createServiceClient();
-  const { data: m } = await svc.from("group_messages").select("chat_id, tg_message_id").eq("id", id).maybeSingle();
-  if (m?.tg_message_id) await tgDeleteMessage(m.chat_id as string, Number(m.tg_message_id));
+  const { data: m } = await svc.from("group_messages").select("chat_id, tg_message_id, source").eq("id", id).maybeSingle();
+  if (m?.tg_message_id) {
+    if (m.source === "discord") await discordDeleteChannelMessage(m.chat_id as string, String(m.tg_message_id));
+    else await tgDeleteMessage(m.chat_id as string, Number(m.tg_message_id));
+  }
   await svc.from("group_messages").update({ status: "hidden" }).eq("id", id);
   await svc.from("message_moderation_log").insert({ message_id: id, action: "deleted", reason: "removed by admin", by_admin: me });
   revalidatePath("/admin/discussion");

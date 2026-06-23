@@ -7,6 +7,36 @@ export async function discordConfigured(): Promise<boolean> {
   return Boolean(await getSecret("DISCORD_WEBHOOK_URL"));
 }
 
+// ----- Bot REST helpers (for per-subject channel discussion) -----
+async function discordBot(method: string, path: string, body?: unknown): Promise<{ ok: boolean; json: { id?: string } | null }> {
+  const token = await getSecret("DISCORD_BOT_TOKEN");
+  if (!token) return { ok: false, json: null };
+  try {
+    const res = await fetch(`https://discord.com/api/v10${path}`, {
+      method,
+      headers: { Authorization: `Bot ${token}`, "content-type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+    });
+    const json = res.status === 204 ? null : await res.json().catch(() => null);
+    return { ok: res.ok, json };
+  } catch {
+    return { ok: false, json: null };
+  }
+}
+
+// Send a message to a Discord channel as the bot. Returns the message id.
+export async function discordSendToChannel(channelId: string, text: string): Promise<string | null> {
+  const r = await discordBot("POST", `/channels/${channelId}/messages`, { content: text.slice(0, 2000), allowed_mentions: { parse: [] } });
+  return r.ok && r.json?.id ? r.json.id : null;
+}
+
+// Delete a message from a Discord channel (bot must have Manage Messages).
+export async function discordDeleteChannelMessage(channelId: string, messageId: string): Promise<boolean> {
+  const r = await discordBot("DELETE", `/channels/${channelId}/messages/${messageId}`);
+  return r.ok;
+}
+
 export async function postToDiscord(content: string, linkUrl?: string): Promise<boolean> {
   const url = await getSecret("DISCORD_WEBHOOK_URL");
   if (!url) return false;

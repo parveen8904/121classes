@@ -89,7 +89,7 @@ export default async function IntegrationsPage({
   const webhookOk = !!health?.webhookUrl;
   const { data: subjectRows } = await svc
     .from("subjects")
-    .select("id, title, telegram_group_url, order_index")
+    .select("id, title, telegram_group_url, telegram_group_chat_id, discord_channel_id, order_index")
     .order("order_index")
     .order("title");
   const subjects = subjectRows ?? [];
@@ -235,37 +235,36 @@ export default async function IntegrationsPage({
         </form>
       </div>
 
-      {/* Per-subject Telegram GROUP links — shown to students on their subject dashboard. */}
+      {/* Per-subject group setup — Telegram + Discord. */}
       <div className="form-card" style={{ marginTop: 18 }}>
-        <h3>👥 Telegram subject groups</h3>
+        <h3>👥 Subject groups (Telegram &amp; Discord)</h3>
         <p className="muted" style={{ fontSize: ".84rem", marginTop: 0 }}>
-          Each subject can have its own Telegram group. Pick the subject, paste its group invite link, and Save. Students see it on their subject dashboard.
+          For each subject set its <strong>Telegram group</strong> (join link + chat id) and/or <strong>Discord channel id</strong>. The join link shows on the student dashboard; the chat/channel ids let the bot post &amp; sync the discussion. (Right-click a Discord channel → Copy Channel ID; Telegram chat ids look like <code>-100…</code>.)
         </p>
-        <form action={saveSubjectGroup}>
-          <label>Subject</label>
-          <select name="subject_id" defaultValue={subjects[0]?.id ?? ""}>
-            {subjects.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.title}{(s as { telegram_group_url?: string | null }).telegram_group_url ? "  ✓ (link set)" : "  — no link yet"}
-              </option>
-            ))}
-          </select>
-          <label>Group invite link</label>
-          <input name="group_url" placeholder="https://t.me/+AbCd… or https://t.me/yourgroup" />
-          <p className="muted" style={{ fontSize: ".78rem", marginTop: 2 }}>Leave blank &amp; Save to remove a subject&apos;s group link.</p>
-          <SubmitButton className="btn" style={{ marginTop: 10 }}>Save group link</SubmitButton>
-        </form>
-        {subjects.some((s) => (s as { telegram_group_url?: string | null }).telegram_group_url) && (
-          <div style={{ marginTop: 12, fontSize: ".84rem" }}>
-            <strong>Current group links</strong>
-            <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
-              {subjects.map((s) => {
-                const g = (s as { telegram_group_url?: string | null }).telegram_group_url;
-                return g ? <li key={s.id}>{s.title}: <a className="grad" href={g} target="_blank" rel="noreferrer">{g}</a></li> : null;
-              })}
-            </ul>
-          </div>
-        )}
+        <div style={{ display: "grid", gap: 12 }}>
+          {subjects.map((s) => {
+            const r = s as { id: string; title: string; telegram_group_url?: string | null; telegram_group_chat_id?: string | null; discord_channel_id?: string | null };
+            return (
+              <form key={r.id} action={saveSubjectGroup} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px" }}>
+                <input type="hidden" name="subject_id" value={r.id} />
+                <strong>{r.title}</strong>
+                <label style={{ marginTop: 6 }}>Telegram group invite link (shown to students)</label>
+                <input name="group_url" defaultValue={r.telegram_group_url ?? ""} placeholder="https://t.me/+AbCd…" />
+                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr", marginTop: 8 }}>
+                  <div>
+                    <label>Telegram chat id (for posting)</label>
+                    <input name="telegram_group_chat_id" defaultValue={r.telegram_group_chat_id ?? ""} placeholder="-1001234567890" />
+                  </div>
+                  <div>
+                    <label>Discord channel id</label>
+                    <input name="discord_channel_id" defaultValue={r.discord_channel_id ?? ""} placeholder="123456789012345678" />
+                  </div>
+                </div>
+                <SubmitButton className="btn small" style={{ marginTop: 10 }}>Save {r.title}</SubmitButton>
+              </form>
+            );
+          })}
+        </div>
       </div>
 
       <div className="form-card" style={{ marginTop: 18 }}>

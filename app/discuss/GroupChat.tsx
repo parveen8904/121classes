@@ -4,25 +4,25 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { postToGroup } from "./actions";
 
-type Group = { subjectId: string; title: string; chatId: string };
+type Group = { subjectId: string; title: string };
 type Msg = { id: string; sender_name: string | null; sender_user_id: string | null; body: string | null; created_at: string; source: string };
 
 export default function GroupChat({ groups, meId, meName }: { groups: Group[]; meId: string; meName: string }) {
   const supabase = createClient();
-  const [active, setActive] = useState(groups[0]?.chatId ?? "");
+  const [active, setActive] = useState(groups[0]?.subjectId ?? "");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const activeGroup = groups.find((g) => g.chatId === active);
+  const activeGroup = groups.find((g) => g.subjectId === active);
 
   const load = useCallback(
-    async (chatId: string) => {
+    async (subjectId: string) => {
       const { data } = await supabase
         .from("group_messages")
         .select("id, sender_name, sender_user_id, body, created_at, source")
-        .eq("chat_id", chatId)
+        .eq("subject_id", subjectId)
         .eq("status", "visible")
         .order("created_at", { ascending: true })
         .limit(200);
@@ -38,7 +38,7 @@ export default function GroupChat({ groups, meId, meName }: { groups: Group[]; m
       .channel(`gm:${active}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "group_messages", filter: `chat_id=eq.${active}` },
+        { event: "INSERT", schema: "public", table: "group_messages", filter: `subject_id=eq.${active}` },
         (payload) => {
           const m = payload.new as Msg & { status: string };
           if (m.status === "visible") setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
@@ -74,8 +74,8 @@ export default function GroupChat({ groups, meId, meName }: { groups: Group[]; m
       {groups.length > 1 && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
           {groups.map((g) => (
-            <button key={g.chatId} type="button" onClick={() => setActive(g.chatId)}
-              className="btn small" style={{ background: g.chatId === active ? "#229ED9" : "var(--bg-soft)", color: g.chatId === active ? "#fff" : "var(--text)" }}>
+            <button key={g.subjectId} type="button" onClick={() => setActive(g.subjectId)}
+              className="btn small" style={{ background: g.subjectId === active ? "#229ED9" : "var(--bg-soft)", color: g.subjectId === active ? "#fff" : "var(--text)" }}>
               {g.title}
             </button>
           ))}

@@ -15,12 +15,12 @@ export default async function DiscussPage() {
   const { data: mine } = await supabase.from("my_subjects").select("subject_id").eq("student_id", user.id);
   const ids = (mine ?? []).map((r) => r.subject_id as string);
 
-  let groups: { subjectId: string; title: string; chatId: string }[] = [];
+  let groups: { subjectId: string; title: string }[] = [];
   if (ids.length) {
-    const { data: subs } = await supabase.from("subjects").select("id, title, telegram_group_chat_id").in("id", ids);
+    const { data: subs } = await supabase.from("subjects").select("id, title, telegram_group_chat_id, discord_channel_id").in("id", ids);
     groups = (subs ?? [])
-      .filter((s) => (s as { telegram_group_chat_id?: string | null }).telegram_group_chat_id)
-      .map((s) => ({ subjectId: s.id as string, title: s.title as string, chatId: (s as { telegram_group_chat_id: string }).telegram_group_chat_id }));
+      .filter((s) => (s as { telegram_group_chat_id?: string | null }).telegram_group_chat_id || (s as { discord_channel_id?: string | null }).discord_channel_id)
+      .map((s) => ({ subjectId: s.id as string, title: s.title as string }));
   }
 
   return (

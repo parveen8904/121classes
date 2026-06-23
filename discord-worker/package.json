@@ -1,0 +1,15 @@
+{
+  "name": "discord-discussion-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Always-on bot that mirrors Discord channel messages into Supabase (group_messages) and relays them to Telegram — the Discord side of the two-way discussion.",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "discord.js": "^14.16.3"
+  }
+}

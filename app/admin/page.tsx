@@ -15,6 +15,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/control-sheet",
   },
   {
+    icon: "🛡️",
+    title: "Group moderation",
+    desc: "Review flagged messages, search all group chats, hide messages, ban/mute users — Telegram kept in sync.",
+    href: "/admin/discussion",
+  },
+  {
     icon: "📘",
     title: "Courses & content",
     desc: "Create courses → subjects → topics → sections, including homework & discussion.",

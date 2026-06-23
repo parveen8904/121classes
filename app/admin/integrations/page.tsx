@@ -55,7 +55,20 @@ async function KeyField({ name, label, placeholder }: { name: string; label: str
       <label>
         {set ? "🟢 " : "⚪ "}{label} {set && <span className="muted" style={{ fontSize: ".78rem" }}>(set — leave blank to keep)</span>}
       </label>
-      <input name={name} type="password" autoComplete="off" placeholder={set ? "•••••••• (saved)" : placeholder} />
+      {/* type=text (not password) so browser password managers can't autofill/overwrite
+          the key you paste. The field is empty on load, so nothing is exposed. */}
+      <input
+        name={name}
+        type="text"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        data-1p-ignore="true"
+        data-lpignore="true"
+        data-form-type="other"
+        placeholder={set ? "•••••••• (saved — leave blank to keep)" : placeholder}
+      />
     </div>
   );
 }
@@ -163,7 +176,7 @@ export default async function IntegrationsPage({
           Stored securely on the server (never shown to students). Blank fields are left unchanged.
           Type <code>CLEAR</code> to remove a key.
         </p>
-        <form action={saveSecrets}>
+        <form action={saveSecrets} autoComplete="off">
           <KeyField name="TELEGRAM_BOT_TOKEN" label="Telegram bot token" placeholder="123456:ABC-DEF…" />
           <KeyField name="TELEGRAM_BOT_USERNAME" label="Telegram bot username (no @)" placeholder="my121bot" />
           <KeyField name="TELEGRAM_CHANNEL_ID" label="Telegram channel (for broadcasts)" placeholder="@caparveen" />

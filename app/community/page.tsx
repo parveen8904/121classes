@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { postCommunity, deleteCommunity, pinCommunity } from "./actions";
+import TelegramFeed from "@/app/components/TelegramFeed";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Community — 121 CA Classes" };
@@ -29,10 +30,10 @@ export default async function CommunityPage() {
   const isAdmin = me?.role === "admin";
 
   // Telegram channel "read in browser" link (t.me/s/<name> opens without the app).
-  const { data: chs } = await supabase.from("site_settings").select("key, value").in("key", ["support_telegram", "support_discord", "whatsapp_channel", "support_whatsapp"]);
+  const { data: chs } = await supabase.from("site_settings").select("key, value").in("key", ["support_telegram", "support_telegram_group", "support_discord", "whatsapp_channel", "support_whatsapp"]);
   const cmap = new Map((chs ?? []).map((r) => [r.key, r.value as string]));
   const tg = cmap.get("support_telegram") || "";
-  const tgWeb = tg.replace(/t\.me\/(s\/)?/, "t.me/s/"); // ensure the /s/ web-preview form
+  const tgGroup = cmap.get("support_telegram_group") || "";
   const discord = cmap.get("support_discord") || "";
   const wa = cmap.get("whatsapp_channel") || cmap.get("support_whatsapp") || "";
 
@@ -52,17 +53,27 @@ export default async function CommunityPage() {
         <p className="meta">Ask, share and discuss with fellow CA students — and updates from CA Parveen Sharma. 🤝</p>
       </div>
 
-      {(tg || discord || wa) && (
+      {(tg || tgGroup || discord || wa) && (
         <div className="card" style={{ marginTop: 14 }}>
-          <strong>📣 Our channels</strong>
+          <strong>📣 Join our channels</strong>
           <p className="muted" style={{ fontSize: ".84rem", margin: "4px 0 10px" }}>
-            Join us on Telegram, Discord or WhatsApp — chat, ask doubts and get updates.
+            One tap to join — chat, ask doubts and get updates.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {tg && <a className="btn small" href={tgWeb} target="_blank" rel="noreferrer" style={{ background: "#229ED9" }}>✈️ Read Telegram channel (in browser)</a>}
-            {tg && <a className="btn small secondary" href={tg} target="_blank" rel="noreferrer">Open in Telegram app</a>}
+            {tg && <a className="btn small" href={tg} target="_blank" rel="noreferrer" style={{ background: "#229ED9", color: "#fff" }}>✈️ Join Telegram channel</a>}
+            {tgGroup && <a className="btn small" href={tgGroup} target="_blank" rel="noreferrer" style={{ background: "#229ED9", color: "#fff" }}>👥 Join Telegram group</a>}
             {discord && <a className="btn small" href={discord} target="_blank" rel="noreferrer" style={{ background: "#5865F2", color: "#fff" }}>🎮 Join Discord</a>}
-            {wa && <a className="btn small secondary" href={wa} target="_blank" rel="noreferrer" style={{ background: "#25D366", color: "#fff" }}>💬 Join WhatsApp channel</a>}
+            {wa && <a className="btn small" href={wa} target="_blank" rel="noreferrer" style={{ background: "#25D366", color: "#fff" }}>💬 Join WhatsApp</a>}
+          </div>
+        </div>
+      )}
+
+      {/* Embedded live channel feed (public channel only). */}
+      {tg && (
+        <div className="card" style={{ marginTop: 14 }}>
+          <strong>📡 Latest from our Telegram channel</strong>
+          <div style={{ marginTop: 10 }}>
+            <TelegramFeed link={tg} />
           </div>
         </div>
       )}

@@ -84,7 +84,7 @@ export default async function IntegrationsPage({
   const { data: links } = await svc
     .from("site_settings")
     .select("key, value")
-    .in("key", ["support_telegram", "support_discord", "whatsapp_channel", "support_whatsapp", "support_instagram", "support_youtube", "support_twitter", "support_facebook"]);
+    .in("key", ["support_telegram", "support_telegram_group", "support_discord", "whatsapp_channel", "support_whatsapp", "support_instagram", "support_youtube", "support_twitter", "support_facebook"]);
   const L = new Map((links ?? []).map((r) => [r.key, r.value as string]));
   const webhookOk = !!health?.webhookUrl;
 
@@ -206,8 +206,10 @@ export default async function IntegrationsPage({
       <div className="form-card" style={{ marginTop: 18 }}>
         <h3>🔗 Public links (footer &amp; dashboard buttons)</h3>
         <form action={saveLinks}>
-          <label>Telegram channel link (students follow)</label>
+          <label>Telegram channel link (public — students follow &amp; it embeds on the site)</label>
           <input name="support_telegram" defaultValue={L.get("support_telegram") || ""} placeholder="https://t.me/yourchannel" />
+          <label>Telegram group link (invite — students join &amp; chat)</label>
+          <input name="support_telegram_group" defaultValue={L.get("support_telegram_group") || ""} placeholder="https://t.me/+AbCd… or https://t.me/yourgroup" />
           <label>Discord server invite (students join)</label>
           <input name="support_discord" defaultValue={L.get("support_discord") || ""} placeholder="https://discord.gg/…" />
           <label>WhatsApp channel link (students follow)</label>

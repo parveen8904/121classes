@@ -7,13 +7,9 @@ export default async function SiteFooter() {
   const { data } = await supabase
     .from("site_settings")
     .select("key, value")
-    .in("key", ["support_telegram", "support_telegram_group", "support_discord", "support_instagram", "support_whatsapp", "support_youtube", "support_twitter", "support_facebook"]);
+    .in("key", ["support_instagram", "support_youtube", "support_twitter", "support_facebook"]);
   const s = new Map((data ?? []).map((r) => [r.key, r.value as string]));
-  const telegram = s.get("support_telegram") || "";
-  const telegramGroup = s.get("support_telegram_group") || "";
-  const discord = s.get("support_discord") || "";
   const instagram = s.get("support_instagram") || "";
-  const whatsapp = s.get("support_whatsapp") || "";
   const youtube = s.get("support_youtube") || "";
   const twitter = s.get("support_twitter") || "";
   const facebook = s.get("support_facebook") || "";
@@ -42,36 +38,9 @@ export default async function SiteFooter() {
           <p className="muted" style={{ marginTop: 4, fontSize: ".82rem" }}>
             📧 <a className="grad" href="mailto:mail@caparveensharma.com">mail@caparveensharma.com</a>
           </p>
-          {/* Community — join & chat */}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
-            {telegram && (
-              <a href={telegram} target="_blank" rel="noopener noreferrer" className="btn small"
-                style={{ background: "#229ED9", color: "#fff" }}>
-                ✈️ Telegram channel
-              </a>
-            )}
-            {telegramGroup && (
-              <a href={telegramGroup} target="_blank" rel="noopener noreferrer" className="btn small"
-                style={{ background: "#229ED9", color: "#fff" }}>
-                👥 Telegram group
-              </a>
-            )}
-            {discord && (
-              <a href={discord} target="_blank" rel="noopener noreferrer" className="btn small"
-                style={{ background: "#5865F2", color: "#fff" }}>
-                🎮 Discord
-              </a>
-            )}
-            {whatsapp && (
-              <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="btn small"
-                style={{ background: "#25D366", color: "#fff" }}>
-                💬 WhatsApp
-              </a>
-            )}
-          </div>
           {/* Social media */}
           {socials.length > 0 && (
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14, alignItems: "center" }}>
               <span className="muted" style={{ fontSize: ".8rem" }}>Follow us:</span>
               {socials.map((sx) => (
                 <a key={sx.label} href={sx.href} target="_blank" rel="noopener noreferrer" aria-label={sx.label} title={sx.label}

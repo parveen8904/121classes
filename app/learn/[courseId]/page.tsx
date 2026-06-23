@@ -130,6 +130,13 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   }
   const MAT_LABEL: Record<string, string> = { book: "📕 Books", question_bank: "📚 Question bank", icai: "🏛️ ICAI", rtp: "📄 RTP", mtp: "📄 MTP", past_papers: "🗂️ Past papers", notes: "📝 Notes" };
 
+  // Community links shown on each subject (channel + Discord are the same for all;
+  // the Telegram GROUP is per-subject from subjects.telegram_group_url).
+  const { data: linkRows } = await supabase.from("site_settings").select("key, value").in("key", ["support_telegram", "support_discord"]);
+  const linkMap = new Map((linkRows ?? []).map((r) => [r.key, r.value as string]));
+  const tgChannel = linkMap.get("support_telegram") || "";
+  const dcLink = linkMap.get("support_discord") || "";
+
   const target = profile?.target_attempt ?? null;
 
   // Continuous class numbering across a subject's topics, in display order:
@@ -267,16 +274,24 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                     )}
                   </div>
                 </div>
-                {mySubjIds.has(s.id) && (s as { telegram_group_url?: string | null }).telegram_group_url && (
-                  <a
-                    className="btn small secondary"
-                    href={(s as { telegram_group_url?: string }).telegram_group_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ background: "#229ED9", color: "#fff", marginBottom: 10, display: "inline-block" }}
-                  >
-                    ✈️ Join the {s.title} Telegram group
-                  </a>
+                {mySubjIds.has(s.id) && ((s as { telegram_group_url?: string | null }).telegram_group_url || tgChannel || dcLink) && (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                    {(s as { telegram_group_url?: string | null }).telegram_group_url && (
+                      <a className="btn small" href={(s as { telegram_group_url?: string }).telegram_group_url} target="_blank" rel="noopener noreferrer" style={{ background: "#229ED9", color: "#fff" }}>
+                        👥 Join {s.title} group
+                      </a>
+                    )}
+                    {tgChannel && (
+                      <a className="btn small" href={tgChannel} target="_blank" rel="noopener noreferrer" style={{ background: "#229ED9", color: "#fff" }}>
+                        ✈️ Telegram channel
+                      </a>
+                    )}
+                    {dcLink && (
+                      <a className="btn small" href={dcLink} target="_blank" rel="noopener noreferrer" style={{ background: "#5865F2", color: "#fff" }}>
+                        🎮 Discord
+                      </a>
+                    )}
+                  </div>
                 )}
                 {(() => {
                   const subjAll = (topics ?? []).filter((t) => t.subject_id === s.id);

@@ -5,7 +5,7 @@ import { razorpayConfigured } from "@/lib/razorpay";
 import { r2Configured } from "@/lib/r2";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
-import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection, sendTestEmail } from "./actions";
+import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection, sendTestEmail, registerDiscordCommand } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +63,7 @@ async function KeyField({ name, label, placeholder }: { name: string; label: str
 export default async function IntegrationsPage({
   searchParams,
 }: {
-  searchParams: { tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string; mailtest?: string };
+  searchParams: { tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string; mailtest?: string; discord?: string };
 }) {
   const [tg, ai, em, wa, rzp, r2, botUser, health, jooble] = await Promise.all([
     telegramConfigured(),
@@ -102,6 +102,9 @@ export default async function IntegrationsPage({
       {searchParams.tg === "notoken" && <div className="notice err" style={{ marginTop: 16 }}>Add your Telegram bot token below first.</div>}
       {searchParams.tg === "badtoken" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ That bot token isn&apos;t valid. Get a real one from @BotFather (it looks like <code>123456789:AA…</code>, ~46 chars) and paste it in the Telegram bot token field below.</div>}
       {searchParams.links === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Links saved.</div>}
+      {searchParams.discord === "registered" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Discord /ask command registered. It can take up to ~1 hour to appear in your server.</div>}
+      {searchParams.discord === "failed" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ Couldn&apos;t register — check the Discord App ID and Bot Token below, then try again.</div>}
+      {searchParams.discord === "missing" && <div className="notice err" style={{ marginTop: 16 }}>Add your Discord App ID and Bot Token below first, save keys, then register.</div>}
       {searchParams.keys === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Keys saved.</div>}
       {searchParams.mailtest && <div className={`notice ${searchParams.mailtest.startsWith("✅") ? "ok" : "err"}`} style={{ marginTop: 16 }}>{searchParams.mailtest}</div>}
 
@@ -159,6 +162,9 @@ export default async function IntegrationsPage({
           <KeyField name="TELEGRAM_BOT_USERNAME" label="Telegram bot username (no @)" placeholder="my121bot" />
           <KeyField name="TELEGRAM_CHANNEL_ID" label="Telegram channel (for broadcasts)" placeholder="@caparveen" />
           <KeyField name="DISCORD_WEBHOOK_URL" label="Discord channel webhook (for broadcasts)" placeholder="Discord → Server → channel → Edit → Integrations → Webhooks → New → Copy URL" />
+          <KeyField name="DISCORD_APP_ID" label="Discord Application ID (for the /ask bot)" placeholder="Discord Developer Portal → your app → Application ID" />
+          <KeyField name="DISCORD_PUBLIC_KEY" label="Discord Public Key (for the /ask bot)" placeholder="Developer Portal → your app → Public Key" />
+          <KeyField name="DISCORD_BOT_TOKEN" label="Discord Bot Token (for the /ask bot)" placeholder="Developer Portal → your app → Bot → Reset Token → Copy" />
           <KeyField name="ANTHROPIC_API_KEY" label="Anthropic (AI) key" placeholder="sk-ant-…" />
           <KeyField name="BUNNY_STREAM_API_KEY" label="Bunny Stream API key (video uploads)" placeholder="from dash.bunny.net → Stream → API" />
           <KeyField name="BUNNY_LIBRARY_ID" label="Bunny Library ID (optional)" placeholder="e.g. 682810" />
@@ -217,6 +223,23 @@ export default async function IntegrationsPage({
           <label>Facebook link</label>
           <input name="support_facebook" defaultValue={L.get("support_facebook") || ""} placeholder="https://facebook.com/…" />
           <SubmitButton className="btn" style={{ marginTop: 14 }}>Save links</SubmitButton>
+        </form>
+      </div>
+
+      <div className="form-card" style={{ marginTop: 18 }}>
+        <h3>🎮 Discord doubt bot (/ask)</h3>
+        <p className="muted" style={{ fontSize: ".84rem", marginTop: 0 }}>
+          Lets students type <code>/ask</code> in your Discord server and get an AI answer from your class material. One-time setup:
+        </p>
+        <ol style={{ margin: "0 0 10px 18px", padding: 0, fontSize: ".84rem", color: "var(--muted)", display: "grid", gap: 4 }}>
+          <li>In the <strong>Discord Developer Portal</strong>, create an Application → add a <strong>Bot</strong>.</li>
+          <li>Copy the <strong>Application ID</strong>, <strong>Public Key</strong> and <strong>Bot Token</strong> into the keys above, then <strong>Save keys</strong>.</li>
+          <li>In the app&apos;s <strong>General Information</strong>, set <strong>Interactions Endpoint URL</strong> to <code>https://caparveensharma.com/api/discord/interactions</code> and save (Discord will verify it).</li>
+          <li>Invite the bot to your server (OAuth2 → URL Generator → scopes: <code>bot</code>, <code>applications.commands</code>).</li>
+          <li>Then tap the button below to register the <code>/ask</code> command.</li>
+        </ol>
+        <form action={registerDiscordCommand}>
+          <SubmitButton className="btn">Register the /ask command</SubmitButton>
         </form>
       </div>
     </section>

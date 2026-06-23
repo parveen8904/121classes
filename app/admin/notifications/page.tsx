@@ -73,6 +73,9 @@ export default async function NotificationsPage({
             <label className="remember" style={{ margin: 0, opacity: tgOn ? 1 : 0.5 }}>
               <input type="checkbox" name="ch_telegram" defaultChecked={tgOn} disabled={!tgOn} /> ✈️ Telegram channel (reaches all)
             </label>
+            <label className="remember" style={{ margin: 0 }}>
+              <input type="checkbox" name="ch_discord" defaultChecked /> 🎮 Discord channel
+            </label>
             <label className="remember" style={{ margin: 0, opacity: tgOn ? 1 : 0.5 }}>
               <input type="checkbox" name="ch_telegram_dm" disabled={!tgOn} /> 📨 Telegram personal messages (to connected students)
             </label>

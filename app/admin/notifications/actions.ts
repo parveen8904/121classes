@@ -24,6 +24,7 @@ export async function broadcast(formData: FormData) {
   if (!title) return;
 
   const chTelegram = formData.get("ch_telegram") === "on";
+  const chDiscord = formData.get("ch_discord") === "on";
   const chTelegramDm = formData.get("ch_telegram_dm") === "on";
   const chEmail = formData.get("ch_email") === "on";
 
@@ -35,6 +36,12 @@ export async function broadcast(formData: FormData) {
 
   if (chTelegram) {
     tgOk = await sendTelegramChannel(`📢 ${title}\n\n${body}`, link || undefined);
+  }
+
+  // Post to the Discord server channel too (parity with Telegram).
+  if (chDiscord) {
+    const { postToDiscord } = await import("@/lib/discord");
+    await postToDiscord(`📢 ${title}\n\n${body}`, link || undefined);
   }
 
   // Mass *individual* Telegram messages to students who connected the bot.

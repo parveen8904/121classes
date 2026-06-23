@@ -59,6 +59,31 @@ export async function connectTelegramWebhook() {
   redirect(`/admin/integrations?tg=${ok ? "set" : "fail"}`);
 }
 
+// Register the Discord "/ask" slash command (one-time). Uses the bot token + app
+// id you pasted above. Global commands can take up to ~1 hour to appear.
+export async function registerDiscordCommand() {
+  if (!(await requireAdmin())) return;
+  const appId = await getSecret("DISCORD_APP_ID");
+  const token = await getSecret("DISCORD_BOT_TOKEN");
+  if (!appId || !token) redirect("/admin/integrations?discord=missing");
+  try {
+    const res = await fetch(`https://discord.com/api/v10/applications/${appId}/commands`, {
+      method: "POST",
+      headers: { "content-type": "application/json", Authorization: `Bot ${token}` },
+      body: JSON.stringify({
+        name: "ask",
+        description: "Ask a CA doubt — answered from CA Parveen Sharma's class material",
+        type: 1,
+        options: [{ name: "question", description: "Your doubt", type: 3, required: true }],
+      }),
+      cache: "no-store",
+    });
+    redirect(`/admin/integrations?discord=${res.ok ? "registered" : "failed"}`);
+  } catch {
+    redirect("/admin/integrations?discord=failed");
+  }
+}
+
 // Save the public channel / social links (no code/SQL needed).
 export async function saveLinks(formData: FormData) {
   if (!(await requireAdmin())) return;
@@ -85,6 +110,9 @@ const SECRET_KEYS = [
   "TELEGRAM_BOT_USERNAME",
   "TELEGRAM_CHANNEL_ID",
   "DISCORD_WEBHOOK_URL",
+  "DISCORD_APP_ID",
+  "DISCORD_PUBLIC_KEY",
+  "DISCORD_BOT_TOKEN",
   "ANTHROPIC_API_KEY",
   "MAILGUN_API_KEY",
   "MAILGUN_DOMAIN",

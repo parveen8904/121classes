@@ -30,8 +30,12 @@ export async function postToGroup(input: { subjectId: string; text: string }): P
   const { data: banned } = await svc.from("banned_group_users").select("id").eq("chat_id", chatId).eq("user_id", user.id).maybeSingle();
   if (banned) return { ok: false, error: "You are muted in this group." };
 
-  const { data: prof } = await svc.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+  const { data: prof } = await svc.from("profiles").select("full_name, role").eq("id", user.id).maybeSingle();
   const name = (prof?.full_name as string) || "Student";
+  const role = (prof?.role as string) || "student";
+  // Label the relay so it's clear WHO is speaking (students post via the bot, which
+  // is a group admin — without this the message looks like it's from the admin).
+  const label = role === "admin" || role === "faculty" ? `👨‍🏫 ${name} (Faculty)` : `👤 ${name}`;
 
   const mod = moderateMessage(text);
   if (mod.flagged) {
@@ -42,7 +46,7 @@ export async function postToGroup(input: { subjectId: string; text: string }): P
     return { ok: false, error: `Message blocked (${mod.reasons.join(", ")}). Group chat is for study discussion only.` };
   }
 
-  const msgId = await tgSendToGroup(chatId, `${name}: ${text}`);
+  const msgId = await tgSendToGroup(chatId, `${label}: ${text}`);
   await svc.from("group_messages").insert({
     chat_id: chatId, subject_id: input.subjectId, source: "website", sender_user_id: user.id, sender_name: name,
     body: text, tg_message_id: msgId, status: "visible",

@@ -63,23 +63,34 @@ export async function POST(req: Request) {
   const body = JSON.parse(raw) as {
     type: number;
     token: string;
+    channel_id?: string;
     data?: { name?: string; options?: { name: string; value: string }[] };
   };
 
   // 1 = PING (Discord's endpoint verification)
   if (body.type === 1) return Response.json({ type: 1 });
 
+  const EPHEMERAL = 64; // only the person who ran /ask sees the reply
+
   // 2 = APPLICATION_COMMAND
   if (body.type === 2) {
     const name = body.data?.name;
     if (name === "ask" || name === "doubt") {
+      // Optionally restrict /ask to specific channels (blank = allowed everywhere).
+      const allowed = ((await getSecret("DISCORD_ASK_CHANNELS")) || "")
+        .split(/[\s,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (allowed.length && body.channel_id && !allowed.includes(body.channel_id)) {
+        return Response.json({ type: 4, data: { flags: EPHEMERAL, content: "Please use /ask in the designated doubts channel. 🙏" } });
+      }
       const question = (body.data?.options ?? []).find((o) => o.name === "question")?.value ?? "";
-      // Acknowledge now (deferred); finish the answer after responding (waitUntil
-      // keeps the function alive past the HTTP response).
+      // Acknowledge now (deferred + ephemeral); finish the answer after responding
+      // (waitUntil keeps the function alive past the HTTP response).
       waitUntil(answerAndFollowup(body.token, question));
-      return Response.json({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
+      return Response.json({ type: 5, data: { flags: EPHEMERAL } }); // DEFERRED, ephemeral
     }
   }
 
-  return Response.json({ type: 4, data: { content: "Unknown command." } });
+  return Response.json({ type: 4, data: { flags: EPHEMERAL, content: "Unknown command." } });
 }

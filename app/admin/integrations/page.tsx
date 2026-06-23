@@ -165,6 +165,7 @@ export default async function IntegrationsPage({
           <KeyField name="DISCORD_APP_ID" label="Discord Application ID (for the /ask bot)" placeholder="Discord Developer Portal → your app → Application ID" />
           <KeyField name="DISCORD_PUBLIC_KEY" label="Discord Public Key (for the /ask bot)" placeholder="Developer Portal → your app → Public Key" />
           <KeyField name="DISCORD_BOT_TOKEN" label="Discord Bot Token (for the /ask bot)" placeholder="Developer Portal → your app → Bot → Reset Token → Copy" />
+          <KeyField name="DISCORD_ASK_CHANNELS" label="Limit /ask to these channel IDs (comma-separated; blank = any channel)" placeholder="e.g. 123456789012345678, 234567…  (right-click a channel → Copy Channel ID)" />
           <KeyField name="ANTHROPIC_API_KEY" label="Anthropic (AI) key" placeholder="sk-ant-…" />
           <KeyField name="BUNNY_STREAM_API_KEY" label="Bunny Stream API key (video uploads)" placeholder="from dash.bunny.net → Stream → API" />
           <KeyField name="BUNNY_LIBRARY_ID" label="Bunny Library ID (optional)" placeholder="e.g. 682810" />
@@ -229,7 +230,7 @@ export default async function IntegrationsPage({
       <div className="form-card" style={{ marginTop: 18 }}>
         <h3>🎮 Discord doubt bot (/ask)</h3>
         <p className="muted" style={{ fontSize: ".84rem", marginTop: 0 }}>
-          Lets students type <code>/ask</code> in your Discord server and get an AI answer from your class material. One-time setup:
+          Lets students type <code>/ask</code> in your Discord server and get an AI answer from your class material. The answer is <strong>private to the asker</strong> (ephemeral), and you can limit <code>/ask</code> to specific channels (key above). One-time setup:
         </p>
         <ol style={{ margin: "0 0 10px 18px", padding: 0, fontSize: ".84rem", color: "var(--muted)", display: "grid", gap: 4 }}>
           <li>In the <strong>Discord Developer Portal</strong>, create an Application → add a <strong>Bot</strong>.</li>

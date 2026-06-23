@@ -84,6 +84,17 @@ export async function registerDiscordCommand() {
   }
 }
 
+// Set the Telegram GROUP link for one subject (chosen from the dropdown).
+export async function saveSubjectGroup(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const subjectId = str(formData.get("subject_id"));
+  const url = str(formData.get("group_url"));
+  if (!subjectId) redirect("/admin/integrations?links=saved");
+  const svc = createServiceClient();
+  await svc.from("subjects").update({ telegram_group_url: url || null }).eq("id", subjectId);
+  redirect("/admin/integrations?links=saved");
+}
+
 // Save the public channel / social links (no code/SQL needed).
 export async function saveLinks(formData: FormData) {
   if (!(await requireAdmin())) return;

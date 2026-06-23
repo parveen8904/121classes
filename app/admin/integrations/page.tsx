@@ -5,7 +5,7 @@ import { razorpayConfigured } from "@/lib/razorpay";
 import { r2Configured } from "@/lib/r2";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
-import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection, sendTestEmail, registerDiscordCommand } from "./actions";
+import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection, sendTestEmail, registerDiscordCommand, saveSubjectGroup } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -87,6 +87,12 @@ export default async function IntegrationsPage({
     .in("key", ["support_telegram", "support_telegram_group", "support_discord", "whatsapp_channel", "support_whatsapp", "support_instagram", "support_youtube", "support_twitter", "support_facebook"]);
   const L = new Map((links ?? []).map((r) => [r.key, r.value as string]));
   const webhookOk = !!health?.webhookUrl;
+  const { data: subjectRows } = await svc
+    .from("subjects")
+    .select("id, title, telegram_group_url, order_index")
+    .order("order_index")
+    .order("title");
+  const subjects = subjectRows ?? [];
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 820 }}>
@@ -227,6 +233,39 @@ export default async function IntegrationsPage({
           <input name="support_facebook" defaultValue={L.get("support_facebook") || ""} placeholder="https://facebook.com/…" />
           <SubmitButton className="btn" style={{ marginTop: 14 }}>Save links</SubmitButton>
         </form>
+      </div>
+
+      {/* Per-subject Telegram GROUP links — shown to students on their subject dashboard. */}
+      <div className="form-card" style={{ marginTop: 18 }}>
+        <h3>👥 Telegram subject groups</h3>
+        <p className="muted" style={{ fontSize: ".84rem", marginTop: 0 }}>
+          Each subject can have its own Telegram group. Pick the subject, paste its group invite link, and Save. Students see it on their subject dashboard.
+        </p>
+        <form action={saveSubjectGroup}>
+          <label>Subject</label>
+          <select name="subject_id" defaultValue={subjects[0]?.id ?? ""}>
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title}{(s as { telegram_group_url?: string | null }).telegram_group_url ? "  ✓ (link set)" : "  — no link yet"}
+              </option>
+            ))}
+          </select>
+          <label>Group invite link</label>
+          <input name="group_url" placeholder="https://t.me/+AbCd… or https://t.me/yourgroup" />
+          <p className="muted" style={{ fontSize: ".78rem", marginTop: 2 }}>Leave blank &amp; Save to remove a subject&apos;s group link.</p>
+          <SubmitButton className="btn" style={{ marginTop: 10 }}>Save group link</SubmitButton>
+        </form>
+        {subjects.some((s) => (s as { telegram_group_url?: string | null }).telegram_group_url) && (
+          <div style={{ marginTop: 12, fontSize: ".84rem" }}>
+            <strong>Current group links</strong>
+            <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+              {subjects.map((s) => {
+                const g = (s as { telegram_group_url?: string | null }).telegram_group_url;
+                return g ? <li key={s.id}>{s.title}: <a className="grad" href={g} target="_blank" rel="noreferrer">{g}</a></li> : null;
+              })}
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="form-card" style={{ marginTop: 18 }}>

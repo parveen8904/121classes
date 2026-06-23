@@ -4,6 +4,8 @@ import { sendTelegramMessage, notifyFaculty } from "@/lib/notify";
 import { answerDoubtFromMaterial, aiConfigured, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getSecret } from "@/lib/secrets";
+import { moderateMessage } from "@/lib/moderation";
+import { tgDeleteMessage } from "@/lib/telegramGroup";
 
 export const dynamic = "force-dynamic";
 
@@ -46,13 +48,49 @@ export async function POST(req: NextRequest) {
   const msg = update?.message ?? update?.edited_message;
   const chatId: string | undefined = msg?.chat?.id ? String(msg.chat.id) : undefined;
   const text: string = (msg?.text ?? "").trim();
-  // Also capture group chat id from any message in a group (belt-and-suspenders).
+  // ---- GROUP messages: mirror into our DB (source of truth) + auto-moderate ----
   if (chatId && (msg?.chat?.type === "group" || msg?.chat?.type === "supergroup")) {
     await svc.from("telegram_groups").upsert(
       { chat_id: chatId, title: msg.chat.title ?? "Group", last_seen_at: new Date().toISOString() },
       { onConflict: "chat_id" },
     );
+    if (msg?.message_id && text) {
+      const { data: subj } = await svc.from("subjects").select("id").eq("telegram_group_chat_id", chatId).maybeSingle();
+      const fromId = msg?.from?.id ? String(msg.from.id) : null;
+      const fromName = [msg?.from?.first_name, msg?.from?.last_name].filter(Boolean).join(" ") || msg?.from?.username || "Member";
+      const mod = moderateMessage(text);
+      let status = "visible";
+      if (mod.flagged) {
+        await tgDeleteMessage(chatId, msg.message_id); // bot must be group admin
+        status = "hidden";
+      }
+      const { data: gm } = await svc
+        .from("group_messages")
+        .upsert(
+          {
+            chat_id: chatId,
+            subject_id: subj?.id ?? null,
+            tg_message_id: msg.message_id,
+            source: "telegram",
+            sender_tg_id: fromId,
+            sender_name: fromName,
+            body: text,
+            reply_to_tg_id: msg?.reply_to_message?.message_id ?? null,
+            flagged: mod.flagged,
+            flag_reasons: mod.reasons,
+            status,
+          },
+          { onConflict: "chat_id,tg_message_id" },
+        )
+        .select("id")
+        .maybeSingle();
+      if (mod.flagged && gm?.id) {
+        await svc.from("message_moderation_log").insert({ message_id: gm.id, action: "auto_hidden", reason: mod.reasons.join(", ") });
+      }
+    }
+    return NextResponse.json({ ok: true });
   }
+
   if (!chatId || !text) return NextResponse.json({ ok: true });
 
   // 1) Account linking via deep link: /start <code>

@@ -15,7 +15,7 @@ export async function postToDiscord(content: string, linkUrl?: string): Promise<
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ content: text, allowed_mentions: { parse: [] } }),
+      body: JSON.stringify({ content: text, username: "CA Parveen Sharma", allowed_mentions: { parse: [] } }),
       cache: "no-store",
     });
     return res.ok;

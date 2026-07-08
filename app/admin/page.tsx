@@ -130,12 +130,6 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/site",
   },
   {
-    icon: "🔐",
-    title: "Downloadable classes",
-    desc: "Register encrypted classes for the Mac/Windows desktop app.",
-    href: "/admin/protected",
-  },
-  {
     icon: "📣",
     title: "Notify students",
     desc: "Broadcast updates by Telegram, email & WhatsApp.",

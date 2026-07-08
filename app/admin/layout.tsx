@@ -47,6 +47,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     .eq("id", user.id)
     .single();
 
+  // Two-factor is REQUIRED for admins. If enrolled but this session hasn't done
+  // the code check yet → challenge; if not enrolled at all → forced setup.
+  if (profile?.role === "admin") {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal && aal.currentLevel !== "aal2") {
+      if (aal.nextLevel === "aal2") redirect("/auth/mfa?next=/admin");
+      redirect("/auth/mfa/setup?required=1");
+    }
+  }
+
   if (profile?.role !== "admin") {
     return (
       <>

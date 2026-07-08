@@ -15,6 +15,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/control-sheet",
   },
   {
+    icon: "🔐",
+    title: "Security (2FA)",
+    desc: "Manage two-factor authentication for your admin login — required for all admins.",
+    href: "/auth/mfa/setup",
+  },
+  {
     icon: "🛡️",
     title: "Group moderation",
     desc: "Review flagged messages, search all group chats, hide messages, ban/mute users — Telegram kept in sync.",

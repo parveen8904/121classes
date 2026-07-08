@@ -29,11 +29,32 @@ const getSupportLinks = unstable_cache(
 );
 
 export const metadata: Metadata = {
-  title: "CA Parveen Sharma — AI-Enabled CA Coaching | caparveensharma.com",
+  metadataBase: new URL("https://caparveensharma.com"),
+  title: {
+    default: "CA Parveen Sharma — AI-Enabled CA Coaching | caparveensharma.com",
+    template: "%s | CA Parveen Sharma",
+  },
   description:
-    "Highly personalized, AI-enabled CA coaching that clears the clutter — top-notch, result-oriented 1-to-1 teaching, live classes and ad-free lectures for CA students in India.",
+    "Highly personalised, AI-enabled CA coaching that clears the clutter — top-notch, result-oriented 1-to-1 teaching, live classes and ad-free lectures for CA students in India.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "CA Parveen Sharma" },
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: "https://caparveensharma.com",
+    siteName: "CA Parveen Sharma",
+    title: "CA Parveen Sharma — Personalised CA Coaching",
+    description: "Advanced Accounting (CA Inter) & Financial Reporting (CA Final) by CA Parveen Sharma — classes, day-by-day study plans, AI doubt-solving, tests & amendments.",
+    images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "CA Parveen Sharma" }],
+    locale: "en_IN",
+  },
+  twitter: {
+    card: "summary",
+    title: "CA Parveen Sharma — Personalised CA Coaching",
+    description: "Advanced Accounting & Financial Reporting — personally mentored, AI-assisted CA preparation.",
+    images: ["/icon-512.png"],
+  },
+  robots: { index: true, follow: true },
 };
 
 // Ensure mobile browsers render at device width (responsive layout).
@@ -55,6 +76,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "EducationalOrganization",
+            name: "CA Parveen Sharma — Personalised Learning",
+            url: "https://caparveensharma.com",
+            logo: "https://caparveensharma.com/icon-512.png",
+            sameAs: [],
+            address: { "@type": "PostalAddress", streetAddress: "W6 Sector 24, DLF Phase 3", addressLocality: "Gurugram", postalCode: "122010", addressCountry: "IN" },
+          }) }}
+        />
       </head>
       <body>
         {/* Top progress bar shown on every page load / navigation */}

@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { videoEmbedSrc } from "../../_lib/media";
 import { attemptRank } from "../../_lib/attempt";
 import { bunnyEmbedUrl } from "@/lib/bunny";
+import { viaProxy } from "@/lib/fileProxy";
 import DoubtBox from "./DoubtBox";
 import ClassDownload from "./ClassDownload";
 import SectionCard from "./SectionCard";
@@ -738,7 +739,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
             <h3 style={{ margin: "0 0 8px" }}>📚 Topic materials</h3>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {topicMaterials.map((mt) => (
-                <a key={mt.id} className="btn small secondary" href={mt.file_url as string} target="_blank" rel="noopener noreferrer">
+                <a key={mt.id} className="btn small secondary" href={viaProxy(mt.file_url as string)} target="_blank" rel="noopener noreferrer">
                   {MAT_LABEL[mt.kind] ?? "📄"} {mt.title}
                 </a>
               ))}
@@ -763,7 +764,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
                     </div>
                   )}
                   {a.notes_hand_url && (
-                    <a className="btn small secondary" href={a.notes_hand_url} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8, display: "inline-block" }}>✍️ Handwritten notes (PDF)</a>
+                    <a className="btn small secondary" href={viaProxy(a.notes_hand_url)} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8, display: "inline-block" }}>✍️ Handwritten notes (PDF)</a>
                   )}
                   {a.discussion && (
                     <details style={{ marginTop: 8 }}>

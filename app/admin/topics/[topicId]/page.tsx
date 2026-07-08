@@ -207,6 +207,9 @@ export default async function TopicDetail({
         <details>
           <summary className="btn secondary as-btn">🎥 Add a video</summary>
           <div className="form-card" style={{ marginTop: 10 }}>
+            <div className="notice ok" style={{ fontSize: ".8rem", marginBottom: 10 }}>
+              📤 <strong>Uploading to Bunny — cost rules:</strong> upload directly on Bunny as usual — originals are now auto-deleted after processing, so big files no longer waste storage. For faster uploads (optional): compress first with HandBrake → preset &ldquo;Fast 1080p30&rdquo; → tick &ldquo;Web Optimized&rdquo; → Start (a 15 GB recording becomes ~3 GB, same quality for students).
+            </div>
             <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 10 }}>Upload the video (+ PDF/notes). Choose its <strong>Kind</strong>: a detailed class is auto-numbered 1, 2, 3…; a Revision Round 1 / 2 video is numbered R1 / R2; a plain video gets no number.</p>
             <SectionForm action={createSection} topicId={topic.id} submitLabel="Add video" defaultType="full_class_video" kindMode subjectCode={subjectCode} topicCode={topicCode} groups={groupList} />
           </div>

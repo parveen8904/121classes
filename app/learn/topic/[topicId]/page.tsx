@@ -364,14 +364,16 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     }
   } else {
     // Students: RPC marks paid sections locked; RLS gives config for unlocked ones.
-    const { data: metas, error: metaErr } = await supabase.rpc("list_topic_sections", { p_topic: topic.id });
-    const { data: accessRows } = await supabase
+    const [{ data: metas, error: metaErr }, { data: accessRows }] = await Promise.all([
+      supabase.rpc("list_topic_sections", { p_topic: topic.id }),
+      supabase
       .from("sections")
       .select("id, type, title, order_index, min_plan, is_published, config, group_id")
       .eq("topic_id", topic.id)
       .eq("is_published", true)
       .order("order_index")
-      .order("title");
+      .order("title"),
+    ]);
     for (const r of accessRows ?? []) {
       configById.set(r.id, r.config as Record<string, unknown> | null);
       sectionGroupId.set(r.id, (r as { group_id?: string | null }).group_id ?? null);
@@ -383,17 +385,20 @@ export default async function LearnTopic({ params }: { params: { topicId: string
   }
 
   // Named Sections (content groups) the admin created for this topic.
-  const { data: topicGroups } = await createServiceClient()
-    .from("topic_groups")
-    .select("id, name, order_index")
-    .eq("topic_id", topic.id)
-    .order("order_index")
-    .order("created_at");
+  // One parallel round trip for all remaining independent lookups (was 5
+  // sequential queries — the other big cause of slow topic-page clicks).
+  const svcP = createServiceClient();
+  const [{ data: topicGroups }, { data: dlRows }, { data: topicMaterials }, { data: amendRows }, { data: durRows }] = await Promise.all([
+    svcP.from("topic_groups").select("id, name, order_index").eq("topic_id", topic.id).order("order_index").order("created_at"),
+    supabase.rpc("list_downloadable_classes"),
+    svcP.from("repository_items").select("id, title, kind, file_url").eq("topic_id", topic.id).eq("is_active", true).not("file_url", "is", null).order("created_at", { ascending: false }),
+    svcP.from("amendments").select("id, title, body, discussion, bunny_video_id, bunny_drm, youtube_url, embed_url, notes_hand_url, valid_from_attempt, valid_to_attempt").eq("topic_id", topic.id).eq("is_published", true).order("order_index"),
+    svcP.from("sections").select("id, type, config").eq("topic_id", topic.id).eq("is_published", true),
+  ]);
   const groupList = topicGroups ?? [];
 
   // Encrypted classes the student may download, keyed by section (for the
   // "Download for offline" button on the class).
-  const { data: dlRows } = await supabase.rpc("list_downloadable_classes");
   const downloadBySection = new Map<string, Downloadable>();
   for (const d of (dlRows ?? []) as Downloadable[]) {
     if (d.section_id) downloadBySection.set(d.section_id, d);
@@ -404,22 +409,9 @@ export default async function LearnTopic({ params }: { params: { topicId: string
 
   // Topic materials (question bank / ICAI / RTP / past papers / book) — the SAME
   // PDFs that train the AI are offered to students here. One upload, both uses.
-  const { data: topicMaterials } = await createServiceClient()
-    .from("repository_items")
-    .select("id, title, kind, file_url")
-    .eq("topic_id", topic.id)
-    .eq("is_active", true)
-    .not("file_url", "is", null)
-    .order("created_at", { ascending: false });
   const MAT_LABEL: Record<string, string> = { question_bank: "📚 Question bank", icai: "🏛️ ICAI material", rtp: "📄 RTP", past_papers: "🗂️ Past papers", book: "📕 Book", notes: "📝 Notes", revision_notes: "🔁 Revision notes", transcript: "🎙️ Transcript", other: "📄 Material" };
 
   // Amendments & updates for THIS topic, filtered to the student's attempt.
-  const { data: amendRows } = await createServiceClient()
-    .from("amendments")
-    .select("id, title, body, discussion, bunny_video_id, bunny_drm, youtube_url, embed_url, notes_hand_url, valid_from_attempt, valid_to_attempt")
-    .eq("topic_id", topic.id)
-    .eq("is_published", true)
-    .order("order_index");
   const myAttemptRank = attemptRank(wmProfile?.target_attempt ?? null);
   const topicAmendments = (amendRows ?? []).filter((a) => {
     if (myAttemptRank === null) return true;
@@ -486,11 +478,6 @@ export default async function LearnTopic({ params }: { params: { topicId: string
   let topicTotalMins = 0;
   let topicMainClasses = 0;
   {
-    const { data: durRows } = await createServiceClient()
-      .from("sections")
-      .select("id, type, config")
-      .eq("topic_id", topic.id)
-      .eq("is_published", true);
     for (const r of durRows ?? []) {
       const cfg = ((r as { config?: Record<string, unknown> | null }).config ?? {}) as Record<string, unknown>;
       const d = Number(cfg.duration_minutes) || 0;

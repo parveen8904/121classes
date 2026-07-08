@@ -31,39 +31,27 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   } = await supabase.auth.getUser();
   if (!user) redirect(`/login?next=/learn/${params.courseId}`);
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("target_attempt")
-    .eq("id", user.id)
-    .single();
-
-  const { data: course } = await supabase
-    .from("courses")
-    .select("id, title")
-    .eq("id", params.courseId)
-    .single();
-  if (!course) notFound();
-
-  const [{ data: subjects }, { data: subscription }] = await Promise.all([
+  // One parallel round trip for everything that only needs the user + course id
+  // (was 4 sequential trips — the main cause of the slow click into a course).
+  const [{ data: profile }, { data: course }, { data: subjects }, { data: subscription }, { data: mySubjRows }] = await Promise.all([
+    supabase.from("profiles").select("target_attempt").eq("id", user.id).single(),
+    supabase.from("courses").select("id, title").eq("id", params.courseId).single(),
     supabase
       .from("subjects")
       .select("id, title, order_index, telegram_group_url, subject_faculty(faculties(full_name, phone, email))")
-      .eq("course_id", course.id)
+      .eq("course_id", params.courseId)
       .order("order_index")
       .order("title"),
     supabase
       .from("subscriptions")
       .select("id, ends_at, auto_renew, subject_id, plans(tier, name), subjects(title)")
       .eq("student_id", user.id)
-      .eq("course_id", course.id)
+      .eq("course_id", params.courseId)
       .eq("status", "active")
       .order("ends_at", { ascending: false }),
+    supabase.from("my_subjects").select("subject_id").eq("student_id", user.id),
   ]);
-
-  const { data: mySubjRows } = await supabase
-    .from("my_subjects")
-    .select("subject_id")
-    .eq("student_id", user.id);
+  if (!course) notFound();
   const mySubjIds = new Set((mySubjRows ?? []).map((r) => r.subject_id as string));
 
   const subjectIds = (subjects ?? []).map((s) => s.id);
@@ -93,11 +81,10 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   // content is still enforced when a class is opened.
   const svc = createServiceClient();
   if (topicIds2.length) {
-    const { data: secRows } = await svc
-      .from("sections")
-      .select("topic_id, type, config")
-      .in("topic_id", topicIds2)
-      .eq("is_published", true);
+    const [{ data: secRows }, { data: matRowsP }] = await Promise.all([
+      svc.from("sections").select("topic_id, type, config").in("topic_id", topicIds2).eq("is_published", true),
+      svc.from("repository_items").select("topic_id, kind").in("topic_id", topicIds2).eq("is_active", true).not("file_url", "is", null),
+    ]);
     for (const r of secRows ?? []) {
       const tid = (r as { topic_id: string }).topic_id;
       const sid = topicToSubject.get(tid);
@@ -114,12 +101,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
       else if (type === "mcq_test") inc(sumMcq, sid);
       else if (type === "subjective_test") inc(sumDesc, sid);
     }
-    const { data: matRows } = await svc
-      .from("repository_items")
-      .select("topic_id, kind")
-      .in("topic_id", topicIds2)
-      .eq("is_active", true)
-      .not("file_url", "is", null);
+    const matRows = matRowsP;
     for (const r of matRows ?? []) {
       const sid = topicToSubject.get((r as { topic_id: string }).topic_id);
       const k = (r as { kind: string }).kind;

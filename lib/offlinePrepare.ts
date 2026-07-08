@@ -36,6 +36,21 @@ async function bunnyLibraryPatch(body: Record<string, unknown>): Promise<void> {
   }).catch(() => {});
 }
 
+// Stream-library video API (per-video info / re-encode) — different host+key
+// from the account-level library-settings API above.
+async function bunnyVideoApi(path: string, method: "GET" | "POST" = "GET"): Promise<Record<string, unknown> | null> {
+  const key = await getSecret("BUNNY_STREAM_API_KEY");
+  const lib = await getSecret("BUNNY_LIBRARY_ID");
+  if (!key || !lib) return null;
+  const res = await fetch(`https://video.bunnycdn.com/library/${lib}/videos/${path}`, {
+    method,
+    headers: { AccessKey: key, accept: "application/json" },
+    cache: "no-store",
+  }).catch(() => null);
+  if (!res || !res.ok) return null;
+  return (await res.json().catch(() => null)) as Record<string, unknown> | null;
+}
+
 async function r2Client(): Promise<{ aws: AwsClient; endpoint: string; publicBase: string } | null> {
   const accountId = await getSecret("R2_ACCOUNT_ID");
   const accessKeyId = await getSecret("R2_ACCESS_KEY_ID");
@@ -74,37 +89,82 @@ export async function prepareStep(sectionId: string, timeBudgetMs = 170_000): Pr
   if (!r2) return { done: false, status: "error", bytesDone: 0, bytesTotal: null, error: "R2 not configured" };
 
   // Bunny blocks direct MP4 access by default — unlock while we work (relocked
-  // by the caller when no jobs remain).
-  await bunnyLibraryPatch({ AllowDirectPlay: true });
+  // by the caller when no jobs remain). MP4 Fallback stays on permanently so
+  // every newly uploaded class gets a downloadable MP4 at encode time.
+  await bunnyLibraryPatch({ AllowDirectPlay: true, EnableMP4Fallback: true });
 
-  if (!job) {
-    // Pick the best available MP4 rendition (prefer 720p — right size for phones).
-    let resolution = "";
-    let total = 0;
+  // Probe for a direct MP4 rendition (prefer 720p — right size for phones).
+  let resolution = job?.resolution || "";
+  let total = Number(job?.bytes_total) || 0;
+  let saw403 = false;
+  if (!resolution) {
     for (const res of ["720p", "480p", "360p"]) {
       const head = await fetch(`https://${CDN_HOST}/${guid}/play_${res}.mp4`, { method: "HEAD", cache: "no-store" });
       if (head.ok) { resolution = res; total = Number(head.headers.get("content-length")) || 0; break; }
+      if (head.status === 403) saw403 = true;
     }
-    if (!resolution) return { done: false, status: "error", bytesDone: 0, bytesTotal: null, error: "No MP4 rendition available yet (Bunny may still be encoding)" };
+  }
 
+  // 403 means the MP4s exist but direct access stayed locked — the library
+  // settings call must have failed. Don't waste a re-encode on that.
+  if (!resolution && saw403) {
+    return { done: false, status: "error", bytesDone: 0, bytesTotal: null, error: "Bunny refused direct access — check BUNNY_ACCOUNT_API_KEY in Admin → Integrations" };
+  }
+
+  if (!resolution) {
+    // Classes encoded before MP4 Fallback was enabled have no downloadable MP4.
+    // Ask Bunny to re-encode this video (it still has the stored original) and
+    // park the job as pending — the hourly run retries until the MP4 appears.
+    const WAIT = "Bunny is re-creating this class's downloadable file — automatic, usually ready within 1–2 hours; no action needed";
+    if (!job) {
+      await bunnyVideoApi(`${guid}/reencode`, "POST");
+      await svc.from("offline_jobs").insert({
+        section_id: sectionId, guid, resolution: "", status: "pending",
+        bytes_total: null, bytes_done: 0, upload_id: null, parts: [],
+        key_b64: randomBytes(32).toString("base64"),
+        iv_b64: randomBytes(16).toString("base64"),
+        last_block_b64: null, storage_key: `offline/${sectionId}.enc`, error: WAIT,
+      });
+    } else {
+      // Nudge Bunny again if this job has sat waiting for 6+ hours.
+      const updatedAt = (job as unknown as { updated_at?: string }).updated_at;
+      if (!updatedAt || Date.now() - new Date(updatedAt).getTime() > 6 * 3600_000) {
+        await bunnyVideoApi(`${guid}/reencode`, "POST");
+      }
+      await svc.from("offline_jobs").update({ status: "pending", error: WAIT, updated_at: new Date().toISOString() }).eq("id", job.id);
+    }
+    return { done: false, status: "pending", bytesDone: 0, bytesTotal: null, error: WAIT };
+  }
+
+  if (!job || !job.resolution) {
+    // MP4 is available — initialise (or wake a parked job): pin the resolution
+    // and start the S3 multipart upload.
     const storageKey = `offline/${sectionId}-${resolution}.enc`;
-    // Start the S3 multipart upload.
     const create = await r2.aws.fetch(`${r2.endpoint}/${storageKey}?uploads=`, { method: "POST" });
     const createXml = await create.text();
     const uploadId = /<UploadId>([^<]+)<\/UploadId>/.exec(createXml)?.[1];
     if (!create.ok || !uploadId) return { done: false, status: "error", bytesDone: 0, bytesTotal: total, error: "Could not start R2 upload" };
 
-    const ins = {
-      section_id: sectionId, guid, resolution, status: "running", bytes_total: total, bytes_done: 0,
-      upload_id: uploadId, parts: [], key_b64: randomBytes(32).toString("base64"),
-      iv_b64: randomBytes(16).toString("base64"), last_block_b64: null, storage_key: storageKey,
-    };
-    const { data: created } = await svc.from("offline_jobs").insert(ins).select("*").single();
-    job = created as Job;
+    if (!job) {
+      const ins = {
+        section_id: sectionId, guid, resolution, status: "running", bytes_total: total, bytes_done: 0,
+        upload_id: uploadId, parts: [], key_b64: randomBytes(32).toString("base64"),
+        iv_b64: randomBytes(16).toString("base64"), last_block_b64: null, storage_key: storageKey,
+      };
+      const { data: created } = await svc.from("offline_jobs").insert(ins).select("*").single();
+      job = created as Job;
+    } else {
+      const { data: woken } = await svc.from("offline_jobs").update({
+        resolution, status: "running", bytes_total: total, bytes_done: 0, upload_id: uploadId,
+        parts: [], last_block_b64: null, storage_key: storageKey, error: null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", job.id).select("*").single();
+      job = woken as Job;
+    }
   }
   if (!job) return { done: false, status: "error", bytesDone: 0, bytesTotal: null, error: "job create failed" };
 
-  const total = Number(job.bytes_total) || 0;
+  total = Number(job.bytes_total) || 0;
   let bytesDone = Number(job.bytes_done) || 0;
   let parts = (job.parts ?? []) as { PartNumber: number; ETag: string }[];
   let chainIv = Buffer.from(job.last_block_b64 || job.iv_b64, "base64");
@@ -187,37 +247,50 @@ export async function prepareStep(sectionId: string, timeBudgetMs = 170_000): Pr
   }
 }
 
-// Continue the oldest unfinished job (used by the hourly cron to drain the backlog).
+// Drain the queue (used by the hourly cron). Jobs parked waiting for Bunny's
+// re-encode return instantly as "pending", so the slice moves on to the next
+// class instead of stalling on them.
 export async function prepareNextPending(timeBudgetMs = 150_000): Promise<StepResult | null> {
   const svc = createServiceClient();
-  const { data: next } = await svc
+  const started = Date.now();
+  const left = () => timeBudgetMs - (Date.now() - started);
+
+  const { data: queued } = await svc
     .from("offline_jobs")
     .select("section_id")
     .in("status", ["pending", "running"])
     .order("created_at")
-    .limit(1)
-    .maybeSingle();
-  if (next) return prepareStep(next.section_id as string, timeBudgetMs);
+    .limit(20);
+  let last: StepResult | null = null;
+  for (const q of queued ?? []) {
+    if (left() < 20_000) return last;
+    last = await prepareStep(q.section_id as string, left());
+    if (last.status !== "pending") return last;
+  }
 
-  // Nothing queued → auto-enqueue the next published class that has no offline
-  // copy yet, so newly uploaded classes become downloadable with zero admin
-  // steps. Gated on ≥1 successful job so the pipeline proves itself on a
-  // manual run first (errors stay visible in Admin → Offline downloads and are
-  // not retried automatically).
+  // Queue empty (or everything is waiting on Bunny) → auto-enqueue the next
+  // published classes that have no offline copy yet, so newly uploaded classes
+  // become downloadable with zero admin steps. Gated on ≥1 successful job so
+  // the pipeline proves itself on a manual run first (errors stay visible in
+  // Admin → Offline downloads and are not retried automatically).
   const { count: doneCount } = await svc
     .from("offline_jobs")
     .select("id", { count: "exact", head: true })
     .eq("status", "done");
-  if (!doneCount) return null;
+  if (!doneCount) return last;
 
   const [{ data: existing }, { data: secs }] = await Promise.all([
     svc.from("offline_jobs").select("section_id"),
     svc.from("sections").select("id, config").eq("type", "full_class_video").eq("is_published", true).order("order_index"),
   ]);
   const have = new Set((existing ?? []).map((e) => e.section_id as string));
-  const target = (secs ?? []).find(
+  const targets = (secs ?? []).filter(
     (s) => ((s.config ?? {}) as Record<string, string>).bunny_video_id && !have.has(s.id as string),
-  );
-  if (!target) return null;
-  return prepareStep(target.id as string, timeBudgetMs);
+  ).slice(0, 5);
+  for (const t of targets) {
+    if (left() < 20_000) return last;
+    last = await prepareStep(t.id as string, left());
+    if (last.status !== "pending") return last;
+  }
+  return last;
 }

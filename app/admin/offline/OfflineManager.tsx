@@ -21,7 +21,7 @@ export default function OfflineManager({ initial }: { initial: Row[] }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [bulk, setBulk] = useState(false);
 
-  async function prepare(sectionId: string): Promise<boolean> {
+  async function prepare(sectionId: string): Promise<"done" | "waiting" | "error"> {
     setBusyId(sectionId);
     try {
       // Keep slicing until done/error (each call ≤ ~4 min server-side).
@@ -35,10 +35,11 @@ export default function OfflineManager({ initial }: { initial: Row[] }) {
         setRows((rs) => rs.map((r) => r.sectionId === sectionId
           ? { ...r, status: j.status, pct: j.bytesTotal ? Math.floor((j.bytesDone / j.bytesTotal) * 100) : 0, error: j.error ?? null }
           : r));
-        if (j.done) return true;
-        if (j.status === "error") return false;
+        if (j.done) return "done";
+        if (j.status === "error") return "error";
+        if (j.status === "pending") return "waiting"; // Bunny re-encoding — the hourly run resumes it
       }
-      return false;
+      return "waiting";
     } finally {
       setBusyId(null);
     }
@@ -49,8 +50,8 @@ export default function OfflineManager({ initial }: { initial: Row[] }) {
     try {
       for (const r of rows) {
         if (r.status === "done") continue;
-        const ok = await prepare(r.sectionId);
-        if (!ok) break; // stop on first error so it's visible
+        const res = await prepare(r.sectionId);
+        if (res === "error") break; // stop on a real error so it's visible; waiting classes continue on their own
       }
     } finally {
       setBulk(false);
@@ -75,10 +76,12 @@ export default function OfflineManager({ initial }: { initial: Row[] }) {
             <div style={{ flex: 1, minWidth: 220 }}>
               <strong style={{ fontSize: ".9rem" }}>{r.title}</strong>
               <span className="muted" style={{ fontSize: ".78rem" }}> · {r.subject}</span>
-              {r.error && <div style={{ color: "#dc2626", fontSize: ".78rem" }}>⚠️ {r.error}</div>}
+              {r.error && r.status !== "pending" && <div style={{ color: "#dc2626", fontSize: ".78rem" }}>⚠️ {r.error}</div>}
             </div>
             {r.status === "done" ? (
               <span style={{ color: "#16a34a", fontWeight: 700, fontSize: ".85rem" }}>✅ Ready</span>
+            ) : r.status === "pending" && busyId !== r.sectionId ? (
+              <span className="muted" style={{ fontSize: ".8rem" }}>🐰 Bunny re-encoding — continues automatically</span>
             ) : r.status === "running" || busyId === r.sectionId ? (
               <span style={{ fontWeight: 700, fontSize: ".85rem" }}>⏳ {r.pct}%</span>
             ) : (

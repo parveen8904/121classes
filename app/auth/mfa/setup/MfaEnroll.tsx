@@ -50,6 +50,8 @@ export default function MfaEnroll({ required }: { required: boolean }) {
     setEnrolling(null);
     setCode("");
     refresh();
+    // Full page navigation (not client-side) so the upgraded 2FA session is used.
+    setTimeout(() => window.location.assign("/admin"), 1200);
   }
 
   async function remove(id: string) {
@@ -76,13 +78,16 @@ export default function MfaEnroll({ required }: { required: boolean }) {
           {done && (
             <div className="notice ok">
               ✅ Two-factor is ON. From now on, admin login = password + the 6-digit code.
-              <p style={{ margin: "8px 0 0" }}><Link className="btn small" href="/admin">Continue to admin →</Link></p>
+              <p style={{ margin: "8px 0 0" }}>Taking you to the admin… <a className="btn small" href="/admin">Continue now →</a></p>
             </div>
           )}
 
           {active.length > 0 && !enrolling && (
             <div style={{ margin: "12px 0" }}>
-              <strong>✅ Active</strong>
+              {!done && (
+                <a className="btn block" href="/admin" style={{ marginBottom: 12 }}>✅ Two-factor is ON — continue to admin →</a>
+              )}
+              <strong>Active</strong>
               {active.map((f) => (
                 <div key={f.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 8, background: "var(--bg-soft)", borderRadius: 10, padding: "8px 12px" }}>
                   <span style={{ fontSize: ".9rem" }}>📱 {f.friendly_name || "Authenticator app"}</span>

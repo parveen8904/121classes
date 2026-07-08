@@ -19,6 +19,7 @@
     "next": "^14.2.35",
     "nextjs-toploader": "^3.9.17",
     "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.1.200",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tus-js-client": "^4.1.0",

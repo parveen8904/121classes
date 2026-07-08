@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import NotesCanvas from "./NotesCanvas";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export default async function NotesViewer({
       </div>
 
       <div style={{ position: "relative", flex: 1, overflow: "hidden" }}>
-        <iframe src={fileUrl} title="Notes" style={{ width: "100%", height: "100%", border: 0, background: "#333" }} />
+        <NotesCanvas fileUrl={fileUrl} />
         {/* Moving student watermark — identifies the viewer on any capture. */}
         <div className="notes-wm" aria-hidden>
           {wm}

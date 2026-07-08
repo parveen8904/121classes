@@ -16,6 +16,9 @@ import { getSecret } from "@/lib/secrets";
 
 const CHUNK = 64 * 1024 * 1024; // 64 MB per slice-part (multiple of 16)
 const CDN_HOST = "vz-839ca0ae-eec.b-cdn.net";
+// The library blocks requests with no/foreign referer (hotlink protection) —
+// our server-side fetches must identify as the site or Bunny answers 403.
+const REFERER = "https://caparveensharma.com/";
 
 type Job = {
   id: string; section_id: string; guid: string; resolution: string; status: string;
@@ -99,7 +102,7 @@ export async function prepareStep(sectionId: string, timeBudgetMs = 170_000): Pr
   let saw403 = false;
   if (!resolution) {
     for (const res of ["720p", "480p", "360p"]) {
-      const head = await fetch(`https://${CDN_HOST}/${guid}/play_${res}.mp4`, { method: "HEAD", cache: "no-store" });
+      const head = await fetch(`https://${CDN_HOST}/${guid}/play_${res}.mp4`, { method: "HEAD", headers: { referer: REFERER }, cache: "no-store" });
       if (head.ok) { resolution = res; total = Number(head.headers.get("content-length")) || 0; break; }
       if (head.status === 403) saw403 = true;
     }
@@ -175,7 +178,7 @@ export async function prepareStep(sectionId: string, timeBudgetMs = 170_000): Pr
       const end = Math.min(bytesDone + CHUNK, total) - 1;
       const isFinal = end === total - 1;
       const res = await fetch(`https://${CDN_HOST}/${job.guid}/play_${job.resolution}.mp4`, {
-        headers: { range: `bytes=${bytesDone}-${end}` },
+        headers: { range: `bytes=${bytesDone}-${end}`, referer: REFERER },
         cache: "no-store",
       });
       if (!res.ok) throw new Error(`download HTTP ${res.status}`);

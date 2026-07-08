@@ -1,0 +1,11 @@
+{
+  "appId": "in.caclasses.app",
+  "appName": "CA Parveen Sharma",
+  "webDir": "www",
+  "server": {
+    "url": "https://caparveensharma.com/dashboard",
+    "allowNavigation": ["caparveensharma.com", "*.caparveensharma.com", "*.supabase.co"]
+  },
+  "ios": { "contentInset": "always" },
+  "android": { "allowMixedContent": false }
+}

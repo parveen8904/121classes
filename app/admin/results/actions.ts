@@ -1,7 +1,9 @@
 "use server";
 
+import { requireArea } from "@/lib/adminAccess";
+
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { str, num, nullable } from "../_lib/util";
 
 function fields(formData: FormData) {
@@ -19,9 +21,10 @@ function fields(formData: FormData) {
 }
 
 export async function createResult(formData: FormData) {
+  if (!(await requireArea("results"))) return;
   const f = fields(formData);
   if (!f.student_name) return;
-  const supabase = createClient();
+  const supabase = createServiceClient();
   await supabase.from("results").insert(f);
   revalidatePath("/admin/results");
   revalidatePath("/results");
@@ -30,10 +33,11 @@ export async function createResult(formData: FormData) {
 }
 
 export async function updateResult(formData: FormData) {
+  if (!(await requireArea("results"))) return;
   const id = str(formData.get("id"));
   const f = fields(formData);
   if (!id || !f.student_name) return;
-  const supabase = createClient();
+  const supabase = createServiceClient();
   await supabase.from("results").update(f).eq("id", id);
   revalidatePath("/admin/results");
   revalidatePath("/results");
@@ -42,8 +46,9 @@ export async function updateResult(formData: FormData) {
 }
 
 export async function deleteResult(formData: FormData) {
+  if (!(await requireArea("results"))) return;
   const id = str(formData.get("id"));
-  const supabase = createClient();
+  const supabase = createServiceClient();
   await supabase.from("results").delete().eq("id", id);
   revalidatePath("/admin/results");
   revalidatePath("/results");

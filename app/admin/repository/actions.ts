@@ -1,5 +1,7 @@
 "use server";
 
+import { requireArea } from "@/lib/adminAccess";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -7,13 +9,7 @@ import { extractPdfText } from "@/lib/pdf";
 import { str } from "../_lib/util";
 
 async function requireAdmin(): Promise<boolean> {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return false;
-  const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-  return data?.role === "admin";
+  return requireArea("repository"); // admin always; operator/faculty with this right
 }
 
 const orNull = (v: FormDataEntryValue | null) => str(v).trim() || null;

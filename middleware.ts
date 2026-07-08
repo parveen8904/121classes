@@ -6,6 +6,9 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 // Refreshes the Supabase session on every request and guards portal routes.
 export async function middleware(request: NextRequest) {
+  // Expose the current path to server layouts (the admin layout uses it to gate
+  // operators/faculty to their permitted areas).
+  request.headers.set("x-pathname", request.nextUrl.pathname);
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

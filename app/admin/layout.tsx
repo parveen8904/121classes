@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { isStaffRole, pathAllowed, areaForPath, type Staff } from "@/lib/adminAccess";
 import PortalHeader from "@/app/components/PortalHeader";
 import PortalFooter from "@/app/components/PortalFooter";
 
@@ -43,13 +45,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, permissions")
     .eq("id", user.id)
     .single();
+  const role = (profile?.role as string) ?? "student";
+  const staff: Staff = { id: user.id, role, permissions: ((profile?.permissions as string[]) ?? []) };
 
-  // Two-factor is REQUIRED for admins. If enrolled but this session hasn't done
-  // the code check yet → challenge; if not enrolled at all → forced setup.
-  if (profile?.role === "admin") {
+  // Two-factor is REQUIRED for the super admin. If enrolled but this session
+  // hasn't done the code check yet → challenge; if not enrolled → forced setup.
+  if (role === "admin") {
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aal && aal.currentLevel !== "aal2") {
       if (aal.nextLevel === "aal2") redirect("/auth/mfa?next=/admin");
@@ -57,16 +61,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     }
   }
 
-  if (profile?.role !== "admin") {
+  const isStaffMember = isStaffRole(role) && (role === "admin" || staff.permissions.length > 0);
+  if (!isStaffMember) {
     return (
       <>
         <PortalHeader />
         <main className="narrow" style={{ paddingTop: 60 }}>
           <div className="card">
-            <h1 style={{ fontSize: "1.3rem", marginBottom: 8 }}>🔒 Admins only</h1>
+            <h1 style={{ fontSize: "1.3rem", marginBottom: 8 }}>🔒 Staff only</h1>
             <p className="muted">
-              Your account isn&apos;t an admin. Set <code>role = &apos;admin&apos;</code> on your row
-              in the <code>profiles</code> table (Supabase &rarr; Table editor) to access this area.
+              Your account doesn&apos;t have admin-panel access. Ask the administrator to grant you a
+              role (operator / faculty) and the rights you need.
             </p>
             <p style={{ marginTop: 16 }}>
               <Link className="btn secondary" href="/dashboard">
@@ -80,12 +85,45 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     );
   }
 
+  // Operators/faculty may only open the areas they've been granted.
+  const path = headers().get("x-pathname") || "/admin";
+  if (!pathAllowed(path, staff)) {
+    return (
+      <>
+        <PortalHeader />
+        <main className="narrow" style={{ paddingTop: 60 }}>
+          <div className="card">
+            <h1 style={{ fontSize: "1.3rem", marginBottom: 8 }}>🔒 No access to this section</h1>
+            <p className="muted">
+              Your account ({role}) doesn&apos;t have rights for this area. The administrator can grant
+              it from Admin → Users.
+            </p>
+            <p style={{ marginTop: 16 }}>
+              <Link className="btn secondary" href="/admin">← My admin areas</Link>
+            </p>
+          </div>
+        </main>
+        <PortalFooter />
+      </>
+    );
+  }
+
+  // Staff see only the nav links they can open (admin sees all).
+  const visibleLinks =
+    role === "admin"
+      ? ADMIN_LINKS
+      : ADMIN_LINKS.filter(([, href]) => {
+          if (href === "/admin") return true;
+          const area = areaForPath(href);
+          return area !== null && staff.permissions.includes(area);
+        });
+
   return (
     <>
       <PortalHeader />
       <nav className="portal-subnav">
         <div className="portal-subnav-inner">
-          {ADMIN_LINKS.map(([label, href]) => (
+          {visibleLinks.map(([label, href]) => (
             <Link key={href} href={href}>
               {label}
             </Link>

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../../_components/AdminHero";
 import { updateUser, sendSetPasswordEmail, adminSetPassword } from "../actions";
+import { ADMIN_AREAS } from "@/lib/adminAccess";
 
 function fmt(s: string | null): string {
   if (!s) return "—";
@@ -29,7 +30,7 @@ export default async function UserDetail({
   const { data: u } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, email, phone, role, target_attempt, created_at, address_line1, address_line2, city, state, pincode, gstin, business_name",
+      "id, full_name, email, phone, role, permissions, target_attempt, created_at, address_line1, address_line2, city, state, pincode, gstin, business_name",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -134,12 +135,28 @@ export default async function UserDetail({
               <label>Role</label>
               <select name="role" defaultValue={u.role}>
                 <option value="student">🎓 Student</option>
+                <option value="operator">🧑‍💼 Operator (staff)</option>
                 <option value="faculty">👩‍🏫 Faculty</option>
-                <option value="admin">🛠️ Admin</option>
+                <option value="admin">🛠️ Admin (full access)</option>
               </select>
             </div>
           </div>
           <p className="muted" style={{ fontSize: ".8rem" }}>Email is the login identity and can&apos;t be changed here.</p>
+
+          <div style={{ marginTop: 14, border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px" }}>
+            <strong>🔑 Rights (for Operator / Faculty)</strong>
+            <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 10px" }}>
+              Tick the admin areas this person may manage. Admins always have everything; students have none.
+              Untick everything to remove their admin access.
+            </p>
+            <div style={{ display: "grid", gap: 6, gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))" }}>
+              {ADMIN_AREAS.map((a) => (
+                <label key={a.key} className="remember" style={{ margin: 0 }}>
+                  <input type="checkbox" name="perm" value={a.key} defaultChecked={((u.permissions as string[]) ?? []).includes(a.key)} /> {a.label}
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="form-card" style={{ marginTop: 16 }}>

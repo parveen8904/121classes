@@ -1,5 +1,7 @@
 "use server";
 
+import { requireArea } from "@/lib/adminAccess";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -8,11 +10,7 @@ import { clearSecretCache } from "@/lib/secrets";
 import { ingestJobs } from "@/lib/jobsfeed";
 
 async function isAdmin(): Promise<boolean> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
-  const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-  return data?.role === "admin";
+  return requireArea("career"); // admin always; operator/faculty with this right
 }
 
 export async function saveJobSources(formData: FormData) {

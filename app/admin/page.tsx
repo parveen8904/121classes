@@ -1,6 +1,7 @@
 import Link from "next/link";
 import AdminHero from "./_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
+import { currentStaff, areaForPath } from "@/lib/adminAccess";
 import { getBunnyBilling } from "@/lib/bunny";
 
 export const dynamic = "force-dynamic";
@@ -181,6 +182,14 @@ async function loadStats() {
 }
 
 export default async function AdminHome() {
+  // Operators/faculty see only their granted areas (stats + tiles); admin sees all.
+  const staff = await currentStaff();
+  const isSuper = staff?.role === "admin";
+  const canPath = (href?: string) => {
+    if (isSuper || !href) return isSuper;
+    const area = areaForPath(href);
+    return area !== null && (staff?.permissions ?? []).includes(area);
+  };
   const s = await loadStats();
   const inr = (usd: number) => `₹${Math.round(usd * INR)}`;
   const cards = [
@@ -192,6 +201,8 @@ export default async function AdminHome() {
     ...(s.bunnyMonth !== null ? [{ label: "Bunny (this month)", value: inr(s.bunnyMonth), href: "/admin/costs" }] : []),
     { label: "Storage used", value: `${s.storageMb.toFixed(1)} MB`, href: "/admin/costs" },
   ];
+  const visibleCards = isSuper ? cards : cards.filter((c) => canPath(c.href));
+  const visiblePanels = isSuper ? PANELS : PANELS.filter((p) => p.href && canPath(p.href));
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
       <AdminHero
@@ -202,7 +213,7 @@ export default async function AdminHome() {
 
       {/* At-a-glance stats */}
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", marginTop: 18, marginBottom: 26 }}>
-        {cards.map((c) => (
+        {visibleCards.map((c) => (
           <Link key={c.label} href={c.href} style={{ display: "block", textDecoration: "none" }}>
             <div style={{ background: "var(--bg-soft)", borderRadius: 10, padding: "14px 16px", border: c.alert ? "1px solid #f59e0b" : "1px solid transparent" }}>
               <div className="muted" style={{ fontSize: ".78rem" }}>{c.label}</div>
@@ -213,7 +224,7 @@ export default async function AdminHome() {
       </div>
 
       <div className="admin-cards">
-        {PANELS.map((p) => {
+        {visiblePanels.map((p) => {
           const inner = (
             <div className={`admin-tile${p.href ? "" : " soon"}`}>
               <div className="tile-ic">{p.icon}</div>

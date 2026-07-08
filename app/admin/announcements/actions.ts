@@ -1,5 +1,7 @@
 "use server";
 
+import { requireArea } from "@/lib/adminAccess";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -9,11 +11,7 @@ import { ingestGovtFeeds } from "@/lib/govtfeed";
 import { str, nullable } from "../_lib/util";
 
 async function isAdmin(): Promise<boolean> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
-  const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-  return data?.role === "admin";
+  return requireArea("announcements"); // admin always; operator/faculty with this right
 }
 
 // Save the list of government/ICAI feed URLs to watch (newline-separated).
@@ -111,9 +109,10 @@ function readKind(formData: FormData): string {
 }
 
 export async function createAnnouncement(formData: FormData) {
+  if (!(await isAdmin())) return;
   const title = str(formData.get("title"));
   if (!title) return;
-  const supabase = createClient();
+  const supabase = createServiceClient();
   await supabase.from("announcements").insert({
     kind: readKind(formData),
     title,
@@ -126,10 +125,11 @@ export async function createAnnouncement(formData: FormData) {
 }
 
 export async function updateAnnouncement(formData: FormData) {
+  if (!(await isAdmin())) return;
   const id = str(formData.get("id"));
   const title = str(formData.get("title"));
   if (!id || !title) return;
-  const supabase = createClient();
+  const supabase = createServiceClient();
   await supabase
     .from("announcements")
     .update({
@@ -145,8 +145,9 @@ export async function updateAnnouncement(formData: FormData) {
 }
 
 export async function deleteAnnouncement(formData: FormData) {
+  if (!(await isAdmin())) return;
   const id = str(formData.get("id"));
-  const supabase = createClient();
+  const supabase = createServiceClient();
   await supabase.from("announcements").delete().eq("id", id);
   revalidatePath("/admin/announcements");
   revalidatePath("/admin/announcements/posts");

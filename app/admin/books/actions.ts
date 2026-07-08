@@ -1,13 +1,16 @@
 "use server";
 
+import { requireArea } from "@/lib/adminAccess";
+
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { str, num, nullable } from "../_lib/util";
 
 export async function createBook(formData: FormData) {
+  if (!(await requireArea("store"))) return;
   const title = str(formData.get("title"));
   if (!title) return;
-  const supabase = createClient();
+  const supabase = createServiceClient();
   await supabase.from("books").insert({
     title,
     author: nullable(formData.get("author")),
@@ -22,10 +25,11 @@ export async function createBook(formData: FormData) {
 }
 
 export async function updateBook(formData: FormData) {
+  if (!(await requireArea("store"))) return;
   const id = str(formData.get("id"));
   const title = str(formData.get("title"));
   if (!id || !title) return;
-  const supabase = createClient();
+  const supabase = createServiceClient();
   await supabase
     .from("books")
     .update({
@@ -43,8 +47,9 @@ export async function updateBook(formData: FormData) {
 }
 
 export async function deleteBook(formData: FormData) {
+  if (!(await requireArea("store"))) return;
   const id = str(formData.get("id"));
-  const supabase = createClient();
+  const supabase = createServiceClient();
   await supabase.from("books").delete().eq("id", id);
   revalidatePath("/admin/books");
   revalidatePath("/books");

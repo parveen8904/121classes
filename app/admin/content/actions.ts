@@ -1,16 +1,14 @@
 "use server";
 
+import { requireArea } from "@/lib/adminAccess";
+
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { str } from "../_lib/util";
 
 async function requireAdmin(): Promise<boolean> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
-  const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-  return data?.role === "admin";
+  return requireArea("career"); // admin always; operator/faculty with this right
 }
 
 // Career Corner content only. Wellness is now hardcoded (lib/motivation.ts),

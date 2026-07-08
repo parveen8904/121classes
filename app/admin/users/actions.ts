@@ -8,7 +8,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { sendEmail, emailShell, emailConfigured } from "@/lib/notify";
 import { str, nullable } from "../_lib/util";
 
-const ROLES = ["student", "admin", "faculty"];
+const ROLES = ["student", "admin", "faculty", "operator"];
 
 async function requireAdmin(): Promise<boolean> {
   const supabase = createClient();
@@ -94,9 +94,13 @@ export async function adminSetPassword(formData: FormData) {
 }
 
 export async function updateUser(formData: FormData) {
+  if (!(await requireAdmin())) return; // only the super admin manages users & rights
   const id = str(formData.get("id"));
   if (!id) return;
   const role = str(formData.get("role"));
+  const safeRole = ROLES.includes(role) ? role : "student";
+  // Rights apply to operator/faculty; admins have everything, students nothing.
+  const perms = safeRole === "operator" || safeRole === "faculty" ? formData.getAll("perm").map(String) : [];
   const supabase = createClient();
   await supabase
     .from("profiles")
@@ -104,7 +108,8 @@ export async function updateUser(formData: FormData) {
       full_name: nullable(formData.get("full_name")),
       phone: nullable(formData.get("phone")),
       target_attempt: nullable(formData.get("target_attempt")),
-      role: ROLES.includes(role) ? role : "student",
+      permissions: perms,
+      role: safeRole,
       address_line1: nullable(formData.get("address_line1")),
       address_line2: nullable(formData.get("address_line2")),
       city: nullable(formData.get("city")),

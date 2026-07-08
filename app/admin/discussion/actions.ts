@@ -1,5 +1,7 @@
 "use server";
 
+import { currentStaff, staffCanArea } from "@/lib/adminAccess";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -8,11 +10,8 @@ import { discordDeleteChannelMessage } from "@/lib/discord";
 import { str } from "../_lib/util";
 
 async function adminId(): Promise<string | null> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-  return data?.role === "admin" ? user.id : null;
+  const staff = await currentStaff();
+  return staff && staffCanArea(staff, "moderation") ? staff.id : null;
 }
 
 // Approve a hidden/flagged message → make it visible again.

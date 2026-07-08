@@ -1,10 +1,13 @@
 "use server";
 
+import { requireArea } from "@/lib/adminAccess";
+
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendEmail, emailShell, sendTelegramMessage } from "@/lib/notify";
 
 export async function markQuestionDone(formData: FormData) {
+  if (!(await requireArea("inbox"))) return;
   const id = (formData.get("id") as string) || "";
   const status = (formData.get("status") as string) || "done";
   if (!id) return;
@@ -15,6 +18,7 @@ export async function markQuestionDone(formData: FormData) {
 // Reply to a question: delivers via Telegram (if the student is linked) or email,
 // then marks it replied. The reply text is logged in `notifications` for record.
 export async function replyToQuestion(formData: FormData) {
+  if (!(await requireArea("inbox"))) return;
   const id = (formData.get("id") as string) || "";
   const reply = ((formData.get("reply") as string) || "").trim();
   if (!id || !reply) return;

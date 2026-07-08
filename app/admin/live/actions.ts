@@ -1,14 +1,16 @@
 "use server";
 
+import { requireArea } from "@/lib/adminAccess";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { zoomConfigured, createZoomMeeting } from "@/lib/zoom";
 import { createServiceClient } from "@/lib/supabase/service";
 import { str, num, nullable } from "../_lib/util";
 
 // Standalone scheduled live class (not tied to any course/topic).
 export async function createLiveSession(formData: FormData) {
+  if (!(await requireArea("live"))) return;
   const title = str(formData.get("title"));
   if (!title) return;
   const svc = createServiceClient();
@@ -28,6 +30,7 @@ export async function createLiveSession(formData: FormData) {
 }
 
 export async function updateLiveSession(formData: FormData) {
+  if (!(await requireArea("live"))) return;
   const id = str(formData.get("id"));
   if (!id) return;
   const svc = createServiceClient();
@@ -45,6 +48,7 @@ export async function updateLiveSession(formData: FormData) {
 }
 
 export async function deleteLiveSession(formData: FormData) {
+  if (!(await requireArea("live"))) return;
   const id = str(formData.get("id"));
   if (!id) return;
   const svc = createServiceClient();
@@ -56,9 +60,10 @@ export async function deleteLiveSession(formData: FormData) {
 // Merge the schedule fields into a live_class section's config (preserving
 // any other keys like zoom_webinar_id).
 export async function updateLiveSchedule(formData: FormData) {
+  if (!(await requireArea("live"))) return;
   const id = str(formData.get("id"));
   if (!id) return;
-  const supabase = createClient();
+  const supabase = createServiceClient();
   const { data: sec } = await supabase.from("sections").select("config").eq("id", id).maybeSingle();
   const config: Record<string, unknown> = { ...((sec?.config as Record<string, unknown>) ?? {}) };
 
@@ -74,11 +79,12 @@ export async function updateLiveSchedule(formData: FormData) {
 // Auto-create a Zoom meeting from the section's title + start time and store
 // the join link + meeting id. No-ops gracefully if Zoom isn't configured.
 export async function createZoomForLive(formData: FormData) {
+  if (!(await requireArea("live"))) return;
   const id = str(formData.get("id"));
   if (!id) return;
   if (!zoomConfigured()) redirect("/admin/live?zoom=unconfigured");
 
-  const supabase = createClient();
+  const supabase = createServiceClient();
   const { data: sec } = await supabase.from("sections").select("title, config").eq("id", id).maybeSingle();
   const config: Record<string, unknown> = { ...((sec?.config as Record<string, unknown>) ?? {}) };
   const startLocal = typeof config.starts_at === "string" ? config.starts_at : "";

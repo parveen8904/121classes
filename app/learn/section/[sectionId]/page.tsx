@@ -125,10 +125,11 @@ export default async function SectionPage({
         {/* Notes — handwritten notes shown prominently as asked. */}
         {(c.notes_hand_url || c.notes_typed_url || c.pdf_url || c.homework_solutions) && (
           <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-            {c.notes_hand_url && <a className="btn" href={c.notes_hand_url} target="_blank" rel="noopener noreferrer">✍️ Handwritten notes (PDF)</a>}
-            {c.notes_typed_url && <a className="btn secondary" href={c.notes_typed_url} target="_blank" rel="noopener noreferrer">⌨️ Typed notes (PDF)</a>}
-            {c.pdf_url && <a className="btn secondary" href={c.pdf_url} target="_blank" rel="noopener noreferrer">📄 Class notes (PDF)</a>}
-            {c.homework_solutions && <a className="btn secondary" href={c.homework_solutions} target="_blank" rel="noopener noreferrer">✅ Homework solutions</a>}
+            {/* All notes open in the in-app viewer: our URL only + moving student watermark. */}
+            {c.notes_hand_url && <Link className="btn" href={`/learn/notes/${section.id}?kind=hand`}>✍️ Handwritten notes (PDF)</Link>}
+            {c.notes_typed_url && <Link className="btn secondary" href={`/learn/notes/${section.id}?kind=typed`}>⌨️ Typed notes (PDF)</Link>}
+            {c.pdf_url && <Link className="btn secondary" href={`/learn/notes/${section.id}?kind=pdf`}>📄 Class notes (PDF)</Link>}
+            {c.homework_solutions && <Link className="btn secondary" href={`/learn/notes/${section.id}?kind=homework`}>✅ Homework solutions</Link>}
           </div>
         )}
 

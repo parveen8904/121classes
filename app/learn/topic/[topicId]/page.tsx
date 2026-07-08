@@ -159,18 +159,11 @@ function SectionBody({
         {c.body && <p style={{ marginTop: 12, whiteSpace: "pre-wrap" }}>{c.body}</p>}
         {(c.pdf_url || c.notes_hand_url || c.notes_typed_url || c.homework_solutions) && (
           <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-            {c.pdf_url && (
-              <a className="btn small secondary" href={c.pdf_url} target="_blank" rel="noopener noreferrer">📄 Class notes (PDF)</a>
-            )}
-            {c.notes_hand_url && (
-              <a className="btn small secondary" href={c.notes_hand_url} target="_blank" rel="noopener noreferrer">✍️ Handwritten notes</a>
-            )}
-            {c.notes_typed_url && (
-              <a className="btn small secondary" href={c.notes_typed_url} target="_blank" rel="noopener noreferrer">⌨️ Typed notes</a>
-            )}
-            {c.homework_solutions && (
-              <a className="btn small secondary" href={c.homework_solutions} target="_blank" rel="noopener noreferrer">✅ Homework solutions</a>
-            )}
+            {/* All notes open in the in-app viewer: our URL only + moving student watermark. */}
+            {c.pdf_url && <Link className="btn small secondary" href={`/learn/notes/${id}?kind=pdf`}>📄 Class notes (PDF)</Link>}
+            {c.notes_hand_url && <Link className="btn small secondary" href={`/learn/notes/${id}?kind=hand`}>✍️ Handwritten notes</Link>}
+            {c.notes_typed_url && <Link className="btn small secondary" href={`/learn/notes/${id}?kind=typed`}>⌨️ Typed notes</Link>}
+            {c.homework_solutions && <Link className="btn small secondary" href={`/learn/notes/${id}?kind=homework`}>✅ Homework solutions</Link>}
           </div>
         )}
         {c.homework && (

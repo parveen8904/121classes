@@ -6,6 +6,6 @@
     "url": "https://caparveensharma.com/dashboard",
     "allowNavigation": ["caparveensharma.com", "*.caparveensharma.com", "*.supabase.co"]
   },
-  "ios": { "contentInset": "always" },
+  "ios": { "contentInset": "automatic" },
   "android": { "allowMixedContent": false }
 }

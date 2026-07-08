@@ -662,3 +662,7 @@ button.is-saving::before {
   animation: spin121 0.7s linear infinite;
   vertical-align: -2px;
 }
+
+/* ---- iOS app (notch) safe areas: zero on normal browsers ---- */
+.lp-nav, .portal-header, .topbar { padding-top: env(safe-area-inset-top); }
+body { padding-bottom: env(safe-area-inset-bottom); }

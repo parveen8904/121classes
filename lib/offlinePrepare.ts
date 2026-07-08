@@ -197,6 +197,27 @@ export async function prepareNextPending(timeBudgetMs = 150_000): Promise<StepRe
     .order("created_at")
     .limit(1)
     .maybeSingle();
-  if (!next) return null;
-  return prepareStep(next.section_id as string, timeBudgetMs);
+  if (next) return prepareStep(next.section_id as string, timeBudgetMs);
+
+  // Nothing queued → auto-enqueue the next published class that has no offline
+  // copy yet, so newly uploaded classes become downloadable with zero admin
+  // steps. Gated on ≥1 successful job so the pipeline proves itself on a
+  // manual run first (errors stay visible in Admin → Offline downloads and are
+  // not retried automatically).
+  const { count: doneCount } = await svc
+    .from("offline_jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "done");
+  if (!doneCount) return null;
+
+  const [{ data: existing }, { data: secs }] = await Promise.all([
+    svc.from("offline_jobs").select("section_id"),
+    svc.from("sections").select("id, config").eq("type", "full_class_video").eq("is_published", true).order("order_index"),
+  ]);
+  const have = new Set((existing ?? []).map((e) => e.section_id as string));
+  const target = (secs ?? []).find(
+    (s) => ((s.config ?? {}) as Record<string, string>).bunny_video_id && !have.has(s.id as string),
+  );
+  if (!target) return null;
+  return prepareStep(target.id as string, timeBudgetMs);
 }

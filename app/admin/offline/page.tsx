@@ -38,7 +38,7 @@ export default async function OfflinePage() {
       <AdminHero
         badge="📥 Offline downloads"
         title="Prepare classes for offline"
-        subtitle="Each prepared class gets an encrypted 720p copy (~1.5–2 GB) that students can download INSIDE the apps and watch without internet — the file is useless outside the app. Prepare runs in the background and resumes automatically; the hourly cron finishes anything pending."
+        subtitle="Each prepared class gets an encrypted 720p copy (~1.5–2 GB) that students can download INSIDE the apps and watch without internet — the file is useless outside the app. After your first class succeeds, this becomes FULLY AUTOMATIC: every newly published class is prepared by the hourly background run with no steps needed. Use the buttons only to jump the queue."
         back={{ href: "/admin", label: "Admin" }}
       />
       <OfflineManager initial={rows} />

@@ -22,6 +22,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/auth/mfa/setup",
   },
   {
+    icon: "📥",
+    title: "Offline downloads",
+    desc: "Prepare encrypted 720p copies of classes so students can download & watch offline in the apps.",
+    href: "/admin/offline",
+  },
+  {
     icon: "🛡️",
     title: "Group moderation",
     desc: "Review flagged messages, search all group chats, hide messages, ban/mute users — Telegram kept in sync.",

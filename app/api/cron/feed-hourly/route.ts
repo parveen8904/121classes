@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ingestGovtFeeds, maybeSendDailyFeedDigest } from "@/lib/govtfeed";
+import { prepareNextPending } from "@/lib/offlinePrepare";
 import { getSecret } from "@/lib/secrets";
 
 export const dynamic = "force-dynamic";
@@ -21,5 +22,9 @@ export async function GET(req: NextRequest) {
 
   const result = await ingestGovtFeeds();
   const digest = await maybeSendDailyFeedDigest();
-  return NextResponse.json({ ok: true, added: result.added, checked: result.checked, emailed: digest.sent });
+  // Piggyback: continue one offline-class encryption job per hour (drains the
+  // Prepare-all backlog automatically even if the admin closes the page).
+  let offline: unknown = null;
+  try { offline = await prepareNextPending(120_000); } catch { /* never block the feed */ }
+  return NextResponse.json({ ok: true, added: result.added, checked: result.checked, emailed: digest.sent, offline });
 }

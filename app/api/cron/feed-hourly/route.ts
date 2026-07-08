@@ -3,7 +3,7 @@ import { ingestGovtFeeds, maybeSendDailyFeedDigest } from "@/lib/govtfeed";
 import { getSecret } from "@/lib/secrets";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 // Runs hourly (Vercel cron + GitHub Action). It pulls new CA / accounting-
 // standards news into PENDING announcements every hour, but emails the founder

@@ -1,14 +1,18 @@
 import Link from "next/link";
 import Logo from "./Logo";
 import SocialLinks from "./SocialLinks";
-import { createClient } from "@/lib/supabase/server";
+import { tryServiceClient } from "@/lib/supabase/service";
 
 export default async function SiteFooter() {
-  const supabase = createClient();
-  const { data } = await supabase
-    .from("site_settings")
-    .select("key, value")
-    .in("key", ["support_instagram", "support_youtube", "support_twitter", "support_facebook"]);
+  // Service client (no cookies) — the footer only reads public site_settings,
+  // and reading cookies here would force every marketing page to skip the cache.
+  const supabase = tryServiceClient();
+  const { data } = supabase
+    ? await supabase
+        .from("site_settings")
+        .select("key, value")
+        .in("key", ["support_instagram", "support_youtube", "support_twitter", "support_facebook"])
+    : { data: [] as { key: string; value: string }[] };
   const s = new Map((data ?? []).map((r) => [r.key, r.value as string]));
   const instagram = s.get("support_instagram") || "";
   const youtube = s.get("support_youtube") || "";

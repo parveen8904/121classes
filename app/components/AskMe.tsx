@@ -3,12 +3,16 @@
 import { useState, useTransition } from "react";
 import { usePathname } from "next/navigation";
 import { askQuestion } from "@/app/actions/engagement";
+import { useSignedIn } from "./AuthCta";
 
 // Floating "Ask me" button shown on every page. Answers instantly: portal
 // questions (faculty, schedule, next live class, contact) from site facts, and
 // CA subject doubts from the AI repository. Anything it can't answer goes to
 // faculty (and the student is told).
-export default function AskMe({ signedIn }: { signedIn?: boolean }) {
+// Detects the session in the browser (no server prop) so the root layout doesn't
+// have to read cookies — which would force the whole site to render dynamically.
+export default function AskMe() {
+  const signedIn = useSignedIn(false);
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [email, setEmail] = useState("");

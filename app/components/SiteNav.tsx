@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 import MobileMenu from "./MobileMenu";
@@ -13,12 +12,11 @@ const NAV_LINKS = [
   { href: "/#contact", label: "Contact" },
 ];
 
-export default async function SiteNav() {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const signedIn = !!user;
+// No server-side auth read here — reading cookies would force every marketing
+// page to render dynamically (no caching). AuthCta/MobileMenu detect the session
+// in the browser and correct themselves right after hydration.
+export default function SiteNav() {
+  const signedIn = false;
 
   return (
     <nav className="lp-nav">

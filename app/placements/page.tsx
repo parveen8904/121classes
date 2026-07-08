@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { createServiceClient } from "@/lib/supabase/service";
+import { tryServiceClient } from "@/lib/supabase/service";
 import CountUp from "@/app/components/CountUp";
 
-export const dynamic = "force-dynamic";
+// Public marketing page — cache it and refresh every 5 minutes.
+export const revalidate = 300;
 export const metadata = {
   title: "Placements & Career — CA Parveen Sharma",
   description: "Live CA & articleship openings, AI mock interviews, a CV builder and firm connections — your launchpad from student to Chartered Accountant.",
@@ -11,7 +12,8 @@ export const metadata = {
 const GRAD = "linear-gradient(135deg,#0d9488,#10b981)";
 
 export default async function PlacementsPage() {
-  const svc = createServiceClient();
+  const svc = tryServiceClient();
+  if (!svc) return null; // local build without env — Vercel always has it
   const { count } = await svc.from("job_listings").select("id", { count: "exact", head: true }).eq("status", "approved");
   const { data: jobs } = await svc.from("job_listings").select("title, company, location, category").eq("status", "approved").order("created_at", { ascending: false }).limit(6);
   const openings = count ?? 0;

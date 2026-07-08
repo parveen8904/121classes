@@ -1,8 +1,11 @@
 import Link from "next/link";
-import { createServiceClient } from "@/lib/supabase/service";
+import { tryServiceClient } from "@/lib/supabase/service";
 import CountUp from "@/app/components/CountUp";
 
-export const dynamic = "force-dynamic";
+// Public marketing page (service client only, no cookies/auth) — serve it from
+// the cache and refresh every 5 minutes instead of hitting the DB on every view.
+// This was the slowest page on the site (~6s); cached it returns instantly.
+export const revalidate = 300;
 export const metadata = {
   title: "Courses — CA Parveen Sharma",
   description: "Advanced Accounting & Financial Reporting — fully guided: classes, day-by-day planner, AI doubt-solving on WhatsApp/Telegram, tests with performance reports, revisions, notes and amendments updated to your exam.",
@@ -18,7 +21,8 @@ const GRAD = "linear-gradient(135deg,#0d9488,#10b981)";
 type Stat = { classes: number; minutes: number; revisions: number; tests: number; notes: number; topics: number; amendments: number; attempts: string[]; faculty: string[]; course: string };
 
 export default async function CoursesPage() {
-  const svc = createServiceClient();
+  const svc = tryServiceClient();
+  if (!svc) return null; // local build without env — Vercel always has it
 
   const { data: courses } = await svc.from("courses").select("id, title").eq("is_published", true).eq("is_test_series", false);
   const courseIds = (courses ?? []).map((c) => c.id as string);

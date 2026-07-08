@@ -3,7 +3,7 @@ import { ingestJobs, sendPlacementDigest } from "@/lib/jobsfeed";
 import { getSecret } from "@/lib/secrets";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300; // was 60 — the jobs sweep timed out 4x this month
 
 // DAILY cron — placement jobs digest + cost alerts. (The govt/ICAI news feed
 // runs hourly in /api/cron/feed-hourly so new items reach the founder fast.)

@@ -100,7 +100,7 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
   for (const url of urls) {
     let xml = "";
     try {
-      xml = await fetch(url, { cache: "no-store", headers: { "User-Agent": "121CAClasses-FeedBot" } }).then((r) => r.text());
+      xml = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(8000), headers: { "User-Agent": "121CAClasses-FeedBot" } }).then((r) => r.text());
     } catch {
       continue;
     }

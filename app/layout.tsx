@@ -2,19 +2,23 @@ import type { Metadata, Viewport } from "next";
 import { unstable_cache } from "next/cache";
 import NextTopLoader from "nextjs-toploader";
 import "./globals.css";
-import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
+import { tryServiceClient } from "@/lib/supabase/service";
 import FloatingSupport from "./components/FloatingSupport";
 import RegisterSW from "./components/RegisterSW";
 import AskMe from "./components/AskMe";
 
-export const dynamic = "force-dynamic";
+// IMPORTANT: no force-dynamic and no cookie reads here. This layout wraps EVERY
+// page — anything dynamic in it disables caching for the whole site (which was
+// why public pages took seconds to load). Auth-aware widgets (AskMe) detect the
+// session client-side instead.
 
 // Support links rarely change — cache them for 5 minutes so we don't hit the DB
 // on every single page load (this runs in the layout, i.e. everywhere).
 const getSupportLinks = unstable_cache(
   async () => {
-    const { data } = await createServiceClient()
+    const svc = tryServiceClient();
+    if (!svc) return {};
+    const { data } = await svc
       .from("site_settings")
       .select("key, value")
       .in("key", ["support_whatsapp", "support_phone", "support_telegram", "whatsapp_faculty"]);
@@ -43,15 +47,8 @@ export const viewport: Viewport = {
 const themeScript = `try{var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createClient();
-  const [links, sessionRes] = await Promise.all([
-    getSupportLinks(),
-    // getSession reads the cookie locally (no network round-trip); it only
-    // toggles the AskMe widget, so it doesn't need getUser's token validation.
-    supabase.auth.getSession(),
-  ]);
+  const links = await getSupportLinks();
   const m = new Map(Object.entries(links as Record<string, string | null>));
-  const signedIn = !!sessionRes.data.session;
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -67,7 +64,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           phone={m.get("support_phone")}
           telegram={m.get("support_telegram")}
         />
-        <AskMe signedIn={signedIn} />
+        <AskMe />
         <RegisterSW />
       </body>
     </html>

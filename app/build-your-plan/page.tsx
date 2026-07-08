@@ -1,7 +1,8 @@
 import { Fragment } from "react";
 import Link from "next/link";
 
-export const dynamic = "force-dynamic";
+// Static marketing page — cache it (refresh every 10 minutes).
+export const revalidate = 600;
 export const metadata = {
   title: "Build your study plan — CA Parveen Sharma",
   description: "A personal, day-by-day study plan to exam day — disciplined, targeted and mentored. Daily targets, revision rounds, most-important-questions, doubt-solving on WhatsApp/Telegram, and progress tracking.",

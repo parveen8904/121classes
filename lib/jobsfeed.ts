@@ -55,7 +55,7 @@ async function fromSerpApi(): Promise<Raw[]> {
     const location = /india/i.test(loc) ? loc : `${loc}, India`;
     const u = `https://serpapi.com/search.json?engine=google_jobs&q=${encodeURIComponent(q)}&location=${encodeURIComponent(location)}&hl=en&gl=in&api_key=${key}`;
     try {
-      const res = await fetch(u, { cache: "no-store" });
+      const res = await fetch(u, { cache: "no-store", signal: AbortSignal.timeout(10000) });
       if (!res.ok) continue;
       const data = await res.json();
       for (const j of (data.jobs_results ?? []).slice(0, 15)) {
@@ -94,6 +94,7 @@ async function fromJooble(): Promise<Raw[]> {
   for (const { keywords, location, page } of combos.slice(0, 40)) {
     try {
       const res = await fetch(`https://jooble.org/api/${key}`, {
+        signal: AbortSignal.timeout(15000),
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ keywords, location, page }),
@@ -140,7 +141,7 @@ async function fromRss(): Promise<Raw[]> {
   for (const url of urls) {
     let xml = "";
     try {
-      xml = await fetch(url, { cache: "no-store", headers: { "User-Agent": "121CAClasses-JobBot" } }).then((r) => r.text());
+      xml = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(8000), headers: { "User-Agent": "121CAClasses-JobBot" } }).then((r) => r.text());
     } catch {
       continue;
     }

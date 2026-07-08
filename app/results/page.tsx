@@ -1,7 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
+import { tryServiceClient } from "@/lib/supabase/service";
 import CountUp from "@/app/components/CountUp";
 
-export const dynamic = "force-dynamic";
+// Public marketing page — cache it and refresh every 5 minutes.
+export const revalidate = 300;
 export const metadata = {
   title: "Results — CA Parveen Sharma",
   description: "Rank-holders and successes mentored by CA Parveen Sharma & team — CA Final and CA Intermediate.",
@@ -33,7 +34,8 @@ function Card({ r }: { r: Result }) {
 }
 
 export default async function ResultsPage() {
-  const supabase = createClient();
+  const supabase = tryServiceClient();
+  if (!supabase) return null; // local build without env — Vercel always has it
   const { data } = await supabase
     .from("results")
     .select("id, student_name, headline, attempt, marks, quote, photo_url, level")

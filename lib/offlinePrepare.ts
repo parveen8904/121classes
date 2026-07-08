@@ -191,9 +191,10 @@ export async function prepareStep(sectionId: string, timeBudgetMs = 170_000): Pr
       chainIv = enc.subarray(enc.length - 16); // next chunk chains from the last block
 
       const partNumber = parts.length + 1;
+      // R2 rejects streamed (chunked) uploads with 411 — declare the size explicitly.
       const up = await r2.aws.fetch(
         `${r2.endpoint}/${job.storage_key}?partNumber=${partNumber}&uploadId=${encodeURIComponent(job.upload_id!)}`,
-        { method: "PUT", body: enc },
+        { method: "PUT", body: enc, headers: { "content-length": String(enc.length) } },
       );
       if (!up.ok) throw new Error(`R2 part HTTP ${up.status}`);
       const etag = up.headers.get("etag") || "";
@@ -216,7 +217,7 @@ export async function prepareStep(sectionId: string, timeBudgetMs = 170_000): Pr
       .join("")}</CompleteMultipartUpload>`;
     const fin = await r2.aws.fetch(
       `${r2.endpoint}/${job.storage_key}?uploadId=${encodeURIComponent(job.upload_id!)}`,
-      { method: "POST", body: xml, headers: { "content-type": "application/xml" } },
+      { method: "POST", body: xml, headers: { "content-type": "application/xml", "content-length": String(Buffer.byteLength(xml)) } },
     );
     if (!fin.ok) throw new Error(`R2 complete HTTP ${fin.status}`);
 

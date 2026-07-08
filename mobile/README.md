@@ -81,6 +81,12 @@ Downloads page detects the app and uses it — no website change needed at build
 > webview is blocked on iOS, the fix is a small native full-screen player method —
 > tell me and I'll add it.
 
+## App display name (under the icon)
+iOS truncates icon labels at ~11 characters. Tested & chosen: **CA Parveen** (fits).
+The full "CA Parveen Sharma" appears in-app, on the splash, and on the App Store listing.
+NOTE: `ios/` is git-ignored — if you ever regenerate it (`npx cap add ios`), re-set the name:
+`/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName CA Parveen" ios/App/App/Info.plist`
+
 ## Update the app later
 
 Because the app loads the live website, **most updates ship instantly** when you

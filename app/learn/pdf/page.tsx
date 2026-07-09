@@ -22,7 +22,7 @@ export default async function PdfViewerPage({
 
   const raw = searchParams.u ?? "";
   const title = (searchParams.t ?? "Document").slice(0, 80);
-  const internal = /^\/learn\//.test(raw);
+  const internal = /^\/(learn|api)\//.test(raw);
   if (!internal && !/^https:\/\//.test(raw)) redirect("/dashboard");
   const fileUrl = internal ? raw : `/api/file?u=${encodeURIComponent(raw)}`;
   const sep = fileUrl.includes("?") ? "&" : "?";

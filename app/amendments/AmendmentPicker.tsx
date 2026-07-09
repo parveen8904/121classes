@@ -49,7 +49,7 @@ export default function AmendmentPicker({
           </>
         )}
         {info.pdf && (
-          <a className="btn small" href={info.pdf} target="_blank" rel="noopener noreferrer" style={{ marginTop: 10, display: "inline-block" }}>
+          <a className="btn small" href={`/learn/pdf?u=${encodeURIComponent(info.pdf)}&t=Amendment PDF`} style={{ marginTop: 10, display: "inline-block" }}>
             📄 Download amendments PDF
           </a>
         )}

@@ -70,7 +70,7 @@ export default function AmendmentsView({ items, defaultAttempt }: { items: Amend
                 </div>
               )}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                {it.notesHandUrl && <a className="btn small secondary" href={it.notesHandUrl} target="_blank" rel="noopener noreferrer">✍️ Handwritten notes (PDF)</a>}
+                {it.notesHandUrl && <a className="btn small secondary" href={`/learn/pdf?u=${encodeURIComponent(it.notesHandUrl)}&t=Amendment notes`}>✍️ Handwritten notes (PDF)</a>}
               </div>
               {it.discussion && (
                 <details style={{ marginTop: 10 }}>

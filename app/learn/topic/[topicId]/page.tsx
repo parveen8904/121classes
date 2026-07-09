@@ -199,7 +199,7 @@ function SectionBody({
         {c.notes_typed_status === "approved" && c.notes_typed_text && (
           <details style={{ marginTop: 12 }}>
             <summary style={{ cursor: "pointer", color: "var(--accent)" }}>⌨️ Typed notes (faculty-approved)</summary>
-            <a className="btn small secondary" href={`/learn/notes/${id}/pdf`} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8, display: "inline-block" }}>
+            <a className="btn small secondary" href={`/learn/pdf?u=${encodeURIComponent(`/learn/notes/${id}/pdf`)}&t=Typed notes`} style={{ marginTop: 8, display: "inline-block" }}>
               ⬇️ Download typed notes (PDF)
             </a>
             <p style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{c.notes_typed_text}</p>

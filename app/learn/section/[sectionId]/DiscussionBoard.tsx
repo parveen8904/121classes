@@ -174,7 +174,7 @@ export default async function DiscussionBoard({
                       </div>
                       <p style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{r.body}</p>
                       {r.pdf_url && (
-                        <a className="btn small" href={r.pdf_url} target="_blank" rel="noopener noreferrer" style={{ marginTop: 6 }}>
+                        <a className="btn small" href={`/learn/pdf?u=${encodeURIComponent(r.pdf_url)}&t=Attachment`} style={{ marginTop: 6 }}>
                           📑 Solution PDF
                         </a>
                       )}

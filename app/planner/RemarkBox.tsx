@@ -21,6 +21,7 @@ export default function RemarkBox({ date, initial }: { date: string; initial: st
 
   return (
     <div>
+      <span className="muted" style={{ fontSize: 11, display: "block", marginBottom: 2 }}>📝 My note for this day</span>
       <textarea
         value={val}
         onChange={(e) => setVal(e.target.value)}

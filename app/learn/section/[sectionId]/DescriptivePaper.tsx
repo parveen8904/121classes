@@ -89,10 +89,13 @@ export default function DescriptivePaper(props: Props) {
     setNativeApp(!!cap?.isNativePlatform?.());
   }, []);
   const fileTarget = nativeApp ? undefined : "_blank";
+  // In the app, PDFs open in our viewer page (has a ← Back header); on the web
+  // they open in a new tab as usual.
+  const fileHref = (url: string, label: string) =>
+    nativeApp ? `/learn/pdf?u=${encodeURIComponent(url)}&t=${encodeURIComponent(label)}` : viaProxy(url);
   const openFile = (url: string) => {
-    const u = viaProxy(url);
-    if (nativeApp) window.location.assign(u);
-    else window.open(u, "_blank", "noopener,noreferrer");
+    if (nativeApp) window.location.assign(fileHref(url, "Question paper"));
+    else window.open(viaProxy(url), "_blank", "noopener,noreferrer");
   };
 
   // ---- countdown ----
@@ -215,10 +218,10 @@ export default function DescriptivePaper(props: Props) {
           {r.summary && <p style={{ margin: "4px 0 0" }}>{r.summary}</p>}
           {r.unreadable && <p className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>⚠️ Part of the handwriting was hard to read — if marks look off, ask the faculty to review.</p>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-            {attempt.annotatedUrl && <a className="btn small" href={viaProxy(attempt.annotatedUrl)} target={fileTarget} rel="noopener noreferrer">📝 My checked copy (marks &amp; notes)</a>}
-            {attempt.fileUrl && <a className="btn small secondary" href={viaProxy(attempt.fileUrl)} target={fileTarget} rel="noopener noreferrer">📄 My uploaded answers</a>}
-            {questionPdf && <a className="btn small secondary" href={viaProxy(questionPdf)} target={fileTarget} rel="noopener noreferrer">📄 Question paper</a>}
-            {solutionPdf && <a className="btn small secondary" href={viaProxy(solutionPdf)} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
+            {attempt.annotatedUrl && <a className="btn small" href={fileHref(attempt.annotatedUrl, "My checked copy")} target={fileTarget} rel="noopener noreferrer">📝 My checked copy (marks &amp; notes)</a>}
+            {attempt.fileUrl && <a className="btn small secondary" href={fileHref(attempt.fileUrl, "My uploaded answers")} target={fileTarget} rel="noopener noreferrer">📄 My uploaded answers</a>}
+            {questionPdf && <a className="btn small secondary" href={fileHref(questionPdf, "Question paper")} target={fileTarget} rel="noopener noreferrer">📄 Question paper</a>}
+            {solutionPdf && <a className="btn small secondary" href={fileHref(solutionPdf, "Official solution")} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
             {props.isAdmin && (
               <button className="btn small secondary" type="button" disabled={busy} onClick={async () => { setBusy(true); try { setAttempt(await resetMyPaperAttempt(sectionId)); } finally { setBusy(false); } }}>
                 🔄 Reset (admin preview)
@@ -265,8 +268,8 @@ export default function DescriptivePaper(props: Props) {
         <p className="muted">We&apos;re checking it against the solution. This usually takes under a minute.</p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
           <button className="btn small" type="button" disabled={busy} onClick={regrade}>{busy ? "Checking…" : "🔄 Show my result"}</button>
-          {attempt.fileUrl && <a className="btn small secondary" href={viaProxy(attempt.fileUrl)} target={fileTarget} rel="noopener noreferrer">📄 My uploaded answers</a>}
-          {solutionPdf && <a className="btn small secondary" href={viaProxy(solutionPdf)} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
+          {attempt.fileUrl && <a className="btn small secondary" href={fileHref(attempt.fileUrl, "My uploaded answers")} target={fileTarget} rel="noopener noreferrer">📄 My uploaded answers</a>}
+          {solutionPdf && <a className="btn small secondary" href={fileHref(solutionPdf, "Official solution")} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
         </div>
       </div>
     );
@@ -279,8 +282,8 @@ export default function DescriptivePaper(props: Props) {
         <h3 style={{ marginTop: 0 }}>⏰ Time over</h3>
         <p className="muted">The upload window for this paper has closed, so it can no longer be submitted. You can still study the question paper and the official solution.</p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-          {questionPdf && <a className="btn small" href={viaProxy(questionPdf)} target={fileTarget} rel="noopener noreferrer">📄 Question paper</a>}
-          {solutionPdf && <a className="btn small secondary" href={viaProxy(solutionPdf)} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
+          {questionPdf && <a className="btn small" href={fileHref(questionPdf, "Question paper")} target={fileTarget} rel="noopener noreferrer">📄 Question paper</a>}
+          {solutionPdf && <a className="btn small secondary" href={fileHref(solutionPdf, "Official solution")} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
           {props.isAdmin && (
             <button className="btn small secondary" type="button" disabled={busy} onClick={async () => { setBusy(true); try { setAttempt(await resetMyPaperAttempt(sectionId)); } finally { setBusy(false); } }}>
               🔄 Reset (admin preview)
@@ -305,7 +308,7 @@ export default function DescriptivePaper(props: Props) {
         <div className="card">
           <strong>1) Your question paper</strong>
           <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 8px" }}>Solve it on paper, then photograph each page.</p>
-          {questionPdf && <a className="btn small" href={viaProxy(questionPdf)} target={fileTarget} rel="noopener noreferrer">📄 Open question paper</a>}
+          {questionPdf && <a className="btn small" href={fileHref(questionPdf, "Question paper")} target={fileTarget} rel="noopener noreferrer">📄 Open question paper</a>}
         </div>
 
         <div className="card">

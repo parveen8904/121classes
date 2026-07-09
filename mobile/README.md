@@ -125,3 +125,9 @@ native shell or the offline plugin changes.
 3. **Main.storyboard** → the view controller's custom class: `CAPBridgeViewController`/`Capacitor` → `MainViewController`/`App`.
 4. **Signing** → project `DEVELOPMENT_TEAM = 32W63QKXH8` (Aldine Ventures), Automatic signing.
 5. Icons/splash come from `assets/` via `npx @capacitor/assets generate --iconBackgroundColor '#0d9488' …` (mind mark at ~72% on teal).
+
+## Hand-made Android customizations (android/ is gitignored — REAPPLY after any `cap add android`)
+
+1. `variables.gradle`: `compileSdkVersion = 35`, `targetSdkVersion = 35` (Play requires API 35+).
+2. `app/build.gradle`: bump `versionCode` on every Play upload (currently 2), `versionName` to match.
+3. Release signing: `~/Keystores/caparveensharma-upload.keystore` (alias `caps`; password in the READ-ME there) via `./gradlew bundleRelease -Pandroid.injected.signing.*` flags.

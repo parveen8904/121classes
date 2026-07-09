@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { startPaperAttempt, submitPaperAttempt, gradePaperNow, type PaperAttempt } from "./paperActions";
+import { startPaperAttempt, submitPaperAttempt, gradePaperNow, resetMyPaperAttempt, type PaperAttempt } from "./paperActions";
 import { viaProxy } from "@/lib/fileProxy";
 
 type Props = {
@@ -15,6 +15,7 @@ type Props = {
   totalMarks: number;
   instructions: string;
   initial: PaperAttempt;
+  isAdmin?: boolean;
 };
 
 function fmtClock(s: number): string {
@@ -216,7 +217,13 @@ export default function DescriptivePaper(props: Props) {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
             {attempt.annotatedUrl && <a className="btn small" href={viaProxy(attempt.annotatedUrl)} target={fileTarget} rel="noopener noreferrer">📝 My checked copy (marks &amp; notes)</a>}
             {attempt.fileUrl && <a className="btn small secondary" href={viaProxy(attempt.fileUrl)} target={fileTarget} rel="noopener noreferrer">📄 My uploaded answers</a>}
+            {questionPdf && <a className="btn small secondary" href={viaProxy(questionPdf)} target={fileTarget} rel="noopener noreferrer">📄 Question paper</a>}
             {solutionPdf && <a className="btn small secondary" href={viaProxy(solutionPdf)} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
+            {props.isAdmin && (
+              <button className="btn small secondary" type="button" disabled={busy} onClick={async () => { setBusy(true); try { setAttempt(await resetMyPaperAttempt(sectionId)); } finally { setBusy(false); } }}>
+                🔄 Reset (admin preview)
+              </button>
+            )}
           </div>
         </div>
 
@@ -270,8 +277,16 @@ export default function DescriptivePaper(props: Props) {
     return (
       <div className="card" style={{ border: "2px solid #ef4444" }}>
         <h3 style={{ marginTop: 0 }}>⏰ Time over</h3>
-        <p className="muted">The upload window for this paper has closed, so it can no longer be submitted. You can still study the official solution.</p>
-        {solutionPdf && <a className="btn small secondary" href={viaProxy(solutionPdf)} target={fileTarget} rel="noopener noreferrer" style={{ marginTop: 8 }}>✅ Official solution (PDF)</a>}
+        <p className="muted">The upload window for this paper has closed, so it can no longer be submitted. You can still study the question paper and the official solution.</p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+          {questionPdf && <a className="btn small" href={viaProxy(questionPdf)} target={fileTarget} rel="noopener noreferrer">📄 Question paper</a>}
+          {solutionPdf && <a className="btn small secondary" href={viaProxy(solutionPdf)} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
+          {props.isAdmin && (
+            <button className="btn small secondary" type="button" disabled={busy} onClick={async () => { setBusy(true); try { setAttempt(await resetMyPaperAttempt(sectionId)); } finally { setBusy(false); } }}>
+              🔄 Reset (admin preview)
+            </button>
+          )}
+        </div>
       </div>
     );
   }

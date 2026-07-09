@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import McqForm from "./McqForm";
-import { getMyMcqResult } from "./testActions";
+import { getMyMcqResult, resetMyMcqAttempt } from "./testActions";
 
 export default async function McqSection({
   section,
@@ -27,6 +27,9 @@ export default async function McqSection({
 
   // One attempt per student — if they've already taken it, show their report.
   const lockedResult = await getMyMcqResult(section.id);
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: prof } = user ? await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle() : { data: null };
+  const isAdmin = prof?.role === "admin";
 
   return (
     <main>
@@ -41,6 +44,12 @@ export default async function McqSection({
         </div>
 
         <div style={{ marginTop: 22 }}>
+          {isAdmin && lockedResult && (
+            <form action={resetMyMcqAttempt} style={{ marginBottom: 12 }}>
+              <input type="hidden" name="sectionId" value={section.id} />
+              <button className="btn small secondary" type="submit">🔄 Reset my attempt (admin preview)</button>
+            </form>
+          )}
           {questions.length > 0 ? (
             <McqForm sectionId={section.id} questions={questions} minutesPerQuestion={minutesPerQuestion} topicId={section.topic_id} lockedResult={lockedResult} />
           ) : (

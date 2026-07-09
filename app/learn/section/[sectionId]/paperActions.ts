@@ -179,6 +179,18 @@ function toAttempt(row: Row | null): PaperAttempt {
   };
 }
 
+// Admin preview: wipe MY OWN attempt so the paper can be tested again and
+// again. Strictly admin — students keep the one-attempt rule.
+export async function resetMyPaperAttempt(sectionId: string): Promise<PaperAttempt> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { status: "none" };
+  const { data: prof } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (prof?.role !== "admin") return getMyPaperAttempt(sectionId);
+  await supabase.from("descriptive_attempts").delete().eq("student_id", user.id).eq("section_id", sectionId);
+  return { status: "none" };
+}
+
 export async function getMyPaperAttempt(sectionId: string): Promise<PaperAttempt> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();

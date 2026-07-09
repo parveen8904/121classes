@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
 import { aiConfigured, gradeSubjective, answerDoubtFromMaterial, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
@@ -311,4 +312,18 @@ export async function askDoubt(input: {
     };
   }
   return { ok: true, answer, pending: !answer };
+}
+
+// Admin preview: wipe MY OWN attempt so the MCQ test can be taken again.
+// Strictly admin — students keep the one-attempt rule.
+export async function resetMyMcqAttempt(formData: FormData) {
+  const sectionId = String(formData.get("sectionId") || "");
+  if (!sectionId) return;
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: prof } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (prof?.role !== "admin") return;
+  await supabase.from("mcq_attempts").delete().eq("student_id", user.id).eq("section_id", sectionId);
+  revalidatePath(`/learn/section/${sectionId}`);
 }

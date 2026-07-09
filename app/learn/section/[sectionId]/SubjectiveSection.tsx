@@ -31,6 +31,8 @@ export default async function SubjectiveSection({
   const ai = await aiConfigured();
 
   const initialAttempt = paperMode && user ? await getMyPaperAttempt(section.id) : null;
+  const { data: prof } = user ? await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle() : { data: null };
+  const isAdmin = prof?.role === "admin";
 
   return (
     <main>
@@ -62,6 +64,7 @@ export default async function SubjectiveSection({
               totalMarks={Number(cfg.paper_total_marks) || 0}
               instructions={(cfg.paper_instructions as string) || ""}
               initial={initialAttempt ?? { status: "none" }}
+              isAdmin={isAdmin}
             />
           ) : questions.length > 0 ? (
             <SubjectiveForm questions={questions} />

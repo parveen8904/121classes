@@ -84,6 +84,16 @@ export async function prepareStep(sectionId: string, timeBudgetMs = 170_000): Pr
   let { data: job } = await svc.from("offline_jobs").select("*").eq("section_id", sectionId).maybeSingle() as { data: Job | null };
   if (job?.status === "done") return { done: true, status: "done", bytesDone: job.bytes_done, bytesTotal: job.bytes_total };
 
+  // Lease: a running job touched in the last 2.5 min is being worked by another
+  // invocation (the 5-min cron or an admin tab) — report progress, don't join in
+  // (two writers would corrupt the multipart upload).
+  if (job?.status === "running") {
+    const touched = (job as unknown as { updated_at?: string }).updated_at;
+    if (touched && Date.now() - new Date(touched).getTime() < 150_000 && Number(job.bytes_done) > 0) {
+      return { done: false, status: "running", bytesDone: Number(job.bytes_done) || 0, bytesTotal: job.bytes_total };
+    }
+  }
+
   const { data: sec } = await svc.from("sections").select("title, min_plan, config, topics(subject_id)").eq("id", sectionId).maybeSingle();
   const guid = ((sec?.config ?? {}) as Record<string, string>).bunny_video_id || "";
   if (!sec || !guid) return { done: false, status: "error", bytesDone: 0, bytesTotal: null, error: "No Bunny video on this class" };
@@ -270,8 +280,11 @@ export async function prepareNextPending(timeBudgetMs = 150_000): Promise<StepRe
   let last: StepResult | null = null;
   for (const q of queued ?? []) {
     if (left() < 20_000) return last;
+    const t0 = Date.now();
     last = await prepareStep(q.section_id as string, left());
-    if (last.status !== "pending") return last;
+    if (last.status === "pending") continue; // parked for Bunny's re-encode
+    if (last.status === "running" && Date.now() - t0 < 10_000) continue; // lease-blocked — another worker owns it
+    return last;
   }
 
   // Queue empty (or everything is waiting on Bunny) → auto-enqueue the next

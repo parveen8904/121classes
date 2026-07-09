@@ -17,6 +17,23 @@ export default async function DownloadsPage() {
   // Classes the student may download (no keys returned here).
   const { data: classes } = await supabase.rpc("list_downloadable_classes");
 
+  // Class numbers (from the section config) so the list reads "Class 12 · …".
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const svc = createServiceClient();
+  const sectionIds = ((classes ?? []) as { section_id?: string }[]).map((c) => c.section_id).filter(Boolean) as string[];
+  const classNoBySection = new Map<string, string>();
+  if (sectionIds.length) {
+    const { data: secs } = await svc.from("sections").select("id, config").in("id", sectionIds);
+    for (const s of secs ?? []) {
+      const n = ((s.config ?? {}) as Record<string, string>).class_no;
+      if (n) classNoBySection.set(s.id as string, String(n));
+    }
+  }
+  const withNumbers = ((classes ?? []) as Record<string, unknown>[]).map((c) => ({
+    ...c,
+    class_no: classNoBySection.get((c.section_id as string) ?? "") ?? null,
+  }));
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name, phone, role")
@@ -34,7 +51,7 @@ export default async function DownloadsPage() {
         <p className="meta">Save your classes to this device and play them without internet — encrypted &amp; watermarked. 🔐</p>
       </div>
       <div style={{ marginTop: 22 }}>
-        <OfflineDownloads classes={(classes as never[]) ?? []} watermark={watermark} isAdmin={isAdmin} />
+        <OfflineDownloads classes={withNumbers as never[]} watermark={watermark} isAdmin={isAdmin} />
       </div>
     </section>
   );

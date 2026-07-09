@@ -23,9 +23,10 @@ export default async function OfflinePage() {
     .map((c) => {
       const j = jobBySection.get(c.id as string);
       const total = Number(j?.bytes_total) || 0;
+      const cfg = (c.config ?? {}) as Record<string, string>;
       return {
         sectionId: c.id as string,
-        title: c.title as string,
+        title: `${cfg.class_no ? `Class ${cfg.class_no} · ` : ""}${c.title as string}`,
         subject: subjName.get(topicSubj.get(c.topic_id as string) ?? "") ?? "",
         status: (j?.status as string) ?? "none",
         pct: total ? Math.floor(((Number(j?.bytes_done) || 0) / total) * 100) : 0,

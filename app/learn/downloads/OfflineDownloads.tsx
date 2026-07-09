@@ -11,6 +11,13 @@ type Klass = {
   iv_b64: string | null;
   alg: string | null;
   byte_size: number | null;
+  class_no?: string | null;
+};
+
+// Sort "1, 2, 2A, 3, 10" correctly (numeric first, then the part letter).
+const classOrder = (c: Klass) => {
+  const m = String(c.class_no ?? "").match(/^(\d+)([A-Za-z]?)/);
+  return m ? Number(m[1]) * 100 + (m[2] ? m[2].toUpperCase().charCodeAt(0) - 64 : 0) : 999999;
 };
 
 // Native bridge exposed by the desktop app's preload (undefined in a browser).
@@ -169,6 +176,7 @@ export default function OfflineDownloads({
     if (!bySubject.has(k)) bySubject.set(k, []);
     bySubject.get(k)!.push(c);
   }
+  for (const items of bySubject.values()) items.sort((a, b) => classOrder(a) - classOrder(b));
 
   return (
     <>
@@ -193,7 +201,7 @@ export default function OfflineDownloads({
               {items.map((c) => (
                 <div className="list-row" key={c.id}>
                   <div>
-                    <span className="row-title">🔐 {c.title}</span>
+                    <span className="row-title">🔐 {c.class_no ? `Class ${c.class_no} · ` : ""}{c.title}</span>
                     <p className="row-sub">
                       {c.byte_size ? `${(Number(c.byte_size) / 1e9).toFixed(2)} GB` : ""}
                     </p>

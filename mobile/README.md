@@ -108,14 +108,17 @@ native shell or the offline plugin changes.
    ```
    and append at file end:
    ```swift
-   // Web container: edge-swipe back + video element fullscreen.
+   // Web container: edge-swipe back, video fullscreen, no AirPlay/PiP.
    class MainViewController: CAPBridgeViewController {
+       override func webView(with frame: CGRect, configuration: WKWebViewConfiguration) -> WKWebView {
+           configuration.allowsAirPlayForMediaPlayback = false
+           configuration.allowsPictureInPictureMediaPlayback = false
+           if #available(iOS 15.4, *) { configuration.preferences.isElementFullscreenEnabled = true }
+           return super.webView(with: frame, configuration: configuration)
+       }
        override func viewDidLoad() {
            super.viewDidLoad()
            webView?.allowsBackForwardNavigationGestures = true
-           if #available(iOS 15.4, *) {
-               webView?.configuration.preferences.isElementFullscreenEnabled = true
-           }
        }
    }
    ```

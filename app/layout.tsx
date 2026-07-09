@@ -5,11 +5,10 @@ import "./globals.css";
 import { tryServiceClient } from "@/lib/supabase/service";
 import FloatingSupport from "./components/FloatingSupport";
 import RegisterSW from "./components/RegisterSW";
-import AskMe from "./components/AskMe";
 
 // IMPORTANT: no force-dynamic and no cookie reads here. This layout wraps EVERY
 // page — anything dynamic in it disables caching for the whole site (which was
-// why public pages took seconds to load). Auth-aware widgets (AskMe) detect the
+// why public pages took seconds to load). Auth-aware widgets detect the
 // session client-side instead.
 
 // Support links rarely change — cache them for 5 minutes so we don't hit the DB
@@ -98,7 +97,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           phone={m.get("support_phone")}
           telegram={m.get("support_telegram")}
         />
-        <AskMe />
         <RegisterSW />
       </body>
     </html>

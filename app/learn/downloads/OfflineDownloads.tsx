@@ -246,11 +246,7 @@ export default function OfflineDownloads({
           </button>
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video src={playerSrc} controls autoPlay playsInline style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
-          {watermark && (
-            <span style={{ position: "absolute", bottom: 16, left: 16, color: "rgba(255,255,255,.35)", fontSize: ".75rem", fontWeight: 400, pointerEvents: "none" }}>
-              {watermark}
-            </span>
-          )}
+          {watermark && <span className="vwm">{watermark}</span>}
         </div>
       )}
     </>

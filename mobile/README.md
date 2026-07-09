@@ -92,3 +92,33 @@ NOTE: `ios/` is git-ignored — if you ever regenerate it (`npx cap add ios`), r
 Because the app loads the live website, **most updates ship instantly** when you
 deploy the site — no new app version needed. You only rebuild/resubmit when the
 native shell or the offline plugin changes.
+
+---
+
+## Hand-made iOS customizations (ios/ is gitignored — REAPPLY after any `cap add ios`)
+
+1. **Info.plist** → `CFBundleDisplayName` = `CA Parveen Sharma`
+   (`/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName CA Parveen Sharma" ios/App/App/Info.plist`)
+2. **AppDelegate.swift** → add at the top: `import OfflineClassesPlugin`, and inside the class:
+   ```swift
+   // iOS relaunches the app when a background class-download finishes.
+   func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
+       OfflineClassesPlugin.backgroundCompletionHandler = completionHandler
+   }
+   ```
+   and append at file end:
+   ```swift
+   // Web container: edge-swipe back + video element fullscreen.
+   class MainViewController: CAPBridgeViewController {
+       override func viewDidLoad() {
+           super.viewDidLoad()
+           webView?.allowsBackForwardNavigationGestures = true
+           if #available(iOS 15.4, *) {
+               webView?.configuration.preferences.isElementFullscreenEnabled = true
+           }
+       }
+   }
+   ```
+3. **Main.storyboard** → the view controller's custom class: `CAPBridgeViewController`/`Capacitor` → `MainViewController`/`App`.
+4. **Signing** → project `DEVELOPMENT_TEAM = 32W63QKXH8` (Aldine Ventures), Automatic signing.
+5. Icons/splash come from `assets/` via `npx @capacitor/assets generate --iconBackgroundColor '#0d9488' …` (mind mark at ~72% on teal).

@@ -115,10 +115,30 @@ export default function WatchTracker({
     };
   }, [sectionId, durationSeconds, topicId, provider]);
 
+  // Fullscreen OUR container (iframe + watermark), not the bare iframe — so the
+  // moving watermark stays on top in fullscreen. (Bunny's own fullscreen button
+  // is removed via the library Controls setting, which would strip the overlay.)
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const goFullscreen = () => {
+    const el = wrapRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;
+    if (!el) return;
+    if (document.fullscreenElement) { document.exitFullscreen?.(); return; }
+    (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+  };
+
   return (
-    <div className="video-frame" style={{ marginTop: 16 }}>
+    <div className="video-frame" ref={wrapRef} style={{ marginTop: 16 }}>
       <iframe ref={iframeRef} src={finalSrc} allow="encrypted-media; fullscreen" allowFullScreen title="Class video" />
       {watermark && <span className="vwm">{watermark}</span>}
+      <button
+        type="button"
+        onClick={goFullscreen}
+        aria-label="Fullscreen"
+        title="Fullscreen"
+        style={{ position: "absolute", bottom: 8, right: 8, zIndex: 4, background: "rgba(0,0,0,.55)", color: "#fff", border: 0, borderRadius: 8, padding: "6px 10px", fontSize: "1rem", cursor: "pointer" }}
+      >
+        ⛶
+      </button>
     </div>
   );
 }

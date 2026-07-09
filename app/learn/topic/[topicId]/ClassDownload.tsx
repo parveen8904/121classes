@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { resolveOfflineKey, cacheOfflineKey } from "../../downloads/licenseCache";
 import Help from "@/app/components/Help";
+import OfflinePlayer from "@/app/components/OfflinePlayer";
 
 type PV = {
   id: string;
@@ -138,21 +139,8 @@ export default function ClassDownload({ pv, watermark }: { pv: PV; watermark: st
         </>
       )}
 
-      {/* Mobile inline secure player (decrypted temp file via the native plugin). */}
-      {playerSrc && (
-        <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 1000, display: "flex", flexDirection: "column" }}>
-          <button
-            type="button"
-            onClick={() => setPlayerSrc(null)}
-            style={{ position: "absolute", top: "calc(12px + env(safe-area-inset-top))", right: 12, zIndex: 2, background: "rgba(0,0,0,.6)", color: "#fff", border: "1px solid rgba(255,255,255,.4)", borderRadius: 8, padding: "6px 12px", fontWeight: 700 }}
-          >
-            ✕ Close
-          </button>
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <video src={playerSrc} controls autoPlay playsInline style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
-          {watermark && <span className="vwm">{watermark}</span>}
-        </div>
-      )}
+      {/* Secure offline player: custom controls, watermark survives fullscreen. */}
+      {playerSrc && <OfflinePlayer src={playerSrc} watermark={watermark} onClose={() => setPlayerSrc(null)} />}
     </div>
   );
 }

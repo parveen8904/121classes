@@ -1,7 +1,7 @@
 // Electron main process. The window loads the FULL website; the preload exposes
 // a small native bridge (download/decrypt/play) so the site's Downloads page can
 // save encrypted classes and play them offline in a local player window.
-const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell, session } = require("electron");
 const { createDecipheriv } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -22,6 +22,9 @@ function createWindow() {
     width: 1280,
     height: 860,
     show: false,
+    title: "CA Parveen Sharma",
+    backgroundColor: "#ffffff",
+    icon: path.join(__dirname, "build", "icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -32,6 +35,31 @@ function createWindow() {
   win.once("ready-to-show", () => {
     win.show();
     win.focus();
+  });
+  // Keep the window titled with the brand, not each page's <title> (which
+  // could read "121…"/old branding).
+  win.on("page-title-updated", (e) => { e.preventDefault(); win.setTitle("CA Parveen Sharma"); });
+
+  // PDFs / any link that tries to open a new tab: open it in a real window so
+  // it never silently fails (the cause of "PDF notes don't open" on Windows).
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("http")) {
+      const child = new BrowserWindow({ width: 1100, height: 800, title: "CA Parveen Sharma", backgroundColor: "#fff" });
+      child.loadURL(url);
+      child.on("page-title-updated", (e) => { e.preventDefault(); child.setTitle("CA Parveen Sharma"); });
+      return { action: "deny" };
+    }
+    return { action: "deny" };
+  });
+}
+
+// Save downloads (stamped notes via ?dl=1, etc.) to the user's Downloads folder
+// with a Save-As dialog — otherwise Electron would drop them silently.
+function wireDownloads() {
+  session.defaultSession.on("will-download", (_e, item) => {
+    const name = item.getFilename() || "download.pdf";
+    const dest = dialog.showSaveDialogSync({ defaultPath: path.join(app.getPath("downloads"), name) });
+    if (dest) item.setSavePath(dest); else item.cancel();
   });
 }
 
@@ -162,6 +190,7 @@ async function checkForUpdate() {
 }
 
 app.whenReady().then(() => {
+  wireDownloads();
   createWindow();
   app.focus({ steal: true });
   setTimeout(checkForUpdate, 4000); // after the window has settled

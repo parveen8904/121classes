@@ -9,6 +9,7 @@ import { announcementKindLabel } from "@/lib/announcements";
 import WellnessTip from "@/app/components/WellnessTip";
 import TodayPlan from "@/app/components/TodayPlan";
 import { addMyCourse } from "@/app/learn/mycourses";
+import OnboardingWizard from "./OnboardingWizard";
 
 export default async function Dashboard({ searchParams }: { searchParams: { saved?: string } }) {
   const supabase = createClient();
@@ -37,6 +38,24 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
   const myIds = new Set((myCourseRows ?? []).map((r) => r.course_id as string));
   const myCourses = (courses ?? []).filter((c) => myIds.has(c.id));
   const otherCourses = (courses ?? []).filter((c) => !myIds.has(c.id));
+  const isAdminUser = profile?.role === "admin";
+
+  // First-visit wizard: ask level → subjects → attempt and write the profile
+  // from the answers (instead of bouncing new students to the profile form).
+  const needsSetup = !isAdminUser && (myIds.size === 0 || !profile?.target_attempt);
+  let subjectsByCourse: Record<string, { id: string; title: string }[]> = {};
+  if (needsSetup) {
+    const { data: allSubs } = await supabase
+      .from("subjects")
+      .select("id, title, course_id")
+      .in("course_id", (courses ?? []).map((c) => c.id))
+      .order("title");
+    subjectsByCourse = {};
+    for (const s of allSubs ?? []) {
+      const k = s.course_id as string;
+      (subjectsByCourse[k] ??= []).push({ id: s.id as string, title: s.title as string });
+    }
+  }
 
   // Faculty contacts — only the faculty teaching the subjects this student has
   // opted for (their own subjects, plus all subjects of the courses on their
@@ -253,11 +272,19 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
           </>
         )}
 
+        {needsSetup && (
+          <OnboardingWizard
+            courses={(courses ?? []).map((c) => ({ id: c.id, title: c.title }))}
+            subjectsByCourse={subjectsByCourse}
+            needAttempt={!profile?.target_attempt}
+          />
+        )}
+
         <FacultyContacts faculty={faculty ?? []} />
 
         <MyCourses courses={myCourses.map((c) => ({ id: c.id, title: c.title }))} />
 
-        {otherCourses.length > 0 && (
+        {isAdminUser && otherCourses.length > 0 && (
           <details style={{ marginTop: 16 }}>
             <summary className="btn small">＋ Add a course</summary>
             <div className="card" style={{ marginTop: 10 }}>

@@ -520,6 +520,9 @@ textarea {
   .portal-nav { justify-content: center; }
 }
 .portal-nav { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+/* One back control only: pages under the portal header rely on its ← Back,
+   so their in-page "← Dashboard" crumbs are redundant and hidden. */
+body:has(.portal-header) .crumb { display: none; }
 .portal-nav a { color: var(--muted); font-size: .9rem; transition: color .2s; }
 .portal-nav a:hover { color: var(--accent); }
 

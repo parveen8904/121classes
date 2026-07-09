@@ -60,9 +60,8 @@ export default async function NotesViewer({
       <style>{`
         .notes-wm {
           position: absolute; left: 0; top: 18%;
-          color: rgba(13,148,136,.4); font-weight: 700; font-size: 15px;
+          color: rgba(13,148,136,.16); font-weight: 500; font-size: 13px;
           white-space: nowrap; pointer-events: none; user-select: none;
-          text-shadow: 0 1px 2px rgba(0,0,0,.35);
           animation: notesDrift 18s linear infinite;
           z-index: 5;
         }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getOfflineKey } from "./actions";
+import { resolveOfflineKey, cacheOfflineKey } from "./licenseCache";
 
 type Klass = {
   id: string;
@@ -99,6 +99,7 @@ export default function OfflineDownloads({
     setLabels((l) => ({ ...l, [c.id]: "Downloading… 0%" }));
     try {
       await native.download(c.id, c.storage_url, c.byte_size ?? undefined);
+      cacheOfflineKey(c.id); // mirror the play key now, while online — enables airplane-mode playback
       setLabels((l) => ({ ...l, [c.id]: "Downloaded ✓" }));
       setReady((r) => ({ ...r, [c.id]: true }));
     } catch (e) {
@@ -111,7 +112,7 @@ export default function OfflineDownloads({
     if (!native) return;
     setLabels((l) => ({ ...l, [c.id]: "Verifying…" }));
     try {
-      const lic = await getOfflineKey(c.id);
+      const lic = await resolveOfflineKey(c.id);
       if (!lic) {
         alert("This class isn't on your plan, or your access expired.");
         setLabels((l) => ({ ...l, [c.id]: "Downloaded ✓" }));

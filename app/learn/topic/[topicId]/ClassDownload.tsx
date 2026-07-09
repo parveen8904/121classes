@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getOfflineKey } from "../../downloads/actions";
+import { resolveOfflineKey, cacheOfflineKey } from "../../downloads/licenseCache";
 import Help from "@/app/components/Help";
 
 type PV = {
@@ -96,6 +96,7 @@ export default function ClassDownload({ pv, watermark }: { pv: PV; watermark: st
     setLabel("Downloading… 0%");
     try {
       await native!.download(pv.id, pv.storage_url, pv.byte_size ?? undefined);
+      cacheOfflineKey(pv.id); // mirror the play key now, while online — enables airplane-mode playback
       setLabel("Downloaded ✓");
       setReady(true);
     } catch (e) {
@@ -107,7 +108,7 @@ export default function ClassDownload({ pv, watermark }: { pv: PV; watermark: st
   async function play() {
     setLabel("Verifying…");
     try {
-      const lic = await getOfflineKey(pv.id);
+      const lic = await resolveOfflineKey(pv.id);
       if (!lic) {
         alert("Access check failed — please contact us.");
         setLabel("Downloaded ✓");

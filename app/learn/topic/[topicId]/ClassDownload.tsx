@@ -114,7 +114,7 @@ export default function ClassDownload({ pv, watermark }: { pv: PV; watermark: st
         setLabel("Downloaded ✓");
         return;
       }
-      setLabel("Decrypting… ⏳");
+      setLabel("Preparing… ⏳ (first play only)");
       await native!.play(pv.id, lic.key, pv.iv_b64, pv.alg, watermark);
       setLabel("Downloaded ✓");
     } catch (e) {

@@ -123,7 +123,7 @@ export default function OfflineDownloads({
         setLabels((l) => ({ ...l, [c.id]: "Downloaded ✓" }));
         return;
       }
-      setLabels((l) => ({ ...l, [c.id]: "Decrypting… ⏳ (~1 min)" }));
+      setLabels((l) => ({ ...l, [c.id]: "Preparing… ⏳ (first play only — replays start instantly)" }));
       await native.play(c.id, lic.key, c.iv_b64, c.alg, watermark);
       setLabels((l) => ({ ...l, [c.id]: "Downloaded ✓" }));
     } catch (e) {

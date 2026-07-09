@@ -284,6 +284,20 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
 
         <MyCourses courses={myCourses.map((c) => ({ id: c.id, title: c.title }))} />
 
+        {!isAdminUser && !needsSetup && myCourses.length > 0 && (
+          <p className="muted" style={{ fontSize: ".85rem", marginTop: 12 }}>
+            ➕ Want more subjects? Open{" "}
+            <Link href={`/learn/${myCourses[0].id}`} style={{ color: "var(--accent)", fontWeight: 600 }}>
+              your course
+            </Link>{" "}
+            and tap &ldquo;Add to my subjects&rdquo; on any subject. Changing your level (e.g. Inter → Final)?{" "}
+            <Link href="/dashboard/profile" style={{ color: "var(--accent)", fontWeight: 600 }}>
+              Update your profile
+            </Link>
+            .
+          </p>
+        )}
+
         {isAdminUser && otherCourses.length > 0 && (
           <details style={{ marginTop: 16 }}>
             <summary className="btn small">＋ Add a course</summary>

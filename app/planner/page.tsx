@@ -15,7 +15,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Study planner — 121 CA Classes" };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+// No weekday here — the row already prints the weekday above the date.
+const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
 type Setup = PlanSetup;
 
@@ -254,9 +255,10 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
                     <td style={{ padding: "8px 6px" }}>
                       {g.lines.map((l, j) => (
                         <div key={j} style={{ marginBottom: j < g.lines.length - 1 ? 8 : 0 }}>
-                          <strong>{l.task}</strong><br /><span style={{ fontStyle: "italic", fontSize: 12, color: "var(--muted)" }}>{l.meta}</span>
+                          <strong style={l.sectionId && completedIds.has(l.sectionId) ? { textDecoration: "line-through", opacity: 0.65 } : undefined}>{l.task}</strong>
+                          <br /><span style={{ fontStyle: "italic", fontSize: 12, color: "var(--muted)" }}>{l.meta}</span>
                           {l.sectionId && (completedIds.has(l.sectionId) ? (
-                            <span style={{ color: "#16a34a", fontSize: 11, marginLeft: 6 }}>✓ done</span>
+                            <span style={{ background: "#16a34a", color: "#fff", borderRadius: 6, padding: "1px 8px", fontSize: 11, fontWeight: 700, marginLeft: 6, whiteSpace: "nowrap" }}>✅ Done</span>
                           ) : (
                             <form action={markClassDone} style={{ display: "inline" }} className="no-print">
                               <input type="hidden" name="sectionId" value={l.sectionId} />

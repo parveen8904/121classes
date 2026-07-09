@@ -41,6 +41,32 @@ export default function McqForm({
   const [secondsLeft, setSecondsLeft] = useState(totalSeconds);
   const submittedRef = useRef(!!lockedResult);
 
+  // The clock is anchored to a WALL-CLOCK deadline kept in localStorage: leaving
+  // the app, locking the phone or reloading never pauses an exam in progress.
+  const deadlineKey = `mcqdl:${sectionId}`;
+  const deadlineRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (result) {
+      try { localStorage.removeItem(deadlineKey); } catch { /* no-op */ }
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(deadlineKey);
+      if (raw) {
+        deadlineRef.current = Number(raw);
+        setStarted(true);
+        setSecondsLeft(Math.max(0, Math.round((Number(raw) - Date.now()) / 1000)));
+      }
+    } catch { /* no-op */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const begin = () => {
+    const dl = Date.now() + totalSeconds * 1000;
+    deadlineRef.current = dl;
+    try { localStorage.setItem(deadlineKey, String(dl)); } catch { /* no-op */ }
+    setStarted(true);
+  };
+
   const submit = useCallback(
     async (auto = false) => {
       if (submittedRef.current) return;
@@ -48,8 +74,10 @@ export default function McqForm({
       setBusy(true);
       try {
         const r = await gradeMcqAttempt({ sectionId, answers });
-        if (r.ok) setResult(r);
-        else {
+        if (r.ok) {
+          setResult(r);
+          try { localStorage.removeItem(`mcqdl:${sectionId}`); } catch { /* no-op */ }
+        } else {
           submittedRef.current = false;
           if (!auto) alert("Could not submit your test. Please try again.");
         }
@@ -67,7 +95,11 @@ export default function McqForm({
       submit(true);
       return;
     }
-    const t = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+    const t = setTimeout(() => {
+      const dl = deadlineRef.current;
+      if (dl) setSecondsLeft(Math.max(0, Math.round((dl - Date.now()) / 1000)));
+      else setSecondsLeft((s) => s - 1);
+    }, 1000);
     return () => clearTimeout(t);
   }, [started, secondsLeft, result, submit]);
 
@@ -180,7 +212,7 @@ export default function McqForm({
           <li>When time runs out, the test <strong>auto-submits</strong> — any unanswered questions are left blank.</li>
           <li>You get <strong>one attempt</strong>. Submit when you&apos;re done to see your score, rank and answer review.</li>
         </ol>
-        <button className="btn block" type="button" onClick={() => setStarted(true)} style={{ marginTop: 12 }}>
+        <button className="btn block" type="button" onClick={begin} style={{ marginTop: 12 }}>
           ▶️ Start test ({limitMinutes} min)
         </button>
       </div>

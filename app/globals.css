@@ -383,6 +383,10 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
   .plan-table tr { border-bottom: 1px solid var(--border) !important; }
   .plan-table td:first-child br { display: none; }
   .plan-table td:first-child { font-weight: 700; }
+
+  /* iPhone zooms the whole page when focusing an input smaller than 16px —
+     and the app can't pinch back out. 16px inputs stop the zoom entirely. */
+  input, select, textarea { font-size: 16px !important; }
 }
 
 /* books */

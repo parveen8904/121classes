@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ingestGovtFeeds, maybeSendDailyFeedDigest } from "@/lib/govtfeed";
 import { prepareNextPending } from "@/lib/offlinePrepare";
 import { syncClassDurations } from "@/lib/syncDurations";
+import { resequenceSubjectClasses } from "@/app/admin/topics/[topicId]/actions";
+import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +21,15 @@ export async function GET(req: NextRequest) {
       req.headers.get("authorization") === `Bearer ${secret}` ||
       new URL(req.url).searchParams.get("key") === secret;
     if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  // ?resequence=1 → re-run class numbering for every subject (idempotent;
+  // used after a numbering-rule change so it applies without touching content).
+  if (new URL(req.url).searchParams.get("resequence")) {
+    const svc = createServiceClient();
+    const { data: subs } = await svc.from("subjects").select("id");
+    for (const s of subs ?? []) await resequenceSubjectClasses(s.id as string);
+    return NextResponse.json({ ok: true, resequenced: (subs ?? []).length });
   }
 
   const result = await ingestGovtFeeds();

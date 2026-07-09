@@ -102,10 +102,13 @@ export async function resequenceSubjectClasses(subjectId: string) {
     byTopic.get(row.topic_id)!.push({ id: row.id, order_index: row.order_index, title: row.title, created_at: row.created_at, config: row.config });
   }
 
-  // A class > 100 min (or the first class of a topic, or one with no duration
-  // set) gets its own NEW number. A class of 100 min or less is treated as a
-  // continuation of the previous class — same number with a letter suffix
-  // (B, C, …) — so a topic split into short clips doesn't inflate the count.
+  // A class > 100 min (or one with no duration set) gets its own NEW number.
+  // A class of 100 min or less is a continuation of the previous class — same
+  // number with a letter suffix (A, B, …) — so short clips don't inflate the
+  // count. When a topic OPENS with a short class, that short class anchors the
+  // number and the full class right after it becomes its "A" part (the pair
+  // consumes one number). Exception: a single-class topic always gets a full
+  // number, even when short.
   let subjectMain = 0;
   const updates: { id: string; config: Record<string, unknown> }[] = [];
   for (const t of topicList) {
@@ -115,16 +118,22 @@ export async function resequenceSubjectClasses(subjectId: string) {
       (a, b) => a.order_index - b.order_index || String(a.created_at).localeCompare(String(b.created_at)),
     );
     let topicMain = 0;
-    let partIdx = 0; // 0 = currently on a main class; first continuation → "B"
+    let partIdx = 0; // 0 = currently on a main class; first continuation → "A"
+    let leaderShort = false; // topic opened with a short class → it lends its number onward
     for (const s of list) {
       const cfg = (s.config ?? {}) as Record<string, unknown>;
       const dur = Number(cfg.duration_minutes) || 0;
       const isShort = dur > 0 && dur <= 100;
-      const isFirstInTopic = topicMain === 0;
       let suffix = "";
-      if (isShort && !isFirstInTopic) {
+      if (topicMain === 0) {
+        subjectMain++;
+        topicMain++;
+        partIdx = 0;
+        leaderShort = list.length > 1 && isShort;
+      } else if (isShort || leaderShort) {
         partIdx++;
-        suffix = String.fromCharCode(65 + partIdx); // 1→B, 2→C, …
+        suffix = String.fromCharCode(64 + partIdx); // 1→A, 2→B, …
+        if (!isShort) leaderShort = false; // the one full class that attaches to a short opener
       } else {
         subjectMain++;
         topicMain++;

@@ -135,6 +135,13 @@ export default async function Home() {
           <Link className="btn" href="/login">Get started — it&apos;s free to join</Link>
           <Link className="btn" href="/#mentor" style={{ background: "var(--accent-2)" }}>Meet CA Parveen Sharma</Link>
         </div>
+        {/* App downloads — Mac/Windows live now; App Store & Play links join once approved. */}
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 16 }}>
+          <span className="muted" style={{ fontSize: ".88rem", alignSelf: "center" }}>📲 Get the app:</span>
+          <Link className="btn small secondary" href="/download">🍎 Mac</Link>
+          <Link className="btn small secondary" href="/download">🪟 Windows</Link>
+          <Link className="btn small secondary" href="/download">📱 iPhone &amp; Android</Link>
+        </div>
         {heroStats.length > 0 && (
           <div
             style={{

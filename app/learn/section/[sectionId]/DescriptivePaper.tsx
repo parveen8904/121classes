@@ -79,6 +79,21 @@ export default function DescriptivePaper(props: Props) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
+  // In the iPhone/Android app, pop-up windows lose the login session (they open
+  // outside the app) — the question paper then shows a "login required" error.
+  // There we navigate in the SAME view instead (edge-swipe returns to the test).
+  const [nativeApp, setNativeApp] = useState(false);
+  useEffect(() => {
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    setNativeApp(!!cap?.isNativePlatform?.());
+  }, []);
+  const fileTarget = nativeApp ? undefined : "_blank";
+  const openFile = (url: string) => {
+    const u = viaProxy(url);
+    if (nativeApp) window.location.assign(u);
+    else window.open(u, "_blank", "noopener,noreferrer");
+  };
+
   // ---- countdown ----
   const [secondsLeft, setSecondsLeft] = useState<number>(() =>
     attempt.deadlineAt ? Math.round((new Date(attempt.deadlineAt).getTime() - Date.now()) / 1000) : 0,
@@ -102,7 +117,7 @@ export default function DescriptivePaper(props: Props) {
       const r = await startPaperAttempt(sectionId);
       if (r.questionPdf) setQuestionPdf(r.questionPdf);
       setAttempt(r);
-      if (r.questionPdf) window.open(viaProxy(r.questionPdf), "_blank", "noopener,noreferrer");
+      if (r.questionPdf) openFile(r.questionPdf);
     } finally {
       setBusy(false);
     }
@@ -199,9 +214,9 @@ export default function DescriptivePaper(props: Props) {
           {r.summary && <p style={{ margin: "4px 0 0" }}>{r.summary}</p>}
           {r.unreadable && <p className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>⚠️ Part of the handwriting was hard to read — if marks look off, ask the faculty to review.</p>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-            {attempt.annotatedUrl && <a className="btn small" href={viaProxy(attempt.annotatedUrl)} target="_blank" rel="noopener noreferrer">📝 My checked copy (marks &amp; notes)</a>}
-            {attempt.fileUrl && <a className="btn small secondary" href={viaProxy(attempt.fileUrl)} target="_blank" rel="noopener noreferrer">📄 My uploaded answers</a>}
-            {solutionPdf && <a className="btn small secondary" href={viaProxy(solutionPdf)} target="_blank" rel="noopener noreferrer">✅ Official solution (PDF)</a>}
+            {attempt.annotatedUrl && <a className="btn small" href={viaProxy(attempt.annotatedUrl)} target={fileTarget} rel="noopener noreferrer">📝 My checked copy (marks &amp; notes)</a>}
+            {attempt.fileUrl && <a className="btn small secondary" href={viaProxy(attempt.fileUrl)} target={fileTarget} rel="noopener noreferrer">📄 My uploaded answers</a>}
+            {solutionPdf && <a className="btn small secondary" href={viaProxy(solutionPdf)} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
           </div>
         </div>
 
@@ -243,8 +258,8 @@ export default function DescriptivePaper(props: Props) {
         <p className="muted">We&apos;re checking it against the solution. This usually takes under a minute.</p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
           <button className="btn small" type="button" disabled={busy} onClick={regrade}>{busy ? "Checking…" : "🔄 Show my result"}</button>
-          {attempt.fileUrl && <a className="btn small secondary" href={viaProxy(attempt.fileUrl)} target="_blank" rel="noopener noreferrer">📄 My uploaded answers</a>}
-          {solutionPdf && <a className="btn small secondary" href={viaProxy(solutionPdf)} target="_blank" rel="noopener noreferrer">✅ Official solution (PDF)</a>}
+          {attempt.fileUrl && <a className="btn small secondary" href={viaProxy(attempt.fileUrl)} target={fileTarget} rel="noopener noreferrer">📄 My uploaded answers</a>}
+          {solutionPdf && <a className="btn small secondary" href={viaProxy(solutionPdf)} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
         </div>
       </div>
     );
@@ -256,7 +271,7 @@ export default function DescriptivePaper(props: Props) {
       <div className="card" style={{ border: "2px solid #ef4444" }}>
         <h3 style={{ marginTop: 0 }}>⏰ Time over</h3>
         <p className="muted">The upload window for this paper has closed, so it can no longer be submitted. You can still study the official solution.</p>
-        {solutionPdf && <a className="btn small secondary" href={viaProxy(solutionPdf)} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8 }}>✅ Official solution (PDF)</a>}
+        {solutionPdf && <a className="btn small secondary" href={viaProxy(solutionPdf)} target={fileTarget} rel="noopener noreferrer" style={{ marginTop: 8 }}>✅ Official solution (PDF)</a>}
       </div>
     );
   }
@@ -275,7 +290,7 @@ export default function DescriptivePaper(props: Props) {
         <div className="card">
           <strong>1) Your question paper</strong>
           <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 8px" }}>Solve it on paper, then photograph each page.</p>
-          {questionPdf && <a className="btn small" href={viaProxy(questionPdf)} target="_blank" rel="noopener noreferrer">📄 Open question paper</a>}
+          {questionPdf && <a className="btn small" href={viaProxy(questionPdf)} target={fileTarget} rel="noopener noreferrer">📄 Open question paper</a>}
         </div>
 
         <div className="card">

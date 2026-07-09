@@ -83,7 +83,9 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   const svc = createServiceClient();
   if (topicIds2.length) {
     const [{ data: secRows }, { data: matRowsP }] = await Promise.all([
-      svc.from("sections").select("topic_id, type, config").in("topic_id", topicIds2).eq("is_published", true),
+      // Only the two tiny config keys we need — configs also hold transcripts
+      // (megabytes across a course), which made this page take seconds.
+      svc.from("sections").select("topic_id, type, duration_minutes:config->>duration_minutes, class_no:config->>class_no").in("topic_id", topicIds2).eq("is_published", true),
       svc.from("repository_items").select("topic_id, kind").in("topic_id", topicIds2).eq("is_active", true).not("file_url", "is", null),
     ]);
     for (const r of secRows ?? []) {
@@ -91,11 +93,11 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
       const sid = topicToSubject.get(tid);
       if (!sid) continue;
       const type = (r as { type: string }).type;
-      const cfg = (r as { config?: { duration_minutes?: unknown; class_no?: unknown } }).config ?? {};
-      const d = Number(cfg.duration_minutes) || 0;
+      const row = r as { duration_minutes?: string | null; class_no?: string | null };
+      const d = Number(row.duration_minutes) || 0;
       if (type === "full_class_video") {
         // Don't count ≤100-min "part" continuations (e.g. 7B) as extra classes.
-        const isPart = /[A-Za-z]/.test(String(cfg.class_no ?? ""));
+        const isPart = /[A-Za-z]/.test(String(row.class_no ?? ""));
         inc(sumClassMins, sid, d);
         inc(topicMins, tid, d);
         if (!isPart) { inc(sumClasses, sid); inc(topicClassCount, tid); }

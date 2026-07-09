@@ -387,7 +387,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     supabase.rpc("list_downloadable_classes"),
     svcP.from("repository_items").select("id, title, kind, file_url").eq("topic_id", topic.id).eq("is_active", true).not("file_url", "is", null).order("created_at", { ascending: false }),
     svcP.from("amendments").select("id, title, body, discussion, bunny_video_id, bunny_drm, youtube_url, embed_url, notes_hand_url, valid_from_attempt, valid_to_attempt").eq("topic_id", topic.id).eq("is_published", true).order("order_index"),
-    svcP.from("sections").select("id, type, config").eq("topic_id", topic.id).eq("is_published", true),
+    svcP.from("sections").select("id, type, duration_minutes:config->>duration_minutes, class_no:config->>class_no").eq("topic_id", topic.id).eq("is_published", true),
   ]);
   const groupList = topicGroups ?? [];
 
@@ -437,23 +437,22 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     if (orderedTopicIds.length) {
       const { data: classRows } = await svc
         .from("sections")
-        .select("id, topic_id, order_index, title, config")
+        .select("id, topic_id, order_index, title, class_no:config->>class_no")
         .in("topic_id", orderedTopicIds)
         .eq("type", "full_class_video")
         .eq("is_published", true)
         .order("order_index")
         .order("title");
-      const byTopic = new Map<string, { id: string; config: Record<string, unknown> | null }[]>();
+      const byTopic = new Map<string, { id: string; class_no: string | null }[]>();
       for (const r of classRows ?? []) {
         const arr = byTopic.get(r.topic_id as string) ?? [];
-        arr.push({ id: r.id as string, config: r.config as Record<string, unknown> | null });
+        arr.push({ id: r.id as string, class_no: (r as { class_no?: string | null }).class_no ?? null });
         byTopic.set(r.topic_id as string, arr);
       }
       let running = 0;
       for (const tid of orderedTopicIds) {
         for (const r of byTopic.get(tid) ?? []) {
-          const cfg = (r.config ?? {}) as Record<string, unknown>;
-          const suffix = String(cfg.class_no ?? "").replace(/[^A-Za-z]/g, "");
+          const suffix = String(r.class_no ?? "").replace(/[^A-Za-z]/g, "");
           if (suffix) {
             classNoLabel.set(r.id, `Class ${running}${suffix}`); // part continuation (e.g. 7B)
           } else {
@@ -473,12 +472,12 @@ export default async function LearnTopic({ params }: { params: { topicId: string
   let topicMainClasses = 0;
   {
     for (const r of durRows ?? []) {
-      const cfg = ((r as { config?: Record<string, unknown> | null }).config ?? {}) as Record<string, unknown>;
-      const d = Number(cfg.duration_minutes) || 0;
-      durById.set(r.id as string, d);
-      if ((r as { type?: string }).type === "full_class_video") {
+      const row = r as { id: string; type?: string; duration_minutes?: string | null; class_no?: string | null };
+      const d = Number(row.duration_minutes) || 0;
+      durById.set(row.id, d);
+      if (row.type === "full_class_video") {
         topicTotalMins += d;
-        if (!/[A-Za-z]/.test(String(cfg.class_no ?? ""))) topicMainClasses += 1;
+        if (!/[A-Za-z]/.test(String(row.class_no ?? ""))) topicMainClasses += 1;
       }
     }
   }

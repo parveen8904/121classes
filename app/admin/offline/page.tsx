@@ -9,7 +9,7 @@ export const metadata = { title: "Offline downloads — Admin" };
 export default async function OfflinePage() {
   const svc = createServiceClient();
   const [{ data: classes }, { data: jobs }, { data: subjects }, { data: topics }] = await Promise.all([
-    svc.from("sections").select("id, title, topic_id, config").eq("type", "full_class_video").eq("is_published", true).order("order_index"),
+    svc.from("sections").select("id, title, topic_id, bunny_video_id:config->>bunny_video_id, class_no:config->>class_no").eq("type", "full_class_video").eq("is_published", true).order("order_index"),
     svc.from("offline_jobs").select("section_id, status, bytes_total, bytes_done, error"),
     svc.from("subjects").select("id, title"),
     svc.from("topics").select("id, subject_id"),
@@ -18,15 +18,14 @@ export default async function OfflinePage() {
   const topicSubj = new Map((topics ?? []).map((t) => [t.id as string, t.subject_id as string]));
   const jobBySection = new Map((jobs ?? []).map((j) => [j.section_id as string, j]));
 
-  const rows = (classes ?? [])
-    .filter((c) => ((c.config ?? {}) as Record<string, string>).bunny_video_id)
+  const rows = ((classes ?? []) as unknown as { id: string; title: string; topic_id: string; bunny_video_id: string | null; class_no: string | null }[])
+    .filter((c) => c.bunny_video_id)
     .map((c) => {
       const j = jobBySection.get(c.id as string);
       const total = Number(j?.bytes_total) || 0;
-      const cfg = (c.config ?? {}) as Record<string, string>;
       return {
         sectionId: c.id as string,
-        title: `${cfg.class_no ? `Class ${cfg.class_no} · ` : ""}${c.title as string}`,
+        title: `${c.class_no ? `Class ${c.class_no} · ` : ""}${c.title as string}`,
         subject: subjName.get(topicSubj.get(c.topic_id as string) ?? "") ?? "",
         status: (j?.status as string) ?? "none",
         pct: total ? Math.floor(((Number(j?.bytes_done) || 0) / total) * 100) : 0,

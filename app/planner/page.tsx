@@ -232,7 +232,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
         <form action={clearPlan} className="no-print"><button className="btn small secondary" type="submit">Delete plan</button></form>
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 13 }}>
+      <table className="plan-table" style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 13 }}>
         <colgroup><col style={{ width: "110px" }} /><col /><col style={{ width: "210px" }} /></colgroup>
         <thead><tr style={{ textAlign: "left", color: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
           <th style={{ padding: "6px" }}>Date &amp; day</th><th style={{ padding: "6px" }}>Target</th><th style={{ padding: "6px" }}>Remarks</th>

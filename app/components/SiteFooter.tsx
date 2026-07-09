@@ -36,7 +36,7 @@ export default async function SiteFooter() {
             Office: W6 Sector 24, DLF Phase 3, Gurugram 122010
           </p>
           <p className="muted" style={{ marginTop: 4, fontSize: ".82rem" }}>
-            📧 <a className="grad" href="mailto:mail@caparveensharma.com">mail@caparveensharma.com</a>
+            📧 <a className="grad" href="mailto:contact@caparveensharma.com">contact@caparveensharma.com</a>
           </p>
           {/* Social media */}
           {hasSocials && (

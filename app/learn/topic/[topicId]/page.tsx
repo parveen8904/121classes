@@ -634,13 +634,21 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     );
   };
 
-  const sectionGroupBanner = (label: string, count: number) => (
+  const sectionGroupBanner = (label: string, count: number, mins = 0) => (
     <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "28px 0 12px" }}>
       <span style={{ fontWeight: 800, fontSize: "1.05rem" }}>{label}</span>
       <span className="muted" style={{ fontSize: ".8rem" }}>({count})</span>
+      {mins > 0 && (
+        <span className="muted" style={{ fontSize: ".8rem", whiteSpace: "nowrap" }}>
+          ⏱️ {Math.floor(mins / 60)}h {mins % 60}m
+        </span>
+      )}
       <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
     </div>
   );
+
+  // Total minutes of the given items (durations synced from Bunny).
+  const groupMins = (items: { id: string }[]) => items.reduce((sum, s) => sum + (durById.get(s.id) ?? 0), 0);
 
   return (
     <main>
@@ -789,7 +797,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
               if (!items.length) return null;
               return (
                 <div key={g.id}>
-                  {sectionGroupBanner(`📚 ${g.name}`, items.length)}
+                  {sectionGroupBanner(`📚 ${g.name}`, items.length, groupMins(items))}
                   <div className="sec-list">{items.map(renderSection)}</div>
                 </div>
               );
@@ -800,7 +808,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
               if (!items.length) return null;
               return (
                 <div key={label}>
-                  {sectionGroupBanner(label, items.length)}
+                  {sectionGroupBanner(label, items.length, groupMins(items))}
                   <div className="sec-list">{items.map(renderSection)}</div>
                 </div>
               );

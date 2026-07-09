@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ingestGovtFeeds, maybeSendDailyFeedDigest } from "@/lib/govtfeed";
 import { prepareNextPending } from "@/lib/offlinePrepare";
+import { syncClassDurations } from "@/lib/syncDurations";
 import { getSecret } from "@/lib/secrets";
 
 export const dynamic = "force-dynamic";
@@ -26,5 +27,9 @@ export async function GET(req: NextRequest) {
   // Prepare-all backlog automatically even if the admin closes the page).
   let offline: unknown = null;
   try { offline = await prepareNextPending(120_000); } catch { /* never block the feed */ }
-  return NextResponse.json({ ok: true, added: result.added, checked: result.checked, emailed: digest.sent, offline });
+  // Keep class durations true to Bunny's encoded length (drives the ⏱️ shown to
+  // students and the ≤100-min part numbering). No-op once everything is synced.
+  let durations: unknown = null;
+  try { durations = await syncClassDurations(120); } catch { /* never block the feed */ }
+  return NextResponse.json({ ok: true, added: result.added, checked: result.checked, emailed: digest.sent, offline, durations });
 }

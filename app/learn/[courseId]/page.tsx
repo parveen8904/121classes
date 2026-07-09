@@ -73,6 +73,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   const sumMcq = new Map<string, number>(), sumDesc = new Map<string, number>();
   const subjMaterials = new Map<string, Set<string>>();
   const topicClassCount = new Map<string, number>(); // non-part classes per topic
+  const topicMins = new Map<string, number>(); // total class minutes per topic
   const inc = (m: Map<string, number>, k: string, by = 1) => m.set(k, (m.get(k) ?? 0) + by);
   // Catalog totals (classes / hours / tests) are the SAME for everyone — they
   // describe what the subject contains, not what this student has unlocked. So we
@@ -96,6 +97,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
         // Don't count ≤100-min "part" continuations (e.g. 7B) as extra classes.
         const isPart = /[A-Za-z]/.test(String(cfg.class_no ?? ""));
         inc(sumClassMins, sid, d);
+        inc(topicMins, tid, d);
         if (!isPart) { inc(sumClasses, sid); inc(topicClassCount, tid); }
       } else if (type === "revision_video") { inc(sumRev, sid); inc(sumRevMins, sid, d); }
       else if (type === "mcq_test") inc(sumMcq, sid);
@@ -314,11 +316,18 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                               </span>
                             )}
                           </span>
-                          {r && (
-                            <span style={{ fontSize: "1.08rem", fontWeight: 700, whiteSpace: "nowrap" }}>
-                              {r.start === r.end ? `Class ${r.start}` : `Classes ${r.start} to ${r.end}`}
-                            </span>
-                          )}
+                          <span style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                            {r && (
+                              <span style={{ display: "block", fontSize: "1.08rem", fontWeight: 700 }}>
+                                {r.start === r.end ? `Class ${r.start}` : `Classes ${r.start} to ${r.end}`}
+                              </span>
+                            )}
+                            {(topicMins.get(t.id) ?? 0) > 0 && (
+                              <span className="muted" style={{ display: "block", fontSize: ".82rem" }}>
+                                ⏱️ {Math.floor((topicMins.get(t.id) ?? 0) / 60)}h {(topicMins.get(t.id) ?? 0) % 60}m
+                              </span>
+                            )}
+                          </span>
                         </Link>
                       );
                     })}

@@ -726,16 +726,16 @@ export default async function Home() {
         <div className="contact-grid" style={{ maxWidth: 900, margin: "0 auto" }}>
           <div className="tile">
             <h3>Reach us</h3>
-            <p style={{ marginTop: 10 }}>📧 <a className="grad" href="mailto:mail@caparveensharma.com">mail@caparveensharma.com</a></p>
+            <p style={{ marginTop: 10 }}>📧 <a className="grad" href="mailto:contact@caparveensharma.com">contact@caparveensharma.com</a></p>
             <p style={{ marginTop: 8 }}>📍 W6 Sector 24, DLF Phase 3, Gurugram 122010</p>
             <p style={{ marginTop: 8 }}>🌐 caparveensharma.com</p>
             <p style={{ marginTop: 16 }}>
-              <a className="btn" href="mailto:mail@caparveensharma.com?subject=Enquiry%20from%20caparveensharma.com">Email us</a>
+              <a className="btn" href="mailto:contact@caparveensharma.com?subject=Enquiry%20from%20caparveensharma.com">Email us</a>
             </p>
           </div>
           <div className="tile">
             <h3>Send a message</h3>
-            <form action="mailto:mail@caparveensharma.com" method="post" encType="text/plain">
+            <form action="mailto:contact@caparveensharma.com" method="post" encType="text/plain">
               <input type="text" placeholder="Your name" required />
               <input type="email" placeholder="Your email" required />
               <textarea rows={4} placeholder="Your message" required />

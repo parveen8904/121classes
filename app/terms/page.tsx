@@ -90,7 +90,7 @@ export default function Terms() {
         <p>
           <strong>121 CA Classes</strong> (a venture of CA Parveen Sharma)<br />
           W6 Sector 24, DLF Phase 3, Gurugram, Haryana 122010, India<br />
-          Email: <a className="grad" href="mailto:mail@caparveensharma.com">mail@caparveensharma.com</a>
+          Email: <a className="grad" href="mailto:contact@caparveensharma.com">contact@caparveensharma.com</a>
         </p>
 
         <p className="muted" style={{ marginTop: 24, fontSize: ".82rem" }}>

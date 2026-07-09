@@ -236,7 +236,7 @@ const ASSIST_SYSTEM =
   "If the question is a CA SUBJECT DOUBT (a concept, problem, standard, section, numerical), DO NOT answer it — reply EXACTLY: " +
   "\"For subject doubts, please use the 'Ask your doubts' button on your subject page — it answers from your class material and can pass it to the faculty.\" " +
   "Answer in short bullet points (never paragraphs), warm and specific, under 100 words. " +
-  "If the SITE INFO doesn't contain the answer, say you're not sure and point them to mail@caparveensharma.com. Never invent facts.";
+  "If the SITE INFO doesn't contain the answer, say you're not sure and point them to contact@caparveensharma.com. Never invent facts.";
 
 // The "Ask me" assistant: handles both portal questions (from site facts) and
 // CA doubts (from repository material) in one call. Returns the answer or the

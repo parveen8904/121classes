@@ -127,7 +127,7 @@ export default function ClassDownload({ pv, watermark }: { pv: PV; watermark: st
       <button className="btn small secondary" type="button" onClick={download}>
         📥 {label}
       </button>
-      <Help text="Saves this class to your device so you can watch it without internet. It downloads securely (encrypted) — the first time can take a few minutes for a long class." />
+      <Help text="Saves this class to your device so you can watch it without internet. It downloads securely (encrypted) and CONTINUES IN THE BACKGROUND — you can lock the phone or leave the app; check back in a few minutes." />
       {ready && (
         <>
           <button className="btn small" type="button" onClick={play}>

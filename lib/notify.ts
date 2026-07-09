@@ -189,7 +189,7 @@ export async function notifyFaculty(title: string, body: string): Promise<void> 
     /* ignore */
   }
   try {
-    const facultyEmail = (await getSecret("FACULTY_EMAIL")) || "mail@caparveensharma.com";
+    const facultyEmail = (await getSecret("FACULTY_EMAIL")) || "contact@caparveensharma.com";
     await sendEmail(facultyEmail, `🔔 ${title}`, emailShell(title, body.replace(/\n/g, "<br/>")));
   } catch {
     /* ignore */

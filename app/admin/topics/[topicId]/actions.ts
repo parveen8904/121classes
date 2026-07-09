@@ -76,7 +76,7 @@ function yymmOf(taughtOn: unknown) {
   return d.length >= 7 ? d.slice(2, 4) + d.slice(5, 7) : "";
 }
 
-async function resequenceSubjectClasses(subjectId: string) {
+export async function resequenceSubjectClasses(subjectId: string) {
   const svc = createServiceClient();
   const { data: subject } = await svc.from("subjects").select("code").eq("id", subjectId).maybeSingle();
   const subCode = cleanCode((subject as { code?: string } | null)?.code ?? "");

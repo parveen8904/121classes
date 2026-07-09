@@ -19,6 +19,7 @@ type Native = {
   isDownloaded: (id: string, expectedSize?: number) => Promise<boolean>;
   play: (id: string, keyB64: string, ivB64: string | null, alg: string | null, watermark: string) => Promise<boolean>;
   onProgress: (cb: (d: { id: string; received: number; total: number }) => void) => void;
+  remove?: (id: string) => Promise<void>;
 };
 
 // Capacitor (mobile app) plugin shape — accessed via the injected window.Capacitor.
@@ -26,6 +27,7 @@ type CapPlugin = {
   download: (o: { id: string; url: string; expectedSize?: number }) => Promise<{ path: string }>;
   isDownloaded: (o: { id: string; expectedSize?: number }) => Promise<{ value: boolean }>;
   decrypt: (o: { id: string; keyB64: string; ivB64?: string | null; alg?: string | null }) => Promise<{ path: string }>;
+  remove: (o: { id: string }) => Promise<void>;
   addListener: (eventName: string, cb: (d: { id: string; received: number; total: number }) => void) => unknown;
 };
 type CapGlobal = {
@@ -37,9 +39,11 @@ type CapGlobal = {
 export default function OfflineDownloads({
   classes,
   watermark,
+  isAdmin,
 }: {
   classes: Klass[];
   watermark: string;
+  isAdmin?: boolean;
 }) {
   const [native, setNative] = useState<Native | null>(null);
   const [labels, setLabels] = useState<Record<string, string>>({});
@@ -74,6 +78,7 @@ export default function OfflineDownloads({
         download: (id, url, size) => plugin.download({ id, url, expectedSize: size }).then((r) => r.path),
         isDownloaded: (id, size) => plugin.isDownloaded({ id, expectedSize: size }).then((r) => r.value),
         onProgress: (cb) => { plugin.addListener("downloadProgress", cb); },
+        remove: (id) => plugin.remove({ id }),
         play: async (id, keyB64, ivB64, alg, _wm) => {
           const { path } = await plugin.decrypt({ id, keyB64, ivB64, alg });
           const src = cap.convertFileSrc ? cap.convertFileSrc(path) : path;
@@ -127,6 +132,19 @@ export default function OfflineDownloads({
     }
   }
 
+  async function removeDownload(c: Klass) {
+    if (!native?.remove) return;
+    if (!confirm(`Remove the downloaded copy of "${c.title}" from this device? You can download it again anytime.`)) return;
+    try {
+      await native.remove(c.id);
+      try { localStorage.removeItem(`offkey:${c.id}`); } catch { /* no-op */ }
+      setReady((r) => ({ ...r, [c.id]: false }));
+      setLabels((l) => ({ ...l, [c.id]: "Download" }));
+    } catch (e) {
+      alert("Could not remove: " + (e as Error).message);
+    }
+  }
+
   if (!native) {
     return (
       <div className="card" style={{ maxWidth: 560, margin: "0 auto", textAlign: "center" }}>
@@ -143,35 +161,68 @@ export default function OfflineDownloads({
     );
   }
 
+  // Folder view: one section per subject (students only ever receive the
+  // subjects on their plan — admins receive everything, hence the note).
+  const bySubject = new Map<string, Klass[]>();
+  for (const c of classes) {
+    const k = c.subject_title ?? "Other";
+    if (!bySubject.has(k)) bySubject.set(k, []);
+    bySubject.get(k)!.push(c);
+  }
+
   return (
     <>
-      <div className="sec-list" style={{ marginTop: 8 }}>
-        {classes.length === 0 ? (
-          <div className="card">
-            <p className="muted">No downloadable classes on your plan yet.</p>
-          </div>
-        ) : (
-          classes.map((c) => (
-            <div className="list-row" key={c.id}>
-              <div>
-                <span className="row-title">🔐 {c.title}</span>
-                <p className="row-sub">
-                  {c.subject_title ?? ""}
-                  {c.byte_size ? ` · ${(Number(c.byte_size) / 1e6).toFixed(0)} MB` : ""}
-                </p>
-              </div>
-              <div className="row-actions">
-                <button className="btn small secondary" type="button" onClick={() => download(c)}>
-                  {labels[c.id] ?? (ready[c.id] ? "Downloaded ✓" : "Download")}
-                </button>
-                <button className="btn small" type="button" disabled={!ready[c.id]} onClick={() => play(c)}>
-                  Play
-                </button>
-              </div>
+      {isAdmin && (
+        <div className="notice ok" style={{ fontSize: ".82rem", marginBottom: 14 }}>
+          👑 <strong>Admin view:</strong> you see EVERY subject. Each student sees only the subjects included in their own plan.
+        </div>
+      )}
+      {classes.length === 0 ? (
+        <div className="card">
+          <p className="muted">No downloadable classes on your plan yet.</p>
+        </div>
+      ) : (
+        [...bySubject.entries()].map(([subject, items]) => (
+          <div key={subject} style={{ marginBottom: 26 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 10px" }}>
+              <span style={{ fontWeight: 800, fontSize: "1.02rem" }}>📁 {subject}</span>
+              <span className="muted" style={{ fontSize: ".8rem" }}>({items.length})</span>
+              <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
             </div>
-          ))
-        )}
-      </div>
+            <div className="sec-list">
+              {items.map((c) => (
+                <div className="list-row" key={c.id}>
+                  <div>
+                    <span className="row-title">🔐 {c.title}</span>
+                    <p className="row-sub">
+                      {c.byte_size ? `${(Number(c.byte_size) / 1e9).toFixed(2)} GB` : ""}
+                    </p>
+                  </div>
+                  <div className="row-actions">
+                    {!ready[c.id] && (
+                      <button className="btn small secondary" type="button" onClick={() => download(c)}>
+                        {labels[c.id] ?? "Download"}
+                      </button>
+                    )}
+                    {ready[c.id] && (
+                      <>
+                        <button className="btn small" type="button" onClick={() => play(c)}>
+                          ▶️ Play
+                        </button>
+                        {native.remove && (
+                          <button className="btn small secondary" type="button" onClick={() => removeDownload(c)} title="Remove from this device">
+                            🗑️
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
 
       {/* Mobile inline secure player (decrypted temp file via the native plugin). */}
       {playerSrc && (
@@ -181,14 +232,14 @@ export default function OfflineDownloads({
           <button
             type="button"
             onClick={() => setPlayerSrc(null)}
-            style={{ position: "absolute", top: 12, right: 12, zIndex: 2, background: "rgba(0,0,0,.6)", color: "#fff", border: "1px solid rgba(255,255,255,.4)", borderRadius: 8, padding: "6px 12px", fontWeight: 700 }}
+            style={{ position: "absolute", top: "calc(12px + env(safe-area-inset-top))", right: 12, zIndex: 2, background: "rgba(0,0,0,.6)", color: "#fff", border: "1px solid rgba(255,255,255,.4)", borderRadius: 8, padding: "6px 12px", fontWeight: 700 }}
           >
             ✕ Close
           </button>
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video src={playerSrc} controls autoPlay playsInline style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
           {watermark && (
-            <span style={{ position: "absolute", bottom: 16, left: 16, color: "rgba(255,255,255,.55)", fontSize: ".8rem", pointerEvents: "none", textShadow: "0 1px 2px #000" }}>
+            <span style={{ position: "absolute", bottom: 16, left: 16, color: "rgba(255,255,255,.35)", fontSize: ".75rem", fontWeight: 400, pointerEvents: "none" }}>
               {watermark}
             </span>
           )}

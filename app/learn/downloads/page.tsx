@@ -19,10 +19,11 @@ export default async function DownloadsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, phone")
+    .select("full_name, phone, role")
     .eq("id", user.id)
     .maybeSingle();
   const watermark = [profile?.full_name, user.email ?? profile?.phone].filter(Boolean).join(" · ");
+  const isAdmin = profile?.role === "admin";
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -33,7 +34,7 @@ export default async function DownloadsPage() {
         <p className="meta">Save your classes to this device and play them without internet — encrypted &amp; watermarked. 🔐</p>
       </div>
       <div style={{ marginTop: 22 }}>
-        <OfflineDownloads classes={(classes as never[]) ?? []} watermark={watermark} />
+        <OfflineDownloads classes={(classes as never[]) ?? []} watermark={watermark} isAdmin={isAdmin} />
       </div>
     </section>
   );

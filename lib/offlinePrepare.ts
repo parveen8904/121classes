@@ -223,12 +223,13 @@ export async function prepareStep(sectionId: string, timeBudgetMs = 170_000): Pr
 
     const encryptedSize = total + (16 - (total % 16));
     const subjectId = (sec as { topics?: { subject_id?: string } | null }).topics?.subject_id ?? null;
-    await svc.from("protected_videos").upsert(
+    // min_plan is NOT NULL — classes default to gold (261/262 are gold anyway).
+    const { error: regErr } = await svc.from("protected_videos").upsert(
       {
         title: (sec.title as string) || "Class",
         subject_id: subjectId,
         section_id: sectionId,
-        min_plan: (sec.min_plan as string) ?? null,
+        min_plan: (sec.min_plan as string) ?? "gold",
         storage_url: `${r2.publicBase}/${job.storage_key}`,
         key_b64: job.key_b64,
         iv_b64: job.iv_b64,
@@ -238,6 +239,7 @@ export async function prepareStep(sectionId: string, timeBudgetMs = 170_000): Pr
       },
       { onConflict: "section_id" },
     );
+    if (regErr) throw new Error(`register failed: ${regErr.message}`); // a silent miss here hides the class from students
     await svc.from("offline_jobs").update({ status: "done", bytes_done: total, updated_at: new Date().toISOString() }).eq("id", job.id);
     return { done: true, status: "done", bytesDone: total, bytesTotal: total };
   } catch (e) {

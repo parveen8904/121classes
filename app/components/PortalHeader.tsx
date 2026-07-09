@@ -25,6 +25,7 @@ export default async function PortalHeader() {
     { href: "/live", label: "📡 Live" },
     { href: "/planner", label: "🗓️ Planner" },
     { href: "/learn/performance", label: "📊 Performance" },
+    { href: "/learn/downloads", label: "📥 Downloads" },
     { href: "/amendments", label: "📜 Amendments" },
     { href: "/career", label: "🎓 Career" },
     { href: "/discuss", label: "💬 Discuss" },

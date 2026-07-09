@@ -9,7 +9,8 @@ import SubmitButton from "@/app/components/SubmitButton";
 import RemarkBox from "./RemarkBox";
 import PrintButton from "./PrintButton";
 import TopicPicker from "./TopicPicker";
-import { savePlanSetup, clearPlan, emailMyPlan, markClassDone, rebalanceFromToday } from "./actions";
+import { savePlanSetup, clearPlan, emailMyPlan, rebalanceFromToday } from "./actions";
+import DoneToggle from "./DoneToggle";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Study planner — 121 CA Classes" };
@@ -255,16 +256,14 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
                     <td style={{ padding: "8px 6px" }}>
                       {g.lines.map((l, j) => (
                         <div key={j} style={{ marginBottom: j < g.lines.length - 1 ? 8 : 0 }}>
-                          <strong style={l.sectionId && completedIds.has(l.sectionId) ? { textDecoration: "line-through", opacity: 0.65 } : undefined}>{l.task}</strong>
-                          <br /><span style={{ fontStyle: "italic", fontSize: 12, color: "var(--muted)" }}>{l.meta}</span>
-                          {l.sectionId && (completedIds.has(l.sectionId) ? (
-                            <span style={{ background: "#16a34a", color: "#fff", borderRadius: 6, padding: "1px 8px", fontSize: 11, fontWeight: 700, marginLeft: 6, whiteSpace: "nowrap" }}>✅ Done</span>
+                          {l.sectionId ? (
+                            <DoneToggle sectionId={l.sectionId} initialDone={completedIds.has(l.sectionId)} task={l.task} meta={l.meta} />
                           ) : (
-                            <form action={markClassDone} style={{ display: "inline" }} className="no-print">
-                              <input type="hidden" name="sectionId" value={l.sectionId} />
-                              <button type="submit" className="btn small secondary" style={{ marginLeft: 6, padding: "0 6px", fontSize: 11 }}>mark done</button>
-                            </form>
-                          ))}
+                            <>
+                              <strong>{l.task}</strong>
+                              <br /><span style={{ fontStyle: "italic", fontSize: 12, color: "var(--muted)" }}>{l.meta}</span>
+                            </>
+                          )}
                         </div>
                       ))}
                     </td>

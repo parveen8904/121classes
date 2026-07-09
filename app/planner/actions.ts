@@ -111,6 +111,18 @@ export async function emailMyPlan() {
   redirect("/planner?emailed=1");
 }
 
+// Toggle a class done/undone from the plan (instant client feedback; this just
+// persists the truth).
+export async function setClassDone(sectionId: string, done: boolean) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || !sectionId) return;
+  const { data: existing } = await supabase.from("class_watch").select("id").eq("student_id", user.id).eq("section_id", sectionId).maybeSingle();
+  if (existing) await supabase.from("class_watch").update({ completed: done, last_watched_at: new Date().toISOString() }).eq("id", existing.id);
+  else if (done) await supabase.from("class_watch").insert({ student_id: user.id, section_id: sectionId, completed: true });
+  revalidatePath("/planner");
+}
+
 // Mark one class complete by hand (in case it was watched elsewhere).
 export async function markClassDone(formData: FormData) {
   const supabase = createClient();

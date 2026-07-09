@@ -5,7 +5,7 @@ import OfflineDownloads from "./OfflineDownloads";
 import Help from "@/app/components/Help";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Offline downloads — 121 CA Classes" };
+export const metadata = { title: "Offline downloads — CA Parveen Sharma" };
 
 export default async function DownloadsPage() {
   const supabase = createClient();

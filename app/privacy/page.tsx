@@ -1,7 +1,7 @@
 import SiteNav from "../components/SiteNav";
 import SiteFooter from "../components/SiteFooter";
 
-export const metadata = { title: "Privacy Policy — 121 CA Classes" };
+export const metadata = { title: "Privacy Policy — CA Parveen Sharma" };
 
 export default function Privacy() {
   return (
@@ -12,10 +12,10 @@ export default function Privacy() {
         <p className="muted">Last updated: 14 June 2026</p>
 
         <p>
-          This Privacy Policy explains how <strong>121 CA Classes</strong>, a venture of
+          This Privacy Policy explains how <strong>CA Parveen Sharma</strong>, a venture of
           CA Parveen Sharma (&ldquo;we&rdquo;, &ldquo;us&rdquo;, &ldquo;our&rdquo;), collects, uses,
           shares and protects your personal data when you use{" "}
-          <a className="grad" href="https://121caclasses.com">121caclasses.com</a>, our mobile and
+          <a className="grad" href="https://caparveensharma.com">caparveensharma.com</a>, our mobile and
           desktop applications, and related services (together, the &ldquo;Platform&rdquo;). We are
           committed to handling your data in accordance with the Digital Personal Data Protection
           Act, 2023 and other applicable Indian law.
@@ -97,7 +97,7 @@ export default function Privacy() {
 
         <h2>11. Grievance Officer &amp; contact</h2>
         <p>
-          <strong>121 CA Classes</strong> (a venture of CA Parveen Sharma)<br />
+          <strong>CA Parveen Sharma</strong> (a venture of CA Parveen Sharma)<br />
           W6 Sector 24, DLF Phase 3, Gurugram, Haryana 122010, India<br />
           Email: <a className="grad" href="mailto:contact@caparveensharma.com">contact@caparveensharma.com</a>
         </p>

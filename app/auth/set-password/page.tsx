@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import SetPasswordForm from "./SetPasswordForm";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Set your password — 121 CA Classes" };
+export const metadata = { title: "Set your password — CA Parveen Sharma" };
 
 export default async function SetPasswordPage({
   searchParams,

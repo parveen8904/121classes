@@ -51,7 +51,7 @@ export async function runStudyReminders(): Promise<{ sent: number }> {
     const text = `📅 Your study plan this week:\n\n${body}\n\nKeep going — small steps daily! 💪`;
     if (prof?.telegram_chat_id) delivered = await sendTelegramMessage(prof.telegram_chat_id, text);
     if (!delivered && prof?.email) {
-      delivered = await sendEmail(prof.email, "📅 Your study plan this week — 121 CA Classes", emailShell("This week's study plan", `<p>${body.replace(/\n/g, "<br/>")}</p><p>Keep going — small steps daily! 💪</p>`));
+      delivered = await sendEmail(prof.email, "📅 Your study plan this week — CA Parveen Sharma", emailShell("This week's study plan", `<p>${body.replace(/\n/g, "<br/>")}</p><p>Keep going — small steps daily! 💪</p>`));
     }
 
     await svc.from("notifications").insert({

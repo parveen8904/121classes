@@ -4,7 +4,7 @@ import { postCommunity, deleteCommunity, pinCommunity } from "./actions";
 import TelegramFeed from "@/app/components/TelegramFeed";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Community — 121 CA Classes" };
+export const metadata = { title: "Community — CA Parveen Sharma" };
 
 type Row = {
   id: string;

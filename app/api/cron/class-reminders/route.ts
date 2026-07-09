@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
       `Reminder: ${s.title} is starting soon`,
       `<p>Your live class <strong>${s.title}</strong> is scheduled for <strong>${when}</strong>.</p>` +
         (s.join_url ? `<p><a href="${s.join_url}">Join the class →</a></p>` : "") +
-        `<p>See you there! — 121 CA Classes</p>`,
+        `<p>See you there! — CA Parveen Sharma</p>`,
     );
     for (const to of emails) {
       if (await sendEmail(to, `⏰ ${s.title} starts soon`, html)) emailed++;

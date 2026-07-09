@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import CvBuilder from "./CvBuilder";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "CV Builder — 121 CA Classes" };
+export const metadata = { title: "CV Builder — CA Parveen Sharma" };
 
 export default async function CvPage() {
   const supabase = createClient();

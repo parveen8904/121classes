@@ -24,7 +24,7 @@ export async function maybeStorageAlert() {
     const { sendEmail } = await import("@/lib/notify");
     await sendEmail(
       to,
-      "⚠️ 121 CA Classes — Supabase storage near limit",
+      "⚠️ CA Parveen Sharma — Supabase storage near limit",
       `<p>Stored files have reached <strong>${usedMb.toFixed(0)} MB</strong> (cap ${capMb} MB; free tier is ~1024 MB).</p><p>Consider enabling Cloudflare R2 for large files. See Admin → Costs &amp; usage.</p>`,
     );
   }

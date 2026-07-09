@@ -153,7 +153,7 @@ export async function sendFeedDigest(items: FeedItem[]): Promise<void> {
     `🆕 ${n} new CA update${n > 1 ? "s" : ""} to review`,
     `<p>New regulatory / accounting-standards news was found and saved as <strong>drafts</strong> (a suggested category is shown on each). Nothing is visible to students until you approve it.</p>${rows}<p style="margin-top:16px">${cta}</p>`,
   );
-  await sendEmail(to, `🆕 ${n} CA update${n > 1 ? "s" : ""} to review — 121 CA Classes`, html);
+  await sendEmail(to, `🆕 ${n} CA update${n > 1 ? "s" : ""} to review — CA Parveen Sharma`, html);
 }
 
 // ONE digest email per ~24h covering all RSS-feed drafts not yet emailed. This

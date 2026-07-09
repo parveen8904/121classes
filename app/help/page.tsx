@@ -4,7 +4,7 @@ import SiteFooter from "../components/SiteFooter";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "How to install the app — 121 CA Classes" };
+export const metadata = { title: "How to install the app — CA Parveen Sharma" };
 
 export default async function InstallHelpPage() {
   const supabase = createClient();
@@ -47,7 +47,7 @@ export default async function InstallHelpPage() {
             opens like an app.
           </p>
           <ol style={{ lineHeight: 1.9, paddingLeft: 18 }}>
-            <li>Open <strong>121caclasses.com</strong> and log in.</li>
+            <li>Open <strong>caparveensharma.com</strong> and log in.</li>
             <li>To install it, tap <strong>Install</strong> below — it detects your device and guides you.</li>
           </ol>
           <Link className="btn" href="/install" style={{ marginTop: 6 }}>
@@ -61,7 +61,7 @@ export default async function InstallHelpPage() {
           <ol style={{ lineHeight: 1.9, paddingLeft: 18 }}>
             <li>Click <strong>Download for Mac</strong> below.</li>
             <li>Open the downloaded <strong>.dmg</strong> file (in your Downloads).</li>
-            <li>Drag <strong>121 CA Classes</strong> into your <strong>Applications</strong> folder.</li>
+            <li>Drag <strong>CA Parveen Sharma</strong> into your <strong>Applications</strong> folder.</li>
             <li>Open it from Applications — it launches straight away (no warning).</li>
             <li>Sign in with your normal account, then download any class to watch offline.</li>
           </ol>
@@ -88,7 +88,7 @@ export default async function InstallHelpPage() {
         <div className="card" style={card}>
           <h3>📱 iPhone</h3>
           <ol style={{ lineHeight: 1.9, paddingLeft: 18 }}>
-            <li>Open <strong>121caclasses.com</strong> in <strong>Safari</strong>.</li>
+            <li>Open <strong>caparveensharma.com</strong> in <strong>Safari</strong>.</li>
             <li>Tap the <strong>Share</strong> button (square with an up-arrow).</li>
             <li>Tap <strong>Add to Home Screen</strong> → <strong>Add</strong>.</li>
           </ol>
@@ -101,7 +101,7 @@ export default async function InstallHelpPage() {
         <div className="card" style={card}>
           <h3>🤖 Android</h3>
           <ol style={{ lineHeight: 1.9, paddingLeft: 18 }}>
-            <li>Open <strong>121caclasses.com</strong> in <strong>Chrome</strong>.</li>
+            <li>Open <strong>caparveensharma.com</strong> in <strong>Chrome</strong>.</li>
             <li>Tap the <strong>⋮</strong> menu → <strong>Install app</strong> (or “Add to Home screen”).</li>
           </ol>
           <Link className="btn" href="/install" style={{ marginTop: 6 }}>

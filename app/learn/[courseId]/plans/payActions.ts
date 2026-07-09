@@ -104,7 +104,7 @@ export async function createPlanOrder(input: {
       orderId: order.id,
       amount: order.amount,
       keyId: await razorpayKeyId(),
-      name: "121 CA Classes",
+      name: "CA Parveen Sharma",
       description: `${subject.title} · ${plan.name} (${months} months)`,
       prefill: {
         name: profile?.full_name ?? undefined,

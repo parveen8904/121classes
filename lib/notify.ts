@@ -215,6 +215,6 @@ export function emailShell(heading: string, bodyHtml: string): string {
     <div style="height:4px;background:#0d9488;border-radius:4px"></div>
     <h2 style="margin:18px 0 8px">${heading}</h2>
     <div style="font-size:15px;line-height:1.6">${bodyHtml}</div>
-    <p style="margin-top:24px;color:#64748b;font-size:13px">📚 121 CA Classes — a venture by CA Parveen Sharma.</p>
+    <p style="margin-top:24px;color:#64748b;font-size:13px">📚 CA Parveen Sharma — Personalised CA coaching.</p>
   </div>`;
 }

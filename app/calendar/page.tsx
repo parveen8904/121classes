@@ -4,7 +4,7 @@ import NotifyButton from "../components/NotifyButton";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Calendar — 121 CA Classes" };
+export const metadata = { title: "Calendar — CA Parveen Sharma" };
 
 type Session = {
   id: string;

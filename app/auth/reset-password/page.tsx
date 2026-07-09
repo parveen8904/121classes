@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import SetPasswordForm from "../set-password/SetPasswordForm";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Set a new password — 121 CA Classes" };
+export const metadata = { title: "Set a new password — CA Parveen Sharma" };
 
 // Reached from the password-reset email link: the recovery code is exchanged in
 // /auth/callback, leaving a session here so the user can set a new password.

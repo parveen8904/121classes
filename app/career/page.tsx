@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Career Corner — 121 CA Classes" };
+export const metadata = { title: "Career Corner — CA Parveen Sharma" };
 
 // Each opening line: "Title | Firm | Location | applyLinkOrEmail"
 function parseJob(line: string) {

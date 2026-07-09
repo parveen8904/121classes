@@ -13,7 +13,7 @@ import { savePlanSetup, clearPlan, emailMyPlan, rebalanceFromToday } from "./act
 import DoneToggle from "./DoneToggle";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Study planner — 121 CA Classes" };
+export const metadata = { title: "Study planner — CA Parveen Sharma" };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 // No weekday here — the row already prints the weekday above the date.

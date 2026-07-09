@@ -58,7 +58,7 @@ export async function replyToQuestion(formData: FormData) {
       "A reply to your question",
       `<p>You asked:</p><blockquote style="color:#475569">${q.question}</blockquote><p>${reply.replace(/\n/g, "<br/>")}</p>`,
     );
-    delivered = await sendEmail(email, "Your question — 121 CA Classes", html);
+    delivered = await sendEmail(email, "Your question — CA Parveen Sharma", html);
   }
 
   await svc.from("page_questions").update({ status: "replied" }).eq("id", id);

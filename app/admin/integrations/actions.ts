@@ -194,14 +194,14 @@ export async function sendTestEmail() {
   const domain = await getSecret("MAILGUN_DOMAIN");
   const to = (await getSecret("FACULTY_EMAIL")) || "";
   const region = (await getSecret("MAILGUN_REGION")).toLowerCase();
-  const from = (await getSecret("NOTIFY_FROM_EMAIL")) || `121 CA Classes <no-reply@${domain}>`;
+  const from = (await getSecret("NOTIFY_FROM_EMAIL")) || `CA Parveen Sharma <no-reply@${domain}>`;
   const apiBase = region === "eu" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
   let msg = "";
   if (!apiKey || !domain) msg = "Mailgun API key / domain not set.";
   else if (!to) msg = "Set FACULTY_EMAIL (the address to send the test to).";
   else {
     try {
-      const body = new URLSearchParams({ from, to, subject: "121 CA Classes — test email", html: "<p>✅ Mailgun is working.</p>" });
+      const body = new URLSearchParams({ from, to, subject: "CA Parveen Sharma — test email", html: "<p>✅ Mailgun is working.</p>" });
       const res = await fetch(`${apiBase}/v3/${domain}/messages`, {
         method: "POST",
         headers: { Authorization: "Basic " + Buffer.from(`api:${apiKey}`).toString("base64"), "Content-Type": "application/x-www-form-urlencoded" },

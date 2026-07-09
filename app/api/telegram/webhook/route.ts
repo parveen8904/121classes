@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
     }
     await sendTelegramMessage(
       chatId,
-      "👋 Welcome to 121 CA Classes! To connect your account, open the “Connect Telegram” button on your dashboard. You can also just type any doubt and I'll help.",
+      "👋 Welcome to CA Parveen Sharma! To connect your account, open the “Connect Telegram” button on your dashboard. You can also just type any doubt and I'll help.",
     );
     return NextResponse.json({ ok: true });
   }
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
   if (!who.data?.id && (await getSecret("telegram_connected_only")) === "1") {
     await sendTelegramMessage(
       chatId,
-      "🔒 Please connect your 121 CA Classes account first — tap “Connect Telegram” on your dashboard. Once connected, I'll answer your doubts right here.",
+      "🔒 Please connect your CA Parveen Sharma account first — tap “Connect Telegram” on your dashboard. Once connected, I'll answer your doubts right here.",
     );
     return NextResponse.json({ ok: true });
   }

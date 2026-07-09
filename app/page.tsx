@@ -196,7 +196,7 @@ export default async function Home() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={heroBanner}
-            alt="121 CA Classes"
+            alt="CA Parveen Sharma"
             style={{ width: "100%", borderRadius: 16, border: "1px solid var(--border)", display: "block" }}
           />
         </div>
@@ -378,7 +378,7 @@ export default async function Home() {
             <div className="video-frame" style={{ paddingBottom: "56.25%" }}>
               <iframe
                 src="https://app.heygen.com/embeds/c2bcd7138f2c42b6b607fe6588910b89"
-                title="121 CA Classes intro"
+                title="CA Parveen Sharma intro"
                 allow="encrypted-media; fullscreen"
                 allowFullScreen
               />

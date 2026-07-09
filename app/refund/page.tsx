@@ -1,7 +1,7 @@
 import SiteNav from "../components/SiteNav";
 import SiteFooter from "../components/SiteFooter";
 
-export const metadata = { title: "Refund Policy — 121 CA Classes" };
+export const metadata = { title: "Refund Policy — CA Parveen Sharma" };
 
 export default function Refund() {
   return (
@@ -12,7 +12,7 @@ export default function Refund() {
         <p className="muted">Last updated: 14 June 2026</p>
 
         <p>
-          This policy applies to all purchases made on <strong>121 CA Classes</strong> (a venture of
+          This policy applies to all purchases made on <strong>CA Parveen Sharma</strong> (a venture of
           CA Parveen Sharma). Please read it carefully before subscribing or ordering.
         </p>
 

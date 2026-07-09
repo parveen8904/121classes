@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import MockInterview from "./MockInterview";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "AI Mock Interview — 121 CA Classes" };
+export const metadata = { title: "AI Mock Interview — CA Parveen Sharma" };
 
 export default async function InterviewPage() {
   const supabase = createClient();

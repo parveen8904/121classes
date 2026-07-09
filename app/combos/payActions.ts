@@ -48,7 +48,7 @@ export async function createComboOrder(input: { comboId: string }): Promise<Comb
       orderId: order.id,
       amount: order.amount,
       keyId: await razorpayKeyId(),
-      name: "121 CA Classes",
+      name: "CA Parveen Sharma",
       description: combo.title,
       prefill: {
         name: profile?.full_name ?? undefined,

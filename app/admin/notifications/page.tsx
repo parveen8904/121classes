@@ -66,7 +66,7 @@ export default async function NotificationsPage({
           <label>Message</label>
           <textarea name="body" rows={4} placeholder="Write your update…" />
           <label>Link (optional)</label>
-          <input name="link" placeholder="https://121caclasses.com/…" />
+          <input name="link" placeholder="https://caparveensharma.com/…" />
 
           <p className="muted" style={{ fontSize: ".85rem", margin: "12px 0 6px" }}>Send via:</p>
           <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>

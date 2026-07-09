@@ -79,7 +79,7 @@ export async function createBookOrder(input: {
       orderId: order.id,
       amount: order.amount,
       keyId: await razorpayKeyId(),
-      name: "121 CA Classes — Books",
+      name: "CA Parveen Sharma — Books",
       description: `${book.title} × ${qty}`,
       prefill: { name: b.name, email: b.email, contact: b.phone },
     };

@@ -1,7 +1,7 @@
 import SiteNav from "../components/SiteNav";
 import SiteFooter from "../components/SiteFooter";
 
-export const metadata = { title: "Terms of Service — 121 CA Classes" };
+export const metadata = { title: "Terms of Service — CA Parveen Sharma" };
 
 export default function Terms() {
   return (
@@ -12,7 +12,7 @@ export default function Terms() {
         <p className="muted">Last updated: 14 June 2026</p>
 
         <p>
-          These Terms govern your use of <strong>121 CA Classes</strong> (a venture of CA Parveen
+          These Terms govern your use of <strong>CA Parveen Sharma</strong> (a venture of CA Parveen
           Sharma) — the website, mobile and desktop apps and all related services (the
           &ldquo;Platform&rdquo;). By registering or using the Platform, you agree to these Terms.
         </p>
@@ -88,7 +88,7 @@ export default function Terms() {
 
         <h2>11. Contact</h2>
         <p>
-          <strong>121 CA Classes</strong> (a venture of CA Parveen Sharma)<br />
+          <strong>CA Parveen Sharma</strong> (a venture of CA Parveen Sharma)<br />
           W6 Sector 24, DLF Phase 3, Gurugram, Haryana 122010, India<br />
           Email: <a className="grad" href="mailto:contact@caparveensharma.com">contact@caparveensharma.com</a>
         </p>

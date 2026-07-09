@@ -193,7 +193,7 @@ export default async function IntegrationsPage({
           <KeyField name="SERPAPI_KEY" label="Google Jobs (SerpAPI) key — placement" placeholder="from serpapi.com" />
           <KeyField name="JOOBLE_API_KEY" label="Jooble key (free fallback) — placement" placeholder="from jooble.org/api/about" />
           <KeyField name="MAILGUN_API_KEY" label="Mailgun API key" placeholder="key-…" />
-          <KeyField name="MAILGUN_DOMAIN" label="Mailgun domain" placeholder="mg.121caclasses.com" />
+          <KeyField name="MAILGUN_DOMAIN" label="Mailgun domain" placeholder="mg.caparveensharma.com" />
           <KeyField name="MAILGUN_REGION" label="Mailgun region — type eu if your domain is EU (mxa.eu.mailgun.org)" placeholder="eu  (or leave blank for US)" />
           <KeyField name="NOTIFY_FROM_EMAIL" label="From address (must be on the verified Mailgun domain)" placeholder="CA Parveen Sharma <noreply@caparveensharma.com>" />
           <KeyField name="NOTIFY_REPLY_TO" label="Reply-To address (where replies go, any domain)" placeholder="contact@caparveensharma.com" />
@@ -210,7 +210,7 @@ export default async function IntegrationsPage({
           <KeyField name="R2_ACCESS_KEY_ID" label="R2 Access Key ID" placeholder="from R2 API token" />
           <KeyField name="R2_SECRET_ACCESS_KEY" label="R2 Secret Access Key" placeholder="from R2 API token" />
           <KeyField name="R2_BUCKET" label="R2 Bucket name" placeholder="e.g. 121-files" />
-          <KeyField name="R2_PUBLIC_BASE" label="R2 Public URL (custom domain or r2.dev)" placeholder="https://files.121caclasses.com" />
+          <KeyField name="R2_PUBLIC_BASE" label="R2 Public URL (custom domain or r2.dev)" placeholder="https://files.caparveensharma.com" />
           <SubmitButton className="btn" style={{ marginTop: 6 }}>Save keys</SubmitButton>
         </form>
         <p className="muted" style={{ fontSize: ".82rem", marginTop: 12 }}>

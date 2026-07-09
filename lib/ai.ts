@@ -100,7 +100,7 @@ async function maybeSpendAlert(svc: ReturnType<typeof createServiceClient>, cost
       const { sendEmail } = await import("@/lib/notify");
       await sendEmail(
         to,
-        "⚠️ 121 CA Classes — AI monthly budget reached",
+        "⚠️ CA Parveen Sharma — AI monthly budget reached",
         `<p>Your AI spend this month has reached <strong>$${total.toFixed(2)}</strong> (cap $${cap.toFixed(2)}).</p><p>Review the breakdown in Admin → AI usage &amp; cost.</p>`,
       );
     }
@@ -147,7 +147,7 @@ async function callClaude(system: string, user: string, maxTokens = 1024, opts: 
 }
 
 const ASSISTANT_SYSTEM =
-  "You are the AI study assistant for 121 CA Classes, the CA-coaching venture of CA Parveen Sharma. " +
+  "You are the AI study assistant for CA Parveen Sharma (CA coaching). " +
   "You help Indian CA (Foundation/Intermediate/Final) students with clear, accurate, exam-focused explanations. " +
   "ALWAYS answer in short bullet points (never paragraphs) and keep the WHOLE answer under 100 words. " +
   "Use Indian accounting/tax/law context, and reference relevant standards or sections where useful. " +
@@ -163,7 +163,7 @@ export async function answerDoubt(question: string, context?: string): Promise<s
 export const NEED_FACULTY = "NEED_FACULTY";
 
 const REPO_SYSTEM =
-  "You are the study assistant for 121 CA Classes (CA Parveen Sharma). Answer the student's question " +
+  "You are the study assistant for CA Parveen Sharma. Answer the student's question " +
   "USING ONLY the study material provided below (transcripts, books, ICAI material). " +
   "Do not use outside knowledge. If the material does not contain enough to answer confidently, " +
   `reply with exactly "${NEED_FACULTY}" and nothing else. ` +
@@ -204,7 +204,7 @@ export async function suggestedAnswer(
   material: string,
 ): Promise<string | null> {
   const sys =
-    "You are an ICAI exam expert for 121 CA Classes. Write a concise, well-structured MODEL ANSWER a student could write to score full marks for the question, using Indian CA exam conventions and citing the relevant standards/sections. Keep it proportional to the marks. If study material is provided, ground the answer in it.";
+    "You are an ICAI exam expert for CA Parveen Sharma. Write a concise, well-structured MODEL ANSWER a student could write to score full marks for the question, using Indian CA exam conventions and citing the relevant standards/sections. Keep it proportional to the marks. If study material is provided, ground the answer in it.";
   const user = `QUESTION (${maxMarks} marks): ${prompt}` + (material ? `\n\nSTUDY MATERIAL:\n${material}` : "");
   return callClaude(sys, user, 1200, { feature: "suggested_answer" });
 }
@@ -262,7 +262,7 @@ export async function generateMcqs(
 > {
   const n = Math.max(1, Math.min(25, Math.round(count) || 10));
   const system =
-    `You are an ICAI exam question setter for 121 CA Classes (CA Parveen Sharma). ` +
+    `You are an ICAI exam question setter for CA Parveen Sharma. ` +
     `From the lecture transcript, write exactly ${n} exam-style multiple-choice questions for Indian CA students` +
     (topic ? ` on "${topic}"` : "") +
     `. Each question has exactly 4 options with ONE correct answer. Test conceptual understanding and application (not trivia); use Indian accounting/tax/law context and reference standards/sections where useful. ` +
@@ -305,7 +305,7 @@ export async function generateSubjectiveQuestions(
 ): Promise<{ prompt: string; max_marks: number; model_answer: string }[] | null> {
   const n = Math.max(1, Math.min(15, Math.round(count) || 5));
   const system =
-    `You are an ICAI exam paper setter for 121 CA Classes (CA Parveen Sharma). ` +
+    `You are an ICAI exam paper setter for CA Parveen Sharma. ` +
     `From the lecture transcript, write exactly ${n} descriptive/long-form CA exam questions for Indian CA students` +
     (topic ? ` on "${topic}"` : "") +
     `. Mix practical/numerical and conceptual questions in ICAI exam style; assign realistic marks (4-16 each). ` +
@@ -345,7 +345,7 @@ export async function gradeSubjective(
     : "";
   const modelText = modelAnswer ? `\n\nModel answer (the ideal answer to compare against):\n${modelAnswer}` : "";
   const system =
-    `You are an ICAI subject examiner for 121 CA Classes. Evaluate the student's answer the way a CA exam examiner would, out of ${mm} marks. ` +
+    `You are an ICAI subject examiner for CA Parveen Sharma. Evaluate the student's answer the way a CA exam examiner would, out of ${mm} marks. ` +
     (scheme.length
       ? `Award marks point-by-point using ONLY the marking scheme provided; the feedback must say which points were earned and which were missed. `
       : "") +

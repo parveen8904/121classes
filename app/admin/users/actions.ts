@@ -20,7 +20,7 @@ async function requireAdmin(): Promise<boolean> {
 
 function baseUrl(): string {
   const h = headers();
-  return `${h.get("x-forwarded-proto") || "https"}://${h.get("host") || "www.121caclasses.com"}`;
+  return `${h.get("x-forwarded-proto") || "https"}://${h.get("host") || "caparveensharma.com"}`;
 }
 
 async function emailSetPasswordLink(email: string, name: string): Promise<boolean> {
@@ -33,14 +33,14 @@ async function emailSetPasswordLink(email: string, name: string): Promise<boolea
   const url = data?.properties?.action_link;
   if (!url || !(await emailConfigured())) return false;
   const html = emailShell(
-    "Your 121 CA Classes account is ready",
+    "Your CA Parveen Sharma account is ready",
     `<p>Hi ${name || "there"},</p>
-     <p>An account has been created for you at <strong>121 CA Classes</strong>. Set your password to get started:</p>
+     <p>An account has been created for you at <strong>CA Parveen Sharma</strong>. Set your password to get started:</p>
      <p><a href="${url}" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Set my password</a></p>
      <p style="color:#64748b;font-size:13px">Or paste this link:<br/>${url}</p>
      <p>Afterwards, log in with your email and the password you chose.</p>`,
   );
-  return sendEmail(email, "Set your password — 121 CA Classes", html);
+  return sendEmail(email, "Set your password — CA Parveen Sharma", html);
 }
 
 // Admin adds one or many users (no verification needed — admin-trusted). Each is

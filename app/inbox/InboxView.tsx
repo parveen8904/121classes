@@ -209,7 +209,7 @@ export default function InboxView({
                                   <p style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{m.feedback}</p>
                                 </div>
                               )}
-                              <PaperTools suggested={m.suggested} shareTitle="My CA paper — 121 CA Classes" shareText={m.shareText} />
+                              <PaperTools suggested={m.suggested} shareTitle="My CA paper — CA Parveen Sharma" shareText={m.shareText} />
                             </>
                           ) : (
                             <>

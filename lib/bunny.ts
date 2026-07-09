@@ -37,7 +37,7 @@ export async function maybeBunnyAlert() {
     const { sendEmail } = await import("@/lib/notify");
     await sendEmail(
       to,
-      "⚠️ 121 CA Classes — Bunny video cost over budget",
+      "⚠️ CA Parveen Sharma — Bunny video cost over budget",
       `<p>Bunny charges this month have reached <strong>$${bill.thisMonth.toFixed(2)}</strong> (cap $${cap.toFixed(2)}).</p><p>See Admin → Costs &amp; usage.</p>`,
     );
   }

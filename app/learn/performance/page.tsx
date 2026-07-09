@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import Help from "@/app/components/Help";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "My Performance — 121 CA Classes" };
+export const metadata = { title: "My Performance — CA Parveen Sharma" };
 
 // Percentile: how many scored <= me, as a %. "Better than X% of students."
 function percentile(values: number[], mine: number): number {

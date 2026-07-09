@@ -55,7 +55,7 @@ export default async function DownloadPage() {
             title="Mac"
             note="macOS 10.12+ (Intel & Apple Silicon)."
             href={mac}
-            steps={["Open the .dmg and drag the app to Applications.", "First open: right-click the app → Open → Open.", "Log in and download your classes."]}
+            steps={["Open the .dmg and drag the app to Applications.", "Open it from Applications — no security warnings (notarized by Apple).", "Log in and download your classes."]}
           />
           <Card
             icon="🪟"

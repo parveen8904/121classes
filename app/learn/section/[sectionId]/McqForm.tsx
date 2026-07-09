@@ -53,9 +53,17 @@ export default function McqForm({
     try {
       const raw = localStorage.getItem(deadlineKey);
       if (raw) {
-        deadlineRef.current = Number(raw);
-        setStarted(true);
-        setSecondsLeft(Math.max(0, Math.round((Number(raw) - Date.now()) / 1000)));
+        const remaining = Math.round((Number(raw) - Date.now()) / 1000);
+        if (remaining > 5) {
+          // A genuine test-in-progress (page reloaded / app reopened) — resume it.
+          deadlineRef.current = Number(raw);
+          setStarted(true);
+          setSecondsLeft(remaining);
+        } else {
+          // Stale leftover from an old sitting — NEVER auto-submit an empty
+          // paper from it (this once created ghost 0-score attempts).
+          localStorage.removeItem(deadlineKey);
+        }
       }
     } catch { /* no-op */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -66,6 +74,17 @@ export default function McqForm({
     try { localStorage.setItem(deadlineKey, String(dl)); } catch { /* no-op */ }
     setStarted(true);
   };
+
+  // In the app, PDFs open in our viewer page (← Back header + share/print);
+  // on the web they open in a new tab.
+  const [nativeApp, setNativeApp] = useState(false);
+  useEffect(() => {
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    setNativeApp(!!cap?.isNativePlatform?.());
+  }, []);
+  const pdfTarget = nativeApp ? undefined : "_blank";
+  const pdfHref = (path: string, label: string) =>
+    nativeApp ? `/learn/pdf?u=${encodeURIComponent(path)}&t=${encodeURIComponent(label)}` : path;
 
   const submit = useCallback(
     async (auto = false) => {
@@ -146,8 +165,8 @@ export default function McqForm({
             </div>
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
-            <a className="btn small secondary" href={`/learn/section/${sectionId}/paper`} target="_blank" rel="noopener noreferrer">⬇️ Question paper (PDF)</a>
-            <a className="btn small secondary" href={`/learn/section/${sectionId}/answers`} target="_blank" rel="noopener noreferrer">⬇️ Answer key + explanations (PDF)</a>
+            <a className="btn small secondary" href={pdfHref(`/learn/section/${sectionId}/paper`, "Question paper")} target={pdfTarget} rel="noopener noreferrer">⬇️ Question paper (PDF)</a>
+            <a className="btn small secondary" href={pdfHref(`/learn/section/${sectionId}/answers`, "Answer key + explanations")} target={pdfTarget} rel="noopener noreferrer">⬇️ Answer key + explanations (PDF)</a>
           </div>
         </div>
 

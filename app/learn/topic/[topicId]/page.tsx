@@ -5,7 +5,6 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { videoEmbedSrc } from "../../_lib/media";
 import { attemptRank } from "../../_lib/attempt";
 import { bunnyEmbedUrl } from "@/lib/bunny";
-import { viaProxy } from "@/lib/fileProxy";
 import DoubtBox from "./DoubtBox";
 import ClassDownload from "./ClassDownload";
 import SectionCard from "./SectionCard";
@@ -217,9 +216,7 @@ function SectionBody({
         {c.pdf_url && (
           <a
             className="btn small"
-            href={c.pdf_url}
-            target="_blank"
-            rel="noopener noreferrer"
+            href={`/learn/pdf?u=${encodeURIComponent(c.pdf_url as string)}&t=Homework`}
             style={{ marginTop: c.body ? 12 : 0 }}
           >
             📄 Homework PDF
@@ -236,7 +233,7 @@ function SectionBody({
     return (
       <div style={{ marginTop: 14 }}>
         {c.pdf_url ? (
-          <a className="btn small" href={c.pdf_url} target="_blank" rel="noopener noreferrer">
+          <a className="btn small" href={`/learn/pdf?u=${encodeURIComponent(c.pdf_url as string)}&t=PDF`}>
             View / Download PDF
           </a>
         ) : (
@@ -299,7 +296,7 @@ function SectionBody({
           {type === "mcq_test" ? "Start MCQ test 🧠" : "Start subjective test ✍️"} →
         </Link>
         {c.pdf_url && (
-          <a className="btn small secondary" href={c.pdf_url} target="_blank" rel="noopener noreferrer">📄 Question paper (PDF)</a>
+          <a className="btn small secondary" href={`/learn/pdf?u=${encodeURIComponent(c.pdf_url as string)}&t=Question paper`}>📄 Question paper (PDF)</a>
         )}
         <Help
           text={
@@ -344,8 +341,9 @@ export default async function LearnTopic({ params }: { params: { topicId: string
 
   if (isAdmin) {
     // Service client → every published section, fully unlocked, with its content.
+    // sections_lite = sections minus the transcript text (megabytes we never show here).
     const { data: rows } = await createServiceClient()
-      .from("sections")
+      .from("sections_lite")
       .select("id, type, title, order_index, min_plan, config, group_id")
       .eq("topic_id", topic.id)
       .eq("is_published", true)
@@ -361,7 +359,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
     const [{ data: metas, error: metaErr }, { data: accessRows }] = await Promise.all([
       supabase.rpc("list_topic_sections", { p_topic: topic.id }),
       supabase
-      .from("sections")
+      .from("sections_lite")
       .select("id, type, title, order_index, min_plan, is_published, config, group_id")
       .eq("topic_id", topic.id)
       .eq("is_published", true)
@@ -746,7 +744,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
             <h3 style={{ margin: "0 0 8px" }}>📚 Topic materials</h3>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {topicMaterials.map((mt) => (
-                <a key={mt.id} className="btn small secondary" href={viaProxy(mt.file_url as string)} target="_blank" rel="noopener noreferrer">
+                <a key={mt.id} className="btn small secondary" href={`/learn/pdf?u=${encodeURIComponent(mt.file_url as string)}&t=Material`}>
                   {MAT_LABEL[mt.kind] ?? "📄"} {mt.title}
                 </a>
               ))}
@@ -771,7 +769,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
                     </div>
                   )}
                   {a.notes_hand_url && (
-                    <a className="btn small secondary" href={viaProxy(a.notes_hand_url)} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8, display: "inline-block" }}>✍️ Handwritten notes (PDF)</a>
+                    <a className="btn small secondary" href={`/learn/pdf?u=${encodeURIComponent(a.notes_hand_url)}&t=Amendment notes`} style={{ marginTop: 8, display: "inline-block" }}>✍️ Handwritten notes (PDF)</a>
                   )}
                   {a.discussion && (
                     <details style={{ marginTop: 8 }}>

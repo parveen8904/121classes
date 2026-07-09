@@ -308,7 +308,14 @@ export default function DescriptivePaper(props: Props) {
         <div className="card">
           <strong>1) Your question paper</strong>
           <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 8px" }}>Solve it on paper, then photograph each page.</p>
-          {questionPdf && <a className="btn small" href={fileHref(questionPdf, "Question paper")} target={fileTarget} rel="noopener noreferrer">📄 Open question paper</a>}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {questionPdf && <a className="btn small" href={fileHref(questionPdf, "Question paper")} target={fileTarget} rel="noopener noreferrer">📄 Open question paper</a>}
+            {props.isAdmin && (
+              <button className="btn small secondary" type="button" disabled={busy} onClick={async () => { setBusy(true); try { setAttempt(await resetMyPaperAttempt(sectionId)); } finally { setBusy(false); } }}>
+                🔄 Reset (admin preview)
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="card">

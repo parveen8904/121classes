@@ -5,6 +5,7 @@ import AnnouncementSplash from "./components/AnnouncementSplash";
 import NotifyButton from "./components/NotifyButton";
 import CountUp from "./components/CountUp";
 import { createClient } from "@/lib/supabase/server";
+import { studentsTaught } from "@/lib/studentsTaught";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +17,9 @@ const KIND_LABEL: Record<string, string> = {
   macro: "Macro",
 };
 
-const stats = [
+const stats = (taught: string) => [
   { num: "20+", lbl: "Years teaching CA" },
-  { num: "50,000+", lbl: "Students mentored" },
+  { num: taught, lbl: "Students taught" },
   { num: "1-on-1", lbl: "Personalised focus" },
 ];
 
@@ -85,17 +86,13 @@ export default async function Home() {
     .lte("starts_at", new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString())
     .order("starts_at")
     .limit(6);
-  const [{ data: classRows }, { count: resultCount }, { count: openingCount }] = await Promise.all([
-    supabase.from("sections").select("config").eq("type", "full_class_video").eq("is_published", true),
+  const [taught, { count: resultCount }, { count: openingCount }] = await Promise.all([
+    studentsTaught(),
     supabase.from("results").select("id", { count: "exact", head: true }).eq("is_published", true),
     supabase.from("job_listings").select("id", { count: "exact", head: true }).eq("status", "approved"),
   ]);
-  // Count main classes only — a "part" continuation (e.g. 7B) isn't a separate class.
-  const classCount = (classRows ?? []).filter(
-    (r) => !/[A-Za-z]/.test(String((r.config as { class_no?: unknown } | null)?.class_no ?? "")),
-  ).length;
   const heroStats = [
-    { n: classCount, suffix: "+", label: "recorded classes" },
+    { n: taught, suffix: "+", label: "students taught" },
     { n: resultCount ?? 0, suffix: "+", label: "success stories" },
     { n: openingCount ?? 0, suffix: "+", label: "live job openings" },
   ].filter((s) => s.n > 0);
@@ -287,7 +284,7 @@ export default async function Home() {
               and practical understanding — helping students achieve excellence in their CA journey.
             </p>
             <div className="stats">
-              {stats.map((s) => (
+              {stats(`${taught.toLocaleString("en-IN")}+`).map((s) => (
                 <div key={s.lbl}>
                   <div className="stat-num grad">{s.num}</div>
                   <div className="stat-lbl">{s.lbl}</div>

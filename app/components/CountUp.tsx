@@ -28,5 +28,5 @@ export default function CountUp({ value, suffix = "", duration = 1200 }: { value
     return () => io.disconnect();
   }, [value, duration]);
 
-  return <span ref={ref}>{n}{suffix}</span>;
+  return <span ref={ref}>{n.toLocaleString("en-IN")}{suffix}</span>;
 }

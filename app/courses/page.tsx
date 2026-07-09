@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { tryServiceClient } from "@/lib/supabase/service";
 import CountUp from "@/app/components/CountUp";
+import { studentsTaught } from "@/lib/studentsTaught";
 
 // Public marketing page (service client only, no cookies/auth) — serve it from
 // the cache and refresh every 5 minutes instead of hitting the DB on every view.
@@ -83,6 +84,7 @@ export default async function CoursesPage() {
     const att = (a.valid_from_attempt as string) || "";
     if (att && !st.attempts.includes(att)) st.attempts.push(att);
   }
+  const taught = await studentsTaught();
   let totalClasses = 0, totalMinutes = 0;
   for (const st of stats.values()) { totalClasses += st.classes; totalMinutes += st.minutes; }
 
@@ -109,8 +111,7 @@ export default async function CoursesPage() {
           </p>
           <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap" }}>
             <div><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}><CountUp value={(subjects ?? []).length} /></div><div style={{ fontSize: ".8rem", opacity: .92 }}>subjects</div></div>
-            <div><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}><CountUp value={totalClasses} suffix="+" /></div><div style={{ fontSize: ".8rem", opacity: .92 }}>classes</div></div>
-            <div><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}><CountUp value={Math.round(totalMinutes / 60)} suffix="+" /></div><div style={{ fontSize: ".8rem", opacity: .92 }}>hours of teaching</div></div>
+            <div><div style={{ fontSize: "2rem", fontWeight: 800, lineHeight: 1 }}><CountUp value={taught} suffix="+" /></div><div style={{ fontSize: ".8rem", opacity: .92 }}>students taught</div></div>
           </div>
         </div>
 

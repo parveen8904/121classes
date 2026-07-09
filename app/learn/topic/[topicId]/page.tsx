@@ -542,7 +542,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
       s.type === "full_class_video" || s.type === "revision_video"
         ? fmtMins(durMin)
         : "";
-    // Class / revision number shown on the right, in the title's font + weight.
+    // Class / revision number on the right — slimmer italic, so the TITLE owns the bold.
     let rightLabel: string | undefined;
     if (s.type === "full_class_video") rightLabel = classNoLabel.get(s.id);
     else if (s.type === "revision_video" && c.class_no) rightLabel = `Revision ${c.class_no}`;
@@ -571,7 +571,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
             {c.description && <div className="muted" style={{ fontSize: ".8rem", marginTop: 2, whiteSpace: "pre-wrap" }}>{c.description}</div>}
           </div>
           <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
-            {rightLabel && <span style={{ fontSize: "1.12rem", fontWeight: 700, whiteSpace: "nowrap" }}>{rightLabel}</span>}
+            {rightLabel && <span className="muted" style={{ fontSize: ".92rem", fontWeight: 400, fontStyle: "italic", whiteSpace: "nowrap" }}>{rightLabel}</span>}
             {hasSummary && (
               <span style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>📋 Summary</span>
             )}

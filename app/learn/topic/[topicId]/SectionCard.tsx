@@ -50,7 +50,7 @@ export default function SectionCard({
         </div>
         <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
           {/* Class/revision number — same font + boldness as the title (.sec-title). */}
-          {rightLabel && <span style={{ fontSize: "1.12rem", fontWeight: 700, lineHeight: 1.2, whiteSpace: "nowrap" }}>{rightLabel}</span>}
+          {rightLabel && <span className="muted" style={{ fontSize: ".92rem", fontWeight: 400, fontStyle: "italic", lineHeight: 1.2, whiteSpace: "nowrap" }}>{rightLabel}</span>}
           {summaryChip && (
             <span style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>
               📋 Summary

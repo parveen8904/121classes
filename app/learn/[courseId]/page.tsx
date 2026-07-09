@@ -318,7 +318,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                           </span>
                           <span style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                             {r && (
-                              <span style={{ display: "block", fontSize: "1.08rem", fontWeight: 700 }}>
+                              <span className="muted" style={{ display: "block", fontSize: ".92rem", fontWeight: 400, fontStyle: "italic" }}>
                                 {r.start === r.end ? `Class ${r.start}` : `Classes ${r.start} to ${r.end}`}
                               </span>
                             )}

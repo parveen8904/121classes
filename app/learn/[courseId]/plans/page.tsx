@@ -104,6 +104,14 @@ export default async function CoursePlans({
           <Link href={`/learn/${course.id}`}>← {course.title}</Link>
         </p>
 
+        {/* Inside the iOS/Android app: no purchases (App Store rules) — plans are managed on the website. */}
+        <div className="show-in-app card" style={{ maxWidth: 560, margin: "20px auto", textAlign: "center" }}>
+          <div style={{ fontSize: "2rem" }}>🔐</div>
+          <h2 style={{ margin: "8px 0" }}>Plans are managed on the website</h2>
+          <p className="muted">Plans and upgrades for your account are handled at caparveensharma.com in a web browser — not inside this app. Once your plan is active, everything unlocks here automatically.</p>
+        </div>
+
+        <div className="hide-in-app">
         <div style={{ textAlign: "center", maxWidth: 660, margin: "0 auto 18px" }}>
           <span className="badge">{course.title}</span>
           <h1 style={{ margin: "14px 0 8px", fontSize: "clamp(1.8rem,4vw,2.6rem)" }}>
@@ -154,6 +162,7 @@ export default async function CoursePlans({
           configured={razorpayOn}
           contactHref="/#contact"
         />
+        </div>
       </section>
     </main>
   );

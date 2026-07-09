@@ -389,6 +389,11 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
   input, select, textarea { font-size: 16px !important; }
 }
 
+/* In-app (iOS/Android) mode: purchase surfaces hidden, app-only notes shown. */
+.show-in-app { display: none; }
+html.in-app .hide-in-app { display: none !important; }
+html.in-app .show-in-app { display: block; }
+
 /* books */
 .book { display: flex; flex-direction: column; }
 .book .cover {

@@ -5,6 +5,7 @@ import "./globals.css";
 import { tryServiceClient } from "@/lib/supabase/service";
 import FloatingSupport from "./components/FloatingSupport";
 import RegisterSW from "./components/RegisterSW";
+import InAppMode from "@/app/components/InAppMode";
 
 // IMPORTANT: no force-dynamic and no cookie reads here. This layout wraps EVERY
 // page — anything dynamic in it disables caching for the whole site (which was
@@ -98,6 +99,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           telegram={m.get("support_telegram")}
         />
         <RegisterSW />
+        <InAppMode />
       </body>
     </html>
   );

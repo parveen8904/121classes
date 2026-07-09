@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import NotesCanvas from "./NotesCanvas";
+import NotesActions from "./NotesActions";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,7 @@ export default async function NotesViewer({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", background: "var(--card)", borderBottom: "1px solid var(--border)", paddingTop: "calc(10px + env(safe-area-inset-top))" }}>
         <Link className="btn small secondary" href={`/learn/topic/${sec.topic_id}`}>← Back</Link>
         <strong style={{ fontSize: ".9rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{KIND_LABEL[kind]} — {sec.title}</strong>
-        <a className="btn small" href={`${fileUrl}&dl=1`}>⬇️ Download / Print</a>
+        <NotesActions fileUrl={fileUrl} title={sec.title as string} />
       </div>
 
       <div style={{ position: "relative", flex: 1, overflow: "hidden" }}>

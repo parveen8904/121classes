@@ -96,6 +96,14 @@ async function decryptToFile(id, keyB64, ivB64, alg) {
 
 // Decrypt then play in a separate LOCAL player window (so the remote https page
 // doesn't have to load a file:// video, which browsers block).
+// Remove a downloaded class (and its session-decrypted copy) from this device.
+ipcMain.handle("remove", async (_e, { id }) => {
+  try { fs.rmSync(classPath(id), { force: true }); } catch { /* already gone */ }
+  const dec = decrypted.get(id);
+  if (dec) { try { fs.rmSync(dec, { force: true }); } catch { /* no-op */ } decrypted.delete(id); }
+  return true;
+});
+
 ipcMain.handle("play", async (_e, { id, keyB64, ivB64, alg, watermark }) => {
   const file = await decryptToFile(id, keyB64, ivB64, alg);
   const player = new BrowserWindow({ width: 1100, height: 720, title: "Class", backgroundColor: "#000" });

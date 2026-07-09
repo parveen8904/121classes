@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld("native", {
   download: (id, url, expectedSize) => ipcRenderer.invoke("download", { id, url, expectedSize }),
   isDownloaded: (id, expectedSize) => ipcRenderer.invoke("is-downloaded", { id, expectedSize }),
   play: (id, keyB64, ivB64, alg, watermark) => ipcRenderer.invoke("play", { id, keyB64, ivB64, alg, watermark }),
+  remove: (id) => ipcRenderer.invoke("remove", { id }),
   onProgress: (cb) => ipcRenderer.on("download-progress", (_e, data) => cb(data)),
 });

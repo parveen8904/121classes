@@ -1,6 +1,6 @@
 {
   "name": "121caclasses-desktop",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "CA Parveen Sharma — desktop app (Mac/Windows) for downloading & playing encrypted classes offline.",
   "author": "CA Parveen Sharma",
   "main": "main.js",

@@ -16,3 +16,7 @@ next-env.d.ts
 *.log
 .vercel
 tsconfig.tsbuildinfo
+
+# Playwright
+/playwright-report/
+/test-results/

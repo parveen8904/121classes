@@ -43,6 +43,10 @@ export async function addRepositoryItem(formData: FormData) {
     valid_from_attempt: orNull(formData.get("valid_from_attempt")),
     share_to_resources: shareToResources,
     resource_label: shareToResources ? (str(formData.get("resource_label")) || title) : null,
+    // AI Repository uploads are AI-only by default — NOT shown to students
+    // (this is where copyright material like ICAI study material lives). The
+    // form can tick "share_to_resources" to expose a PDF publicly if wanted.
+    student_visible: false,
   });
   revalidatePath("/admin/repository");
   revalidatePath("/resources");

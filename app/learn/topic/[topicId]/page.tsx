@@ -377,7 +377,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
   const [{ data: topicGroups }, { data: dlRows }, { data: topicMaterials }, { data: amendRows }, { data: durRows }] = await Promise.all([
     svcP.from("topic_groups").select("id, name, order_index").eq("topic_id", topic.id).order("order_index").order("created_at"),
     supabase.rpc("list_downloadable_classes"),
-    svcP.from("repository_items").select("id, title, kind, file_url").eq("topic_id", topic.id).eq("is_active", true).not("file_url", "is", null).order("created_at", { ascending: false }),
+    svcP.from("repository_items").select("id, title, kind, file_url").eq("topic_id", topic.id).eq("is_active", true).eq("student_visible", true).not("file_url", "is", null).order("created_at", { ascending: false }),
     svcP.from("amendments").select("id, title, body, discussion, bunny_video_id, bunny_drm, youtube_url, embed_url, notes_hand_url, valid_from_attempt, valid_to_attempt").eq("topic_id", topic.id).eq("is_published", true).order("order_index"),
     svcP.from("sections").select("id, type, duration_minutes:config->>duration_minutes, class_no:config->>class_no").eq("topic_id", topic.id).eq("is_published", true),
   ]);

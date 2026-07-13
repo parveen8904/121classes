@@ -126,6 +126,7 @@ export default async function TopicDetail({
                     <option value="question_bank">📚 Question bank</option>
                     <option value="icai">🏛️ ICAI material</option>
                     <option value="rtp">📄 RTP</option>
+                    <option value="mtp">📄 MTP</option>
                     <option value="past_papers">🗂️ Past exam questions</option>
                     <option value="book">📕 Book</option>
                     <option value="notes">📝 Notes</option>
@@ -139,6 +140,9 @@ export default async function TopicDetail({
               <PdfUpload name="file_url" folder="repository" label="PDF (text is auto-extracted for the AI)" />
               <label style={{ marginTop: 6 }}>Or paste text directly</label>
               <textarea name="content" rows={3} placeholder="Optional — paste text instead of (or in addition to) a PDF." />
+              <label className="remember" style={{ marginTop: 8 }}>
+                <input type="checkbox" name="ai_only" /> 🔒 AI only — feed the AI but <strong>don&apos;t show students</strong> (for copyright material like ICAI study material)
+              </label>
               <SubmitButton className="btn small" savedLabel="✓ Added" style={{ marginTop: 8 }}>Add training material</SubmitButton>
             </form>
             {materials && materials.length > 0 && (

@@ -24,6 +24,8 @@ export async function addTopicMaterial(formData: FormData) {
     const ex = await extractPdfText(fileUrl);
     if (ex) content = ex;
   }
+  // "AI only" → feed the AI but don't show students (copyright material).
+  const aiOnly = str(formData.get("ai_only")) === "on";
   await createServiceClient().from("repository_items").insert({
     title: title || kind,
     kind,
@@ -32,6 +34,7 @@ export async function addTopicMaterial(formData: FormData) {
     file_url: fileUrl,
     content,
     is_active: true,
+    student_visible: !aiOnly,
   });
   revalidatePath(`/admin/topics/${topicId}`);
   // Full redirect (not just revalidate) so the upload widget resets — the admin

@@ -13,6 +13,7 @@ import {
   deleteTopic,
   toggleTopicPublish,
   updateSubjectInline,
+  updateSubjectRemarks,
   setSubjectFaculty,
 } from "./actions";
 
@@ -22,7 +23,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, telegram_group_url, courses(title)")
+    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, telegram_group_url, remarks, courses(title)")
     .eq("id", subjectId)
     .single();
 
@@ -135,6 +136,16 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
           Students see this same summary (transcripts are never shown to them).
         </p>
       </div>
+
+      {/* Admin remarks / notes for this subject */}
+      <details className="card" style={{ marginTop: 12 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>📝 Subject remarks {subject.remarks ? "✓" : ""}</summary>
+        <form action={updateSubjectRemarks} style={{ marginTop: 10 }}>
+          <input type="hidden" name="id" value={subject.id} />
+          <textarea name="remarks" rows={3} defaultValue={subject.remarks ?? ""} placeholder="Private note for this subject — reminders, to-dos, anything." style={{ width: "100%" }} />
+          <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 8 }}>Save remarks</SubmitButton>
+        </form>
+      </details>
 
       {/* New topic — right-aligned expander (primary action) */}
       <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>

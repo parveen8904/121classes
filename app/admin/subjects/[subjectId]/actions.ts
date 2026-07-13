@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { slugify, str, num, nullable } from "../../_lib/util";
 
 export async function createTopic(formData: FormData) {
@@ -70,6 +71,14 @@ export async function toggleTopicPublish(formData: FormData) {
   const supabase = createClient();
   await supabase.from("topics").update({ is_published: next }).eq("id", id);
   revalidatePath(`/admin/subjects/${subjectId}`);
+}
+
+// Save the admin's free-text remarks/notes for a subject.
+export async function updateSubjectRemarks(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("subjects").update({ remarks: str(formData.get("remarks")) || null }).eq("id", id);
+  revalidatePath(`/admin/subjects/${id}`);
 }
 
 export async function updateSubjectInline(formData: FormData) {

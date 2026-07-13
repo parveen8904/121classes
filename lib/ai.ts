@@ -184,11 +184,55 @@ export async function answerDoubtFromMaterial(
   question: string,
   material: string,
 ): Promise<string | null> {
-  if (!material.trim()) return null;
-  const user = `STUDY MATERIAL:\n${material}\n\nSTUDENT QUESTION:\n${question}`;
   // Enough room to actually SOLVE a numbered question (working notes, journal
   // entries), not just a one-line conceptual reply.
+  const user = `STUDY MATERIAL:\n${material || "(none provided)"}\n\nSTUDENT QUESTION:\n${question}`;
   return callClaude(REPO_SYSTEM, user, 1400, { model: await fastModel(), feature: "doubt" });
+}
+
+// Answer a doubt where the student ATTACHED an image or PDF (a photographed
+// question, a screenshot, a problem PDF). Claude reads the attachment AND the
+// typed text together, grounded in the same study material.
+export async function answerDoubtWithAttachment(
+  question: string,
+  material: string,
+  attachment: { dataB64: string; mediaType: string },
+): Promise<string | null> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey) return null;
+  if ((await aiDisabledSet()).has("doubt")) return null;
+  const model = await fastModel();
+  const isPdf = attachment.mediaType === "application/pdf";
+  const block = isPdf
+    ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: attachment.dataB64 } }
+    : { type: "image", source: { type: "base64", media_type: attachment.mediaType, data: attachment.dataB64 } };
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1400,
+        system: REPO_SYSTEM,
+        messages: [{
+          role: "user",
+          content: [
+            block,
+            { type: "text", text: `STUDY MATERIAL:\n${material || "(none provided)"}\n\nThe attached ${isPdf ? "PDF" : "image"} is part of the student's doubt — read it carefully. STUDENT'S TYPED MESSAGE:\n${question || "(see the attachment)"}` },
+          ],
+        }],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("doubt", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    const text = (data.content ?? []).filter((b: { type: string }) => b.type === "text").map((b: { text: string }) => b.text).join("\n").trim();
+    return text || null;
+  } catch {
+    return null;
+  }
 }
 
 // From a student's recent questions, pull the specific CA topics/standards they

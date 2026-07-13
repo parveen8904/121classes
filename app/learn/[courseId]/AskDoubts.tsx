@@ -1,7 +1,32 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { askSubjectDoubt } from "./doubt-actions";
+
+// Read a file → base64 (images downscaled to keep the payload small & cheap).
+async function fileToAttachment(file: File): Promise<{ dataB64: string; mediaType: string } | null> {
+  if (file.type === "application/pdf") {
+    if (file.size > 6 * 1024 * 1024) throw new Error("PDF too large — please keep it under 6 MB.");
+    const buf = new Uint8Array(await file.arrayBuffer());
+    let bin = ""; const CH = 0x8000;
+    for (let i = 0; i < buf.length; i += CH) bin += String.fromCharCode(...buf.subarray(i, i + CH));
+    return { dataB64: btoa(bin), mediaType: "application/pdf" };
+  }
+  if (!file.type.startsWith("image/")) throw new Error("Please attach an image or a PDF.");
+  // Downscale big photos to max 1600px, JPEG.
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("Couldn't read the image")); i.src = url; });
+    const scale = Math.min(1, 1600 / (img.width || 1600));
+    const w = Math.max(1, Math.round((img.width || 1600) * scale));
+    const h = Math.max(1, Math.round((img.height || 1600) * scale));
+    const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Canvas unsupported");
+    ctx.drawImage(img, 0, 0, w, h);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    return { dataB64: dataUrl.split(",")[1], mediaType: "image/jpeg" };
+  } finally { URL.revokeObjectURL(url); }
+}
 
 function waHref(v?: string | null): string | null {
   if (!v) return null;
@@ -30,7 +55,10 @@ export default function AskDoubts({
   const [answer, setAnswer] = useState<string | null>(null);
   const [asked, setAsked] = useState(false);
   const [limited, setLimited] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [fileErr, setFileErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const wa = waHref(facultyPhone);
 
@@ -40,11 +68,19 @@ export default function AskDoubts({
     setAnswer(null);
     setLimited(false);
     setQ("");
+    setFile(null);
+    setFileErr(null);
   }
 
   function submit() {
+    setFileErr(null);
     start(async () => {
-      const r = await askSubjectDoubt({ subjectId, question: q });
+      let attachment: { dataB64: string; mediaType: string } | null = null;
+      if (file) {
+        try { attachment = await fileToAttachment(file); }
+        catch (e) { setFileErr((e as Error).message); return; }
+      }
+      const r = await askSubjectDoubt({ subjectId, question: q, attachment });
       setAnswer(r.ok ? r.answer : null);
       setLimited(!!r.limited);
       setAsked(true);
@@ -93,11 +129,24 @@ export default function AskDoubts({
             rows={3}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="e.g. How is a current investment valued under AS 13?"
+            placeholder="e.g. How is a current investment valued under AS 13? — or attach a photo of the question"
             style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)" }}
           />
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <button className="btn" type="button" disabled={pending || q.trim().length < 3} onClick={submit}>
+          <input ref={fileRef} type="file" accept="image/*,application/pdf" capture="environment"
+            onChange={(e) => { setFile(e.target.files?.[0] ?? null); setFileErr(null); }} style={{ display: "none" }} />
+          <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button className="btn small secondary" type="button" onClick={() => fileRef.current?.click()}>
+              📎 Attach image / PDF
+            </button>
+            {file && (
+              <span className="muted" style={{ fontSize: ".82rem" }}>
+                📄 {file.name.slice(0, 28)} <button type="button" onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ""; }} style={{ background: "none", border: 0, color: "#dc2626", cursor: "pointer", fontWeight: 700 }}>✕</button>
+              </span>
+            )}
+          </div>
+          {fileErr && <p style={{ color: "#dc2626", fontSize: ".82rem", margin: "6px 0 0" }}>{fileErr}</p>}
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button className="btn" type="button" disabled={pending || (q.trim().length < 3 && !file)} onClick={submit}>
               {pending ? "Thinking…" : "Get instant reply ⚡"}
             </button>
             <button className="btn secondary" type="button" onClick={close}>Close</button>

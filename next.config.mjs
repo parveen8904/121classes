@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Allow bigger server-action payloads so students can attach an image/PDF to
+  // a doubt (photographed question). Downscaled client-side; 8mb is plenty.
+  experimental: { serverActions: { bodySizeLimit: "8mb" } },
   // Browser-level armor on every response. NOTE: no X-Frame-Options DENY —
   // the site runs inside the iOS/Android/desktop app webviews (same-origin
   // navigation, not framing, so DENY would be safe — but SAMEORIGIN also keeps

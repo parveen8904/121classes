@@ -6,7 +6,7 @@ import { topicVisible } from "../_lib/attempt";
 import { setAutoRenew } from "./actions";
 import { addMySubject, removeMySubject } from "../mycourses";
 import AskDoubts from "./AskDoubts";
-import { fmtMins, SPEED_NOTE } from "@/lib/duration";
+import { fmtMins, fmtAt125, AT125_NOTE } from "@/lib/duration";
 
 export const dynamic = "force-dynamic";
 
@@ -283,13 +283,12 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                     <div className="card" style={{ margin: "4px 0 14px" }}>
                       <strong style={{ fontSize: ".95rem" }}>📊 What this subject contains</strong>
                       <div style={{ display: "grid", gap: 6, fontSize: ".9rem", marginTop: 8 }}>
-                        <div>🎓 <strong>{sumClasses.get(s.id) ?? 0}</strong> classes · ⏱️ {fmtMins(sumClassMins.get(s.id) ?? 0)} total</div>
+                        <div>🎓 <strong>{sumClasses.get(s.id) ?? 0}</strong> classes · ⏱️ {fmtAt125(sumClassMins.get(s.id) ?? 0)} total <span className="muted" style={{ fontSize: ".82rem" }}>{AT125_NOTE}</span></div>
                         <div>🎬 <strong>{sumRev.get(s.id) ?? 0}</strong> revision videos · ⏱️ {fmtMins(sumRevMins.get(s.id) ?? 0)} total</div>
                         <div>🧠 <strong>{sumMcq.get(s.id) ?? 0}</strong> MCQ tests · ✍️ <strong>{sumDesc.get(s.id) ?? 0}</strong> descriptive tests</div>
                         <div>📌 Important questions — first revision: {hasRev1 ? "✓" : "—"} · second revision: {hasRev2 ? "✓" : "—"}</div>
                         <div>📚 Materials: {mats.length ? mats.join(" · ") : "coming soon"}</div>
                         <div>📅 Applicable: {attempts.length ? attempts.join(", ") : "all attempts"}</div>
-                        <div className="muted" style={{ fontSize: ".8rem" }}>{SPEED_NOTE}</div>
                       </div>
                     </div>
                   );

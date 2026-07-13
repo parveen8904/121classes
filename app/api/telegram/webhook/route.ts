@@ -1,12 +1,35 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendTelegramMessage, notifyFaculty } from "@/lib/notify";
-import { answerDoubtFromMaterial, aiConfigured, NEED_FACULTY } from "@/lib/ai";
+import { answerDoubtFromMaterial, aiConfigured, aiFeatureEnabled, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getSecret } from "@/lib/secrets";
 import { moderateMessage } from "@/lib/moderation";
-import { tgDeleteMessage } from "@/lib/telegramGroup";
+import { tgDeleteMessage, tgSendGroupReply } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
+
+// Does a group message look like an academic QUESTION worth an AI answer?
+// Deliberately conservative — greetings/chit-chat must never trigger the AI.
+function looksLikeQuestion(text: string): boolean {
+  const t = text.trim();
+  if (t.length < 15) return false;
+  if (t.includes("?")) return true;
+  return /\b(how|what|why|when|where|which|whether|explain|solve|difference|doubt|calculate|clarify|anyone|help|confus|kya|kaise|kyun|kyu|kab|samjha)\b/i.test(t);
+}
+
+// Daily cap on group AI answers (all groups combined) so a chatty day can't run
+// up the bill. Configurable via site_settings key ai_group_doubt_daily_limit.
+async function groupDoubtBudgetLeft(svc: ReturnType<typeof createServiceClient>): Promise<boolean> {
+  const { data } = await svc.from("site_settings").select("value").eq("key", "ai_group_doubt_daily_limit").maybeSingle();
+  const cap = Number(data?.value) || 100;
+  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
+  const { count } = await svc
+    .from("ai_usage")
+    .select("id", { count: "exact", head: true })
+    .eq("feature", "group_doubt")
+    .gte("created_at", dayStart.toISOString());
+  return (count ?? 0) < cap;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +115,52 @@ export async function POST(req: NextRequest) {
       const dc = (subj as { discord_channel_id?: string | null } | null)?.discord_channel_id;
       if (!mod.flagged && dc) {
         await discordSendToChannel(dc, `👤 ${fromName}: ${text}`);
+      }
+
+      // ---- AI answers in the group ----
+      // A clean message that reads like an academic question gets an instant AI
+      // reply, grounded in THIS subject's material, threaded under the question
+      // and clearly marked 🤖. Mirrored to Discord + stored so the website
+      // discussion shows it too. Off-syllabus / unknown → stay SILENT (no group
+      // noise; faculty can reply from the moderation panel like before).
+      // Controls: the "group_doubt" admin toggle + a daily cap (default 100/day).
+      if (
+        !mod.flagged &&
+        subj?.id &&
+        looksLikeQuestion(text) &&
+        (await aiFeatureEnabled("group_doubt")) &&
+        (await groupDoubtBudgetLeft(svc))
+      ) {
+        try {
+          const material = await getRepositoryContext(subj.id, 12000, { query: text });
+          const raw = await answerDoubtFromMaterial(text, material, "group_doubt");
+          const answer = raw && raw.trim() !== NEED_FACULTY ? raw.trim() : null;
+          if (answer) {
+            const body = `🤖 ${answer}\n\n— AI assistant, under CA Parveen Sharma's guidance`;
+            const sentId = await tgSendGroupReply(chatId, body, msg.message_id);
+            if (sentId) {
+              // Store the bot's own reply (Telegram never webhooks it back to us)
+              // so the website discussion and moderation panel show the thread.
+              await svc.from("group_messages").upsert(
+                {
+                  chat_id: chatId,
+                  subject_id: subj.id,
+                  tg_message_id: sentId,
+                  source: "telegram",
+                  sender_tg_id: null,
+                  sender_name: "🤖 AI assistant",
+                  body,
+                  reply_to_tg_id: msg.message_id,
+                  flagged: false,
+                  flag_reasons: [],
+                  status: "visible",
+                },
+                { onConflict: "chat_id,tg_message_id" },
+              );
+              if (dc) await discordSendToChannel(dc, body);
+            }
+          }
+        } catch { /* never block the mirror on an AI hiccup */ }
       }
     }
     return NextResponse.json({ ok: true });

@@ -24,6 +24,18 @@ export async function tgSendToGroup(chatId: string, text: string): Promise<numbe
   return j?.ok && j.result?.message_id ? j.result.message_id : null;
 }
 
+// Send as a THREADED reply to a specific group message (used for AI answers, so
+// the answer visibly attaches to the student's question). Returns message_id.
+export async function tgSendGroupReply(chatId: string, text: string, replyToMessageId: number): Promise<number | null> {
+  const j = await tgApi("sendMessage", {
+    chat_id: chatId,
+    text,
+    disable_web_page_preview: true,
+    reply_parameters: { message_id: replyToMessageId, allow_sending_without_reply: true },
+  });
+  return j?.ok && j.result?.message_id ? j.result.message_id : null;
+}
+
 export async function tgDeleteMessage(chatId: string, messageId: number): Promise<boolean> {
   const j = await tgApi("deleteMessage", { chat_id: chatId, message_id: messageId });
   return !!j?.ok;

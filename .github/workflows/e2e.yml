@@ -1,8 +1,8 @@
 name: E2E click-tests
 on:
-  push:
-    branches: [main]
-  workflow_dispatch: {}
+  schedule:
+    - cron: "30 2 * * *"   # once daily (08:00 IST)
+  workflow_dispatch: {}      # run on demand from the Actions tab
 jobs:
   e2e:
     runs-on: ubuntu-latest
@@ -12,9 +12,7 @@ jobs:
         with: { node-version: 20 }
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      # Give the just-pushed deploy a moment to go live, then click-test it.
-      - run: sleep 120
-      - run: npx playwright test
+      - run: npx playwright test --project=chromium
         env:
           BASE_URL: https://caparveensharma.com
           TEST_EMAIL: ${{ secrets.TEST_EMAIL }}

@@ -100,10 +100,10 @@ export default function LoginForm() {
           {mode === "login" && (
             <form onSubmit={login}>
               <label htmlFor="email">Email address</label>
-              <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+              <input id="email" name="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
               <label htmlFor="pw">Password</label>
               <div style={{ position: "relative" }}>
-                <input id="pw" type={showPw ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your password" style={{ paddingRight: 60 }} />
+                <input id="pw" name="password" type={showPw ? "text" : "password"} autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your password" style={{ paddingRight: 60 }} />
                 <button type="button" onClick={() => setShowPw((s) => !s)} aria-label={showPw ? "Hide password" : "Show password"}
                   style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--accent)", fontWeight: 700, fontSize: ".8rem", cursor: "pointer" }}>
                   {showPw ? "Hide" : "Show"}
@@ -122,9 +122,9 @@ export default function LoginForm() {
           {mode === "signup" && (
             <form onSubmit={signup}>
               <label htmlFor="name">Full name</label>
-              <input id="name" type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+              <input id="name" name="name" type="text" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
               <label htmlFor="semail">Email address</label>
-              <input id="semail" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+              <input id="semail" name="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
               <p className="muted" style={{ fontSize: ".78rem", margin: "-6px 0 10px" }}>Use a real email — it's verified and can't be changed later. We&apos;ll email you a link; you&apos;ll set your password after verifying.</p>
               <button className="btn block" disabled={loading} type="submit">{loading ? "Sending…" : "Send verification link"}</button>
               <p className="muted" style={{ textAlign: "center", marginTop: 16, fontSize: ".88rem" }}>
@@ -136,7 +136,7 @@ export default function LoginForm() {
           {mode === "forgot" && (
             <form onSubmit={forgot}>
               <label htmlFor="femail">Email address</label>
-              <input id="femail" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+              <input id="femail" name="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
               <button className="btn block" disabled={loading} type="submit">{loading ? "Sending…" : "Send reset link"}</button>
               <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".82rem" }}>
                 <button type="button" style={linkBtn} onClick={() => { setMode("login"); setMsg(null); }}>← Back to login</button>

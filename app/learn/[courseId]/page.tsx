@@ -318,6 +318,11 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                                 {r.start === r.end ? `Class ${r.start}` : `Classes ${r.start} to ${r.end}`}
                               </span>
                             )}
+                            {(topicMins.get(t.id) ?? 0) > 0 && (
+                              <span className="muted" style={{ display: "block", fontSize: ".82rem", fontWeight: 400 }}>
+                                ⏱️ {fmtMins(topicMins.get(t.id) ?? 0)}
+                              </span>
+                            )}
                           </span>
                         </Link>
                       );

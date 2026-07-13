@@ -5,6 +5,7 @@ import { syncClassDurations } from "@/lib/syncDurations";
 import { resequenceSubjectClasses } from "@/app/admin/topics/[topicId]/actions";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
+import { isOffPeakNow } from "@/lib/offpeak";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -32,19 +33,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, resequenced: (subs ?? []).length });
   }
 
+  // Light work runs every hour for freshness: pull news, email the daily digest.
   const result = await ingestGovtFeeds();
   const digest = await maybeSendDailyFeedDigest();
-  // Piggyback: continue one offline-class encryption job per hour (drains the
-  // Prepare-all backlog automatically even if the admin closes the page).
-  let offline: unknown = null;
-  try { offline = await prepareNextPending(120_000); } catch { /* never block the feed */ }
-  // Keep class durations true to Bunny's encoded length (drives the ⏱️ shown to
-  // students and the ≤100-min part numbering). No-op once everything is synced.
-  let durations: unknown = null;
-  try { durations = await syncClassDurations(120); } catch { /* never block the feed */ }
-  // Pre-digest transcripts into clean saved notes so doubts answer cheaply from
-  // the digest instead of re-sending the raw transcript. No-op once all done.
-  let knowledge: unknown = null;
-  try { const { ingestPending } = await import("@/lib/knowledge"); knowledge = await ingestPending(); } catch { /* never block the feed */ }
+
+  // Heavy work (video encryption, duration sync, transcript OCR/digest) is
+  // DB- and CPU-hungry, so it runs ONLY in the quiet overnight window — never
+  // while ~200–1000 students are viewing classes. Off-peak it catches up fast;
+  // ?force=1 lets an admin run it on demand. This is the main fix for the
+  // recurring "every second day" slowdowns.
+  const heavy = isOffPeakNow() || new URL(req.url).searchParams.get("force") === "1";
+  let offline: unknown = heavy ? null : "skipped-peak";
+  let durations: unknown = heavy ? null : "skipped-peak";
+  let knowledge: unknown = heavy ? null : "skipped-peak";
+  if (heavy) {
+    // Continue one offline-class encryption job (drains the Prepare-all backlog
+    // hands-free even if the admin closes the page).
+    try { offline = await prepareNextPending(120_000); } catch { /* never block the feed */ }
+    // Keep class durations true to Bunny's encoded length. No-op once synced.
+    try { durations = await syncClassDurations(120); } catch { /* never block the feed */ }
+    // Pre-digest transcripts into clean saved notes so doubts answer cheaply.
+    try { const { ingestPending } = await import("@/lib/knowledge"); knowledge = await ingestPending(); } catch { /* never block the feed */ }
+  }
   return NextResponse.json({ ok: true, added: result.added, checked: result.checked, emailed: digest.sent, offline, durations, knowledge });
 }

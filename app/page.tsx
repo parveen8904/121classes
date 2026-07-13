@@ -4,10 +4,14 @@ import SiteFooter from "./components/SiteFooter";
 import AnnouncementSplash from "./components/AnnouncementSplash";
 import NotifyButton from "./components/NotifyButton";
 import CountUp from "./components/CountUp";
-import { createClient } from "@/lib/supabase/server";
+import { tryServiceClient } from "@/lib/supabase/service";
 import { studentsTaught } from "@/lib/studentsTaught";
 
-export const dynamic = "force-dynamic";
+// Public marketing homepage — no per-user content (only public, published rows).
+// Serve it from the edge cache and refresh every 5 minutes instead of running
+// ~8 DB queries + an auth check on every one of the ~1000 nightly visits. This
+// is the single biggest speed win: most visitors never touch the database.
+export const revalidate = 300;
 
 const KIND_LABEL: Record<string, string> = {
   amendment: "Amendment",
@@ -55,7 +59,8 @@ const APP_PLATFORMS = [
 ];
 
 export default async function Home() {
-  const supabase = createClient();
+  const supabase = tryServiceClient();
+  if (!supabase) return null; // local build without env — Vercel always has it
   const [{ data: announcements }, { data: dbCourses }, { data: settings }] = await Promise.all([
     supabase
       .from("announcements")
@@ -96,10 +101,9 @@ export default async function Home() {
     { n: resultCount ?? 0, suffix: "+", label: "success stories" },
     { n: openingCount ?? 0, suffix: "+", label: "live job openings" },
   ].filter((s) => s.n > 0);
-  const {
-    data: { user: landingUser },
-  } = await supabase.auth.getUser();
-  const signedIn = !!landingUser;
+  // Cached page → no per-request auth. Logged-in visitors simply use the same
+  // email "Notify me" flow as everyone else on the public homepage.
+  const signedIn = false;
   const latestHighlight = announcements?.[0] ?? null;
   const amendments = (announcements ?? []).filter((a) => a.kind === "amendment").slice(0, 3);
   const siteImg = new Map((settings ?? []).map((r) => [r.key, r.value as string | null]));

@@ -63,13 +63,19 @@ export async function getRepositoryContext(
     for (const s of secByTopic.get(t.id) ?? []) {
       const c = s.config;
       const parts: string[] = [];
+      // A digest exists → use the CLEAN, small digest and SKIP the huge raw
+      // transcript (big token + cost saving; the digest is what the AI reads).
+      const hasDigest = !!c.ai_summary;
       if (c.ai_summary) parts.push(`Class summary: ${c.ai_summary}`);
+      if (c.ai_concepts_discussed) parts.push(`Concepts covered: ${String(c.ai_concepts_discussed).split("\n").filter(Boolean).join("; ")}`);
+      if (c.ai_questions_discussed) parts.push(`Questions discussed: ${String(c.ai_questions_discussed).split("\n").filter(Boolean).join("; ")}`);
       if (c.ai_key_points) parts.push(`Key concepts: ${String(c.ai_key_points).split("\n").filter(Boolean).join("; ")}`);
       if (c.important_concepts) parts.push(`Important concepts: ${c.important_concepts}`);
       if (c.important_questions) parts.push(`Important questions: ${c.important_questions}`);
       if (c.homework) parts.push(`Homework: ${c.homework}`);
-      if (c.transcript) parts.push(`Transcript:\n${c.transcript}`);
+      if (c.notes_text) parts.push(`Handwritten class notes:\n${c.notes_text}`); // OCR'd faculty notes
       if (c.ai_pdf_text) parts.push(`PDF content:\n${c.ai_pdf_text}`);
+      if (!hasDigest && c.transcript) parts.push(`Transcript:\n${c.transcript}`); // fallback until digested
       if (parts.length) lines.push(`— ${s.title} —\n${parts.join("\n")}`);
     }
     if (lines.length) chunks.push({ subject_id: t.subject_id, topic_id: t.id, text: `${head}\n${lines.join("\n")}` });

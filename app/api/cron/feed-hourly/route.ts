@@ -42,5 +42,9 @@ export async function GET(req: NextRequest) {
   // students and the ≤100-min part numbering). No-op once everything is synced.
   let durations: unknown = null;
   try { durations = await syncClassDurations(120); } catch { /* never block the feed */ }
-  return NextResponse.json({ ok: true, added: result.added, checked: result.checked, emailed: digest.sent, offline, durations });
+  // Pre-digest transcripts into clean saved notes so doubts answer cheaply from
+  // the digest instead of re-sending the raw transcript. No-op once all done.
+  let knowledge: unknown = null;
+  try { const { digestPendingClasses } = await import("@/lib/knowledge"); knowledge = await digestPendingClasses(4); } catch { /* never block the feed */ }
+  return NextResponse.json({ ok: true, added: result.added, checked: result.checked, emailed: digest.sent, offline, durations, knowledge });
 }

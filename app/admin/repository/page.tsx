@@ -41,14 +41,27 @@ function fmtRange(from: string | null, to: string | null, attempt: string | null
 
 export default async function RepositoryPage() {
   const svc = createServiceClient();
-  const [{ data: items }, { data: subjects }, { data: courses }, ai] = await Promise.all([
+  const [{ data: items }, { data: subjects }, { data: courses }, ai, { data: secs }] = await Promise.all([
     svc.from("repository_items").select("id, title, kind, subject_id, file_url, content, valid_from, valid_to, valid_from_attempt, is_active").order("created_at", { ascending: false }),
     svc.from("subjects").select("id, title").order("title"),
     svc.from("courses").select("id, title").order("title"),
     aiConfigured(),
+    svc.from("sections").select("config").eq("type", "full_class_video").eq("is_published", true),
   ]);
   const list = (items ?? []) as Item[];
   const subjMap = new Map((subjects ?? []).map((s) => [s.id, s.title as string]));
+
+  // What content the AI actually has to answer from.
+  const cov = { total: 0, transcript: 0, digest: 0, notes_have: 0, notes_ocr: 0 };
+  for (const s of secs ?? []) {
+    const c = (s.config ?? {}) as Record<string, unknown>;
+    cov.total++;
+    if (String(c.transcript ?? "").length > 100) cov.transcript++;
+    if (String(c.ai_summary ?? "").trim()) cov.digest++;
+    if (c.notes_hand_url) cov.notes_have++;
+    if (String(c.notes_text ?? "").trim()) cov.notes_ocr++;
+  }
+  const books = list.filter((i) => i.is_active && (i.content ?? "").length > 100).length;
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 900 }}>
@@ -61,6 +74,21 @@ export default async function RepositoryPage() {
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
         <Link className="btn small secondary" href="/admin/repository/overview">📊 Overview — what&apos;s missing</Link>
+      </div>
+
+      {/* What the AI can actually read from, right now. */}
+      <div className="card" style={{ marginTop: 12 }}>
+        <strong>🧠 What the AI can answer from</strong>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginTop: 10, textAlign: "center" }}>
+          <div><div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{cov.digest}/{cov.transcript}</div><div className="muted" style={{ fontSize: ".78rem" }}>class transcripts digested (used for doubts)</div></div>
+          <div><div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{cov.notes_ocr}/{cov.notes_have}</div><div className="muted" style={{ fontSize: ".78rem" }}>handwritten notes read into text</div></div>
+          <div><div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{books}</div><div className="muted" style={{ fontSize: ".78rem" }}>book / ICAI PDFs (text extracted)</div></div>
+        </div>
+        <p className="muted" style={{ fontSize: ".8rem", marginTop: 10, marginBottom: 0 }}>
+          Doubts answer from the <strong>digests</strong> (cheap &amp; clean). Transcripts are digested automatically every hour.
+          Handwritten notes and books need a one-time text extraction to feed the AI — {cov.notes_have - cov.notes_ocr} notes and
+          uploaded books are not yet readable by the AI.
+        </p>
       </div>
 
       {!ai && (

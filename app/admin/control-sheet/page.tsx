@@ -85,15 +85,12 @@ export default async function ControlSheetPage() {
     const mcqReady = mcqSecs.filter((s) => (mcqCount.get(s.id) ?? 0) > 0).length;
 
     const descSecs = secs.filter((s) => s.type === "subjective_test");
-    const descPaperReady = descSecs.filter((s) => {
-      const c = (s.config ?? {}) as Record<string, unknown>;
-      return has(c.paper_question_pdf) && has(c.paper_solution_pdf);
-    }).length;
+    const cfgOf = (s: Sec) => (s.config ?? {}) as Record<string, unknown>;
+    const descQuestions = descSecs.filter((s) => has(cfgOf(s).paper_question_pdf)).length; // question paper uploaded
+    const descPaperReady = descSecs.filter((s) => has(cfgOf(s).paper_solution_pdf)).length;  // solution uploaded (for auto-grading)
     const descTyped = descSecs.filter((s) => (subjCount.get(s.id) ?? 0) > 0).length;
-    const descReady = descSecs.filter((s) => {
-      const c = (s.config ?? {}) as Record<string, unknown>;
-      return (has(c.paper_question_pdf) && has(c.paper_solution_pdf)) || (subjCount.get(s.id) ?? 0) > 0;
-    }).length;
+    // "Uploaded" = has a question paper OR typed questions. Solution is only needed for AI auto-grading.
+    const descReady = descSecs.filter((s) => has(cfgOf(s).paper_question_pdf) || (subjCount.get(s.id) ?? 0) > 0).length;
 
     const repo = repoByTopic.get(t.id) ?? new Map<string, number>();
     const amd = amendByTopic.get(t.id) ?? { total: 0, hand: 0 };
@@ -105,10 +102,11 @@ export default async function ControlSheetPage() {
       if (classes && transcripts < classes) missing.push("transcripts (for AI)");
     }
     if (mcqSecs.length && mcqReady < mcqSecs.length) missing.push("MCQ questions");
-    if (descSecs.length && descReady < descSecs.length) missing.push("descriptive answers");
+    if (descSecs.length && descReady < descSecs.length) missing.push("descriptive question papers");
+    if (descQuestions && descPaperReady < descQuestions) missing.push("descriptive solution PDFs (for auto-grading)");
     if (amd.total && amd.hand < amd.total) missing.push("amendment notes");
 
-    return { t, classes, hand, typed, transcripts, mcqSecs: mcqSecs.length, mcqReady, descSecs: descSecs.length, descReady, descPaperReady, descTyped, repo, amd, missing };
+    return { t, classes, hand, typed, transcripts, mcqSecs: mcqSecs.length, mcqReady, descSecs: descSecs.length, descReady, descQuestions, descPaperReady, descTyped, repo, amd, missing };
   }
 
   return (
@@ -160,7 +158,7 @@ export default async function ControlSheetPage() {
                     <Cell label="⌨️ Typed notes" value={`${r.typed}/${r.classes || 0}`} status={!r.classes ? "none" : r.typed >= r.classes ? "ok" : r.typed ? "warn" : "none"} />
                     <Cell label="🎙️ Transcripts (AI)" value={`${r.transcripts}/${r.classes || 0}`} status={!r.classes ? "none" : r.transcripts >= r.classes ? "ok" : r.transcripts ? "warn" : "bad"} />
                     <Cell label="🧠 MCQ tests" value={r.mcqSecs ? `${r.mcqReady}/${r.mcqSecs} ready` : "0"} status={!r.mcqSecs ? "none" : r.mcqReady >= r.mcqSecs ? "ok" : r.mcqReady ? "warn" : "bad"} hint={r.mcqSecs ? "ready = has questions" : undefined} />
-                    <Cell label="📝 Descriptive tests" value={r.descSecs ? `${r.descReady}/${r.descSecs} ready` : "0"} status={!r.descSecs ? "none" : r.descReady >= r.descSecs ? "ok" : r.descReady ? "warn" : "bad"} hint={r.descSecs ? `${r.descPaperReady} model-paper · ${r.descTyped} typed` : undefined} />
+                    <Cell label="📝 Descriptive tests" value={r.descSecs ? `${r.descReady}/${r.descSecs} uploaded` : "0"} status={!r.descSecs ? "none" : r.descReady >= r.descSecs ? "ok" : r.descReady ? "warn" : "bad"} hint={r.descSecs ? `${r.descQuestions} question papers · ${r.descPaperReady} solutions · ${r.descTyped} typed` : undefined} />
                     <Cell label="📄 MTP" value={String(r.repo.get("mtp") ?? 0)} status={(r.repo.get("mtp") ?? 0) ? "ok" : "none"} />
                     <Cell label="📄 RTP" value={String(r.repo.get("rtp") ?? 0)} status={(r.repo.get("rtp") ?? 0) ? "ok" : "none"} />
                     <Cell label="🗂️ Past exam papers" value={String(r.repo.get("past_papers") ?? 0)} status={(r.repo.get("past_papers") ?? 0) ? "ok" : "none"} />

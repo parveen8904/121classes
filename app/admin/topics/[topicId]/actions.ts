@@ -34,6 +34,9 @@ export async function addTopicMaterial(formData: FormData) {
     is_active: true,
   });
   revalidatePath(`/admin/topics/${topicId}`);
+  // Full redirect (not just revalidate) so the upload widget resets — the admin
+  // can add the next RTP/MTP immediately without a manual page refresh.
+  redirect(`/admin/topics/${topicId}?added=material#materials`);
 }
 
 export async function deleteTopicMaterial(formData: FormData) {

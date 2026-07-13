@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import DeleteButton from "../../_components/DeleteButton";
 import AdminHero from "../../_components/AdminHero";
 import { fmtMins } from "../../_lib/util";
+import { fmtAt125, AT125_NOTE } from "@/lib/duration";
 import SubmitButton from "@/app/components/SubmitButton";
 import AttemptPicker from "@/app/components/AttemptPicker";
 import {
@@ -88,7 +90,9 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
 
     // Materials available in the subject (books / RTP / past papers / ICAI …) —
     // transcripts are intentionally excluded (never shared with students).
-    const { data: matRows } = await supabase
+    // repository_items has RLS with no client policy, so read via the service
+    // client (admin context) — otherwise it returns nothing ("none uploaded").
+    const { data: matRows } = await createServiceClient()
       .from("repository_items")
       .select("kind")
       .in("topic_id", topicIds)
@@ -120,7 +124,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
       <div className="card" style={{ marginTop: 16 }}>
         <h3 style={{ margin: "0 0 10px" }}>📊 Subject summary — {subject.title}</h3>
         <div style={{ display: "grid", gap: 7, fontSize: ".92rem" }}>
-          <div>🎓 <strong>{totalClasses}</strong> {totalClasses === 1 ? "class" : "classes"} · ⏱️ <strong>{fmtMins(totalClassMins)}</strong> total class time</div>
+          <div>🎓 <strong>{totalClasses}</strong> {totalClasses === 1 ? "class" : "classes"} · ⏱️ <strong>{fmtAt125(totalClassMins)}</strong> total class time <span className="muted" style={{ fontWeight: 400, fontSize: ".82rem" }}>{AT125_NOTE}</span></div>
           <div>🎬 <strong>{revisionCount}</strong> revision {revisionCount === 1 ? "video" : "videos"} · ⏱️ <strong>{fmtMins(revisionMins)}</strong> total revision time</div>
           <div>🧠 <strong>{mcqCount}</strong> MCQ {mcqCount === 1 ? "test" : "tests"} · ✍️ <strong>{descCount}</strong> descriptive {descCount === 1 ? "test" : "tests"}</div>
           <div>📌 Most important questions — first revision: <strong>{hasRev1 ? "✓ available" : "— not added"}</strong> · second revision: <strong>{hasRev2 ? "✓ available" : "— not added"}</strong></div>

@@ -24,7 +24,9 @@ export async function askSubjectDoubt(input: {
 
   let answer: string | null = null;
   if (await aiConfigured()) {
-    const material = await getRepositoryContext(input.subjectId, 12000, { query: question });
+    // Larger budget so uploaded question banks / ICAI / RTP text is available —
+    // needed to find and solve a specific numbered question.
+    const material = await getRepositoryContext(input.subjectId, 24000, { query: question });
     const raw = await answerDoubtFromMaterial(question, material);
     if (raw && raw.trim() !== NEED_FACULTY) answer = raw;
   }

@@ -164,12 +164,19 @@ export const NEED_FACULTY = "NEED_FACULTY";
 
 const REPO_SYSTEM =
   "You are the AI study assistant for CA Parveen Sharma's CA coaching, helping Indian CA " +
-  "(Intermediate/Final) students. Answer the student's doubt clearly and correctly for the Indian " +
-  "CA exam — grounded in the provided class material where relevant, and otherwise using standard " +
-  "ICAI syllabus knowledge (Accounting Standards, Ind AS, company law, etc.). Prefer short bullet " +
-  "points, cite the relevant AS/Ind AS or section, and keep it under 120 words. Only reply with " +
-  `exactly "${NEED_FACULTY}" if the question is NOT about the CA syllabus (e.g. personal, fees, ` +
-  "login, or administrative matters).";
+  "(Intermediate/Final) students. Use the STUDY MATERIAL below (class transcripts/digests, notes, " +
+  "question banks, ICAI study material, RTP/MTP, past papers) as your PRIMARY source, plus standard " +
+  "ICAI syllabus knowledge (AS, Ind AS, company law).\n" +
+  "• If the student asks you to SOLVE a specific numbered question (e.g. 'question 15 of Amalgamation', " +
+  "'Q6 of the ICAI study material', 'question 10 from RTP May 2026'), FIND that question in the material, " +
+  "restate it briefly, then give a FULL step-by-step exam-style solution — working notes, journal entries, " +
+  "and the relevant AS/Ind AS or section. This is a valid academic request; never refuse it as 'administrative'.\n" +
+  "• If that specific numbered question is NOT present in the provided material, say clearly you couldn't " +
+  "find it in the uploaded material, then EITHER solve it from your own CA knowledge if you can, OR ask the " +
+  "student to paste the question text so you can solve it.\n" +
+  "• For a conceptual doubt, answer concisely and cite the relevant standard/section.\n" +
+  `Only reply with exactly "${NEED_FACULTY}" if the request is genuinely NOT about the CA syllabus at all ` +
+  "(personal, fees, login, or account matters).";
 
 // Answer strictly from the repository material. Returns the answer, the literal
 // NEED_FACULTY sentinel (escalate to faculty), or null if AI/material unavailable.
@@ -179,7 +186,9 @@ export async function answerDoubtFromMaterial(
 ): Promise<string | null> {
   if (!material.trim()) return null;
   const user = `STUDY MATERIAL:\n${material}\n\nSTUDENT QUESTION:\n${question}`;
-  return callClaude(REPO_SYSTEM, user, 260, { model: await fastModel(), feature: "doubt" });
+  // Enough room to actually SOLVE a numbered question (working notes, journal
+  // entries), not just a one-line conceptual reply.
+  return callClaude(REPO_SYSTEM, user, 1400, { model: await fastModel(), feature: "doubt" });
 }
 
 // From a student's recent questions, pull the specific CA topics/standards they

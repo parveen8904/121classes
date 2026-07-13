@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
-import { aiConfigured, gradeSubjective, answerDoubtFromMaterial, NEED_FACULTY } from "@/lib/ai";
+import { aiConfigured, gradeSubjective, answerDoubtFromMaterial, answerDoubtWithAttachment, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getMcqExplanations } from "@/lib/answers";
 import { dailyDoubtLimitReached } from "@/lib/limits";
@@ -254,6 +254,7 @@ export async function submitSubjective(input: {
 export async function askDoubt(input: {
   sectionId: string;
   question: string;
+  attachment?: { dataB64: string; mediaType: string } | null;
 }): Promise<{ ok: boolean; answer: string | null; pending: boolean; note?: string }> {
   const supabase = createClient();
   const {
@@ -261,7 +262,8 @@ export async function askDoubt(input: {
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, answer: null, pending: false };
   const question = (input.question ?? "").trim();
-  if (!question) return { ok: false, answer: null, pending: false };
+  const att = input.attachment ?? null;
+  if (!question && !att) return { ok: false, answer: null, pending: false };
 
   // Find the subject so we can pull the right repository material.
   const { data: section } = await supabase
@@ -279,8 +281,10 @@ export async function askDoubt(input: {
   let status = "open";
   const limited = await dailyDoubtLimitReached(user.id);
   if (!limited && await aiConfigured()) {
-    const material = await getRepositoryContext(subjectId, 12000, { topicId, query: question });
-    const raw = await answerDoubtFromMaterial(question, material);
+    const material = await getRepositoryContext(subjectId, att ? 24000 : 12000, { topicId, query: question });
+    const raw = att
+      ? await answerDoubtWithAttachment(question, material, att)
+      : await answerDoubtFromMaterial(question, material);
     if (raw && raw.trim() !== NEED_FACULTY) {
       answer = raw;
       status = "answered";

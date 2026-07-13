@@ -53,11 +53,7 @@ export default function TopicMetaForm({
         <input name="topic_code" defaultValue={topic.topic_code ?? ""} maxLength={6} placeholder="e.g. AS13 or IAS115" style={{ textTransform: "uppercase" }} />
       </div>
 
-      {/* Basics */}
-      <div style={{ marginTop: 8 }}>
-        <label>Weightage marks (ICAI) *</label>
-        <input name="weightage_marks" type="number" min={0} defaultValue={topic.weightage_marks ?? ""} placeholder="e.g. 12" style={{ maxWidth: 160 }} />
-      </div>
+      {/* Weightage is now set once at the SUBJECT level for all chapters. */}
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr", marginTop: 8 }}>
         <div>
           <label>Applicable from attempt *</label>

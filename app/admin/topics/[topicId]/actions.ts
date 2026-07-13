@@ -195,7 +195,7 @@ export async function updateTopicMeta(formData: FormData) {
       ...(title ? { title } : {}),
       // short code: uppercase, alphanumeric only, capped at 6 chars
       topic_code: str(formData.get("topic_code")).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) || null,
-      weightage_marks: str(formData.get("weightage_marks")) ? num(formData.get("weightage_marks")) : null,
+      // weightage_marks is set at the subject level now — don't overwrite it here.
       importance: parseImportance(str(formData.get("importance"))),
       valid_from_attempt: nn("valid_from_attempt"),
       valid_to_attempt: nn("valid_to_attempt"),

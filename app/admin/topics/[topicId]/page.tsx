@@ -124,10 +124,6 @@ export default async function TopicDetail({
                   <label>Type</label>
                   <select name="kind" defaultValue="question_bank">
                     <option value="question_bank">📚 Question bank</option>
-                    <option value="icai">🏛️ ICAI material</option>
-                    <option value="rtp">📄 RTP</option>
-                    <option value="mtp">📄 MTP</option>
-                    <option value="past_papers">🗂️ Past exam questions</option>
                     <option value="book">📕 Book</option>
                     <option value="notes">📝 Notes</option>
                   </select>

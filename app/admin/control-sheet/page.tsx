@@ -27,7 +27,7 @@ function Cell({ label, value, status, hint }: { label: string; value: string; st
 export default async function ControlSheetPage() {
   const svc = createServiceClient();
   const [{ data: subjects }, { data: topics }] = await Promise.all([
-    svc.from("subjects").select("id, title, order_index").order("order_index").order("title"),
+    svc.from("subjects").select("id, title, order_index, miq_rev1, miq_rev2").order("order_index").order("title"),
     svc
       .from("topics")
       .select("id, title, subject_id, order_index, is_combined, weightage_marks, important_qs_rev1, important_qs_rev2, book_pdf_url, icai_material_url, revision_notes_hand_url, revision_notes_typed_url, revision_paper_url, amendments_pdf_url")
@@ -41,6 +41,17 @@ export default async function ControlSheetPage() {
     topicIds.length ? svc.from("repository_items").select("topic_id, kind, file_url, is_active").in("topic_id", topicIds) : { data: [] as { topic_id: string; kind: string; file_url: string | null; is_active: boolean }[] },
     topicIds.length ? svc.from("amendments").select("topic_id, is_published, notes_hand_url").in("topic_id", topicIds) : { data: [] as { topic_id: string; is_published: boolean; notes_hand_url: string | null }[] },
   ]);
+
+  // Subject-level materials (RTP / MTP / past papers / ICAI), attempt-tagged.
+  const subjectIds = (subjects ?? []).map((s) => s.id);
+  const { data: subjMatRows } = subjectIds.length
+    ? await svc.from("repository_items").select("subject_id, kind, title, valid_from_attempt, valid_to_attempt").in("subject_id", subjectIds).is("topic_id", null).eq("is_active", true).in("kind", ["mtp", "rtp", "past_papers", "icai"])
+    : { data: [] as { subject_id: string; kind: string; title: string; valid_from_attempt: string | null; valid_to_attempt: string | null }[] };
+  const subjMatBy = new Map<string, { kind: string; title: string; valid_from_attempt: string | null; valid_to_attempt: string | null }[]>();
+  for (const m of subjMatRows ?? []) {
+    const arr = subjMatBy.get(m.subject_id) ?? [];
+    arr.push(m); subjMatBy.set(m.subject_id, arr);
+  }
 
   const secByTopic = new Map<string, Sec[]>();
   for (const s of (secRows ?? []) as Sec[]) (secByTopic.get(s.topic_id) ?? secByTopic.set(s.topic_id, []).get(s.topic_id)!).push(s);
@@ -129,10 +140,28 @@ export default async function ControlSheetPage() {
         return (
           <div key={subj.id} style={{ marginTop: 28 }}>
             <h2 style={{ fontSize: "1.25rem", marginBottom: 4 }}>{subj.title}</h2>
-            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 12 }}>
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 0, marginBottom: 8 }}>
               {list.length} topics · 🎓 {subTotals.classes} classes ·{" "}
               {subTotals.topicsMissing === 0 ? <span style={{ color: "#16a34a", fontWeight: 700 }}>✓ all topics complete</span> : <span style={{ color: "#b91c1c", fontWeight: 700 }}>⚠️ {subTotals.topicsMissing} topic(s) need attention</span>}
             </p>
+            {(() => {
+              const mats = subjMatBy.get(subj.id) ?? [];
+              const line = (kind: string, label: string, range?: boolean) => {
+                const items = mats.filter((m) => m.kind === kind);
+                if (!items.length) return <span style={{ color: "#b91c1c" }}>{label}: — </span>;
+                const attempts = items.map((m) => (range ? (m.valid_to_attempt || m.valid_from_attempt) : m.valid_from_attempt) || "?").join(", ");
+                return <span style={{ color: "#16a34a" }}>{label}: {items.length} ({kind === "icai" ? "AI only" : attempts}) </span>;
+              };
+              return (
+                <div style={{ fontSize: ".82rem", marginBottom: 12, display: "flex", gap: 14, flexWrap: "wrap", fontWeight: 600 }}>
+                  {line("rtp", "📄 RTP")}
+                  {line("mtp", "📄 MTP")}
+                  {line("past_papers", "🗂️ Past papers", true)}
+                  {line("icai", "🏛️ ICAI")}
+                  <span style={{ color: (subj.miq_rev1 && subj.miq_rev2) ? "#16a34a" : "#b91c1c" }}>📌 Imp. Qs: {subj.miq_rev1 ? "R1✓" : "R1—"} {subj.miq_rev2 ? "R2✓" : "R2—"}</span>
+                </div>
+              );
+            })()}
 
             <div style={{ display: "grid", gap: 12 }}>
               {rows.map((r) => (
@@ -155,14 +184,10 @@ export default async function ControlSheetPage() {
                   <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", marginTop: 12 }}>
                     <Cell label="🎓 Classes" value={String(r.classes)} status={r.classes ? "ok" : (r.t.is_combined ? "none" : "bad")} />
                     <Cell label="✍️ Handwritten notes" value={`${r.hand}/${r.classes || 0}`} status={!r.classes ? "none" : r.hand >= r.classes ? "ok" : r.hand ? "warn" : "bad"} />
-                    <Cell label="⌨️ Typed notes" value={`${r.typed}/${r.classes || 0}`} status={!r.classes ? "none" : r.typed >= r.classes ? "ok" : r.typed ? "warn" : "none"} />
                     <Cell label="🎙️ Transcripts (AI)" value={`${r.transcripts}/${r.classes || 0}`} status={!r.classes ? "none" : r.transcripts >= r.classes ? "ok" : r.transcripts ? "warn" : "bad"} />
                     <Cell label="🧠 MCQ tests" value={r.mcqSecs ? `${r.mcqReady}/${r.mcqSecs} ready` : "0"} status={!r.mcqSecs ? "none" : r.mcqReady >= r.mcqSecs ? "ok" : r.mcqReady ? "warn" : "bad"} hint={r.mcqSecs ? "ready = has questions" : undefined} />
                     <Cell label="📝 Descriptive tests" value={r.descSecs ? `${r.descReady}/${r.descSecs} uploaded` : "0"} status={!r.descSecs ? "none" : r.descReady >= r.descSecs ? "ok" : r.descReady ? "warn" : "bad"} hint={r.descSecs ? `${r.descQuestions} question papers · ${r.descPaperReady} solutions · ${r.descTyped} typed` : undefined} />
-                    <Cell label="📄 MTP" value={String(r.repo.get("mtp") ?? 0)} status={(r.repo.get("mtp") ?? 0) ? "ok" : "none"} />
-                    <Cell label="📄 RTP" value={String(r.repo.get("rtp") ?? 0)} status={(r.repo.get("rtp") ?? 0) ? "ok" : "none"} />
-                    <Cell label="🗂️ Past exam papers" value={String(r.repo.get("past_papers") ?? 0)} status={(r.repo.get("past_papers") ?? 0) ? "ok" : "none"} />
-                    <Cell label="📚 Past exam questions" value={String(r.repo.get("question_bank") ?? 0)} status={(r.repo.get("question_bank") ?? 0) ? "ok" : "none"} />
+                    <Cell label="📚 Question bank" value={String(r.repo.get("question_bank") ?? 0)} status={(r.repo.get("question_bank") ?? 0) ? "ok" : "none"} />
                     <Cell label="📌 Amendments" value={r.amd.total ? `${r.amd.total}` : "0"} status={r.amd.total ? "ok" : "none"} hint={r.amd.total ? `${r.amd.hand} with handwritten notes` : undefined} />
                     <Cell label="🏛️ ICAI material" value={(r.repo.get("icai") ?? 0) || has(r.t.icai_material_url) ? "✓" : "—"} status={(r.repo.get("icai") ?? 0) || has(r.t.icai_material_url) ? "ok" : "none"} />
                     <Cell label="📕 Book" value={has(r.t.book_pdf_url) ? "✓" : "—"} status={has(r.t.book_pdf_url) ? "ok" : "none"} />

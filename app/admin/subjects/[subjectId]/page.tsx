@@ -8,6 +8,7 @@ import { fmtMins } from "../../_lib/util";
 import { fmtAt125, AT125_NOTE } from "@/lib/duration";
 import SubmitButton from "@/app/components/SubmitButton";
 import AttemptPicker from "@/app/components/AttemptPicker";
+import SubjectContent from "./SubjectContent";
 import {
   createTopic,
   deleteTopic,
@@ -23,7 +24,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, telegram_group_url, remarks, courses(title)")
+    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, telegram_group_url, remarks, miq_rev1, miq_rev2, courses(title)")
     .eq("id", subjectId)
     .single();
 
@@ -32,7 +33,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
   const [{ data: topics }, { data: faculties }, { data: assigned }] = await Promise.all([
     supabase
       .from("topics")
-      .select("id, title, slug, order_index, valid_from_attempt, valid_to_attempt, amendments_upto, important_qs_rev1, important_qs_rev2, is_published, is_combined")
+      .select("id, title, slug, order_index, valid_from_attempt, valid_to_attempt, amendments_upto, important_qs_rev1, important_qs_rev2, weightage_marks, is_published, is_combined")
       .eq("subject_id", subjectId)
       .order("is_combined")
       .order("order_index")
@@ -40,6 +41,17 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
     supabase.from("faculties").select("id, full_name").order("full_name"),
     supabase.from("subject_faculty").select("faculty_id").eq("subject_id", subjectId),
   ]);
+
+  // Subject-level materials (RTP / MTP / past papers / ICAI) — read via the
+  // service client (repository_items has no client RLS policy).
+  const { data: subjMaterials } = await createServiceClient()
+    .from("repository_items")
+    .select("id, kind, title, valid_from_attempt, valid_to_attempt")
+    .eq("subject_id", subjectId)
+    .is("topic_id", null)
+    .eq("is_active", true)
+    .in("kind", ["icai", "mtp", "rtp", "past_papers"])
+    .order("created_at", { ascending: false });
 
   const assignedIds = new Set((assigned ?? []).map((a) => a.faculty_id));
   const courseTitle = (subject as { courses?: { title?: string } | null }).courses?.title;
@@ -146,6 +158,15 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
           <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 8 }}>Save remarks</SubmitButton>
         </form>
       </details>
+
+      {/* Subject-level content — weightage, MIQ, RTP/MTP/past papers/ICAI in one place */}
+      <SubjectContent
+        subjectId={subject.id}
+        miqRev1={(subject as { miq_rev1?: string | null }).miq_rev1 ?? ""}
+        miqRev2={(subject as { miq_rev2?: string | null }).miq_rev2 ?? ""}
+        topics={(topics ?? []).map((t) => ({ id: t.id as string, title: t.title as string, weightage_marks: (t as { weightage_marks?: number | null }).weightage_marks ?? null }))}
+        materials={(subjMaterials ?? []) as { id: string; kind: string; title: string; valid_from_attempt: string | null; valid_to_attempt: string | null }[]}
+      />
 
       {/* New topic — right-aligned expander (primary action) */}
       <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>

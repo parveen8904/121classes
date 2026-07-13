@@ -81,6 +81,66 @@ export async function updateSubjectRemarks(formData: FormData) {
   revalidatePath(`/admin/subjects/${id}`);
 }
 
+// Subject-level "most important questions" for first & second revision.
+export async function saveSubjectMIQ(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("subjects").update({
+    miq_rev1: str(formData.get("miq_rev1")) || null,
+    miq_rev2: str(formData.get("miq_rev2")) || null,
+  }).eq("id", id);
+  revalidatePath(`/admin/subjects/${id}`);
+}
+
+// Per-chapter weightage, entered once at subject level for every topic.
+export async function saveSubjectWeightage(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  const { data: topics } = await svc.from("topics").select("id").eq("subject_id", id);
+  for (const t of topics ?? []) {
+    const v = num(formData.get(`w_${t.id}`));
+    await svc.from("topics").update({ weightage_marks: v > 0 ? v : null }).eq("id", t.id);
+  }
+  revalidatePath(`/admin/subjects/${id}`);
+}
+
+// Upload a subject-level material (ICAI / MTP / RTP / past papers), attempt-tagged.
+// ICAI is AI-only (copyright — never shown to students); the rest are shown.
+export async function addSubjectMaterial(formData: FormData) {
+  const subjectId = str(formData.get("subjectId"));
+  const kind = str(formData.get("kind")) || "rtp";
+  const fileUrl = str(formData.get("file_url")) || null;
+  if (!subjectId || !fileUrl) return;
+  let content: string | null = null;
+  if (/\.pdf($|\?)/i.test(fileUrl)) {
+    const { extractPdfText } = await import("@/lib/pdf");
+    content = (await extractPdfText(fileUrl)) || null;
+  }
+  await createServiceClient().from("repository_items").insert({
+    title: str(formData.get("title")) || kind.toUpperCase(),
+    kind,
+    subject_id: subjectId,
+    topic_id: null,
+    file_url: fileUrl,
+    content,
+    is_active: true,
+    student_visible: kind !== "icai", // ICAI copyright → AI only
+    valid_from_attempt: str(formData.get("valid_from_attempt")) || null,
+    valid_to_attempt: str(formData.get("valid_to_attempt")) || null,
+  });
+  revalidatePath(`/admin/subjects/${subjectId}`);
+  redirect(`/admin/subjects/${subjectId}?added=material#subject-content`);
+}
+
+export async function deleteSubjectMaterial(formData: FormData) {
+  const id = str(formData.get("id"));
+  const subjectId = str(formData.get("parentId"));
+  if (!id) return;
+  await createServiceClient().from("repository_items").delete().eq("id", id);
+  if (subjectId) revalidatePath(`/admin/subjects/${subjectId}`);
+}
+
 export async function updateSubjectInline(formData: FormData) {
   const id = str(formData.get("id"));
   const title = str(formData.get("title"));

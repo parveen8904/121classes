@@ -84,7 +84,10 @@ export async function getRepositoryContext(
       if (c.notes_text) parts.push(`Handwritten class notes:\n${c.notes_text}`); // OCR'd faculty notes
       if (c.ai_pdf_text) parts.push(`PDF content:\n${c.ai_pdf_text}`);
       if (!hasDigest && c.transcript) parts.push(`Transcript:\n${c.transcript}`); // fallback until digested
-      if (parts.length) lines.push(`— ${s.title} —\n${parts.join("\n")}`);
+      // Label each class with its CLASS NUMBER so the AI can tell the student
+      // which class to watch for this concept.
+      const cno = c.class_no ? `Class ${c.class_no} — ` : "";
+      if (parts.length) lines.push(`— ${cno}${s.title} —\n${parts.join("\n")}`);
     }
     if (lines.length) chunks.push({ subject_id: t.subject_id, topic_id: t.id, text: `${head}\n${lines.join("\n")}` });
   }

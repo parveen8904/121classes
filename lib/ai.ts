@@ -387,10 +387,12 @@ export async function classifyJobs(jobs: { title: string; company?: string; snip
 // Convert a handwritten-notes PDF into clean typed notes (Markdown) using
 // Claude's vision. Run ONCE at admin level; the result goes to faculty for
 // approval before students see it.
-export async function transcribeHandwriting(pdfUrl: string): Promise<string | null> {
+export async function transcribeHandwriting(pdfUrl: string, opts: { force?: boolean } = {}): Promise<string | null> {
   const apiKey = await getSecret("ANTHROPIC_API_KEY");
   if (!apiKey || !pdfUrl) return null;
-  if ((await aiDisabledSet()).has("transcribe")) return null;
+  // The realtime "transcribe" toggle gates the on-demand admin button; the
+  // background knowledge-ingestion pass sets force:true to feed the AI regardless.
+  if (!opts.force && (await aiDisabledSet()).has("transcribe")) return null;
   const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
   try {
     const pdfRes = await fetch(pdfUrl, { cache: "no-store" });

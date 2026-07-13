@@ -45,6 +45,6 @@ export async function GET(req: NextRequest) {
   // Pre-digest transcripts into clean saved notes so doubts answer cheaply from
   // the digest instead of re-sending the raw transcript. No-op once all done.
   let knowledge: unknown = null;
-  try { const { digestPendingClasses } = await import("@/lib/knowledge"); knowledge = await digestPendingClasses(4); } catch { /* never block the feed */ }
+  try { const { ingestPending } = await import("@/lib/knowledge"); knowledge = await ingestPending(); } catch { /* never block the feed */ }
   return NextResponse.json({ ok: true, added: result.added, checked: result.checked, emailed: digest.sent, offline, durations, knowledge });
 }

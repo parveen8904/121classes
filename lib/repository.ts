@@ -50,6 +50,14 @@ export async function getRepositoryContext(
 
   for (const r of itemRows) chunks.push({ subject_id: r.subject_id, topic_id: (r as { topic_id?: string | null }).topic_id ?? null, text: `### ${r.title}\n${r.content}` });
 
+  // --- Source 3: published amendments (their body IS teaching text) ---
+  const { data: amends } = await svc
+    .from("amendments").select("title, body, subject_id, topic_id").eq("is_published", true).not("body", "is", null);
+  for (const a of amends ?? []) {
+    if (!String(a.body ?? "").trim()) continue;
+    chunks.push({ subject_id: (a as { subject_id?: string | null }).subject_id ?? null, topic_id: (a as { topic_id?: string | null }).topic_id ?? null, text: `### Amendment — ${a.title}\n${a.body}` });
+  }
+
   for (const t of topics ?? []) {
     const subj = (t as { subjects?: { title?: string } | null }).subjects?.title ?? "";
     const lines: string[] = [];

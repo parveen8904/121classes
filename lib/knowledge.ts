@@ -1,43 +1,79 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { summarizeClass } from "@/lib/ai";
+import { summarizeClass, transcribeHandwriting } from "@/lib/ai";
+import { extractPdfText } from "@/lib/pdf";
 
-// Pre-build the AI knowledge base ONCE per class, so doubts answer from small,
-// clean, saved digests instead of re-sending the big raw transcript every time.
-// This is the cost + quality win: a transcript is ~10–20k characters of messy
-// spoken Hinglish; its digest is a few hundred clean characters. Doubts then
-// cost a fraction and read better. Runs a few classes per cron tick (cheap
-// Haiku), skips anything already digested, so steady-state is a no-op.
-export async function digestPendingClasses(limit = 4): Promise<{ digested: number; remaining: number }> {
+// ---------------------------------------------------------------------------
+// UNIFIED AI KNOWLEDGE INGESTION
+// Everything the founder uploads anywhere — class transcripts, handwritten
+// notes, book/ICAI PDFs, topic materials — is turned ONCE into AI-readable text
+// and saved. The AI then answers doubts / builds tests from this saved content.
+// The founder never uploads to a separate "AI repository": whatever they add for
+// students automatically becomes teaching content here.
+//
+// Runs a few items per cron tick, cheapest-first, so cost stays controlled:
+//   1. transcript → digest        (cheap text model)
+//   2. material/book PDF → text    (FREE, no AI — just PDF text extraction)
+//   3. handwritten notes → text    (vision model — rate-limited, the costly one)
+// Amendments and tests are pulled in live at answer time (they're already text),
+// so they need no pre-processing.
+// ---------------------------------------------------------------------------
+
+type Result = { digested: number; pdfsExtracted: number; notesOcr: number; remaining: number };
+
+export async function ingestPending(limits = { digests: 4, pdfs: 6, notes: 2 }): Promise<Result> {
   const svc = createServiceClient();
+  const out: Result = { digested: 0, pdfsExtracted: 0, notesOcr: 0, remaining: 0 };
 
-  // Classes that HAVE a transcript but NO digest yet.
   const { data: rows } = await svc
     .from("sections")
     .select("id, config")
     .eq("type", "full_class_video")
     .eq("is_published", true);
+  const secs = (rows ?? []) as { id: string; config: Record<string, unknown> | null }[];
 
-  const pending = (rows ?? []).filter((s) => {
+  // --- 1. Digest transcripts that lack a digest (cheap) ---
+  const needDigest = secs.filter((s) => {
     const c = (s.config ?? {}) as Record<string, unknown>;
     return String(c.transcript ?? "").length > 200 && !String(c.ai_summary ?? "").trim();
   });
-
-  let digested = 0;
-  for (const s of pending.slice(0, limit)) {
+  for (const s of needDigest.slice(0, limits.digests)) {
     const c = (s.config ?? {}) as Record<string, unknown>;
-    const result = await summarizeClass(String(c.transcript));
-    if (!result) continue; // AI hiccup — retry next tick
+    const r = await summarizeClass(String(c.transcript));
+    if (!r) continue;
     await svc.from("sections").update({
-      config: {
-        ...c,
-        ai_summary: result.summary,
-        ai_questions_discussed: result.questions_discussed.join("\n"),
-        ai_concepts_discussed: result.concepts_discussed.join("\n"),
-        ai_homework_count: result.homework_covered_count,
-        ai_homework_next: result.homework_next,
-      },
+      config: { ...c, ai_summary: r.summary, ai_questions_discussed: r.questions_discussed.join("\n"),
+        ai_concepts_discussed: r.concepts_discussed.join("\n"), ai_homework_count: r.homework_covered_count, ai_homework_next: r.homework_next },
     }).eq("id", s.id);
-    digested++;
+    out.digested++;
   }
-  return { digested, remaining: pending.length - digested };
+
+  // --- 2. Extract typed/book PDF text (FREE) into repository_items ---
+  const { data: repoRows } = await svc
+    .from("repository_items").select("id, file_url").eq("is_active", true).is("content", null).not("file_url", "is", null);
+  for (const it of (repoRows ?? []).slice(0, limits.pdfs)) {
+    const txt = await extractPdfText(it.file_url as string);
+    if (txt && txt.length > 50) { await svc.from("repository_items").update({ content: txt }).eq("id", it.id); out.pdfsExtracted++; }
+  }
+
+  // --- 3. OCR handwritten class notes → config.notes_text (vision, rate-limited) ---
+  const needNotes = secs.filter((s) => {
+    const c = (s.config ?? {}) as Record<string, unknown>;
+    return c.notes_hand_url && !String(c.notes_text ?? "").trim() && c.notes_text !== "__none__";
+  });
+  for (const s of needNotes.slice(0, limits.notes)) {
+    const c = (s.config ?? {}) as Record<string, unknown>;
+    const txt = await transcribeHandwriting(String(c.notes_hand_url), { force: true });
+    // Store the text, or a sentinel so we don't retry a note that won't OCR.
+    await svc.from("sections").update({ config: { ...c, notes_text: txt && txt.length > 30 ? txt : "__none__" } }).eq("id", s.id);
+    if (txt && txt.length > 30) out.notesOcr++;
+  }
+
+  out.remaining = (needDigest.length - out.digested) + ((repoRows ?? []).length - out.pdfsExtracted) + (needNotes.length - out.notesOcr);
+  return out;
+}
+
+// Back-compat alias (feed-hourly imported this name).
+export async function digestPendingClasses(limit = 4): Promise<{ digested: number; remaining: number }> {
+  const r = await ingestPending({ digests: limit, pdfs: 6, notes: 2 });
+  return { digested: r.digested, remaining: r.remaining };
 }

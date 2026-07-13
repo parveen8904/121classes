@@ -68,7 +68,7 @@ export default async function RepositoryPage() {
       <AdminHero
         badge="📚 AI Repository"
         title="Learning material for the AI"
-        subtitle="Upload transcripts, book PDFs and ICAI material. The AI answers doubts and builds tests ONLY from what's here."
+        subtitle="Everything you upload for students — class videos, handwritten notes, books, amendments, tests — automatically becomes the AI's teaching content. You don't upload here separately; this page just shows what the AI has learned."
         back={{ href: "/admin", label: "Admin" }}
       />
 
@@ -85,9 +85,9 @@ export default async function RepositoryPage() {
           <div><div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{books}</div><div className="muted" style={{ fontSize: ".78rem" }}>book / ICAI PDFs (text extracted)</div></div>
         </div>
         <p className="muted" style={{ fontSize: ".8rem", marginTop: 10, marginBottom: 0 }}>
-          Doubts answer from the <strong>digests</strong> (cheap &amp; clean). Transcripts are digested automatically every hour.
-          Handwritten notes and books need a one-time text extraction to feed the AI — {cov.notes_have - cov.notes_ocr} notes and
-          uploaded books are not yet readable by the AI.
+          ✨ <strong>Fully automatic:</strong> whatever you upload for students anywhere — class videos, handwritten notes,
+          book/ICAI PDFs, amendments, tests — is turned into AI teaching content by itself, every hour. No separate upload here.
+          {cov.notes_have - cov.notes_ocr > 0 ? ` Still processing: ${cov.notes_have - cov.notes_ocr} handwritten notes.` : " Everything is ingested."}
         </p>
       </div>
 

@@ -10,7 +10,7 @@ import ClassDownload from "./ClassDownload";
 import SectionCard from "./SectionCard";
 import DiscussionBoard from "../../section/[sectionId]/DiscussionBoard";
 import Help from "@/app/components/Help";
-import { fmtMins, SPEED_NOTE } from "@/lib/duration";
+import { fmtMins } from "@/lib/duration";
 
 type Downloadable = {
   id: string;
@@ -663,7 +663,6 @@ export default async function LearnTopic({ params }: { params: { topicId: string
               ? ` · 🎯 ${(topic as { weightage_marks?: number }).weightage_marks} marks (ICAI weightage)`
               : ""}
           </p>
-          {topicTotalMins > 0 && <p className="meta" style={{ fontSize: ".82rem", opacity: 0.85 }}>{SPEED_NOTE}</p>}
         </div>
 
         {catStyle && (

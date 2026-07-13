@@ -3,7 +3,7 @@
 // the raw recording). Always paired with a visible "at 1.25× speed" note so it
 // is honest, never a hidden claim.
 export const WATCH_SPEED = 1.25;
-export const SPEED_NOTE = "⚡ Times shown at 1.25× speed — we recommend watching classes at 1.25×.";
+export const SPEED_NOTE = "⚡ Best viewed at 1.25× speed — we strongly recommend watching classes at 1.25×.";
 
 // Actual recorded minutes → minutes at 1.25×.
 export function at125(actualMins: number): number {

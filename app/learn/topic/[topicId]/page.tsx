@@ -10,6 +10,7 @@ import ClassDownload from "./ClassDownload";
 import SectionCard from "./SectionCard";
 import DiscussionBoard from "../../section/[sectionId]/DiscussionBoard";
 import Help from "@/app/components/Help";
+import { fmtMins, SPEED_NOTE } from "@/lib/duration";
 
 type Downloadable = {
   id: string;
@@ -23,13 +24,6 @@ type Downloadable = {
 export const dynamic = "force-dynamic";
 
 // Minutes -> "1h 30m" / "45m".
-function fmtMins(mins: number): string {
-  const m = Math.max(0, Math.round(mins || 0));
-  if (!m) return "";
-  const h = Math.floor(m / 60);
-  const r = m % 60;
-  return h ? (r ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
-}
 
 type SectionMeta = {
   id: string;
@@ -637,7 +631,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
       <span className="muted" style={{ fontSize: ".8rem" }}>({count})</span>
       {mins > 0 && (
         <span className="muted" style={{ fontSize: ".8rem", whiteSpace: "nowrap" }}>
-          ⏱️ {Math.floor(mins / 60)}h {mins % 60}m
+          ⏱️ {fmtMins(mins)}
         </span>
       )}
       <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
@@ -669,6 +663,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
               ? ` · 🎯 ${(topic as { weightage_marks?: number }).weightage_marks} marks (ICAI weightage)`
               : ""}
           </p>
+          {topicTotalMins > 0 && <p className="meta" style={{ fontSize: ".82rem", opacity: 0.85 }}>{SPEED_NOTE}</p>}
         </div>
 
         {catStyle && (

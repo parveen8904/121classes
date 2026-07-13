@@ -56,8 +56,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (role === "admin") {
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aal && aal.currentLevel !== "aal2") {
-      if (aal.nextLevel === "aal2") redirect("/auth/mfa?next=/admin");
-      redirect("/auth/mfa/setup?required=1");
+      // "Remember this device for 30 days" — a valid trusted-device cookie lets
+      // this browser skip the code. Unenrolled admins still must set up MFA.
+      const { cookies } = await import("next/headers");
+      const { isTrusted, TRUSTED_COOKIE } = await import("@/lib/trustedDevice");
+      const trusted = isTrusted(cookies().get(TRUSTED_COOKIE)?.value, user.id);
+      if (aal.nextLevel === "aal2" && !trusted) redirect("/auth/mfa?next=/admin");
+      if (aal.nextLevel !== "aal2") redirect("/auth/mfa/setup?required=1");
     }
   }
 

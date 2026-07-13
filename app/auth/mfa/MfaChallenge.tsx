@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { trustThisDevice } from "@/app/auth/session-actions";
 import Logo from "@/app/components/Logo";
 
 // Second step of admin login: enter the 6-digit code from the authenticator app.
@@ -12,6 +13,7 @@ export default function MfaChallenge({ next }: { next: string }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [remember, setRemember] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -38,6 +40,7 @@ export default function MfaChallenge({ next }: { next: string }) {
       setErr("That code didn't match — check the app and try again (codes change every 30 seconds).");
       return;
     }
+    if (remember) { try { await trustThisDevice(); } catch { /* non-fatal */ } }
     window.location.assign(next);
   }
 
@@ -68,6 +71,10 @@ export default function MfaChallenge({ next }: { next: string }) {
               style={{ fontSize: "1.4rem", letterSpacing: "6px", textAlign: "center" }}
               autoFocus
             />
+            <label className="remember" style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0", fontSize: ".88rem" }}>
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+              Remember this device for 30 days (skip the code on this browser)
+            </label>
             <button className="btn block" type="submit" disabled={busy || code.length < 6 || !factorId}>
               {busy ? "Checking…" : "Verify & continue"}
             </button>

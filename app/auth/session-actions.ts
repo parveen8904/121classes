@@ -50,3 +50,14 @@ export async function needsPassword(): Promise<boolean> {
   const { data } = await supabase.from("profiles").select("has_password").eq("id", user.id).maybeSingle();
   return !data?.has_password;
 }
+
+// "Remember this device for 30 days" — after a successful admin authenticator
+// check, drop a signed cookie so this browser skips the 6-digit code for 30 days.
+export async function trustThisDevice(): Promise<void> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { trustedCookie } = await import("@/lib/trustedDevice");
+  const c = trustedCookie(user.id);
+  cookies().set(c.name, c.value, { httpOnly: true, sameSite: "lax", secure: true, maxAge: c.maxAge, path: "/" });
+}

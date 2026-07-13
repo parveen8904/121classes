@@ -13,9 +13,11 @@ export const metadata = {
 };
 
 const dur = (c: any) => Number(c?.duration_minutes) || 0;
+// Hours shown at the recommended 1.25× watch speed (actual watch time).
 const hrs = (mins: number) => {
-  const h = Math.round(mins / 60);
-  return h > 0 ? `${h} hr${h === 1 ? "" : "s"}` : `${mins} min`;
+  const m = Math.round((mins || 0) / 1.25);
+  const h = Math.round(m / 60);
+  return h > 0 ? `${h} hr${h === 1 ? "" : "s"}` : `${m} min`;
 };
 const GRAD = "linear-gradient(135deg,#0d9488,#10b981)";
 
@@ -130,7 +132,7 @@ export default async function CoursesPage() {
               const pics = photosByLevel.get(st.course) ?? [];
               const chips: { label: string; value: string }[] = [
                 { label: "Classes", value: String(st.classes) },
-                { label: "Class hours", value: hrs(st.minutes) },
+                { label: "Class hours (at 1.25×)", value: hrs(st.minutes) },
                 { label: "Topics", value: String(st.topics) },
                 { label: "Tests", value: String(st.tests) },
                 { label: "Notes & PDFs", value: String(st.notes) },

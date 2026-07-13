@@ -65,7 +65,8 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
             <div>
               <label>Watch classes at</label>
-              <select name="speed" defaultValue={String(setup?.speed ?? 1.2)}>
+              <select name="speed" defaultValue={String(setup?.speed ?? 1.25)}>
+                <option value="1.25">1.25× (recommended)</option>
                 <option value="1.2">1.2× (relaxed)</option>
                 <option value="1.5">1.5×</option>
                 <option value="2">2× (fastest)</option>

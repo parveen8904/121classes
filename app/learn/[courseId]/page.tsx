@@ -6,6 +6,7 @@ import { topicVisible } from "../_lib/attempt";
 import { setAutoRenew } from "./actions";
 import { addMySubject, removeMySubject } from "../mycourses";
 import AskDoubts from "./AskDoubts";
+import { fmtMins, SPEED_NOTE } from "@/lib/duration";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +17,6 @@ function fmtDate(s: string | null): string {
   return new Date(s).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" });
 }
 
-function fmtMins(mins: number): string {
-  const m = Math.max(0, Math.round(mins || 0));
-  if (!m) return "0m";
-  const h = Math.floor(m / 60);
-  const r = m % 60;
-  return h ? (r ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
-}
 
 export default async function LearnCourse({ params }: { params: { courseId: string } }) {
   const supabase = createClient();
@@ -295,6 +289,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                         <div>📌 Important questions — first revision: {hasRev1 ? "✓" : "—"} · second revision: {hasRev2 ? "✓" : "—"}</div>
                         <div>📚 Materials: {mats.length ? mats.join(" · ") : "coming soon"}</div>
                         <div>📅 Applicable: {attempts.length ? attempts.join(", ") : "all attempts"}</div>
+                        <div className="muted" style={{ fontSize: ".8rem" }}>{SPEED_NOTE}</div>
                       </div>
                     </div>
                   );
@@ -326,7 +321,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                             )}
                             {(topicMins.get(t.id) ?? 0) > 0 && (
                               <span className="muted" style={{ display: "block", fontSize: ".82rem" }}>
-                                ⏱️ {Math.floor((topicMins.get(t.id) ?? 0) / 60)}h {(topicMins.get(t.id) ?? 0) % 60}m
+                                ⏱️ {fmtMins(topicMins.get(t.id) ?? 0)}
                               </span>
                             )}
                           </span>

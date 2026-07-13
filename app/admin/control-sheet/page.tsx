@@ -188,6 +188,9 @@ export default async function ControlSheetPage() {
                     <Cell label="🧠 MCQ tests" value={r.mcqSecs ? `${r.mcqReady}/${r.mcqSecs} ready` : "0"} status={!r.mcqSecs ? "none" : r.mcqReady >= r.mcqSecs ? "ok" : r.mcqReady ? "warn" : "bad"} hint={r.mcqSecs ? "ready = has questions" : undefined} />
                     <Cell label="📝 Descriptive tests" value={r.descSecs ? `${r.descReady}/${r.descSecs} uploaded` : "0"} status={!r.descSecs ? "none" : r.descReady >= r.descSecs ? "ok" : r.descReady ? "warn" : "bad"} hint={r.descSecs ? `${r.descQuestions} question papers · ${r.descPaperReady} solutions · ${r.descTyped} typed` : undefined} />
                     <Cell label="📚 Question bank" value={String(r.repo.get("question_bank") ?? 0)} status={(r.repo.get("question_bank") ?? 0) ? "ok" : "none"} />
+                    <Cell label="📄 RTP (topic)" value={String(r.repo.get("rtp") ?? 0)} status={(r.repo.get("rtp") ?? 0) ? "ok" : "none"} />
+                    <Cell label="📄 MTP (topic)" value={String(r.repo.get("mtp") ?? 0)} status={(r.repo.get("mtp") ?? 0) ? "ok" : "none"} />
+                    <Cell label="🗂️ Past papers (topic)" value={String(r.repo.get("past_papers") ?? 0)} status={(r.repo.get("past_papers") ?? 0) ? "ok" : "none"} />
                     <Cell label="📌 Amendments" value={r.amd.total ? `${r.amd.total}` : "0"} status={r.amd.total ? "ok" : "none"} hint={r.amd.total ? `${r.amd.hand} with handwritten notes` : undefined} />
                     <Cell label="🏛️ ICAI material" value={(r.repo.get("icai") ?? 0) || has(r.t.icai_material_url) ? "✓" : "—"} status={(r.repo.get("icai") ?? 0) || has(r.t.icai_material_url) ? "ok" : "none"} />
                     <Cell label="📕 Book" value={has(r.t.book_pdf_url) ? "✓" : "—"} status={has(r.t.book_pdf_url) ? "ok" : "none"} />

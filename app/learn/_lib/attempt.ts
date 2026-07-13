@@ -32,3 +32,31 @@ export function topicVisible(
   if (e !== null && t > e) return false;
   return true;
 }
+
+// Applicability is set once at the SUBJECT level and inherited by every topic.
+// A topic may OVERRIDE it by setting its own from/to; if a topic sets either
+// bound, its own window fully replaces the subject's (all-or-nothing, so a
+// partial override can't create a contradictory window).
+export function effectiveAttemptWindow(
+  topicFrom?: string | null,
+  topicTo?: string | null,
+  subjectFrom?: string | null,
+  subjectTo?: string | null,
+): { from: string | null; to: string | null } {
+  if (topicFrom || topicTo) return { from: topicFrom ?? null, to: topicTo ?? null };
+  return { from: subjectFrom ?? null, to: subjectTo ?? null };
+}
+
+// Guard against an impossible window (a "to" earlier than "from"), which would
+// hide the content from EVERYONE (this is exactly what hid AS 13). If the bounds
+// are reversed, drop the "to" and treat it as "from … onwards" so content is
+// never accidentally hidden. Used on every save of an attempt window.
+export function normalizeWindow(
+  from: string | null,
+  to: string | null,
+): { from: string | null; to: string | null } {
+  const f = attemptRank(from);
+  const t = attemptRank(to);
+  if (f !== null && t !== null && t < f) return { from, to: null };
+  return { from, to };
+}

@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { videoEmbedSrc } from "../../_lib/media";
-import { attemptRank } from "../../_lib/attempt";
+import { attemptRank, effectiveAttemptWindow } from "../../_lib/attempt";
 import { bunnyEmbedUrl } from "@/lib/bunny";
 import DoubtBox from "./DoubtBox";
 import ClassDownload from "./ClassDownload";
@@ -315,7 +315,7 @@ export default async function LearnTopic({ params }: { params: { topicId: string
 
   const { data: topic } = await supabase
     .from("topics")
-    .select("id, title, subject_id, topic_code, weightage_marks, importance, important_qs_rev1, important_qs_rev2, valid_from_attempt, valid_to_attempt, amendments_upto, application_notes, update_coming, update_on, update_for, update_note, subjects(title, course_id)")
+    .select("id, title, subject_id, topic_code, weightage_marks, importance, important_qs_rev1, important_qs_rev2, valid_from_attempt, valid_to_attempt, amendments_upto, application_notes, update_coming, update_on, update_for, update_note, subjects(title, course_id, valid_from_attempt, valid_to_attempt)")
     .eq("id", params.topicId)
     .single();
   if (!topic) notFound();
@@ -702,15 +702,21 @@ export default async function LearnTopic({ params }: { params: { topicId: string
             amendments_upto?: string | null;
             important_qs_rev1?: string | null;
             important_qs_rev2?: string | null;
+            subjects?: { valid_from_attempt?: string | null; valid_to_attempt?: string | null } | null;
           };
-          const hasMeta = td.valid_from_attempt || td.amendments_upto || td.important_qs_rev1 || td.important_qs_rev2;
+          // Effective window: the topic's own override if set, else the subject's.
+          const eff = effectiveAttemptWindow(
+            td.valid_from_attempt, td.valid_to_attempt,
+            td.subjects?.valid_from_attempt, td.subjects?.valid_to_attempt,
+          );
+          const hasMeta = eff.from || td.amendments_upto || td.important_qs_rev1 || td.important_qs_rev2;
           if (!hasMeta) return null;
           const lines = (s?: string | null) => (s ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
           return (
             <div className="card" style={{ marginTop: 18 }}>
               <h3 style={{ margin: "0 0 8px" }}>📋 Topic details</h3>
               <p className="muted" style={{ fontSize: ".88rem", margin: "0 0 6px" }}>
-                {td.valid_from_attempt ? <>📅 Applicable from <strong>{td.valid_from_attempt}</strong>{td.valid_to_attempt ? <> to <strong>{td.valid_to_attempt}</strong></> : " onwards"}</> : null}
+                {eff.from ? <>📅 Applicable from <strong>{eff.from}</strong>{eff.to ? <> to <strong>{eff.to}</strong></> : " onwards"}</> : null}
                 {td.amendments_upto ? <> · 📝 Amendments up to <strong>{td.amendments_upto}</strong></> : null}
               </p>
               {td.important_qs_rev1 && (

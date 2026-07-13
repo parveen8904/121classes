@@ -53,14 +53,23 @@ export default function TopicMetaForm({
         <input name="topic_code" defaultValue={topic.topic_code ?? ""} maxLength={6} placeholder="e.g. AS13 or IAS115" style={{ textTransform: "uppercase" }} />
       </div>
 
-      {/* Weightage is now set once at the SUBJECT level for all chapters. */}
-      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr", marginTop: 8 }}>
+      {/* Weightage + applicability are set once at the SUBJECT level for all
+          chapters. These fields are an OPTIONAL override — leave both blank and
+          this topic inherits the subject's applicable-attempt window. Only set
+          them for a special case (an updated/superseded chapter that applies to
+          a different attempt than the rest of the subject). */}
+      <h4 style={{ margin: "16px 0 4px" }}>📅 Applicable attempt — override (optional)</h4>
+      <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 6px" }}>
+        Leave blank to use the subject&apos;s setting (the normal case). Fill these only to override
+        this one chapter.
+      </p>
+      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr", marginTop: 4 }}>
         <div>
-          <label>Applicable from attempt *</label>
-          <AttemptPicker name="valid_from_attempt" defaultValue={topic.valid_from_attempt ?? ""} />
+          <label>Override — applies from attempt</label>
+          <AttemptPicker name="valid_from_attempt" defaultValue={topic.valid_from_attempt ?? ""} allowNone />
         </div>
         <div>
-          <label>Applicable to attempt (optional)</label>
+          <label>Override — applies to attempt</label>
           <AttemptPicker name="valid_to_attempt" defaultValue={topic.valid_to_attempt ?? ""} allowNone />
         </div>
       </div>

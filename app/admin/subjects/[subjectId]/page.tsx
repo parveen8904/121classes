@@ -15,6 +15,7 @@ import {
   toggleTopicPublish,
   updateSubjectInline,
   updateSubjectRemarks,
+  updateSubjectApplicability,
   setSubjectFaculty,
 } from "./actions";
 
@@ -24,7 +25,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, telegram_group_url, remarks, miq_rev1, miq_rev2, courses(title)")
+    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, telegram_group_url, remarks, miq_rev1, miq_rev2, valid_from_attempt, valid_to_attempt, courses(title)")
     .eq("id", subjectId)
     .single();
 
@@ -120,7 +121,12 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
   // Subject-level rollups for the summary banner.
   const hasRev1 = (topics ?? []).some((t) => ((t as { important_qs_rev1?: string | null }).important_qs_rev1 ?? "").trim());
   const hasRev2 = (topics ?? []).some((t) => ((t as { important_qs_rev2?: string | null }).important_qs_rev2 ?? "").trim());
-  const attempts = [...new Set((topics ?? []).map((t) => t.valid_from_attempt).filter(Boolean) as string[])];
+  const subjFrom = (subject as { valid_from_attempt?: string | null }).valid_from_attempt ?? null;
+  const subjTo = (subject as { valid_to_attempt?: string | null }).valid_to_attempt ?? null;
+  const subjApplicable = subjFrom
+    ? `${subjFrom}${subjTo ? ` to ${subjTo}` : " onwards"}`
+    : "all attempts";
+  const overrideCount = (topics ?? []).filter((t) => t.valid_from_attempt || t.valid_to_attempt).length;
   const MAT_LABEL: Record<string, string> = { book: "📕 Books", question_bank: "📚 Question bank", icai: "🏛️ ICAI", rtp: "📄 RTP", mtp: "📄 MTP", past_papers: "🗂️ Past papers", notes: "📝 Notes" };
   const materialList = [...materialKinds].map((k) => MAT_LABEL[k] ?? k);
 
@@ -142,7 +148,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
           <div>🧠 <strong>{mcqCount}</strong> MCQ {mcqCount === 1 ? "test" : "tests"} · ✍️ <strong>{descCount}</strong> descriptive {descCount === 1 ? "test" : "tests"}</div>
           <div>📌 Most important questions — first revision: <strong>{hasRev1 ? "✓ available" : "— not added"}</strong> · second revision: <strong>{hasRev2 ? "✓ available" : "— not added"}</strong></div>
           <div>📚 Materials: <strong>{materialList.length ? materialList.join(" · ") : "none uploaded yet"}</strong></div>
-          <div>📅 Applicable attempt(s): <strong>{attempts.length ? attempts.join(", ") : "all attempts"}</strong></div>
+          <div>📅 Applicable attempt: <strong>{subjApplicable}</strong>{overrideCount > 0 ? <span className="muted" style={{ fontWeight: 400, fontSize: ".82rem" }}> · {overrideCount} topic{overrideCount === 1 ? "" : "s"} override this</span> : null}</div>
         </div>
         <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0 0" }}>
           Students see this same summary (transcripts are never shown to them).
@@ -156,6 +162,33 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
           <input type="hidden" name="id" value={subject.id} />
           <textarea name="remarks" rows={3} defaultValue={subject.remarks ?? ""} placeholder="Private note for this subject — reminders, to-dos, anything." style={{ width: "100%" }} />
           <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 8 }}>Save remarks</SubmitButton>
+        </form>
+      </details>
+
+      {/* Global applicability for the whole subject — every topic inherits this
+          unless a topic sets its own override. Set once here. */}
+      <details className="card" style={{ marginTop: 12 }} open={!subjFrom}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+          📅 Applicable for attempt (whole subject) — <strong>{subjApplicable}</strong>
+        </summary>
+        <form action={updateSubjectApplicability} style={{ marginTop: 10 }}>
+          <input type="hidden" name="id" value={subject.id} />
+          <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
+            Set this once for the subject. Every topic uses it automatically. Leave blank = shown to
+            all attempts. A single topic can still override this on its own page (for an updated/
+            superseded chapter).
+          </p>
+          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr", maxWidth: 460 }}>
+            <div>
+              <label>Applies from attempt</label>
+              <AttemptPicker name="valid_from_attempt" defaultValue={subjFrom ?? ""} allowNone />
+            </div>
+            <div>
+              <label>Applies to attempt (optional — blank = onwards)</label>
+              <AttemptPicker name="valid_to_attempt" defaultValue={subjTo ?? ""} allowNone />
+            </div>
+          </div>
+          <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 10 }}>Save applicability</SubmitButton>
         </form>
       </details>
 
@@ -321,7 +354,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                 <p className="row-sub">
                   {range ? <><strong>{range}</strong> · </> : null}
                   order {t.order_index} · {t.is_published ? "🟢 published" : "⚪ draft"}
-                  {t.valid_from_attempt ? ` · from ${t.valid_from_attempt}` : ""}
+                  {(t.valid_from_attempt || t.valid_to_attempt) ? ` · ⚠️ overrides subject: from ${t.valid_from_attempt ?? "—"}${t.valid_to_attempt ? ` to ${t.valid_to_attempt}` : " onwards"}` : ""}
                 </p>
               </div>
               <div className="row-actions">

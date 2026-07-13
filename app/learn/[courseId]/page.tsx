@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { topicVisible } from "../_lib/attempt";
+import { topicVisible, effectiveAttemptWindow } from "../_lib/attempt";
 import { setAutoRenew } from "./actions";
 import { addMySubject, removeMySubject } from "../mycourses";
 import AskDoubts from "./AskDoubts";
@@ -32,7 +32,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
     supabase.from("courses").select("id, title").eq("id", params.courseId).single(),
     supabase
       .from("subjects")
-      .select("id, title, order_index, telegram_group_url, subject_faculty(faculties(full_name, phone, email))")
+      .select("id, title, order_index, telegram_group_url, valid_from_attempt, valid_to_attempt, subject_faculty(faculties(full_name, phone, email))")
       .eq("course_id", params.courseId)
       .order("order_index")
       .order("title"),
@@ -49,6 +49,20 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   const mySubjIds = new Set((mySubjRows ?? []).map((r) => r.subject_id as string));
 
   const subjectIds = (subjects ?? []).map((s) => s.id);
+  // Global applicability per subject; each topic inherits it unless it overrides.
+  const subjWindow = new Map(
+    (subjects ?? []).map((s) => [
+      s.id as string,
+      {
+        from: (s as { valid_from_attempt?: string | null }).valid_from_attempt ?? null,
+        to: (s as { valid_to_attempt?: string | null }).valid_to_attempt ?? null,
+      },
+    ]),
+  );
+  const topicWindow = (t: { subject_id: string | null; valid_from_attempt?: string | null; valid_to_attempt?: string | null }) => {
+    const sw = subjWindow.get((t.subject_id as string) ?? "") ?? { from: null, to: null };
+    return effectiveAttemptWindow(t.valid_from_attempt, t.valid_to_attempt, sw.from, sw.to);
+  };
   const { data: topics } = subjectIds.length
     ? await supabase
         .from("topics")
@@ -124,9 +138,11 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   // many (non-part) classes each topic has, so it doesn't depend on stored class_no.
   const topicClassRange = new Map<string, { start: number; end: number }>();
   for (const s of subjects ?? []) {
-    const ordered = (topics ?? []).filter(
-      (t) => t.subject_id === s.id && topicVisible(target, t.valid_from_attempt, t.valid_to_attempt),
-    );
+    const ordered = (topics ?? []).filter((t) => {
+      if (t.subject_id !== s.id) return false;
+      const w = topicWindow(t);
+      return topicVisible(target, w.from, w.to);
+    });
     let running = 0;
     for (const t of ordered) {
       const cnt = topicClassCount.get(t.id) ?? 0;
@@ -203,11 +219,11 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
               .filter((f): f is NonNullable<SubjectFacultyRow["faculties"]> => !!f);
             const faculty = facultyRows.map((f) => f.full_name).filter(Boolean);
             const facultyContacts = facultyRows.filter((f) => f.phone || f.email);
-            const subjTopics = (topics ?? []).filter(
-              (t) =>
-                t.subject_id === s.id &&
-                topicVisible(target, t.valid_from_attempt, t.valid_to_attempt),
-            );
+            const subjTopics = (topics ?? []).filter((t) => {
+              if (t.subject_id !== s.id) return false;
+              const w = topicWindow(t);
+              return topicVisible(target, w.from, w.to);
+            });
             return (
               <div key={s.id} className="subj-block">
                 {/* Prominent subject banner — carries the faculty contact. */}
@@ -277,7 +293,8 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                   const subjAll = (topics ?? []).filter((t) => t.subject_id === s.id);
                   const hasRev1 = subjAll.some((t) => ((t as { important_qs_rev1?: string | null }).important_qs_rev1 ?? "").trim());
                   const hasRev2 = subjAll.some((t) => ((t as { important_qs_rev2?: string | null }).important_qs_rev2 ?? "").trim());
-                  const attempts = [...new Set(subjAll.map((t) => t.valid_from_attempt).filter(Boolean) as string[])];
+                  const sw = subjWindow.get(s.id) ?? { from: null, to: null };
+                  const applicable = sw.from ? `${sw.from}${sw.to ? ` to ${sw.to}` : " onwards"}` : "";
                   const mats = [...(subjMaterials.get(s.id) ?? [])].map((k) => MAT_LABEL[k] ?? k);
                   return (
                     <div className="card" style={{ margin: "4px 0 14px" }}>
@@ -288,7 +305,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                         <div>🧠 <strong>{sumMcq.get(s.id) ?? 0}</strong> MCQ tests · ✍️ <strong>{sumDesc.get(s.id) ?? 0}</strong> descriptive tests</div>
                         <div>📌 Important questions — first revision: {hasRev1 ? "✓" : "—"} · second revision: {hasRev2 ? "✓" : "—"}</div>
                         <div>📚 Materials: {mats.length ? mats.join(" · ") : "coming soon"}</div>
-                        <div>📅 Applicable: {attempts.length ? attempts.join(", ") : "all attempts"}</div>
+                        <div>📅 Applicable: {applicable || "all attempts"}</div>
                       </div>
                     </div>
                   );

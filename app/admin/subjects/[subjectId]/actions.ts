@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { slugify, str, num, nullable } from "../../_lib/util";
+import { normalizeWindow } from "@/app/learn/_lib/attempt";
 
 export async function createTopic(formData: FormData) {
   const subjectId = str(formData.get("subjectId"));
@@ -71,6 +72,23 @@ export async function toggleTopicPublish(formData: FormData) {
   const supabase = createClient();
   await supabase.from("topics").update({ is_published: next }).eq("id", id);
   revalidatePath(`/admin/subjects/${subjectId}`);
+}
+
+// Global "applicable for attempt" for the whole subject. Every topic inherits
+// this window unless the topic sets its own override. normalizeWindow() drops a
+// reversed "to" so an impossible window can never hide the subject.
+export async function updateSubjectApplicability(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const { from, to } = normalizeWindow(
+    str(formData.get("valid_from_attempt")) || null,
+    str(formData.get("valid_to_attempt")) || null,
+  );
+  await createServiceClient().from("subjects").update({
+    valid_from_attempt: from,
+    valid_to_attempt: to,
+  }).eq("id", id);
+  revalidatePath(`/admin/subjects/${id}`);
 }
 
 // Save the admin's free-text remarks/notes for a subject.

@@ -8,6 +8,7 @@ import { ALL_CONFIG_FIELDS } from "./sectionTypes";
 import { summarizeClass } from "@/lib/ai";
 import { extractPdfText } from "@/lib/pdf";
 import { createServiceClient } from "@/lib/supabase/service";
+import { normalizeWindow } from "@/app/learn/_lib/attempt";
 
 // Attach AI-training material (question bank / ICAI / RTP / past papers / book)
 // to a topic. PDF text is extracted ONCE so the AI is grounded on it for this
@@ -187,6 +188,7 @@ export async function updateTopicMeta(formData: FormData) {
   if (!topicId) return;
   const nn = (k: string) => str(formData.get(k)) || null;
   const title = str(formData.get("title"));
+  const win = normalizeWindow(nn("valid_from_attempt"), nn("valid_to_attempt"));
   const supabase = createClient();
   await supabase
     .from("topics")
@@ -197,8 +199,11 @@ export async function updateTopicMeta(formData: FormData) {
       topic_code: str(formData.get("topic_code")).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) || null,
       // weightage_marks is set at the subject level now — don't overwrite it here.
       importance: parseImportance(str(formData.get("importance"))),
-      valid_from_attempt: nn("valid_from_attempt"),
-      valid_to_attempt: nn("valid_to_attempt"),
+      // Optional per-topic override of the subject's applicability. Guard against
+      // a reversed window (which would hide the topic from everyone, as happened
+      // to AS 13). Blank = inherit the subject.
+      valid_from_attempt: win.from,
+      valid_to_attempt: win.to,
       amendments_upto: nn("amendments_upto"),
       application_notes: nn("application_notes"),
       important_qs_rev1: nn("important_qs_rev1"),

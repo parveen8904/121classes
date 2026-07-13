@@ -269,7 +269,7 @@ export default async function IntegrationsPage({
                     <input name="telegram_group_chat_id" defaultValue={r.telegram_group_chat_id ?? ""} placeholder="-1001234567890" />
                   </div>
                   <div>
-                    <label>Discord channel id</label>
+                    <label>Discord channel id <span className="muted" style={{ fontWeight: 400 }}>(numeric — NOT the invite link)</span></label>
                     <input name="discord_channel_id" defaultValue={r.discord_channel_id ?? ""} placeholder="123456789012345678" />
                   </div>
                 </div>

@@ -26,7 +26,11 @@ async function discordBot(method: string, path: string, body?: unknown): Promise
 }
 
 // Send a message to a Discord channel as the bot. Returns the message id.
+// A channel ID is a long number (a "snowflake"); an invite link like
+// https://discord.gg/xxxx is NOT usable here — guard against it so a
+// mis-configured subject doesn't fire a broken API call.
 export async function discordSendToChannel(channelId: string, text: string): Promise<string | null> {
+  if (!/^\d{5,}$/.test(String(channelId).trim())) return null; // not a numeric channel ID
   const r = await discordBot("POST", `/channels/${channelId}/messages`, { content: text.slice(0, 2000), allowed_mentions: { parse: [] } });
   return r.ok && r.json?.id ? r.json.id : null;
 }

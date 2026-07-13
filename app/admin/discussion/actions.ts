@@ -14,6 +14,19 @@ async function adminId(): Promise<string | null> {
   return staff && staffCanArea(staff, "moderation") ? staff.id : null;
 }
 
+// Save the admin's extra blocked terms (competitor names, banned phrases) —
+// one per line. Applied instantly to Telegram, Discord and website messages.
+export async function saveBlockedTerms(formData: FormData) {
+  const me = await adminId();
+  if (!me) return;
+  const terms = String(formData.get("terms") ?? "")
+    .split("\n").map((l) => l.trim()).filter(Boolean).join("\n");
+  await createServiceClient()
+    .from("site_settings")
+    .upsert({ key: "moderation_blocked_terms", value: terms }, { onConflict: "key" });
+  revalidatePath("/admin/discussion");
+}
+
 // Approve a hidden/flagged message → make it visible again.
 export async function restoreMessage(formData: FormData) {
   const me = await adminId();

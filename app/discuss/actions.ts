@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { moderateMessage } from "@/lib/moderation";
+import { moderateMessageDyn } from "@/lib/moderation";
 import { tgSendToGroup } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
 
@@ -38,7 +38,7 @@ export async function postToGroup(input: { subjectId: string; text: string }): P
   const role = (prof?.role as string) || "student";
   const label = role === "admin" || role === "faculty" ? `👨‍🏫 ${name} (Faculty)` : `👤 ${name}`;
 
-  const mod = moderateMessage(text);
+  const mod = await moderateMessageDyn(text);
   if (mod.flagged) {
     await svc.from("group_messages").insert({
       chat_id: tgChat || dcChannel, subject_id: input.subjectId, source: "website", sender_user_id: user.id, sender_name: name,

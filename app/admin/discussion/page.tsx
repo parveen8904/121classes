@@ -1,7 +1,7 @@
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { restoreMessage, hideMessage, banSender, unbanUser } from "./actions";
+import { restoreMessage, hideMessage, banSender, unbanUser, saveBlockedTerms } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Group moderation — Admin" };
@@ -39,6 +39,8 @@ export default async function DiscussionAdmin({ searchParams }: { searchParams: 
   const { data: messages } = await qb;
 
   const { data: bans } = await svc.from("banned_group_users").select("id, chat_id, user_id, tg_user_id, kind, reason, created_at").order("created_at", { ascending: false }).limit(50);
+  const { data: btRow } = await svc.from("site_settings").select("value").eq("key", "moderation_blocked_terms").maybeSingle();
+  const blockedTerms = (btRow?.value as string) ?? "";
   const { data: log } = await svc.from("message_moderation_log").select("action, reason, created_at").order("created_at", { ascending: false }).limit(20);
 
   const card = { background: "var(--bg-soft)", borderRadius: 10, padding: "10px 12px" } as const;
@@ -73,6 +75,22 @@ export default async function DiscussionAdmin({ searchParams }: { searchParams: 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 920 }}>
       <AdminHero badge="🛡️ Group moderation" title="Discussion moderation" subtitle="Review flagged messages, search across all groups, hide messages and ban/mute users. Your DB is the record; Telegram is kept in sync." back={{ href: "/admin", label: "Admin" }} />
+
+      {/* Extra blocked words/phrases — competitor names, banned topics. */}
+      <details className="card" style={{ marginTop: 14 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+          🚫 Blocked words &amp; competitor names {blockedTerms.trim() ? `(${blockedTerms.trim().split("\n").length})` : "(none yet)"}
+        </summary>
+        <form action={saveBlockedTerms} style={{ marginTop: 10 }}>
+          <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
+            One word or phrase per line (e.g. a competitor&apos;s name). Any group message containing one is
+            deleted automatically — on Telegram, Discord and the website. Links, phone numbers, ads,
+            abusive language and adult content are already blocked built-in.
+          </p>
+          <textarea name="terms" rows={5} defaultValue={blockedTerms} placeholder={"competitor institute name\nanother coaching brand\npen drive classes"} style={{ width: "100%", fontFamily: "monospace" }} />
+          <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 8 }}>Save blocked terms</SubmitButton>
+        </form>
+      </details>
 
       <h2 className="admin-section-title">🚩 Flagged &amp; hidden — review ({(flagged ?? []).length})</h2>
       <div style={{ display: "grid", gap: 8 }}>

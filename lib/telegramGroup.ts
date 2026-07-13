@@ -41,6 +41,18 @@ export async function tgDeleteMessage(chatId: string, messageId: number): Promis
   return !!j?.ok;
 }
 
+// Approve / decline a pending join request (group must have "Approve new
+// members" turned on; the bot must be a group admin). Used to keep the subject
+// groups exclusive to linked portal students.
+export async function tgApproveJoin(chatId: string, tgUserId: string): Promise<boolean> {
+  const j = await tgApi("approveChatJoinRequest", { chat_id: chatId, user_id: Number(tgUserId) });
+  return !!j?.ok;
+}
+export async function tgDeclineJoin(chatId: string, tgUserId: string): Promise<boolean> {
+  const j = await tgApi("declineChatJoinRequest", { chat_id: chatId, user_id: Number(tgUserId) });
+  return !!j?.ok;
+}
+
 // Mute (restrict to no permissions) or ban a Telegram user in a group.
 export async function tgRestrictUser(chatId: string, tgUserId: string, ban = false): Promise<boolean> {
   if (ban) {

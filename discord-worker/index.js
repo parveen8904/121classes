@@ -12,7 +12,7 @@
 import { Client, GatewayIntentBits, Partials } from "discord.js";
 import { createClient } from "@supabase/supabase-js";
 
-const { DISCORD_BOT_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TELEGRAM_BOT_TOKEN } = process.env;
+const { DISCORD_BOT_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TELEGRAM_BOT_TOKEN, SITE_URL, CRON_SECRET } = process.env;
 if (!DISCORD_BOT_TOKEN || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error("Missing env: DISCORD_BOT_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
   process.exit(1);
@@ -24,7 +24,11 @@ const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
 const URL = /(https?:\/\/|www\.)\S+|\b(?:t\.me|wa\.me|chat\.whatsapp\.com|bit\.ly|tinyurl\.com|youtu\.be|forms\.gle|linktr\.ee|rb\.gy)\/\S+/i;
 const PHONE = /(?:\+?\d[\s-]?){10,}/;
 const PROMO = /\b(buy now|earn money|work from home|click here|guaranteed|limited offer|cashback|forex|crypto|bitcoin|investment plan|join my|dm me|subscribe to my channel|promo ?code|coupon code|discount code|whatsapp me|telegram me)\b/i;
-const ABUSE = ["fuck","fucking","bitch","bastard","asshole","dick","slut","whore","motherfucker","bullshit","cunt","retard","chutiya","chutiye","madarchod","behenchod","bhenchod","bsdk","gandu","lund","randi","harami","kamina","kutta"];
+const ABUSE = ["fuck","fucking","bitch","bastard","asshole","dick","slut","whore","motherfucker","bullshit","cunt","retard","idiot","stupid","chutiya","chutiye","madarchod","behenchod","bhenchod","bsdk","mc","bc","gandu","lund","randi","harami","kamina","kutta","saala","saale","gaand","jhant","bhosdike","bhosdi","lauda","laude","tatti","chodu","raand"];
+const ADULT = ["porn","porno","pornhub","xvideos","xnxx","onlyfans","nude","nudes","naked","sexy","sexting","boobs","hentai","xxx","blowjob","horny","erotic","stripper","escort","callgirl","call girl","nangi","chudai","chudayi","sambhog"];
+// Admin-defined blocked terms (competitor names etc.) — site_settings key
+// moderation_blocked_terms, one per line; refreshed with the channel map.
+let blockedTerms = [];
 function moderate(text) {
   const t = (text || "").trim();
   const reasons = [];
@@ -35,7 +39,11 @@ function moderate(text) {
   if (PROMO.test(t)) reasons.push("advertisement / spam");
   const low = ` ${t.toLowerCase().replace(/[^a-z\s]/g, " ")} `;
   if (ABUSE.some((w) => low.includes(` ${w} `))) reasons.push("abusive language");
+  if (ADULT.some((w) => low.includes(` ${w} `))) reasons.push("adult content");
   if (/(.)\1{9,}/.test(t)) reasons.push("spam (repetition)");
+  const lowRaw = t.toLowerCase();
+  const hit = blockedTerms.find((term) => term && lowRaw.includes(term.toLowerCase()));
+  if (hit) reasons.push(`blocked term ("${hit}")`);
   return { flagged: reasons.length > 0, reasons };
 }
 
@@ -55,6 +63,8 @@ let channelMap = new Map();
 async function refreshMap() {
   const { data } = await db.from("subjects").select("id, discord_channel_id, telegram_group_chat_id").not("discord_channel_id", "is", null);
   channelMap = new Map((data ?? []).map((s) => [s.discord_channel_id, { subjectId: s.id, tg: s.telegram_group_chat_id }]));
+  const { data: bt } = await db.from("site_settings").select("value").eq("key", "moderation_blocked_terms").maybeSingle();
+  blockedTerms = String(bt?.value ?? "").split("\n").map((l) => l.trim()).filter((l) => l.length >= 2);
 }
 
 const client = new Client({
@@ -108,6 +118,19 @@ client.on("messageCreate", async (msg) => {
     }
     // Relay clean messages to the subject's Telegram group (bot-authored → no loop).
     if (map.tg) await tgRelay(map.tg, `👤 ${name}: ${text}`);
+    // AI answer (same brain/toggle/cap as the Telegram groups): the site decides
+    // whether to answer; we just post the reply threaded under the question.
+    if (SITE_URL && CRON_SECRET) {
+      try {
+        const res = await fetch(`${SITE_URL}/api/group-ai-answer`, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${CRON_SECRET}` },
+          body: JSON.stringify({ discordChannelId: msg.channelId, question: text }),
+        });
+        const j = await res.json().catch(() => null);
+        if (j?.answer) await msg.reply({ content: j.answer.slice(0, 1990), allowedMentions: { repliedUser: false } });
+      } catch (e) { console.error("ai answer failed", e?.message); }
+    }
   } catch (e) {
     console.error("messageCreate error", e?.message);
   }

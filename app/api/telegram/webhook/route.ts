@@ -1,35 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendTelegramMessage, notifyFaculty } from "@/lib/notify";
-import { answerDoubtFromMaterial, aiConfigured, aiFeatureEnabled, NEED_FACULTY } from "@/lib/ai";
+import { answerDoubtFromMaterial, aiConfigured, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getSecret } from "@/lib/secrets";
-import { moderateMessage } from "@/lib/moderation";
-import { tgDeleteMessage, tgSendGroupReply } from "@/lib/telegramGroup";
+import { moderateMessageDyn } from "@/lib/moderation";
+import { tgDeleteMessage, tgSendGroupReply, tgApproveJoin, tgDeclineJoin } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
-
-// Does a group message look like an academic QUESTION worth an AI answer?
-// Deliberately conservative — greetings/chit-chat must never trigger the AI.
-function looksLikeQuestion(text: string): boolean {
-  const t = text.trim();
-  if (t.length < 15) return false;
-  if (t.includes("?")) return true;
-  return /\b(how|what|why|when|where|which|whether|explain|solve|difference|doubt|calculate|clarify|anyone|help|confus|kya|kaise|kyun|kyu|kab|samjha)\b/i.test(t);
-}
-
-// Daily cap on group AI answers (all groups combined) so a chatty day can't run
-// up the bill. Configurable via site_settings key ai_group_doubt_daily_limit.
-async function groupDoubtBudgetLeft(svc: ReturnType<typeof createServiceClient>): Promise<boolean> {
-  const { data } = await svc.from("site_settings").select("value").eq("key", "ai_group_doubt_daily_limit").maybeSingle();
-  const cap = Number(data?.value) || 100;
-  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
-  const { count } = await svc
-    .from("ai_usage")
-    .select("id", { count: "exact", head: true })
-    .eq("feature", "group_doubt")
-    .gte("created_at", dayStart.toISOString());
-  return (count ?? 0) < cap;
-}
+import { groupAiAnswer } from "@/lib/groupDoubt";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +47,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  // ---- Members-only gate: someone asked to JOIN a subject group ----
+  // The group has "Approve new members" on; Telegram sends us the request. We
+  // approve ONLY people who have linked their portal account (Connect Telegram
+  // on the dashboard) — everyone else is declined with a DM explaining how.
+  const jr = update?.chat_join_request;
+  if (jr?.chat?.id && jr?.from?.id) {
+    const jrChat = String(jr.chat.id);
+    const jrUser = String(jr.from.id);
+    // For 1-to-1 chats the chat id IS the user id, so profiles.telegram_chat_id
+    // (set during Connect Telegram) doubles as the linked Telegram user id.
+    const { data: linked } = await svc
+      .from("profiles")
+      .select("id")
+      .eq("telegram_chat_id", jrUser)
+      .maybeSingle();
+    if (linked?.id) {
+      await tgApproveJoin(jrChat, jrUser);
+    } else {
+      await tgDeclineJoin(jrChat, jrUser);
+      // Best-effort DM (works only if they've ever started the bot).
+      await sendTelegramMessage(
+        jrUser,
+        "🔒 This group is only for CA Parveen Sharma students. Please log in at caparveensharma.com, tap “Connect Telegram” on your dashboard, then request to join again — you'll be approved automatically.",
+      );
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   const msg = update?.message ?? update?.edited_message;
   const chatId: string | undefined = msg?.chat?.id ? String(msg.chat.id) : undefined;
   const text: string = (msg?.text ?? "").trim();
@@ -82,7 +88,7 @@ export async function POST(req: NextRequest) {
       const { data: subj } = await svc.from("subjects").select("id, discord_channel_id").eq("telegram_group_chat_id", chatId).maybeSingle();
       const fromId = msg?.from?.id ? String(msg.from.id) : null;
       const fromName = [msg?.from?.first_name, msg?.from?.last_name].filter(Boolean).join(" ") || msg?.from?.username || "Member";
-      const mod = moderateMessage(text);
+      const mod = await moderateMessageDyn(text);
       let status = "visible";
       if (mod.flagged) {
         await tgDeleteMessage(chatId, msg.message_id); // bot must be group admin
@@ -124,19 +130,10 @@ export async function POST(req: NextRequest) {
       // discussion shows it too. Off-syllabus / unknown → stay SILENT (no group
       // noise; faculty can reply from the moderation panel like before).
       // Controls: the "group_doubt" admin toggle + a daily cap (default 100/day).
-      if (
-        !mod.flagged &&
-        subj?.id &&
-        looksLikeQuestion(text) &&
-        (await aiFeatureEnabled("group_doubt")) &&
-        (await groupDoubtBudgetLeft(svc))
-      ) {
+      if (!mod.flagged && subj?.id) {
         try {
-          const material = await getRepositoryContext(subj.id, 12000, { query: text });
-          const raw = await answerDoubtFromMaterial(text, material, "group_doubt");
-          const answer = raw && raw.trim() !== NEED_FACULTY ? raw.trim() : null;
-          if (answer) {
-            const body = `🤖 ${answer}\n\n— AI assistant, under CA Parveen Sharma's guidance`;
+          const body = await groupAiAnswer(subj.id, text); // toggle+cap+question check inside
+          if (body) {
             const sentId = await tgSendGroupReply(chatId, body, msg.message_id);
             if (sentId) {
               // Store the bot's own reply (Telegram never webhooks it back to us)

@@ -46,20 +46,20 @@ export default async function RepositoryPage() {
     svc.from("subjects").select("id, title").order("title"),
     svc.from("courses").select("id, title").order("title"),
     aiConfigured(),
-    svc.from("sections").select("config").eq("type", "full_class_video").eq("is_published", true),
+    // sections_meta exposes existence flags only — no transcript blob pulled.
+    svc.from("sections_meta").select("has_transcript, has_digest, notes_hand_url, has_notes_text").eq("type", "full_class_video").eq("is_published", true),
   ]);
   const list = (items ?? []) as Item[];
   const subjMap = new Map((subjects ?? []).map((s) => [s.id, s.title as string]));
 
   // What content the AI actually has to answer from.
   const cov = { total: 0, transcript: 0, digest: 0, notes_have: 0, notes_ocr: 0 };
-  for (const s of secs ?? []) {
-    const c = (s.config ?? {}) as Record<string, unknown>;
+  for (const s of (secs ?? []) as { has_transcript: boolean; has_digest: boolean; notes_hand_url: string | null; has_notes_text: boolean }[]) {
     cov.total++;
-    if (String(c.transcript ?? "").length > 100) cov.transcript++;
-    if (String(c.ai_summary ?? "").trim()) cov.digest++;
-    if (c.notes_hand_url) cov.notes_have++;
-    if (String(c.notes_text ?? "").trim()) cov.notes_ocr++;
+    if (s.has_transcript) cov.transcript++;
+    if (s.has_digest) cov.digest++;
+    if (s.notes_hand_url) cov.notes_have++;
+    if (s.has_notes_text) cov.notes_ocr++;
   }
   const books = list.filter((i) => i.is_active && (i.content ?? "").length > 100).length;
 

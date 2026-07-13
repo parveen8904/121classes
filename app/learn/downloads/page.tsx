@@ -23,9 +23,9 @@ export default async function DownloadsPage() {
   const sectionIds = ((classes ?? []) as { section_id?: string }[]).map((c) => c.section_id).filter(Boolean) as string[];
   const classNoBySection = new Map<string, string>();
   if (sectionIds.length) {
-    const { data: secs } = await svc.from("sections").select("id, config").in("id", sectionIds);
+    const { data: secs } = await svc.from("sections_meta").select("id, class_no").in("id", sectionIds);
     for (const s of secs ?? []) {
-      const n = ((s.config ?? {}) as Record<string, string>).class_no;
+      const n = (s as { class_no?: string | null }).class_no;
       if (n) classNoBySection.set(s.id as string, String(n));
     }
   }

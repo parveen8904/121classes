@@ -56,12 +56,11 @@ export default async function CostsPage() {
   const totalMonth = aiMonth + bunnyMonth + supabasePlan + vercelPlan;
 
   // --- Bunny videos vs YouTube (usage proxy) ---
-  const { data: secs } = await svc.from("sections").select("config").limit(5000);
+  const { data: secs } = await svc.from("sections_meta").select("bunny_video_id, youtube_url").limit(5000);
   let bunnyVideos = 0, youtubeVideos = 0;
-  for (const s of secs ?? []) {
-    const c = (s.config ?? {}) as Record<string, unknown>;
-    if (c.bunny_video_id) bunnyVideos++;
-    else if (c.youtube_url) youtubeVideos++;
+  for (const s of (secs ?? []) as { bunny_video_id: string | null; youtube_url: string | null }[]) {
+    if (s.bunny_video_id) bunnyVideos++;
+    else if (s.youtube_url) youtubeVideos++;
   }
 
   // --- Files on R2 vs Supabase (by URL) ---

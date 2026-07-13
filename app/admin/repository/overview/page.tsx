@@ -5,7 +5,10 @@ import { createServiceClient } from "@/lib/supabase/service";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Repository overview — Admin" };
 
-type Sec = { topic_id: string; type: string; config: Record<string, unknown> | null };
+type Sec = {
+  topic_id: string; type: string; class_no: string | null; pdf_url: string | null;
+  notes_hand_url: string | null; notes_typed_url: string | null; has_transcript: boolean;
+};
 
 const has = (v: unknown) => !!(v && String(v).trim());
 
@@ -20,7 +23,7 @@ export default async function RepositoryOverview() {
   ]);
   const topicIds = (topics ?? []).map((t) => t.id);
   const { data: secRows } = topicIds.length
-    ? await svc.from("sections").select("topic_id, type, config").in("topic_id", topicIds)
+    ? await svc.from("sections_meta").select("topic_id, type, class_no, pdf_url, notes_hand_url, notes_typed_url, has_transcript").in("topic_id", topicIds)
     : { data: [] as Sec[] };
 
   const secByTopic = new Map<string, Sec[]>();
@@ -33,13 +36,12 @@ export default async function RepositoryOverview() {
     const secs = secByTopic.get(topicId) ?? [];
     let classes = 0, pdfs = 0, transcripts = 0;
     for (const s of secs) {
-      const c = (s.config ?? {}) as Record<string, unknown>;
       // Don't count "part" continuations (e.g. 7B) as separate classes.
-      if (s.type === "full_class_video" && !/[A-Za-z]/.test(String(c.class_no ?? ""))) classes++;
-      if (has(c.pdf_url)) pdfs++;
-      if (has(c.notes_hand_url)) pdfs++;
-      if (has(c.notes_typed_url)) pdfs++;
-      if (has(c.transcript)) transcripts++;
+      if (s.type === "full_class_video" && !/[A-Za-z]/.test(String(s.class_no ?? ""))) classes++;
+      if (has(s.pdf_url)) pdfs++;
+      if (has(s.notes_hand_url)) pdfs++;
+      if (has(s.notes_typed_url)) pdfs++;
+      if (s.has_transcript) transcripts++;
     }
     const missing: string[] = [];
     if (t.is_combined) {

@@ -6,9 +6,14 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Control sheet — Admin" };
 
 const has = (v: unknown) => !!(v && String(v).trim());
-const isPart = (cfg: Record<string, unknown>) => /[A-Za-z]/.test(String(cfg.class_no ?? ""));
 
-type Sec = { id: string; topic_id: string; type: string; is_published: boolean; config: Record<string, unknown> | null };
+// From sections_meta — scalar keys + existence flags only, never the transcript.
+type Sec = {
+  id: string; topic_id: string; type: string; is_published: boolean;
+  class_no: string | null; notes_hand_url: string | null; notes_typed_url: string | null;
+  paper_question_pdf: string | null; paper_solution_pdf: string | null; has_transcript: boolean;
+};
+const isPart = (s: Sec) => /[A-Za-z]/.test(String(s.class_no ?? ""));
 
 // A single readiness cell: a count + a status colour (green ok / amber partial / red missing).
 function Cell({ label, value, status, hint }: { label: string; value: string; status: "ok" | "warn" | "bad" | "none"; hint?: string }) {
@@ -37,7 +42,7 @@ export default async function ControlSheetPage() {
   const topicIds = (topics ?? []).map((t) => t.id);
 
   const [{ data: secRows }, { data: repoRows }, { data: amendRows }] = await Promise.all([
-    topicIds.length ? svc.from("sections").select("id, topic_id, type, is_published, config").in("topic_id", topicIds) : { data: [] as Sec[] },
+    topicIds.length ? svc.from("sections_meta").select("id, topic_id, type, is_published, class_no, notes_hand_url, notes_typed_url, paper_question_pdf, paper_solution_pdf, has_transcript").in("topic_id", topicIds) : { data: [] as Sec[] },
     topicIds.length ? svc.from("repository_items").select("topic_id, kind, file_url, is_active").in("topic_id", topicIds) : { data: [] as { topic_id: string; kind: string; file_url: string | null; is_active: boolean }[] },
     topicIds.length ? svc.from("amendments").select("topic_id, is_published, notes_hand_url").in("topic_id", topicIds) : { data: [] as { topic_id: string; is_published: boolean; notes_hand_url: string | null }[] },
   ]);
@@ -87,21 +92,20 @@ export default async function ControlSheetPage() {
   function rowFor(t: (NonNullable<typeof topics>)[number]) {
     const secs = secByTopic.get(t.id) ?? [];
     const classSecs = secs.filter((s) => s.type === "full_class_video");
-    const classes = classSecs.filter((s) => !isPart((s.config ?? {}) as Record<string, unknown>)).length;
-    const hand = classSecs.filter((s) => has((s.config as Record<string, unknown> | null)?.notes_hand_url)).length;
-    const typed = classSecs.filter((s) => has((s.config as Record<string, unknown> | null)?.notes_typed_url)).length;
-    const transcripts = classSecs.filter((s) => has((s.config as Record<string, unknown> | null)?.transcript)).length;
+    const classes = classSecs.filter((s) => !isPart(s)).length;
+    const hand = classSecs.filter((s) => has(s.notes_hand_url)).length;
+    const typed = classSecs.filter((s) => has(s.notes_typed_url)).length;
+    const transcripts = classSecs.filter((s) => s.has_transcript).length;
 
     const mcqSecs = secs.filter((s) => s.type === "mcq_test");
     const mcqReady = mcqSecs.filter((s) => (mcqCount.get(s.id) ?? 0) > 0).length;
 
     const descSecs = secs.filter((s) => s.type === "subjective_test");
-    const cfgOf = (s: Sec) => (s.config ?? {}) as Record<string, unknown>;
-    const descQuestions = descSecs.filter((s) => has(cfgOf(s).paper_question_pdf)).length; // question paper uploaded
-    const descPaperReady = descSecs.filter((s) => has(cfgOf(s).paper_solution_pdf)).length;  // solution uploaded (for auto-grading)
+    const descQuestions = descSecs.filter((s) => has(s.paper_question_pdf)).length; // question paper uploaded
+    const descPaperReady = descSecs.filter((s) => has(s.paper_solution_pdf)).length;  // solution uploaded (for auto-grading)
     const descTyped = descSecs.filter((s) => (subjCount.get(s.id) ?? 0) > 0).length;
     // "Uploaded" = has a question paper OR typed questions. Solution is only needed for AI auto-grading.
-    const descReady = descSecs.filter((s) => has(cfgOf(s).paper_question_pdf) || (subjCount.get(s.id) ?? 0) > 0).length;
+    const descReady = descSecs.filter((s) => has(s.paper_question_pdf) || (subjCount.get(s.id) ?? 0) > 0).length;
 
     const repo = repoByTopic.get(t.id) ?? new Map<string, number>();
     const amd = amendByTopic.get(t.id) ?? { total: 0, hand: 0 };

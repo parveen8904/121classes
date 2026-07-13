@@ -68,27 +68,28 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
   const materialKinds = new Set<string>();
 
   if (topicIds.length) {
+    // sections_meta: only the scalar keys we need, never the transcript blob.
     const { data: secRows } = await supabase
-      .from("sections")
-      .select("topic_id, type, config")
+      .from("sections_meta")
+      .select("topic_id, type, duration_minutes, class_no")
       .in("topic_id", topicIds)
       .eq("is_published", true);
     for (const r of secRows ?? []) {
       const tid = (r as { topic_id: string }).topic_id;
       const type = (r as { type: string }).type;
-      const cfg = (r as { config?: { duration_minutes?: unknown; class_no?: unknown } }).config ?? {};
-      const d = Number(cfg.duration_minutes) || 0;
+      const row = r as { duration_minutes?: string | null; class_no?: string | null };
+      const d = Number(row.duration_minutes) || 0;
       if (type === "full_class_video") {
         // A "part" class (e.g. "7B", a ≤100-min continuation) shares the
         // previous class's number — don't count it as a separate class.
-        const isPart = /[A-Za-z]/.test(String(cfg.class_no ?? ""));
+        const isPart = /[A-Za-z]/.test(String(row.class_no ?? ""));
         totalClassMins += d;
         classMins.set(tid, (classMins.get(tid) ?? 0) + d);
         if (!isPart) {
           totalClasses++;
           classCount.set(tid, (classCount.get(tid) ?? 0) + 1);
         }
-        const no = parseInt(String(cfg.class_no ?? "").replace(/\D/g, ""), 10);
+        const no = parseInt(String(row.class_no ?? "").replace(/\D/g, ""), 10);
         if (Number.isFinite(no) && no > 0) {
           classNoMin.set(tid, Math.min(classNoMin.get(tid) ?? Infinity, no));
           classNoMax.set(tid, Math.max(classNoMax.get(tid) ?? 0, no));

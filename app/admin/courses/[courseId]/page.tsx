@@ -41,20 +41,20 @@ export default async function CourseDetail({ params }: { params: { courseId: str
     const topicIds = (topicRows ?? []).map((t) => t.id);
     if (topicIds.length) {
       const { data: classRows } = await supabase
-        .from("sections")
-        .select("topic_id, config")
+        .from("sections_meta")
+        .select("topic_id, duration_minutes, class_no")
         .in("topic_id", topicIds)
         .eq("type", "full_class_video")
         .eq("is_published", true);
       for (const r of classRows ?? []) {
         const sid = topicToSubject.get((r as { topic_id: string }).topic_id);
         if (!sid) continue;
-        const cfg = (r as { config?: { duration_minutes?: unknown; class_no?: unknown } }).config ?? {};
+        const row = r as { duration_minutes?: string | null; class_no?: string | null };
         // A "part" class (e.g. 7B) continues the previous one — don't count it as
         // a separate class, so the class count reads lower (and consistent everywhere).
-        const isPart = /[A-Za-z]/.test(String(cfg.class_no ?? ""));
+        const isPart = /[A-Za-z]/.test(String(row.class_no ?? ""));
         if (!isPart) classCount.set(sid, (classCount.get(sid) ?? 0) + 1);
-        const d = Number(cfg.duration_minutes) || 0;
+        const d = Number(row.duration_minutes) || 0;
         classMins.set(sid, (classMins.get(sid) ?? 0) + d);
       }
     }

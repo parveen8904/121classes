@@ -6,9 +6,11 @@
 // during those hours or they compete with student page-loads for the same
 // database and make the site slow (the "every second day" slowdowns).
 //
-// They run only in the genuinely quiet window, roughly 01:30–08:30 IST.
-// Vercel cron fires in UTC; IST = UTC + 5:30, so that window is UTC 20:00–03:00.
+// Students start logging in as early as 5:00–6:30 AM IST, and night viewing runs
+// late, so the only genuinely quiet window is ~01:30–04:30 IST. Heavy jobs must
+// finish before the early-morning students arrive.
+// Vercel cron fires in UTC; IST = UTC + 5:30, so 01:30–04:30 IST = UTC 20:00–23:00.
 export function isOffPeakNow(now: Date = new Date()): boolean {
   const h = now.getUTCHours();
-  return h >= 20 || h < 3;
+  return h >= 20 && h < 23;
 }

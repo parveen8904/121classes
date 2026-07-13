@@ -10,6 +10,12 @@ const INR = 85;
 // The layout already guards admin access, so this is just the hub.
 const PANELS: { icon: string; title: string; desc: string; href?: string; phase?: string }[] = [
   {
+    icon: "🩺",
+    title: "Server health",
+    desc: "Live: how busy the server is, how many students are active, what's slow, and a plain-English 'what to do if it slows down' for staff.",
+    href: "/admin/health",
+  },
+  {
     icon: "🧭",
     title: "Control sheet",
     desc: "Per subject & topic: what's uploaded (classes, notes, transcripts, MCQ/descriptive tests, MTP/RTP/papers, amendments) and what's missing.",

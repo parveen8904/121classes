@@ -243,9 +243,13 @@ export default async function McqAdminPage({ params }: { params: { sectionId: st
                   <input name="concept" defaultValue={q.concept ?? ""} placeholder="e.g. Cost of a current investment" />
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                     <SubmitButton className="btn small" closeDetails>Save changes</SubmitButton>
-                    <DeleteButton action={deleteMcq} id={q.id} parentId={section.id} message="Delete this question?" />
                   </div>
                 </form>
+                {/* Delete is its OWN form — must be a sibling of the edit form,
+                    never nested inside it (nested forms don't submit). */}
+                <div style={{ marginTop: 8 }}>
+                  <DeleteButton action={deleteMcq} id={q.id} parentId={section.id} message="Delete this question?" />
+                </div>
               </details>
             );
           })

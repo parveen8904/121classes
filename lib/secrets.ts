@@ -31,10 +31,14 @@ async function loadDb(): Promise<Record<string, string>> {
 }
 
 export async function getSecret(name: string): Promise<string> {
-  const env = process.env[name];
-  if (env) return env;
+  // Admin-managed secrets (Integrations UI → app_secrets) are the SOURCE OF
+  // TRUTH and win over any Vercel env var — so re-pasting a corrected key in the
+  // admin actually takes effect (a stale Vercel copy no longer silently
+  // overrides it, which had broken the Telegram relay). Env is the fallback for
+  // infra keys not managed in the DB.
   const db = await loadDb();
-  return db[name] || "";
+  if (db[name]) return db[name];
+  return process.env[name] || "";
 }
 
 export function clearSecretCache(): void {

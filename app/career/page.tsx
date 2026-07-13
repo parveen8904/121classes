@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import CareerOpenings, { type Opening } from "./CareerOpenings";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Career Corner — CA Parveen Sharma" };
@@ -59,12 +60,6 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
     ? (listings ?? []).filter((j) => (j.location || "").toLowerCase().includes(selectedCity.toLowerCase()))
     : (listings ?? []);
 
-  const byCat = new Map<string, NonNullable<typeof listings>>();
-  for (const j of shown) {
-    const c = j.category || "Other";
-    if (!byCat.has(c)) byCat.set(c, [] as never);
-    byCat.get(c)!.push(j);
-  }
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
@@ -94,37 +89,22 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
         </form>
       )}
 
-      {/* Auto-aggregated openings, grouped by category */}
-      {byCat.size > 0 && (
-        <div style={{ marginTop: 24 }}>
-          <h2 style={{ fontSize: "1.15rem" }}>💼 Latest openings{selectedCity ? ` in ${selectedCity}` : ""}</h2>
-          {[...byCat.entries()].map(([cat, list]) => (
-            <div key={cat} style={{ marginTop: 12 }}>
-              <h3 style={{ fontSize: "1rem", margin: "0 0 6px" }}>{cat}</h3>
-              <div style={{ display: "grid", gap: 8 }}>
-                {list.map((j) => (
-                  <div className="card" key={j.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                    <div style={{ minWidth: 0 }}>
-                      <strong>{j.title}</strong>
-                      {(j.company || j.location || j.source || ago(j)) && (
-                        <p className="muted" style={{ fontSize: ".82rem", margin: "2px 0 0" }}>
-                          {[j.company, j.location, j.source, ago(j)].filter(Boolean).join(" · ")}
-                        </p>
-                      )}
-                    </div>
-                    <a className="btn small" href={j.url} target="_blank" rel="noopener noreferrer">Apply →</a>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Auto-aggregated openings — paginated so the page stays short. */}
+      <CareerOpenings
+        city={selectedCity}
+        openings={shown.map((j): Opening => ({
+          id: j.id as string,
+          title: j.title as string,
+          category: (j.category as string) || "Other",
+          meta: [j.company, j.location, j.source, ago(j)].filter(Boolean).join(" · "),
+          url: j.url as string,
+        }))}
+      />
 
       {/* Manually posted openings (optional, in addition to the feed) */}
       {jobs.length > 0 && (
         <>
-          <h2 style={{ marginTop: 24, fontSize: "1.15rem" }}>💼 {byCat.size > 0 ? "More" : "Job & articleship"} openings</h2>
+          <h2 style={{ marginTop: 24, fontSize: "1.15rem" }}>💼 {shown.length > 0 ? "More" : "Job &amp; articleship"} openings</h2>
           <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
             {jobs.map((line, i) => {
               const j = parseJob(line);
@@ -145,7 +125,7 @@ export default async function CareerPage({ searchParams }: { searchParams: { cit
           </div>
         </>
       )}
-      {jobs.length === 0 && byCat.size === 0 && (
+      {jobs.length === 0 && shown.length === 0 && (
         <>
           <h2 style={{ marginTop: 24, fontSize: "1.15rem" }}>💼 Job &amp; articleship openings</h2>
           <div className="card" style={{ marginTop: 10 }}><p className="muted">No openings posted right now — check back soon. ✨</p></div>

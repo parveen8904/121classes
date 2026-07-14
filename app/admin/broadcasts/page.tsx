@@ -9,7 +9,7 @@ export const metadata = { title: "Marketing broadcasts — Admin" };
 
 type Post = {
   id: string; body: string; link_url: string | null; send_at: string;
-  to_tg_channel: boolean; to_tg_groups: boolean; to_discord: boolean;
+  to_tg_channel: boolean; to_tg_groups: boolean; to_discord: boolean; to_direct: boolean;
   status: string; status_note: string | null; sent_at: string | null;
 };
 
@@ -22,6 +22,7 @@ function Targets({ p }: { p: Post }) {
       {p.to_tg_channel && <span className="badge">✈️ Channel</span>}
       {p.to_tg_groups && <span className="badge">👥 TG groups</span>}
       {p.to_discord && <span className="badge">🎮 Discord</span>}
+      {p.to_direct && <span className="badge">📩 Direct to students</span>}
     </span>
   );
 }
@@ -65,6 +66,7 @@ export default async function BroadcastsPage() {
                 <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_tg_channel" defaultChecked /> ✈️ Telegram channel (broadcast)</label>
                 <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_tg_groups" /> 👥 All subject Telegram groups</label>
                 <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_discord" /> 🎮 All subject Discord channels</label>
+                <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_direct" /> 📩 Direct message to every connected student (personal Telegram chat)</label>
               </div>
             </div>
           </div>

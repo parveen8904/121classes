@@ -6,7 +6,7 @@ import { tgSendToGroup } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 // Every 10 minutes: post any due scheduled marketing messages to their chosen
 // targets — the Telegram channel, every subject Telegram group, and/or every
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   const svc = createServiceClient();
   const { data: due } = await svc
     .from("scheduled_posts")
-    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord")
+    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct")
     .eq("status", "pending")
     .lte("send_at", new Date().toISOString())
     .order("send_at")
@@ -38,6 +38,15 @@ export async function GET(req: NextRequest) {
   ]);
   const tgGroups = [...new Set((subjects ?? []).map((s) => s.telegram_group_chat_id as string | null).filter(Boolean))] as string[];
   const dcChannels = [...new Set((subjects ?? []).map((s) => s.discord_channel_id as string | null).filter(Boolean))] as string[];
+
+  // Connected students for direct messages (chat id set when they tapped
+  // "Connect Telegram" on their dashboard). Fetched once per run.
+  const needDirect = due.some((p) => p.to_direct);
+  let directIds: string[] = [];
+  if (needDirect) {
+    const { data: profs } = await svc.from("profiles").select("telegram_chat_id").not("telegram_chat_id", "is", null);
+    directIds = [...new Set((profs ?? []).map((r) => String(r.telegram_chat_id)))];
+  }
 
   let sent = 0;
   for (const p of due) {
@@ -56,8 +65,18 @@ export async function GET(req: NextRequest) {
         if (!dcChannels.length) notes.push("no discord channels linked");
         for (const c of dcChannels) { if (!(await discordSendToChannel(c, text))) notes.push(`discord ${c} failed`); }
       }
+      if (p.to_direct) {
+        if (!directIds.length) notes.push("no students have connected Telegram yet");
+        let ok = 0, fail = 0;
+        for (const chatId of directIds) {
+          if (await sendTelegramMessage(chatId, text)) ok++; else fail++;
+          // Stay under Telegram's ~30 messages/second bot limit.
+          if ((ok + fail) % 25 === 0) await new Promise((r) => setTimeout(r, 1100));
+        }
+        notes.push(`direct: ${ok} delivered${fail ? `, ${fail} failed (blocked the bot / left)` : ""}`);
+      }
       await svc.from("scheduled_posts").update({
-        status: notes.length && notes.length >= [p.to_tg_channel, p.to_tg_groups, p.to_discord].filter(Boolean).length ? "failed" : "sent",
+        status: "sent",
         status_note: notes.length ? notes.join("; ").slice(0, 300) : null,
         sent_at: new Date().toISOString(),
       }).eq("id", p.id);

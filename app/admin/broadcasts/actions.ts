@@ -28,6 +28,7 @@ export async function schedulePost(formData: FormData) {
     to_tg_channel: formData.get("to_tg_channel") === "on",
     to_tg_groups: formData.get("to_tg_groups") === "on",
     to_discord: formData.get("to_discord") === "on",
+    to_direct: formData.get("to_direct") === "on",
   });
   revalidatePath("/admin/broadcasts");
 }

@@ -156,6 +156,7 @@ const SECRET_KEYS = [
   "BUNNY_STREAM_API_KEY",
   "BUNNY_LIBRARY_ID",
   "BUNNY_ACCOUNT_API_KEY",
+  "SUPABASE_ACCESS_TOKEN",
 ] as const;
 
 // Save API keys pasted in the admin. Blank fields are IGNORED (so you can update
@@ -216,4 +217,75 @@ export async function sendTestEmail() {
     }
   }
   redirect(`/admin/integrations?mailtest=${encodeURIComponent(msg)}`);
+}
+
+
+// One-click: point Supabase's own login emails at OUR Mailgun, so its built-in
+// mailer (and its bounce warnings) are out of the picture. Creates/rotates a
+// Mailgun SMTP credential via the Mailgun API, then writes the SMTP settings to
+// Supabase via the Management API. Needs SUPABASE_ACCESS_TOKEN (a personal
+// access token pasted below) + the Mailgun key/domain already saved. All values
+// stay server-side; the generated SMTP password is never shown to anyone.
+export async function setupAuthSmtp() {
+  if (!(await requireAdmin())) return;
+  const [mgKey, mgDomain, mgRegion, sbToken] = await Promise.all([
+    getSecret("MAILGUN_API_KEY"),
+    getSecret("MAILGUN_DOMAIN"),
+    getSecret("MAILGUN_REGION"),
+    getSecret("SUPABASE_ACCESS_TOKEN"),
+  ]);
+  if (!sbToken) redirect("/admin/integrations?smtp=notoken");
+  if (!mgKey || !mgDomain) redirect("/admin/integrations?smtp=nomailgun");
+
+  const mgBase = (mgRegion || "").toLowerCase() === "eu" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
+  const auth = "Basic " + Buffer.from(`api:${mgKey}`).toString("base64");
+  const login = `supabase@${mgDomain}`;
+  const { randomBytes } = await import("node:crypto");
+  const password = randomBytes(18).toString("base64url").slice(0, 24);
+
+  // Create the credential; if it already exists, rotate its password instead.
+  let mgOk = false;
+  try {
+    const create = await fetch(`${mgBase}/v3/domains/${mgDomain}/credentials`, {
+      method: "POST",
+      headers: { Authorization: auth, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ login, password }),
+      cache: "no-store",
+    });
+    if (create.ok) mgOk = true;
+    else {
+      const update = await fetch(`${mgBase}/v3/domains/${mgDomain}/credentials/${encodeURIComponent(login)}`, {
+        method: "PUT",
+        headers: { Authorization: auth, "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ password }),
+        cache: "no-store",
+      });
+      mgOk = update.ok;
+    }
+  } catch { mgOk = false; }
+  if (!mgOk) redirect("/admin/integrations?smtp=mgfail");
+
+  // Project ref from the public Supabase URL (e.g. xmeltwyfvzhhurtcjfiu).
+  const ref = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname.split(".")[0];
+  const smtpHost = (mgRegion || "").toLowerCase() === "eu" ? "smtp.eu.mailgun.org" : "smtp.mailgun.org";
+  let sbOk = false;
+  let sbMsg = "";
+  try {
+    const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/config/auth`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${sbToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        smtp_admin_email: `noreply@${mgDomain}`,
+        smtp_host: smtpHost,
+        smtp_port: "587",
+        smtp_user: login,
+        smtp_pass: password,
+        smtp_sender_name: "CA Parveen Sharma",
+      }),
+      cache: "no-store",
+    });
+    sbOk = res.ok;
+    if (!res.ok) sbMsg = (await res.text()).slice(0, 160);
+  } catch (e) { sbMsg = e instanceof Error ? e.message : "network error"; }
+  redirect(sbOk ? "/admin/integrations?smtp=ok" : `/admin/integrations?smtp=sbfail&smtpmsg=${encodeURIComponent(sbMsg)}`);
 }

@@ -65,10 +65,12 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
             <div>
               <label>Watch classes at</label>
-              <select name="speed" defaultValue={String(setup?.speed ?? 1.25)}>
+              {/* Only speeds the Bunny player actually offers (1.2 was never a player option). */}
+              <select name="speed" defaultValue={setup?.speed && setup.speed !== 1.2 ? String(setup.speed) : "1.25"}>
                 <option value="1.25">1.25× (recommended)</option>
-                <option value="1.2">1.2× (relaxed)</option>
+                <option value="1">1× (normal)</option>
                 <option value="1.5">1.5×</option>
+                <option value="1.75">1.75×</option>
                 <option value="2">2× (fastest)</option>
               </select>
             </div>

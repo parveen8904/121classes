@@ -5,7 +5,7 @@ import { razorpayConfigured } from "@/lib/razorpay";
 import { r2Configured } from "@/lib/r2";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
-import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection, sendTestEmail, registerDiscordCommand, saveSubjectGroup } from "./actions";
+import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection, sendTestEmail, registerDiscordCommand, saveSubjectGroup, setupAuthSmtp } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -76,7 +76,7 @@ async function KeyField({ name, label, placeholder }: { name: string; label: str
 export default async function IntegrationsPage({
   searchParams,
 }: {
-  searchParams: { tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string; mailtest?: string; discord?: string };
+  searchParams: { tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string; mailtest?: string; discord?: string; smtp?: string; smtpmsg?: string };
 }) {
   const [tg, ai, em, wa, rzp, r2, botUser, health, jooble] = await Promise.all([
     telegramConfigured(),
@@ -123,6 +123,11 @@ export default async function IntegrationsPage({
       {searchParams.links === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Links saved.</div>}
       {searchParams.discord === "registered" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Discord /ask command registered. It can take up to ~1 hour to appear in your server.</div>}
       {searchParams.discord === "failed" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ Couldn&apos;t register — check the Discord App ID and Bot Token below, then try again.</div>}
+      {searchParams.smtp === "ok" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Done — Supabase login emails now go through your Mailgun. The bounce warning is history.</div>}
+      {searchParams.smtp === "notoken" && <div className="notice err" style={{ marginTop: 16 }}>Paste your Supabase access token below first (supabase.com/dashboard/account/tokens → Generate new token), then press the SMTP button again.</div>}
+      {searchParams.smtp === "nomailgun" && <div className="notice err" style={{ marginTop: 16 }}>Mailgun key/domain missing — fill those fields first.</div>}
+      {searchParams.smtp === "mgfail" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ Mailgun didn&apos;t accept the SMTP credential — check the Mailgun API key and domain.</div>}
+      {searchParams.smtp === "sbfail" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ Mailgun is ready but Supabase rejected the settings{searchParams.smtpmsg ? <>: <code>{searchParams.smtpmsg}</code></> : ""} — check the access token.</div>}
       {searchParams.discord === "missing" && <div className="notice err" style={{ marginTop: 16 }}>Add your Discord App ID and Bot Token below first, save keys, then register.</div>}
       {searchParams.keys === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Keys saved.</div>}
       {searchParams.mailtest && <div className={`notice ${searchParams.mailtest.startsWith("✅") ? "ok" : "err"}`} style={{ marginTop: 16 }}>{searchParams.mailtest}</div>}
@@ -202,6 +207,7 @@ export default async function IntegrationsPage({
           <KeyField name="FACULTY_TELEGRAM_CHAT_ID" label="Faculty Telegram chat id (for doubt alerts)" placeholder="your own Telegram chat id" />
           <KeyField name="FACULTY_EMAIL" label="Faculty alert email" placeholder="contact@caparveensharma.com" />
           <KeyField name="CRON_SECRET" label="Cron secret (optional — protects scheduled jobs)" placeholder="any random text" />
+          <KeyField name="SUPABASE_ACCESS_TOKEN" label="Supabase access token (for the one-click SMTP button below)" placeholder="supabase.com/dashboard/account/tokens → Generate new token → paste sbp_…" />
           <KeyField name="RAZORPAY_KEY_ID" label="Razorpay Key ID" placeholder="rzp_live_… or rzp_test_…" />
           <KeyField name="RAZORPAY_KEY_SECRET" label="Razorpay Key Secret" placeholder="from Razorpay dashboard" />
           <div style={{ borderTop: "1px solid var(--border)", margin: "12px 0", paddingTop: 12 }}>
@@ -214,6 +220,16 @@ export default async function IntegrationsPage({
           <KeyField name="R2_PUBLIC_BASE" label="R2 Public URL (custom domain or r2.dev)" placeholder="https://files.caparveensharma.com" />
           <SubmitButton className="btn" style={{ marginTop: 6 }}>Save keys</SubmitButton>
         </form>
+        <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
+          <p className="muted" style={{ fontSize: ".85rem", marginBottom: 8 }}>
+            📧 <strong>One-click:</strong> route Supabase&apos;s own login emails through your Mailgun (fixes the
+            &ldquo;bounced emails&rdquo; warning). Needs the Mailgun key/domain and the Supabase access token saved above —
+            everything else (SMTP credential, password, settings) is done automatically and never displayed.
+          </p>
+          <form action={setupAuthSmtp} style={{ margin: 0 }}>
+            <SubmitButton className="btn small">🔐 Set up login-email SMTP via Mailgun</SubmitButton>
+          </form>
+        </div>
         <p className="muted" style={{ fontSize: ".82rem", marginTop: 12 }}>
           🎥 <strong>Zoom auto-record:</strong> in your Zoom <em>Server-to-Server OAuth</em> app → <em>Feature → Event Subscriptions</em>, add the event
           <strong> &ldquo;Recording Completed&rdquo;</strong> with the webhook URL

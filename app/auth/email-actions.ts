@@ -25,7 +25,8 @@ export async function registerWithVerification(formData: FormData): Promise<Resu
   // the project's password policy (needs lower + UPPER + digit + symbol): plain
   // UUIDs are lowercase-hex only and were REJECTED (weak_password 422), which
   // silently blocked every new registration — hence the "Aa1!" prefix.
-  const password = "Aa1!" + randomUUID() + randomUUID();
+  // (One UUID, not two: the policy also caps passwords at 72 characters.)
+  const password = "Aa1!" + randomUUID();
   const { data, error } = await svc.auth.admin.generateLink({
     type: "signup",
     email,

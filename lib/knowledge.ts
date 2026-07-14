@@ -55,6 +55,24 @@ export async function ingestPending(limits = { digests: 4, pdfs: 6, notes: 2 }):
     if (txt && txt.length > 50) { await svc.from("repository_items").update({ content: txt }).eq("id", it.id); out.pdfsExtracted++; }
   }
 
+  // --- 2b. Backfill class-attached PDFs (question PDFs / typed notes) into
+  // config.ai_pdf_text. Free (no AI) — older classes were saved before this
+  // extraction existed, so their PDFs never reached the AI. ---
+  const needClassPdf = secs.filter((s) => {
+    const c = (s.config ?? {}) as Record<string, unknown>;
+    const hasPdf = String(c.pdf_url ?? "") || String(c.notes_typed_url ?? "");
+    return hasPdf && !String(c.ai_pdf_text ?? "").trim() && c.ai_pdf_text !== "__none__";
+  });
+  for (const s of needClassPdf.slice(0, limits.pdfs)) {
+    const c = (s.config ?? {}) as Record<string, unknown>;
+    const urls = [c.pdf_url, c.notes_typed_url].map((u) => String(u ?? "")).filter(Boolean);
+    const texts = await Promise.all(urls.map((u) => extractPdfText(u)));
+    const txt = texts.filter(Boolean).join("\n\n").slice(0, 20000);
+    // Sentinel on unreadable PDFs so we don't retry them every hour.
+    await svc.from("sections").update({ config: { ...c, ai_pdf_text: txt.length > 50 ? txt : "__none__" } }).eq("id", s.id);
+    if (txt.length > 50) out.pdfsExtracted++;
+  }
+
   // --- 3. OCR handwritten class notes → config.notes_text (vision, rate-limited) ---
   const needNotes = secs.filter((s) => {
     const c = (s.config ?? {}) as Record<string, unknown>;

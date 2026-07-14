@@ -47,21 +47,23 @@ export default async function RepositoryPage() {
     svc.from("courses").select("id, title").order("title"),
     aiConfigured(),
     // sections_meta exposes existence flags only — no transcript blob pulled.
-    svc.from("sections_meta").select("has_transcript, has_digest, notes_hand_url, has_notes_text").eq("type", "full_class_video").eq("is_published", true),
+    svc.from("sections_meta").select("topic_id, has_transcript, has_digest, notes_hand_url, has_notes_text, pdf_url, notes_typed_url, has_pdf_text").eq("type", "full_class_video").eq("is_published", true),
   ]);
   const list = (items ?? []) as Item[];
   const subjMap = new Map((subjects ?? []).map((s) => [s.id, s.title as string]));
 
   // What content the AI actually has to answer from.
-  const cov = { total: 0, transcript: 0, digest: 0, notes_have: 0, notes_ocr: 0 };
-  for (const s of (secs ?? []) as { has_transcript: boolean; has_digest: boolean; notes_hand_url: string | null; has_notes_text: boolean }[]) {
+  const cov = { total: 0, transcript: 0, digest: 0, notes_have: 0, notes_ocr: 0, class_pdfs: 0, class_pdfs_done: 0 };
+  for (const s of (secs ?? []) as { has_transcript: boolean; has_digest: boolean; notes_hand_url: string | null; has_notes_text: boolean; pdf_url: string | null; notes_typed_url: string | null; has_pdf_text: boolean }[]) {
     cov.total++;
     if (s.has_transcript) cov.transcript++;
     if (s.has_digest) cov.digest++;
     if (s.notes_hand_url) cov.notes_have++;
     if (s.has_notes_text) cov.notes_ocr++;
+    if (s.pdf_url || s.notes_typed_url) { cov.class_pdfs++; if (s.has_pdf_text) cov.class_pdfs_done++; }
   }
   const books = list.filter((i) => i.is_active && (i.content ?? "").length > 100).length;
+  const noTranscript = cov.total - cov.transcript;
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 900 }}>
@@ -80,10 +82,18 @@ export default async function RepositoryPage() {
       <div className="card" style={{ marginTop: 12 }}>
         <strong>🧠 What the AI can answer from</strong>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginTop: 10, textAlign: "center" }}>
-          <div><div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{cov.digest}/{cov.transcript}</div><div className="muted" style={{ fontSize: ".78rem" }}>class transcripts digested (used for doubts)</div></div>
+          <div><div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{cov.total}</div><div className="muted" style={{ fontSize: ".78rem" }}>class videos on the portal</div></div>
+          <div><div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{cov.digest}/{cov.transcript}</div><div className="muted" style={{ fontSize: ".78rem" }}>transcripts digested (used for doubts)</div></div>
           <div><div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{cov.notes_ocr}/{cov.notes_have}</div><div className="muted" style={{ fontSize: ".78rem" }}>handwritten notes read into text</div></div>
-          <div><div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{books}</div><div className="muted" style={{ fontSize: ".78rem" }}>book / ICAI PDFs (text extracted)</div></div>
+          <div><div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{cov.class_pdfs_done}/{cov.class_pdfs}</div><div className="muted" style={{ fontSize: ".78rem" }}>class-attached PDFs read</div></div>
+          <div><div style={{ fontSize: "1.5rem", fontWeight: 800 }}>{books}</div><div className="muted" style={{ fontSize: ".78rem" }}>book / ICAI / RTP PDFs (text extracted)</div></div>
         </div>
+        {noTranscript > 0 && (
+          <p style={{ fontSize: ".84rem", marginTop: 10, marginBottom: 0, background: "rgba(234,179,8,.12)", border: "1px solid #eab308", borderRadius: 8, padding: "8px 12px" }}>
+            ⚠️ <strong>{noTranscript} classes have no transcript at all</strong> — the AI cannot answer from those
+            lectures (it still uses their notes, books and PDFs). Uploading transcripts for them closes the gap.
+          </p>
+        )}
         <p className="muted" style={{ fontSize: ".8rem", marginTop: 10, marginBottom: 0 }}>
           ✨ <strong>Fully automatic:</strong> whatever you upload for students anywhere — class videos, handwritten notes,
           book/ICAI PDFs, amendments, tests — is turned into AI teaching content by itself, every hour. No separate upload here.

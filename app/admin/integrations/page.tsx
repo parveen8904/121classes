@@ -5,7 +5,7 @@ import { razorpayConfigured } from "@/lib/razorpay";
 import { r2Configured } from "@/lib/r2";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
-import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection, sendTestEmail, registerDiscordCommand, saveSubjectGroup, setupAuthSmtp } from "./actions";
+import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection, sendTestEmail, registerDiscordCommand, saveSubjectGroup, setupAuthSmtp, getSupabaseInfra, raiseAuthPool, upgradeCompute } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -76,7 +76,7 @@ async function KeyField({ name, label, placeholder }: { name: string; label: str
 export default async function IntegrationsPage({
   searchParams,
 }: {
-  searchParams: { tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string; mailtest?: string; discord?: string; smtp?: string; smtpmsg?: string };
+  searchParams: { tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string; mailtest?: string; discord?: string; smtp?: string; smtpmsg?: string; infra?: string; inframsg?: string };
 }) {
   const [tg, ai, em, wa, rzp, r2, botUser, health, jooble] = await Promise.all([
     telegramConfigured(),
@@ -107,6 +107,8 @@ export default async function IntegrationsPage({
     .order("title");
   const subjects = subjectRows ?? [];
 
+  const infra = await getSupabaseInfra();
+
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 820 }}>
       <AdminHero
@@ -128,6 +130,10 @@ export default async function IntegrationsPage({
       {searchParams.smtp === "nomailgun" && <div className="notice err" style={{ marginTop: 16 }}>Mailgun key/domain missing — fill those fields first.</div>}
       {searchParams.smtp === "mgfail" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ Mailgun didn&apos;t accept the SMTP credential — check the Mailgun API key and domain.</div>}
       {searchParams.smtp === "sbfail" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ Mailgun is ready but Supabase rejected the settings{searchParams.smtpmsg ? <>: <code>{searchParams.smtpmsg}</code></> : ""} — check the access token.</div>}
+      {searchParams.infra === "poolok" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Login capacity raised — the auth server can now use up to 30 database connections (was 10). Morning login rushes won&apos;t queue.</div>}
+      {searchParams.infra === "computeok" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Database size change requested — it applies with a ~2-minute restart. Check back on this page in a few minutes.</div>}
+      {searchParams.infra === "notoken" && <div className="notice err" style={{ marginTop: 16 }}>Paste your Supabase access token below first (same token as the SMTP button), Save keys, then retry.</div>}
+      {searchParams.infra === "fail" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ Supabase rejected the change{searchParams.inframsg ? <>: <code>{searchParams.inframsg}</code></> : ""}.</div>}
       {searchParams.discord === "missing" && <div className="notice err" style={{ marginTop: 16 }}>Add your Discord App ID and Bot Token below first, save keys, then register.</div>}
       {searchParams.keys === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Keys saved.</div>}
       {searchParams.mailtest && <div className={`notice ${searchParams.mailtest.startsWith("✅") ? "ok" : "err"}`} style={{ marginTop: 16 }}>{searchParams.mailtest}</div>}
@@ -229,6 +235,31 @@ export default async function IntegrationsPage({
           <form action={setupAuthSmtp} style={{ margin: 0 }}>
             <SubmitButton className="btn small">🔐 Set up login-email SMTP via Mailgun</SubmitButton>
           </form>
+        </div>
+        <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
+          <p className="muted" style={{ fontSize: ".85rem", marginBottom: 8 }}>
+            🖥️ <strong>Server capacity (one-click, same token):</strong>{" "}
+            {infra
+              ? <>current database size: <strong>{infra.compute}</strong> · auth login-connections: <strong>{infra.authPool ?? "unknown"}</strong></>
+              : <>paste the Supabase access token above to see and change these.</>}
+          </p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <form action={raiseAuthPool} style={{ margin: 0 }}>
+              <SubmitButton className="btn small">🚪 Raise login capacity (10 → 30 connections)</SubmitButton>
+            </form>
+            <form action={upgradeCompute} style={{ margin: 0, display: "flex", gap: 8, alignItems: "center" }}>
+              <select name="variant" defaultValue="ci_small" style={{ minWidth: 210 }}>
+                <option value="ci_micro">Micro (~$10/mo)</option>
+                <option value="ci_small">Small (~$15/mo) — recommended</option>
+                <option value="ci_medium">Medium (~$60/mo)</option>
+              </select>
+              <SubmitButton className="btn small secondary">📈 Change database size</SubmitButton>
+            </form>
+          </div>
+          <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
+            ⚠️ Changing the database size is a <strong>billing change</strong> (charged to your Supabase card,
+            pro-rated) and restarts the database for ~2 minutes — best done late at night.
+          </p>
         </div>
         <p className="muted" style={{ fontSize: ".82rem", marginTop: 12 }}>
           🎥 <strong>Zoom auto-record:</strong> in your Zoom <em>Server-to-Server OAuth</em> app → <em>Feature → Event Subscriptions</em>, add the event

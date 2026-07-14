@@ -62,7 +62,9 @@ export async function GET(req: NextRequest) {
     // Keep class durations true to Bunny's encoded length. No-op once synced.
     try { durations = await syncClassDurations(120); } catch { /* never block the feed */ }
     // Pre-digest transcripts into clean saved notes so doubts answer cheaply.
-    try { const { ingestPending } = await import("@/lib/knowledge"); knowledge = await ingestPending(); } catch { /* never block the feed */ }
+    // Bigger batches: this only runs in the quiet overnight window (3 runs), so
+    // the backlog (e.g. 269 handwritten notes) clears in nights, not months.
+    try { const { ingestPending } = await import("@/lib/knowledge"); knowledge = await ingestPending({ digests: 12, pdfs: 10, notes: 20 }); } catch { /* never block the feed */ }
     // Keep the visitor log lean: 60 days is plenty for the admin report.
     try {
       const svc = createServiceClient();

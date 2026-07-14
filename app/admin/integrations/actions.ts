@@ -289,3 +289,70 @@ export async function setupAuthSmtp() {
   } catch (e) { sbMsg = e instanceof Error ? e.message : "network error"; }
   redirect(sbOk ? "/admin/integrations?smtp=ok" : `/admin/integrations?smtp=sbfail&smtpmsg=${encodeURIComponent(sbMsg)}`);
 }
+
+
+// ---- Supabase infrastructure via the Management API (uses the same
+// SUPABASE_ACCESS_TOKEN as the SMTP button). ----
+
+function projectRef(): string {
+  return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname.split(".")[0];
+}
+
+async function sbApi(path: string, init: RequestInit = {}): Promise<{ ok: boolean; status: number; body: any }> {
+  const token = await getSecret("SUPABASE_ACCESS_TOKEN");
+  if (!token) return { ok: false, status: 0, body: null };
+  try {
+    const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef()}${path}`, {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, "content-type": "application/json", ...(init.headers ?? {}) },
+      cache: "no-store",
+    });
+    let body: any = null;
+    try { body = await res.json(); } catch { body = null; }
+    return { ok: res.ok, status: res.status, body };
+  } catch {
+    return { ok: false, status: 0, body: null };
+  }
+}
+
+// Read-only snapshot for the Integrations page: current compute size + the
+// auth server's DB pool setting. Null when no token is saved.
+export async function getSupabaseInfra(): Promise<{ compute: string; authPool: number | null } | null> {
+  const token = await getSecret("SUPABASE_ACCESS_TOKEN");
+  if (!token) return null;
+  const [addons, auth] = await Promise.all([sbApi("/billing/addons"), sbApi("/config/auth")]);
+  let compute = "starter (no add-on)";
+  const list = (addons.body?.selected_addons ?? addons.body ?? []) as any[];
+  if (Array.isArray(list)) {
+    const ci = list.find((a) => a?.type === "compute_instance" || a?.addon_type === "compute_instance");
+    const v = ci?.variant?.name ?? ci?.variant ?? ci?.addon_variant;
+    if (v) compute = String(typeof v === "object" ? v.name ?? JSON.stringify(v) : v);
+  }
+  const authPool = Number(auth.body?.db_max_pool_size) || null;
+  return { compute, authPool };
+}
+
+// Job 1 — lift the auth server's 10-connection cap so a morning login rush
+// doesn't queue. 30 is comfortable for Small/Medium compute.
+export async function raiseAuthPool() {
+  if (!(await requireAdmin())) return;
+  const token = await getSecret("SUPABASE_ACCESS_TOKEN");
+  if (!token) redirect("/admin/integrations?infra=notoken");
+  const r = await sbApi("/config/auth", { method: "PATCH", body: JSON.stringify({ db_max_pool_size: 30 }) });
+  redirect(r.ok ? "/admin/integrations?infra=poolok" : `/admin/integrations?infra=fail&inframsg=${encodeURIComponent(JSON.stringify(r.body)?.slice(0, 140) ?? String(r.status))}`);
+}
+
+// Job 2 — change the database compute size. BILLING CHANGE + ~2 min restart:
+// the button in the UI spells that out; clicking it is the admin's consent.
+export async function upgradeCompute(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const token = await getSecret("SUPABASE_ACCESS_TOKEN");
+  if (!token) redirect("/admin/integrations?infra=notoken");
+  const variant = str(formData.get("variant"));
+  if (!["ci_micro", "ci_small", "ci_medium"].includes(variant)) return;
+  const r = await sbApi("/billing/addons", {
+    method: "PATCH",
+    body: JSON.stringify({ addon_type: "compute_instance", addon_variant: variant }),
+  });
+  redirect(r.ok ? "/admin/integrations?infra=computeok" : `/admin/integrations?infra=fail&inframsg=${encodeURIComponent(JSON.stringify(r.body)?.slice(0, 140) ?? String(r.status))}`);
+}

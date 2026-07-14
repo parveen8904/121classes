@@ -37,6 +37,28 @@ export async function GET(req: NextRequest) {
   const result = await ingestGovtFeeds();
   const digest = await maybeSendDailyFeedDigest();
 
+  // Daily "what's missing" digest to staff (~09:30 IST = 04:00 UTC run): every
+  // forgotten upload — transcripts, notes, revision videos, books, RTP/MTP,
+  // tests, MIQ lists — flagged before students notice. Once per day.
+  let gapDigest: unknown = null;
+  try {
+    if (new Date().getUTCHours() === 4) {
+      const svc = createServiceClient();
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: last } = await svc.from("site_settings").select("value").eq("key", "gap_digest_last").maybeSingle();
+      if (last?.value !== today) {
+        const { buildContentGapReport, gapReportToText } = await import("@/lib/contentGaps");
+        const report = await buildContentGapReport();
+        if (report.totalGaps > 0) {
+          const { notifyFaculty } = await import("@/lib/notify");
+          await notifyFaculty(`Content check: ${report.totalGaps} missing items`, gapReportToText(report));
+        }
+        await svc.from("site_settings").upsert({ key: "gap_digest_last", value: today }, { onConflict: "key" });
+        gapDigest = report.totalGaps;
+      }
+    }
+  } catch { /* never block the feed */ }
+
   // Safety net for admin-initiated case-study PDF parsing: if the self-chaining
   // parser was interrupted, continue it here (cheap check when nothing pending;
   // runs any hour — the admin is waiting on it, and it's one set at a time).
@@ -71,5 +93,5 @@ export async function GET(req: NextRequest) {
       await svc.from("page_views").delete().lt("created_at", new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString());
     } catch { /* never block the feed */ }
   }
-  return NextResponse.json({ ok: true, added: result.added, checked: result.checked, emailed: digest.sent, offline, durations, knowledge, cases });
+  return NextResponse.json({ ok: true, added: result.added, checked: result.checked, emailed: digest.sent, offline, durations, knowledge, cases, gapDigest });
 }

@@ -16,6 +16,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/health",
   },
   {
+    icon: "📢",
+    title: "Marketing broadcasts",
+    desc: "Write messages once and schedule them (IST) to auto-post to the Telegram channel, all subject Telegram groups and Discord.",
+    href: "/admin/broadcasts",
+  },
+  {
     icon: "🔍",
     title: "Student insights",
     desc: "Most-viewed topics, where doubts come from, how students found us — and the drop-off call-list (never started / inactive 14d+).",
@@ -30,7 +36,7 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
   {
     icon: "🔐",
     title: "Security (2FA)",
-    desc: "Manage two-factor authentication for your admin login — required for all admins.",
+    desc: "Optional two-factor authentication for your admin login (switched off by default).",
     href: "/auth/mfa/setup",
   },
   {

@@ -15,6 +15,7 @@ const ADMIN_LINKS: [string, string][] = [
   ["👥 Users", "/admin/users"],
   ["👩‍🏫 Faculty", "/admin/faculty"],
   ["📣 Announcements", "/admin/announcements"],
+  ["📢 Broadcasts", "/admin/broadcasts"],
   ["📜 Amendments", "/admin/amendments"],
   ["🗓️ Study planner", "/admin/planner"],
   ["📥 Inbox", "/admin/inbox"],

@@ -18,7 +18,7 @@ const STAGES = [
 ];
 
 const SAMPLE = [
-  { stage: "Stage 1 · Exhaustive", date: "Mon, 1 Aug", task: "Class 12 · AS 13 Accounting for Investments", meta: "1h 20m · watch at 1.5× · do homework if any" },
+  { stage: "Stage 1 · Exhaustive", date: "Mon, 1 Aug", task: "Class 12 · AS 13 Accounting for Investments", meta: "1h 20m · watch at 1.25× · do homework if any" },
   { stage: "", date: "Sun, 7 Aug", task: "Deep test — AS 13", meta: "MCQ + descriptive test in app", test: true },
   { stage: "Stage 2 · Revision round 1", date: "Tue, 3 Mar", task: "AS 13 — revision video + RTP/MTP · do Q2, Q3, Q4", meta: "watch revision video at 1.5×" },
   { stage: "Stage 4 · Final revision", date: "Wed, 29 Apr", task: "Marked MIQs → quick pass → revision @2× → final mock → re-check RTP", meta: "final push · 11h/day" },

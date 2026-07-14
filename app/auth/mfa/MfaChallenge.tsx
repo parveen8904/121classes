@@ -21,7 +21,8 @@ export default function MfaChallenge({ next }: { next: string }) {
       if (error) return setErr(error.message);
       const totp = data?.totp?.find((f) => f.status === "verified") ?? data?.totp?.[0];
       if (!totp) {
-        window.location.assign("/auth/mfa/setup?required=1");
+        // No authenticator enrolled (MFA is optional now) — nothing to ask.
+        window.location.assign(next);
         return;
       }
       setFactorId(totp.id);

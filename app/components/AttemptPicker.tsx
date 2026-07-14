@@ -14,12 +14,15 @@ export default function AttemptPicker({
   required = false,
   allowNone = false,
   years = 7,
+  pastYears = 3,
 }: {
   name: string;
   defaultValue?: string;
   required?: boolean;
   allowNone?: boolean;
   years?: number;
+  /** Past years offered too — past exam papers / RTP / MTP go back to 2023. */
+  pastYears?: number;
 }) {
   const m = (defaultValue || "").replace(/_/g, " ").trim().match(/^([A-Za-z]+)\s+(\d{4})$/);
   const initMonth = m ? (MONTHS.find((mo) => mo.toLowerCase() === m[1].toLowerCase()) ?? "") : "";
@@ -29,7 +32,7 @@ export default function AttemptPicker({
   const [year, setYear] = useState(initYear);
 
   const thisYear = new Date().getFullYear();
-  const yearOpts = Array.from({ length: years }, (_, i) => String(thisYear + i));
+  const yearOpts = Array.from({ length: pastYears + years }, (_, i) => String(thisYear - pastYears + i));
   if (initYear && !yearOpts.includes(initYear)) yearOpts.unshift(initYear);
 
   const value = month && year ? `${month} ${year}` : "";

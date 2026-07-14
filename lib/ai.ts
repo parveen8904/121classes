@@ -16,7 +16,7 @@ export async function aiConfigured(): Promise<boolean> {
 // so the app falls back gracefully (e.g. "faculty will review"). Default: all on.
 export const AI_TOGGLES: { key: string; label: string; desc: string }[] = [
   { key: "doubt", label: "Answer student doubts", desc: "AI replies to doubts on class pages & Telegram (otherwise sent to faculty)." },
-  { key: "group_doubt", label: "Answer doubts in Telegram groups", desc: "AI replies (marked 🤖) to questions asked in the subject Telegram groups — mirrored to Discord & the website discussion. Daily cap applies." },
+  { key: "group_doubt", label: "Answer doubts in Telegram/Discord groups", desc: "AI replies (marked 🤖) only when a student TAGS the bot or replies to it — it never interrupts student discussions. Mirrored across platforms. Daily cap applies." },
   { key: "ask_me", label: "“Ask me” assistant", desc: "The website / portal help box." },
   { key: "grade", label: "Evaluate typed descriptive answers", desc: "AI marks typed subjective answers (otherwise faculty reviews them)." },
   { key: "grade_descriptive", label: "Evaluate handwritten paper (PDF)", desc: "AI reads a student's uploaded handwritten answer PDF and grades it against your solution PDF." },

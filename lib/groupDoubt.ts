@@ -32,8 +32,11 @@ async function budgetLeft(): Promise<boolean> {
 
 // Full pipeline: toggle → cap → subject material → answer. Returns the ready-to-
 // post message body (marked 🤖), or null when the AI should stay SILENT.
+// NOTE: the bot answers ONLY when a student tags it (@bot …) or replies to it —
+// the callers enforce that. It never jumps into a student-to-student discussion,
+// so no question heuristic here: tagging the bot IS the request.
 export async function groupAiAnswer(subjectId: string, question: string): Promise<string | null> {
-  if (!looksLikeQuestion(question)) return null;
+  if (question.trim().length < 5) return null;
   if (!(await aiFeatureEnabled("group_doubt"))) return null;
   if (!(await budgetLeft())) return null;
   const material = await getRepositoryContext(subjectId, 12000, { query: question });

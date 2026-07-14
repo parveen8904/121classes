@@ -123,16 +123,19 @@ export async function POST(req: NextRequest) {
         await discordSendToChannel(dc, `👤 ${fromName}: ${text}`);
       }
 
-      // ---- AI answers in the group ----
-      // A clean message that reads like an academic question gets an instant AI
-      // reply, grounded in THIS subject's material, threaded under the question
-      // and clearly marked 🤖. Mirrored to Discord + stored so the website
-      // discussion shows it too. Off-syllabus / unknown → stay SILENT (no group
-      // noise; faculty can reply from the moderation panel like before).
-      // Controls: the "group_doubt" admin toggle + a daily cap (default 100/day).
-      if (!mod.flagged && subj?.id) {
+      // ---- AI answers in the group: ONLY when the bot is asked directly ----
+      // The bot never interrupts a student-to-student discussion. It answers
+      // only when a student TAGS it (@botname …) or REPLIES to one of its
+      // messages. The answer is threaded, marked 🤖, mirrored to Discord and
+      // stored for the website view. Controls: 'group_doubt' toggle + daily cap.
+      const botUser = ((await getSecret("TELEGRAM_BOT_USERNAME")) || "").replace(/^@/, "").toLowerCase();
+      const mentioned = !!botUser && text.toLowerCase().includes(`@${botUser}`);
+      const repliedToBot = !!botUser && String(msg?.reply_to_message?.from?.username ?? "").toLowerCase() === botUser;
+      if (!mod.flagged && subj?.id && (mentioned || repliedToBot)) {
         try {
-          const body = await groupAiAnswer(subj.id, text); // toggle+cap+question check inside
+          // Remove the tag itself so the AI sees a clean question.
+          const question = mentioned ? text.replace(new RegExp(`@${botUser}`, "ig"), " ").replace(/\s+/g, " ").trim() : text;
+          const body = await groupAiAnswer(subj.id, question); // toggle+cap inside
           if (body) {
             const sentId = await tgSendGroupReply(chatId, body, msg.message_id);
             if (sentId) {

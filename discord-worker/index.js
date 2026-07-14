@@ -118,14 +118,17 @@ client.on("messageCreate", async (msg) => {
     }
     // Relay clean messages to the subject's Telegram group (bot-authored → no loop).
     if (map.tg) await tgRelay(map.tg, `👤 ${name}: ${text}`);
-    // AI answer (same brain/toggle/cap as the Telegram groups): the site decides
-    // whether to answer; we just post the reply threaded under the question.
-    if (SITE_URL && CRON_SECRET) {
+    // AI answer ONLY when the bot is @mentioned (or the message replies to the
+    // bot) — it never interrupts a student-to-student discussion. Same
+    // brain/toggle/cap as the Telegram groups via the site endpoint.
+    const mentionsBot = msg.mentions?.users?.has(client.user.id)
+      || (msg.reference && (await msg.fetchReference().catch(() => null))?.author?.id === client.user.id);
+    if (mentionsBot && SITE_URL && CRON_SECRET) {
       try {
         const res = await fetch(`${SITE_URL}/api/group-ai-answer`, {
           method: "POST",
           headers: { "content-type": "application/json", authorization: `Bearer ${CRON_SECRET}` },
-          body: JSON.stringify({ discordChannelId: msg.channelId, question: text }),
+          body: JSON.stringify({ discordChannelId: msg.channelId, question: text.replace(/<@!?\d+>/g, " ").replace(/\s+/g, " ").trim() }),
         });
         const j = await res.json().catch(() => null);
         if (j?.answer) await msg.reply({ content: j.answer.slice(0, 1990), allowedMentions: { repliedUser: false } });

@@ -39,7 +39,10 @@ function impRank(imp: unknown): number {
 }
 const dur = (cfg: any) => Number(cfg?.duration_minutes) || 0;
 // Use the FINAL (continuous) class number, not the within-topic number.
-const classNo = (cfg: any) => Number(cfg?.class_no ?? cfg?.topic_class_no ?? 0);
+// Class numbers may carry a "part" letter (7A, 7B — short continuations of
+// class 7). Numeric part for ordering/labels; the letter marks a part.
+const classNo = (cfg: any) => parseInt(String(cfg?.class_no ?? cfg?.topic_class_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
+const partSuffix = (cfg: any) => (String(cfg?.class_no ?? "").match(/[A-Za-z]+$/)?.[0] ?? "");
 
 // Build the engine input for one subject from the live content + planner config.
 export async function loadPlanInput(opts: {
@@ -74,8 +77,37 @@ export async function loadPlanInput(opts: {
   const topicsMeta: TopicMeta[] = sorted.map((t) => ({ topicId: t.id as string, title: t.title as string, importance: impLetter(t.importance) }));
   for (const t of sorted) {
     const mine = secs.filter((s) => s.topic_id === t.id);
-    const cls = mine.filter((s) => s.type === "full_class_video").sort((a, b) => classNo(a.config) - classNo(b.config));
-    cls.forEach((s, i) => classes.push({ sectionId: s.id as string, topicId: t.id as string, topicTitle: t.title as string, importance: impLetter(t.importance), label: `Class ${classNo(s.config) || i + 1}`, minutes: dur(s.config) || 60 }));
+    const cls = mine
+      .filter((s) => s.type === "full_class_video")
+      // Order by class number; within a number the main class ("7") comes
+      // before its parts ("7A", "7B").
+      .sort((a, b) => classNo(a.config) - classNo(b.config) || partSuffix(a.config).localeCompare(partSuffix(b.config)));
+    // A "part" (7A/7B — a ≤100-min continuation) is the SAME class sitting, so
+    // merge it into its main class row: one plan entry, combined minutes. This
+    // keeps the planner's class count equal to everywhere else on the site
+    // (e.g. 137 classes, not 168 videos) while losing no watch time.
+    type Row = { sectionId: string; no: number; minutes: number; parts: number };
+    const merged: Row[] = [];
+    for (const s of cls) {
+      const no = classNo(s.config);
+      const prev = merged[merged.length - 1];
+      if (partSuffix(s.config) && prev && prev.no === no) {
+        prev.minutes += dur(s.config) || 60;
+        prev.parts++;
+      } else {
+        merged.push({ sectionId: s.id as string, no, minutes: dur(s.config) || 60, parts: 0 });
+      }
+    }
+    merged.forEach((r, i) =>
+      classes.push({
+        sectionId: r.sectionId,
+        topicId: t.id as string,
+        topicTitle: t.title as string,
+        importance: impLetter(t.importance),
+        label: `Class ${r.no || i + 1}${r.parts ? ` (all ${r.parts + 1} parts)` : ""}`,
+        minutes: r.minutes,
+      }),
+    );
     const classTotal = cls.reduce((x, s) => x + (dur(s.config) || 60), 0);
     for (const s of mine.filter((s) => s.type === "revision_video")) {
       revisions.push({ topicTitle: t.title as string, minutes: dur(s.config) || Math.round(classTotal * 0.25) || 30 });

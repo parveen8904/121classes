@@ -7,6 +7,11 @@ import { schedulePost, deletePost, sendPostNow } from "./actions";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Marketing broadcasts — Admin" };
 
+type Audience = {
+  name: string | null; email: string | null; telegram_id: string;
+  level: string; enrolled: string; queries: number; source: string;
+};
+
 type Post = {
   id: string; body: string; link_url: string | null; send_at: string;
   to_tg_channel: boolean; to_tg_groups: boolean; to_discord: boolean; to_direct: boolean;
@@ -35,6 +40,8 @@ export default async function BroadcastsPage() {
     .order("send_at", { ascending: false })
     .limit(60);
   const posts = (data ?? []) as Post[];
+  const { data: audData } = await svc.rpc("admin_dm_audience");
+  const audience = (audData ?? []) as Audience[];
   const pending = posts.filter((p) => p.status === "pending").sort((a, b) => a.send_at.localeCompare(b.send_at));
   const done = posts.filter((p) => p.status !== "pending");
 
@@ -46,6 +53,49 @@ export default async function BroadcastsPage() {
         subtitle="Write a message once, pick a date & time (IST) and where it goes — the channel, every subject Telegram group, Discord — and it posts itself. ⏰"
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {/* Who receives direct messages */}
+      <details className="card" style={{ marginTop: 16 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+          📩 Direct-message audience — {audience.length} {audience.length === 1 ? "person" : "people"} reachable
+        </summary>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "8px 0" }}>
+          Everyone here has pressed <strong>Start</strong> on the bot, so Telegram allows us to message them
+          personally. Grows every time a student taps the bot (see the pinned &ldquo;press Start&rdquo; post).
+        </p>
+        {audience.length === 0 ? (
+          <p className="muted" style={{ fontSize: ".85rem" }}>Nobody yet — once students press Start on @Caclassesbot they appear here with full details.</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".82rem" }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "var(--muted)" }}>
+                  <th style={{ padding: "6px 8px" }}>Name</th>
+                  <th style={{ padding: "6px 8px" }}>Level</th>
+                  <th style={{ padding: "6px 8px" }}>Email</th>
+                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Telegram ID</th>
+                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Enrolled</th>
+                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Queries asked</th>
+                  <th style={{ padding: "6px 8px" }}>Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                {audience.map((a, i) => (
+                  <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "6px 8px", fontWeight: 600 }}>{a.name || "—"}</td>
+                    <td style={{ padding: "6px 8px" }}>{a.level}</td>
+                    <td style={{ padding: "6px 8px" }}>{a.email || "—"}</td>
+                    <td style={{ padding: "6px 8px", fontFamily: "monospace", fontSize: ".76rem" }}>{a.telegram_id}</td>
+                    <td style={{ padding: "6px 8px" }}>{a.enrolled}</td>
+                    <td style={{ padding: "6px 8px", fontWeight: 700 }}>{a.queries}</td>
+                    <td style={{ padding: "6px 8px" }}>{a.source === "portal student" ? "🎓 portal student" : "💬 bot subscriber"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </details>
 
       {/* Compose */}
       <div className="form-card" style={{ marginTop: 16 }}>

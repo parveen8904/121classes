@@ -17,6 +17,7 @@ type Result = { ok: boolean; error?: string };
 export async function registerWithVerification(formData: FormData): Promise<Result> {
   const name = String(formData.get("name") || "").trim();
   const email = String(formData.get("email") || "").trim().toLowerCase();
+  const phone = String(formData.get("phone") || "").trim().slice(0, 20);
   if (!email) return { ok: false, error: "Enter your email address." };
   if (!(await emailConfigured())) return { ok: false, error: "Email isn't set up yet. Please ask the admin to add the Mailgun key." };
 
@@ -40,6 +41,13 @@ export async function registerWithVerification(formData: FormData): Promise<Resu
       return { ok: false, error: "An account with this email already exists. Please log in, or use “Forgot password”." };
     }
     return { ok: false, error: error?.message || "Could not start sign-up. Please try again." };
+  }
+
+  // Save the optional WhatsApp number so staff can help this student even
+  // before their first login (best-effort — never blocks registration).
+  const newUserId = data?.user?.id;
+  if (phone && newUserId) {
+    try { await svc.from("profiles").update({ phone }).eq("id", newUserId); } catch { /* ignore */ }
   }
 
   // Verify via our own server-side route (token_hash flow), which sets the
@@ -76,6 +84,32 @@ export async function resendVerification(formData: FormData): Promise<Result> {
   );
   const sent = await sendEmail(email, "Verify your email — CA Parveen Sharma", html);
   return sent ? { ok: true } : { ok: false, error: "Couldn't send the email." };
+}
+
+// "Trouble logging in" call-back request (shown after 2 failed attempts):
+// lands in the admin inbox + emails the faculty so staff can call the student.
+export async function requestLoginHelp(formData: FormData): Promise<Result> {
+  const name = String(formData.get("name") || "").trim().slice(0, 80);
+  const phone = String(formData.get("phone") || "").trim().slice(0, 20);
+  const email = String(formData.get("email") || "").trim().slice(0, 120);
+  if (!phone) return { ok: false, error: "Enter a WhatsApp number." };
+  const svc = createServiceClient();
+  try {
+    await svc.from("page_questions").insert({
+      user_id: null,
+      page_path: "login-help",
+      question: `📞 LOGIN HELP REQUEST — ${name || "No name"} · WhatsApp: ${phone}${email ? ` · tried email: ${email}` : ""}`,
+      status: "open",
+    });
+  } catch { /* the email below still goes out */ }
+  try {
+    const { notifyFaculty } = await import("@/lib/notify");
+    await notifyFaculty(
+      "A student needs help logging in",
+      `Name: ${name || "—"}\nWhatsApp: ${phone}\nEmail they tried: ${email || "—"}\n\nPlease call them back. (From the login page after failed attempts.)`,
+    );
+  } catch { /* inbox row above is enough */ }
+  return { ok: true };
 }
 
 // Forgot password: email a reset link via OUR Mailgun. Always reports success

@@ -16,6 +16,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/health",
   },
   {
+    icon: "🔍",
+    title: "Student insights",
+    desc: "Most-viewed topics, where doubts come from, how students found us — and the drop-off call-list (never started / inactive 14d+).",
+    href: "/admin/insights",
+  },
+  {
     icon: "🧭",
     title: "Control sheet",
     desc: "Per subject & topic: what's uploaded (classes, notes, transcripts, MCQ/descriptive tests, MTP/RTP/papers, amendments) and what's missing.",

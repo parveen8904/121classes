@@ -157,11 +157,23 @@ const ASSISTANT_SYSTEM =
 
 export async function answerDoubt(question: string, context?: string): Promise<string | null> {
   const user = (context ? `Topic context: ${context}\n\n` : "") + `Student's doubt: ${question}`;
-  return callClaude(ASSISTANT_SYSTEM, user, 260, { model: await fastModel(), feature: "doubt" });
+  return withBeta(await callClaude(ASSISTANT_SYSTEM, user, 260, { model: await fastModel(), feature: "doubt" }));
 }
 
 // Sentinel the model returns when the repository doesn't cover the question.
 export const NEED_FACULTY = "NEED_FACULTY";
+
+// Shown under every AI answer until the formal launch: sets expectations and
+// protects trust if an answer is imperfect. Remove at launch.
+export const BETA_NOTE =
+  "⚠️ Beta version — the portal has not been formally launched yet. AI answers can make mistakes; please verify important points with the faculty.";
+
+// Append the beta note to a successful AI answer (never to the NEED_FACULTY
+// sentinel, which callers compare verbatim).
+function withBeta(text: string | null): string | null {
+  if (!text || text.trim() === NEED_FACULTY) return text;
+  return `${text.trim()}\n\n${BETA_NOTE}`;
+}
 
 const REPO_SYSTEM =
   "You are the AI study assistant for CA Parveen Sharma's CA coaching, helping Indian CA " +
@@ -189,7 +201,7 @@ export async function answerDoubtFromMaterial(
   // Enough room to actually SOLVE a numbered question (working notes, journal
   // entries), not just a one-line conceptual reply.
   const user = `STUDY MATERIAL:\n${material || "(none provided)"}\n\nSTUDENT QUESTION:\n${question}`;
-  return callClaude(REPO_SYSTEM, user, 1400, { model: await fastModel(), feature });
+  return withBeta(await callClaude(REPO_SYSTEM, user, 1400, { model: await fastModel(), feature }));
 }
 
 // Answer a doubt where the student ATTACHED an image or PDF (a photographed
@@ -231,7 +243,7 @@ export async function answerDoubtWithAttachment(
     const u = data.usage ?? {};
     await logUsage("doubt", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
     const text = (data.content ?? []).filter((b: { type: string }) => b.type === "text").map((b: { text: string }) => b.text).join("\n").trim();
-    return text || null;
+    return withBeta(text || null);
   } catch {
     return null;
   }
@@ -303,7 +315,7 @@ export async function answerAssistant(
   material: string,
 ): Promise<string | null> {
   const user = `SITE INFO:\n${siteFacts}\n\nSTUDY MATERIAL:\n${material || "(none provided)"}\n\nQUESTION:\n${question}`;
-  return callClaude(ASSIST_SYSTEM, user, 260, { model: await fastModel(), feature: "ask_me" });
+  return withBeta(await callClaude(ASSIST_SYSTEM, user, 260, { model: await fastModel(), feature: "ask_me" }));
 }
 
 // Pre-generate MCQs from a class transcript (token-frugal: run ONCE at upload

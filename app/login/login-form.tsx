@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Logo from "@/app/components/Logo";
 import { claimDevice } from "../auth/session-actions";
-import { registerWithVerification, sendPasswordReset } from "../auth/email-actions";
+import { registerWithVerification, sendPasswordReset, requestLoginHelp } from "../auth/email-actions";
 
 type Mode = "login" | "signup" | "forgot";
 
@@ -20,7 +20,13 @@ export default function LoginForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [showPw, setShowPw] = useState(false);
+  // After 2 failed logins, offer a human call-back (name + WhatsApp → admin inbox).
+  const [failCount, setFailCount] = useState(0);
+  const [helpName, setHelpName] = useState("");
+  const [helpPhone, setHelpPhone] = useState("");
+  const [helpSent, setHelpSent] = useState(false);
 
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(
     reason === "elsewhere"
@@ -38,6 +44,7 @@ export default function LoginForm() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setLoading(false);
+      setFailCount((c) => c + 1);
       // Count the failed attempt (admin Visitors report) — fire-and-forget.
       import("@/app/components/Tracker").then(({ track }) => track("login_failed", "/login")).catch(() => {});
       const m = error.message.toLowerCase();
@@ -57,7 +64,7 @@ export default function LoginForm() {
     e.preventDefault();
     setLoading(true); setMsg(null);
     const fd = new FormData();
-    fd.set("name", name); fd.set("email", email);
+    fd.set("name", name); fd.set("email", email); fd.set("phone", phone);
     const r = await registerWithVerification(fd);
     setLoading(false);
     // Count signups (admin Visitors report) so a broken registration flow shows
@@ -125,13 +132,45 @@ export default function LoginForm() {
             </form>
           )}
 
+          {/* Trouble logging in? After 2 failed tries, offer a human call-back. */}
+          {mode === "login" && failCount >= 2 && !helpSent && (
+            <div style={{ marginTop: 14, border: "1px solid var(--accent)", borderRadius: 10, padding: "12px 14px", background: "var(--bg-soft)" }}>
+              <strong style={{ fontSize: ".92rem" }}>😕 Trouble logging in? We&apos;ll call you.</strong>
+              <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 8px" }}>Leave your name and WhatsApp number — our team will help you get in.</p>
+              <input type="text" placeholder="Your name" value={helpName} onChange={(e) => setHelpName(e.target.value)} />
+              <input type="tel" placeholder="WhatsApp number" value={helpPhone} onChange={(e) => setHelpPhone(e.target.value)} />
+              <button
+                type="button"
+                className="btn small block"
+                disabled={!helpPhone.trim()}
+                onClick={async () => {
+                  const fd = new FormData();
+                  fd.set("name", helpName); fd.set("phone", helpPhone); fd.set("email", email);
+                  await requestLoginHelp(fd).catch(() => null);
+                  setHelpSent(true);
+                }}
+              >
+                📞 Request a call-back
+              </button>
+            </div>
+          )}
+          {helpSent && (
+            <p className="notice ok" style={{ marginTop: 12 }}>✅ Got it — our team will contact you on WhatsApp shortly.</p>
+          )}
+
           {mode === "signup" && (
             <form onSubmit={signup}>
+              <div style={{ border: "1px solid #eab308", background: "rgba(234,179,8,.12)", borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: ".82rem" }}>
+                🚧 <strong>Beta version</strong> — the portal is still being developed and has not been formally
+                launched. Some functions may not yet work as designed. Thank you for your patience!
+              </div>
               <label htmlFor="name">Full name</label>
               <input id="name" name="name" type="text" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
               <label htmlFor="semail">Email address</label>
               <input id="semail" name="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
               <p className="muted" style={{ fontSize: ".78rem", margin: "-6px 0 10px" }}>Use a real email — it's verified and can't be changed later. We&apos;ll email you a link; you&apos;ll set your password after verifying.</p>
+              <label htmlFor="sphone">WhatsApp number (optional)</label>
+              <input id="sphone" name="phone" type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 98100 12345 — so we can help you if anything goes wrong" />
               <button className="btn block" disabled={loading} type="submit">{loading ? "Sending…" : "Send verification link"}</button>
               <p className="muted" style={{ textAlign: "center", marginTop: 16, fontSize: ".88rem" }}>
                 Already have an account? <button type="button" style={linkBtn} onClick={() => { setMode("login"); setMsg(null); }}>Log in</button>

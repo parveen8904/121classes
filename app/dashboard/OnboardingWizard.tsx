@@ -76,6 +76,23 @@ export default function OnboardingWizard({
         )}
 
         {courseId && (
+          <>
+            <p style={{ fontWeight: 700, margin: "18px 0 8px" }}>💬 How did you hear about us? <span className="muted" style={{ fontWeight: 400, fontSize: ".82rem" }}>(helps us reach more students like you)</span></p>
+            <select name="heard_from" defaultValue="">
+              <option value="">Select one (optional)</option>
+              <option value="youtube">YouTube</option>
+              <option value="telegram">Telegram</option>
+              <option value="friend">A friend / classmate</option>
+              <option value="google">Google search</option>
+              <option value="instagram">Instagram</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="attended_before">Attended CA Parveen Sharma's classes before</option>
+              <option value="other">Other</option>
+            </select>
+          </>
+        )}
+
+        {courseId && (
           <button className="btn" type="submit" style={{ marginTop: 18 }}>
             ✅ Done — set up my dashboard
           </button>

@@ -19,6 +19,9 @@ export async function completeOnboarding(formData: FormData) {
 
   // The chosen attempt lands in the profile (that's the "fit it in the profile" part).
   if (attempt) await supabase.from("profiles").update({ target_attempt: attempt }).eq("id", user.id);
+  // Marketing attribution — asked once, optional.
+  const heardFrom = str(formData.get("heard_from"));
+  if (heardFrom) await supabase.from("profiles").update({ heard_from: heardFrom }).eq("id", user.id);
 
   // Students study ONE level: the chosen course replaces anything else on the shelf.
   const { data: prof } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();

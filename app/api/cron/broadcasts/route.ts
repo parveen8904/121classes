@@ -44,8 +44,14 @@ export async function GET(req: NextRequest) {
   const needDirect = due.some((p) => p.to_direct);
   let directIds: string[] = [];
   if (needDirect) {
-    const { data: profs } = await svc.from("profiles").select("telegram_chat_id").not("telegram_chat_id", "is", null);
-    directIds = [...new Set((profs ?? []).map((r) => String(r.telegram_chat_id)))];
+    const [{ data: profs }, { data: subs }] = await Promise.all([
+      svc.from("profiles").select("telegram_chat_id").not("telegram_chat_id", "is", null),
+      svc.from("telegram_subscribers").select("chat_id"),
+    ]);
+    directIds = [...new Set([
+      ...(profs ?? []).map((r) => String(r.telegram_chat_id)),
+      ...(subs ?? []).map((r) => String(r.chat_id)),
+    ])];
   }
 
   let sent = 0;

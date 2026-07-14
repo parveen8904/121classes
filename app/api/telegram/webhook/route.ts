@@ -165,6 +165,16 @@ export async function POST(req: NextRequest) {
 
   if (!chatId || !text) return NextResponse.json({ ok: true });
 
+  // Remember every private chat that ever talks to the bot — Telegram only
+  // lets bots DM people who started them, so this table IS the direct-message
+  // audience (portal students and group members alike).
+  try {
+    await svc.from("telegram_subscribers").upsert(
+      { chat_id: chatId, first_name: msg?.from?.first_name ?? null },
+      { onConflict: "chat_id" },
+    );
+  } catch { /* best-effort */ }
+
   // 1) Account linking via deep link: /start <code>
   if (text.startsWith("/start")) {
     const code = text.split(/\s+/)[1];

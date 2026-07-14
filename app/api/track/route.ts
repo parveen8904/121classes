@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   let body: { path?: string; event?: string; visitor?: string } = {};
   try { body = await req.json(); } catch { return NextResponse.json({ ok: true }); }
   const path = String(body.path ?? "").slice(0, 300);
-  const event = ["view", "login_success", "login_failed"].includes(String(body.event)) ? String(body.event) : "view";
+  const event = ["view", "login_success", "login_failed", "signup_success", "signup_failed"].includes(String(body.event)) ? String(body.event) : "view";
   if (!path && event === "view") return NextResponse.json({ ok: true });
 
   // Who is it (if logged in)? Cookie comes along on same-origin beacons.

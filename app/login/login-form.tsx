@@ -60,6 +60,9 @@ export default function LoginForm() {
     fd.set("name", name); fd.set("email", email);
     const r = await registerWithVerification(fd);
     setLoading(false);
+    // Count signups (admin Visitors report) so a broken registration flow shows
+    // up the same day, not via student complaints.
+    import("@/app/components/Tracker").then(({ track }) => track(r.ok ? "signup_success" : "signup_failed", "/login")).catch(() => {});
     if (!r.ok) return err(r.error || "Could not sign up.");
     setMode("login");
     ok("Almost there! We've emailed you a verification link. Click it to verify your email — you'll then choose your password and you're in. No need to come back here.");

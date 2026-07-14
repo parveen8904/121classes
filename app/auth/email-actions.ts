@@ -21,7 +21,11 @@ export async function registerWithVerification(formData: FormData): Promise<Resu
   if (!(await emailConfigured())) return { ok: false, error: "Email isn't set up yet. Please ask the admin to add the Mailgun key." };
 
   const svc = createServiceClient();
-  const password = randomUUID() + randomUUID(); // temporary — replaced when they set their own
+  // Temporary password, replaced when the student sets their own. Must satisfy
+  // the project's password policy (needs lower + UPPER + digit + symbol): plain
+  // UUIDs are lowercase-hex only and were REJECTED (weak_password 422), which
+  // silently blocked every new registration — hence the "Aa1!" prefix.
+  const password = "Aa1!" + randomUUID() + randomUUID();
   const { data, error } = await svc.auth.admin.generateLink({
     type: "signup",
     email,

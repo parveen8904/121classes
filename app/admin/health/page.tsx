@@ -68,6 +68,9 @@ type Visitors = {
   signed_in_today: number;
   login_success_today: number;
   login_failed_today: number;
+  signup_success_today: number;
+  signup_failed_today: number;
+  new_accounts_today: number;
   top_pages: { path: string; views: number; visitors: number }[];
   activity: { name: string | null; email: string | null; first_seen: string; last_seen: string; minutes: number; pages: number }[];
 };
@@ -139,6 +142,12 @@ export default async function HealthPage() {
                 <Stat label="Students signed in" value={String(v.signed_in_today)} sub="unique accounts active" />
                 <Stat label="Successful logins" value={String(v.login_success_today)} />
                 <Stat label="Failed login attempts" value={String(v.login_failed_today)} sub={v.login_failed_today > 20 ? "⚠️ unusually high" : "normal"} />
+                <Stat label="New registrations" value={String(v.new_accounts_today)} sub="accounts created today" />
+                <Stat
+                  label="Failed sign-up attempts"
+                  value={String(v.signup_failed_today)}
+                  sub={v.signup_failed_today > 0 && v.signup_success_today === 0 ? "🔴 registration may be broken — tell tech" : v.signup_failed_today > 0 ? "⚠️ some students struggled" : "all good"}
+                />
               </div>
               <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
                 Counting started today when this feature went live — numbers grow from now on. Tracked on our own

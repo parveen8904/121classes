@@ -51,20 +51,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const role = (profile?.role as string) ?? "student";
   const staff: Staff = { id: user.id, role, permissions: ((profile?.permissions as string[]) ?? []) };
 
-  // Two-factor is REQUIRED for the super admin. If enrolled but this session
-  // hasn't done the code check yet → challenge; if not enrolled → forced setup.
-  if (role === "admin") {
-    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (aal && aal.currentLevel !== "aal2") {
-      // "Remember this device for 30 days" — a valid trusted-device cookie lets
-      // this browser skip the code. Unenrolled admins still must set up MFA.
-      const { cookies } = await import("next/headers");
-      const { isTrusted, TRUSTED_COOKIE } = await import("@/lib/trustedDevice");
-      const trusted = isTrusted(cookies().get(TRUSTED_COOKIE)?.value, user.id);
-      if (aal.nextLevel === "aal2" && !trusted) redirect("/auth/mfa?next=/admin");
-      if (aal.nextLevel !== "aal2") redirect("/auth/mfa/setup?required=1");
-    }
-  }
+  // MFA is no longer enforced (founder's call 2026-07-14: more friction than
+  // benefit — the password-manager confusion outweighed it). The /auth/mfa
+  // pages still exist for anyone who wants to enroll voluntarily.
 
   const isStaffMember = isStaffRole(role) && (role === "admin" || staff.permissions.length > 0);
   if (!isStaffMember) {

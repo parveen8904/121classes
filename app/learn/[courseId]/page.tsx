@@ -89,6 +89,33 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
   // show a not-yet-subscribed student only the free preview). Access to the actual
   // content is still enforced when a class is opened.
   const svc = createServiceClient();
+  // Subject-level resources (custom content, RTP/MTP/past papers uploaded at the
+  // subject — not topic — level) that are student-visible.
+  const { data: subjResRows } = subjectIds.length
+    ? await svc
+        .from("repository_items")
+        .select("id, subject_id, kind, title, file_url, valid_from_attempt, valid_to_attempt")
+        .in("subject_id", subjectIds)
+        .is("topic_id", null)
+        .eq("is_active", true)
+        .eq("student_visible", true)
+        .not("file_url", "is", null)
+        .order("created_at", { ascending: false })
+    : { data: [] as never[] };
+  const subjResources = new Map<string, { id: string; kind: string; title: string; file_url: string; valid_from_attempt: string | null; valid_to_attempt: string | null }[]>();
+  for (const r of (subjResRows ?? []) as { id: string; subject_id: string; kind: string; title: string; file_url: string; valid_from_attempt: string | null; valid_to_attempt: string | null }[]) {
+    const arr = subjResources.get(r.subject_id) ?? [];
+    arr.push(r); subjResources.set(r.subject_id, arr);
+  }
+  // Published case-study sets per subject (scenario + MCQs practice).
+  const { data: caseSetRows } = subjectIds.length
+    ? await svc.from("case_sets").select("id, subject_id, title").in("subject_id", subjectIds).eq("status", "ready").eq("is_published", true).order("created_at", { ascending: false })
+    : { data: [] as never[] };
+  const subjCaseSets = new Map<string, { id: string; title: string }[]>();
+  for (const r of (caseSetRows ?? []) as { id: string; subject_id: string; title: string }[]) {
+    const arr = subjCaseSets.get(r.subject_id) ?? [];
+    arr.push(r); subjCaseSets.set(r.subject_id, arr);
+  }
   if (topicIds2.length) {
     const [{ data: secRows }, { data: matRowsP }] = await Promise.all([
       // Only the two tiny config keys we need — configs also hold transcripts
@@ -310,6 +337,33 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                     </div>
                   );
                 })()}
+                {(subjCaseSets.get(s.id) ?? []).length > 0 && (
+                  <div style={{ display: "grid", gap: 8, margin: "0 0 14px" }}>
+                    {(subjCaseSets.get(s.id) ?? []).map((cset) => (
+                      <Link key={cset.id} href={`/learn/cases/${cset.id}`} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, color: "var(--text)", border: "2px solid var(--accent)" }}>
+                        <span style={{ fontWeight: 700 }}>🧩 {cset.title}</span>
+                        <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap" }}>Practise cases →</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+                {(subjResources.get(s.id) ?? []).length > 0 && (
+                  <div className="card" style={{ margin: "0 0 14px" }}>
+                    <strong style={{ fontSize: ".95rem" }}>📚 Subject resources</strong>
+                    <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+                      {(subjResources.get(s.id) ?? []).map((r) => {
+                        const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(r.file_url);
+                        const kindTag = r.kind === "custom" ? (isVideo ? "🎬" : "📄") : ({ rtp: "📄 RTP", mtp: "📄 MTP", past_papers: "🗂️ Past paper" }[r.kind] ?? "📄");
+                        return (
+                          <a key={r.id} href={r.file_url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", background: "var(--bg-soft)", borderRadius: 8, padding: "8px 12px", color: "var(--text)" }}>
+                            <span style={{ fontSize: ".9rem" }}>{kindTag} <strong>{r.title}</strong>{r.valid_from_attempt ? <span className="muted"> · {r.valid_from_attempt}{r.valid_to_attempt ? `–${r.valid_to_attempt}` : ""}</span> : null}</span>
+                            <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap" }}>{isVideo ? "Watch →" : "Open →"}</span>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 {subjTopics.length > 0 ? (
                   <div style={{ display: "grid", gap: 8 }}>
                     {subjTopics.map((t) => {

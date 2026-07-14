@@ -38,10 +38,13 @@ export default function LoginForm() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setLoading(false);
+      // Count the failed attempt (admin Visitors report) — fire-and-forget.
+      import("@/app/components/Tracker").then(({ track }) => track("login_failed", "/login")).catch(() => {});
       const m = error.message.toLowerCase();
       if (m.includes("confirm")) return err("Please verify your email first — check your inbox for the verification link.");
       return err("Email or password didn't match. New here? Tap “Create account”. Forgot it? Use “Forgot password”.");
     }
+    import("@/app/components/Tracker").then(({ track }) => track("login_success", "/login")).catch(() => {});
     await claimDevice();
     // Full-page navigation so the freshly-set auth cookies are applied before
     // the next page loads. (router.push raced the cookie write and bounced the

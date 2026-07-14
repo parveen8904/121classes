@@ -87,6 +87,36 @@ export default function SubjectContent({
       <MaterialBlock kind="mtp" />
       <MaterialBlock kind="past_papers" withRange />
       <MaterialBlock kind="icai" />
+
+      {/* 4) Custom subject content — ANY name, with a PDF or a video link.
+          Shown to students under "Subject resources" on their course page. */}
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12, marginTop: 12 }}>
+        <strong>✨ Custom content — any name, PDF or video</strong>
+        <div style={{ display: "grid", gap: 6, margin: "8px 0" }}>
+          {byKind("custom").length === 0 && <span className="muted" style={{ fontSize: ".82rem" }}>Nothing added yet.</span>}
+          {byKind("custom").map((m) => (
+            <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, background: "var(--bg-soft)", borderRadius: 8, padding: "6px 10px" }}>
+              <span style={{ fontSize: ".85rem" }}><strong>{m.title}</strong>{m.valid_from_attempt && <span className="muted"> · {m.valid_from_attempt}</span>}</span>
+              <DeleteButton action={deleteSubjectMaterial} id={m.id} parentId={subjectId} message="Remove this content?" />
+            </div>
+          ))}
+        </div>
+        <form action={addSubjectMaterial}>
+          <input type="hidden" name="subjectId" value={subjectId} />
+          <input type="hidden" name="kind" value="custom" />
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+            <div><label>Name (what students see)</label><input name="title" placeholder="e.g. Ind AS summary charts" required /></div>
+            <div><label>For which attempt (optional)</label><AttemptPicker name="valid_from_attempt" allowNone /></div>
+          </div>
+          <PdfUpload name="file_url" folder="repository" label="PDF (optional — or give a video link below)" />
+          <label style={{ marginTop: 8 }}>🎬 Video link (optional — YouTube / any video URL)</label>
+          <input name="video_url" placeholder="https://youtu.be/…" />
+          <label className="remember" style={{ marginTop: 8 }}>
+            <input type="checkbox" name="ai_only" /> 🔒 AI only — train the AI but don&apos;t show students
+          </label>
+          <SubmitButton className="btn small" savedLabel="✓ Added" style={{ marginTop: 8 }}>Add content</SubmitButton>
+        </form>
+      </div>
     </details>
   );
 }

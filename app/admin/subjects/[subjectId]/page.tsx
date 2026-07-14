@@ -9,6 +9,7 @@ import { fmtAt125, AT125_NOTE } from "@/lib/duration";
 import SubmitButton from "@/app/components/SubmitButton";
 import AttemptPicker from "@/app/components/AttemptPicker";
 import SubjectContent from "./SubjectContent";
+import PdfUpload from "../../_components/PdfUpload";
 import {
   createTopic,
   deleteTopic,
@@ -17,6 +18,10 @@ import {
   updateSubjectRemarks,
   updateSubjectApplicability,
   setSubjectFaculty,
+  createCaseSet,
+  continueCaseParse,
+  toggleCaseSetPublish,
+  deleteCaseSet,
 } from "./actions";
 
 export default async function SubjectDetail({ params }: { params: { subjectId: string } }) {
@@ -51,8 +56,21 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
     .eq("subject_id", subjectId)
     .is("topic_id", null)
     .eq("is_active", true)
-    .in("kind", ["icai", "mtp", "rtp", "past_papers"])
+    .in("kind", ["icai", "mtp", "rtp", "past_papers", "custom"])
     .order("created_at", { ascending: false });
+
+  // Case-study sets (subject-level, parsed from an uploaded PDF).
+  const { data: caseSets } = await createServiceClient()
+    .from("case_sets")
+    .select("id, title, status, status_note, is_published, created_at")
+    .eq("subject_id", subjectId)
+    .order("created_at", { ascending: false });
+  const caseSetIds = (caseSets ?? []).map((c) => c.id as string);
+  const caseCounts = new Map<string, number>();
+  if (caseSetIds.length) {
+    const { data: ccRows } = await createServiceClient().from("case_studies").select("set_id").in("set_id", caseSetIds);
+    for (const r of ccRows ?? []) caseCounts.set(r.set_id as string, (caseCounts.get(r.set_id as string) ?? 0) + 1);
+  }
 
   const assignedIds = new Set((assigned ?? []).map((a) => a.faculty_id));
   const courseTitle = (subject as { courses?: { title?: string } | null }).courses?.title;
@@ -201,6 +219,65 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
         topics={(topics ?? []).map((t) => ({ id: t.id as string, title: t.title as string, weightage_marks: (t as { weightage_marks?: number | null }).weightage_marks ?? null }))}
         materials={(subjMaterials ?? []) as { id: string; kind: string; title: string; valid_from_attempt: string | null; valid_to_attempt: string | null }[]}
       />
+
+      {/* Case-study scenarios — upload one PDF; AI splits it into cases + MCQs. */}
+      <details className="card" id="case-sets" style={{ marginTop: 12 }} open={(caseSets ?? []).some((c) => c.status === "processing")}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+          🧩 Case studies (scenario + MCQs) — {(caseSets ?? []).length} set{(caseSets ?? []).length === 1 ? "" : "s"}
+        </summary>
+        <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+          {(caseSets ?? []).length === 0 && (
+            <p className="muted" style={{ fontSize: ".85rem", margin: 0 }}>
+              Upload one PDF containing all the case studies (each case followed by its MCQs, with the
+              correct answers given in the PDF). The AI splits it into individual cases automatically.
+            </p>
+          )}
+          {(caseSets ?? []).map((c) => (
+            <div key={c.id} className="list-row">
+              <div>
+                <span className="row-title">🧩 {c.title}</span>
+                <p className="row-sub">
+                  {c.status === "processing" && <>⏳ Processing… {c.status_note ?? ""} · {caseCounts.get(c.id) ?? 0} cases so far — refresh this page to see progress</>}
+                  {c.status === "ready" && <>✅ Ready · <strong>{caseCounts.get(c.id) ?? 0} case studies</strong> · {c.is_published ? "🟢 visible to students" : "⚪ hidden (publish when checked)"}</>}
+                  {c.status === "failed" && <>❌ {c.status_note ?? "Failed"}</>}
+                </p>
+              </div>
+              <div className="row-actions">
+                {c.status === "processing" && (
+                  <form action={continueCaseParse} style={{ display: "inline" }}>
+                    <input type="hidden" name="subjectId" value={subject.id} />
+                    <SubmitButton className="btn small secondary">▶ Continue processing</SubmitButton>
+                  </form>
+                )}
+                {c.status === "ready" && (
+                  <>
+                    <Link className="btn small secondary" href={`/learn/cases/${c.id}`}>Preview →</Link>
+                    <form action={toggleCaseSetPublish} style={{ display: "inline" }}>
+                      <input type="hidden" name="id" value={c.id} />
+                      <input type="hidden" name="subjectId" value={subject.id} />
+                      <input type="hidden" name="next" value={c.is_published ? "false" : "true"} />
+                      <SubmitButton className="btn small">{c.is_published ? "Unpublish" : "Publish to students"}</SubmitButton>
+                    </form>
+                  </>
+                )}
+                <DeleteButton action={deleteCaseSet} id={c.id} parentId={subject.id} message="Delete this case-study set and all its cases?" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <form action={createCaseSet} style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+          <input type="hidden" name="subjectId" value={subject.id} />
+          <div style={{ maxWidth: 420 }}>
+            <label>Set name (what students see)</label>
+            <input name="title" placeholder="e.g. FR Case Study Scenarios — May 2026" required />
+          </div>
+          <PdfUpload name="file_url" folder="cases" label="Case-studies PDF (can be 150+ pages)" />
+          <SubmitButton className="btn small" savedLabel="✓ Uploaded — parsing…" style={{ marginTop: 8 }}>Upload &amp; start parsing</SubmitButton>
+          <p className="muted" style={{ fontSize: ".78rem", marginTop: 6 }}>
+            Parsing a large PDF takes a few minutes and runs in the background — you can leave this page.
+          </p>
+        </form>
+      </details>
 
       {/* New topic — right-aligned expander (primary action) */}
       <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>

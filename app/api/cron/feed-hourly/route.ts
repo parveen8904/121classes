@@ -37,6 +37,15 @@ export async function GET(req: NextRequest) {
   const result = await ingestGovtFeeds();
   const digest = await maybeSendDailyFeedDigest();
 
+  // Safety net for admin-initiated case-study PDF parsing: if the self-chaining
+  // parser was interrupted, continue it here (cheap check when nothing pending;
+  // runs any hour — the admin is waiting on it, and it's one set at a time).
+  let cases: unknown = null;
+  try {
+    const { processPendingCaseSets } = await import("@/lib/caseStudies");
+    cases = await processPendingCaseSets(90_000);
+  } catch { /* never block the feed */ }
+
   // Heavy work (video encryption, duration sync, transcript OCR/digest) is
   // DB- and CPU-hungry, so it runs ONLY in the quiet overnight window — never
   // while ~200–1000 students are viewing classes. Off-peak it catches up fast;
@@ -54,6 +63,11 @@ export async function GET(req: NextRequest) {
     try { durations = await syncClassDurations(120); } catch { /* never block the feed */ }
     // Pre-digest transcripts into clean saved notes so doubts answer cheaply.
     try { const { ingestPending } = await import("@/lib/knowledge"); knowledge = await ingestPending(); } catch { /* never block the feed */ }
+    // Keep the visitor log lean: 60 days is plenty for the admin report.
+    try {
+      const svc = createServiceClient();
+      await svc.from("page_views").delete().lt("created_at", new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString());
+    } catch { /* never block the feed */ }
   }
-  return NextResponse.json({ ok: true, added: result.added, checked: result.checked, emailed: digest.sent, offline, durations, knowledge });
+  return NextResponse.json({ ok: true, added: result.added, checked: result.checked, emailed: digest.sent, offline, durations, knowledge, cases });
 }

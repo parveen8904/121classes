@@ -128,13 +128,15 @@ export async function saveSubjectWeightage(formData: FormData) {
 export async function addSubjectMaterial(formData: FormData) {
   const subjectId = str(formData.get("subjectId"));
   const kind = str(formData.get("kind")) || "rtp";
-  const fileUrl = str(formData.get("file_url")) || null;
+  // A custom item can carry a PDF OR a video link (either satisfies the form).
+  const fileUrl = str(formData.get("file_url")) || str(formData.get("video_url")) || null;
   if (!subjectId || !fileUrl) return;
   let content: string | null = null;
   if (/\.pdf($|\?)/i.test(fileUrl)) {
     const { extractPdfText } = await import("@/lib/pdf");
     content = (await extractPdfText(fileUrl)) || null;
   }
+  const aiOnly = str(formData.get("ai_only")) === "on";
   await createServiceClient().from("repository_items").insert({
     title: str(formData.get("title")) || kind.toUpperCase(),
     kind,
@@ -143,12 +145,82 @@ export async function addSubjectMaterial(formData: FormData) {
     file_url: fileUrl,
     content,
     is_active: true,
-    student_visible: kind !== "icai", // ICAI copyright → AI only
+    student_visible: kind !== "icai" && !aiOnly, // ICAI copyright → AI only
     valid_from_attempt: str(formData.get("valid_from_attempt")) || null,
     valid_to_attempt: str(formData.get("valid_to_attempt")) || null,
   });
   revalidatePath(`/admin/subjects/${subjectId}`);
   redirect(`/admin/subjects/${subjectId}?added=material#subject-content`);
+}
+
+// ---- Case-study sets (PDF → parsed cases + MCQs) ----
+// Fire the background parser and abandon the connection: the route keeps
+// running (and self-chains) after we abort, so a 150-page PDF parses hands-free.
+async function triggerCaseParse() {
+  const { headers } = await import("next/headers");
+  const { getSecret } = await import("@/lib/secrets");
+  const host = headers().get("host");
+  const proto = headers().get("x-forwarded-proto") || "https";
+  const secret = await getSecret("CRON_SECRET");
+  try {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 1500);
+    await fetch(`${proto}://${host}/api/case-parse${secret ? `?key=${encodeURIComponent(secret)}` : ""}`, { signal: ac.signal, cache: "no-store" }).catch(() => null);
+    clearTimeout(t);
+  } catch { /* hourly cron continues it anyway */ }
+}
+
+export async function createCaseSet(formData: FormData) {
+  const subjectId = str(formData.get("subjectId"));
+  const fileUrl = str(formData.get("file_url"));
+  if (!subjectId || !fileUrl) return;
+  const { extractPdfText } = await import("@/lib/pdf");
+  const text = await extractPdfText(fileUrl);
+  const svc = createServiceClient();
+  if (!text || text.length < 500) {
+    await svc.from("case_sets").insert({
+      subject_id: subjectId,
+      title: str(formData.get("title")) || "Case studies",
+      file_url: fileUrl,
+      source_text: text || null,
+      status: "failed",
+      status_note: "Could not read text from this PDF (is it scanned images?). Try a text-based PDF.",
+    });
+  } else {
+    await svc.from("case_sets").insert({
+      subject_id: subjectId,
+      title: str(formData.get("title")) || "Case studies",
+      file_url: fileUrl,
+      source_text: text,
+      status: "processing",
+      status_note: "parsing started",
+    });
+    await triggerCaseParse();
+  }
+  revalidatePath(`/admin/subjects/${subjectId}`);
+  redirect(`/admin/subjects/${subjectId}?added=caseset#case-sets`);
+}
+
+export async function continueCaseParse(formData: FormData) {
+  const subjectId = str(formData.get("subjectId"));
+  await triggerCaseParse();
+  if (subjectId) revalidatePath(`/admin/subjects/${subjectId}`);
+}
+
+export async function toggleCaseSetPublish(formData: FormData) {
+  const id = str(formData.get("id"));
+  const subjectId = str(formData.get("subjectId"));
+  if (!id) return;
+  await createServiceClient().from("case_sets").update({ is_published: formData.get("next") === "true" }).eq("id", id);
+  if (subjectId) revalidatePath(`/admin/subjects/${subjectId}`);
+}
+
+export async function deleteCaseSet(formData: FormData) {
+  const id = str(formData.get("id"));
+  const subjectId = str(formData.get("parentId"));
+  if (!id) return;
+  await createServiceClient().from("case_sets").delete().eq("id", id);
+  if (subjectId) revalidatePath(`/admin/subjects/${subjectId}`);
 }
 
 export async function deleteSubjectMaterial(formData: FormData) {

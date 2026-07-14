@@ -353,6 +353,88 @@ export async function generateMcqs(
   }
 }
 
+// ---- Case-study engine ----
+// Parse ONE chunk of a case-studies PDF into structured cases. The PDF has
+// numbered case scenarios, each followed by 5-7 MCQs, with the correct answers
+// given in the PDF (after each question, after the case, or in an answer key).
+// The model must return only COMPLETE cases and say how much of the chunk it
+// consumed, so the driver can resume exactly where the last full case ended.
+export type ParsedCase = {
+  title: string;
+  scenario: string;
+  questions: { question: string; options: string[]; correct_index: number }[];
+};
+export async function parseCaseStudiesChunk(
+  chunk: string,
+  isLastChunk: boolean,
+): Promise<{ cases: ParsedCase[]; consumed: number } | null> {
+  const system =
+    `You extract case studies from an Indian CA exam PDF (text below). The document contains numbered ` +
+    `case-study scenarios, each followed by about 5-7 multiple-choice questions; the correct answers are ` +
+    `stated in the document (marked with the question, listed after the case, or in an answer key). ` +
+    `Extract every COMPLETE case study in this text chunk. Keep the scenario text faithful to the source ` +
+    `(you may clean line-break artifacts). Each question: full text, all options in order, and the 0-based ` +
+    `index of the correct option AS GIVEN IN THE DOCUMENT (never guess; if truly absent use -1). ` +
+    (isLastChunk
+      ? `This is the FINAL chunk — extract everything remaining. Set "consumed_chars" to the chunk length. `
+      : `The chunk may END MID-CASE: exclude any incomplete trailing case, and set "consumed_chars" to the ` +
+        `character offset where the last complete case ends, so parsing resumes there. `) +
+    `Respond ONLY as compact JSON, no prose, no code fences: ` +
+    `{"cases":[{"title":"Case 12 — <short name>","scenario":"...","questions":[{"question":"...","options":["...","..."],"correct_index":0}]}],"consumed_chars":12345}`;
+  const text = await callClaude(system, chunk, 16000, { feature: "case_parse" });
+  if (!text) return null;
+  try {
+    const json = JSON.parse(text.replace(/```json|```/g, "").trim());
+    const arr = Array.isArray(json.cases) ? json.cases : [];
+    const cases: ParsedCase[] = arr
+      .map((c: { title?: unknown; scenario?: unknown; questions?: unknown }) => ({
+        title: String(c.title ?? "").trim(),
+        scenario: String(c.scenario ?? "").trim(),
+        questions: (Array.isArray(c.questions) ? c.questions : [])
+          .map((q: { question?: unknown; options?: unknown; correct_index?: unknown }) => ({
+            question: String(q.question ?? "").trim(),
+            options: (Array.isArray(q.options) ? q.options : []).map((o) => String(o).trim()).filter(Boolean),
+            correct_index: Number.isInteger(q.correct_index) ? (q.correct_index as number) : -1,
+          }))
+          .filter((q: { question: string; options: string[] }) => q.question && q.options.length >= 2),
+      }))
+      .filter((c: ParsedCase) => c.scenario && c.questions.length > 0);
+    const consumed = Number(json.consumed_chars);
+    return { cases, consumed: Number.isFinite(consumed) && consumed > 0 ? Math.min(consumed, chunk.length) : chunk.length };
+  } catch {
+    return null;
+  }
+}
+
+// Generate the per-question reasons for ONE case (why the correct option is
+// right + why each option is right/wrong). Run once per case, cached in the DB.
+export async function explainCaseAnswers(
+  scenario: string,
+  questions: { question: string; options: string[]; correct_index: number }[],
+): Promise<{ why_correct: string; why_options: string[] }[] | null> {
+  const system =
+    `You are CA Parveen Sharma's teaching assistant. For each MCQ of this case study, explain in ` +
+    `1-2 short lines WHY the correct option is correct, and for EVERY option one short line why it is ` +
+    `right or wrong (cite the accounting standard / provision where useful). Respond ONLY as compact JSON: ` +
+    `{"explanations":[{"why_correct":"...","why_options":["reason opt 1","reason opt 2",...]}]} ` +
+    `— one entry per question, why_options in the same order as the options.`;
+  const user =
+    `CASE:\n${scenario.slice(0, 8000)}\n\nQUESTIONS:\n` +
+    questions.map((q, i) => `${i + 1}. ${q.question}\nOptions: ${q.options.map((o, j) => `(${j + 1}) ${o}`).join(" ")}\nCorrect: option ${q.correct_index + 1}`).join("\n\n");
+  const text = await callClaude(system, user, 4000, { feature: "case_explain" });
+  if (!text) return null;
+  try {
+    const json = JSON.parse(text.replace(/```json|```/g, "").trim());
+    const arr = Array.isArray(json.explanations) ? json.explanations : [];
+    return arr.map((e: { why_correct?: unknown; why_options?: unknown }) => ({
+      why_correct: String(e.why_correct ?? "").trim(),
+      why_options: (Array.isArray(e.why_options) ? e.why_options : []).map((o) => String(o ?? "").trim()),
+    }));
+  } catch {
+    return null;
+  }
+}
+
 // Pre-generate descriptive (subjective) exam questions from a transcript.
 export async function generateSubjectiveQuestions(
   transcript: string,

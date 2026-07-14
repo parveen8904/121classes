@@ -61,10 +61,25 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
+type Visitors = {
+  visitors_today: number;
+  visitors_7d: number;
+  views_today: number;
+  signed_in_today: number;
+  login_success_today: number;
+  login_failed_today: number;
+  top_pages: { path: string; views: number; visitors: number }[];
+  activity: { name: string | null; email: string | null; first_seen: string; last_seen: string; minutes: number; pages: number }[];
+};
+
 export default async function HealthPage() {
   const svc = createServiceClient();
-  const { data, error } = await svc.rpc("admin_server_health");
+  const [{ data, error }, { data: vData }] = await Promise.all([
+    svc.rpc("admin_server_health"),
+    svc.rpc("admin_visitor_report"),
+  ]);
   const h = data as Health | null;
+  const v = vData as Visitors | null;
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 1000 }}>
@@ -113,6 +128,73 @@ export default async function HealthPage() {
             &ldquo;Students active&rdquo; is approximate (based on live sessions). Videos stream from Bunny&apos;s CDN, not this
             server, so watching classes barely loads the database — logins and page-opens are the real load.
           </p>
+
+          {/* Visitors & activity (today, IST) */}
+          {v && (
+            <>
+              <h3 style={{ margin: "22px 0 8px" }}>🚶 Visitors today (since midnight IST)</h3>
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
+                <Stat label="Visitors today" value={String(v.visitors_today)} sub={`${v.visitors_7d} in the last 7 days`} />
+                <Stat label="Pages viewed today" value={String(v.views_today)} />
+                <Stat label="Students signed in" value={String(v.signed_in_today)} sub="unique accounts active" />
+                <Stat label="Successful logins" value={String(v.login_success_today)} />
+                <Stat label="Failed login attempts" value={String(v.login_failed_today)} sub={v.login_failed_today > 20 ? "⚠️ unusually high" : "normal"} />
+              </div>
+              <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
+                Counting started today when this feature went live — numbers grow from now on. Tracked on our own
+                database only (no Google Analytics, nothing shared outside).
+              </p>
+
+              {v.top_pages.length > 0 && (
+                <>
+                  <h4 style={{ margin: "18px 0 6px" }}>📄 Most-seen pages today</h4>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {v.top_pages.map((p) => (
+                      <span key={p.path} className="card" style={{ padding: "5px 10px", fontSize: ".8rem" }}>
+                        <strong>{p.path}</strong> · {p.views} views · {p.visitors} people
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {v.activity.length > 0 && (
+                <>
+                  <h4 style={{ margin: "18px 0 6px" }}>🧑‍🎓 Who was on the site today (logged-in students)</h4>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".82rem" }}>
+                      <thead>
+                        <tr style={{ textAlign: "left", color: "var(--muted)" }}>
+                          <th style={{ padding: "6px 8px" }}>Name</th>
+                          <th style={{ padding: "6px 8px" }}>Email</th>
+                          <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>First seen</th>
+                          <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Last seen</th>
+                          <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Time on site</th>
+                          <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Pages</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {v.activity.map((a, i) => (
+                          <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                            <td style={{ padding: "6px 8px", fontWeight: 600 }}>{a.name || "—"}</td>
+                            <td style={{ padding: "6px 8px" }}>{a.email || "—"}</td>
+                            <td style={{ padding: "6px 8px" }}>{a.first_seen}</td>
+                            <td style={{ padding: "6px 8px" }}>{a.last_seen}</td>
+                            <td style={{ padding: "6px 8px" }}>{a.minutes >= 60 ? `${Math.floor(a.minutes / 60)}h ${a.minutes % 60}m` : `${a.minutes}m`}</td>
+                            <td style={{ padding: "6px 8px" }}>{a.pages}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
+                    &ldquo;Time on site&rdquo; is from first to last page they opened today. Anonymous visitors (not logged in)
+                    are in the totals above but can&apos;t be named — we only know registered students.
+                  </p>
+                </>
+              )}
+            </>
+          )}
 
           {/* Where the time goes */}
           {h.has_query_stats && h.top_queries.length > 0 && (

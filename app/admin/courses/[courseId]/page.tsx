@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import DeleteButton from "../../_components/DeleteButton";
 import AdminHero from "../../_components/AdminHero";
-import { fmtMins } from "../../_lib/util";
+import { fmtAt125, AT125_NOTE } from "@/lib/duration";
 import SubmitButton from "@/app/components/SubmitButton";
 import { updateCourse } from "../actions";
 import { createSubject, deleteSubject } from "./actions";
@@ -147,7 +147,7 @@ export default async function CourseDetail({ params }: { params: { courseId: str
               </div>
               <div className="row-actions">
                 <span style={{ fontWeight: 700, fontSize: ".95rem", background: "var(--bg-soft)", padding: "6px 12px", borderRadius: 8, whiteSpace: "nowrap" }}>
-                  🎓 {classCount.get(s.id) ?? 0} {(classCount.get(s.id) ?? 0) === 1 ? "class" : "classes"} · ⏱️ {fmtMins(classMins.get(s.id) ?? 0)}
+                  🎓 {classCount.get(s.id) ?? 0} {(classCount.get(s.id) ?? 0) === 1 ? "class" : "classes"} · ⏱️ {fmtAt125(classMins.get(s.id) ?? 0)} <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>{AT125_NOTE}</span>
                 </span>
                 <Link className="btn small secondary" href={`/admin/subjects/${s.id}`}>
                   Manage →

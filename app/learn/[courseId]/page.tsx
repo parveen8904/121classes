@@ -353,11 +353,13 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                     <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
                       {(subjResources.get(s.id) ?? []).map((r) => {
                         const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(r.file_url);
-                        const kindTag = r.kind === "custom" ? (isVideo ? "🎬" : "📄") : ({ rtp: "📄 RTP", mtp: "📄 MTP", past_papers: "🗂️ Past paper" }[r.kind] ?? "📄");
+                        const isPaper = ["mtp", "rtp", "past_papers"].includes(r.kind); // practice papers
+                        const kindTag = r.kind === "custom" ? (isVideo ? "🎬" : "📄") : ({ rtp: "📝 RTP", mtp: "📝 MTP", past_papers: "🗂️ Past paper" }[r.kind] ?? "📄");
+                        const href = isPaper ? `/learn/paper/${r.id}` : r.file_url;
                         return (
-                          <a key={r.id} href={r.file_url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", background: "var(--bg-soft)", borderRadius: 8, padding: "8px 12px", color: "var(--text)" }}>
+                          <a key={r.id} href={href} target={isPaper ? undefined : "_blank"} rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", background: "var(--bg-soft)", borderRadius: 8, padding: "8px 12px", color: "var(--text)" }}>
                             <span style={{ fontSize: ".9rem" }}>{kindTag} <strong>{r.title}</strong>{r.valid_from_attempt ? <span className="muted"> · {r.valid_from_attempt}{r.valid_to_attempt ? `–${r.valid_to_attempt}` : ""}</span> : null}</span>
-                            <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap" }}>{isVideo ? "Watch →" : "Open →"}</span>
+                            <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap" }}>{isPaper ? "Attempt →" : isVideo ? "Watch →" : "Open →"}</span>
                           </a>
                         );
                       })}

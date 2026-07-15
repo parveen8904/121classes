@@ -143,6 +143,8 @@ export async function addSubjectMaterial(formData: FormData) {
     subject_id: subjectId,
     topic_id: null,
     file_url: fileUrl,
+    // Suggested-answers PDF for MTP/RTP/past papers → enables student AI evaluation.
+    solution_url: str(formData.get("solution_url")) || null,
     content,
     is_active: true,
     student_visible: kind !== "icai" && !aiOnly, // ICAI copyright → AI only

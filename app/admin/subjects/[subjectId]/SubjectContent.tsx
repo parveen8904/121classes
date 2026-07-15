@@ -5,7 +5,11 @@ import DeleteButton from "../../_components/DeleteButton";
 import { saveSubjectMIQ, saveSubjectWeightage, addSubjectMaterial, deleteSubjectMaterial } from "./actions";
 
 type Topic = { id: string; title: string; weightage_marks: number | null };
-type Material = { id: string; kind: string; title: string; valid_from_attempt: string | null; valid_to_attempt: string | null };
+type Material = { id: string; kind: string; title: string; valid_from_attempt: string | null; valid_to_attempt: string | null; solution_url?: string | null };
+
+// MTP / RTP / past papers become full "practice papers": question + suggested
+// answers, and students can upload their own answers for AI evaluation.
+const PAPER_KINDS = ["mtp", "rtp", "past_papers"];
 
 const KIND_LABEL: Record<string, string> = { icai: "🏛️ ICAI study material", mtp: "📄 MTP", rtp: "📄 RTP", past_papers: "🗂️ Past exam papers" };
 
@@ -29,6 +33,7 @@ export default function SubjectContent({
             <span style={{ fontSize: ".85rem" }}>
               <strong>{m.title}</strong>
               {m.valid_from_attempt && <span className="muted"> · {withRange && m.valid_to_attempt ? `till ${m.valid_to_attempt}` : m.valid_from_attempt}</span>}
+              {PAPER_KINDS.includes(kind) && <span className="muted"> · {m.solution_url ? "✅ has suggested answers (AI evaluation on)" : "⚠️ no suggested answers"}</span>}
             </span>
             <DeleteButton action={deleteSubjectMaterial} id={m.id} parentId={subjectId} message="Remove this material?" />
           </div>
@@ -46,7 +51,10 @@ export default function SubjectContent({
             </div>
           )}
         </div>
-        <PdfUpload name="file_url" folder="repository" label="PDF (text auto-extracted for the AI)" />
+        <PdfUpload name="file_url" folder="repository" label={PAPER_KINDS.includes(kind) ? "Question paper PDF" : "PDF (text auto-extracted for the AI)"} />
+        {PAPER_KINDS.includes(kind) && (
+          <PdfUpload name="solution_url" folder="repository" label="Suggested answers PDF (optional — students can then upload their own answers for AI evaluation)" />
+        )}
         <SubmitButton className="btn small" savedLabel="✓ Added" style={{ marginTop: 8 }}>Add {KIND_LABEL[kind].replace(/[^\w ]/g, "").trim()}</SubmitButton>
       </form>
     </div>

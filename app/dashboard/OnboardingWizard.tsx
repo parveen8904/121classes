@@ -18,7 +18,8 @@ export default function OnboardingWizard({
   needAttempt: boolean;
   defaultPhone?: string | null;
 }) {
-  const [mode, setMode] = useState<"" | "student" | "sponsor">("");
+  // Default to the student flow (the vast majority); sponsoring is a small link.
+  const [mode, setMode] = useState<"" | "student" | "sponsor">("student");
   const [phone, setPhone] = useState(defaultPhone ?? "");
   const [courseId, setCourseId] = useState("");
   const [chosen, setChosen] = useState<Set<string>>(new Set());
@@ -38,11 +39,17 @@ export default function OnboardingWizard({
       <h2 style={{ marginTop: 0, fontSize: "1.15rem" }}>👋 Welcome! A quick setup to continue</h2>
       <p className="muted" style={{ fontSize: ".85rem", marginTop: -4 }}>This is required once — it can&apos;t be skipped, so you never have to fill it later.</p>
 
-      <p style={{ fontWeight: 700, margin: "14px 0 8px" }}>Are you here to study, or to sponsor/gift for someone?</p>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="button" className={`btn small ${mode === "student" ? "" : "secondary"}`} onClick={() => setMode("student")}>🎓 I&apos;m here to study</button>
-        <button type="button" className={`btn small ${mode === "sponsor" ? "" : "secondary"}`} onClick={() => setMode("sponsor")}>🎁 I&apos;m sponsoring / gifting for someone</button>
-      </div>
+      {/* Sponsoring is a small link, not a big choice (few sponsors). */}
+      {mode === "student" ? (
+        <p style={{ fontSize: ".82rem", marginTop: 8 }}>
+          🎁 Sponsoring for someone else?{" "}
+          <button type="button" onClick={() => setMode("sponsor")} style={{ background: "none", border: 0, color: "var(--accent)", cursor: "pointer", padding: 0, font: "inherit", fontWeight: 700, textDecoration: "underline" }}>Click here</button>
+        </p>
+      ) : (
+        <p style={{ fontSize: ".82rem", marginTop: 8 }}>
+          <button type="button" onClick={() => setMode("student")} style={{ background: "none", border: 0, color: "var(--accent)", cursor: "pointer", padding: 0, font: "inherit", fontWeight: 700 }}>← Back to my own study setup</button>
+        </p>
+      )}
 
       {mode && (
         <div style={{ marginTop: 16 }}>

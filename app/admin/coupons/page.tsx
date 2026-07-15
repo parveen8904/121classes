@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../_components/AdminHero";
 import DeleteButton from "../_components/DeleteButton";
-import { createCoupon, deleteCoupon, toggleCoupon } from "./actions";
+import SubmitButton from "@/app/components/SubmitButton";
+import { createCoupon, deleteCoupon, toggleCoupon, emailCoupon } from "./actions";
 
-export default async function CouponsPage() {
+export default async function CouponsPage({ searchParams }: { searchParams: { mail?: string } }) {
   const supabase = createClient();
   const { data: coupons } = await supabase
     .from("coupons")
@@ -18,6 +19,9 @@ export default async function CouponsPage() {
         subtitle="Run offers like the competition — percentage or flat-amount codes applied at checkout. 💸"
         back={{ href: "/admin", label: "Admin" }}
       />
+      {searchParams.mail === "sent" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Coupon emailed with the Sponsor Guide attached.</div>}
+      {searchParams.mail === "fail" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ Couldn&apos;t send — check the email address and that Mailgun is set up.</div>}
+      {searchParams.mail === "bademail" && <div className="notice err" style={{ marginTop: 16 }}>Enter a valid email address.</div>}
 
       <details style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
         <summary className="btn as-btn">＋ New coupon</summary>
@@ -89,7 +93,12 @@ export default async function CouponsPage() {
                   {(c as { expires_at?: string | null }).expires_at ? ` · ⏳ till ${new Date((c as { expires_at?: string }).expires_at!).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : ""}
                 </p>
               </div>
-              <div className="row-actions">
+              <div className="row-actions" style={{ flexWrap: "wrap" }}>
+                <form action={emailCoupon} style={{ margin: 0, display: "flex", gap: 4 }}>
+                  <input type="hidden" name="id" value={c.id} />
+                  <input name="to" type="email" placeholder="email to sponsor…" style={{ width: 170, fontSize: ".82rem" }} required />
+                  <SubmitButton className="btn small">✉️ Send</SubmitButton>
+                </form>
                 <form action={toggleCoupon} style={{ margin: 0 }}>
                   <input type="hidden" name="id" value={c.id} />
                   <input type="hidden" name="next" value={c.is_active ? "false" : "true"} />

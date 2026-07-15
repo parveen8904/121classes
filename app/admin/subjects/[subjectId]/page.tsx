@@ -62,7 +62,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
   // Case-study sets (subject-level, parsed from an uploaded PDF).
   const { data: caseSets } = await createServiceClient()
     .from("case_sets")
-    .select("id, title, status, status_note, is_published, created_at")
+    .select("id, title, status, status_note, is_published, created_at, skipped_ranges")
     .eq("subject_id", subjectId)
     .order("created_at", { ascending: false });
   const caseSetIds = (caseSets ?? []).map((c) => c.id as string);
@@ -233,15 +233,34 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
               correct answers given in the PDF). The AI splits it into individual cases automatically.
             </p>
           )}
-          {(caseSets ?? []).map((c) => (
+          {(caseSets ?? []).map((c) => {
+            const skipped = (Array.isArray((c as { skipped_ranges?: unknown }).skipped_ranges) ? (c as { skipped_ranges: { at_pct: number; preview: string }[] }).skipped_ranges : []);
+            return (
             <div key={c.id} className="list-row">
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <span className="row-title">🧩 {c.title}</span>
                 <p className="row-sub">
                   {c.status === "processing" && <>⏳ Processing… {c.status_note ?? ""} · {caseCounts.get(c.id) ?? 0} cases so far — refresh this page to see progress</>}
                   {c.status === "ready" && <>✅ Ready · <strong>{caseCounts.get(c.id) ?? 0} case studies</strong> · {c.is_published ? "🟢 visible to students" : "⚪ hidden (publish when checked)"}</>}
                   {c.status === "failed" && <>❌ {c.status_note ?? "Failed"}</>}
                 </p>
+                {skipped.length > 0 && (
+                  <details style={{ marginTop: 4 }}>
+                    <summary style={{ cursor: "pointer", color: "#b45309", fontSize: ".82rem", fontWeight: 600 }}>
+                      ⚠️ {skipped.length} section{skipped.length === 1 ? "" : "s"} skipped (couldn&apos;t auto-read) — click to see what
+                    </summary>
+                    <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
+                      {skipped.map((sk, i) => (
+                        <div key={i} style={{ background: "rgba(234,179,8,.10)", borderRadius: 8, padding: "6px 10px", fontSize: ".8rem" }}>
+                          <strong>~{sk.at_pct}% into the PDF:</strong> <span className="muted">&ldquo;{sk.preview}…&rdquo;</span>
+                        </div>
+                      ))}
+                      <p className="muted" style={{ fontSize: ".76rem", margin: "2px 0 0" }}>
+                        Find these pages in your PDF and add them as a small separate case-study upload, or send them to me to re-run.
+                      </p>
+                    </div>
+                  </details>
+                )}
               </div>
               <div className="row-actions">
                 {c.status === "processing" && (
@@ -264,7 +283,8 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
                 <DeleteButton action={deleteCaseSet} id={c.id} parentId={subject.id} message="Delete this case-study set and all its cases?" />
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         <form action={createCaseSet} style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
           <input type="hidden" name="subjectId" value={subject.id} />

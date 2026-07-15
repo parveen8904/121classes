@@ -19,7 +19,7 @@ export async function processCaseSet(setId: string, budgetMs: number): Promise<{
   for (;;) {
     const { data: set } = await svc
       .from("case_sets")
-      .select("id, status, parse_cursor, source_text")
+      .select("id, status, parse_cursor, source_text, skipped_ranges")
       .eq("id", setId)
       .maybeSingle();
     if (!set || set.status !== "processing") return { done: true, added };
@@ -51,10 +51,15 @@ export async function processCaseSet(setId: string, budgetMs: number): Promise<{
     }
     if (!parsed) {
       // Even a small slice won't parse → skip past this unreadable stretch so
-      // the REST of the booklet still processes (never stall forever).
+      // the REST of the booklet still processes (never stall forever). RECORD
+      // the skipped range + a text preview so the admin can see & recover it.
+      const from = cursor;
       cursor = Math.min(cursor + 2500, text.length);
+      const preview = text.slice(from, from + 400).replace(/\s+/g, " ").trim();
+      const prevRanges = Array.isArray(set.skipped_ranges) ? set.skipped_ranges : [];
       await svc.from("case_sets").update({
         parse_cursor: cursor,
+        skipped_ranges: [...prevRanges, { from, to: cursor, at_pct: Math.round((from / text.length) * 100), preview }],
         status_note: `skipped an unreadable section (~${Math.round((cursor / text.length) * 100)}%) — continuing`,
         ...(cursor >= text.length ? { status: "ready" } : {}),
       }).eq("id", setId);

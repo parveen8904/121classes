@@ -28,6 +28,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/tickets",
   },
   {
+    icon: "📇",
+    title: "Contacts & leads",
+    desc: "Import contacts from Interakt/WhatsApp exports or call lists. Leads join WhatsApp campaigns and the phone system recognises them when they call.",
+    href: "/admin/leads",
+  },
+  {
     icon: "🔍",
     title: "Student insights",
     desc: "Most-viewed topics, where doubts come from, how students found us — and the drop-off call-list (never started / inactive 14d+).",

@@ -61,13 +61,17 @@ export async function GET(req: NextRequest) {
     ])];
   }
 
-  // WhatsApp audience: every student with a valid Indian mobile on file.
+  // WhatsApp audience: every student with a valid Indian mobile on file, plus
+  // imported leads (Interakt exports, call lists) that aren't students yet.
   const needWa = due.some((p) => p.to_whatsapp);
   let waPhones: string[] = [];
   if (needWa) {
-    const { data: profs } = await svc.from("profiles").select("phone").eq("role", "student").not("phone", "is", null);
+    const [{ data: profs }, { data: leadRows }] = await Promise.all([
+      svc.from("profiles").select("phone").eq("role", "student").not("phone", "is", null),
+      svc.from("leads").select("phone").is("matched_user_id", null).not("phone", "is", null),
+    ]);
     waPhones = [...new Set(
-      (profs ?? [])
+      [...(profs ?? []), ...(leadRows ?? [])]
         .map((r) => String(r.phone).replace(/\D/g, "").slice(-10))
         .filter((d) => d.length === 10),
     )];

@@ -76,14 +76,21 @@ async function handle(req: NextRequest) {
 
   const svc = createServiceClient();
 
-  // Who called? Match a student profile by the last 10 digits of their phone.
+  // Who called? Match a student profile by the last 10 digits of their phone,
+  // falling back to the imported-leads list.
   const { data: prof } = await svc
     .from("profiles")
     .select("id, full_name, email, phone")
     .like("phone", `%${digits}`)
     .limit(1)
     .maybeSingle();
-  const who = (prof?.full_name as string) || digits;
+  const { data: lead } = prof ? { data: null } : await svc
+    .from("leads")
+    .select("name, email")
+    .eq("phone", digits)
+    .limit(1)
+    .maybeSingle();
+  const who = (prof?.full_name as string) || (lead?.name as string) || digits;
 
   const line = [
     missed ? "📵 Missed IVR call" : "📞 IVR call",
@@ -112,8 +119,8 @@ async function handle(req: NextRequest) {
   const { data: t } = await svc.from("tickets").insert({
     title: missed ? `Missed call from ${who}` : `Call from ${who}`,
     description: line,
-    student_name: (prof?.full_name as string) || null,
-    student_email: (prof?.email as string) || null,
+    student_name: (prof?.full_name as string) || (lead?.name as string) || null,
+    student_email: (prof?.email as string) || (lead?.email as string) || null,
     student_phone: digits,
     user_id: (prof?.id as string) || null,
     source: "phone",

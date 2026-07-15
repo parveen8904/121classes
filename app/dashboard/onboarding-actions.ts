@@ -1,8 +1,21 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { str } from "../admin/_lib/util";
+
+// A sponsor just gives their phone, then goes to gift a subscription. We mark
+// the account as a sponsor so the mandatory-setup gate is satisfied.
+export async function completeSponsorSetup(formData: FormData) {
+  const phone = str(formData.get("phone")).trim();
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase.from("profiles").update({ account_type: "sponsor", phone: phone || null }).eq("id", user.id);
+  revalidatePath("/dashboard");
+  redirect("/gift");
+}
 
 // One-tap onboarding from the dashboard wizard: the student ANSWERS questions
 // (level → subjects → attempt) and we write the profile/shelf from the answers
@@ -10,15 +23,21 @@ import { str } from "../admin/_lib/util";
 export async function completeOnboarding(formData: FormData) {
   const courseId = str(formData.get("course_id"));
   const attempt = str(formData.get("target_attempt"));
+  const phone = str(formData.get("phone")).trim();
   const subjectIds = formData.getAll("subj").map(String).filter(Boolean);
-  if (!courseId) return;
+  // Mandatory: level, at least one subject, and a phone number.
+  if (!courseId || subjectIds.length === 0 || phone.replace(/\D/g, "").length < 10) return;
 
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
-  // The chosen attempt lands in the profile (that's the "fit it in the profile" part).
-  if (attempt) await supabase.from("profiles").update({ target_attempt: attempt }).eq("id", user.id);
+  // The chosen attempt + phone land in the profile (mandatory fields).
+  await supabase.from("profiles").update({
+    account_type: "student",
+    phone,
+    ...(attempt ? { target_attempt: attempt } : {}),
+  }).eq("id", user.id);
   // Marketing attribution — asked once, optional.
   const heardFrom = str(formData.get("heard_from"));
   if (heardFrom) await supabase.from("profiles").update({ heard_from: heardFrom }).eq("id", user.id);

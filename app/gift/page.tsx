@@ -6,7 +6,7 @@ import { razorpayConfigured } from "@/lib/razorpay";
 import GiftForm from "./GiftForm";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Gift a subscription — CA Parveen Sharma" };
+export const metadata = { title: "Sponsor a Student — CA Parveen Sharma" };
 
 export default async function GiftPage() {
   const supabase = createClient();
@@ -26,8 +26,8 @@ export default async function GiftPage() {
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 640 }}>
         <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
         <div className="learn-hero">
-          <span className="badge">🎁 Gift a subscription</span>
-          <h1 style={{ fontSize: "1.5rem" }}>Gift CA classes to someone</h1>
+          <span className="badge">🎁 Sponsor a Student</span>
+          <h1 style={{ fontSize: "1.5rem" }}>Sponsor a Student · Gift a subscription</h1>
           <p className="meta">Pay for a subscription and we&apos;ll set it up for the person you choose. Your receipt &amp; GST invoice come to you; they just get access — they never see the amount.</p>
         </div>
         {!configured && (

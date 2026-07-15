@@ -10,6 +10,7 @@ import WellnessTip from "@/app/components/WellnessTip";
 import TodayPlan from "@/app/components/TodayPlan";
 import { addMyCourse } from "@/app/learn/mycourses";
 import OnboardingWizard from "./OnboardingWizard";
+import SponsoredStudents from "./SponsoredStudents";
 
 export default async function Dashboard({ searchParams }: { searchParams: { saved?: string } }) {
   const supabase = createClient();
@@ -21,7 +22,7 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role, target_attempt, telegram_chat_id")
+    .select("full_name, role, target_attempt, telegram_chat_id, phone, account_type")
     .eq("id", user.id)
     .single();
 
@@ -39,10 +40,13 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
   const myCourses = (courses ?? []).filter((c) => myIds.has(c.id));
   const otherCourses = (courses ?? []).filter((c) => !myIds.has(c.id));
   const isAdminUser = profile?.role === "admin";
+  const phoneOk = ((profile?.phone as string | null) ?? "").replace(/\D/g, "").length >= 10;
 
-  // First-visit wizard: ask level → subjects → attempt and write the profile
-  // from the answers (instead of bouncing new students to the profile form).
-  const needsSetup = !isAdminUser && (myIds.size === 0 || !profile?.target_attempt);
+  // Mandatory first-visit setup. A SPONSOR only needs a phone; a STUDENT needs a
+  // course + subjects + attempt + phone. Until complete, the wizard is the only
+  // thing shown and the learn area is blocked (see app/learn/layout.tsx).
+  const isSponsor = profile?.account_type === "sponsor";
+  const needsSetup = !isAdminUser && (isSponsor ? !phoneOk : (myIds.size === 0 || !profile?.target_attempt || !phoneOk));
   let subjectsByCourse: Record<string, { id: string; title: string }[]> = {};
   if (needsSetup) {
     const { data: allSubs } = await supabase
@@ -277,15 +281,19 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
             courses={(courses ?? []).map((c) => ({ id: c.id, title: c.title }))}
             subjectsByCourse={subjectsByCourse}
             needAttempt={!profile?.target_attempt}
+            defaultPhone={(profile?.phone as string | null) ?? ""}
           />
         )}
 
-        <FacultyContacts faculty={faculty ?? []} />
+        {/* Sponsor view: the students they've gifted a subscription to. */}
+        {isSponsor && !needsSetup && <SponsoredStudents gifterId={user.id} />}
 
-        <MyCourses courses={myCourses.map((c) => ({ id: c.id, title: c.title }))} />
+        {!isSponsor && <FacultyContacts faculty={faculty ?? []} />}
+
+        {!isSponsor && <MyCourses courses={myCourses.map((c) => ({ id: c.id, title: c.title }))} />}
 
         <div style={{ marginTop: 12 }}>
-          <Link className="btn small secondary" href="/gift">🎁 Gift a subscription to someone</Link>
+          <Link className="btn small secondary" href="/gift">🎁 Sponsor a Student · Gift a subscription</Link>
         </div>
 
         {!isAdminUser && !needsSetup && myCourses.length > 0 && (

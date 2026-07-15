@@ -29,6 +29,7 @@ export const AI_TOGGLES: { key: string; label: string; desc: string }[] = [
   { key: "recommend", label: "Study recommendations", desc: "Personalised topic recommendations." },
   { key: "interview", label: "AI mock interview", desc: "Career-corner interview practice." },
   { key: "cv", label: "CV summary polish", desc: "Improve a CV summary / objective." },
+  { key: "marketing", label: "Marketing pack generator & weekly autopilot", desc: "Writes multi-channel campaign packs (Telegram/WhatsApp + Instagram + YouTube) and powers the Monday autopilot on the Campaigns page." },
 ];
 
 let _aiDisabled: { at: number; set: Set<string> } | null = null;
@@ -903,4 +904,58 @@ export async function summarizeClass(transcript: string): Promise<ClassSummary |
   } catch {
     return null;
   }
+}
+
+// ---- Marketing campaign packs ------------------------------------------------
+// One AI call → a multi-day, multi-channel campaign. Every post carries three
+// variants: a Telegram/WhatsApp/Discord message, an Instagram caption with
+// hashtags, and a YouTube community-post text. The copy rules enforce the
+// founder's no-false-claims policy (only the approved facts below).
+export type PackPost = {
+  day: number;        // 0-based day offset from the start date
+  focus: string;      // what this post promotes (shown to the admin)
+  message: string;    // Telegram / WhatsApp / Discord text
+  instagram: string;  // caption + hashtags
+  youtube: string;    // community-post text
+};
+
+const PACK_SYSTEM =
+  "You write marketing posts for CA Parveen Sharma's CA coaching platform (caparveensharma.com) aimed at Indian CA students (Foundation/Intermediate/Final). " +
+  "STRICT RULES: never invent facts, numbers, discounts, deadlines or testimonials. The ONLY approved claims: " +
+  "CA Parveen Sharma has 36 years of teaching experience; the platform offers a FREE day-by-day study planner, FREE chapter MCQ tests with rank & concept reports, case-study (case-scenario) practice for the new exam pattern, recorded classes, live classes, and a doubt-solving AI + faculty. " +
+  "Tone: warm, encouraging senior-teacher voice; simple English with a light Indian touch; emojis welcome but not overdone. " +
+  "Each day must take a DIFFERENT angle (a feature, a study tip that ends in the feature, a question to the reader, exam-mindset encouragement). Lead with FREE offerings. " +
+  "Always include the exact link given for that focus. " +
+  "Respond ONLY as compact JSON, no prose, no code fences: " +
+  '{"posts":[{"day":0,"focus":"...","message":"...","instagram":"...","youtube":"..."}]}';
+
+export async function generateCampaignPack(
+  theme: string,
+  days: number,
+  context: string,
+): Promise<PackPost[] | null> {
+  const user =
+    `Campaign theme: ${theme}\n` +
+    `Number of daily posts: ${days}\n\n` +
+    `Links to use (pick the one matching each post's focus; keep the ?src= tag):\n` +
+    `- Free study planner: https://caparveensharma.com/free-planner?src=ig (use ?src=yt in the youtube text, ?src=tg in the message)\n` +
+    `- Courses: https://caparveensharma.com/courses\n` +
+    `- Live classes: https://caparveensharma.com/live\n\n` +
+    `What's happening on the platform right now (mention when relevant, never invent more):\n${context}\n\n` +
+    `Per-post limits: message ≤ 450 characters; instagram = caption ≤ 500 characters + 8-12 relevant hashtags on a new line; youtube ≤ 350 characters.`;
+  const text = await callClaude(PACK_SYSTEM, user, Math.min(300 + days * 550, 8000), { feature: "marketing" });
+  if (!text) return null;
+  const json = parseLooseJson(text);
+  const arr = Array.isArray(json?.posts) ? json.posts : null;
+  if (!arr?.length) return null;
+  return arr
+    .map((p: { day?: unknown; focus?: unknown; message?: unknown; instagram?: unknown; youtube?: unknown }, i: number) => ({
+      day: Number.isFinite(Number(p.day)) ? Number(p.day) : i,
+      focus: String(p.focus ?? "").trim() || `Post ${i + 1}`,
+      message: String(p.message ?? "").trim(),
+      instagram: String(p.instagram ?? "").trim(),
+      youtube: String(p.youtube ?? "").trim(),
+    }))
+    .filter((p: PackPost) => p.message.length > 0)
+    .slice(0, Math.max(1, days));
 }

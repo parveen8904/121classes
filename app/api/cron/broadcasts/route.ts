@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   const svc = createServiceClient();
   const { data: due } = await svc
     .from("scheduled_posts")
-    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, status_note")
+    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, ig_text, yt_text, status_note")
     .eq("status", "pending")
     .lte("send_at", new Date().toISOString())
     .order("send_at")
@@ -121,10 +121,17 @@ export async function GET(req: NextRequest) {
           const platforms = [p.to_instagram ? "Instagram" : null, p.to_youtube ? "YouTube (community post / video description)" : null].filter(Boolean).join(" and ");
           if (!adminEmails.length) notes.push("insta/yt reminder: no admin email");
           else {
+            // Platform-specific variants when the post carries them (campaign packs).
+            const igBlock = p.to_instagram
+              ? `<p style="margin:14px 0 4px"><strong>📷 Instagram caption</strong></p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(p.ig_text ?? text))}</div>`
+              : "";
+            const ytBlock = p.to_youtube
+              ? `<p style="margin:14px 0 4px"><strong>▶️ YouTube community post</strong></p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(p.yt_text ?? text))}</div>`
+              : "";
             const html = emailShell(`📣 Post this on ${platforms}`,
-              `<p>Your campaign${p.campaign ? ` <strong>${esc(String(p.campaign))}</strong>` : ""} is going out now. Please publish this on <strong>${platforms}</strong>:</p>
-               <div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(text)}</div>
-               <p style="font-size:13px;color:#666">Copy the text above into the Instagram / YouTube app. (These platforms don't allow reliable auto-posting, so this reminder is your cue.)</p>`);
+              `<p>Your campaign${p.campaign ? ` <strong>${esc(String(p.campaign))}</strong>` : ""} is going out now. Ready-to-paste content:</p>
+               ${igBlock}${ytBlock}
+               <p style="font-size:13px;color:#666">Copy the text into the Instagram / YouTube app. (These platforms don't allow reliable auto-posting, so this reminder is your cue.)</p>`);
             let ok = 0;
             for (const to of adminEmails) if (await sendEmail(to, `📣 Post to ${platforms} now — campaign is live`, html).catch(() => false)) ok++;
             notes.push(`insta/yt reminder emailed${ok ? "" : " FAILED"}`);

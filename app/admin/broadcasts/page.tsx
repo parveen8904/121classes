@@ -2,7 +2,7 @@ import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import DeleteButton from "../_components/DeleteButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { schedulePost, deletePost, sendPostNow } from "./actions";
+import { schedulePost, deletePost, sendPostNow, generatePack, updatePost, toggleAutopilot } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Campaigns — Admin" };
@@ -17,8 +17,12 @@ type Post = {
   to_tg_channel: boolean; to_tg_groups: boolean; to_discord: boolean; to_direct: boolean;
   campaign: string | null; to_whatsapp: boolean; wa_template: string | null;
   to_instagram: boolean; to_youtube: boolean;
+  ig_text: string | null; yt_text: string | null; created_by: string | null;
   status: string; status_note: string | null; sent_at: string | null;
 };
+
+// UTC instant → value for a datetime-local input showing IST wall-clock time.
+const istInput = (s: string) => new Date(new Date(s).getTime() + (5 * 60 + 30) * 60 * 1000).toISOString().slice(0, 16);
 
 const istFmt = (s: string) =>
   new Date(s).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
@@ -37,7 +41,7 @@ function Targets({ p }: { p: Post }) {
   );
 }
 
-export default async function BroadcastsPage() {
+export default async function BroadcastsPage({ searchParams }: { searchParams: { pack?: string } }) {
   const svc = createServiceClient();
   const { data } = await svc
     .from("scheduled_posts")
@@ -47,6 +51,8 @@ export default async function BroadcastsPage() {
   const posts = (data ?? []) as Post[];
   const { data: audData } = await svc.rpc("admin_dm_audience");
   const audience = (audData ?? []) as Audience[];
+  const { data: apFlag } = await svc.from("site_settings").select("value").eq("key", "marketing_autopilot").maybeSingle();
+  const autopilotOn = apFlag?.value === "on";
   const pending = posts.filter((p) => p.status === "pending").sort((a, b) => a.send_at.localeCompare(b.send_at));
   const done = posts.filter((p) => p.status !== "pending");
 
@@ -58,6 +64,81 @@ export default async function BroadcastsPage() {
         subtitle="Write a message once, pick a date & time (IST) and the channels — Telegram, Discord and WhatsApp post automatically; Instagram & YouTube email you the ready-to-paste post at send time. ⏰"
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {searchParams.pack && searchParams.pack !== "fail" && (
+        <div className="notice ok" style={{ marginTop: 16 }}>
+          ✨ Pack ready — <strong>{searchParams.pack} posts</strong> written and scheduled below. Read them, edit or delete any you don&apos;t like; the rest go out on time.
+        </div>
+      )}
+      {searchParams.pack === "fail" && (
+        <div className="notice err" style={{ marginTop: 16 }}>
+          Couldn&apos;t generate the pack — check the Anthropic key on Integrations and that &ldquo;Marketing pack generator&rdquo; is on in Admin → AI usage.
+        </div>
+      )}
+
+      {/* Weekly autopilot */}
+      <div className="card" style={{ marginTop: 16, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ minWidth: 260, flex: 1 }}>
+          <strong>{autopilotOn ? "🟢" : "⚪"} Weekly marketing autopilot</strong>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 0" }}>
+            Every Monday morning it writes the week&apos;s posts (rotating your FREE tools — planner, MCQ tests, case studies),
+            schedules them daily at 7 pm IST, and emails you the plan. You only delete what you don&apos;t like.
+            Telegram posts itself; Instagram &amp; YouTube text reaches you by email at post time. WhatsApp is never auto-included.
+          </p>
+        </div>
+        <form action={toggleAutopilot} style={{ margin: 0 }}>
+          <input type="hidden" name="next" value={autopilotOn ? "off" : "on"} />
+          <SubmitButton className={`btn small ${autopilotOn ? "secondary" : ""}`}>
+            {autopilotOn ? "Switch off" : "▶ Switch on autopilot"}
+          </SubmitButton>
+        </form>
+      </div>
+
+      {/* One-click campaign pack */}
+      <details className="form-card" style={{ marginTop: 14 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>✨ Generate a campaign pack (AI writes it, you approve)</summary>
+        <form action={generatePack} style={{ marginTop: 12 }}>
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+            <div>
+              <label>What to promote</label>
+              <select name="theme" defaultValue="The FREE day-by-day study planner">
+                <option>The FREE day-by-day study planner</option>
+                <option>FREE chapter MCQ tests with rank report</option>
+                <option>Case-study practice for the new exam pattern</option>
+                <option>New batch / course launch</option>
+                <option>Live classes this week</option>
+              </select>
+            </div>
+            <div>
+              <label>…or type your own theme</label>
+              <input name="custom_theme" placeholder="e.g. September attempt — last 60 days plan" />
+            </div>
+          </div>
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr", marginTop: 8 }}>
+            <div><label>How many days</label><input name="days" type="number" min={1} max={14} defaultValue={7} /></div>
+            <div><label>Start date</label><input name="start_date" type="date" /></div>
+            <div><label>Post time (IST)</label><input name="post_time" type="time" defaultValue="19:00" /></div>
+          </div>
+          <label style={{ marginTop: 10 }}>Channels for every post in the pack</label>
+          <div style={{ display: "grid", gap: 6, marginTop: 4 }}>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_tg_channel" defaultChecked /> ✈️ Telegram channel (auto)</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_tg_groups" /> 👥 Subject Telegram groups (auto)</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_discord" /> 🎮 Discord (auto)</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_instagram" defaultChecked /> 📷 Instagram caption — emailed to you at post time</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_youtube" defaultChecked /> ▶️ YouTube community text — emailed to you at post time</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_whatsapp" /> 💬 WhatsApp bulk (careful — every post goes to every contact)</label>
+          </div>
+          <div style={{ marginLeft: 24 }}>
+            <label style={{ fontSize: ".8rem" }}>WhatsApp template name (only if WhatsApp is ticked)</label>
+            <input name="wa_template" placeholder="e.g. marketing_update" style={{ maxWidth: 320 }} />
+          </div>
+          <SubmitButton className="btn" savedLabel="✓ Pack scheduled" style={{ marginTop: 12 }}>✨ Write & schedule the pack</SubmitButton>
+          <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
+            The AI writes one post per day (different angle each day, no invented claims). Everything lands in
+            &ldquo;Upcoming&rdquo; below where you can edit or delete before it goes out.
+          </p>
+        </form>
+      </details>
 
       {/* Who receives direct messages */}
       <details className="card" style={{ marginTop: 16 }}>
@@ -156,10 +237,13 @@ export default async function BroadcastsPage() {
       <div style={{ display: "grid", gap: 8 }}>
         {pending.length === 0 && <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing scheduled.</p></div>}
         {pending.map((p) => (
-          <div className="list-row" key={p.id}>
-            <div style={{ minWidth: 0 }}>
+          <div className="list-row" key={p.id} style={{ flexWrap: "wrap" }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <span className="row-title" style={{ whiteSpace: "pre-wrap" }}>{p.body.length > 140 ? p.body.slice(0, 140) + "…" : p.body}</span>
-              <p className="row-sub">{p.campaign ? <>📣 {p.campaign} · </> : null}🕐 {istFmt(p.send_at)} IST · <Targets p={p} /></p>
+              <p className="row-sub">
+                {p.created_by === "autopilot" ? "🤖 autopilot · " : p.created_by === "pack" ? "✨ pack · " : ""}
+                {p.campaign ? <>📣 {p.campaign} · </> : null}🕐 {istFmt(p.send_at)} IST · <Targets p={p} />
+              </p>
             </div>
             <div className="row-actions">
               <form action={sendPostNow} style={{ display: "inline" }}>
@@ -168,6 +252,23 @@ export default async function BroadcastsPage() {
               </form>
               <DeleteButton action={deletePost} id={p.id} message="Delete this scheduled post?" />
             </div>
+            <details style={{ flexBasis: "100%", marginTop: 6 }}>
+              <summary style={{ cursor: "pointer", fontSize: ".8rem", color: "var(--accent)" }}>✏️ Edit this post</summary>
+              <form action={updatePost} style={{ marginTop: 8, borderTop: "1px dashed var(--border)", paddingTop: 8 }}>
+                <input type="hidden" name="id" value={p.id} />
+                <label>Message (Telegram / WhatsApp / Discord)</label>
+                <textarea name="body" rows={3} defaultValue={p.body} required />
+                {p.to_instagram && (<><label style={{ marginTop: 6 }}>📷 Instagram caption</label><textarea name="ig_text" rows={3} defaultValue={p.ig_text ?? ""} /></>)}
+                {p.to_youtube && (<><label style={{ marginTop: 6 }}>▶️ YouTube community text</label><textarea name="yt_text" rows={2} defaultValue={p.yt_text ?? ""} /></>)}
+                {!p.to_instagram && <input type="hidden" name="ig_text" value={p.ig_text ?? ""} />}
+                {!p.to_youtube && <input type="hidden" name="yt_text" value={p.yt_text ?? ""} />}
+                <div style={{ maxWidth: 260, marginTop: 6 }}>
+                  <label>Post at (IST)</label>
+                  <input type="datetime-local" name="send_at" defaultValue={istInput(p.send_at)} />
+                </div>
+                <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 8 }}>Save changes</SubmitButton>
+              </form>
+            </details>
           </div>
         ))}
       </div>

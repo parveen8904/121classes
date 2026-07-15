@@ -16,9 +16,9 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/health",
   },
   {
-    icon: "📢",
-    title: "Marketing broadcasts",
-    desc: "Write messages once and schedule them (IST) to auto-post to the Telegram channel, all subject Telegram groups and Discord.",
+    icon: "📣",
+    title: "Campaigns",
+    desc: "Schedule marketing posts once — Telegram, Discord and WhatsApp go out automatically; Instagram & YouTube email you the ready-to-paste post at send time.",
     href: "/admin/broadcasts",
   },
   {

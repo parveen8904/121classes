@@ -1,17 +1,24 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
-import { sendTelegramMessage } from "@/lib/notify";
+import { sendTelegramMessage, sendWhatsApp, sendEmail, emailShell } from "@/lib/notify";
 import { tgSendToGroup } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-// Every 10 minutes: post any due scheduled marketing messages to their chosen
-// targets — the Telegram channel, every subject Telegram group, and/or every
-// subject Discord channel. Light query when nothing is due; NOT off-peak gated
-// (marketing posts go out at daytime hours by design).
+// How many WhatsApp messages one cron pass sends per post. Bigger campaigns
+// resume on the next 10-minute pass (wa_offset tracks progress), so a 6000-
+// student campaign completes hands-free without blowing the time limit.
+const WA_BATCH = 400;
+
+const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
+
+// Every 10 minutes: post any due campaign messages to their chosen targets —
+// Telegram channel / subject groups / Discord / direct DMs / bulk WhatsApp —
+// and email the drafted post to admins for Instagram/YouTube (those platforms
+// can't be reliably auto-posted, so they are prepare-and-remind).
 export async function GET(req: NextRequest) {
   const secret = await getSecret("CRON_SECRET");
   if (secret) {
@@ -24,7 +31,7 @@ export async function GET(req: NextRequest) {
   const svc = createServiceClient();
   const { data: due } = await svc
     .from("scheduled_posts")
-    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct")
+    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, status_note")
     .eq("status", "pending")
     .lte("send_at", new Date().toISOString())
     .order("send_at")
@@ -41,7 +48,7 @@ export async function GET(req: NextRequest) {
 
   // Connected students for direct messages (chat id set when they tapped
   // "Connect Telegram" on their dashboard). Fetched once per run.
-  const needDirect = due.some((p) => p.to_direct);
+  const needDirect = due.some((p) => p.to_direct && (p.wa_offset ?? 0) === 0);
   let directIds: string[] = [];
   if (needDirect) {
     const [{ data: profs }, { data: subs }] = await Promise.all([
@@ -54,33 +61,100 @@ export async function GET(req: NextRequest) {
     ])];
   }
 
+  // WhatsApp audience: every student with a valid Indian mobile on file.
+  const needWa = due.some((p) => p.to_whatsapp);
+  let waPhones: string[] = [];
+  if (needWa) {
+    const { data: profs } = await svc.from("profiles").select("phone").eq("role", "student").not("phone", "is", null);
+    waPhones = [...new Set(
+      (profs ?? [])
+        .map((r) => String(r.phone).replace(/\D/g, "").slice(-10))
+        .filter((d) => d.length === 10),
+    )];
+  }
+
+  // Admin emails for the Instagram/YouTube prepare-and-remind mails.
+  const needRemind = due.some((p) => (p.to_instagram || p.to_youtube) && (p.wa_offset ?? 0) === 0);
+  let adminEmails: string[] = [];
+  if (needRemind) {
+    const { data: admins } = await svc.from("profiles").select("email").eq("role", "admin").not("email", "is", null).limit(5);
+    adminEmails = (admins ?? []).map((a) => String(a.email));
+  }
+
   let sent = 0;
   for (const p of due) {
     const text = p.link_url ? `${p.body}\n\n${p.link_url}` : p.body;
-    const notes: string[] = [];
+    // A resumed WhatsApp post already did its channels on the first pass.
+    const firstPass = (p.wa_offset ?? 0) === 0;
+    const notes: string[] = firstPass ? [] : String(p.status_note ?? "").split("; ").filter((n) => n && !n.startsWith("whatsapp:"));
     try {
-      if (p.to_tg_channel) {
-        if (channel) { if (!(await sendTelegramMessage(channel, text))) notes.push("channel failed"); }
-        else notes.push("no channel configured");
-      }
-      if (p.to_tg_groups) {
-        if (!tgGroups.length) notes.push("no groups linked");
-        for (const g of tgGroups) { if (!(await tgSendToGroup(g, text))) notes.push(`group ${g} failed`); }
-      }
-      if (p.to_discord) {
-        if (!dcChannels.length) notes.push("no discord channels linked");
-        for (const c of dcChannels) { if (!(await discordSendToChannel(c, text))) notes.push(`discord ${c} failed`); }
-      }
-      if (p.to_direct) {
-        if (!directIds.length) notes.push("no students have connected Telegram yet");
-        let ok = 0, fail = 0;
-        for (const chatId of directIds) {
-          if (await sendTelegramMessage(chatId, text)) ok++; else fail++;
-          // Stay under Telegram's ~30 messages/second bot limit.
-          if ((ok + fail) % 25 === 0) await new Promise((r) => setTimeout(r, 1100));
+      if (firstPass) {
+        if (p.to_tg_channel) {
+          if (channel) { if (!(await sendTelegramMessage(channel, text))) notes.push("channel failed"); }
+          else notes.push("no channel configured");
         }
-        notes.push(`direct: ${ok} delivered${fail ? `, ${fail} failed (blocked the bot / left)` : ""}`);
+        if (p.to_tg_groups) {
+          if (!tgGroups.length) notes.push("no groups linked");
+          for (const g of tgGroups) { if (!(await tgSendToGroup(g, text))) notes.push(`group ${g} failed`); }
+        }
+        if (p.to_discord) {
+          if (!dcChannels.length) notes.push("no discord channels linked");
+          for (const c of dcChannels) { if (!(await discordSendToChannel(c, text))) notes.push(`discord ${c} failed`); }
+        }
+        if (p.to_direct) {
+          if (!directIds.length) notes.push("no students have connected Telegram yet");
+          let ok = 0, fail = 0;
+          for (const chatId of directIds) {
+            if (await sendTelegramMessage(chatId, text)) ok++; else fail++;
+            // Stay under Telegram's ~30 messages/second bot limit.
+            if ((ok + fail) % 25 === 0) await new Promise((r) => setTimeout(r, 1100));
+          }
+          notes.push(`direct: ${ok} delivered${fail ? `, ${fail} failed (blocked the bot / left)` : ""}`);
+        }
+        // Instagram / YouTube — prepare-and-remind: email the drafted post to
+        // the admins to publish manually (auto-posting isn't reliably possible).
+        if (p.to_instagram || p.to_youtube) {
+          const platforms = [p.to_instagram ? "Instagram" : null, p.to_youtube ? "YouTube (community post / video description)" : null].filter(Boolean).join(" and ");
+          if (!adminEmails.length) notes.push("insta/yt reminder: no admin email");
+          else {
+            const html = emailShell(`📣 Post this on ${platforms}`,
+              `<p>Your campaign${p.campaign ? ` <strong>${esc(String(p.campaign))}</strong>` : ""} is going out now. Please publish this on <strong>${platforms}</strong>:</p>
+               <div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(text)}</div>
+               <p style="font-size:13px;color:#666">Copy the text above into the Instagram / YouTube app. (These platforms don't allow reliable auto-posting, so this reminder is your cue.)</p>`);
+            let ok = 0;
+            for (const to of adminEmails) if (await sendEmail(to, `📣 Post to ${platforms} now — campaign is live`, html).catch(() => false)) ok++;
+            notes.push(`insta/yt reminder emailed${ok ? "" : " FAILED"}`);
+          }
+        }
       }
+
+      // WhatsApp bulk — batched; resumes across cron passes via wa_offset.
+      if (p.to_whatsapp) {
+        const template = String(p.wa_template ?? "").trim();
+        if (!waPhones.length) notes.push("whatsapp: no student phone numbers on file");
+        else if (!template) notes.push("whatsapp: skipped — no approved template name set");
+        else {
+          // Template variables can't contain newlines — flatten the message.
+          const waText = text.replace(/\s+/g, " ").trim().slice(0, 900);
+          const start = p.wa_offset ?? 0;
+          const batch = waPhones.slice(start, start + WA_BATCH);
+          let ok = 0, fail = 0;
+          for (let i = 0; i < batch.length; i += 8) {
+            const results = await Promise.all(batch.slice(i, i + 8).map((ph) => sendWhatsApp(ph, template, [waText]).catch(() => false)));
+            for (const r of results) r ? ok++ : fail++;
+          }
+          const done = start + batch.length;
+          if (done < waPhones.length) {
+            await svc.from("scheduled_posts").update({
+              wa_offset: done,
+              status_note: [...notes, `whatsapp: ${done}/${waPhones.length} sent — continuing…`].join("; ").slice(0, 300),
+            }).eq("id", p.id);
+            continue; // stays pending; the next 10-minute pass sends the next batch
+          }
+          notes.push(`whatsapp: finished all ${waPhones.length} numbers (last batch: ${ok} delivered${fail ? `, ${fail} failed` : ""})`);
+        }
+      }
+
       await svc.from("scheduled_posts").update({
         status: "sent",
         status_note: notes.length ? notes.join("; ").slice(0, 300) : null,

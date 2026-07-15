@@ -92,6 +92,7 @@ export default async function IntegrationsPage({
   const jb = Boolean(jooble);
   const serp = Boolean(await getSecret("SERPAPI_KEY"));
   const bunny = Boolean(await getSecret("BUNNY_STREAM_API_KEY"));
+  const ivr = Boolean(await getSecret("IVR_WEBHOOK_KEY"));
 
   const svc = createServiceClient();
   const { data: links } = await svc
@@ -165,6 +166,7 @@ export default async function IntegrationsPage({
           <button className="btn small" type="submit">✉️ Send test email (shows the exact error)</button>
         </form>
         <Row on={wa} label="💬 WhatsApp (Interakt)" help={<>Key from <a className="grad" href="https://app.interakt.ai" target="_blank" rel="noreferrer">Interakt</a> → Settings → Developer Settings. Bulk WhatsApp also needs an approved template.</>} />
+        <Row on={ivr} label="📞 IVR / phone calls → tickets" help={<>Turns every call on your IVR number (98100 12674) into ticket activity — missed calls open a high-priority ticket automatically. Set the <strong>IVR webhook key</strong> below (any long random text), then in your IVR provider&apos;s portal find <em>webhooks / call-event notifications</em> and paste:<br /><code style={{ fontSize: ".78rem", wordBreak: "break-all" }}>https://caparveensharma.com/api/calls/webhook?key=YOUR-KEY</code><br />It accepts the call formats of MyOperator, Exotel, Knowlarity, Servetel/Tata Smartflo &amp; Ozonetel.</>} />
         <Row on={rzp} label="💳 Razorpay (payments)" help={<>Key ID + Secret from <a className="grad" href="https://dashboard.razorpay.com" target="_blank" rel="noreferrer">Razorpay</a> → Settings → API Keys. After saving, click <strong>Test</strong> below before going live.</>} />
         {rzp && (
           <form action={testRazorpayConnection}>
@@ -212,6 +214,7 @@ export default async function IntegrationsPage({
           <KeyField name="NOTIFY_FROM_EMAIL" label="From address (must be on the verified Mailgun domain)" placeholder="CA Parveen Sharma <noreply@caparveensharma.com>" />
           <KeyField name="NOTIFY_REPLY_TO" label="Reply-To address (where replies go, any domain)" placeholder="contact@caparveensharma.com" />
           <KeyField name="INTERAKT_API_KEY" label="Interakt (WhatsApp) key" placeholder="Basic auth key" />
+          <KeyField name="IVR_WEBHOOK_KEY" label="IVR webhook key (phone calls → tickets)" placeholder="any long random text — use the same in your IVR portal's webhook URL" />
           <KeyField name="FACULTY_TELEGRAM_CHAT_ID" label="Faculty Telegram chat id (for doubt alerts)" placeholder="your own Telegram chat id" />
           <KeyField name="FACULTY_EMAIL" label="Faculty alert email" placeholder="contact@caparveensharma.com" />
           <KeyField name="CRON_SECRET" label="Cron secret (optional — protects scheduled jobs)" placeholder="any random text" />

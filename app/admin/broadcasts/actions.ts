@@ -23,12 +23,20 @@ export async function schedulePost(formData: FormData) {
   const utc = new Date(new Date(`${when}:00Z`).getTime() - (5 * 60 + 30) * 60 * 1000);
   await createServiceClient().from("scheduled_posts").insert({
     body,
+    campaign: str(formData.get("campaign")) || null,
     link_url: str(formData.get("link_url")) || null,
     send_at: utc.toISOString(),
     to_tg_channel: formData.get("to_tg_channel") === "on",
     to_tg_groups: formData.get("to_tg_groups") === "on",
     to_discord: formData.get("to_discord") === "on",
     to_direct: formData.get("to_direct") === "on",
+    // WhatsApp bulk (Interakt) — needs a pre-approved template with one {{1}} variable.
+    to_whatsapp: formData.get("to_whatsapp") === "on",
+    wa_template: str(formData.get("wa_template")) || null,
+    // Instagram/YouTube can't be reliably auto-posted — prepare-and-remind:
+    // at send time the drafted post is emailed to the admins to publish manually.
+    to_instagram: formData.get("to_instagram") === "on",
+    to_youtube: formData.get("to_youtube") === "on",
   });
   revalidatePath("/admin/broadcasts");
 }

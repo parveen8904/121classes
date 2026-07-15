@@ -159,6 +159,8 @@ const SECRET_KEYS = [
   "SUPABASE_ACCESS_TOKEN",
   "ZOOM_SDK_KEY",
   "ZOOM_SDK_SECRET",
+  "ZOOM_WEBHOOK_SECRET_TOKEN",
+  "IVR_WEBHOOK_KEY",
 ] as const;
 
 // Save API keys pasted in the admin. Blank fields are IGNORED (so you can update

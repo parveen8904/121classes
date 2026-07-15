@@ -223,9 +223,13 @@ export async function startPaperAttempt(sectionId: string): Promise<PaperAttempt
 async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt> {
   const cfg = await paperCfg(sectionId);
   const svc = createServiceClient();
+  // The answer sheet lives in the private bucket now — resolve it to a signed
+  // URL so the AI grader and the annotator can read it.
+  const { resolveFileUrl } = await import("@/lib/storage");
+  const studentUrl = await resolveFileUrl(row.file_url);
   let graded: DescriptiveGrade | null = null;
   try {
-    if (cfg.solutionPdf && row.file_url) graded = await gradeDescriptivePaper(row.file_url, cfg.solutionPdf, cfg.totalMarks || row.total_marks || null);
+    if (cfg.solutionPdf && studentUrl) graded = await gradeDescriptivePaper(studentUrl, cfg.solutionPdf, cfg.totalMarks || row.total_marks || null);
   } catch {
     graded = null;
   }
@@ -233,12 +237,13 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
     // Build the annotated "checked copy" (marks + margin notes) — best-effort.
     let annotatedUrl: string | null = null;
     try {
-      if (row.file_url && (graded.annotations?.length ?? 0) > 0) {
-        const bytes = await buildAnnotatedPdf(row.file_url, graded);
+      if (studentUrl && (graded.annotations?.length ?? 0) > 0) {
+        const bytes = await buildAnnotatedPdf(studentUrl, graded);
         if (bytes) {
+          // The checked copy is personal too → private bucket.
           const path = `descriptive/${sectionId}/${row.id}-checked.pdf`;
-          const up = await svc.storage.from("media").upload(path, Buffer.from(bytes), { contentType: "application/pdf", upsert: true });
-          if (!up.error) annotatedUrl = svc.storage.from("media").getPublicUrl(path).data.publicUrl;
+          const up = await svc.storage.from("secure").upload(path, Buffer.from(bytes), { contentType: "application/pdf", upsert: true });
+          if (!up.error) annotatedUrl = `secure:${path}`;
         }
       }
     } catch {
@@ -268,7 +273,12 @@ export async function submitPaperAttempt(input: { sectionId: string; fileUrl: st
   const submittedAt = new Date().toISOString();
   await createServiceClient().from("descriptive_attempts").update({ file_url: input.fileUrl, submitted_at: submittedAt, status: "submitted" }).eq("id", r.id);
   try {
-    if (user.email) await notifyFaculty("A descriptive paper was submitted", `Student: ${user.email}\nPaper: ${input.sectionId}\nUploaded answer: ${input.fileUrl}`);
+    if (user.email) {
+      // The answer is private — give faculty a proxied link (needs their login)
+      // instead of the useless raw "secure:" reference.
+      const link = `https://caparveensharma.com/api/file?u=${encodeURIComponent(input.fileUrl)}`;
+      await notifyFaculty("A descriptive paper was submitted", `Student: ${user.email}\nPaper: ${input.sectionId}\nUploaded answer (login required): ${link}`);
+    }
   } catch { /* non-blocking */ }
 
   return gradeAndStore({ ...r, file_url: input.fileUrl, submitted_at: submittedAt, status: "submitted" }, input.sectionId);

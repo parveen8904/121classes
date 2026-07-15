@@ -68,9 +68,12 @@ async function imagesToPdfBlob(files: File[]): Promise<Blob> {
 
 async function uploadPdf(blob: Blob, path: string): Promise<string | null> {
   const supabase = createClient();
-  const { error } = await supabase.storage.from("media").upload(path, blob, { contentType: "application/pdf", upsert: true });
+  // Answer sheets are personal — upload to the PRIVATE "secure" bucket and
+  // store a "secure:<path>" reference (served only via signed URLs, never a
+  // public link).
+  const { error } = await supabase.storage.from("secure").upload(path, blob, { contentType: "application/pdf", upsert: true });
   if (error) return null;
-  return supabase.storage.from("media").getPublicUrl(path).data.publicUrl;
+  return `secure:${path}`;
 }
 
 export default function DescriptivePaper(props: Props) {

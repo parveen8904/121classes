@@ -58,6 +58,7 @@ export default async function SiteFooter() {
           <Link href="/#about">About Us</Link>
           <Link href="/#vision">Vision</Link>
           <Link href="/#contact">Contact Us</Link>
+          <Link href="/support">Help &amp; Support</Link>
           <Link href="/privacy">Privacy Policy</Link>
           <Link href="/refund">Refund Policy</Link>
           <Link href="/terms">Terms of Service</Link>

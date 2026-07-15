@@ -14,6 +14,7 @@ export type AdminArea = { key: string; label: string; prefixes: string[] };
 export const ADMIN_AREAS: AdminArea[] = [
   { key: "announcements", label: "📣 Announcements & broadcasts", prefixes: ["/admin/announcements", "/admin/notifications", "/admin/amendments"] },
   { key: "inbox", label: "📥 Inbox & student doubts", prefixes: ["/admin/inbox"] },
+  { key: "tickets", label: "🎫 Support tickets", prefixes: ["/admin/tickets"] },
   { key: "moderation", label: "🛡️ Group chat moderation", prefixes: ["/admin/discussion"] },
   { key: "live", label: "📡 Live classes", prefixes: ["/admin/live"] },
   { key: "results", label: "🏆 Results", prefixes: ["/admin/results"] },

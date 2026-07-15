@@ -12,12 +12,17 @@ export default function SubmitButton({
   savedLabel = "✓ Saved",
   closeDetails = false,
   style,
+  name,
+  value,
 }: {
   children: React.ReactNode;
   className?: string;
   savedLabel?: string;
   closeDetails?: boolean;
   style?: React.CSSProperties;
+  /** Optional form field submitted when THIS button is the one clicked. */
+  name?: string;
+  value?: string;
 }) {
   const { pending } = useFormStatus();
   const [saved, setSaved] = useState(false);
@@ -39,7 +44,7 @@ export default function SubmitButton({
   }, [pending, closeDetails]);
 
   return (
-    <button ref={ref} className={className} type="submit" disabled={pending} aria-busy={pending} style={style}>
+    <button ref={ref} className={className} type="submit" disabled={pending} aria-busy={pending} style={style} name={name} value={value}>
       {pending ? (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <span className="btn-spinner" aria-hidden="true" /> Saving…

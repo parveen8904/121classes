@@ -22,6 +22,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/broadcasts",
   },
   {
+    icon: "🎫",
+    title: "Support tickets",
+    desc: "Every website & phone issue as a ticket — assign it to someone who calls the student, log the activity, resolve/close. Overdue tickets escalate automatically.",
+    href: "/admin/tickets",
+  },
+  {
     icon: "🔍",
     title: "Student insights",
     desc: "Most-viewed topics, where doubts come from, how students found us — and the drop-off call-list (never started / inactive 14d+).",

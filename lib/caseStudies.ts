@@ -7,7 +7,10 @@ import { parseCaseStudiesChunk, explainCaseAnswers } from "@/lib/ai";
 // persisted per chunk (parse_cursor), so processing survives restarts and can
 // be continued by the API route, the admin button, or the hourly cron.
 
-const CHUNK = 15_000;
+// Smaller chunks keep each AI response well under the output-token limit — a
+// 15k chunk asked the model to echo several full cases as JSON and overflowed,
+// producing truncated (invalid) JSON. ~7k yields 1–2 cases per call safely.
+const CHUNK = 7_000;
 
 export async function processCaseSet(setId: string, budgetMs: number): Promise<{ done: boolean; added: number }> {
   const svc = createServiceClient();

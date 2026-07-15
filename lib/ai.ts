@@ -376,6 +376,35 @@ export type ParsedCase = {
   scenario: string;
   questions: { question: string; options: string[]; correct_index: number }[];
 };
+// Parse model JSON that may be wrapped in code fences OR truncated at the token
+// limit. On a clean parse failure, salvage by trimming to the last complete
+// object/array close — so a cut-off response still yields the cases it did emit.
+function parseLooseJson(text: string): any | null {
+  let s = text.replace(/```json|```/g, "").trim();
+  const start = s.indexOf("{");
+  if (start > 0) s = s.slice(start);
+  try { return JSON.parse(s); } catch { /* try salvage */ }
+  // Salvage a truncated "cases" array: keep whole case objects only.
+  const m = s.match(/"cases"\s*:\s*\[/);
+  if (!m) return null;
+  const arrStart = (m.index ?? 0) + m[0].length;
+  const objs: string[] = [];
+  let depth = 0, objStart = -1, inStr = false, esc = false;
+  for (let i = arrStart; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (esc) esc = false; else if (ch === "\\") esc = true; else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === "{") { if (depth === 0) objStart = i; depth++; }
+    else if (ch === "}") { depth--; if (depth === 0 && objStart >= 0) { objs.push(s.slice(objStart, i + 1)); objStart = -1; } }
+    else if (ch === "]" && depth === 0) break;
+  }
+  if (!objs.length) return null;
+  try { return { cases: JSON.parse(`[${objs.join(",")}]`), consumed_chars: 0 }; } catch { return null; }
+}
+
 export async function parseCaseStudiesChunk(
   chunk: string,
   isLastChunk: boolean,
@@ -396,7 +425,8 @@ export async function parseCaseStudiesChunk(
   const text = await callClaude(system, chunk, 16000, { feature: "case_parse" });
   if (!text) return null;
   try {
-    const json = JSON.parse(text.replace(/```json|```/g, "").trim());
+    const json = parseLooseJson(text);
+    if (!json) return null;
     const arr = Array.isArray(json.cases) ? json.cases : [];
     const cases: ParsedCase[] = arr
       .map((c: { title?: unknown; scenario?: unknown; questions?: unknown }) => ({

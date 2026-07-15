@@ -28,6 +28,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/tickets",
   },
   {
+    icon: "📝",
+    title: "Articles & SEO",
+    desc: "Original AI-written study articles that bring Google traffic — a topic queue writes itself; edit, publish or unpublish anything.",
+    href: "/admin/articles",
+  },
+  {
     icon: "📇",
     title: "Contacts & leads",
     desc: "Import contacts from Interakt/WhatsApp exports or call lists. Leads join WhatsApp campaigns and the phone system recognises them when they call.",

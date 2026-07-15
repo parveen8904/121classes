@@ -30,6 +30,7 @@ export const AI_TOGGLES: { key: string; label: string; desc: string }[] = [
   { key: "interview", label: "AI mock interview", desc: "Career-corner interview practice." },
   { key: "cv", label: "CV summary polish", desc: "Improve a CV summary / objective." },
   { key: "marketing", label: "Marketing pack generator & weekly autopilot", desc: "Writes multi-channel campaign packs (Telegram/WhatsApp + Instagram + YouTube) and powers the Monday autopilot on the Campaigns page." },
+  { key: "articles", label: "SEO articles writer", desc: "Writes original public study articles from the topic queue (Admin → Articles). Original content only — never copied from the web." },
 ];
 
 let _aiDisabled: { at: number; set: Set<string> } | null = null;
@@ -958,4 +959,28 @@ export async function generateCampaignPack(
     }))
     .filter((p: PackPost) => p.message.length > 0)
     .slice(0, Math.max(1, days));
+}
+
+// ---- SEO articles ------------------------------------------------------------
+// Original educational articles for the public /articles section. Hard rules:
+// never copy from any source, never invent statistics/dates/thresholds — where
+// a rule may change, the article says "verify with the latest ICAI material".
+export type WrittenArticle = { title: string; description: string; body_md: string };
+
+const ARTICLE_SYSTEM =
+  "You write ORIGINAL educational articles for caparveensharma.com, the CA coaching platform of CA Parveen Sharma (36 years of teaching experience). Audience: Indian CA students (Foundation/Intermediate/Final). " +
+  "ABSOLUTE RULES: write 100% original prose — never reproduce text from ICAI materials, textbooks or websites. Never invent statistics, dates, fee amounts, section numbers or thresholds you are not certain of; where a rule/limit may have changed, write 'verify in the latest ICAI study material / announcement'. No fake testimonials or invented stories. " +
+  "STYLE: a warm senior-teacher voice; simple English; short paragraphs; concrete worked LOGIC (not copied questions); markdown with ## and ### headings and bullet lists; 700–1000 words; end with a short '## FAQs' section (2–3 Q&As), then a final paragraph naturally pointing students to the free tools: the free day-by-day study planner at https://caparveensharma.com/free-planner?src=article and free case-scenario practice at https://caparveensharma.com (courses). " +
+  "SEO: title ≤ 65 characters containing the main keyword; meta description ≤ 155 characters. " +
+  'Respond ONLY as compact JSON, no prose, no code fences: {"title":"...","description":"...","body_md":"..."}';
+
+export async function writeArticle(topic: string, keywords: string): Promise<WrittenArticle | null> {
+  const user = `Article topic: ${topic}\nTarget keywords: ${keywords}\nWrite the article now.`;
+  const text = await callClaude(ARTICLE_SYSTEM, user, 3200, { feature: "articles" });
+  if (!text) return null;
+  const json = parseLooseJson(text);
+  const title = String(json?.title ?? "").trim();
+  const body = String(json?.body_md ?? "").trim();
+  if (!title || body.length < 400) return null;
+  return { title, description: String(json?.description ?? "").trim(), body_md: body };
 }

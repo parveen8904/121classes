@@ -72,7 +72,7 @@ type Visitors = {
   signup_failed_today: number;
   new_accounts_today: number;
   top_pages: { path: string; views: number; visitors: number }[];
-  activity: { name: string | null; email: string | null; first_seen: string; last_seen: string; minutes: number; pages: number }[];
+  activity: { name: string | null; email: string | null; phone?: string | null; first_seen: string; last_seen: string; minutes: number; pages: number }[];
 };
 
 export default async function HealthPage() {
@@ -169,12 +169,13 @@ export default async function HealthPage() {
 
               {v.activity.length > 0 && (
                 <>
-                  <h4 style={{ margin: "18px 0 6px" }}>🧑‍🎓 Who was on the site today (logged-in students)</h4>
+                  <h4 style={{ margin: "18px 0 6px" }}>🧑‍🎓 Everyone on the site today — longest time first ({v.activity.length})</h4>
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".82rem" }}>
                       <thead>
                         <tr style={{ textAlign: "left", color: "var(--muted)" }}>
                           <th style={{ padding: "6px 8px" }}>Name</th>
+                          <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Phone</th>
                           <th style={{ padding: "6px 8px" }}>Email</th>
                           <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>First seen</th>
                           <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Last seen</th>
@@ -184,8 +185,9 @@ export default async function HealthPage() {
                       </thead>
                       <tbody>
                         {v.activity.map((a, i) => (
-                          <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
-                            <td style={{ padding: "6px 8px", fontWeight: 600 }}>{a.name || "—"}</td>
+                          <tr key={i} style={{ borderTop: "1px solid var(--border)", opacity: a.name || a.email ? 1 : 0.72 }}>
+                            <td style={{ padding: "6px 8px", fontWeight: 600 }}>{a.name || "🕶 Visitor (not registered)"}</td>
+                            <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{a.phone ? <a href={`tel:${a.phone}`}>{a.phone}</a> : "—"}</td>
                             <td style={{ padding: "6px 8px" }}>{a.email || "—"}</td>
                             <td style={{ padding: "6px 8px" }}>{a.first_seen}</td>
                             <td style={{ padding: "6px 8px" }}>{a.last_seen}</td>
@@ -197,8 +199,9 @@ export default async function HealthPage() {
                     </table>
                   </div>
                   <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
-                    &ldquo;Time on site&rdquo; is from first to last page they opened today. Anonymous visitors (not logged in)
-                    are in the totals above but can&apos;t be named — we only know registered students.
+                    &ldquo;Time on site&rdquo; is from first to last page opened today (IST), longest first. 🕶 rows are real
+                    visitors who haven&apos;t registered — no website can know a visitor&apos;s name or phone until they give
+                    it (that&apos;s the job of the case-test popup and the free-planner page).
                   </p>
                 </>
               )}

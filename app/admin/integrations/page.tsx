@@ -92,7 +92,11 @@ export default async function IntegrationsPage({
   const jb = Boolean(jooble);
   const serp = Boolean(await getSecret("SERPAPI_KEY"));
   const bunny = Boolean(await getSecret("BUNNY_STREAM_API_KEY"));
-  const ivr = Boolean(await getSecret("IVR_WEBHOOK_KEY"));
+  const ivrKey = (await getSecret("IVR_WEBHOOK_KEY")).trim();
+  const ivr = Boolean(ivrKey);
+  // Admin-only page: showing the ready-made webhook URL removes every chance
+  // of a typo when pasting it into the IVR provider's portal.
+  const ivrUrl = ivrKey ? `https://caparveensharma.com/api/calls/webhook?key=${encodeURIComponent(ivrKey)}` : "";
 
   const svc = createServiceClient();
   const { data: links } = await svc
@@ -166,7 +170,13 @@ export default async function IntegrationsPage({
           <button className="btn small" type="submit">✉️ Send test email (shows the exact error)</button>
         </form>
         <Row on={wa} label="💬 WhatsApp (Interakt)" help={<>Key from <a className="grad" href="https://app.interakt.ai" target="_blank" rel="noreferrer">Interakt</a> → Settings → Developer Settings. Bulk WhatsApp also needs an approved template.</>} />
-        <Row on={ivr} label="📞 IVR / phone calls → tickets" help={<>Turns every call on your IVR number (98100 12674) into ticket activity — missed calls open a high-priority ticket automatically. Set the <strong>IVR webhook key</strong> below (any long random text), then in your IVR provider&apos;s portal find <em>webhooks / call-event notifications</em> and paste:<br /><code style={{ fontSize: ".78rem", wordBreak: "break-all" }}>https://caparveensharma.com/api/calls/webhook?key=YOUR-KEY</code><br />It accepts the call formats of MyOperator, Exotel, Knowlarity, Servetel/Tata Smartflo &amp; Ozonetel.</>} />
+        <Row on={ivr} label="📞 IVR / phone calls → tickets" help={<>Turns every call on your IVR number (98100 12674) into ticket activity — missed calls open a high-priority ticket automatically. Set the <strong>IVR webhook key</strong> below, then paste the ready-made URL into your IVR portal (Smartflo: Services → Webhook → Add Webhook, method POST). Works with MyOperator, Exotel, Knowlarity, Servetel/Tata Smartflo &amp; Ozonetel.</>} />
+        {ivrUrl && (
+          <div style={{ margin: "6px 0 10px" }}>
+            <label style={{ fontSize: ".8rem" }}>📋 Copy this EXACT URL into the IVR webhook (don&apos;t retype it):</label>
+            <input readOnly value={ivrUrl} style={{ fontFamily: "monospace", fontSize: ".78rem" }} />
+          </div>
+        )}
         <Row on={rzp} label="💳 Razorpay (payments)" help={<>Key ID + Secret from <a className="grad" href="https://dashboard.razorpay.com" target="_blank" rel="noreferrer">Razorpay</a> → Settings → API Keys. After saving, click <strong>Test</strong> below before going live.</>} />
         {rzp && (
           <form action={testRazorpayConnection}>

@@ -101,8 +101,29 @@ export default async function CoursesPage() {
     { i: "📦", t: "Books, PDFs & offline classes", d: "Printed hardcopy books delivered to you, downloadable PDF notes, streaming on any browser, and offline class downloads in our desktop app (Windows & Mac) — mobile apps coming soon." },
   ];
 
+  // Course rich-result schema: one Course per subject, provider = the org
+  // defined in the root layout's knowledge graph.
+  const courseJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    itemListElement: (subjects ?? []).map((s: any, i: number) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      item: {
+        "@type": "Course",
+        name: `${s.title} — ${courseTitle.get(s.course_id as string) ?? "CA"}`,
+        description: `Complete ${s.title} preparation with CA Parveen Sharma — recorded classes, day-by-day study plan, tests with reports, revisions and amendments.`,
+        provider: { "@id": "https://caparveensharma.com/#org" },
+        url: "https://caparveensharma.com/courses",
+        offers: { "@type": "Offer", category: "Paid", availability: "https://schema.org/InStock" },
+        hasCourseInstance: { "@type": "CourseInstance", courseMode: "Online" },
+      },
+    })),
+  };
+
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(courseJsonLd) }} />
       <section className="section">
         <div style={{ background: GRAD, color: "#fff", borderRadius: 22, padding: "40px 28px", textAlign: "center", marginBottom: 22 }}>
           <span style={{ display: "inline-block", background: "rgba(255,255,255,.18)", padding: "4px 12px", borderRadius: 999, fontSize: ".8rem", fontWeight: 700 }}>📚 Courses</span>

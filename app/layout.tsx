@@ -23,7 +23,7 @@ const getSupportLinks = unstable_cache(
     const { data } = await svc
       .from("site_settings")
       .select("key, value")
-      .in("key", ["support_whatsapp", "support_phone", "support_telegram", "whatsapp_faculty"]);
+      .in("key", ["support_whatsapp", "support_phone", "support_telegram", "whatsapp_faculty", "support_youtube", "support_instagram", "support_twitter", "support_facebook"]);
     return Object.fromEntries((data ?? []).map((r) => [r.key, r.value as string | null]));
   },
   ["layout-support-links"],
@@ -73,6 +73,11 @@ const themeScript = `try{var t=localStorage.getItem('theme')||(window.matchMedia
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const links = await getSupportLinks();
   const m = new Map(Object.entries(links as Record<string, string | null>));
+  // Social profiles strengthen the knowledge-graph link between the site and
+  // the founder's established channels (E-E-A-T signal for Google).
+  const sameAs = ["support_youtube", "support_instagram", "support_twitter", "support_facebook"]
+    .map((k) => m.get(k))
+    .filter((u): u is string => Boolean(u && u.startsWith("http")));
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -82,12 +87,28 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "EducationalOrganization",
-            name: "CA Parveen Sharma — Personalised Learning",
-            url: "https://caparveensharma.com",
-            logo: "https://caparveensharma.com/icon-512.png",
-            sameAs: [],
-            address: { "@type": "PostalAddress", streetAddress: "W6 Sector 24, DLF Phase 3", addressLocality: "Gurugram", postalCode: "122010", addressCountry: "IN" },
+            "@graph": [
+              {
+                "@type": "EducationalOrganization",
+                "@id": "https://caparveensharma.com/#org",
+                name: "CA Parveen Sharma — Personalised Learning",
+                url: "https://caparveensharma.com",
+                logo: "https://caparveensharma.com/icon-512.png",
+                sameAs,
+                founder: { "@id": "https://caparveensharma.com/#person" },
+                address: { "@type": "PostalAddress", streetAddress: "W6 Sector 24, DLF Phase 3", addressLocality: "Gurugram", postalCode: "122010", addressCountry: "IN" },
+              },
+              {
+                "@type": "Person",
+                "@id": "https://caparveensharma.com/#person",
+                name: "CA Parveen Sharma",
+                jobTitle: "Chartered Accountant & Educator",
+                description: "CA faculty with 36 years of teaching experience — Advanced Accounting (CA Inter) and Financial Reporting (CA Final).",
+                url: "https://caparveensharma.com",
+                sameAs,
+                worksFor: { "@id": "https://caparveensharma.com/#org" },
+              },
+            ],
           }) }}
         />
       </head>

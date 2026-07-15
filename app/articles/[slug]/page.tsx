@@ -30,9 +30,50 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   };
 }
 
+// Pull Q&As out of the article's "## FAQs" section for FAQPage rich results.
+// Questions are ### headings (or bold lines); the answer is the text until the
+// next question. Best-effort — no FAQs found simply means no FAQ schema.
+function extractFaqs(md: string): { q: string; a: string }[] {
+  const m = md.match(/^##\s*FAQs?\b[^\n]*\n([\s\S]*)$/im);
+  if (!m) return [];
+  const section = m[1].split(/^##\s/m)[0];
+  const out: { q: string; a: string }[] = [];
+  let q = "", buf: string[] = [];
+  const push = () => { if (q && buf.join(" ").trim()) out.push({ q, a: buf.join(" ").replace(/\s+/g, " ").trim().slice(0, 500) }); };
+  for (const line of section.split(/\r?\n/)) {
+    const qm = line.match(/^###\s+(.+)$/) || line.match(/^\*\*(.+?)\*\*\s*$/);
+    if (qm) { push(); q = qm[1].replace(/[*#]/g, "").trim(); buf = []; }
+    else if (q) buf.push(line.trim());
+  }
+  push();
+  return out.slice(0, 5);
+}
+
 export default async function ArticlePage({ params }: { params: { slug: string } }) {
   const a = await getArticle(params.slug);
   if (!a) notFound();
+
+  const faqs = extractFaqs(a.body_md as string);
+  const extraLd: object[] = [
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: "https://caparveensharma.com" },
+        { "@type": "ListItem", position: 2, name: "Study Articles", item: "https://caparveensharma.com/articles" },
+        { "@type": "ListItem", position: 3, name: a.title },
+      ],
+    },
+    ...(faqs.length >= 2 ? [{
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: faqs.map((f) => ({
+        "@type": "Question",
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer", text: f.a },
+      })),
+    }] : []),
+  ];
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -49,6 +90,9 @@ export default async function ArticlePage({ params }: { params: { slug: string }
   return (
     <main>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      {extraLd.map((ld, i) => (
+        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+      ))}
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
         <p className="crumb"><Link href="/articles">← All articles</Link></p>
         <h1 style={{ lineHeight: 1.2 }}>{a.title}</h1>

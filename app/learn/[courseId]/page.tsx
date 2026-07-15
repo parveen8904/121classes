@@ -116,6 +116,19 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
     const arr = subjCaseSets.get(r.subject_id) ?? [];
     arr.push(r); subjCaseSets.set(r.subject_id, arr);
   }
+  // Total case scenarios per subject (for the "what's uploaded" highlight).
+  const caseSetToSubject = new Map((caseSetRows ?? []).map((r) => [r.id as string, (r as { subject_id: string }).subject_id]));
+  const subjCaseCount = new Map<string, number>();
+  const caseSetIds = (caseSetRows ?? []).map((r) => r.id as string);
+  if (caseSetIds.length) {
+    const { data: csRows } = await svc.from("case_studies").select("set_id").in("set_id", caseSetIds);
+    for (const r of (csRows ?? []) as { set_id: string }[]) {
+      const sid = caseSetToSubject.get(r.set_id);
+      if (sid) subjCaseCount.set(sid, (subjCaseCount.get(sid) ?? 0) + 1);
+    }
+  }
+  // Count subject-level materials by kind (MTP / RTP / past papers) for the badge line.
+  const subjMatCount = (sid: string, kind: string) => (subjResources.get(sid) ?? []).filter((r) => r.kind === kind).length;
   if (topicIds2.length) {
     const [{ data: secRows }, { data: matRowsP }] = await Promise.all([
       // Only the two tiny config keys we need — configs also hold transcripts
@@ -323,6 +336,17 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                   const sw = subjWindow.get(s.id) ?? { from: null, to: null };
                   const applicable = sw.from ? `${sw.from}${sw.to ? ` to ${sw.to}` : " onwards"}` : "";
                   const mats = [...(subjMaterials.get(s.id) ?? [])].map((k) => MAT_LABEL[k] ?? k);
+                  const nMtp = subjMatCount(s.id, "mtp");
+                  const nRtp = subjMatCount(s.id, "rtp");
+                  const nPast = subjMatCount(s.id, "past_papers");
+                  const nCases = subjCaseCount.get(s.id) ?? 0;
+                  // Bold badges only for what actually exists (no "0 MTPs").
+                  const paperBadges = [
+                    nMtp > 0 && `📝 ${nMtp} MTP${nMtp === 1 ? "" : "s"}`,
+                    nRtp > 0 && `📝 ${nRtp} RTP${nRtp === 1 ? "" : "s"}`,
+                    nPast > 0 && `🗂️ ${nPast} past exam paper${nPast === 1 ? "" : "s"}`,
+                    nCases > 0 && `🧩 ${nCases} case scenario${nCases === 1 ? "" : "s"}`,
+                  ].filter(Boolean) as string[];
                   return (
                     <div className="card" style={{ margin: "4px 0 14px" }}>
                       <strong style={{ fontSize: ".95rem" }}>📊 What this subject contains</strong>
@@ -330,9 +354,21 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                         <div>🎓 <strong>{sumClasses.get(s.id) ?? 0}</strong> classes · ⏱️ {fmtAt125(sumClassMins.get(s.id) ?? 0)} total <span className="muted" style={{ fontSize: ".82rem" }}>{AT125_NOTE}</span></div>
                         <div>🎬 <strong>{sumRev.get(s.id) ?? 0}</strong> revision videos · ⏱️ {fmtMins(sumRevMins.get(s.id) ?? 0)} total</div>
                         <div>🧠 <strong>{sumMcq.get(s.id) ?? 0}</strong> MCQ tests · ✍️ <strong>{sumDesc.get(s.id) ?? 0}</strong> descriptive tests</div>
+                        {paperBadges.length > 0 && (
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "2px 0" }}>
+                            {paperBadges.map((b) => (
+                              <span key={b} style={{ background: "var(--accent)", color: "#fff", borderRadius: 999, padding: "2px 10px", fontSize: ".82rem", fontWeight: 700 }}>{b}</span>
+                            ))}
+                          </div>
+                        )}
                         <div>📌 Important questions — first revision: {hasRev1 ? "✓" : "—"} · second revision: {hasRev2 ? "✓" : "—"}</div>
                         <div>📚 Materials: {mats.length ? mats.join(" · ") : "coming soon"}</div>
                         <div>📅 Applicable: {applicable || "all attempts"}</div>
+                      </div>
+                      {/* Turn all of the above into a day-by-day schedule. */}
+                      <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: ".88rem" }}>🗓️ Fit every class, revision, test &amp; paper above into a personal day-by-day plan:</span>
+                        <Link className="btn small" href={`/planner?subject=${s.id}`}>Build your plan →</Link>
                       </div>
                     </div>
                   );

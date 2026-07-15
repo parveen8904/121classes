@@ -21,7 +21,7 @@ const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN",
 
 type Setup = PlanSetup;
 
-export default async function PlannerPage({ searchParams }: { searchParams: { new?: string; emailed?: string; rebalanced?: string } }) {
+export default async function PlannerPage({ searchParams }: { searchParams: { new?: string; emailed?: string; rebalanced?: string; subject?: string } }) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/planner");
@@ -35,7 +35,9 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
   const { data: planRow } = await supabase.from("study_plans").select("setup, remarks").eq("user_id", user.id).maybeSingle();
   const setup = (planRow?.setup ?? null) as Setup | null;
   const remarks = (planRow?.remarks ?? {}) as Record<string, string>;
-  const showForm = !setup?.subjectId || searchParams.new === "1";
+  // A "Build your plan →" link from a subject can pre-select that subject.
+  const preSubject = (subjOpts ?? []).some((s) => s.id === searchParams.subject) ? searchParams.subject! : "";
+  const showForm = !setup?.subjectId || searchParams.new === "1" || !!preSubject;
 
   if (showForm) {
     const subjIds = (subjOpts ?? []).map((s) => s.id as string);
@@ -55,7 +57,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: { ne
           <TopicPicker
             subjects={(subjOpts ?? []).map((s) => ({ id: s.id as string, title: s.title as string }))}
             topicsBySubject={topicsBySubject}
-            defaultSubjectId={setup?.subjectId ?? ""}
+            defaultSubjectId={preSubject || setup?.subjectId || ""}
             pickedIds={setup?.pickedTopicIds ?? []}
           />
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>

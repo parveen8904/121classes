@@ -147,13 +147,20 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
     if (!up.error) invoiceRef = `secure:${path}`;
     const gifterEmail = user.email || "";
     if (gifterEmail) {
+      // A gifter's email always carries the Sponsor Guide alongside the invoice.
+      const { buildSponsorGuidePdf } = await import("@/lib/sponsorGuide");
+      const guidePdf = await buildSponsorGuidePdf().catch(() => null);
       await sendEmailWithAttachment(
         gifterEmail,
         `Your invoice ${invoiceNo} — CA Parveen Sharma`,
         emailShell("Thank you for your gift 🎁",
           `<p>Your payment was successful and <strong>${g.recipient_name}</strong> now has ${g.tier} access to <strong>${subj?.title ?? "the subject"}</strong> for ${g.months} months.</p>
-           <p>Your GST invoice (${invoiceNo}) is attached. Total paid: <strong>Rs. ${Number(gst.total).toLocaleString("en-IN")}</strong>.</p>`),
-        { filename: `Invoice-${invoiceNo.replace(/[^\w-]/g, "_")}.pdf`, content: Buffer.from(pdf), contentType: "application/pdf" },
+           <p>Your GST invoice (${invoiceNo}) is attached. Total paid: <strong>Rs. ${Number(gst.total).toLocaleString("en-IN")}</strong>.</p>
+           <p>We&apos;ve also attached the <strong>Sponsor Guide</strong> — it explains everything the student receives and how you can sponsor more students. 💚</p>`),
+        [
+          { filename: `Invoice-${invoiceNo.replace(/[^\w-]/g, "_")}.pdf`, content: Buffer.from(pdf), contentType: "application/pdf" },
+          ...(guidePdf ? [{ filename: "Sponsor-a-Student-Guide.pdf", content: Buffer.from(guidePdf), contentType: "application/pdf" }] : []),
+        ],
       );
     }
   } catch { /* invoice best-effort; payment already captured */ }

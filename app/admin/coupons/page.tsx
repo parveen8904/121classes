@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../_components/AdminHero";
 import DeleteButton from "../_components/DeleteButton";
 import SubmitButton from "@/app/components/SubmitButton";
-import { createCoupon, deleteCoupon, toggleCoupon, emailCoupon } from "./actions";
+import { createCoupon, deleteCoupon, toggleCoupon, emailCoupon, editCoupon } from "./actions";
 
 export default async function CouponsPage({ searchParams }: { searchParams: { mail?: string } }) {
   const supabase = createClient();
@@ -20,6 +20,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: { ma
         back={{ href: "/admin", label: "Admin" }}
       />
       {searchParams.mail === "sent" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Coupon emailed with the Sponsor Guide attached.</div>}
+      {searchParams.mail === "edited" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Coupon updated.</div>}
       {searchParams.mail === "fail" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ Couldn&apos;t send — check the email address and that Mailgun is set up.</div>}
       {searchParams.mail === "bademail" && <div className="notice err" style={{ marginTop: 16 }}>Enter a valid email address.</div>}
 
@@ -81,7 +82,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: { ma
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
         {coupons && coupons.length > 0 ? (
           coupons.map((c) => (
-            <div className="list-row" key={c.id}>
+            <div className="list-row" key={c.id} style={{ flexWrap: "wrap" }}>
               <div>
                 <span className="row-title">🏷️ {c.code}</span>
                 <p className="row-sub">
@@ -108,6 +109,40 @@ export default async function CouponsPage({ searchParams }: { searchParams: { ma
                 </form>
                 <DeleteButton action={deleteCoupon} id={c.id} message="Delete this coupon?" />
               </div>
+              <details style={{ marginTop: 8, flexBasis: "100%" }}>
+                <summary style={{ cursor: "pointer", fontSize: ".82rem", color: "var(--accent)" }}>✏️ Edit coupon</summary>
+                <form action={editCoupon} style={{ marginTop: 10, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
+                  <input type="hidden" name="id" value={c.id} />
+                  <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
+                    <div><label>Code</label><input name="code" defaultValue={c.code} /></div>
+                    <div><label>% off</label><input name="percent_off" type="number" defaultValue={c.percent_off ?? ""} /></div>
+                    <div><label>OR ₹ off</label><input name="amount_off_inr" type="number" defaultValue={c.amount_off_inr ?? ""} /></div>
+                    <div><label>Max uses</label><input name="max_uses" type="number" defaultValue={c.max_uses ?? ""} placeholder="blank = ∞" /></div>
+                  </div>
+                  <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr", marginTop: 10 }}>
+                    <div>
+                      <label>Applies to</label>
+                      <select name="scope" defaultValue={(c as { scope?: string }).scope ?? "any"}>
+                        <option value="any">Anyone (users &amp; gifters)</option>
+                        <option value="user">Users buying for themselves</option>
+                        <option value="donor">Gifters (gift purchases)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label>Expires on (blank = never)</label>
+                      <input name="expires_at" type="date" defaultValue={(c as { expires_at?: string | null }).expires_at ? new Date((c as { expires_at?: string }).expires_at!).toISOString().slice(0, 10) : ""} />
+                    </div>
+                    <div>
+                      <label>Lock to one email (optional)</label>
+                      <input name="for_email" type="email" defaultValue={(c as { for_email?: string | null }).for_email ?? ""} placeholder="blank = anyone" />
+                    </div>
+                  </div>
+                  <label className="remember" style={{ marginTop: 8 }}>
+                    <input type="checkbox" name="is_active" defaultChecked={c.is_active} /> Active
+                  </label>
+                  <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginLeft: 8 }}>Save changes</SubmitButton>
+                </form>
+              </details>
             </div>
           ))
         ) : (

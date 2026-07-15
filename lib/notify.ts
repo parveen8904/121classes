@@ -92,11 +92,13 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
 
 // Send an email with a file attachment (e.g. a generated PDF) via Mailgun
 // multipart. Returns false (no-op) if the provider isn't configured.
+type EmailAttachment = { filename: string; content: Buffer; contentType: string };
+
 export async function sendEmailWithAttachment(
   to: string,
   subject: string,
   html: string,
-  attachment: { filename: string; content: Buffer; contentType: string },
+  attachment: EmailAttachment | EmailAttachment[],
 ): Promise<boolean> {
   const apiKey = await getSecret("MAILGUN_API_KEY");
   const domain = await getSecret("MAILGUN_DOMAIN");
@@ -112,7 +114,10 @@ export async function sendEmailWithAttachment(
     form.set("html", html);
     const replyTo = await getSecret("NOTIFY_REPLY_TO");
     if (replyTo) form.set("h:Reply-To", replyTo);
-    form.set("attachment", new Blob([new Uint8Array(attachment.content)], { type: attachment.contentType }), attachment.filename);
+    // Mailgun accepts several `attachment` parts on one message.
+    for (const a of Array.isArray(attachment) ? attachment : [attachment]) {
+      form.append("attachment", new Blob([new Uint8Array(a.content)], { type: a.contentType }), a.filename);
+    }
     const res = await fetch(`${apiBase}/v3/${domain}/messages`, {
       method: "POST",
       headers: { Authorization: "Basic " + Buffer.from(`api:${apiKey}`).toString("base64") },

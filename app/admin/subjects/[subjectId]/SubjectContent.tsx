@@ -2,7 +2,7 @@ import PdfUpload from "../../_components/PdfUpload";
 import SubmitButton from "@/app/components/SubmitButton";
 import AttemptPicker from "@/app/components/AttemptPicker";
 import DeleteButton from "../../_components/DeleteButton";
-import { saveSubjectMIQ, saveSubjectWeightage, addSubjectMaterial, deleteSubjectMaterial } from "./actions";
+import { saveSubjectMIQ, saveSubjectWeightage, addSubjectMaterial, deleteSubjectMaterial, editSubjectMaterial } from "./actions";
 
 type Topic = { id: string; title: string; weightage_marks: number | null };
 type Material = { id: string; kind: string; title: string; valid_from_attempt: string | null; valid_to_attempt: string | null; solution_url?: string | null };
@@ -29,13 +29,36 @@ export default function SubjectContent({
       <div style={{ display: "grid", gap: 6, margin: "8px 0" }}>
         {byKind(kind).length === 0 && <span className="muted" style={{ fontSize: ".82rem" }}>None uploaded yet.</span>}
         {byKind(kind).map((m) => (
-          <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, background: "var(--bg-soft)", borderRadius: 8, padding: "6px 10px" }}>
-            <span style={{ fontSize: ".85rem" }}>
-              <strong>{m.title}</strong>
-              {m.valid_from_attempt && <span className="muted"> · {withRange && m.valid_to_attempt ? `till ${m.valid_to_attempt}` : m.valid_from_attempt}</span>}
-              {PAPER_KINDS.includes(kind) && <span className="muted"> · {m.solution_url ? "✅ has suggested answers (AI evaluation on)" : "⚠️ no suggested answers"}</span>}
-            </span>
-            <DeleteButton action={deleteSubjectMaterial} id={m.id} parentId={subjectId} message="Remove this material?" />
+          <div key={m.id} style={{ background: "var(--bg-soft)", borderRadius: 8, padding: "6px 10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: ".85rem" }}>
+                <strong>{m.title}</strong>
+                {m.valid_from_attempt && <span className="muted"> · {withRange && m.valid_to_attempt ? `till ${m.valid_to_attempt}` : m.valid_from_attempt}</span>}
+                {PAPER_KINDS.includes(kind) && <span className="muted"> · {m.solution_url ? "✅ has suggested answers (AI evaluation on)" : "⚠️ no suggested answers"}</span>}
+              </span>
+              <DeleteButton action={deleteSubjectMaterial} id={m.id} parentId={subjectId} message="Remove this material?" />
+            </div>
+            <details style={{ marginTop: 6 }}>
+              <summary style={{ cursor: "pointer", fontSize: ".8rem", color: "var(--accent)" }}>✏️ Edit / replace{PAPER_KINDS.includes(kind) && !m.solution_url ? " — add suggested answers" : ""}</summary>
+              <form action={editSubjectMaterial} style={{ marginTop: 8, borderTop: "1px dashed var(--border)", paddingTop: 8 }}>
+                <input type="hidden" name="id" value={m.id} />
+                <input type="hidden" name="subjectId" value={subjectId} />
+                <div style={{ display: "grid", gap: 10, gridTemplateColumns: kind === "icai" ? "1fr" : "1fr 1fr" }}>
+                  <div><label>Name</label><input name="title" defaultValue={m.title} /></div>
+                  {kind !== "icai" && (
+                    <div>
+                      <label>{withRange ? "Till which attempt" : "For which attempt"}</label>
+                      <AttemptPicker name={withRange ? "valid_to_attempt" : "valid_from_attempt"} defaultValue={(withRange ? m.valid_to_attempt : m.valid_from_attempt) ?? ""} allowNone />
+                    </div>
+                  )}
+                </div>
+                <PdfUpload name="file_url" folder="repository" label={`Replace ${PAPER_KINDS.includes(kind) ? "question paper" : "PDF"} (leave blank to keep current)`} />
+                {PAPER_KINDS.includes(kind) && (
+                  <PdfUpload name="solution_url" folder="repository" label={m.solution_url ? "Replace suggested-answers PDF (leave blank to keep)" : "➕ Add suggested-answers PDF (turns on AI evaluation)"} />
+                )}
+                <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 8 }}>Save changes</SubmitButton>
+              </form>
+            </details>
           </div>
         ))}
       </div>
@@ -103,9 +126,26 @@ export default function SubjectContent({
         <div style={{ display: "grid", gap: 6, margin: "8px 0" }}>
           {byKind("custom").length === 0 && <span className="muted" style={{ fontSize: ".82rem" }}>Nothing added yet.</span>}
           {byKind("custom").map((m) => (
-            <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, background: "var(--bg-soft)", borderRadius: 8, padding: "6px 10px" }}>
-              <span style={{ fontSize: ".85rem" }}><strong>{m.title}</strong>{m.valid_from_attempt && <span className="muted"> · {m.valid_from_attempt}</span>}</span>
-              <DeleteButton action={deleteSubjectMaterial} id={m.id} parentId={subjectId} message="Remove this content?" />
+            <div key={m.id} style={{ background: "var(--bg-soft)", borderRadius: 8, padding: "6px 10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: ".85rem" }}><strong>{m.title}</strong>{m.valid_from_attempt && <span className="muted"> · {m.valid_from_attempt}</span>}</span>
+                <DeleteButton action={deleteSubjectMaterial} id={m.id} parentId={subjectId} message="Remove this content?" />
+              </div>
+              <details style={{ marginTop: 6 }}>
+                <summary style={{ cursor: "pointer", fontSize: ".8rem", color: "var(--accent)" }}>✏️ Edit / replace</summary>
+                <form action={editSubjectMaterial} style={{ marginTop: 8, borderTop: "1px dashed var(--border)", paddingTop: 8 }}>
+                  <input type="hidden" name="id" value={m.id} />
+                  <input type="hidden" name="subjectId" value={subjectId} />
+                  <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+                    <div><label>Name (what students see)</label><input name="title" defaultValue={m.title} /></div>
+                    <div><label>For which attempt (optional)</label><AttemptPicker name="valid_from_attempt" defaultValue={m.valid_from_attempt ?? ""} allowNone /></div>
+                  </div>
+                  <PdfUpload name="file_url" folder="repository" label="Replace PDF (leave blank to keep current)" />
+                  <label style={{ marginTop: 8 }}>🎬 Replace video link (leave blank to keep)</label>
+                  <input name="video_url" placeholder="https://youtu.be/…" />
+                  <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 8 }}>Save changes</SubmitButton>
+                </form>
+              </details>
             </div>
           ))}
         </div>

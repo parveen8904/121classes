@@ -233,6 +233,58 @@ export async function deleteSubjectMaterial(formData: FormData) {
   if (subjectId) revalidatePath(`/admin/subjects/${subjectId}`);
 }
 
+// Edit / update / replace an already-uploaded material. Empty file fields keep
+// the existing file (so you can, e.g., add a suggested-answers PDF to a past
+// paper months later without re-uploading the question paper).
+export async function editSubjectMaterial(formData: FormData) {
+  const id = str(formData.get("id"));
+  const subjectId = str(formData.get("subjectId"));
+  if (!id) return;
+  const svc = createServiceClient();
+  const { data: existing } = await svc
+    .from("repository_items")
+    .select("kind, file_url, content")
+    .eq("id", id)
+    .maybeSingle();
+
+  const update: Record<string, unknown> = {};
+
+  const title = str(formData.get("title"));
+  if (title) update.title = title;
+
+  // Attempt tags — a submitted value overwrites; blank keeps the current one.
+  for (const f of ["valid_from_attempt", "valid_to_attempt"] as const) {
+    const v = str(formData.get(f));
+    if (v) update[f] = v;
+  }
+
+  // Replace the main file (question paper / PDF / video). Blank = keep current.
+  const newFile = str(formData.get("file_url")) || str(formData.get("video_url"));
+  if (newFile && newFile !== existing?.file_url) {
+    update.file_url = newFile;
+    if (/\.pdf($|\?)/i.test(newFile)) {
+      const { extractPdfText } = await import("@/lib/pdf");
+      update.content = (await extractPdfText(newFile)) || null;
+    }
+  }
+
+  // Add / replace the suggested-answers PDF (turns on AI evaluation). Blank = keep.
+  const newSolution = str(formData.get("solution_url"));
+  if (newSolution) update.solution_url = newSolution;
+
+  // Optional visibility toggle for AI-only items.
+  const aiOnly = formData.get("ai_only");
+  if (aiOnly !== null && existing?.kind && existing.kind !== "icai") {
+    update.student_visible = str(aiOnly) !== "on";
+  }
+
+  if (Object.keys(update).length > 0) {
+    await svc.from("repository_items").update(update).eq("id", id);
+  }
+  if (subjectId) revalidatePath(`/admin/subjects/${subjectId}`);
+  redirect(`/admin/subjects/${subjectId}?edited=material#subject-content`);
+}
+
 export async function updateSubjectInline(formData: FormData) {
   const id = str(formData.get("id"));
   const title = str(formData.get("title"));

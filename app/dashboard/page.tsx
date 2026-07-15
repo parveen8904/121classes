@@ -284,6 +284,10 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
 
         <MyCourses courses={myCourses.map((c) => ({ id: c.id, title: c.title }))} />
 
+        <div style={{ marginTop: 12 }}>
+          <Link className="btn small secondary" href="/gift">🎁 Gift a subscription to someone</Link>
+        </div>
+
         {!isAdminUser && !needsSetup && myCourses.length > 0 && (
           <p className="muted" style={{ fontSize: ".85rem", marginTop: 12 }}>
             ➕ Want more subjects? Open{" "}

@@ -136,6 +136,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/combos",
   },
   {
+    icon: "🧾",
+    title: "GST & invoicing",
+    desc: "GSTIN, rate & invoice settings. Gift-subscription transactions and downloadable invoices appear in Reports.",
+    href: "/admin/billing",
+  },
+  {
     icon: "📊",
     title: "Reports",
     desc: "Revenue, active plans, book sales and dispatch snapshot.",

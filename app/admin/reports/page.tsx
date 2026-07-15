@@ -1,6 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { viaProxy } from "@/lib/fileProxy";
 import { formatINR } from "@/lib/pricing";
 import AdminHero from "../_components/AdminHero";
+
+const inr = (n: number) => "₹" + (Math.round(n) || 0).toLocaleString("en-IN");
 
 function fmt(s: string): string {
   return new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
@@ -134,6 +138,59 @@ export default async function ReportsPage() {
           </div>
         )}
       </div>
+
+      {/* Gift subscriptions — transactions, GST breakup & invoices */}
+      {await (async () => {
+        const svc = createServiceClient();
+        const { data: gifts } = await svc
+          .from("gift_orders")
+          .select("id, created_at, paid_at, status, recipient_name, recipient_email, billing_name, billing_state, amount_inr, taxable_value, cgst, sgst, igst, invoice_no, invoice_url, tier, months")
+          .order("created_at", { ascending: false })
+          .limit(200);
+        const paid = (gifts ?? []).filter((g) => g.status === "provisioned" || g.status === "paid");
+        const total = paid.reduce((s, g) => s + Number(g.amount_inr || 0), 0);
+        const tax = paid.reduce((s, g) => s + Number(g.cgst || 0) + Number(g.sgst || 0) + Number(g.igst || 0), 0);
+        const th = { padding: "6px 8px", textAlign: "left" as const, color: "var(--muted)" };
+        const td = { padding: "6px 8px" };
+        return (
+          <div style={{ marginTop: 28 }}>
+            <h2 className="admin-section-title">🎁 Gift subscriptions &amp; invoices</h2>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "6px 0 12px" }}>
+              <span className="card" style={{ padding: "6px 12px" }}><strong>{paid.length}</strong> gifts · {inr(total)} collected · GST {inr(tax)}</span>
+            </div>
+            {paid.length === 0 ? (
+              <div className="card"><p className="muted" style={{ margin: 0 }}>No gift purchases yet.</p></div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".8rem" }}>
+                  <thead><tr>
+                    <th style={th}>Date</th><th style={th}>Invoice</th><th style={th}>Gifter</th><th style={th}>Recipient</th>
+                    <th style={th}>Plan</th><th style={th}>State</th><th style={th}>Taxable</th><th style={th}>CGST</th><th style={th}>SGST</th><th style={th}>IGST</th><th style={th}>Total</th><th style={th}>Invoice</th>
+                  </tr></thead>
+                  <tbody>
+                    {paid.map((g) => (
+                      <tr key={g.id} style={{ borderTop: "1px solid var(--border)" }}>
+                        <td style={td}>{fmt(g.paid_at || g.created_at)}</td>
+                        <td style={td}>{g.invoice_no || "—"}</td>
+                        <td style={td}>{g.billing_name || "—"}</td>
+                        <td style={td}>{g.recipient_name}<br /><span className="muted">{g.recipient_email}</span></td>
+                        <td style={td}>{g.tier} · {g.months}m</td>
+                        <td style={td}>{g.billing_state}</td>
+                        <td style={td}>{inr(Number(g.taxable_value || 0))}</td>
+                        <td style={td}>{inr(Number(g.cgst || 0))}</td>
+                        <td style={td}>{inr(Number(g.sgst || 0))}</td>
+                        <td style={td}>{inr(Number(g.igst || 0))}</td>
+                        <td style={{ ...td, fontWeight: 700 }}>{inr(Number(g.amount_inr || 0))}</td>
+                        <td style={td}>{g.invoice_url ? <a className="grad" href={viaProxy(g.invoice_url)} target="_blank" rel="noopener noreferrer">PDF ↓</a> : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <p className="muted" style={{ fontSize: ".82rem", marginTop: 24 }}>
         As of {fmt(now.toISOString())} · revenue counts paid online orders (Razorpay). Admin-granted

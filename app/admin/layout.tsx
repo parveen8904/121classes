@@ -33,6 +33,7 @@ const ADMIN_LINKS: [string, string][] = [
   ["🏷️ Coupons", "/admin/coupons"],
   ["🎁 Combos", "/admin/combos"],
   ["📊 Reports", "/admin/reports"],
+  ["🧾 GST & invoicing", "/admin/billing"],
   ["🖼️ Site images", "/admin/site"],
 ];
 

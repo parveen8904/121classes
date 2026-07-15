@@ -30,7 +30,7 @@ export default function FreePlannerLanding({ searchParams }: { searchParams: { s
               <li>✅ <strong>Revision rounds built in</strong> — first &amp; second revision, not just one pass</li>
               <li>✅ <strong>Free chapter MCQ tests</strong> with rank &amp; concept report</li>
               <li>✅ <strong>Case-study practice</strong> for the new pattern</li>
-              <li>✅ From the classroom of <strong>CA Parveen Sharma</strong></li>
+              <li>✅ Learn from <strong>CA Parveen Sharma</strong> — 36 years of teaching experience</li>
             </ul>
             <p className="muted" style={{ fontSize: ".8rem", marginTop: 16 }}>
               Join the students already planning their attempt on caparveensharma.com

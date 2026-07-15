@@ -119,11 +119,19 @@ export default async function AdminLivePage({
                 <input type="number" name="duration_mins" defaultValue={60} />
               </div>
               <div>
-                <label>Join link (Zoom/Meet)</label>
+                <label>Join link (fallback only)</label>
                 <input name="join_url" placeholder="https://…" />
               </div>
             </div>
-            <label className="remember" style={{ marginTop: 0 }}>
+            <div style={{ border: "1px solid var(--accent)", borderRadius: 10, padding: "10px 12px", marginTop: 8, background: "var(--bg-soft)" }}>
+              <strong style={{ fontSize: ".9rem" }}>🔒 White-label (recommended) — students watch inside our site, never see Zoom</strong>
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr", marginTop: 8 }}>
+                <div><label>Zoom meeting / webinar number</label><input name="zoom_meeting_number" placeholder="e.g. 812 3456 7890" /></div>
+                <div><label>Passcode (if any)</label><input name="zoom_passcode" placeholder="optional" /></div>
+              </div>
+              <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>Paste the meeting number from Zoom. Students then join at caparveensharma.com — no zoom.us link is shown. Needs the Zoom SDK Key/Secret on Integrations.</p>
+            </div>
+            <label className="remember" style={{ marginTop: 8 }}>
               <input type="checkbox" name="is_published" defaultChecked /> Published (visible to students + landing)
             </label>
             <button className="btn" type="submit">

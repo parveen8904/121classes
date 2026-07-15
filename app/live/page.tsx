@@ -51,9 +51,12 @@ export default async function LivePage() {
   // Standalone scheduled live classes (RLS returns only published ones).
   const { data: liveData } = await supabase
     .from("live_sessions")
-    .select("id, title, description, audience, starts_at, join_url, recording_url");
+    .select("id, title, description, audience, starts_at, join_url, recording_url, zoom_meeting_number");
   const standalone = (liveData ?? []).map((s) => {
     const when = s.starts_at ? new Date(s.starts_at) : null;
+    // White-label: if a Zoom meeting number is set, students join INSIDE our
+    // site (/live/join/[id]) and never see a zoom.us link.
+    const whiteLabel = !!(s.zoom_meeting_number as string | null);
     return {
       id: s.id,
       title: s.title as string,
@@ -62,7 +65,8 @@ export default async function LivePage() {
       subject: "",
       topic: (s.description as string) || "",
       when: when && !isNaN(when.getTime()) ? when : null,
-      join: (s.join_url as string) || "",
+      join: whiteLabel ? `/live/join/${s.id}` : ((s.join_url as string) || ""),
+      internal: whiteLabel,
       recording: (s.recording_url as string) || "",
     };
   });
@@ -97,7 +101,9 @@ export default async function LivePage() {
                 </p>
               </div>
               <div className="row-actions">
-                {x.join ? (
+                {x.join && x.join.startsWith("/") ? (
+                  <Link className="btn small" href={x.join}>Join class →</Link>
+                ) : x.join ? (
                   <a className="btn small" href={x.join} target="_blank" rel="noopener noreferrer">
                     Join →
                   </a>

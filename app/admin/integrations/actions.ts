@@ -157,6 +157,8 @@ const SECRET_KEYS = [
   "BUNNY_LIBRARY_ID",
   "BUNNY_ACCOUNT_API_KEY",
   "SUPABASE_ACCESS_TOKEN",
+  "ZOOM_SDK_KEY",
+  "ZOOM_SDK_SECRET",
 ] as const;
 
 // Save API keys pasted in the admin. Blank fields are IGNORED (so you can update

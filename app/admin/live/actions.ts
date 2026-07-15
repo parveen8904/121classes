@@ -22,6 +22,10 @@ export async function createLiveSession(formData: FormData) {
     starts_at: str(formData.get("starts_at")) ? new Date(str(formData.get("starts_at"))).toISOString() : null,
     duration_mins: num(formData.get("duration_mins"), 60),
     join_url: nullable(formData.get("join_url")),
+    // White-label Zoom: paste the numeric meeting/webinar number + passcode and
+    // students watch inside our site (no zoom.us link shown).
+    zoom_meeting_number: str(formData.get("zoom_meeting_number")).replace(/\D/g, "") || null,
+    zoom_passcode: nullable(formData.get("zoom_passcode")),
     is_published: formData.get("is_published") === "on",
   });
   revalidatePath("/admin/live");

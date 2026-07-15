@@ -135,6 +135,15 @@ async function handle(req: NextRequest) {
   // as a lead too, so campaigns can reach them and future calls show a name.
   if (!prof && !lead) {
     await svc.from("leads").insert({ phone: digits, source: "phone", note: "called the IVR" }).select("id");
+
+    // Missed-call opt-in: if an approved template is configured, WhatsApp the
+    // free-planner link back to the caller ("give a missed call and get the
+    // planner on WhatsApp"). Best-effort — never blocks the ticket.
+    const tpl = (await getSecret("WHATSAPP_MISSEDCALL_TEMPLATE")).trim();
+    if (tpl) {
+      const { sendWhatsApp } = await import("@/lib/notify");
+      await sendWhatsApp(digits, tpl, ["https://caparveensharma.com/free-planner?src=call"]).catch(() => false);
+    }
   }
   return NextResponse.json({ ok: true, ticket: t?.ref ?? null, action: "created" });
 }

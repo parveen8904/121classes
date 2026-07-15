@@ -215,6 +215,8 @@ export default async function IntegrationsPage({
           <KeyField name="NOTIFY_REPLY_TO" label="Reply-To address (where replies go, any domain)" placeholder="contact@caparveensharma.com" />
           <KeyField name="INTERAKT_API_KEY" label="Interakt (WhatsApp) key" placeholder="Basic auth key" />
           <KeyField name="IVR_WEBHOOK_KEY" label="IVR webhook key (phone calls → tickets)" placeholder="any long random text — use the same in your IVR portal's webhook URL" />
+          <KeyField name="WHATSAPP_OTP_TEMPLATE" label="WhatsApp OTP template name (verifies case-test leads)" placeholder="Interakt → Templates → an approved AUTHENTICATION template with one {{1}} variable" />
+          <KeyField name="WHATSAPP_MISSEDCALL_TEMPLATE" label="WhatsApp missed-call reply template (sends the free-planner link to callers)" placeholder="approved MARKETING/UTILITY template with one {{1}} variable (the link)" />
           <KeyField name="FACULTY_TELEGRAM_CHAT_ID" label="Faculty Telegram chat id (for doubt alerts)" placeholder="your own Telegram chat id" />
           <KeyField name="FACULTY_EMAIL" label="Faculty alert email" placeholder="contact@caparveensharma.com" />
           <KeyField name="CRON_SECRET" label="Cron secret (optional — protects scheduled jobs)" placeholder="any random text" />

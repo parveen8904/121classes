@@ -5,7 +5,7 @@ import DeleteButton from "../../_components/DeleteButton";
 import { saveSubjectMIQ, saveSubjectWeightage, addSubjectMaterial, deleteSubjectMaterial, editSubjectMaterial } from "./actions";
 
 type Topic = { id: string; title: string; weightage_marks: number | null };
-type Material = { id: string; kind: string; title: string; valid_from_attempt: string | null; valid_to_attempt: string | null; solution_url?: string | null };
+type Material = { id: string; kind: string; title: string; valid_from_attempt: string | null; valid_to_attempt: string | null; solution_url?: string | null; public_sample?: boolean };
 
 // MTP / RTP / past papers become full "practice papers": question + suggested
 // answers, and students can upload their own answers for AI evaluation.
@@ -55,6 +55,11 @@ export default function SubjectContent({
                 <PdfUpload name="file_url" folder="repository" label={`Replace ${PAPER_KINDS.includes(kind) ? "question paper" : "PDF"} (leave blank to keep current)`} />
                 {PAPER_KINDS.includes(kind) && (
                   <PdfUpload name="solution_url" folder="repository" label={m.solution_url ? "Replace suggested-answers PDF (leave blank to keep)" : "➕ Add suggested-answers PDF (turns on AI evaluation)"} />
+                )}
+                {kind !== "icai" && (
+                  <label className="remember" style={{ marginTop: 8 }}>
+                    <input type="checkbox" name="public_sample" defaultChecked={m.public_sample} /> 🌐 Free sample — downloadable by verified visitors on the public try page (lead magnet)
+                  </label>
                 )}
                 <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 8 }}>Save changes</SubmitButton>
               </form>
@@ -143,6 +148,9 @@ export default function SubjectContent({
                   <PdfUpload name="file_url" folder="repository" label="Replace PDF (leave blank to keep current)" />
                   <label style={{ marginTop: 8 }}>🎬 Replace video link (leave blank to keep)</label>
                   <input name="video_url" placeholder="https://youtu.be/…" />
+                  <label className="remember" style={{ marginTop: 8 }}>
+                    <input type="checkbox" name="public_sample" defaultChecked={m.public_sample} /> 🌐 Free sample — downloadable by verified visitors on the public try page (lead magnet)
+                  </label>
                   <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 8 }}>Save changes</SubmitButton>
                 </form>
               </details>

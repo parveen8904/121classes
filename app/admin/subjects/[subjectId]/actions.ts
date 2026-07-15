@@ -278,6 +278,12 @@ export async function editSubjectMaterial(formData: FormData) {
     update.student_visible = str(aiOnly) !== "on";
   }
 
+  // Free-sample flag (lead magnet on the public try page). ICAI is copyright —
+  // its edit form has no such checkbox and it can never be a public sample.
+  if (existing?.kind && existing.kind !== "icai") {
+    update.public_sample = formData.get("public_sample") === "on";
+  }
+
   if (Object.keys(update).length > 0) {
     await svc.from("repository_items").update(update).eq("id", id);
   }

@@ -52,7 +52,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
   // service client (repository_items has no client RLS policy).
   const { data: subjMaterials } = await createServiceClient()
     .from("repository_items")
-    .select("id, kind, title, valid_from_attempt, valid_to_attempt, solution_url")
+    .select("id, kind, title, valid_from_attempt, valid_to_attempt, solution_url, public_sample")
     .eq("subject_id", subjectId)
     .is("topic_id", null)
     .eq("is_active", true)
@@ -218,7 +218,7 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
         miqRev1={(subject as { miq_rev1?: string | null }).miq_rev1 ?? ""}
         miqRev2={(subject as { miq_rev2?: string | null }).miq_rev2 ?? ""}
         topics={(topics ?? []).map((t) => ({ id: t.id as string, title: t.title as string, weightage_marks: (t as { weightage_marks?: number | null }).weightage_marks ?? null }))}
-        materials={(subjMaterials ?? []) as { id: string; kind: string; title: string; valid_from_attempt: string | null; valid_to_attempt: string | null; solution_url: string | null }[]}
+        materials={(subjMaterials ?? []) as { id: string; kind: string; title: string; valid_from_attempt: string | null; valid_to_attempt: string | null; solution_url: string | null; public_sample?: boolean }[]}
       />
 
       {/* Case-study scenarios — upload one PDF; AI splits it into cases + MCQs. */}

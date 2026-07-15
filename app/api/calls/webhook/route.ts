@@ -130,6 +130,12 @@ async function handle(req: NextRequest) {
   }).select("id, ref").maybeSingle();
 
   if (t) await logTicketEvent(svc, t.id as string, { author_name: "IVR", kind: "created", body: line });
+
+  // Unknown caller (not a student, not an existing lead) → capture the number
+  // as a lead too, so campaigns can reach them and future calls show a name.
+  if (!prof && !lead) {
+    await svc.from("leads").insert({ phone: digits, source: "phone", note: "called the IVR" }).select("id");
+  }
   return NextResponse.json({ ok: true, ticket: t?.ref ?? null, action: "created" });
 }
 

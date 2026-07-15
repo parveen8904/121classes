@@ -7,6 +7,7 @@ import FloatingSupport from "./components/FloatingSupport";
 import RegisterSW from "./components/RegisterSW";
 import InAppMode from "@/app/components/InAppMode";
 import Tracker from "./components/Tracker";
+import LeadPopup from "./components/LeadPopup";
 
 // IMPORTANT: no force-dynamic and no cookie reads here. This layout wraps EVERY
 // page — anything dynamic in it disables caching for the whole site (which was
@@ -103,6 +104,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <InAppMode />
         {/* First-party page-view beacon (client-side; keeps the layout cacheable) */}
         <Tracker />
+        {/* Lead capture on public marketing pages (client-side session check) */}
+        <LeadPopup />
       </body>
     </html>
   );

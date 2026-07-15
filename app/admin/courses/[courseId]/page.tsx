@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import DeleteButton from "../../_components/DeleteButton";
 import AdminHero from "../../_components/AdminHero";
 import { fmtAt125, AT125_NOTE } from "@/lib/duration";
@@ -40,7 +41,8 @@ export default async function CourseDetail({ params }: { params: { courseId: str
     for (const t of topicRows ?? []) topicToSubject.set(t.id, (t as { subject_id: string }).subject_id);
     const topicIds = (topicRows ?? []).map((t) => t.id);
     if (topicIds.length) {
-      const { data: classRows } = await supabase
+      // sections_meta is service_role-only (definer view over sections).
+      const { data: classRows } = await createServiceClient()
         .from("sections_meta")
         .select("topic_id, duration_minutes, class_no")
         .in("topic_id", topicIds)

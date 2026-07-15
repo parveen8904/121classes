@@ -87,7 +87,8 @@ export default async function SubjectDetail({ params }: { params: { subjectId: s
 
   if (topicIds.length) {
     // sections_meta: only the scalar keys we need, never the transcript blob.
-    const { data: secRows } = await supabase
+    // (service_role-only view — definer semantics over sections.)
+    const { data: secRows } = await createServiceClient()
       .from("sections_meta")
       .select("topic_id, type, duration_minutes, class_no")
       .in("topic_id", topicIds)

@@ -32,13 +32,34 @@ export async function processCaseSet(setId: string, budgetMs: number): Promise<{
     // Stop before the serverless clock runs out; the next trigger continues.
     if (Date.now() - t0 > budgetMs) return { done: false, added };
 
-    const isLast = cursor + CHUNK >= text.length;
-    const chunk = text.slice(cursor, cursor + CHUNK);
-    const parsed = await parseCaseStudiesChunk(chunk, isLast);
-    if (!parsed) {
-      // AI hiccup / not configured — leave the cursor; a later run retries.
-      await svc.from("case_sets").update({ status_note: "AI parse failed — will retry" }).eq("id", setId);
+    // Try the full chunk; if it won't parse, retry progressively SMALLER slices
+    // (a stubborn chunk usually parses when shorter). Distinguish a real AI
+    // outage (retry later, keep the cursor) from unreadable content (skip past).
+    let parsed: Awaited<ReturnType<typeof parseCaseStudiesChunk>> = null;
+    let aiDown = false;
+    for (const size of [CHUNK, Math.floor(CHUNK / 2), 3000, 1500]) {
+      const isLast = cursor + size >= text.length;
+      const r = await parseCaseStudiesChunk(text.slice(cursor, cursor + size), isLast);
+      if (r === "AI_DOWN") { aiDown = true; break; }
+      if (r) { parsed = r; break; }
+      // r === null → unparseable at this size; shrink and try again.
+    }
+    if (aiDown) {
+      // The model is unavailable right now — stop WITHOUT losing our place.
+      await svc.from("case_sets").update({ status_note: "AI temporarily unavailable — will resume automatically" }).eq("id", setId);
       return { done: false, added };
+    }
+    if (!parsed) {
+      // Even a small slice won't parse → skip past this unreadable stretch so
+      // the REST of the booklet still processes (never stall forever).
+      cursor = Math.min(cursor + 2500, text.length);
+      await svc.from("case_sets").update({
+        parse_cursor: cursor,
+        status_note: `skipped an unreadable section (~${Math.round((cursor / text.length) * 100)}%) — continuing`,
+        ...(cursor >= text.length ? { status: "ready" } : {}),
+      }).eq("id", setId);
+      if (cursor >= text.length) return { done: true, added };
+      continue;
     }
     const { count } = await svc.from("case_studies").select("id", { count: "exact", head: true }).eq("set_id", setId);
     let seq = (count ?? 0) + 1;

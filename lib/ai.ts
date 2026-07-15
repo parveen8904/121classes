@@ -405,10 +405,13 @@ function parseLooseJson(text: string): any | null {
   try { return { cases: JSON.parse(`[${objs.join(",")}]`), consumed_chars: 0 }; } catch { return null; }
 }
 
+// "AI_DOWN" = the model call itself failed (no key / API error / rate limit) —
+// caller should retry later, NOT skip content. null = we got a response but
+// couldn't parse it (content problem) — caller may skip past it.
 export async function parseCaseStudiesChunk(
   chunk: string,
   isLastChunk: boolean,
-): Promise<{ cases: ParsedCase[]; consumed: number } | null> {
+): Promise<{ cases: ParsedCase[]; consumed: number } | "AI_DOWN" | null> {
   const system =
     `You extract case studies from an Indian CA exam PDF (text below). The document contains numbered ` +
     `case-study scenarios, each followed by about 5-7 multiple-choice questions; the correct answers are ` +
@@ -423,7 +426,7 @@ export async function parseCaseStudiesChunk(
     `Respond ONLY as compact JSON, no prose, no code fences: ` +
     `{"cases":[{"title":"Case 12 — <short name>","scenario":"...","questions":[{"question":"...","options":["...","..."],"correct_index":0}]}],"consumed_chars":12345}`;
   const text = await callClaude(system, chunk, 16000, { feature: "case_parse" });
-  if (!text) return null;
+  if (!text) return "AI_DOWN"; // API/config error — retry later, don't skip
   try {
     const json = parseLooseJson(text);
     if (!json) return null;

@@ -118,6 +118,18 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/live",
   },
   {
+    icon: "🎖️",
+    title: "Result awards",
+    desc: "Students who submitted their result (marksheet + photo) to claim an award — verify & approve; a growing feed of success stories.",
+    href: "/admin/awards",
+  },
+  {
+    icon: "💚",
+    title: "Scholarships",
+    desc: "Merit (marksheet ≤1yr, ≥55% → 15%) & need-based (→10%) applications; approve to auto-issue and email a discount coupon.",
+    href: "/admin/scholarships",
+  },
+  {
     icon: "🏆",
     title: "Results",
     desc: "Showcase rank-holders & toppers — the #1 trust signal for CA students.",

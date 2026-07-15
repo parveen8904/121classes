@@ -18,7 +18,8 @@ export default async function GiftPage() {
     .from("subjects")
     .select("id, title, gold_price_inr, courses(title)")
     .order("order_index");
-  const { data: plans } = await svc.from("plans").select("tier, name, web_price_inr").eq("is_active", true).in("tier", ["silver", "gold"]).order("rank");
+  // Sponsors can gift the GOLD subscription only.
+  const { data: plans } = await svc.from("plans").select("tier, name, web_price_inr").eq("is_active", true).eq("tier", "gold").order("rank");
   const configured = await razorpayConfigured();
 
   return (

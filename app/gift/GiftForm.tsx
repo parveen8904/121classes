@@ -12,7 +12,7 @@ const STATES = ["Delhi", "Haryana", "Uttar Pradesh", "Punjab", "Rajasthan", "Mah
 
 export default function GiftForm({ configured, subjects, plans }: { configured: boolean; subjects: Subject[]; plans: Plan[] }) {
   const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
-  const [tier, setTier] = useState("gold");
+  const tier = "gold"; // sponsors gift Gold only
   const [months, setMonths] = useState(12);
   const [rName, setRName] = useState(""); const [rEmail, setREmail] = useState(""); const [rPhone, setRPhone] = useState("");
   const [rAttempt, setRAttempt] = useState(""); const [rAddr, setRAddr] = useState("");
@@ -69,16 +69,12 @@ export default function GiftForm({ configured, subjects, plans }: { configured: 
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
           <div>
             <label>Plan</label>
-            <select value={tier} onChange={(e) => setTier(e.target.value)}>
-              {plans.map((p) => <option key={p.tier} value={p.tier}>{p.name}{p.tier === "silver" && p.price ? ` (₹${p.price})` : ""}</option>)}
-            </select>
+            <input value={plans[0]?.name ? `${plans[0].name} (full premium access)` : "Gold"} readOnly style={{ background: "var(--bg-soft)" }} />
           </div>
-          {tier === "gold" && (
-            <div>
-              <label>Months</label>
-              <input type="number" min={1} max={60} value={months} onChange={(e) => setMonths(Number(e.target.value) || 12)} />
-            </div>
-          )}
+          <div>
+            <label>Months</label>
+            <input type="number" min={1} max={60} value={months} onChange={(e) => setMonths(Number(e.target.value) || 12)} />
+          </div>
         </div>
 
         <h3 style={{ margin: "8px 0 0" }}>2️⃣ Who it&apos;s for (the recipient)</h3>

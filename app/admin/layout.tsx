@@ -30,6 +30,8 @@ const ADMIN_LINKS: [string, string][] = [
   ["🚚 Orders", "/admin/orders"],
   ["📡 Live", "/admin/live"],
   ["🏆 Results", "/admin/results"],
+  ["🎖️ Result awards", "/admin/awards"],
+  ["💚 Scholarships", "/admin/scholarships"],
   ["🏷️ Coupons", "/admin/coupons"],
   ["🎁 Combos", "/admin/combos"],
   ["📊 Reports", "/admin/reports"],

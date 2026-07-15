@@ -121,6 +121,9 @@ export default async function CoursePlans({
             Each subject is priced on its own. Bronze is free, Silver adds tests &amp; AI doubt-solving,
             and Gold unlocks the full premium classes with CA Parveen Sharma&apos;s team.
           </p>
+          <p style={{ marginTop: 8 }}>
+            💚 Need help affording Gold? <Link className="grad" href="/scholarship" style={{ fontWeight: 700 }}>Apply for a merit or need-based discount →</Link>
+          </p>
         </div>
 
         {/* Subject picker */}

@@ -59,6 +59,9 @@ export default async function ResultsPage() {
           Real rank-holders mentored by <strong>CA Parveen Sharma &amp; team</strong> — with disciplined plans, doubt-solving and revision that actually work. 🎯
         </p>
         {results.length > 0 && <div style={{ fontSize: "2rem", fontWeight: 800, marginTop: 16 }}><CountUp value={results.length} suffix="+" /> <span style={{ fontSize: ".9rem", fontWeight: 500, opacity: .92 }}>success stories</span></div>}
+        <div style={{ marginTop: 18 }}>
+          <a className="btn" href="/awards" style={{ background: "#fff", color: "#0d9488", fontWeight: 800 }}>🎖️ Studied with us? Tell us your result &amp; get an award →</a>
+        </div>
       </div>
 
       {results.length === 0 ? (

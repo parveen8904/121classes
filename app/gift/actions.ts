@@ -27,7 +27,7 @@ export type GiftOrderResult =
 // recipient + billing details to the Razorpay order + our gift_orders row.
 export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult> {
   if (!(await razorpayConfigured())) return { ok: false, reason: "unconfigured" };
-  if (!PAID.includes(input.tier)) return { ok: false, reason: "error" };
+  if (input.tier !== "gold") return { ok: false, reason: "error" }; // sponsors gift Gold only
   if (!input.recipient?.email || !input.recipient?.name || !input.billing?.state) return { ok: false, reason: "missing" };
 
   const supabase = createClient();

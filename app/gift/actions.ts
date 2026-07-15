@@ -8,12 +8,13 @@ import {
 } from "@/lib/razorpay";
 import { sendEmail, sendEmailWithAttachment, emailShell } from "@/lib/notify";
 import { getGstSettings, computeGst, nextInvoiceNo, buildInvoicePdf } from "@/lib/invoice";
+import { applyCoupon, redeemCoupon } from "@/lib/coupons";
 
 const SITE = "https://caparveensharma.com";
 const PAID = ["silver", "gold"];
 
 type GiftInput = {
-  subjectId: string; tier: string; months?: number;
+  subjectId: string; tier: string; months?: number; couponCode?: string;
   recipient: { name: string; email: string; phone?: string; attempt?: string; address?: string };
   billing: { name: string; gstin?: string; address?: string; state: string };
 };
@@ -50,13 +51,20 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
     if (!amount || amount <= 0) return { ok: false, reason: "noprice" };
   }
 
+  // Optional coupon (donor-scoped coupons apply here).
+  let couponId = "";
+  if (input.couponCode) {
+    const applied = await applyCoupon(input.couponCode, amount, { kind: "donor", email: user.email });
+    if (applied) { amount = applied.amount; couponId = applied.couponId; }
+  }
+
   const s = await getGstSettings();
   const gst = computeGst(amount, input.billing.state, s);
 
   try {
     const order = await createRazorpayOrder(amount, `gift_${Date.now()}`, {
       kind: "gift", subjectId: subject.id, courseId: subject.course_id, tier: input.tier,
-      months: String(months), planId: plan.id, gifterId: user.id,
+      months: String(months), planId: plan.id, gifterId: user.id, couponId,
     });
     await svc.from("gift_orders").insert({
       gifter_id: user.id,
@@ -169,6 +177,9 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
     razorpay_payment_id: input.razorpay_payment_id, taxable_value: gst.taxable, cgst: gst.cgst, sgst: gst.sgst, igst: gst.igst,
     paid_at: now.toISOString(),
   }).eq("id", g.id);
+
+  const couponId = (order.notes as { couponId?: string })?.couponId;
+  if (couponId) await redeemCoupon(couponId);
 
   return { ok: true };
 }

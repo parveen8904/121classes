@@ -10,12 +10,18 @@ export async function createCoupon(formData: FormData) {
   const percent = num(formData.get("percent_off"), 0);
   const amount = num(formData.get("amount_off_inr"), 0);
   const maxUses = num(formData.get("max_uses"), 0);
+  const scope = ["any", "user", "donor"].includes(str(formData.get("scope"))) ? str(formData.get("scope")) : "any";
+  const expiry = str(formData.get("expires_at")); // yyyy-mm-dd or blank
+  const forEmail = str(formData.get("for_email")).trim().toLowerCase() || null;
   const supabase = createClient();
   await supabase.from("coupons").insert({
     code,
     percent_off: percent > 0 ? Math.min(100, percent) : null,
     amount_off_inr: amount > 0 ? amount : null,
     max_uses: maxUses > 0 ? maxUses : null,
+    scope,
+    for_email: forEmail,
+    expires_at: expiry ? new Date(expiry + "T23:59:59").toISOString() : null,
     is_active: formData.get("is_active") === "on",
   });
   revalidatePath("/admin/coupons");

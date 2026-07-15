@@ -17,6 +17,7 @@ export default function GiftForm({ configured, subjects, plans }: { configured: 
   const [rName, setRName] = useState(""); const [rEmail, setREmail] = useState(""); const [rPhone, setRPhone] = useState("");
   const [rAttempt, setRAttempt] = useState(""); const [rAddr, setRAddr] = useState("");
   const [bName, setBName] = useState(""); const [bGstin, setBGstin] = useState(""); const [bAddr, setBAddr] = useState(""); const [bState, setBState] = useState("Delhi");
+  const [coupon, setCoupon] = useState("");
   const [busy, setBusy] = useState(false); const [done, setDone] = useState(false); const [err, setErr] = useState<string | null>(null);
 
   async function pay(e: React.FormEvent) {
@@ -27,7 +28,7 @@ export default function GiftForm({ configured, subjects, plans }: { configured: 
     setBusy(true);
     try {
       const res = await createGiftOrder({
-        subjectId, tier, months,
+        subjectId, tier, months, couponCode: coupon,
         recipient: { name: rName, email: rEmail, phone: rPhone, attempt: rAttempt, address: rAddr },
         billing: { name: bName || rName, gstin: bGstin, address: bAddr, state: bState },
       });
@@ -99,8 +100,12 @@ export default function GiftForm({ configured, subjects, plans }: { configured: 
           </div>
         </div>
 
+        <div style={{ maxWidth: 260 }}>
+          <label>Coupon code (optional)</label>
+          <input value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} placeholder="e.g. GIFT20" />
+        </div>
         {err && <div className="notice err">{err}</div>}
-        <button className="btn" type="submit" disabled={busy || !configured}>{busy ? "Starting…" : "🎁 Pay & gift this subscription"}</button>
+        <button className="btn" type="submit" disabled={busy || !configured}>{busy ? "Starting…" : "🎁 Pay & gift this Education Gift subscription"}</button>
         <p className="muted" style={{ fontSize: ".78rem", margin: 0 }}>
           Your payment receipt and a GST-compliant invoice are emailed to you. {rName || "The recipient"} gets access and a link to set their password — they never see the amount.
         </p>

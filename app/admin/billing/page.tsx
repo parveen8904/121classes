@@ -31,7 +31,11 @@ export default async function BillingPage() {
           <div><label>Registered state (place of supply base)</label><input name="gst_state" defaultValue={v("gst_state", "Delhi")} placeholder="Delhi" /></div>
         </div>
         <div><label>Legal / business name (invoice header)</label><input name="gst_legal_name" defaultValue={v("gst_legal_name", "CA Parveen Sharma")} /></div>
-        <div><label>Registered address</label><textarea name="gst_address" rows={2} defaultValue={v("gst_address")} /></div>
+        <div>
+          <label>Registered address (head office — must match your GSTIN)</label>
+          <textarea name="gst_address" rows={2} defaultValue={v("gst_address")} placeholder="Registered Head Office: Delhi (as per GSTIN). Operational office: Gurugram." />
+          <p className="muted" style={{ fontSize: ".78rem", margin: "4px 0 0" }}>Your GST registration is in <strong>Delhi</strong> (head office); Gurugram is the operational office. Put the exact Delhi address from your GST certificate here so invoices are valid.</p>
+        </div>
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr" }}>
           <div><label>GST rate %</label><input name="gst_rate" type="number" step="0.01" defaultValue={v("gst_rate", "18")} /></div>
           <div><label>SAC code</label><input name="gst_sac" defaultValue={v("gst_sac", "999293")} /></div>

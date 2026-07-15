@@ -5,18 +5,25 @@ import { createServiceClient } from "@/lib/supabase/service";
 export async function applyCoupon(
   code: string,
   amountInr: number,
+  ctx: { kind?: "user" | "donor"; email?: string | null } = {},
 ): Promise<{ couponId: string; code: string; amount: number } | null> {
   const c = (code || "").trim().toUpperCase();
   if (!c) return null;
   const svc = createServiceClient();
   const { data: coupon } = await svc
     .from("coupons")
-    .select("id, code, percent_off, amount_off_inr, is_active, expires_at, max_uses, used_count")
+    .select("id, code, percent_off, amount_off_inr, is_active, expires_at, max_uses, used_count, scope, for_email")
     .eq("code", c)
     .maybeSingle();
   if (!coupon || !coupon.is_active) return null;
   if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) return null;
   if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) return null;
+  // Scope: a "donor" coupon only works on gift purchases, a "user" coupon only
+  // on self-purchases; "any" works everywhere. Default context = user.
+  const kind = ctx.kind ?? "user";
+  if (coupon.scope && coupon.scope !== "any" && coupon.scope !== kind) return null;
+  // Optional lock to one person's email.
+  if (coupon.for_email && (ctx.email ?? "").trim().toLowerCase() !== String(coupon.for_email).trim().toLowerCase()) return null;
 
   let amount = amountInr;
   if (coupon.percent_off) amount = Math.round(amountInr * (1 - coupon.percent_off / 100));

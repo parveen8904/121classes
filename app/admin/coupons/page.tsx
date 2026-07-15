@@ -7,7 +7,7 @@ export default async function CouponsPage() {
   const supabase = createClient();
   const { data: coupons } = await supabase
     .from("coupons")
-    .select("id, code, percent_off, amount_off_inr, is_active, max_uses, used_count")
+    .select("id, code, percent_off, amount_off_inr, is_active, max_uses, used_count, scope, for_email, expires_at")
     .order("created_at", { ascending: false });
 
   return (
@@ -39,10 +39,28 @@ export default async function CouponsPage() {
             </div>
             <div>
               <label>Max uses</label>
-              <input name="max_uses" type="number" placeholder="blank = ∞" />
+              <input name="max_uses" type="number" placeholder="blank = ∞, 1 = once" />
             </div>
           </div>
-          <label className="remember" style={{ marginTop: 0 }}>
+          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr 1fr", marginTop: 10 }}>
+            <div>
+              <label>Applies to</label>
+              <select name="scope" defaultValue="any">
+                <option value="any">Anyone (users &amp; gifters)</option>
+                <option value="user">Users buying for themselves</option>
+                <option value="donor">Gifters (gift purchases)</option>
+              </select>
+            </div>
+            <div>
+              <label>Expires on (blank = never)</label>
+              <input name="expires_at" type="date" />
+            </div>
+            <div>
+              <label>Lock to one email (optional)</label>
+              <input name="for_email" type="email" placeholder="blank = anyone" />
+            </div>
+          </div>
+          <label className="remember" style={{ marginTop: 8 }}>
             <input type="checkbox" name="is_active" defaultChecked /> Active
           </label>
           <button className="btn" type="submit">
@@ -66,6 +84,9 @@ export default async function CouponsPage() {
                   {c.percent_off ? `${c.percent_off}% off` : c.amount_off_inr ? `₹${c.amount_off_inr} off` : "—"} ·{" "}
                   {c.is_active ? "🟢 active" : "⚪ off"} · used {c.used_count}
                   {c.max_uses ? ` / ${c.max_uses}` : ""}
+                  {(c as { scope?: string }).scope && (c as { scope?: string }).scope !== "any" ? ` · ${(c as { scope?: string }).scope === "donor" ? "🎁 gifters only" : "👤 users only"}` : ""}
+                  {(c as { for_email?: string | null }).for_email ? ` · 🔒 ${(c as { for_email?: string }).for_email}` : ""}
+                  {(c as { expires_at?: string | null }).expires_at ? ` · ⏳ till ${new Date((c as { expires_at?: string }).expires_at!).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : ""}
                 </p>
               </div>
               <div className="row-actions">

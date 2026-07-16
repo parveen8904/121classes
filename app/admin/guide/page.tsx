@@ -13,6 +13,15 @@ type Entry = { steps: string[]; tip?: string };
 
 const GUIDE: Record<string, Entry> = {
   // ── 📣 Marketing & communication ─────────────────────────────────────────
+  "/admin/marketing": {
+    steps: [
+      "Your once-a-week check. The funnel shows visitors → new leads → new signups for the last 7 days.",
+      "The two numbers that matter: new leads and new signups. Growing = marketing is working.",
+      "'Where visitors come from' shows which platform actually sends people (only tagged ?src= links are counted) — put those links everywhere.",
+      "The bottom section is a step-by-step playbook to run Instagram and Google ads yourself; imported ad leads show up here by source.",
+    ],
+    tip: "Ad spend/cost lives in Meta & Google; leads and signups from ads show here — divide one by the other for your real cost per lead.",
+  },
   "/admin/broadcasts": {
     steps: [
       "To post once to many platforms: open '✍️ Schedule a campaign post', write the message, pick date & time (Indian time) and tick the channels. Telegram/Discord/WhatsApp send themselves; for Instagram/YouTube you receive an email with ready-to-paste text at post time.",

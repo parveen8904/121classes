@@ -9,7 +9,8 @@ export const metadata = { title: "Leads — Admin" };
 
 const SOURCE_LABEL: Record<string, string> = {
   csv: "📄 CSV import", interakt: "💬 Interakt export", whatsapp: "💬 WhatsApp",
-  youtube: "▶️ YouTube", landing: "🪄 Free-planner page", manual: "✍️ Manual", other: "Other",
+  youtube: "▶️ YouTube", landing: "🪄 Free-planner page", manual: "✍️ Manual",
+  meta: "💰 Meta/Instagram ad", google: "💰 Google ad", popup: "🧩 Site popup", phone: "📞 Phone call", other: "Other",
 };
 
 export default async function LeadsPage({ searchParams }: { searchParams: { msg?: string; added?: string; students?: string; dupes?: string } }) {
@@ -69,6 +70,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: { msg?
               <label>Where are these contacts from?</label>
               <select name="source" defaultValue="interakt">
                 <option value="interakt">Interakt (WhatsApp) export</option>
+                <option value="meta">Meta / Instagram lead ad (Forms Library CSV)</option>
+                <option value="google">Google ad leads</option>
                 <option value="whatsapp">WhatsApp (collected manually)</option>
                 <option value="youtube">YouTube</option>
                 <option value="csv">Other CSV</option>

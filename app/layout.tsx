@@ -8,6 +8,7 @@ import RegisterSW from "./components/RegisterSW";
 import InAppMode from "@/app/components/InAppMode";
 import Tracker from "./components/Tracker";
 import LeadPopup from "./components/LeadPopup";
+import PageHelp from "./components/PageHelp";
 
 // IMPORTANT: no force-dynamic and no cookie reads here. This layout wraps EVERY
 // page — anything dynamic in it disables caching for the whole site (which was
@@ -127,6 +128,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Tracker />
         {/* Lead capture on public marketing pages (client-side session check) */}
         <LeadPopup />
+        {/* Floating per-page "?" help (bottom-left, page-aware) */}
+        <PageHelp />
       </body>
     </html>
   );

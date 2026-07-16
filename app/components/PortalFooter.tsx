@@ -27,6 +27,10 @@ export default async function PortalFooter() {
           </div>
         )}
 
+        <p className="sub" style={{ marginBottom: 4 }}>
+          <a href="/guide" style={{ marginRight: 12 }}>📖 How to use the portal</a>
+          <a href="/support">🎧 Help &amp; support</a>
+        </p>
         <p className="sub">
           © 2026 CA Parveen Sharma 🙏 · Site by: Dmeter Inc.
         </p>

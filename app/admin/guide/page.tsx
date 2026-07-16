@@ -1,6 +1,6 @@
 import Link from "next/link";
 import AdminHero from "../_components/AdminHero";
-import PrintButton from "./PrintButton";
+import PrintButton from "@/app/components/PrintButton";
 import { ADMIN_GROUPS } from "@/lib/adminNav";
 
 export const dynamic = "force-dynamic";

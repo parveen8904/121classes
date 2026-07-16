@@ -3,41 +3,16 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isStaffRole, pathAllowed, areaForPath, type Staff } from "@/lib/adminAccess";
+import { ADMIN_GROUPS } from "@/lib/adminNav";
 import PortalHeader from "@/app/components/PortalHeader";
 import PortalFooter from "@/app/components/PortalFooter";
 
 // All /admin/* pages are request-time rendered (they read the auth cookie).
 export const dynamic = "force-dynamic";
 
-const ADMIN_LINKS: [string, string][] = [
-  ["🏠 Dashboard", "/admin"],
-  ["📘 Courses", "/admin/courses"],
-  ["👥 Users", "/admin/users"],
-  ["👩‍🏫 Faculty", "/admin/faculty"],
-  ["📣 Announcements", "/admin/announcements"],
-  ["📢 Broadcasts", "/admin/broadcasts"],
-  ["📜 Amendments", "/admin/amendments"],
-  ["🗓️ Study planner", "/admin/planner"],
-  ["📥 Inbox", "/admin/inbox"],
-  ["📚 AI Repository", "/admin/repository"],
-  ["🎓 Career", "/admin/content"],
-  ["🗄️ Storage", "/admin/storage"],
-  ["🔌 Integrations", "/admin/integrations"],
-  ["✈️ Telegram", "/admin/telegram"],
-  ["🎟️ Enrolment", "/admin/enrolment"],
-  ["💳 Plans", "/admin/plans"],
-  ["📦 Books", "/admin/books"],
-  ["🚚 Orders", "/admin/orders"],
-  ["📡 Live", "/admin/live"],
-  ["🏆 Results", "/admin/results"],
-  ["🎖️ Result awards", "/admin/awards"],
-  ["💚 Scholarships", "/admin/scholarships"],
-  ["🏷️ Coupons", "/admin/coupons"],
-  ["🎁 Combos", "/admin/combos"],
-  ["📊 Reports", "/admin/reports"],
-  ["🧾 GST & invoicing", "/admin/billing"],
-  ["🖼️ Site images", "/admin/site"],
-];
+// The header shows the same GROUPS as the dashboard (one source of truth in
+// lib/adminNav.ts) — clicking a group jumps to that section of the dashboard.
+// No more headers-without-tiles or tiles-without-headers.
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
@@ -106,15 +81,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     );
   }
 
-  // Staff see only the nav links they can open (admin sees all).
-  const visibleLinks =
-    role === "admin"
-      ? ADMIN_LINKS
-      : ADMIN_LINKS.filter(([, href]) => {
-          if (href === "/admin") return true;
-          const area = areaForPath(href);
-          return area !== null && staff.permissions.includes(area);
-        });
+  // Staff see only the groups containing at least one area they can open.
+  const canPath = (href: string) => {
+    if (role === "admin") return true;
+    const area = areaForPath(href);
+    return area !== null && staff.permissions.includes(area);
+  };
+  const visibleLinks: [string, string][] = [
+    ["🏠 Dashboard", "/admin"],
+    ...ADMIN_GROUPS
+      .filter((g) => g.panels.some((p) => canPath(p.href)))
+      .map((g) => [`${g.icon} ${g.title}`, `/admin#${g.id}`] as [string, string]),
+  ];
 
   return (
     <>

@@ -54,6 +54,7 @@ export default async function AdminArticlesPage() {
                 <option value="advanced-accounting">Advanced Accounting (Inter)</option>
                 <option value="strategy">Study strategy</option>
                 <option value="career">Exams & career</option>
+                <option value="news">Accounting world / news</option>
               </select>
             </div>
             <SubmitButton className="btn small" savedLabel="✓ Queued">Add to queue</SubmitButton>

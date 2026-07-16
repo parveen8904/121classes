@@ -38,6 +38,10 @@
     {
       "path": "/api/articles-generate",
       "schedule": "40 * * * *"
+    },
+    {
+      "path": "/api/cron/topics-trends",
+      "schedule": "0 1 * * 1"
     }
   ]
 }

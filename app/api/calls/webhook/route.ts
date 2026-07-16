@@ -60,7 +60,15 @@ async function readPayload(req: NextRequest): Promise<Record<string, string>> {
 async function handle(req: NextRequest) {
   const key = await getSecret("IVR_WEBHOOK_KEY");
   if (!key) return NextResponse.json({ error: "unconfigured" }, { status: 503 });
-  if (new URL(req.url).searchParams.get("key") !== key) {
+  // The key may arrive as ?key= in the URL, OR via the portal's Headers box
+  // ("key: <value>" / "x-webhook-key" / "Authorization: Bearer <value>") —
+  // whichever is easiest to configure in the IVR provider's UI.
+  const supplied =
+    new URL(req.url).searchParams.get("key") ||
+    req.headers.get("x-webhook-key") ||
+    req.headers.get("key") ||
+    (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (supplied !== key) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

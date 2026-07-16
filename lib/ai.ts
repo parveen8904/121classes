@@ -984,3 +984,37 @@ export async function writeArticle(topic: string, keywords: string): Promise<Wri
   if (!title || body.length < 400) return null;
   return { title, description: String(json?.description ?? "").trim(), body_md: body };
 }
+
+// Weekly trend scan → new article topics. Input: fresh headlines from the
+// accounting world (Ind AS/ICAI/NFRA/SEBI/SFIO/forensic/scams). Output: NEW
+// topics for the article queue, angled educationally for CA students, never
+// duplicating what's already queued or written.
+export type TrendTopic = { topic: string; category: string; keywords: string };
+
+const TRENDS_SYSTEM =
+  "You pick article topics for a CA-student education site (caparveensharma.com). From the news headlines given, propose up to 8 NEW article topics. " +
+  "RULES: every topic must be from the ACCOUNTING world (accounting standards, ICAI, NFRA, SEBI accounting/audit matters, SFIO/CBI fraud investigations, forensic accounting, corporate accounting scams, industry accounting news). " +
+  "Angle each topic educationally for CA students — 'what happened and what a CA student should learn from it' — not as journalism. " +
+  "Do NOT duplicate or closely repeat any topic from the EXISTING list. Do not assume facts beyond the headline itself; the article writer will phrase uncertain details carefully. " +
+  "Include the source headline inside keywords so the writer has context. category must be one of: fr | advanced-accounting | strategy | career | news (use 'news' for scams/NFRA/SEBI/forensic/current-affairs topics). " +
+  'Respond ONLY as compact JSON: {"topics":[{"topic":"...","category":"news","keywords":"... | headline: ..."}]}';
+
+export async function proposeTrendingTopics(headlines: string[], existing: string[]): Promise<TrendTopic[] | null> {
+  const user =
+    `FRESH HEADLINES (this week):\n${headlines.slice(0, 60).map((h) => `- ${h}`).join("\n")}\n\n` +
+    `EXISTING topics (do not repeat):\n${existing.slice(0, 150).map((t) => `- ${t}`).join("\n")}`;
+  const text = await callClaude(TRENDS_SYSTEM, user, 1800, { feature: "articles" });
+  if (!text) return null;
+  const json = parseLooseJson(text);
+  const arr = Array.isArray(json?.topics) ? json.topics : null;
+  if (!arr) return null;
+  const CATS = ["fr", "advanced-accounting", "strategy", "career", "news"];
+  return arr
+    .map((t: { topic?: unknown; category?: unknown; keywords?: unknown }) => ({
+      topic: String(t.topic ?? "").trim(),
+      category: CATS.includes(String(t.category)) ? String(t.category) : "news",
+      keywords: String(t.keywords ?? "").trim(),
+    }))
+    .filter((t: TrendTopic) => t.topic.length > 15)
+    .slice(0, 8);
+}

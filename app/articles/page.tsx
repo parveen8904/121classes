@@ -10,12 +10,13 @@ export const metadata = {
 };
 
 const CAT_LABEL: Record<string, string> = {
+  news: "📰 Accounting world this week",
   fr: "📘 Financial Reporting (CA Final)",
   "advanced-accounting": "📗 Advanced Accounting (CA Inter)",
   strategy: "🎯 Study strategy",
   career: "🧭 Exams & career",
 };
-const CAT_ORDER = ["fr", "advanced-accounting", "strategy", "career"];
+const CAT_ORDER = ["news", "fr", "advanced-accounting", "strategy", "career"];
 
 export default async function ArticlesIndex() {
   const svc = tryServiceClient();

@@ -9,6 +9,7 @@ import InAppMode from "@/app/components/InAppMode";
 import Tracker from "./components/Tracker";
 import LeadPopup from "./components/LeadPopup";
 import PageHelp from "./components/PageHelp";
+import RatePrompt from "./components/RatePrompt";
 
 // IMPORTANT: no force-dynamic and no cookie reads here. This layout wraps EVERY
 // page — anything dynamic in it disables caching for the whole site (which was
@@ -130,6 +131,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <LeadPopup />
         {/* Floating per-page "?" help (bottom-left, page-aware) */}
         <PageHelp />
+        {/* Play-Store rating ask — Android app only, invested users, happy pages */}
+        <RatePrompt />
       </body>
     </html>
   );

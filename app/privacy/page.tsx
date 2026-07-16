@@ -54,6 +54,16 @@ export default function Privacy() {
           (WhatsApp/Interakt, Telegram) and AI-assisted features (Anthropic). These providers may
           process data outside India; where they do, we take steps to ensure it remains protected.
         </p>
+        <p>
+          <strong>AI features in detail.</strong> Some features (doubt answering, answer-sheet
+          evaluation, the mock interview, study recommendations) send the content you submit — your
+          typed question or answer, or the answer document you upload — to our AI provider
+          (Anthropic) to generate a response. We do not send your name, email, phone number or any
+          account identifier with these requests, and per Anthropic&apos;s API terms this content is
+          not used to train AI models. Interactive AI features ask for your consent in the app
+          before your first use, and every AI feature is optional — the Platform works without
+          them.
+        </p>
 
         <h2>5. Data retention</h2>
         <p>

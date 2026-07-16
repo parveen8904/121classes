@@ -219,7 +219,7 @@ const SECTIONS: Section[] = [
         title: "Using the apps",
         steps: [
           "The website works on any phone browser. The desktop app (Windows/Mac) adds offline class downloads — get it from the Download page.",
-          "Mobile apps are on their way to the app stores.",
+          "The Android app is on Google Play (search “CA Parveen Sharma” or use the Download page); the iPhone app is in Apple review.",
           "Your account works on a limited number of devices at a time — if you change phones, log out from the old one first.",
         ],
       },

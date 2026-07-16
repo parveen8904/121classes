@@ -50,6 +50,14 @@ export async function deleteArticle(formData: FormData) {
   refresh(cur?.slug as string | undefined);
 }
 
+export async function deleteTopic(formData: FormData) {
+  if (!(await requireArea("articles"))) return;
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("article_topics").delete().eq("id", id).eq("status", "pending");
+  revalidatePath("/admin/articles");
+}
+
 // Add new topics to the queue (one per line) — the generator writes them.
 export async function addTopics(formData: FormData) {
   if (!(await requireArea("articles"))) return;

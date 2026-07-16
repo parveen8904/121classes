@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import DeleteButton from "../_components/DeleteButton";
 import SubmitButton from "@/app/components/SubmitButton";
-import { editArticle, toggleArticle, deleteArticle, addTopics, generateNow } from "./actions";
+import { editArticle, toggleArticle, deleteArticle, addTopics, generateNow, deleteTopic } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Articles — Admin" };
@@ -40,6 +40,25 @@ export default async function AdminArticlesPage() {
           </form>
         )}
       </div>
+
+      {/* The full topic queue — grows every Monday from the trends scanner; automation never deletes. */}
+      {pendingTopics.length > 0 && (
+        <details className="card" style={{ marginTop: 12 }} open>
+          <summary style={{ cursor: "pointer", fontWeight: 700 }}>📋 Topic list — waiting to be written ({pendingTopics.length})</summary>
+          <p className="muted" style={{ fontSize: ".78rem", margin: "6px 0 8px" }}>
+            New trending topics are added automatically every Monday (Ind AS / ICAI / NFRA / SEBI / SFIO / scams news).
+            The scanner only ever ADDS — nothing is removed unless you remove it here.
+          </p>
+          <div style={{ display: "grid", gap: 4 }}>
+            {pendingTopics.map((t) => (
+              <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, borderTop: "1px solid var(--border)", padding: "6px 0" }}>
+                <span style={{ fontSize: ".85rem" }}>✍️ {t.topic}</span>
+                <DeleteButton action={deleteTopic} id={t.id} message="Remove this topic from the queue?" />
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
 
       {/* Add topics */}
       <details className="card" style={{ marginTop: 12 }}>

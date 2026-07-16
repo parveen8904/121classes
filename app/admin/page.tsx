@@ -28,6 +28,12 @@ const PANELS: { icon: string; title: string; desc: string; href?: string; phase?
     href: "/admin/tickets",
   },
   {
+    icon: "▶️",
+    title: "YouTube performance",
+    desc: "Channel stats (views, likes, comments, subscribers) next to what YouTube actually sends the site — visits, leads and signups from your videos.",
+    href: "/admin/youtube",
+  },
+  {
     icon: "📝",
     title: "Articles & SEO",
     desc: "Original AI-written study articles that bring Google traffic — a topic queue writes itself; edit, publish or unpublish anything.",

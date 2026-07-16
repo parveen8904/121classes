@@ -21,7 +21,11 @@ function visitorKey(): string {
 
 export function track(event: string, path?: string) {
   try {
-    const payload = JSON.stringify({ path: path ?? location.pathname, event, visitor: visitorKey() });
+    // Keep the ?src= tag (yt/wa/ig/tg…) so campaign-link clicks are measurable.
+    const src = new URLSearchParams(location.search).get("src");
+    const base = path ?? location.pathname;
+    const withSrc = src && !base.includes("?") ? `${base}?src=${src.slice(0, 20)}` : base;
+    const payload = JSON.stringify({ path: withSrc, event, visitor: visitorKey() });
     if (navigator.sendBeacon) navigator.sendBeacon("/api/track", new Blob([payload], { type: "application/json" }));
     else fetch("/api/track", { method: "POST", body: payload, keepalive: true }).catch(() => {});
   } catch { /* never break the page */ }

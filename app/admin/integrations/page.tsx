@@ -203,7 +203,8 @@ export default async function IntegrationsPage({
           <KeyField name="TELEGRAM_BOT_TOKEN" label="Telegram bot token" placeholder="123456:ABC-DEF…" />
           <KeyField name="TELEGRAM_BOT_USERNAME" label="Telegram bot username (no @)" placeholder="my121bot" />
           <KeyField name="TELEGRAM_CHANNEL_ID" label="Telegram channel (for broadcasts)" placeholder="@caparveen" />
-          <KeyField name="YOUTUBE_API_KEY" label="YouTube Data API key (for revision-video durations)" placeholder="Google Cloud Console → APIs → YouTube Data API v3 → Create API key" />
+          <KeyField name="YOUTUBE_API_KEY" label="YouTube Data API key (for revision-video durations + the YouTube panel)" placeholder="Google Cloud Console → APIs → YouTube Data API v3 → Create API key" />
+          <KeyField name="YOUTUBE_CHANNEL_ID" label="YouTube channel (for Admin → YouTube performance)" placeholder="your channel link, @handle, or UC… id" />
           <KeyField name="DISCORD_WEBHOOK_URL" label="Discord channel webhook (for broadcasts)" placeholder="Discord → Server → channel → Edit → Integrations → Webhooks → New → Copy URL" />
           <KeyField name="DISCORD_APP_ID" label="Discord Application ID (for the /ask bot)" placeholder="Discord Developer Portal → your app → Application ID" />
           <KeyField name="DISCORD_PUBLIC_KEY" label="Discord Public Key (for the /ask bot)" placeholder="Developer Portal → your app → Public Key" />

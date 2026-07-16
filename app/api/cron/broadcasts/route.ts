@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   const svc = createServiceClient();
   const { data: due } = await svc
     .from("scheduled_posts")
-    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, ig_text, yt_text, status_note")
+    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, to_twitter, ig_text, yt_text, status_note")
     .eq("status", "pending")
     .lte("send_at", new Date().toISOString())
     .order("send_at")
@@ -77,12 +77,20 @@ export async function GET(req: NextRequest) {
     )];
   }
 
-  // Admin emails for the Instagram/YouTube prepare-and-remind mails.
-  const needRemind = due.some((p) => (p.to_instagram || p.to_youtube) && (p.wa_offset ?? 0) === 0);
+  // Who receives the Instagram/YouTube/Twitter "post this now" reminders. The
+  // founder can route them to a staff member (site_settings marketing_poster_
+  // emails, comma-separated); falls back to the admins.
+  const needRemind = due.some((p) => (p.to_instagram || p.to_youtube || p.to_twitter) && (p.wa_offset ?? 0) === 0);
   let adminEmails: string[] = [];
   if (needRemind) {
-    const { data: admins } = await svc.from("profiles").select("email").eq("role", "admin").not("email", "is", null).limit(5);
-    adminEmails = (admins ?? []).map((a) => String(a.email));
+    const { data: cfg } = await svc.from("site_settings").select("value").eq("key", "marketing_poster_emails").maybeSingle();
+    const configured = String(cfg?.value ?? "").split(/[,\s;]+/).map((s) => s.trim()).filter((s) => s.includes("@"));
+    if (configured.length) {
+      adminEmails = configured.slice(0, 5);
+    } else {
+      const { data: admins } = await svc.from("profiles").select("email").eq("role", "admin").not("email", "is", null).limit(5);
+      adminEmails = (admins ?? []).map((a) => String(a.email));
+    }
   }
 
   let sent = 0;
@@ -117,9 +125,13 @@ export async function GET(req: NextRequest) {
         }
         // Instagram / YouTube — prepare-and-remind: email the drafted post to
         // the admins to publish manually (auto-posting isn't reliably possible).
-        if (p.to_instagram || p.to_youtube) {
-          const platforms = [p.to_instagram ? "Instagram" : null, p.to_youtube ? "YouTube (community post / video description)" : null].filter(Boolean).join(" and ");
-          if (!adminEmails.length) notes.push("insta/yt reminder: no admin email");
+        if (p.to_instagram || p.to_youtube || p.to_twitter) {
+          const platforms = [
+            p.to_instagram ? "Instagram" : null,
+            p.to_youtube ? "YouTube" : null,
+            p.to_twitter ? "Twitter/X" : null,
+          ].filter(Boolean).join(", ");
+          if (!adminEmails.length) notes.push("social reminder: no email set");
           else {
             // Platform-specific variants when the post carries them (campaign packs).
             const igBlock = p.to_instagram
@@ -128,13 +140,16 @@ export async function GET(req: NextRequest) {
             const ytBlock = p.to_youtube
               ? `<p style="margin:14px 0 4px"><strong>▶️ YouTube community post</strong></p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(p.yt_text ?? text))}</div>`
               : "";
+            const twBlock = p.to_twitter
+              ? `<p style="margin:14px 0 4px"><strong>🐦 Twitter/X post</strong> <span style="color:#888;font-size:12px">(trim to 280 characters)</span></p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(text).slice(0, 275))}</div>`
+              : "";
             const html = emailShell(`📣 Post this on ${platforms}`,
               `<p>Your campaign${p.campaign ? ` <strong>${esc(String(p.campaign))}</strong>` : ""} is going out now. Ready-to-paste content:</p>
-               ${igBlock}${ytBlock}
-               <p style="font-size:13px;color:#666">Copy the text into the Instagram / YouTube app. (These platforms don't allow reliable auto-posting, so this reminder is your cue.)</p>`);
+               ${igBlock}${ytBlock}${twBlock}
+               <p style="font-size:13px;color:#666">Copy the text into each app. (These platforms don't allow reliable auto-posting, so this reminder is your cue.)</p>`);
             let ok = 0;
             for (const to of adminEmails) if (await sendEmail(to, `📣 Post to ${platforms} now — campaign is live`, html).catch(() => false)) ok++;
-            notes.push(`insta/yt reminder emailed${ok ? "" : " FAILED"}`);
+            notes.push(`social reminder emailed${ok ? "" : " FAILED"}`);
           }
         }
       }

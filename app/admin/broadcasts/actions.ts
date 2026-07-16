@@ -38,7 +38,20 @@ export async function schedulePost(formData: FormData) {
     // at send time the drafted post is emailed to the admins to publish manually.
     to_instagram: formData.get("to_instagram") === "on",
     to_youtube: formData.get("to_youtube") === "on",
+    to_twitter: formData.get("to_twitter") === "on",
   });
+  revalidatePath("/admin/broadcasts");
+}
+
+// Who receives the "post this on Instagram/YouTube/Twitter now" reminder emails
+// (comma-separated). Blank = the admins. Lets the founder hand pasting to staff.
+export async function saveMarketingSettings(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const emails = str(formData.get("poster_emails")).trim();
+  await createServiceClient().from("site_settings").upsert(
+    { key: "marketing_poster_emails", value: emails },
+    { onConflict: "key" },
+  );
   revalidatePath("/admin/broadcasts");
 }
 
@@ -110,6 +123,7 @@ export async function generatePack(formData: FormData) {
     wa_template: str(formData.get("wa_template")) || null,
     to_instagram: toIg,
     to_youtube: toYt,
+    to_twitter: formData.get("to_twitter") === "on",
     ig_text: toIg ? p.instagram || null : null,
     yt_text: toYt ? p.youtube || null : null,
     created_by: "pack",

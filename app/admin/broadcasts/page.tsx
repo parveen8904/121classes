@@ -2,7 +2,7 @@ import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import DeleteButton from "../_components/DeleteButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { schedulePost, deletePost, sendPostNow, generatePack, updatePost, toggleAutopilot } from "./actions";
+import { schedulePost, deletePost, sendPostNow, generatePack, updatePost, toggleAutopilot, saveMarketingSettings } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Campaigns — Admin" };
@@ -16,7 +16,7 @@ type Post = {
   id: string; body: string; link_url: string | null; send_at: string;
   to_tg_channel: boolean; to_tg_groups: boolean; to_discord: boolean; to_direct: boolean;
   campaign: string | null; to_whatsapp: boolean; wa_template: string | null;
-  to_instagram: boolean; to_youtube: boolean;
+  to_instagram: boolean; to_youtube: boolean; to_twitter: boolean;
   ig_text: string | null; yt_text: string | null; created_by: string | null;
   status: string; status_note: string | null; sent_at: string | null;
 };
@@ -37,6 +37,7 @@ function Targets({ p }: { p: Post }) {
       {p.to_whatsapp && <span className="badge">💬 WhatsApp</span>}
       {p.to_instagram && <span className="badge">📷 Instagram (remind)</span>}
       {p.to_youtube && <span className="badge">▶️ YouTube (remind)</span>}
+      {p.to_twitter && <span className="badge">🐦 Twitter (remind)</span>}
     </span>
   );
 }
@@ -51,8 +52,10 @@ export default async function BroadcastsPage({ searchParams }: { searchParams: {
   const posts = (data ?? []) as Post[];
   const { data: audData } = await svc.rpc("admin_dm_audience");
   const audience = (audData ?? []) as Audience[];
-  const { data: apFlag } = await svc.from("site_settings").select("value").eq("key", "marketing_autopilot").maybeSingle();
-  const autopilotOn = apFlag?.value === "on";
+  const { data: settingRows } = await svc.from("site_settings").select("key, value").in("key", ["marketing_autopilot", "marketing_poster_emails"]);
+  const settings = new Map((settingRows ?? []).map((r) => [r.key, r.value as string]));
+  const autopilotOn = settings.get("marketing_autopilot") === "on";
+  const posterEmails = settings.get("marketing_poster_emails") ?? "";
   const pending = posts.filter((p) => p.status === "pending").sort((a, b) => a.send_at.localeCompare(b.send_at));
   const done = posts.filter((p) => p.status !== "pending");
 
@@ -94,6 +97,19 @@ export default async function BroadcastsPage({ searchParams }: { searchParams: {
         </form>
       </div>
 
+      {/* Who does the Instagram/YouTube/Twitter pasting */}
+      <div className="card" style={{ marginTop: 12 }}>
+        <strong>📧 Who posts on Instagram / YouTube / Twitter?</strong>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 8px" }}>
+          These platforms can&apos;t auto-post, so we email the ready-to-paste text at post time. Enter a staff
+          member&apos;s email to send those reminders to them instead of you (comma-separate for more than one). Blank = they come to the admins.
+        </p>
+        <form action={saveMarketingSettings} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <input name="poster_emails" type="text" defaultValue={posterEmails} placeholder="assistant@example.com, social@example.com" style={{ flex: 1, minWidth: 240 }} />
+          <SubmitButton className="btn small" savedLabel="✓ Saved">Save</SubmitButton>
+        </form>
+      </div>
+
       {/* One-click campaign pack */}
       <details className="form-card" style={{ marginTop: 14 }}>
         <summary style={{ cursor: "pointer", fontWeight: 700 }}>✨ Generate a campaign pack (AI writes it, you approve)</summary>
@@ -126,6 +142,7 @@ export default async function BroadcastsPage({ searchParams }: { searchParams: {
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_discord" /> 🎮 Discord (auto)</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_instagram" defaultChecked /> 📷 Instagram caption — emailed to you at post time</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_youtube" defaultChecked /> ▶️ YouTube community text — emailed to you at post time</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_twitter" /> 🐦 Twitter/X post — emailed to you at post time</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_whatsapp" /> 💬 WhatsApp bulk (careful — every post goes to every contact)</label>
           </div>
           <div style={{ marginLeft: 24 }}>
@@ -219,6 +236,7 @@ export default async function BroadcastsPage({ searchParams }: { searchParams: {
           <div style={{ display: "grid", gap: 6, marginTop: 4 }}>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_instagram" /> 📷 Instagram — at send time you get an email with the ready-to-paste post</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_youtube" /> ▶️ YouTube (community post) — same reminder email</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_twitter" /> 🐦 Twitter/X — same reminder email</label>
           </div>
           <p className="muted" style={{ fontSize: ".76rem", margin: "4px 0 0" }}>
             Instagram &amp; YouTube don&apos;t allow reliable auto-posting by third-party tools, so we prepare the post and remind you — no false promises.

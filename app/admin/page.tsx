@@ -66,6 +66,9 @@ export default async function AdminHome() {
         title="Admin dashboard"
         subtitle="Your control centre — key numbers at a glance, then everything to manage below. 🚀"
       />
+      <p style={{ marginTop: 10 }}>
+        <Link className="btn small secondary" href="/admin/guide">📖 New here? How to use this panel — step-by-step guide</Link>
+      </p>
 
       {/* At-a-glance stats */}
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", marginTop: 18, marginBottom: 26 }}>

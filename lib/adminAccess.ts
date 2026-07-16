@@ -66,6 +66,7 @@ export function allowedPrefixes(staff: Staff): string[] {
 export function pathAllowed(path: string, staff: Staff): boolean {
   if (staff.role === "admin") return true;
   if (path === "/admin") return staff.permissions.length > 0; // home shows only their tiles
+  if (path === "/admin/guide") return staff.permissions.length > 0; // the how-to guide is for all staff
   return allowedPrefixes(staff).some((p) => path === p || path.startsWith(p + "/"));
 }
 

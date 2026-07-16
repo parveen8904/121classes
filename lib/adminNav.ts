@@ -86,6 +86,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { icon: "💰", title: "Costs & usage", desc: "AI, Bunny, Cloudflare & Supabase costs in one place.", href: "/admin/costs" },
       { icon: "🤖", title: "AI usage detail", desc: "Token spend by feature & model; monthly cap & alert; per-feature on/off switches.", href: "/admin/ai-usage" },
       { icon: "🔐", title: "Security (2FA)", desc: "Optional two-factor authentication for your admin login.", href: "/auth/mfa/setup" },
+      { icon: "📖", title: "Admin guide", desc: "How to use every function of this panel, step by step — printable for your team.", href: "/admin/guide" },
     ],
   },
 ];

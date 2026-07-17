@@ -32,7 +32,7 @@ export default async function CoursesPage() {
   const courseTitle = new Map((courses ?? []).map((c) => [c.id as string, c.title as string]));
 
   const { data: subjects } = courseIds.length
-    ? await svc.from("subjects").select("id, title, code, course_id, subject_faculty(faculties(full_name))").in("course_id", courseIds).order("order_index")
+    ? await svc.from("subjects").select("id, title, code, course_id, valid_from_attempt, valid_to_attempt, subject_faculty(faculties(full_name))").in("course_id", courseIds).order("order_index")
     : { data: [] as any[] };
 
   const subjectIds = (subjects ?? []).map((s) => s.id as string);
@@ -49,6 +49,30 @@ export default async function CoursesPage() {
   const { data: amendments } = subjectIds.length
     ? await svc.from("amendments").select("subject_id, valid_from_attempt").eq("is_published", true).in("subject_id", subjectIds)
     : { data: [] as any[] };
+
+  // Practice papers (MTP/RTP/past) and case scenarios per subject — the marketing
+  // depth of content. Papers can be at subject OR topic level.
+  const { data: repoRows } = subjectIds.length
+    ? await svc.from("repository_items").select("subject_id, topic_id, kind").eq("is_active", true).in("kind", ["mtp", "rtp", "past_papers"])
+    : { data: [] as any[] };
+  const papersBySubject = new Map<string, number>();
+  for (const r of repoRows ?? []) {
+    const sid = (r as any).subject_id || topicSubject.get((r as any).topic_id);
+    if (sid && subjectIds.includes(sid)) papersBySubject.set(sid, (papersBySubject.get(sid) ?? 0) + 1);
+  }
+  const { data: caseSetRows } = subjectIds.length
+    ? await svc.from("case_sets").select("id, subject_id").eq("status", "ready").eq("is_published", true).in("subject_id", subjectIds)
+    : { data: [] as any[] };
+  const caseSetSub = new Map((caseSetRows ?? []).map((r: any) => [r.id, r.subject_id]));
+  const casesBySubject = new Map<string, number>();
+  const caseSetIds = (caseSetRows ?? []).map((r: any) => r.id);
+  if (caseSetIds.length) {
+    const { data: cs } = await svc.from("case_studies").select("set_id").in("set_id", caseSetIds);
+    for (const r of cs ?? []) { const sid = caseSetSub.get((r as any).set_id); if (sid) casesBySubject.set(sid, (casesBySubject.get(sid) ?? 0) + 1); }
+  }
+  const levelDefault = (courseTitleLower: string) =>
+    courseTitleLower.includes("final") ? "November 2026 up to November 2028"
+    : courseTitleLower.includes("inter") ? "September 2026 up to May 2028" : "";
 
   const { data: results } = await svc.from("results").select("student_name, headline, attempt, marks, photo_url, quote, level").eq("is_published", true).order("order_index").limit(60);
 
@@ -151,13 +175,20 @@ export default async function CoursesPage() {
             {(subjects ?? []).map((s) => {
               const st = stats.get(s.id as string)!;
               const pics = photosByLevel.get(st.course) ?? [];
+              const nPapers = papersBySubject.get(s.id as string) ?? 0;
+              const nCases = casesBySubject.get(s.id as string) ?? 0;
+              const sfrom = (s as any).valid_from_attempt as string | null;
+              const sto = (s as any).valid_to_attempt as string | null;
+              const applicable = sfrom ? (sto ? `${sfrom} up to ${sto}` : `from ${sfrom}`) : levelDefault(st.course.toLowerCase());
               const chips: { label: string; value: string }[] = [
                 { label: "Classes", value: String(st.classes) },
                 { label: "Class hours (at 1.25×)", value: hrs(st.minutes) },
                 { label: "Topics", value: String(st.topics) },
                 { label: "Tests", value: String(st.tests) },
-                { label: "Notes & PDFs", value: String(st.notes) },
                 { label: "Revision videos", value: String(st.revisions) },
+                ...(nPapers > 0 ? [{ label: "Practice papers (MTP/RTP/past)", value: String(nPapers) }] : []),
+                ...(nCases > 0 ? [{ label: "Case scenarios", value: String(nCases) }] : []),
+                { label: "Notes & PDFs", value: String(st.notes) },
               ];
               return (
                 <div className="tile" key={s.id} style={{ textAlign: "left" }}>
@@ -186,6 +217,9 @@ export default async function CoursesPage() {
                       </div>
                     ))}
                   </div>
+                  {applicable && (
+                    <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 4px" }}>📅 Applicable {applicable}</p>
+                  )}
                   <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 4px" }}>
                     📜 {st.amendments} amendment{st.amendments === 1 ? "" : "s"} — kept updated{st.attempts.length ? ` (applicable for ${st.attempts.slice(0, 3).join(", ")})` : " to your exam"}.
                   </p>

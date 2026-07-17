@@ -289,7 +289,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
         {/* Sponsor view: the students they've gifted a subscription to. */}
         {isSponsor && !needsSetup && <SponsoredStudents gifterId={user.id} />}
 
-        {!isSponsor && <FacultyContacts faculty={faculty ?? []} />}
+        {!isSponsor && <FacultyContacts faculty={(faculty ?? []).map((f) => ({ id: f.id, full_name: f.full_name, email: f.email, photo_url: f.photo_url, hasPhone: !!(f.phone && f.phone.replace(/\D/g, "").length >= 10) }))} />}
 
         {!isSponsor && <MyCourses courses={myCourses.map((c) => ({ id: c.id, title: c.title }))} />}
 

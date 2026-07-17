@@ -29,15 +29,17 @@ export async function saveAccessLimits(formData: FormData) {
       rows.push({ plan, category: cat.key, lim });
     }
   }
+  // Per-plan fair-use watch multiplier (× total class hours). Blank = no cap (-1).
+  for (const plan of PLANS) {
+    const raw = str(formData.get(`watchmult__${plan}`)).trim().toLowerCase();
+    let lim: number;
+    if (raw === "" || raw === "inf" || raw === "∞" || raw === "unlimited") lim = -1;
+    else { const n = parseInt(raw, 10); lim = Number.isFinite(n) && n > 0 ? n : -1; }
+    rows.push({ plan, category: "watch_multiplier", lim });
+  }
+
   const svc = createServiceClient();
   await svc.from("plan_limits").upsert(rows, { onConflict: "plan,category" });
-
-  // Fair-use watch multiplier (× total class hours per subject). Blank keeps 2.
-  const mRaw = str(formData.get("fair_use_multiplier")).trim();
-  const m = parseFloat(mRaw);
-  if (Number.isFinite(m) && m > 0) {
-    await svc.from("site_settings").upsert({ key: "fair_use_multiplier", value: String(m) }, { onConflict: "key" });
-  }
 
   clearLimitsCache();
   revalidatePath("/admin/access");

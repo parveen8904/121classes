@@ -14,8 +14,6 @@ export default async function AccessLimitsPage(props: { searchParams: Promise<{ 
   const svc = createServiceClient();
   const { data } = await svc.from("plan_limits").select("plan, category, lim");
   const cur = new Map((data ?? []).map((r) => [`${r.plan}:${r.category}`, Number(r.lim)]));
-  const { data: fuRow } = await svc.from("site_settings").select("value").eq("key", "fair_use_multiplier").maybeSingle();
-  const fairUseMult = (fuRow?.value as string) || "2";
   const cell = (plan: string, cat: string) => {
     const v = cur.get(`${plan}:${cat}`);
     return v === undefined || v === -1 ? "" : String(v); // blank shown = unlimited
@@ -69,13 +67,28 @@ export default async function AccessLimitsPage(props: { searchParams: Promise<{ 
           Free-plan limits are one-time (a free student gets these totals once, then must upgrade). Revision videos are free for everyone.
         </p>
         <div className="card" style={{ marginTop: 18, background: "var(--bg-soft)" }}>
-          <strong>⏳ Fair-use video watch limit</strong>
-          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
-            Per subject, a student can watch its recorded classes for this many times the total class length
-            before hitting a fair-use limit. Live classes are never counted. Example: 2 × a 100-hour subject = 200 hours of watching.
+          <strong>⏳ Fair-use video watch limit (per plan)</strong>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 12px" }}>
+            Per subject, a student can watch its recorded Bunny classes for this many times the total class length
+            before hitting a fair-use limit. Live classes are never counted. Example: <strong>2</strong> × a 100-hour subject = 200 hours.
+            Set it separately for each plan. <strong>Blank</strong> = no watch limit for that plan.
           </p>
-          <label htmlFor="fu" style={{ fontSize: ".85rem", fontWeight: 600 }}>Multiplier (× total class hours)</label>
-          <input id="fu" name="fair_use_multiplier" defaultValue={fairUseMult} inputMode="decimal" style={{ width: 90, textAlign: "center", marginLeft: 10 }} placeholder="2" />
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            {PLANS.map((p) => (
+              <label key={p} style={{ fontSize: ".85rem", fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+                {PLAN_LABEL[p]}
+                <input
+                  name={`watchmult__${p}`}
+                  defaultValue={cell(p, "watch_multiplier")}
+                  inputMode="decimal"
+                  placeholder="∞"
+                  style={{ width: 72, textAlign: "center" }}
+                  title="Blank = no watch limit · a number = that many × total class hours"
+                />
+                <span className="muted" style={{ fontWeight: 400 }}>× hours</span>
+              </label>
+            ))}
+          </div>
         </div>
 
         <SubmitButton className="btn" savedLabel="✓ Saved" style={{ marginTop: 8 }}>Save access limits</SubmitButton>

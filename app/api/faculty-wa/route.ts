@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 // copying, or saving the raw number from the page.
 export async function GET(req: NextRequest) {
   const subjectId = req.nextUrl.searchParams.get("subject") ?? "";
+  const facultyId = req.nextUrl.searchParams.get("faculty") ?? "";
   const text = req.nextUrl.searchParams.get("text") ?? "";
 
   // Only logged-in students can use the bridge (stops public scraping of the
@@ -18,20 +19,27 @@ export async function GET(req: NextRequest) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(new URL("/login", req.url));
-  if (!subjectId) return NextResponse.redirect(new URL("/dashboard", req.url));
+  if (!subjectId && !facultyId) return NextResponse.redirect(new URL("/dashboard", req.url));
 
-  // Find a faculty on this subject who has a phone number.
   const svc = createServiceClient();
-  const { data } = await svc
-    .from("subject_faculty")
-    .select("faculties(phone)")
-    .eq("subject_id", subjectId);
+  let raw: string | undefined;
 
-  const phones = ((data ?? []) as unknown as { faculties: { phone: string | null } | { phone: string | null }[] | null }[])
-    .flatMap((r) => (Array.isArray(r.faculties) ? r.faculties : r.faculties ? [r.faculties] : []))
-    .map((f) => f.phone)
-    .filter((p): p is string => !!p);
-  const raw = phones[0];
+  if (facultyId) {
+    // Direct faculty lookup (dashboard "Your faculty" cards).
+    const { data: f } = await svc.from("faculties").select("phone").eq("id", facultyId).maybeSingle();
+    raw = (f as { phone: string | null } | null)?.phone ?? undefined;
+  } else {
+    // Any faculty on this subject who has a phone number.
+    const { data } = await svc
+      .from("subject_faculty")
+      .select("faculties(phone)")
+      .eq("subject_id", subjectId);
+    const phones = ((data ?? []) as unknown as { faculties: { phone: string | null } | { phone: string | null }[] | null }[])
+      .flatMap((r) => (Array.isArray(r.faculties) ? r.faculties : r.faculties ? [r.faculties] : []))
+      .map((f) => f.phone)
+      .filter((p): p is string => !!p);
+    raw = phones[0];
+  }
   if (!raw) {
     // No faculty number set — send them back rather than leaking anything.
     return NextResponse.redirect(new URL("/dashboard", req.url));

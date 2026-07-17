@@ -11,7 +11,7 @@ import DiscussionBoard from "./DiscussionBoard";
 import ClassDownload from "../../topic/[topicId]/ClassDownload";
 import WatchTracker from "./WatchTracker";
 import UpgradeGate from "@/app/components/UpgradeGate";
-import { checkQuota } from "@/lib/entitlements";
+import { checkQuota, studentPlan, getAllLimits, limitFor, WATCH_CATEGORY } from "@/lib/entitlements";
 
 export const dynamic = "force-dynamic";
 // Descriptive-paper grading reads two PDFs with Claude vision — allow time.
@@ -109,11 +109,18 @@ export default async function SectionPage(
     const { data: tRow } = await supabase.from("topics").select("subject_id").eq("id", section.topic_id).maybeSingle();
     const subjectId = (tRow as { subject_id?: string } | null)?.subject_id;
     if (subjectId) {
-      const { data: fu } = await supabase.rpc("fair_use_status", { p_subject: subjectId });
+      // Watch cap is per plan: read this student's plan multiplier (× class hours).
+      // ≤0 or unlimited (-1) → no watch cap for that plan.
+      const [plan, limits] = await Promise.all([studentPlan(user.id), getAllLimits()]);
+      const mult = limitFor(limits, plan, WATCH_CATEGORY);
+      const gate = mult !== -1 && mult > 0;
+      const { data: fu } = gate
+        ? await supabase.rpc("fair_use_status", { p_subject: subjectId, p_multiplier: mult })
+        : { data: null };
       const row = Array.isArray(fu) ? fu[0] : fu;
       const budget = Number(row?.budget_seconds) || 0;
       const used = Number(row?.used_seconds) || 0;
-      if (budget > 0 && used >= budget) {
+      if (gate && budget > 0 && used >= budget) {
         const hrs = (budget / 3600).toFixed(1);
         return (
           <main>

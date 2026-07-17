@@ -1,23 +1,17 @@
 type Faculty = {
   id: string;
   full_name: string;
-  phone: string | null;
+  hasPhone: boolean;
   email: string | null;
   photo_url: string | null;
 };
 
-// wa.me needs full international digits. Indian numbers are entered as 10 digits
-// (sometimes with spaces) — strip non-digits and assume +91 when it's a bare 10.
-function waHref(phone: string): string {
-  const d = phone.replace(/\D/g, "");
-  const full = d.length === 10 ? `91${d}` : d;
-  return `https://wa.me/${full}`;
-}
-
 // "Your faculty" — names + contact links, shown to students on the dashboard.
-// Only faculty who have a phone or email are listed.
+// Only faculty who have a phone or email are listed. The phone NUMBER is never
+// sent to the browser: the WhatsApp button goes through the /api/faculty-wa
+// bridge, which looks the number up server-side and forwards into a chat.
 export default function FacultyContacts({ faculty }: { faculty: Faculty[] }) {
-  const withContact = faculty.filter((f) => f.phone || f.email);
+  const withContact = faculty.filter((f) => f.hasPhone || f.email);
   if (withContact.length === 0) return null;
 
   return (
@@ -37,18 +31,18 @@ export default function FacultyContacts({ faculty }: { faculty: Faculty[] }) {
               <strong>{f.full_name}</strong>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              {f.phone && (
-                <a className="btn small" href={waHref(f.phone)} target="_blank" rel="noopener noreferrer"
+              {f.hasPhone && (
+                <a className="btn small" href={`/api/faculty-wa?faculty=${f.id}`} target="_blank" rel="noopener noreferrer"
                   style={{ background: "#25D366", color: "#fff" }}>💬 WhatsApp</a>
               )}
               {f.email && (
                 <a className="btn small secondary" href={`mailto:${f.email}`}>✉️ Email</a>
               )}
             </div>
-            <p className="muted" style={{ fontSize: ".8rem", margin: 0, wordBreak: "break-word" }}>
-              {[f.phone, f.email].filter(Boolean).join(" · ")}
-            </p>
-            {f.phone && (
+            {f.email && (
+              <p className="muted" style={{ fontSize: ".8rem", margin: 0, wordBreak: "break-word" }}>{f.email}</p>
+            )}
+            {f.hasPhone && (
               <p className="muted" style={{ fontSize: ".78rem", margin: 0 }}>🙏 Please WhatsApp your message — kindly avoid calling.</p>
             )}
           </div>

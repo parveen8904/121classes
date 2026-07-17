@@ -18,6 +18,11 @@ export const ACCESS_CATEGORIES: { key: string; label: string; kind: "content" | 
   { key: "build_plan", label: "🗓️ Build your plan", kind: "action" },
 ];
 
+// Fair-use recorded-class watch cap, per plan. Not a count like the categories
+// above — the value is a MULTIPLIER on the subject's total class hours (N× hours).
+// Blank/≤0 = no watch cap for that plan. Stored in plan_limits under this key.
+export const WATCH_CATEGORY = "watch_multiplier";
+
 // Bronze retired (2026-07-17): the ladder is Free → Silver → Gold.
 export const PLANS = ["free", "silver", "gold"] as const;
 export type PlanTier = (typeof PLANS)[number];

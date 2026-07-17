@@ -162,7 +162,17 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
       subjMaterials.get(sid)!.add(k);
     }
   }
-  const MAT_LABEL: Record<string, string> = { book: "📕 Books", question_bank: "📚 Question bank", icai: "🏛️ ICAI", rtp: "📄 RTP", mtp: "📄 MTP", past_papers: "🗂️ Past papers", notes: "📝 Notes" };
+  const MAT_LABEL: Record<string, string> = { book: "📕 Book", question_bank: "📚 Question bank", icai: "🏛️ ICAI material", rtp: "📝 RTP", mtp: "📝 MTP", past_papers: "🗂️ Past exam papers", notes: "✍️ Handwritten notes/book", custom: "✨ Additional resources" };
+  // How the "Subject resources" list is grouped & ordered (founder's order).
+  const RES_ORDER: { kind: string; label: string }[] = [
+    { kind: "notes", label: "✍️ Handwritten notes / book" },
+    { kind: "book", label: "📕 Books" },
+    { kind: "question_bank", label: "📚 Question bank" },
+    { kind: "past_papers", label: "🗂️ Past exam papers" },
+    { kind: "rtp", label: "📝 RTPs — Revision Test Papers" },
+    { kind: "mtp", label: "📝 MTPs — Mock Test Papers" },
+    { kind: "custom", label: "✨ Additional resources" },
+  ];
 
   // Community links shown on each subject (channel + Discord are the same for all;
   // the Telegram GROUP is per-subject from subjects.telegram_group_url).
@@ -334,36 +344,40 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                   const hasRev1 = subjAll.some((t) => ((t as { important_qs_rev1?: string | null }).important_qs_rev1 ?? "").trim());
                   const hasRev2 = subjAll.some((t) => ((t as { important_qs_rev2?: string | null }).important_qs_rev2 ?? "").trim());
                   const sw = subjWindow.get(s.id) ?? { from: null, to: null };
-                  const applicable = sw.from ? `${sw.from}${sw.to ? ` to ${sw.to}` : " onwards"}` : "";
-                  const mats = [...(subjMaterials.get(s.id) ?? [])].map((k) => MAT_LABEL[k] ?? k);
+                  // Never open-ended "onwards" — show the range, or just "from X".
+                  const applicable = sw.from ? (sw.to ? `${sw.from} up to ${sw.to}` : `from ${sw.from}`) : "";
+                  // Topics that actually carry classes (for "137 classes in X topics").
+                  const nTopics = subjTopics.filter((t) => (topicClassCount.get(t.id) ?? 0) > 0).length;
+                  // Materials line = everything EXCEPT the practice papers (shown on
+                  // their own line) — from both topic-level and subject-level uploads.
+                  const paperKinds = new Set(["mtp", "rtp", "past_papers"]);
+                  const allKinds = new Set<string>([
+                    ...(subjMaterials.get(s.id) ?? []),
+                    ...((subjResources.get(s.id) ?? []).map((r) => r.kind)),
+                  ]);
+                  const mats = [...allKinds].filter((k) => !paperKinds.has(k) && k !== "transcript").map((k) => MAT_LABEL[k] ?? k);
                   const nMtp = subjMatCount(s.id, "mtp");
                   const nRtp = subjMatCount(s.id, "rtp");
                   const nPast = subjMatCount(s.id, "past_papers");
                   const nCases = subjCaseCount.get(s.id) ?? 0;
-                  // Bold badges only for what actually exists (no "0 MTPs").
-                  const paperBadges = [
-                    nMtp > 0 && `📝 ${nMtp} MTP${nMtp === 1 ? "" : "s"}`,
-                    nRtp > 0 && `📝 ${nRtp} RTP${nRtp === 1 ? "" : "s"}`,
-                    nPast > 0 && `🗂️ ${nPast} past exam paper${nPast === 1 ? "" : "s"}`,
-                    nCases > 0 && `🧩 ${nCases} case scenario${nCases === 1 ? "" : "s"}`,
-                  ].filter(Boolean) as string[];
+                  // Plain text (no highlight pills) — consistent with the other lines.
+                  const paperLine = [
+                    nMtp > 0 && `${nMtp} MTP${nMtp === 1 ? "" : "s"}`,
+                    nRtp > 0 && `${nRtp} RTP${nRtp === 1 ? "" : "s"}`,
+                    nPast > 0 && `${nPast} past exam paper${nPast === 1 ? "" : "s"}`,
+                    nCases > 0 && `${nCases} case scenario${nCases === 1 ? "" : "s"}`,
+                  ].filter(Boolean).join(" · ");
                   return (
                     <div className="card" style={{ margin: "4px 0 14px" }}>
                       <strong style={{ fontSize: ".95rem" }}>📊 What this subject contains</strong>
                       <div style={{ display: "grid", gap: 6, fontSize: ".9rem", marginTop: 8 }}>
-                        <div>🎓 <strong>{sumClasses.get(s.id) ?? 0}</strong> classes · ⏱️ {fmtAt125(sumClassMins.get(s.id) ?? 0)} total <span className="muted" style={{ fontSize: ".82rem" }}>{AT125_NOTE}</span></div>
+                        <div>🎓 <strong>{sumClasses.get(s.id) ?? 0}</strong> classes in <strong>{nTopics}</strong> topic{nTopics === 1 ? "" : "s"} · ⏱️ {fmtAt125(sumClassMins.get(s.id) ?? 0)} total <span className="muted" style={{ fontSize: ".82rem" }}>{AT125_NOTE}</span></div>
                         <div>🎬 <strong>{sumRev.get(s.id) ?? 0}</strong> revision videos · ⏱️ {fmtMins(sumRevMins.get(s.id) ?? 0)} total</div>
                         <div>🧠 <strong>{sumMcq.get(s.id) ?? 0}</strong> MCQ tests · ✍️ <strong>{sumDesc.get(s.id) ?? 0}</strong> descriptive tests</div>
-                        {paperBadges.length > 0 && (
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "2px 0" }}>
-                            {paperBadges.map((b) => (
-                              <span key={b} style={{ background: "var(--accent)", color: "#fff", borderRadius: 999, padding: "2px 10px", fontSize: ".82rem", fontWeight: 700 }}>{b}</span>
-                            ))}
-                          </div>
-                        )}
-                        <div>📌 Important questions — first revision: {hasRev1 ? "✓" : "—"} · second revision: {hasRev2 ? "✓" : "—"}</div>
+                        {paperLine && <div>📄 Practice papers: {paperLine}</div>}
+                        <div>📌 Important-question lists — First revision: {hasRev1 ? "✓ available" : "— not added"} · Second revision: {hasRev2 ? "✓ available" : "— not added"}</div>
                         <div>📚 Materials: {mats.length ? mats.join(" · ") : "coming soon"}</div>
-                        <div>📅 Applicable: {applicable || "all attempts"}</div>
+                        <div>📅 Applicable {applicable || "for all attempts"}</div>
                       </div>
                       {/* Turn all of the above into a day-by-day schedule. */}
                       <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -386,19 +400,35 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                 {(subjResources.get(s.id) ?? []).length > 0 && (
                   <div className="card" style={{ margin: "0 0 14px" }}>
                     <strong style={{ fontSize: ".95rem" }}>📚 Subject resources</strong>
-                    <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
-                      {(subjResources.get(s.id) ?? []).map((r) => {
-                        const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(r.file_url);
-                        const isPaper = ["mtp", "rtp", "past_papers"].includes(r.kind); // practice papers
-                        const kindTag = r.kind === "custom" ? (isVideo ? "🎬" : "📄") : ({ rtp: "📝 RTP", mtp: "📝 MTP", past_papers: "🗂️ Past paper" }[r.kind] ?? "📄");
-                        const href = isPaper ? `/learn/paper/${r.id}` : r.file_url;
-                        return (
-                          <a key={r.id} href={href} target={isPaper ? undefined : "_blank"} rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", background: "var(--bg-soft)", borderRadius: 8, padding: "8px 12px", color: "var(--text)" }}>
-                            <span style={{ fontSize: ".9rem" }}>{kindTag} <strong>{r.title}</strong>{r.valid_from_attempt ? <span className="muted"> · {r.valid_from_attempt}{r.valid_to_attempt ? `–${r.valid_to_attempt}` : ""}</span> : null}</span>
-                            <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap" }}>{isPaper ? "Attempt →" : isVideo ? "Watch →" : "Open →"}</span>
-                          </a>
-                        );
-                      })}
+                    <div style={{ display: "grid", gap: 12, marginTop: 8 }}>
+                      {(() => {
+                        const items = subjResources.get(s.id) ?? [];
+                        // Group by type in the founder's order; anything with an
+                        // unknown kind falls into a final "Other" group.
+                        const known = new Set(RES_ORDER.map((g) => g.kind));
+                        const groups = [
+                          ...RES_ORDER.map((g) => ({ label: g.label, rows: items.filter((r) => r.kind === g.kind) })),
+                          { label: "📄 Other", rows: items.filter((r) => !known.has(r.kind)) },
+                        ].filter((g) => g.rows.length > 0);
+                        return groups.map((g) => (
+                          <div key={g.label}>
+                            <div className="muted" style={{ fontSize: ".8rem", fontWeight: 700, marginBottom: 4 }}>{g.label} ({g.rows.length})</div>
+                            <div style={{ display: "grid", gap: 6 }}>
+                              {g.rows.map((r) => {
+                                const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(r.file_url);
+                                const isPaper = ["mtp", "rtp", "past_papers"].includes(r.kind);
+                                const href = isPaper ? `/learn/paper/${r.id}` : r.file_url;
+                                return (
+                                  <a key={r.id} href={href} target={isPaper ? undefined : "_blank"} rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", background: "var(--bg-soft)", borderRadius: 8, padding: "8px 12px", color: "var(--text)" }}>
+                                    <span style={{ fontSize: ".9rem" }}><strong>{r.title}</strong>{r.valid_from_attempt ? <span className="muted"> · {r.valid_from_attempt}{r.valid_to_attempt ? ` up to ${r.valid_to_attempt}` : ""}</span> : null}</span>
+                                    <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap" }}>{isPaper ? "Attempt →" : isVideo ? "Watch →" : "Open →"}</span>
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ));
+                      })()}
                     </div>
                   </div>
                 )}

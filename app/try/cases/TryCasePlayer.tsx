@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import CaseText from "@/app/components/CaseText";
 
 type Q = { id: string; question: string; options: string[]; correct_index: number; explanation: string | null };
 
@@ -16,7 +17,7 @@ export default function TryCasePlayer({ title, scenario, questions }: { title: s
     <div style={{ marginTop: 16 }}>
       <div className="card">
         <strong>🧩 {title}</strong>
-        <p style={{ whiteSpace: "pre-wrap", fontSize: ".92rem", marginTop: 8 }}>{scenario}</p>
+        <CaseText text={scenario} fontSize=".92rem" />
       </div>
 
       <div style={{ display: "grid", gap: 12, marginTop: 14 }}>

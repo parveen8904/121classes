@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
+import CaseText, { tidyAmounts } from "@/app/components/CaseText";
 import { caseDisplayNumbers } from "@/lib/caseOrder";
 import { submitCaseAttempt } from "../actions";
 
@@ -91,10 +92,10 @@ export default async function CasePage(
           )}
         </div>
 
-        {/* The scenario */}
+        {/* The scenario — typeset (tables, bullets, tight ₹ amounts) */}
         <div className="card" style={{ marginTop: 16 }}>
           <strong>📖 Read the case</strong>
-          <p style={{ whiteSpace: "pre-wrap", marginTop: 8, lineHeight: 1.65 }}>{cs.scenario}</p>
+          <CaseText text={cs.scenario} />
         </div>
 
         {!attempt ? (
@@ -105,12 +106,12 @@ export default async function CasePage(
             <div style={{ display: "grid", gap: 14 }}>
               {questions.map((q, qi) => (
                 <div className="card" key={q.id}>
-                  <strong>Q{qi + 1}. {q.question}</strong>
+                  <strong>Q{qi + 1}. {tidyAmounts(q.question)}</strong>
                   <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
                     {q.options.map((opt, oi) => (
                       <label key={oi} style={{ display: "flex", gap: 10, alignItems: "flex-start", background: "var(--bg-soft)", borderRadius: 8, padding: "8px 12px", cursor: "pointer" }}>
                         <input type="radio" name={`q_${q.id}`} value={oi} required style={{ marginTop: 3 }} />
-                        <span><strong>{letters[oi] ?? oi + 1}.</strong> {opt}</span>
+                        <span><strong>{letters[oi] ?? oi + 1}.</strong> {tidyAmounts(opt)}</span>
                       </label>
                     ))}
                   </div>
@@ -128,7 +129,7 @@ export default async function CasePage(
               const ex = q.explanation ?? null;
               return (
                 <div className="card" key={q.id} style={{ borderLeft: `4px solid ${right ? "#16a34a" : "#b91c1c"}` }}>
-                  <strong>{right ? "✅" : "❌"} Q{qi + 1}. {q.question}</strong>
+                  <strong>{right ? "✅" : "❌"} Q{qi + 1}. {tidyAmounts(q.question)}</strong>
                   <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
                     {q.options.map((opt, oi) => {
                       const isCorrect = oi === q.correct_index;
@@ -139,7 +140,7 @@ export default async function CasePage(
                           border: isCorrect ? "1px solid #16a34a" : isPicked ? "1px solid #ef4444" : "1px solid transparent",
                           borderRadius: 8, padding: "8px 12px",
                         }}>
-                          <span><strong>{letters[oi] ?? oi + 1}.</strong> {opt}
+                          <span><strong>{letters[oi] ?? oi + 1}.</strong> {tidyAmounts(opt)}
                             {isCorrect && <strong style={{ color: "#16a34a" }}> ✓ correct answer</strong>}
                             {isPicked && !isCorrect && <strong style={{ color: "#b91c1c" }}> ✗ your answer</strong>}
                           </span>

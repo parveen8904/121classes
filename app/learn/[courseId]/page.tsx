@@ -163,16 +163,18 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
     }
   }
   const MAT_LABEL: Record<string, string> = { book: "📕 Book", question_bank: "📚 Question bank", icai: "🏛️ ICAI material", rtp: "📝 RTP", mtp: "📝 MTP", past_papers: "🗂️ Past exam papers", notes: "✍️ Handwritten notes/book", custom: "✨ Additional resources" };
-  // How the "Subject resources" list is grouped & ordered (founder's order).
-  const RES_ORDER: { kind: string; label: string }[] = [
-    { kind: "notes", label: "✍️ Handwritten notes / book" },
-    { kind: "book", label: "📕 Books" },
-    { kind: "question_bank", label: "📚 Question bank" },
-    { kind: "past_papers", label: "🗂️ Past exam papers" },
-    { kind: "rtp", label: "📝 RTPs — Revision Test Papers" },
-    { kind: "mtp", label: "📝 MTPs — Mock Test Papers" },
-    { kind: "custom", label: "✨ Additional resources" },
+  // "Subject resources" tiles — display order + icon/short label per type.
+  const RES_ORDER: { kind: string; icon: string; label: string }[] = [
+    { kind: "notes", icon: "✍️", label: "Handwritten" },
+    { kind: "book", icon: "📕", label: "Book" },
+    { kind: "question_bank", icon: "📚", label: "Question bank" },
+    { kind: "past_papers", icon: "🗂️", label: "Past paper" },
+    { kind: "rtp", icon: "📝", label: "RTP" },
+    { kind: "mtp", icon: "📝", label: "MTP" },
+    { kind: "custom", icon: "✨", label: "Resource" },
   ];
+  const RES_ICON = new Map(RES_ORDER.map((r) => [r.kind, r]));
+  const RES_RANK = new Map(RES_ORDER.map((r, i) => [r.kind, i]));
 
   // Community links shown on each subject (channel + Discord are the same for all;
   // the Telegram GROUP is per-subject from subjects.telegram_group_url).
@@ -402,37 +404,26 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                   </div>
                 )}
                 {(subjResources.get(s.id) ?? []).length > 0 && (
-                  <div className="card" style={{ margin: "0 0 14px" }}>
+                  <div style={{ margin: "0 0 14px" }}>
                     <strong style={{ fontSize: ".95rem" }}>📚 Subject resources</strong>
-                    <div style={{ display: "grid", gap: 12, marginTop: 8 }}>
-                      {(() => {
-                        const items = subjResources.get(s.id) ?? [];
-                        // Group by type in the founder's order; anything with an
-                        // unknown kind falls into a final "Other" group.
-                        const known = new Set(RES_ORDER.map((g) => g.kind));
-                        const groups = [
-                          ...RES_ORDER.map((g) => ({ label: g.label, rows: items.filter((r) => r.kind === g.kind) })),
-                          { label: "📄 Other", rows: items.filter((r) => !known.has(r.kind)) },
-                        ].filter((g) => g.rows.length > 0);
-                        return groups.map((g) => (
-                          <div key={g.label}>
-                            <div className="muted" style={{ fontSize: ".8rem", fontWeight: 700, marginBottom: 4 }}>{g.label} ({g.rows.length})</div>
-                            <div style={{ display: "grid", gap: 6 }}>
-                              {g.rows.map((r) => {
-                                const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(r.file_url);
-                                const isPaper = ["mtp", "rtp", "past_papers"].includes(r.kind);
-                                const href = isPaper ? `/learn/paper/${r.id}` : r.file_url;
-                                return (
-                                  <a key={r.id} href={href} target={isPaper ? undefined : "_blank"} rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", background: "var(--bg-soft)", borderRadius: 8, padding: "8px 12px", color: "var(--text)" }}>
-                                    <span style={{ fontSize: ".9rem" }}><strong>{r.title}</strong>{r.valid_from_attempt ? <span className="muted"> · {r.valid_from_attempt}{r.valid_to_attempt ? ` up to ${r.valid_to_attempt}` : ""}</span> : null}</span>
-                                    <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap" }}>{isPaper ? "Attempt →" : isVideo ? "Watch →" : "Open →"}</span>
-                                  </a>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ));
-                      })()}
+                    <div style={{ display: "grid", gap: 10, marginTop: 8, gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}>
+                      {[...(subjResources.get(s.id) ?? [])]
+                        .sort((a, b) => (RES_RANK.get(a.kind) ?? 99) - (RES_RANK.get(b.kind) ?? 99))
+                        .map((r) => {
+                          const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(r.file_url);
+                          const isPaper = ["mtp", "rtp", "past_papers"].includes(r.kind);
+                          const meta = RES_ICON.get(r.kind) ?? { icon: isVideo ? "🎬" : "📄", label: "Resource" };
+                          const href = isPaper ? `/learn/paper/${r.id}` : r.file_url;
+                          return (
+                            <a key={r.id} href={href} target={isPaper ? undefined : "_blank"} rel="noopener noreferrer"
+                              style={{ display: "flex", flexDirection: "column", gap: 4, background: "var(--bg-soft)", border: "2px solid var(--accent)", borderRadius: 12, padding: "12px 14px", color: "var(--text)", minHeight: 96 }}>
+                              <span style={{ fontSize: "1.5rem", lineHeight: 1 }}>{meta.icon}</span>
+                              <span style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: ".03em" }}>{meta.label}</span>
+                              <span style={{ fontSize: ".88rem", fontWeight: 700, lineHeight: 1.25 }}>{r.title}</span>
+                              <span style={{ marginTop: "auto", color: "var(--accent)", fontWeight: 700, fontSize: ".82rem" }}>{isPaper ? "Attempt →" : isVideo ? "Watch →" : "Open →"}</span>
+                            </a>
+                          );
+                        })}
                     </div>
                   </div>
                 )}

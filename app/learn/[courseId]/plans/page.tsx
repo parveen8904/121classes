@@ -24,7 +24,7 @@ export default async function CoursePlans(
 
   const { data: course } = await supabase
     .from("courses")
-    .select("id, title")
+    .select("id, title, max_subscription_months")
     .eq("id", params.courseId)
     .single();
   if (!course) notFound();
@@ -46,7 +46,7 @@ export default async function CoursePlans(
         .maybeSingle(),
       supabase
         .from("subscriptions")
-        .select("subject_id, plans(tier, rank)")
+        .select("subject_id, months_total, ends_at, plans(tier, rank)")
         .eq("student_id", user.id)
         .eq("course_id", course.id)
         .eq("status", "active"),
@@ -85,15 +85,23 @@ export default async function CoursePlans(
   // (a whole-course subscription has subject_id = null and covers everything).
   let currentTier: string | null = null;
   let currentRank = 0;
+  let subMonthsTotal: number | null = null;
+  let subEndsAt: string | null = null;
   for (const row of subs ?? []) {
-    const r = row as { subject_id: string | null; plans?: { tier?: string; rank?: number } | null };
+    const r = row as { subject_id: string | null; months_total: number | null; ends_at: string | null; plans?: { tier?: string; rank?: number } | null };
     const covers = r.subject_id === null || r.subject_id === selected.id;
     const rank = r.plans?.rank ?? 0;
     if (covers && rank > currentRank) {
       currentRank = rank;
       currentTier = r.plans?.tier ?? null;
     }
+    // Extend only applies to a per-subject subscription for THIS subject.
+    if (r.subject_id === selected.id) {
+      subMonthsTotal = r.months_total ?? subMonthsTotal;
+      subEndsAt = r.ends_at ?? subEndsAt;
+    }
   }
+  const maxMonths = Number(course.max_subscription_months) || 36;
 
   const facultyNames = ((selected as {
     subject_faculty?: { faculties?: { full_name?: string } | null }[];
@@ -195,6 +203,9 @@ export default async function CoursePlans(
           configured={razorpayOn}
           contactHref="/#contact"
           saleDiscountPct={sale?.discountPct ?? 0}
+          subMonthsTotal={subMonthsTotal}
+          subEndsAt={subEndsAt}
+          maxMonths={maxMonths}
         />
         </div>
 

@@ -181,6 +181,7 @@ export async function verifyPlanPayment(input: {
     ends_at: ends.toISOString(),
     status: "active",
     auto_renew: true,
+    months_total: months,
   });
   await svc
     .from("orders")
@@ -205,6 +206,177 @@ export async function verifyPlanPayment(input: {
     template: "plan_purchased",
     payload: { courseId: n.courseId, subjectId: n.subjectId, tier: n.tier, months },
   });
+
+  return { ok: true, courseId: n.courseId };
+}
+
+// ---- Extend an existing subscription ---------------------------------------
+// The student keeps everything they have and only pays for the ADDITIONAL
+// months, priced at their position on the ladder (slabTotal(new) − slabTotal(now)).
+// Capped by the course's max_subscription_months (CA Final 3 yrs / Inter 2 yrs).
+
+export type ExtendOrderResult =
+  | { ok: true; orderId: string; amount: number; keyId: string; name: string; description: string; prefill: { name?: string; email?: string; contact?: string } }
+  | { ok: false; reason: "unconfigured" | "auth" | "nosub" | "atcap" | "noprice" | "error" };
+
+export async function createExtendOrder(input: {
+  subjectId: string;
+  addMonths: number;
+  couponCode?: string;
+}): Promise<ExtendOrderResult> {
+  if (!(await razorpayConfigured())) return { ok: false, reason: "unconfigured" };
+
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, reason: "auth" };
+
+  const add = Math.min(60, Math.max(1, Math.round(input.addMonths || 0)));
+  if (!add) return { ok: false, reason: "error" };
+
+  const { data: subject } = await supabase
+    .from("subjects")
+    .select("id, title, course_id, gold_price_inr, validity_months, gold_slabs")
+    .eq("id", input.subjectId)
+    .single();
+  if (!subject) return { ok: false, reason: "error" };
+
+  // The student's active subscription for this subject (latest expiry).
+  const { data: sub } = await supabase
+    .from("subscriptions")
+    .select("id, months_total, ends_at, plan_id")
+    .eq("student_id", user.id)
+    .eq("subject_id", input.subjectId)
+    .eq("status", "active")
+    .order("ends_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!sub) return { ok: false, reason: "nosub" };
+
+  const { data: course } = await supabase
+    .from("courses")
+    .select("max_subscription_months")
+    .eq("id", subject.course_id)
+    .maybeSingle();
+  const cap = Number(course?.max_subscription_months) || 36;
+
+  const baseMonths = subject.validity_months || 12;
+  const current = Number(sub.months_total) || baseMonths;
+  const newTotal = Math.min(cap, current + add);
+  const effAdd = newTotal - current;
+  if (effAdd <= 0) return { ok: false, reason: "atcap" };
+
+  // Marginal price for the extra months at the student's ladder position.
+  const { parseSlabs, slabTotal } = await import("@/lib/pricing");
+  const slabs = parseSlabs((subject as { gold_slabs?: unknown }).gold_slabs);
+  let baseAmount: number;
+  if (slabs) {
+    baseAmount = slabTotal(slabs, newTotal) - slabTotal(slabs, current);
+  } else {
+    if (!subject.gold_price_inr || subject.gold_price_inr <= 0) return { ok: false, reason: "noprice" };
+    baseAmount = Math.max(1, Math.round((subject.gold_price_inr * effAdd) / baseMonths));
+  }
+  if (baseAmount <= 0) return { ok: false, reason: "noprice" };
+
+  // Live sale applies to extensions too, then coupon.
+  {
+    const { saleFromSettings, applySaleDiscount } = await import("@/lib/sale");
+    const { data: settings } = await supabase.from("site_settings").select("key, value");
+    const sale = saleFromSettings(new Map((settings ?? []).map((r) => [r.key, r.value as string | null])));
+    baseAmount = applySaleDiscount(baseAmount, sale);
+  }
+
+  let amountInr = baseAmount;
+  let couponId = "";
+  if (input.couponCode) {
+    const applied = await applyCoupon(input.couponCode, baseAmount);
+    if (applied) { amountInr = applied.amount; couponId = applied.couponId; }
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, email, phone")
+    .eq("id", user.id)
+    .single();
+
+  try {
+    const order = await createRazorpayOrder(amountInr, `ext_${Date.now()}`, {
+      kind: "extension",
+      subscriptionId: sub.id,
+      courseId: subject.course_id,
+      subjectId: subject.id,
+      addMonths: String(effAdd),
+      newTotal: String(newTotal),
+      userId: user.id,
+      couponId,
+    });
+    await supabase.from("orders").insert({
+      student_id: user.id,
+      kind: "subscription",
+      channel: "web",
+      razorpay_order_id: order.id,
+      amount_inr: amountInr,
+      status: "created",
+    });
+    return {
+      ok: true,
+      orderId: order.id,
+      amount: order.amount,
+      keyId: await razorpayKeyId(),
+      name: "CA Parveen Sharma",
+      description: `Extend ${subject.title} · +${effAdd} month${effAdd === 1 ? "" : "s"}`,
+      prefill: {
+        name: profile?.full_name ?? undefined,
+        email: profile?.email ?? user.email ?? undefined,
+        contact: profile?.phone ?? undefined,
+      },
+    };
+  } catch {
+    return { ok: false, reason: "error" };
+  }
+}
+
+export async function verifyExtendPayment(input: {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}): Promise<{ ok: boolean; courseId?: string }> {
+  if (!(await verifyRazorpaySignature(input.razorpay_order_id, input.razorpay_payment_id, input.razorpay_signature))) {
+    return { ok: false };
+  }
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+
+  let order;
+  try { order = await fetchRazorpayOrder(input.razorpay_order_id); }
+  catch { return { ok: false }; }
+  const n = order.notes ?? {};
+  if (n.kind !== "extension" || n.userId !== user.id) return { ok: false };
+  if (order.status !== "paid") return { ok: false };
+
+  const addMonths = Number(n.addMonths) || 0;
+  const newTotal = Number(n.newTotal) || 0;
+  if (addMonths <= 0) return { ok: false };
+
+  const svc = createServiceClient();
+  const { data: sub } = await svc
+    .from("subscriptions")
+    .select("id, ends_at, months_total")
+    .eq("id", n.subscriptionId)
+    .maybeSingle();
+  if (!sub) return { ok: false };
+
+  // Extend from the current expiry (or now, if already lapsed).
+  const from = sub.ends_at && new Date(sub.ends_at) > new Date() ? new Date(sub.ends_at) : new Date();
+  from.setMonth(from.getMonth() + addMonths);
+
+  await svc.from("subscriptions")
+    .update({ ends_at: from.toISOString(), months_total: newTotal || (Number(sub.months_total) || 0) + addMonths, status: "active" })
+    .eq("id", sub.id);
+  await svc.from("orders")
+    .update({ status: "paid", store_txn_id: input.razorpay_payment_id })
+    .eq("razorpay_order_id", input.razorpay_order_id);
+  if (n.couponId) await redeemCoupon(n.couponId);
 
   return { ok: true, courseId: n.courseId };
 }

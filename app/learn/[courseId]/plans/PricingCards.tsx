@@ -5,7 +5,7 @@ import Link from "next/link";
 import Script from "next/script";
 import { formatINR, parseSlabs, slabTotal, slabMonthOptions, type Slab } from "@/lib/pricing";
 import { TIER_META, TIER_RANK } from "@/lib/tiers";
-import { createPlanOrder, verifyPlanPayment } from "./payActions";
+import { createPlanOrder, verifyPlanPayment, createExtendOrder, verifyExtendPayment } from "./payActions";
 import Help from "@/app/components/Help";
 
 type Subject = {
@@ -48,6 +48,9 @@ export default function PricingCards({
   configured,
   contactHref,
   saleDiscountPct = 0,
+  subMonthsTotal = null,
+  subEndsAt = null,
+  maxMonths = 36,
 }: {
   subject: Subject;
   facultyNames: string;
@@ -58,6 +61,9 @@ export default function PricingCards({
   configured: boolean;
   contactHref: string;
   saleDiscountPct?: number;
+  subMonthsTotal?: number | null;
+  subEndsAt?: string | null;
+  maxMonths?: number;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [coupon, setCoupon] = useState("");
@@ -140,6 +146,49 @@ export default function PricingCards({
     } finally {
       setBusy(null);
     }
+  }
+
+  // ---- Extend (owned Gold only) --------------------------------------------
+  const currentMonths = subMonthsTotal ?? 0;
+  const remainingMonths = Math.max(0, maxMonths - currentMonths);
+  const canExtend = currentTier === "gold" && subMonthsTotal != null && remainingMonths > 0;
+  const extChoices = [1, 3, 6, 12].filter((m) => m <= remainingMonths);
+  if (remainingMonths > 0 && !extChoices.includes(remainingMonths)) extChoices.push(remainingMonths);
+  const [extMonths, setExtMonths] = useState<number>(extChoices[0] ?? 1);
+  const [busyExt, setBusyExt] = useState(false);
+
+  const extAdd = Math.min(remainingMonths, extMonths);
+  const extNewTotal = currentMonths + extAdd;
+  const extBase = goldSlabs
+    ? slabTotal(goldSlabs, extNewTotal) - slabTotal(goldSlabs, currentMonths)
+    : subject.gold_price_inr
+      ? Math.max(1, Math.round((subject.gold_price_inr * extAdd) / goldBase))
+      : 0;
+  const extNet = saleDiscountPct > 0 ? Math.max(1, Math.round(extBase * (1 - saleDiscountPct / 100))) : extBase;
+
+  async function extend() {
+    if (!window.Razorpay) { alert("Payment library is still loading — please try again in a moment."); return; }
+    setBusyExt(true);
+    try {
+      const res = await createExtendOrder({ subjectId: subject.id, addMonths: extMonths, couponCode: coupon });
+      if (!res.ok) {
+        if (res.reason === "unconfigured") window.location.href = contactHref;
+        else if (res.reason === "atcap") alert("You're already at the maximum allowed duration for this course.");
+        else if (res.reason === "nosub") alert("We couldn't find your active plan for this subject.");
+        else alert("Could not start the extension. Please try again or contact us.");
+        return;
+      }
+      const rzp = new window.Razorpay({
+        key: res.keyId, amount: res.amount, currency: "INR", name: res.name, description: res.description,
+        order_id: res.orderId, prefill: res.prefill, theme: { color: "#0d9488" },
+        handler: async (resp) => {
+          const v = await verifyExtendPayment(resp);
+          if (v.ok) window.location.href = `/learn/${v.courseId ?? courseId}`;
+          else alert("Payment received but verification failed. We'll sort it out — please contact us.");
+        },
+      });
+      rzp.open();
+    } finally { setBusyExt(false); }
   }
 
   const tiers = ["bronze", "silver", "gold"];
@@ -264,7 +313,44 @@ export default function PricingCards({
                   </Link>
                 )
               ) : owned ? (
-                <div className="plan-current">{isCurrent ? "✓ Your current plan" : "Included in your plan"}</div>
+                <>
+                  <div className="plan-current">{isCurrent ? "✓ Your current plan" : "Included in your plan"}</div>
+                  {tier === "gold" && canExtend && configured && (
+                    <div style={{ marginTop: 12, borderTop: "1px dashed var(--border)", paddingTop: 12 }}>
+                      <div style={{ fontWeight: 700, fontSize: ".9rem", marginBottom: 2 }}>➕ Extend your access</div>
+                      {subEndsAt && (
+                        <div className="muted" style={{ fontSize: ".76rem", marginBottom: 8 }}>
+                          Currently valid till {new Date(subEndsAt).toLocaleDateString("en-IN")} · up to {maxMonths} months total for this course.
+                        </div>
+                      )}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                        {extChoices.map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setExtMonths(m)}
+                            className="btn small secondary"
+                            style={extMonths === m ? { background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", borderColor: "transparent" } : undefined}
+                          >
+                            +{m}m
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: ".85rem", marginBottom: 8 }}>
+                        Add {extAdd} month{extAdd === 1 ? "" : "s"} for{" "}
+                        {extNet !== extBase && <span style={{ textDecoration: "line-through", opacity: 0.5, marginRight: 6 }}>{formatINR(extBase)}</span>}
+                        <strong>{formatINR(extNet)}</strong>
+                        <span className="muted"> · new expiry {extAdd} month{extAdd === 1 ? "" : "s"} later</span>
+                      </div>
+                      <button className="btn block small" type="button" disabled={busyExt} onClick={extend}>
+                        {busyExt ? "Starting…" : `Extend (+${extAdd} month${extAdd === 1 ? "" : "s"}) →`}
+                      </button>
+                    </div>
+                  )}
+                  {tier === "gold" && currentTier === "gold" && subMonthsTotal != null && remainingMonths <= 0 && (
+                    <div className="muted" style={{ fontSize: ".76rem", marginTop: 8 }}>You&apos;re at the maximum duration for this course.</div>
+                  )}
+                </>
               ) : noPrice || !configured ? (
                 <a className="btn block" href={contactHref}>
                   Enroll in {tierName} →

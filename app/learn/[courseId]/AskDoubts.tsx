@@ -42,11 +42,13 @@ function waHref(v?: string | null): string | null {
 export default function AskDoubts({
   subjectId,
   subjectTitle,
+  courseId,
   facultyPhone,
   facultyEmail,
 }: {
   subjectId: string;
   subjectTitle: string;
+  courseId: string;
   facultyPhone?: string | null;
   facultyEmail?: string | null;
 }) {
@@ -55,6 +57,7 @@ export default function AskDoubts({
   const [answer, setAnswer] = useState<string | null>(null);
   const [asked, setAsked] = useState(false);
   const [limited, setLimited] = useState(false);
+  const [upgrade, setUpgrade] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [fileErr, setFileErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -83,6 +86,7 @@ export default function AskDoubts({
       const r = await askSubjectDoubt({ subjectId, question: q, attachment });
       setAnswer(r.ok ? r.answer : null);
       setLimited(!!r.limited);
+      setUpgrade(!!r.upgrade);
       setAsked(true);
     });
   }
@@ -154,7 +158,11 @@ export default function AskDoubts({
         </>
       ) : (
         <>
-          {limited ? (
+          {upgrade ? (
+            <div className="notice" style={{ marginTop: 0, marginRight: 24, background: "var(--bg-soft)" }}>
+              🔒 You&apos;ve used all your free doubts. <a href={`/learn/${courseId}/plans`} style={{ fontWeight: 700 }}>Upgrade to Silver or Gold</a> to keep asking unlimited questions.
+            </div>
+          ) : limited ? (
             <p className="muted" style={{ marginTop: 0, marginRight: 24 }}>🙏 You&apos;ve reached today&apos;s limit of 20 questions. Continue tomorrow, or send this doubt to the faculty below.</p>
           ) : answer ? (
             <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, marginTop: 0 }}>{answer}</p>

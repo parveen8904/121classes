@@ -18,9 +18,11 @@ export const ACCESS_CATEGORIES: { key: string; label: string; kind: "content" | 
   { key: "build_plan", label: "🗓️ Build your plan", kind: "action" },
 ];
 
-export const PLANS = ["free", "bronze", "silver", "gold"] as const;
+// Bronze retired (2026-07-17): the ladder is Free → Silver → Gold.
+export const PLANS = ["free", "silver", "gold"] as const;
 export type PlanTier = (typeof PLANS)[number];
-const RANK: Record<string, number> = { free: 0, bronze: 1, silver: 2, gold: 3 };
+// Legacy 'bronze' (was ₹0) maps to free.
+const RANK: Record<string, number> = { free: 0, bronze: 0, silver: 1, gold: 2 };
 
 // -1 = unlimited, 0 = none, N = cap.
 export const UNLIMITED = -1;

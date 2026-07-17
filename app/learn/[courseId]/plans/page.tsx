@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { razorpayConfigured } from "@/lib/razorpay";
 import PricingCards from "./PricingCards";
+import { ACCESS_CATEGORIES, getAllLimits, limitFor } from "@/lib/entitlements";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,15 @@ export default async function CoursePlans({
 
   const razorpayOn = await razorpayConfigured();
 
+  // Build the "Free includes" chips from the admin limits matrix.
+  const limitsMap = await getAllLimits();
+  const freeIncludes = ACCESS_CATEGORIES.map((c) => {
+    const lim = limitFor(limitsMap, "free", c.key);
+    if (lim === 0) return null;                        // locked → not listed
+    const name = c.label.replace(/^[^A-Za-z]+/, "").trim(); // drop leading emoji
+    return lim < 0 ? `${name}: unlimited` : `${lim} ${name}`;
+  }).filter(Boolean) as string[];
+
   return (
     <main>
       <section className="container" style={{ paddingTop: 40, paddingBottom: 70 }}>
@@ -165,6 +175,19 @@ export default async function CoursePlans({
           configured={razorpayOn}
           contactHref="/#contact"
         />
+        </div>
+
+        {/* What the FREE plan includes (from the admin access-limits matrix). */}
+        <div className="card" style={{ maxWidth: 640, margin: "24px auto 0" }}>
+          <strong>🆓 Free plan includes</strong>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+            {freeIncludes.map((f) => (
+              <span key={f} style={{ background: "var(--bg-soft)", borderRadius: 999, padding: "4px 12px", fontSize: ".84rem" }}>{f}</span>
+            ))}
+          </div>
+          <p className="muted" style={{ fontSize: ".78rem", marginTop: 8, marginBottom: 0 }}>
+            A one-time free trial. Upgrade to Silver or Gold for unlimited access.
+          </p>
         </div>
       </section>
     </main>

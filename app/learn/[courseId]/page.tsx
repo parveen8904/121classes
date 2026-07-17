@@ -317,6 +317,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                     <AskDoubts
                       subjectId={s.id}
                       subjectTitle={s.title}
+                      courseId={course.id}
                       facultyPhone={facultyContacts.find((f) => f.phone)?.phone ?? null}
                       facultyEmail={facultyContacts.find((f) => f.email)?.email ?? null}
                     />

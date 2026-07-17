@@ -325,25 +325,6 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                     <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0 0" }}>
                       ⚡ Instant reply from your class material.
                     </p>
-                    {facultyContacts.length > 0 && (
-                      <p style={{ fontSize: ".78rem", margin: "6px 0 0", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                        {facultyContacts.map((f) => {
-                          // The number is never emitted to the page — the WhatsApp
-                          // link goes through the server bridge, which looks it up
-                          // and forwards the student into a chat.
-                          const hasWhatsApp = ((f.phone ?? "").replace(/\D/g, "").length >= 10);
-                          return (
-                            <span key={f.full_name} style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-                              <span className="muted">👩‍🏫 {f.full_name}:</span>
-                              {hasWhatsApp && (
-                                <a href={`/api/faculty-wa?subject=${s.id}`} target="_blank" rel="noopener noreferrer" style={{ color: "#25D366", fontWeight: 700 }}>💬 WhatsApp</a>
-                              )}
-                              {f.email && <a href={`mailto:${f.email}`} style={{ color: "var(--accent)", fontWeight: 700 }}>✉️ Email</a>}
-                            </span>
-                          );
-                        })}
-                      </p>
-                    )}
                   </div>
                 </div>
                 {mySubjIds.has(s.id) && ((s as { telegram_group_url?: string | null }).telegram_group_url || tgChannel || dcLink) && (

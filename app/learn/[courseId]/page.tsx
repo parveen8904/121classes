@@ -173,8 +173,12 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
     { kind: "mtp", icon: "📝", label: "MTP" },
     { kind: "custom", icon: "✨", label: "Resource" },
   ];
-  const RES_ICON = new Map(RES_ORDER.map((r) => [r.kind, r]));
-  const RES_RANK = new Map(RES_ORDER.map((r, i) => [r.kind, i]));
+  // Fuller category names for the resource drill-down headers.
+  const RES_CAT_LABEL: Record<string, string> = {
+    notes: "Handwritten notes / book", book: "Books", question_bank: "Question bank",
+    past_papers: "Past exam papers", rtp: "RTPs — Revision Test Papers", mtp: "MTPs — Mock Test Papers",
+    custom: "Additional resources",
+  };
 
   // Community links shown on each subject (channel + Discord are the same for all;
   // the Telegram GROUP is per-subject from subjects.telegram_group_url).
@@ -369,18 +373,23 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                     ...(subjMaterials.get(s.id) ?? []),
                     ...((subjResources.get(s.id) ?? []).map((r) => r.kind)),
                   ]);
-                  const mats = [...allKinds].filter((k) => !paperKinds.has(k) && k !== "transcript").map((k) => MAT_LABEL[k] ?? k);
+                  // Custom content is named explicitly (not a vague "additional").
+                  const customTitles = (subjResources.get(s.id) ?? []).filter((r) => r.kind === "custom").map((r) => r.title);
+                  const mats = [
+                    ...[...allKinds].filter((k) => !paperKinds.has(k) && k !== "transcript" && k !== "custom").map((k) => MAT_LABEL[k] ?? k),
+                    ...customTitles.map((t) => `✨ ${t}`),
+                  ];
                   const nMtp = subjMatCount(s.id, "mtp");
                   const nRtp = subjMatCount(s.id, "rtp");
                   const nPast = subjMatCount(s.id, "past_papers");
                   const nCases = subjCaseCount.get(s.id) ?? 0;
-                  // Plain text (no highlight pills) — consistent with the other lines.
-                  const paperLine = [
-                    nMtp > 0 && `${nMtp} MTP${nMtp === 1 ? "" : "s"}`,
-                    nRtp > 0 && `${nRtp} RTP${nRtp === 1 ? "" : "s"}`,
-                    nPast > 0 && `${nPast} past exam paper${nPast === 1 ? "" : "s"}`,
-                  ].filter(Boolean).join(" · ");
                   const nCaseSets = (subjCaseSets.get(s.id) ?? []).length;
+                  // Counts kept as data so we can bold the NUMBERS in the render.
+                  const paperItems = [
+                    nMtp > 0 && { n: nMtp, unit: `MTP${nMtp === 1 ? "" : "s"}` },
+                    nRtp > 0 && { n: nRtp, unit: `RTP${nRtp === 1 ? "" : "s"}` },
+                    nPast > 0 && { n: nPast, unit: `past exam paper${nPast === 1 ? "" : "s"}` },
+                  ].filter(Boolean) as { n: number; unit: string }[];
                   return (
                     <div className="card" style={{ margin: "4px 0 14px" }}>
                       <strong style={{ fontSize: ".95rem" }}>📊 What this subject contains</strong>
@@ -388,9 +397,13 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                         <div>🎓 <strong>{sumClasses.get(s.id) ?? 0}</strong> classes in <strong>{nTopics}</strong> topic{nTopics === 1 ? "" : "s"} · ⏱️ {fmtAt125(sumClassMins.get(s.id) ?? 0)} total <span className="muted" style={{ fontSize: ".82rem" }}>{AT125_NOTE}</span></div>
                         <div>🎬 <strong>{sumRev.get(s.id) ?? 0}</strong> revision videos · ⏱️ {fmtMins(sumRevMins.get(s.id) ?? 0)} total</div>
                         <div>🧠 <strong>{sumMcq.get(s.id) ?? 0}</strong> MCQ tests · ✍️ <strong>{sumDesc.get(s.id) ?? 0}</strong> descriptive tests</div>
-                        {paperLine && <div>📄 Practice papers: {paperLine}</div>}
+                        {paperItems.length > 0 && (
+                          <div>📄 Practice papers: {paperItems.map((p, i) => (
+                            <span key={p.unit}>{i > 0 ? " · " : ""}<strong>{p.n}</strong> {p.unit}</span>
+                          ))}</div>
+                        )}
                         {nCases > 0 && <div>🧩 <strong>{nCases}</strong> case scenario{nCases === 1 ? "" : "s"}{nCaseSets > 1 ? ` (${nCaseSets} sets)` : ""} — practise below</div>}
-                        <div>📌 Important-question lists — First revision: {hasRev1 ? "✓ available" : "— not added"} · Second revision: {hasRev2 ? "✓ available" : "— not added"}</div>
+                        <div>📌 Important-question lists — First revision: <strong>{hasRev1 ? "✓ available" : "— not added"}</strong> · Second revision: <strong>{hasRev2 ? "✓ available" : "— not added"}</strong></div>
                         <div>📚 Materials: {mats.length ? mats.join(" · ") : "coming soon"}</div>
                         <div>📅 Applicable {applicable || "for all attempts"}</div>
                       </div>
@@ -418,24 +431,35 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                 {(subjResources.get(s.id) ?? []).length > 0 && (
                   <div style={{ margin: "0 0 14px" }}>
                     <strong style={{ fontSize: ".95rem" }}>📚 Subject resources</strong>
-                    <div style={{ display: "grid", gap: 10, marginTop: 8, gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}>
-                      {[...(subjResources.get(s.id) ?? [])]
-                        .sort((a, b) => (RES_RANK.get(a.kind) ?? 99) - (RES_RANK.get(b.kind) ?? 99))
-                        .map((r) => {
-                          const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(r.file_url);
-                          const isPaper = ["mtp", "rtp", "past_papers"].includes(r.kind);
-                          const meta = RES_ICON.get(r.kind) ?? { icon: isVideo ? "🎬" : "📄", label: "Resource" };
-                          const href = isPaper ? `/learn/paper/${r.id}` : r.file_url;
-                          return (
-                            <a key={r.id} href={href} target={isPaper ? undefined : "_blank"} rel="noopener noreferrer"
-                              style={{ display: "flex", flexDirection: "column", gap: 4, background: "var(--bg-soft)", border: "2px solid var(--accent)", borderRadius: 12, padding: "12px 14px", color: "var(--text)", minHeight: 96 }}>
-                              <span style={{ fontSize: "1.5rem", lineHeight: 1 }}>{meta.icon}</span>
-                              <span style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: ".03em" }}>{meta.label}</span>
-                              <span style={{ fontSize: ".88rem", fontWeight: 700, lineHeight: 1.25 }}>{r.title}</span>
-                              <span style={{ marginTop: "auto", color: "var(--accent)", fontWeight: 700, fontSize: ".82rem" }}>{isPaper ? "Attempt →" : isVideo ? "Watch →" : "Open →"}</span>
-                            </a>
-                          );
-                        })}
+                    <p className="muted" style={{ fontSize: ".78rem", margin: "2px 0 8px" }}>Tap a category to open its papers / notes.</p>
+                    <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+                      {RES_ORDER.map((cat) => {
+                        const rows = (subjResources.get(s.id) ?? []).filter((r) => r.kind === cat.kind);
+                        if (rows.length === 0) return null;
+                        const catLabel = RES_CAT_LABEL[cat.kind] ?? cat.label;
+                        return (
+                          <details key={cat.kind} style={{ border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", overflow: "hidden" }}>
+                            <summary style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", fontWeight: 700 }}>
+                              <span style={{ fontSize: "1.4rem", lineHeight: 1 }}>{cat.icon}</span>
+                              <span style={{ flex: 1, fontSize: ".9rem" }}>{catLabel}</span>
+                              <span style={{ background: "var(--accent)", color: "#fff", borderRadius: 999, padding: "1px 10px", fontSize: ".8rem" }}>{rows.length}</span>
+                            </summary>
+                            <div style={{ display: "grid", gap: 6, padding: "0 12px 12px" }}>
+                              {rows.map((r) => {
+                                const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(r.file_url);
+                                const isPaper = ["mtp", "rtp", "past_papers"].includes(r.kind);
+                                const href = isPaper ? `/learn/paper/${r.id}` : r.file_url;
+                                return (
+                                  <a key={r.id} href={href} target={isPaper ? undefined : "_blank"} rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", background: "var(--card)", borderRadius: 8, padding: "8px 12px", color: "var(--text)" }}>
+                                    <span style={{ fontSize: ".88rem" }}><strong>{r.title}</strong>{r.valid_from_attempt ? <span className="muted"> · {r.valid_from_attempt}{r.valid_to_attempt ? ` up to ${r.valid_to_attempt}` : ""}</span> : null}</span>
+                                    <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap", fontSize: ".82rem" }}>{isPaper ? "Attempt →" : isVideo ? "Watch →" : "Open →"}</span>
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          </details>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

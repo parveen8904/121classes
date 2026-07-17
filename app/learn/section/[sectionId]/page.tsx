@@ -10,6 +10,8 @@ import SubjectiveSection from "./SubjectiveSection";
 import DiscussionBoard from "./DiscussionBoard";
 import ClassDownload from "../../topic/[topicId]/ClassDownload";
 import WatchTracker from "./WatchTracker";
+import UpgradeGate from "@/app/components/UpgradeGate";
+import { checkQuota } from "@/lib/entitlements";
 
 export const dynamic = "force-dynamic";
 // Descriptive-paper grading reads two PDFs with Claude vision — allow time.
@@ -52,15 +54,36 @@ export default async function SectionPage({
     .maybeSingle();
   if (!section) notFound();
 
-  if (section.type === "mcq_test") return <McqSection section={section} />;
-  if (section.type === "subjective_test") return <SubjectiveSection section={section} />;
-
   const { data: prof } = await supabase
     .from("profiles")
     .select("role, full_name, phone")
     .eq("id", user.id)
     .maybeSingle();
   const isAdmin = prof?.role === "admin" || prof?.role === "faculty";
+
+  // Free-plan quota on tests: a free student who's used their allowance sees an
+  // Enroll screen. Already-attempted tests (refId) still open (to see the report).
+  if ((section.type === "mcq_test" || section.type === "subjective_test") && !isAdmin) {
+    const cat = section.type === "mcq_test" ? "mcq_test" : "descriptive_test";
+    const q = await checkQuota(user.id, cat, section.id);
+    if (!q.allowed) {
+      const svc2 = createServiceClient();
+      const { data: tp } = await svc2.from("topics").select("subject_id, subjects(course_id)").eq("id", section.topic_id).maybeSingle();
+      const courseId = (tp?.subjects as { course_id?: string } | null)?.course_id ?? "";
+      return (
+        <UpgradeGate
+          title={cat === "mcq_test" ? "MCQ tests" : "descriptive tests"}
+          used={q.used}
+          limit={q.limit}
+          plansHref={courseId ? `/learn/${courseId}/plans?subject=${tp?.subject_id ?? ""}` : "/dashboard"}
+          backHref={`/learn/topic/${section.topic_id}`}
+          backLabel="← Back to topic"
+        />
+      );
+    }
+  }
+  if (section.type === "mcq_test") return <McqSection section={section} />;
+  if (section.type === "subjective_test") return <SubjectiveSection section={section} />;
 
   if (section.type === "discussion" || searchParams.view === "discussion") {
     return <DiscussionSection section={section} userId={user.id} isAdmin={prof?.role === "admin"} />;

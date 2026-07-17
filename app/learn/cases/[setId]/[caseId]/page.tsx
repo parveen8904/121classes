@@ -31,6 +31,27 @@ export default async function CasePage({
   const isStaff = me?.role === "admin" || me?.role === "faculty";
   if (!set || !cs || cs.set_id !== set.id || set.status !== "ready" || (!set.is_published && !isStaff)) notFound();
 
+  // Free-plan quota: a new case beyond the allowance shows an Enroll screen.
+  if (!isStaff) {
+    const { checkQuota } = await import("@/lib/entitlements");
+    const quota = await checkQuota(user.id, "case_study", cs.id as string);
+    if (!quota.allowed) {
+      const { data: setSub } = await svc.from("case_sets").select("subject_id, subjects(course_id)").eq("id", set.id).maybeSingle();
+      const courseId = (setSub?.subjects as { course_id?: string } | null)?.course_id ?? "";
+      const UpgradeGate = (await import("@/app/components/UpgradeGate")).default;
+      return (
+        <UpgradeGate
+          title="case scenarios"
+          used={quota.used}
+          limit={quota.limit}
+          plansHref={courseId ? `/learn/${courseId}/plans?subject=${setSub?.subject_id ?? ""}` : "/dashboard"}
+          backHref={`/learn/cases/${set.id}`}
+          backLabel="← Back to cases"
+        />
+      );
+    }
+  }
+
   const { data: qRows } = await svc
     .from("case_questions")
     .select("id, seq, question, options, correct_index, explanation")

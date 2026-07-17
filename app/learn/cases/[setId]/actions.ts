@@ -16,6 +16,12 @@ export async function submitCaseAttempt(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/login?next=/learn/cases/${setId}/${caseId}`);
 
+  // Free-plan quota: block a new case attempt past the allowance (already-tried
+  // cases stay open via the ref-id). Paid plans are unlimited.
+  const { checkQuota } = await import("@/lib/entitlements");
+  const quota = await checkQuota(user.id, "case_study", caseId);
+  if (!quota.allowed) redirect(`/learn/cases/${setId}/${caseId}?upgrade=1`);
+
   const svc = createServiceClient();
   const { data: qs } = await svc
     .from("case_questions")
@@ -42,6 +48,9 @@ export async function submitCaseAttempt(formData: FormData) {
     .insert({ case_id: caseId, student_id: user.id, answers, score, total: list.length })
     .select("id")
     .single();
+
+  // Count this case toward the free-plan case quota (no-op for paid plans).
+  try { const { consumeQuota } = await import("@/lib/entitlements"); await consumeQuota(user.id, "case_study", caseId); } catch { /* never block */ }
 
   redirect(`/learn/cases/${setId}/${caseId}?attempt=${attempt?.id ?? ""}`);
 }

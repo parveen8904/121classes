@@ -192,6 +192,8 @@ export async function gradeMcqAttempt(input: {
     section_id: input.sectionId,
     detail: { score: res.score, total: res.total },
   });
+  // Count this test toward the free-plan MCQ quota (no-op for paid plans).
+  try { const { consumeQuota } = await import("@/lib/entitlements"); await consumeQuota(user.id, "mcq_test", input.sectionId); } catch { /* never block grading */ }
 
   // Email the report to the student (best-effort — never block grading on it).
   try {
@@ -221,7 +223,7 @@ export async function submitSubjective(input: {
 
   const { data: q } = await supabase
     .from("subjective_questions")
-    .select("id, prompt, max_marks, rubric, model_answer")
+    .select("id, section_id, prompt, max_marks, rubric, model_answer")
     .eq("id", input.questionId)
     .maybeSingle();
   if (!q) return { ok: false, status: "error", score: null, feedback: "" };
@@ -247,6 +249,9 @@ export async function submitSubjective(input: {
     ai_feedback: feedback,
     status,
   });
+  // Count toward the free-plan descriptive-test quota (keyed by the test section
+  // so re-opening the same test doesn't consume again). No-op for paid plans.
+  try { const { consumeQuota } = await import("@/lib/entitlements"); await consumeQuota(user.id, "descriptive_test", (q as { section_id?: string }).section_id ?? q.id); } catch { /* never block */ }
 
   return { ok: true, status, score, feedback };
 }

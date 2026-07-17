@@ -205,7 +205,9 @@ export default function SectionForm({
       <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
         <div>
           <label>Minimum plan</label>
-          <select name="min_plan" defaultValue={section?.min_plan ?? ""}>
+          {/* Secure by default: a NEW section defaults to Gold (paid). Choose
+              "Free" deliberately for a preview. Editing keeps the current value. */}
+          <select name="min_plan" defaultValue={section ? (section.min_plan ?? "") : "gold"}>
             {PLAN_OPTIONS.map((p) => (
               <option key={p.value} value={p.value}>
                 {p.label}

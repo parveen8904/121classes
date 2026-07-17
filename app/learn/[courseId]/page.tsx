@@ -379,12 +379,10 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                     ...(subjMaterials.get(s.id) ?? []),
                     ...((subjResources.get(s.id) ?? []).map((r) => r.kind)),
                   ]);
-                  // Custom content is named explicitly (not a vague "additional").
-                  const customTitles = (subjResources.get(s.id) ?? []).filter((r) => r.kind === "custom").map((r) => r.title);
-                  const mats = [
-                    ...[...allKinds].filter((k) => !paperKinds.has(k) && k !== "transcript" && k !== "custom").map((k) => MAT_LABEL[k] ?? k),
-                    ...customTitles.map((t) => `✨ ${t}`),
-                  ];
+                  // Materials line = material TYPES only (handwritten notes/book,
+                  // question bank, ICAI…). Custom items appear as their own named
+                  // tiles in Subject resources, so we don't list their titles here.
+                  const mats = [...allKinds].filter((k) => !paperKinds.has(k) && k !== "transcript" && k !== "custom").map((k) => MAT_LABEL[k] ?? k);
                   const nMtp = subjMatCount(s.id, "mtp");
                   const nRtp = subjMatCount(s.id, "rtp");
                   const nPast = subjMatCount(s.id, "past_papers");
@@ -439,7 +437,8 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                     <strong style={{ fontSize: ".95rem" }}>📚 Subject resources</strong>
                     <p className="muted" style={{ fontSize: ".78rem", margin: "2px 0 8px" }}>Tap a category to open its papers / notes.</p>
                     <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
-                      {RES_ORDER.map((cat) => {
+                      {/* Standard categories → tap to open their papers/notes. */}
+                      {RES_ORDER.filter((cat) => cat.kind !== "custom").map((cat) => {
                         const rows = (subjResources.get(s.id) ?? []).filter((r) => r.kind === cat.kind);
                         if (rows.length === 0) return null;
                         const catLabel = RES_CAT_LABEL[cat.kind] ?? cat.label;
@@ -464,6 +463,17 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                               })}
                             </div>
                           </details>
+                        );
+                      })}
+                      {/* Custom content → each item is its OWN tile, named exactly as uploaded. */}
+                      {(subjResources.get(s.id) ?? []).filter((r) => r.kind === "custom").map((r) => {
+                        const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(r.file_url);
+                        return (
+                          <a key={r.id} href={r.file_url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", gap: 6, border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", padding: "12px 14px", color: "var(--text)", minHeight: 84 }}>
+                            <span style={{ fontSize: "1.4rem", lineHeight: 1 }}>{isVideo ? "🎬" : "📄"}</span>
+                            <span style={{ fontSize: ".9rem", fontWeight: 700, lineHeight: 1.25 }}>{r.title}</span>
+                            <span style={{ marginTop: "auto", color: "var(--accent)", fontWeight: 700, fontSize: ".82rem" }}>{isVideo ? "Watch →" : "Open →"}</span>
+                          </a>
                         );
                       })}
                     </div>

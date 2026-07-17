@@ -6,6 +6,7 @@ import NotifyButton from "./components/NotifyButton";
 import CountUp from "./components/CountUp";
 import { tryServiceClient } from "@/lib/supabase/service";
 import { studentsTaught } from "@/lib/studentsTaught";
+import { saleFromSettings } from "@/lib/sale";
 
 // Public marketing homepage — no per-user content (only public, published rows).
 // Serve it from the edge cache and refresh every 5 minutes instead of running
@@ -114,6 +115,7 @@ export default async function Home() {
   const homeCities = (siteImg.get("career_cities") || "").split(/[,\n]/).map((c) => c.trim()).filter(Boolean);
   const cityList = (homeCities.length ? homeCities : ["Delhi", "Gurgaon", "Mumbai", "Pune", "Bengaluru", "Hyderabad", "Chennai", "Kolkata"]).slice(0, 12);
   const cityJobUrl = (c: string) => `https://www.google.com/search?q=${encodeURIComponent(`chartered accountant jobs in ${c}`)}&ibp=htl;jobs`;
+  const sale = saleFromSettings(siteImg);
   const splashBanner = siteImg.get("splash_banner") || "";
   const splashLink = siteImg.get("splash_link") || "";
   const splashSeconds = Number(siteImg.get("splash_seconds")) || 5;
@@ -122,6 +124,19 @@ export default async function Home() {
     <main>
       <AnnouncementSplash banner={splashBanner} link={splashLink} seconds={splashSeconds} />
       <SiteNav />
+
+      {sale && (
+        <a href={sale.ctaUrl || "/login"} style={{ display: "block", textDecoration: "none" }}>
+          {sale.bannerHome ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={sale.bannerHome} alt={sale.headline} style={{ width: "100%", display: "block" }} />
+          ) : (
+            <div style={{ background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", padding: "12px 18px", textAlign: "center", fontWeight: 700 }}>
+              🎉 {sale.headline} — {sale.discountPct}% OFF{sale.endsAt ? ` · ends ${new Date(sale.endsAt).toLocaleDateString("en-IN")}` : ""}
+            </div>
+          )}
+        </a>
+      )}
 
       {/* HERO */}
       <section className="hero">

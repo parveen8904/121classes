@@ -71,6 +71,14 @@ export async function createPlanOrder(input: {
     if (!baseAmount || baseAmount <= 0) return { ok: false, reason: "noprice" };
   }
 
+  // Live sale: the discount % comes off the computed price before any coupon.
+  {
+    const { saleFromSettings, applySaleDiscount } = await import("@/lib/sale");
+    const { data: settings } = await supabase.from("site_settings").select("key, value");
+    const sale = saleFromSettings(new Map((settings ?? []).map((r) => [r.key, r.value as string | null])));
+    if (sale && baseAmount != null) baseAmount = applySaleDiscount(baseAmount, sale);
+  }
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name, email, phone")

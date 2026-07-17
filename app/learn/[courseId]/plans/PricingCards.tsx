@@ -47,6 +47,7 @@ export default function PricingCards({
   courseId,
   configured,
   contactHref,
+  saleDiscountPct = 0,
 }: {
   subject: Subject;
   facultyNames: string;
@@ -56,6 +57,7 @@ export default function PricingCards({
   courseId: string;
   configured: boolean;
   contactHref: string;
+  saleDiscountPct?: number;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [coupon, setCoupon] = useState("");
@@ -224,15 +226,27 @@ export default function PricingCards({
                   On request
                 </div>
               ) : (
-                <>
-                  <div className="plan-price">{formatINR(price as number)}</div>
-                  <div className="plan-permonth">
-                    {tierMonths[tier]} month{tierMonths[tier] === 1 ? "" : "s"} access
-                    {tierSlabbed[tier] && tierMonths[tier] > 0 && (
-                      <> · ≈ {formatINR(Math.round((price as number) / tierMonths[tier]))}/month</>
-                    )}
-                  </div>
-                </>
+                (() => {
+                  const full = price as number;
+                  const net = saleDiscountPct > 0 ? Math.max(1, Math.round(full * (1 - saleDiscountPct / 100))) : full;
+                  return (
+                    <>
+                      <div className="plan-price">
+                        {net !== full && (
+                          <span style={{ textDecoration: "line-through", opacity: 0.5, fontSize: "1rem", marginRight: 8, fontWeight: 500 }}>{formatINR(full)}</span>
+                        )}
+                        {formatINR(net)}
+                      </div>
+                      <div className="plan-permonth">
+                        {net !== full && <span style={{ color: "#16a34a", fontWeight: 700 }}>🎉 {saleDiscountPct}% off · </span>}
+                        {tierMonths[tier]} month{tierMonths[tier] === 1 ? "" : "s"} access
+                        {tierSlabbed[tier] && tierMonths[tier] > 0 && (
+                          <> · ≈ {formatINR(Math.round(net / tierMonths[tier]))}/month</>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()
               )}
 
               <ul className="feat-list">

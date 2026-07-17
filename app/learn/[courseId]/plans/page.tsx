@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { razorpayConfigured } from "@/lib/razorpay";
 import PricingCards from "./PricingCards";
 import { ACCESS_CATEGORIES, getAllLimits, limitFor } from "@/lib/entitlements";
+import { saleFromSettings } from "@/lib/sale";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,10 @@ export default async function CoursePlans(
         .eq("status", "active"),
       supabase.from("site_settings").select("value").eq("key", "gold_validity_options").maybeSingle(),
     ]);
+
+  // Live sale (if any) — discounts every price and shows a banner.
+  const { data: saleSettings } = await supabase.from("site_settings").select("key, value");
+  const sale = saleFromSettings(new Map((saleSettings ?? []).map((r) => [r.key, r.value as string | null])));
 
   const goldValidityOptions = ((validitySetting?.value as string) ?? "1,2,3,6,12,18,24")
     .split(",")
@@ -123,6 +128,18 @@ export default async function CoursePlans(
         </div>
 
         <div className="hide-in-app">
+        {sale && (
+          <a href={sale.ctaUrl || undefined} style={{ display: "block", maxWidth: 900, margin: "0 auto 20px", textDecoration: "none" }}>
+            {sale.bannerPlans ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={sale.bannerPlans} alt={sale.headline} style={{ width: "100%", borderRadius: 14, display: "block" }} />
+            ) : (
+              <div style={{ background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", borderRadius: 14, padding: "14px 18px", textAlign: "center", fontWeight: 700 }}>
+                🎉 {sale.headline} — {sale.discountPct}% OFF{sale.endsAt ? ` · ends ${new Date(sale.endsAt).toLocaleDateString("en-IN")}` : ""}
+              </div>
+            )}
+          </a>
+        )}
         <div style={{ textAlign: "center", maxWidth: 660, margin: "0 auto 18px" }}>
           <span className="badge">{course.title}</span>
           <h1 style={{ margin: "14px 0 8px", fontSize: "clamp(1.8rem,4vw,2.6rem)" }}>
@@ -177,6 +194,7 @@ export default async function CoursePlans(
           courseId={course.id}
           configured={razorpayOn}
           contactHref="/#contact"
+          saleDiscountPct={sale?.discountPct ?? 0}
         />
         </div>
 

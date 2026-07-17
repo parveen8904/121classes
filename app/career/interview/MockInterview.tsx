@@ -1,9 +1,23 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { mockInterview } from "../actions";
 
 type Turn = { who: "interviewer" | "you"; text: string };
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+// Pick a natural English voice for the interviewer — prefer Indian English,
+// then any English. Voices load async in some browsers, hence the getter.
+function pickVoice(): SpeechSynthesisVoice | null {
+  const voices = window.speechSynthesis?.getVoices?.() ?? [];
+  return (
+    voices.find((v) => /en[-_]IN/i.test(v.lang)) ??
+    voices.find((v) => /^en/i.test(v.lang)) ??
+    voices[0] ??
+    null
+  );
+}
 
 export default function MockInterview() {
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -13,6 +27,87 @@ export default function MockInterview() {
   const [consent, setConsent] = useState(false);
   const [practice, setPractice] = useState(false);
   const [error, setError] = useState("");
+
+  // --- Spoken interview (browser speech, no server needed) -------------------
+  const [voiceOn, setVoiceOn] = useState(true);        // interviewer speaks questions
+  const [speaking, setSpeaking] = useState(false);
+  const [listening, setListening] = useState(false);   // student's mic dictation
+  const [canListen, setCanListen] = useState(false);
+  const voiceOnRef = useRef(voiceOn);
+  voiceOnRef.current = voiceOn;
+  const recRef = useRef<any>(null);
+  const spokenCount = useRef(0);                       // interviewer turns already spoken
+
+  useEffect(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    setCanListen(!!SR);
+    // Warm the voice list (Chrome populates it async).
+    window.speechSynthesis?.getVoices?.();
+    return () => {
+      window.speechSynthesis?.cancel?.();
+      try { recRef.current?.stop?.(); } catch { /* already stopped */ }
+    };
+  }, []);
+
+  function speak(text: string) {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = pickVoice();
+    if (v) u.voice = v;
+    u.rate = 0.95;
+    u.onstart = () => setSpeaking(true);
+    u.onend = () => setSpeaking(false);
+    u.onerror = () => setSpeaking(false);
+    synth.speak(u);
+  }
+
+  // Speak each NEW interviewer turn as it arrives (when voice is on).
+  useEffect(() => {
+    const interviewerTurns = turns.filter((t) => t.who === "interviewer");
+    if (interviewerTurns.length > spokenCount.current) {
+      spokenCount.current = interviewerTurns.length;
+      if (voiceOnRef.current) speak(interviewerTurns[interviewerTurns.length - 1].text);
+    }
+  }, [turns]);
+
+  function toggleVoice() {
+    setVoiceOn((on) => {
+      if (on) { window.speechSynthesis?.cancel?.(); setSpeaking(false); }
+      else {
+        // Turning back on: read the latest question aloud.
+        const last = [...turns].reverse().find((t) => t.who === "interviewer");
+        if (last) speak(last.text);
+      }
+      return !on;
+    });
+  }
+
+  // Dictate the answer with the browser's speech recognition (where supported).
+  function toggleMic() {
+    if (listening) { try { recRef.current?.stop?.(); } catch { /* noop */ } return; }
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    window.speechSynthesis?.cancel?.(); // don't record the interviewer's voice
+    setSpeaking(false);
+    const rec = new SR();
+    recRef.current = rec;
+    rec.lang = "en-IN";
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = (e: any) => {
+      let text = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) text += e.results[i][0].transcript + " ";
+      }
+      if (text.trim()) setInput((prev) => (prev ? prev + " " : "") + text.trim());
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    setListening(true);
+    try { rec.start(); } catch { setListening(false); }
+  }
 
   const answers = turns.filter((t) => t.who === "you").length;
 
@@ -41,6 +136,7 @@ export default function MockInterview() {
 
   function send(end = false) {
     const answer = input.trim();
+    if (listening) { try { recRef.current?.stop?.(); } catch { /* noop */ } }
     const mine: Turn[] = answer ? [{ who: "you", text: answer }] : [];
     const t = transcript(mine) + (end ? "\nEND INTERVIEW" : "");
     setTurns((prev) => [...prev, ...mine]);
@@ -67,11 +163,12 @@ export default function MockInterview() {
   if (turns.length === 0) {
     return (
       <div className="card">
-        <p>Ready when you are. The interviewer will ask CA technical, practical and HR questions — you&apos;ll get feedback after each answer and a final assessment.</p>
+        <p>Ready when you are. The interviewer will <strong>ask questions aloud</strong> (browser voice) and you can
+          <strong> speak your answers</strong> with the mic or type them — with feedback after each answer and a final assessment.</p>
         <label className="remember" style={{ margin: "10px 0", display: "flex", gap: 8, alignItems: "flex-start" }}>
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ marginTop: 3 }} />
           <span style={{ fontSize: ".82rem" }}>
-            I agree that the answers I type here will be processed by the platform&apos;s AI service (Anthropic) to
+            I agree that the answers I give here will be processed by the platform&apos;s AI service (Anthropic) to
             generate interview questions and feedback. My answers are not used to train AI models. See the{" "}
             <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
           </span>
@@ -86,6 +183,12 @@ export default function MockInterview() {
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button className="btn small secondary" type="button" onClick={toggleVoice} title="Interviewer voice on/off">
+          {voiceOn ? "🔊 Voice on" : "🔇 Voice off"}
+        </button>
+        {speaking && <span className="muted" style={{ fontSize: ".8rem" }}>🗣️ Interviewer is speaking…</span>}
+      </div>
       {practice && (
         <p className="notice ok" style={{ margin: 0, fontSize: ".82rem" }}>
           🧪 Practice mode — standard questions without AI feedback right now. Your answers still make great practice.
@@ -95,14 +198,35 @@ export default function MockInterview() {
         <div key={i} className="card" style={{ background: t.who === "you" ? "var(--bg-soft)" : "var(--card)" }}>
           <p className="muted" style={{ fontSize: ".75rem", margin: 0 }}>{t.who === "interviewer" ? "🧑‍💼 Interviewer" : "🙋 You"}</p>
           <p style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{t.text}</p>
+          {t.who === "interviewer" && (
+            <button className="btn small secondary" type="button" onClick={() => speak(t.text)} style={{ marginTop: 6 }}>
+              🔁 Hear again
+            </button>
+          )}
         </div>
       ))}
 
       {!done && (
         <div className="card">
-          <textarea rows={3} value={input} onChange={(e) => setInput(e.target.value)} placeholder="Type your answer…" />
+          <textarea
+            rows={3}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={listening ? "🎙️ Listening — speak your answer…" : "Speak with the mic or type your answer…"}
+          />
           {error && <p className="notice err" style={{ margin: "8px 0" }}>{error}</p>}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            {canListen && (
+              <button
+                className="btn secondary"
+                type="button"
+                onClick={toggleMic}
+                disabled={pending}
+                style={listening ? { background: "#dc2626", color: "#fff", borderColor: "transparent" } : undefined}
+              >
+                {listening ? "⏹ Stop mic" : "🎤 Speak answer"}
+              </button>
+            )}
             <button className="btn" type="button" onClick={() => send(false)} disabled={pending || !input.trim()}>
               {pending ? "…" : "Send answer"}
             </button>
@@ -112,6 +236,11 @@ export default function MockInterview() {
               </button>
             )}
           </div>
+          {!canListen && (
+            <p className="muted" style={{ fontSize: ".75rem", marginTop: 6 }}>
+              🎤 Voice answers need Chrome, Edge or Safari. You can always type instead.
+            </p>
+          )}
         </div>
       )}
       {done && <p className="muted" style={{ textAlign: "center" }}>Interview complete. Refresh the page to practise again.</p>}

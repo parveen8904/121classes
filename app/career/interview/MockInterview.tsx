@@ -7,16 +7,43 @@ type Turn = { who: "interviewer" | "you"; text: string };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-// Pick a natural English voice for the interviewer — prefer Indian English,
-// then any English. Voices load async in some browsers, hence the getter.
-function pickVoice(): SpeechSynthesisVoice | null {
+// Rank voices for a natural INDIAN interviewer. Every device ships different
+// voices, so score what's available: Indian-English "Natural/Neural" voices
+// (Edge: Neerja/Prabhat) → Google en-IN → premium/enhanced en-IN → any en-IN →
+// natural any-English → the rest. The student can still override via the picker.
+function voiceScore(v: SpeechSynthesisVoice): number {
+  const name = v.name.toLowerCase();
+  const isIN = /en[-_]in/i.test(v.lang);
+  const natural = /natural|neural|premium|enhanced/.test(name);
+  const google = name.includes("google");
+  if (isIN && natural) return 100;
+  if (isIN && google) return 90;
+  if (isIN) return 80;
+  if (/^en/i.test(v.lang) && natural) return 60;
+  if (/^en/i.test(v.lang) && google) return 50;
+  if (/^en/i.test(v.lang)) return 40;
+  return 0;
+}
+
+function bestVoices(): SpeechSynthesisVoice[] {
   const voices = window.speechSynthesis?.getVoices?.() ?? [];
-  return (
-    voices.find((v) => /en[-_]IN/i.test(v.lang)) ??
-    voices.find((v) => /^en/i.test(v.lang)) ??
-    voices[0] ??
-    null
-  );
+  return voices
+    .filter((v) => voiceScore(v) > 0)
+    .sort((a, b) => voiceScore(b) - voiceScore(a));
+}
+
+// Make the text sound like a person: drop emoji/markdown the engine would read
+// out ("asterisk asterisk…"), expand a few abbreviations, keep punctuation for
+// natural pauses.
+function cleanForSpeech(text: string): string {
+  return text
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, " ")     // emoji
+    .replace(/[*_#`>~|]+/g, " ")                                          // markdown
+    .replace(/\be\.g\.\s*/gi, "for example, ")
+    .replace(/\bi\.e\.\s*/gi, "that is, ")
+    .replace(/\bvs\.?\b/gi, "versus")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 export default function MockInterview() {
@@ -40,20 +67,45 @@ export default function MockInterview() {
 
   const keepAlive = useRef<ReturnType<typeof setInterval> | null>(null);
   const unlocked = useRef(false);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceName, setVoiceName] = useState<string>("");   // student's choice (persisted)
+  const voiceNameRef = useRef(voiceName);
+  voiceNameRef.current = voiceName;
 
   useEffect(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     setCanListen(!!SR);
-    // Warm the voice list (Chrome populates it async via voiceschanged).
+    // Voice list loads async in Chrome — refresh on voiceschanged.
     const synth = window.speechSynthesis;
-    synth?.getVoices?.();
-    synth?.addEventListener?.("voiceschanged", () => synth.getVoices());
+    const load = () => {
+      const vs = bestVoices();
+      setVoices(vs);
+      const saved = localStorage.getItem("interviewVoice");
+      if (saved && vs.some((v) => v.name === saved)) setVoiceName(saved);
+      else if (vs.length && !voiceNameRef.current) setVoiceName(vs[0].name);
+    };
+    load();
+    synth?.addEventListener?.("voiceschanged", load);
     return () => {
+      synth?.removeEventListener?.("voiceschanged", load);
       if (keepAlive.current) clearInterval(keepAlive.current);
-      window.speechSynthesis?.cancel?.();
+      synth?.cancel?.();
       try { recRef.current?.stop?.(); } catch { /* already stopped */ }
     };
   }, []);
+
+  function chooseVoice(name: string) {
+    setVoiceName(name);
+    try { localStorage.setItem("interviewVoice", name); } catch { /* private mode */ }
+    const v = window.speechSynthesis?.getVoices?.().find((x) => x.name === name);
+    if (v) {
+      // Short sample so the student instantly hears the new voice.
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance("Hello, I will be your interviewer today.");
+      u.voice = v; u.rate = 0.92;
+      setTimeout(() => window.speechSynthesis.speak(u), 120);
+    }
+  }
 
   // Browsers only allow speech that a user gesture "unlocked". The first
   // question arrives AFTER an async server call, so we unlock synchronously
@@ -73,23 +125,27 @@ export default function MockInterview() {
 
   function speak(text: string) {
     const synth = window.speechSynthesis;
-    if (!synth || !text.trim()) return;
+    const cleaned = cleanForSpeech(text);
+    if (!synth || !cleaned) return;
     synth.cancel();
     if (keepAlive.current) clearInterval(keepAlive.current);
     // Chrome stalls on long utterances (~15s) — split into sentence-sized
-    // chunks and queue them; each chunk is short enough to finish reliably.
+    // chunks and queue them; each chunk is short enough to finish reliably,
+    // and the tiny gap between chunks doubles as a natural breath pause.
     const chunks: string[] = [];
     let buf = "";
-    for (const part of text.replace(/\s+/g, " ").split(/(?<=[.!?।])\s+/)) {
+    for (const part of cleaned.split(/(?<=[.!?।])\s+/)) {
       if ((buf + " " + part).trim().length > 200 && buf) { chunks.push(buf.trim()); buf = part; }
       else buf = (buf ? buf + " " : "") + part;
     }
     if (buf.trim()) chunks.push(buf.trim());
-    const v = pickVoice();
+    const all = window.speechSynthesis?.getVoices?.() ?? [];
+    const v = all.find((x) => x.name === voiceNameRef.current) ?? bestVoices()[0] ?? null;
     chunks.forEach((chunk, i) => {
       const u = new SpeechSynthesisUtterance(chunk);
       if (v) u.voice = v;
-      u.rate = 0.95;
+      u.rate = 0.92;   // measured, interviewer-like pace
+      u.pitch = 1.0;
       if (i === 0) u.onstart = () => setSpeaking(true);
       if (i === chunks.length - 1) { u.onend = () => setSpeaking(false); u.onerror = () => setSpeaking(false); }
       // Chrome swallows a speak() issued immediately after cancel() — queue a
@@ -226,6 +282,20 @@ export default function MockInterview() {
         <button className="btn small secondary" type="button" onClick={toggleVoice} title="Interviewer voice on/off">
           {voiceOn ? "🔊 Voice on" : "🔇 Voice off"}
         </button>
+        {voiceOn && voices.length > 1 && (
+          <select
+            value={voiceName}
+            onChange={(e) => chooseVoice(e.target.value)}
+            style={{ fontSize: ".8rem", padding: "6px 8px", maxWidth: 220, marginBottom: 0 }}
+            title="Interviewer's voice — pick the one that sounds most natural on your device"
+          >
+            {voices.map((v) => (
+              <option key={v.name} value={v.name}>
+                {/en[-_]in/i.test(v.lang) ? "🇮🇳 " : ""}{v.name.replace(/^Microsoft |^Google /, "")}
+              </option>
+            ))}
+          </select>
+        )}
         {speaking && <span className="muted" style={{ fontSize: ".8rem" }}>🗣️ Interviewer is speaking…</span>}
       </div>
       {practice && (

@@ -185,6 +185,15 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
 
   const target = profile?.target_attempt ?? null;
 
+  // Default applicability shown when a subject has no explicit window set — by
+  // course level. The admin overrides per subject anytime (subject applicability).
+  const courseLevelDefault = (() => {
+    const t = (course.title || "").toLowerCase();
+    if (t.includes("final")) return { from: "November 2026", to: "November 2028" };
+    if (t.includes("inter")) return { from: "September 2026", to: "May 2028" };
+    return null;
+  })();
+
   // Continuous class numbering across a subject's topics, in display order:
   // topic 1 → "Classes 1 to 10", topic 2 → "Classes 11 to 15", etc. Based on how
   // many (non-part) classes each topic has, so it doesn't depend on stored class_no.
@@ -345,7 +354,10 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                   const subjAll = (topics ?? []).filter((t) => t.subject_id === s.id);
                   const hasRev1 = subjAll.some((t) => ((t as { important_qs_rev1?: string | null }).important_qs_rev1 ?? "").trim());
                   const hasRev2 = subjAll.some((t) => ((t as { important_qs_rev2?: string | null }).important_qs_rev2 ?? "").trim());
-                  const sw = subjWindow.get(s.id) ?? { from: null, to: null };
+                  const swRaw = subjWindow.get(s.id) ?? { from: null, to: null };
+                  // Fall back to the course-level default when nothing is set;
+                  // an explicit subject applicability always overrides it.
+                  const sw = swRaw.from ? swRaw : (courseLevelDefault ?? swRaw);
                   // Never open-ended "onwards" — show the range, or just "from X".
                   const applicable = sw.from ? (sw.to ? `${sw.from} up to ${sw.to}` : `from ${sw.from}`) : "";
                   // Topics that actually carry classes (for "137 classes in X topics").

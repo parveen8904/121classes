@@ -24,7 +24,8 @@ function Block({ icon, title, body }: { icon: string; title: string; body: strin
   );
 }
 
-export default async function CareerPage({ searchParams }: { searchParams: { city?: string } }) {
+export default async function CareerPage(props: { searchParams: Promise<{ city?: string }> }) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/career");

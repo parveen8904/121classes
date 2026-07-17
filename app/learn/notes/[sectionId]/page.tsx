@@ -16,13 +16,14 @@ const KIND_LABEL: Record<string, string> = {
 // In-app notes viewer: the PDF streams through our own domain (no storage URL
 // visible) and a MOVING watermark with the student's identity floats over it —
 // so screenshots/screen-recordings identify who leaked them.
-export default async function NotesViewer({
-  params,
-  searchParams,
-}: {
-  params: { sectionId: string };
-  searchParams: { kind?: string };
-}) {
+export default async function NotesViewer(
+  props: {
+    params: Promise<{ sectionId: string }>;
+    searchParams: Promise<{ kind?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/login?next=/learn/notes/${params.sectionId}`);

@@ -8,7 +8,8 @@ import { saveJobSources, fetchJobsNow, approveJob, approveAllPending, rejectJob,
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Student Placement — Admin" };
 
-export default async function PlacementAdmin({ searchParams }: { searchParams: { fetched?: string; saved?: string } }) {
+export default async function PlacementAdmin(props: { searchParams: Promise<{ fetched?: string; saved?: string }> }) {
+  const searchParams = await props.searchParams;
   const svc = createServiceClient();
   const [{ data: pending }, { data: approved }, jooble, queries, location, feeds, digestEmail] = await Promise.all([
     svc.from("job_listings").select("id, title, company, location, url, snippet, category, source").eq("status", "new").order("created_at", { ascending: false }).limit(150),

@@ -22,11 +22,12 @@ type SubRow = {
 };
 type CourseRow = { id: string; title: string; subjects: { id: string; title: string }[] };
 
-export default async function EnrolmentPage({
-  searchParams,
-}: {
-  searchParams: { granted?: string; missing?: string; error?: string };
-}) {
+export default async function EnrolmentPage(
+  props: {
+    searchParams: Promise<{ granted?: string; missing?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
 
   const [{ data: courses }, { data: subs }] = await Promise.all([

@@ -9,7 +9,8 @@ export const metadata = {
 // Lead-capture landing page for YouTube / WhatsApp / Instagram traffic.
 // Share as /free-planner?src=yt (or wa / ig / tg) — the source flows into the
 // insights page so every platform's real conversion is visible.
-export default function FreePlannerLanding({ searchParams }: { searchParams: { src?: string } }) {
+export default async function FreePlannerLanding(props: { searchParams: Promise<{ src?: string }> }) {
+  const searchParams = await props.searchParams;
   const src = (searchParams.src ?? "").slice(0, 20);
 
   return (

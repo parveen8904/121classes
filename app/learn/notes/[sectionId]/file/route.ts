@@ -14,7 +14,8 @@ const KINDS: Record<string, string> = {
   homework: "homework_solutions",
 };
 
-export async function GET(req: NextRequest, { params }: { params: { sectionId: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ sectionId: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new NextResponse("Login required", { status: 401 });

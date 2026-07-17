@@ -14,13 +14,14 @@ import { fmtMins } from "../../_lib/util";
 const TYPE_LABEL = Object.fromEntries(SECTION_TYPES.map((t) => [t.value, t.label]));
 const PLAN_LABEL: Record<string, string> = { bronze: "Bronze+", silver: "Silver+", gold: "Gold" };
 
-export default async function TopicDetail({
-  params,
-  searchParams,
-}: {
-  params: { topicId: string };
-  searchParams?: { summary?: string };
-}) {
+export default async function TopicDetail(
+  props: {
+    params: Promise<{ topicId: string }>;
+    searchParams?: Promise<{ summary?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const supabase = createClient();
   const { topicId } = params;
 

@@ -37,8 +37,8 @@ export async function connectTelegramWebhook() {
   await svc.from("app_secrets").upsert({ key: "TELEGRAM_BOT_USERNAME", value: username }, { onConflict: "key" });
   clearSecretCache();
 
-  const host = headers().get("host");
-  const proto = headers().get("x-forwarded-proto") || "https";
+  const host = (await headers()).get("host");
+  const proto = (await headers()).get("x-forwarded-proto") || "https";
   const webhookUrl = `${proto}://${host}/api/telegram/webhook`;
   const secret = await getSecret("TELEGRAM_WEBHOOK_SECRET");
   const params: Record<string, string> = { url: webhookUrl };

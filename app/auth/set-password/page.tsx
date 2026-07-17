@@ -5,11 +5,12 @@ import SetPasswordForm from "./SetPasswordForm";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Set your password — CA Parveen Sharma" };
 
-export default async function SetPasswordPage({
-  searchParams,
-}: {
-  searchParams: { next?: string };
-}) {
+export default async function SetPasswordPage(
+  props: {
+    searchParams: Promise<{ next?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const {
     data: { user },

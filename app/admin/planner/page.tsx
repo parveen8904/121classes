@@ -16,7 +16,8 @@ function NumField({ label, name, value, step = "1", hint }: { label: string; nam
   );
 }
 
-export default async function PlannerSettingsPage({ searchParams }: { searchParams: { saved?: string } }) {
+export default async function PlannerSettingsPage(props: { searchParams: Promise<{ saved?: string }> }) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const { data: subjects } = await supabase
     .from("subjects")

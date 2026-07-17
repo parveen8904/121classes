@@ -34,13 +34,14 @@ const VIDEO_NAV = new Set(["full_class_video", "revision_video", "discussion_vid
 
 // One route, dispatched by section type. RLS only returns the section if the
 // student may access it (free or subscribed) — locked ones 404 back to topic.
-export default async function SectionPage({
-  params,
-  searchParams,
-}: {
-  params: { sectionId: string };
-  searchParams: { view?: string };
-}) {
+export default async function SectionPage(
+  props: {
+    params: Promise<{ sectionId: string }>;
+    searchParams: Promise<{ view?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const supabase = createClient();
   const {
     data: { user },

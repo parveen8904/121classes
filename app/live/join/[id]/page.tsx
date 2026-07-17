@@ -10,7 +10,8 @@ export const metadata = { title: "Live class — CA Parveen Sharma" };
 // White-label live class: students watch inside caparveensharma.com. They never
 // see (or can copy) a zoom.us link — joining happens via a server-issued
 // signature for logged-in students only.
-export default async function JoinLivePage({ params }: { params: { id: string } }) {
+export default async function JoinLivePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/login?next=/live/join/${params.id}`);

@@ -5,11 +5,12 @@ import { addUsers } from "./actions";
 
 const ROLE_EMOJI: Record<string, string> = { student: "🎓", admin: "🛠️", faculty: "👩‍🏫" };
 
-export default async function UsersPage({
-  searchParams,
-}: {
-  searchParams: { q?: string; role?: string; added?: string; invited?: string; failed?: string };
-}) {
+export default async function UsersPage(
+  props: {
+    searchParams: Promise<{ q?: string; role?: string; added?: string; invited?: string; failed?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const q = (searchParams.q ?? "").trim();
   const role = searchParams.role ?? "";

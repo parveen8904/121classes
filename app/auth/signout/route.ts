@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const supabase = createClient();
   await supabase.auth.signOut();
-  cookies().delete("dsid");
+  (await cookies()).delete("dsid");
   const reason = new URL(request.url).searchParams.get("reason");
   // Forced sign-out (e.g. used on another device) → /login with the reason;
   // a normal sign-out returns to the landing page.

@@ -9,7 +9,8 @@ export const metadata = { title: "Try a free CA case scenario — CA Parveen Sha
 // The reward page of the verified-lead funnel: one REAL case scenario with its
 // MCQs, playable without an account — plus any free sample PDFs the admin has
 // marked. Reachable only with a verified lead_verifications id (?v=).
-export default async function TryCasesPage({ searchParams }: { searchParams: { v?: string } }) {
+export default async function TryCasesPage(props: { searchParams: Promise<{ v?: string }> }) {
+  const searchParams = await props.searchParams;
   const v = (searchParams.v ?? "").trim();
   if (!/^[0-9a-f-]{36}$/.test(v)) redirect("/free-planner?src=try");
 

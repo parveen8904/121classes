@@ -13,7 +13,10 @@ const SOURCE_LABEL: Record<string, string> = {
   meta: "💰 Meta/Instagram ad", google: "💰 Google ad", popup: "🧩 Site popup", phone: "📞 Phone call", other: "Other",
 };
 
-export default async function LeadsPage({ searchParams }: { searchParams: { msg?: string; added?: string; students?: string; dupes?: string } }) {
+export default async function LeadsPage(
+  props: { searchParams: Promise<{ msg?: string; added?: string; students?: string; dupes?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const svc = createServiceClient();
   const [{ data: leads }, { count: total }, { count: matched }] = await Promise.all([
     svc.from("leads").select("id, name, phone, email, source, note, matched_user_id, created_at").order("created_at", { ascending: false }).limit(200),

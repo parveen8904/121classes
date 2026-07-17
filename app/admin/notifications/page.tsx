@@ -5,11 +5,12 @@ import { broadcast } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function NotificationsPage({
-  searchParams,
-}: {
-  searchParams: { tg?: string; em?: string; emt?: string; dm?: string; dmt?: string };
-}) {
+export default async function NotificationsPage(
+  props: {
+    searchParams: Promise<{ tg?: string; em?: string; emt?: string; dm?: string; dmt?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const tgOn = await telegramConfigured();
   const emOn = await emailConfigured();
   const waOn = await whatsappConfigured();

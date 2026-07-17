@@ -9,7 +9,8 @@ const LETTER = ["A", "B", "C", "D", "E", "F"];
 // Downloadable ANSWER KEY (correct answers + explanations). Only the admin/faculty
 // or a student who has ALREADY attempted the test may download it — so it can't be
 // used to cheat before taking the test.
-export async function GET(_req: Request, { params }: { params: { sectionId: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ sectionId: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new NextResponse("Login required", { status: 401 });

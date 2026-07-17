@@ -4,7 +4,8 @@ import DeleteButton from "../_components/DeleteButton";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createCoupon, deleteCoupon, toggleCoupon, emailCoupon, editCoupon } from "./actions";
 
-export default async function CouponsPage({ searchParams }: { searchParams: { mail?: string } }) {
+export default async function CouponsPage(props: { searchParams: Promise<{ mail?: string }> }) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const { data: coupons } = await supabase
     .from("coupons")

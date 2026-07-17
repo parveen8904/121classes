@@ -8,7 +8,8 @@ import { updateProfile } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage({ searchParams }: { searchParams: { saved?: string; need?: string } }) {
+export default async function ProfilePage(props: { searchParams: Promise<{ saved?: string; need?: string }> }) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const {
     data: { user },

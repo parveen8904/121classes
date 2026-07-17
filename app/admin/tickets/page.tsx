@@ -24,7 +24,8 @@ const TABS = [
   { key: "all", label: "All" },
 ];
 
-export default async function TicketsPage({ searchParams }: { searchParams: { tab?: string } }) {
+export default async function TicketsPage(props: { searchParams: Promise<{ tab?: string }> }) {
+  const searchParams = await props.searchParams;
   const svc = createServiceClient();
   const tab = searchParams.tab || "open";
 

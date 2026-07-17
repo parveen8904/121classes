@@ -15,7 +15,8 @@ type Rubric = { point: string; marks: number }[];
 const rubricToText = (r: Rubric | null | undefined) => (r ?? []).map((x) => `${x.point} | ${x.marks}`).join("\n");
 const LEVELS = ["Easy", "Medium", "Hard", "Exam-level"];
 
-export default async function SubjectiveAdminPage({ params }: { params: { sectionId: string } }) {
+export default async function SubjectiveAdminPage(props: { params: Promise<{ sectionId: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: section } = await supabase
     .from("sections")

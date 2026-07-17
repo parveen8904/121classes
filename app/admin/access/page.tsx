@@ -9,7 +9,8 @@ export const metadata = { title: "Access & limits — Admin" };
 
 const PLAN_LABEL: Record<string, string> = { free: "🆓 Free", bronze: "🥉 Bronze", silver: "🥈 Silver", gold: "🥇 Gold" };
 
-export default async function AccessLimitsPage({ searchParams }: { searchParams: { saved?: string } }) {
+export default async function AccessLimitsPage(props: { searchParams: Promise<{ saved?: string }> }) {
+  const searchParams = await props.searchParams;
   const svc = createServiceClient();
   const { data } = await svc.from("plan_limits").select("plan, category, lim");
   const cur = new Map((data ?? []).map((r) => [`${r.plan}:${r.category}`, Number(r.lim)]));

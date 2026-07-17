@@ -17,7 +17,8 @@ const EVENT_ICON: Record<string, string> = {
   created: "🆕", note: "📝", call: "📞", status: "🔀", assign: "👤", escalate: "⚠️", email: "✉️",
 };
 
-export default async function TicketDetail({ params }: { params: { id: string } }) {
+export default async function TicketDetail(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const svc = createServiceClient();
   const { data: t } = await svc.from("tickets").select("*").eq("id", params.id).maybeSingle();
   if (!t) notFound();

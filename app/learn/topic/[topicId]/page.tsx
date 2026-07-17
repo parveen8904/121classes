@@ -306,7 +306,8 @@ function SectionBody({
   return null;
 }
 
-export default async function LearnTopic({ params }: { params: { topicId: string } }) {
+export default async function LearnTopic(props: { params: Promise<{ topicId: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const {
     data: { user },

@@ -6,7 +6,8 @@ import SubmitButton from "@/app/components/SubmitButton";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Career corner — Admin" };
 
-export default async function ContentPage({ searchParams }: { searchParams: { saved?: string } }) {
+export default async function ContentPage(props: { searchParams: Promise<{ saved?: string }> }) {
+  const searchParams = await props.searchParams;
   const svc = createServiceClient();
   const { data } = await svc.from("site_settings").select("key, value").like("key", "career_%");
   const m = new Map((data ?? []).map((r) => [r.key, r.value as string]));

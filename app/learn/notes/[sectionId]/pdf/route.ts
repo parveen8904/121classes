@@ -5,7 +5,8 @@ import { notesToPdf } from "@/lib/pdf";
 
 // Streams the typed notes for a class as a PDF. Approved notes are available to
 // any logged-in user; pending (not yet approved) notes only to admin/faculty.
-export async function GET(_req: Request, { params }: { params: { sectionId: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ sectionId: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new NextResponse("Login required", { status: 401 });

@@ -19,7 +19,8 @@ async function getArticle(slug: string) {
   return data;
 }
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const a = await getArticle(params.slug);
   if (!a) return { title: "Article — CA Parveen Sharma" };
   return {
@@ -49,7 +50,8 @@ function extractFaqs(md: string): { q: string; a: string }[] {
   return out.slice(0, 5);
 }
 
-export default async function ArticlePage({ params }: { params: { slug: string } }) {
+export default async function ArticlePage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const a = await getArticle(params.slug);
   if (!a) notFound();
 

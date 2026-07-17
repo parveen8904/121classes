@@ -161,8 +161,9 @@ export async function addSubjectMaterial(formData: FormData) {
 async function triggerCaseParse() {
   const { headers } = await import("next/headers");
   const { getSecret } = await import("@/lib/secrets");
-  const host = headers().get("host");
-  const proto = headers().get("x-forwarded-proto") || "https";
+  const h = await headers();
+  const host = h.get("host");
+  const proto = h.get("x-forwarded-proto") || "https";
   const secret = await getSecret("CRON_SECRET");
   try {
     const ac = new AbortController();

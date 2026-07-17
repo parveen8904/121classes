@@ -28,14 +28,6 @@ async function fileToAttachment(file: File): Promise<{ dataB64: string; mediaTyp
   } finally { URL.revokeObjectURL(url); }
 }
 
-function waHref(v?: string | null): string | null {
-  if (!v) return null;
-  if (/^https?:\/\//i.test(v)) return v;
-  const d = v.replace(/\D/g, "");
-  if (!d) return null;
-  return `https://wa.me/${d.length === 10 ? `91${d}` : d}`;
-}
-
 // The prominent, flashing "Ask your doubts" button on each subject. AI answers
 // the subject doubt instantly; if the student isn't satisfied, they can forward
 // the exact question to the faculty on WhatsApp or email.
@@ -43,13 +35,13 @@ export default function AskDoubts({
   subjectId,
   subjectTitle,
   courseId,
-  facultyPhone,
+  facultyHasWhatsApp,
   facultyEmail,
 }: {
   subjectId: string;
   subjectTitle: string;
   courseId: string;
-  facultyPhone?: string | null;
+  facultyHasWhatsApp?: boolean;
   facultyEmail?: string | null;
 }) {
   const [open, setOpen] = useState(false);
@@ -63,7 +55,11 @@ export default function AskDoubts({
   const [pending, start] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const wa = waHref(facultyPhone);
+  // WhatsApp goes through the server bridge (/api/faculty-wa) so the faculty
+  // number is never exposed in the page. The student's doubt is pre-filled.
+  const wa = facultyHasWhatsApp
+    ? `/api/faculty-wa?subject=${encodeURIComponent(subjectId)}`
+    : null;
 
   function close() {
     setOpen(false);
@@ -172,7 +168,7 @@ export default function AskDoubts({
           <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0 6px" }}>Not satisfied? Send this doubt to the faculty:</p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {wa && (
-              <a className="btn small" href={`${wa}?text=${encodeURIComponent(`Doubt (${subjectTitle}): ${q}`)}`} target="_blank" rel="noopener noreferrer"
+              <a className="btn small" href={`${wa}&text=${encodeURIComponent(`Doubt (${subjectTitle}): ${q}`)}`} target="_blank" rel="noopener noreferrer"
                 style={{ background: "#25D366", color: "#fff" }}>
                 💬 Send to faculty (WhatsApp)
               </a>

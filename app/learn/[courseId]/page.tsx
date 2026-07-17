@@ -319,7 +319,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                       subjectId={s.id}
                       subjectTitle={s.title}
                       courseId={course.id}
-                      facultyPhone={facultyContacts.find((f) => f.phone)?.phone ?? null}
+                      facultyHasWhatsApp={facultyContacts.some((f) => (f.phone ?? "").replace(/\D/g, "").length >= 10)}
                       facultyEmail={facultyContacts.find((f) => f.email)?.email ?? null}
                     />
                     <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0 0" }}>
@@ -328,12 +328,15 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                     {facultyContacts.length > 0 && (
                       <p style={{ fontSize: ".78rem", margin: "6px 0 0", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                         {facultyContacts.map((f) => {
-                          const wa = (f.phone ?? "").replace(/\D/g, "").slice(-10);
+                          // The number is never emitted to the page — the WhatsApp
+                          // link goes through the server bridge, which looks it up
+                          // and forwards the student into a chat.
+                          const hasWhatsApp = ((f.phone ?? "").replace(/\D/g, "").length >= 10);
                           return (
                             <span key={f.full_name} style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
                               <span className="muted">👩‍🏫 {f.full_name}:</span>
-                              {wa.length === 10 && (
-                                <a href={`https://wa.me/91${wa}`} target="_blank" rel="noopener noreferrer" style={{ color: "#25D366", fontWeight: 700 }}>💬 WhatsApp</a>
+                              {hasWhatsApp && (
+                                <a href={`/api/faculty-wa?subject=${s.id}`} target="_blank" rel="noopener noreferrer" style={{ color: "#25D366", fontWeight: 700 }}>💬 WhatsApp</a>
                               )}
                               {f.email && <a href={`mailto:${f.email}`} style={{ color: "var(--accent)", fontWeight: 700 }}>✉️ Email</a>}
                             </span>

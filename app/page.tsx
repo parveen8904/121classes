@@ -139,12 +139,16 @@ export default async function Home() {
           <Link className="btn" href="/login">Get started — it&apos;s free to join</Link>
           <Link className="btn" href="/#mentor" style={{ background: "var(--accent-2)" }}>Meet CA Parveen Sharma</Link>
         </div>
-        {/* App downloads — Mac/Windows live now; App Store & Play links join once approved. */}
+        {/* App downloads — direct store links when live, else the download page. */}
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 16 }}>
           <span className="muted" style={{ fontSize: ".88rem", alignSelf: "center" }}>📲 Get the app:</span>
-          <Link className="btn small secondary" href="/download">🍎 Mac</Link>
-          <Link className="btn small secondary" href="/download">🪟 Windows</Link>
-          <Link className="btn small secondary" href="/download">📱 iPhone &amp; Android</Link>
+          {siteImg.get("app_url_ios") ? (
+            <a className="btn small secondary" href={siteImg.get("app_url_ios") as string} target="_blank" rel="noopener noreferrer"> App Store</a>
+          ) : null}
+          {siteImg.get("app_url_android") ? (
+            <a className="btn small secondary" href={siteImg.get("app_url_android") as string} target="_blank" rel="noopener noreferrer">▶ Google Play</a>
+          ) : null}
+          <Link className="btn small secondary" href="/download">🍎 Mac · 🪟 Windows</Link>
         </div>
         {heroStats.length > 0 && (
           <div

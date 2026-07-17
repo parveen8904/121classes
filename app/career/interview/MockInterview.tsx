@@ -202,6 +202,37 @@ export default function MockInterview() {
     try { rec.start(); } catch { setListening(false); }
   }
 
+  // --- Pre-interview voice check: ask the student's permission for the mic and
+  // confirm the speaker works BEFORE starting (no surprise browser prompts).
+  const [speakerOk, setSpeakerOk] = useState(false);
+  const [speakerTesting, setSpeakerTesting] = useState(false);
+  const [micState, setMicState] = useState<"idle" | "granted" | "denied" | "skipped">("idle");
+
+  function testSpeaker() {
+    unlockSpeech();
+    setSpeakerTesting(true);
+    const synth = window.speechSynthesis;
+    if (!synth) { setSpeakerTesting(false); return; }
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance("Hello! I will be your interviewer today. If you can hear me clearly, tap the button that says I can hear.");
+    const v = bestVoices()[0];
+    if (v) u.voice = v;
+    u.rate = 0.92;
+    u.onend = () => setSpeakerTesting(false);
+    u.onerror = () => setSpeakerTesting(false);
+    setTimeout(() => { try { synth.resume(); synth.speak(u); } catch { setSpeakerTesting(false); } }, 120);
+  }
+
+  async function askMic() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop()); // permission is what we wanted, not the stream
+      setMicState("granted");
+    } catch {
+      setMicState("denied");
+    }
+  }
+
   const answers = turns.filter((t) => t.who === "you").length;
 
   function transcript(extra?: Turn[]): string {
@@ -256,10 +287,14 @@ export default function MockInterview() {
   }
 
   if (turns.length === 0) {
+    const micDecided = micState === "granted" || micState === "skipped" || micState === "denied" || !canListen;
+    const ready = consent && speakerOk && micDecided;
     return (
       <div className="card">
         <p>Ready when you are. The interviewer will <strong>ask questions aloud</strong> (browser voice) and you can
           <strong> speak your answers</strong> with the mic or type them — with feedback after each answer and a final assessment.</p>
+
+        {/* Step 1 — AI consent */}
         <label className="remember" style={{ margin: "10px 0", display: "flex", gap: 8, alignItems: "flex-start" }}>
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ marginTop: 3 }} />
           <span style={{ fontSize: ".82rem" }}>
@@ -268,10 +303,57 @@ export default function MockInterview() {
             <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
           </span>
         </label>
+
+        {/* Step 2 — speaker check (interviewer speaks; student confirms they heard) */}
+        <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+          <strong style={{ fontSize: ".9rem" }}>🔊 Step 1 · Speaker check</strong>
+          <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 8px" }}>
+            The interviewer speaks questions aloud — play the test and confirm you can hear it. (Phone not on silent, volume up.)
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button className="btn small secondary" type="button" onClick={testSpeaker} disabled={speakerTesting}>
+              {speakerTesting ? "🗣️ Speaking…" : "▶ Play test voice"}
+            </button>
+            {speakerOk ? (
+              <span style={{ color: "#16a34a", fontWeight: 700, fontSize: ".85rem" }}>✓ Speaker working</span>
+            ) : (
+              <button className="btn small" type="button" onClick={() => setSpeakerOk(true)}>👍 I can hear</button>
+            )}
+          </div>
+        </div>
+
+        {/* Step 3 — microphone permission (explicitly asked, never a surprise) */}
+        <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+          <strong style={{ fontSize: ".9rem" }}>🎤 Step 2 · Microphone permission</strong>
+          <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 8px" }}>
+            To speak your answers, the browser needs your permission to use the microphone. Your voice is converted to
+            text on your device/browser; only the text is sent for feedback. You can also skip this and type.
+          </p>
+          {!canListen ? (
+            <span className="muted" style={{ fontSize: ".85rem" }}>This browser doesn&apos;t support voice answers — you&apos;ll type instead (Chrome, Edge or Safari support it).</span>
+          ) : micState === "granted" ? (
+            <span style={{ color: "#16a34a", fontWeight: 700, fontSize: ".85rem" }}>✓ Microphone allowed</span>
+          ) : micState === "denied" ? (
+            <span style={{ color: "#dc2626", fontWeight: 600, fontSize: ".85rem" }}>✗ Microphone blocked — you can still type your answers. (Allow it from the browser&apos;s address-bar settings to speak.)</span>
+          ) : micState === "skipped" ? (
+            <span className="muted" style={{ fontWeight: 600, fontSize: ".85rem" }}>Skipped — you&apos;ll type your answers. <button type="button" className="btn small secondary" onClick={askMic} style={{ marginLeft: 6 }}>Allow mic instead</button></span>
+          ) : (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button className="btn small" type="button" onClick={askMic}>Allow microphone</button>
+              <button className="btn small secondary" type="button" onClick={() => setMicState("skipped")}>Skip — I&apos;ll type</button>
+            </div>
+          )}
+        </div>
+
         {error && <p className="notice err" style={{ marginBottom: 10 }}>{error}</p>}
-        <button className="btn" type="button" onClick={begin} disabled={pending || !consent}>
+        <button className="btn" type="button" onClick={begin} disabled={pending || !ready}>
           {pending ? "Starting…" : "Start interview 🎤"}
         </button>
+        {!ready && (
+          <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
+            {!consent ? "Tick the consent box" : !speakerOk ? "Confirm you can hear the test voice" : "Choose Allow or Skip for the microphone"} to begin.
+          </p>
+        )}
       </div>
     );
   }

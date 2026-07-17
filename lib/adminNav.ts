@@ -65,6 +65,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     tagline: "Pricing, discounts, the book store, invoices and revenue.",
     panels: [
       { icon: "💳", title: "Plans & pricing", desc: "Bronze/Silver/Gold per-month prices; duration discounts; web vs app.", href: "/admin/plans" },
+      { icon: "🔑", title: "Access & limits", desc: "Set per plan how much of each thing a student can use (classes, tests, doubts…). Free-trial caps, upgrade locks — mark it yourself.", href: "/admin/access" },
       { icon: "🏷️", title: "Coupons", desc: "Run % or flat-amount discount codes applied at checkout — create, edit, email to sponsors.", href: "/admin/coupons" },
       { icon: "🎁", title: "Combos", desc: "Bundle several subjects at one discounted price.", href: "/admin/combos" },
       { icon: "📦", title: "Books", desc: "Manage the book catalogue, prices and stock for the store.", href: "/admin/books" },

@@ -85,6 +85,20 @@ input, select {
 }
 input:focus, select:focus { outline: none; border-color: var(--accent); }
 
+/* Radios & checkboxes must NOT get the full-width text-input treatment above —
+   that turned every MCQ option's radio into a giant empty box that pushed the
+   option text out of the card. */
+input[type="radio"], input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  padding: 0;
+  margin: 2px 0 0;
+  border: none;
+  background: none;
+  accent-color: var(--accent);
+}
+
 .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
 .tabs button {
   flex: 1; padding: 10px; border-radius: 10px; cursor: pointer;

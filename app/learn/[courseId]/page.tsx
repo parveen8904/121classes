@@ -18,7 +18,8 @@ function fmtDate(s: string | null): string {
 }
 
 
-export default async function LearnCourse({ params }: { params: { courseId: string } }) {
+export default async function LearnCourse(props: { params: Promise<{ courseId: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const {
     data: { user },

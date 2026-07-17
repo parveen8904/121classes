@@ -73,11 +73,12 @@ async function KeyField({ name, label, placeholder }: { name: string; label: str
   );
 }
 
-export default async function IntegrationsPage({
-  searchParams,
-}: {
-  searchParams: { tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string; mailtest?: string; discord?: string; smtp?: string; smtpmsg?: string; infra?: string; inframsg?: string };
-}) {
+export default async function IntegrationsPage(
+  props: {
+    searchParams: Promise<{ tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string; mailtest?: string; discord?: string; smtp?: string; smtpmsg?: string; infra?: string; inframsg?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const [tg, ai, em, wa, rzp, r2, botUser, health, jooble] = await Promise.all([
     telegramConfigured(),
     aiConfigured(),

@@ -7,7 +7,8 @@ import { caseDisplayNumbers } from "@/lib/caseOrder";
 export const dynamic = "force-dynamic";
 
 // List of case studies in a set: number, title, question count, my best score.
-export default async function CaseSetPage({ params }: { params: { setId: string } }) {
+export default async function CaseSetPage(props: { params: Promise<{ setId: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/login?next=/learn/cases/${params.setId}`);

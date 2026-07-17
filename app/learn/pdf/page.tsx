@@ -11,11 +11,12 @@ export const dynamic = "force-dynamic";
 // raw PDF view has no controls at all. External files stream through /api/file
 // (auth + allowlisted storage hosts); internal /learn/... routes (MCQ paper /
 // answer key) are served directly and carry their own access checks.
-export default async function PdfViewerPage({
-  searchParams,
-}: {
-  searchParams: { u?: string; t?: string };
-}) {
+export default async function PdfViewerPage(
+  props: {
+    searchParams: Promise<{ u?: string; t?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");

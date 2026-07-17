@@ -21,7 +21,10 @@ const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN",
 
 type Setup = PlanSetup;
 
-export default async function PlannerPage({ searchParams }: { searchParams: { new?: string; emailed?: string; rebalanced?: string; subject?: string } }) {
+export default async function PlannerPage(
+  props: { searchParams: Promise<{ new?: string; emailed?: string; rebalanced?: string; subject?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/planner");

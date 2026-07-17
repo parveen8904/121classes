@@ -19,13 +19,14 @@ type SubRow = {
   plans: { tier: string } | null;
 };
 
-export default async function UserDetail({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: { pwset?: string };
-}) {
+export default async function UserDetail(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams: Promise<{ pwset?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const supabase = createClient();
   const { data: u } = await supabase
     .from("profiles")

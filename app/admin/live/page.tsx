@@ -21,11 +21,12 @@ type LiveRow = {
   topics: { title: string; subjects: { title: string; courses: { title: string } | null } | null } | null;
 };
 
-export default async function AdminLivePage({
-  searchParams,
-}: {
-  searchParams: { zoom?: string };
-}) {
+export default async function AdminLivePage(
+  props: {
+    searchParams: Promise<{ zoom?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const zoomOn = zoomConfigured();
   const { data } = await supabase

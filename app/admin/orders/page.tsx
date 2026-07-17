@@ -27,11 +27,12 @@ function fmt(s: string): string {
   return new Date(s).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" });
 }
 
-export default async function AdminOrdersPage({
-  searchParams,
-}: {
-  searchParams: { dispatch?: string };
-}) {
+export default async function AdminOrdersPage(
+  props: {
+    searchParams: Promise<{ dispatch?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const { data } = await supabase
     .from("book_orders")

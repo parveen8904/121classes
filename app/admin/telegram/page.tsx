@@ -7,7 +7,8 @@ import { linkGroupToSubject, sendTelegramManual, saveTelegramSettings } from "./
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Telegram broadcast — Admin" };
 
-export default async function TelegramAdminPage({ searchParams }: { searchParams: { sent?: string } }) {
+export default async function TelegramAdminPage(props: { searchParams: Promise<{ sent?: string }> }) {
+  const searchParams = await props.searchParams;
   const svc = createServiceClient();
   const [{ data: subjects }, { data: groups }] = await Promise.all([
     svc.from("subjects").select("id, title, telegram_group_chat_id").order("title"),

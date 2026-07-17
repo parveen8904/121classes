@@ -8,7 +8,8 @@ import PdfUpload from "../../_components/PdfUpload";
 import SubmitButton from "@/app/components/SubmitButton";
 import { getMcqExplanations } from "@/lib/answers";
 
-export default async function McqAdminPage({ params }: { params: { sectionId: string } }) {
+export default async function McqAdminPage(props: { params: Promise<{ sectionId: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: section } = await supabase
     .from("sections")

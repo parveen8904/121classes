@@ -11,7 +11,8 @@ import { submitScholarship } from "./actions";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Financial help / scholarship — CA Parveen Sharma" };
 
-export default async function ScholarshipPage({ searchParams }: { searchParams: { done?: string; err?: string } }) {
+export default async function ScholarshipPage(props: { searchParams: Promise<{ done?: string; err?: string }> }) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/scholarship");

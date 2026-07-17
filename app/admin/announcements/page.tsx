@@ -18,11 +18,12 @@ function KindSelect({ name, value }: { name: string; value?: string }) {
   );
 }
 
-export default async function AnnouncementsPage({
-  searchParams,
-}: {
-  searchParams: { feeds?: string; fetched?: string; digest?: string };
-}) {
+export default async function AnnouncementsPage(
+  props: {
+    searchParams: Promise<{ feeds?: string; fetched?: string; digest?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const { data: rows } = await supabase.from("announcements").select("id, is_published");
   const total = (rows ?? []).length;

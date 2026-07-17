@@ -9,7 +9,8 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { updateCourse } from "../actions";
 import { createSubject, deleteSubject } from "./actions";
 
-export default async function CourseDetail({ params }: { params: { courseId: string } }) {
+export default async function CourseDetail(props: { params: Promise<{ courseId: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { courseId } = params;
 

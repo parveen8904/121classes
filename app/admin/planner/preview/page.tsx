@@ -9,7 +9,10 @@ export const metadata = { title: "Plan preview — Admin" };
 
 const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
-export default async function PlanPreviewPage({ searchParams }: { searchParams: { subject?: string; start?: string; exam?: string; done?: string; speed?: string; rev?: string } }) {
+export default async function PlanPreviewPage(
+  props: { searchParams: Promise<{ subject?: string; start?: string; exam?: string; done?: string; speed?: string; rev?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const { data: subjects } = await supabase.from("subjects").select("id, title, code").order("code");
 

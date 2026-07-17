@@ -7,13 +7,14 @@ import { ACCESS_CATEGORIES, getAllLimits, limitFor } from "@/lib/entitlements";
 
 export const dynamic = "force-dynamic";
 
-export default async function CoursePlans({
-  params,
-  searchParams,
-}: {
-  params: { courseId: string };
-  searchParams: { subject?: string };
-}) {
+export default async function CoursePlans(
+  props: {
+    params: Promise<{ courseId: string }>;
+    searchParams: Promise<{ subject?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const supabase = createClient();
   const {
     data: { user },

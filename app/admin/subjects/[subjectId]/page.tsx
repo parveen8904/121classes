@@ -24,7 +24,8 @@ import {
   deleteCaseSet,
 } from "./actions";
 
-export default async function SubjectDetail({ params }: { params: { subjectId: string } }) {
+export default async function SubjectDetail(props: { params: Promise<{ subjectId: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { subjectId } = params;
 

@@ -59,7 +59,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   // Operators/faculty may only open the areas they've been granted.
-  const path = headers().get("x-pathname") || "/admin";
+  const path = (await headers()).get("x-pathname") || "/admin";
   if (!pathAllowed(path, staff)) {
     return (
       <>

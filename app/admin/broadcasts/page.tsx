@@ -42,7 +42,8 @@ function Targets({ p }: { p: Post }) {
   );
 }
 
-export default async function BroadcastsPage({ searchParams }: { searchParams: { pack?: string } }) {
+export default async function BroadcastsPage(props: { searchParams: Promise<{ pack?: string }> }) {
+  const searchParams = await props.searchParams;
   const svc = createServiceClient();
   const { data } = await svc
     .from("scheduled_posts")

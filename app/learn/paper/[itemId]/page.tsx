@@ -15,7 +15,8 @@ type Grade = {
   improvements: string[]; concepts_to_revise: string[];
 };
 
-export default async function PaperPage({ params }: { params: { itemId: string } }) {
+export default async function PaperPage(props: { params: Promise<{ itemId: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/login?next=/learn/paper/${params.itemId}`);

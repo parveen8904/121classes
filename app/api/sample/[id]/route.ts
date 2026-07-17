@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 
 // Public download for repository items the admin explicitly marked as a free
 // sample (public_sample). Everything else stays behind login as before.
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   if (!/^[0-9a-f-]{36}$/.test(params.id)) return NextResponse.json({ error: "not found" }, { status: 404 });
   const svc = createServiceClient();
   const { data: it } = await svc

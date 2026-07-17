@@ -12,7 +12,8 @@ import { addMyCourse } from "@/app/learn/mycourses";
 import OnboardingWizard from "./OnboardingWizard";
 import SponsoredStudents from "./SponsoredStudents";
 
-export default async function Dashboard({ searchParams }: { searchParams: { saved?: string } }) {
+export default async function Dashboard(props: { searchParams: Promise<{ saved?: string }> }) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const {
     data: { user },
@@ -102,8 +103,8 @@ export default async function Dashboard({ searchParams }: { searchParams: { save
   // 📡 Live classes TODAY — standalone sessions + topic live-classes in the
   // student's opted subjects, that start today.
   const nowD = new Date();
-  const dayStart = new Date(nowD); dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(nowD); dayEnd.setHours(23, 59, 59, 999);
+  const dayStart = new Date(nowD);dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(nowD);dayEnd.setHours(23, 59, 59, 999);
   type LiveToday = { title: string; whenISO: string; joinUrl: string | null; where: string | null; href?: string };
   const liveToday: LiveToday[] = [];
   const { data: liveSessions } = await supabase

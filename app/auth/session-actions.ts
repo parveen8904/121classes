@@ -14,14 +14,14 @@ export async function claimDevice(): Promise<void> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return;
-  const ua = headers().get("user-agent") || "";
+  const ua = (await headers()).get("user-agent") || "";
   const kind = deviceKind(ua);
   const token = randomUUID() + randomUUID();
   await supabase.from("device_sessions").upsert(
     { user_id: user.id, device_kind: kind, token, user_agent: ua.slice(0, 300), updated_at: new Date().toISOString() },
     { onConflict: "user_id,device_kind" },
   );
-  cookies().set("dsid", token, {
+  (await cookies()).set("dsid", token, {
     httpOnly: true,
     sameSite: "lax",
     secure: true,
@@ -59,5 +59,5 @@ export async function trustThisDevice(): Promise<void> {
   if (!user) return;
   const { trustedCookie } = await import("@/lib/trustedDevice");
   const c = trustedCookie(user.id);
-  cookies().set(c.name, c.value, { httpOnly: true, sameSite: "lax", secure: true, maxAge: c.maxAge, path: "/" });
+  (await cookies()).set(c.name, c.value, { httpOnly: true, sameSite: "lax", secure: true, maxAge: c.maxAge, path: "/" });
 }

@@ -8,7 +8,8 @@ export const metadata = { title: "Group moderation — Admin" };
 
 type Msg = { id: string; chat_id: string; sender_name: string | null; body: string | null; created_at: string; source: string; status: string; flagged: boolean; flag_reasons: string[] };
 
-export default async function DiscussionAdmin({ searchParams }: { searchParams: { q?: string; group?: string } }) {
+export default async function DiscussionAdmin(props: { searchParams: Promise<{ q?: string; group?: string }> }) {
+  const searchParams = await props.searchParams;
   const svc = createServiceClient();
   const q = (searchParams.q ?? "").trim();
   const group = searchParams.group ?? "";

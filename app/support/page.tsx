@@ -12,7 +12,8 @@ const CATEGORY_LABEL: Record<string, string> = {
   content: "Question about content", technical: "Website / app not working", other: "Something else",
 };
 
-export default async function SupportPage({ searchParams }: { searchParams: { ok?: string; err?: string } }) {
+export default async function SupportPage(props: { searchParams: Promise<{ ok?: string; err?: string }> }) {
+  const searchParams = await props.searchParams;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const { data: p } = user ? await supabase.from("profiles").select("full_name, email, phone").eq("id", user.id).maybeSingle() : { data: null };

@@ -7,7 +7,8 @@ import BookCheckout from "./BookCheckout";
 
 export const dynamic = "force-dynamic";
 
-export default async function BookDetail({ params }: { params: { id: string } }) {
+export default async function BookDetail(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: book } = await supabase
     .from("books")
@@ -24,16 +25,15 @@ export default async function BookDetail({ params }: { params: { id: string } })
       <p className="crumb">
         <Link href="/books">← Back to book store</Link>
       </p>
-
       <div className="studio" style={{ marginTop: 10 }}>
         <div className="imgph" style={{ minHeight: 360 }}>
           {book.cover_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
+            (<img
               src={book.cover_url}
               alt={book.title}
               style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 16 }}
-            />
+            />)
           ) : (
             <span className="em">📘</span>
           )}
@@ -50,7 +50,6 @@ export default async function BookDetail({ params }: { params: { id: string } })
           </p>
         </div>
       </div>
-
       <div style={{ marginTop: 28, maxWidth: 620 }}>
         <BookCheckout
           bookId={book.id}

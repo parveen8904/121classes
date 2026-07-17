@@ -18,8 +18,8 @@ async function requireAdmin(): Promise<boolean> {
   return data?.role === "admin";
 }
 
-function baseUrl(): string {
-  const h = headers();
+async function baseUrl(): Promise<string> {
+  const h = await headers();
   return `${h.get("x-forwarded-proto") || "https"}://${h.get("host") || "caparveensharma.com"}`;
 }
 
@@ -28,7 +28,7 @@ async function emailSetPasswordLink(email: string, name: string): Promise<boolea
   const { data } = await svc.auth.admin.generateLink({
     type: "recovery",
     email,
-    options: { redirectTo: `${baseUrl()}/auth/callback?next=/auth/reset-password` },
+    options: { redirectTo: `${await baseUrl()}/auth/callback?next=/auth/reset-password` },
   });
   const url = data?.properties?.action_link;
   if (!url || !(await emailConfigured())) return false;

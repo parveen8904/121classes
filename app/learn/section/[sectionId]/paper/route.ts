@@ -6,7 +6,8 @@ import { notesToPdf } from "@/lib/pdf";
 const LETTER = ["A", "B", "C", "D", "E", "F"];
 
 // Downloadable QUESTION PAPER (no answers) for an MCQ test.
-export async function GET(_req: Request, { params }: { params: { sectionId: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ sectionId: string }> }) {
+  const params = await props.params;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new NextResponse("Login required", { status: 401 });

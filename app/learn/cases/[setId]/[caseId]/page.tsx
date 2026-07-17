@@ -12,12 +12,14 @@ type Q = { id: string; seq: number; question: string; options: string[]; correct
 
 // One case study: the scenario, its MCQs, and (after submitting) the results —
 // right/wrong per question, the correct answer, and the AI-generated reasons.
-export default async function CasePage({
-  params, searchParams,
-}: {
-  params: { setId: string; caseId: string };
-  searchParams: { attempt?: string };
-}) {
+export default async function CasePage(
+  props: {
+    params: Promise<{ setId: string; caseId: string }>;
+    searchParams: Promise<{ attempt?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/login?next=/learn/cases/${params.setId}/${params.caseId}`);
@@ -97,7 +99,7 @@ export default async function CasePage({
 
         {!attempt ? (
           // ---- Answer mode ----
-          <form action={submitCaseAttempt} style={{ marginTop: 18 }}>
+          (<form action={submitCaseAttempt} style={{ marginTop: 18 }}>
             <input type="hidden" name="setId" value={set.id} />
             <input type="hidden" name="caseId" value={cs.id} />
             <div style={{ display: "grid", gap: 14 }}>
@@ -116,10 +118,10 @@ export default async function CasePage({
               ))}
             </div>
             <SubmitButton className="btn" style={{ marginTop: 16 }}>Submit answers → see results &amp; reasons</SubmitButton>
-          </form>
+          </form>)
         ) : (
           // ---- Results mode ----
-          <div style={{ display: "grid", gap: 14, marginTop: 18 }}>
+          (<div style={{ display: "grid", gap: 14, marginTop: 18 }}>
             {questions.map((q, qi) => {
               const picked = attempt!.answers[q.id] ?? -1;
               const right = picked === q.correct_index;
@@ -160,7 +162,7 @@ export default async function CasePage({
               <Link className="btn secondary" href={`/learn/cases/${set.id}/${cs.id}`}>🔁 Try this case again</Link>
               <Link className="btn" href={`/learn/cases/${set.id}`}>Next case →</Link>
             </div>
-          </div>
+          </div>)
         )}
       </section>
     </main>

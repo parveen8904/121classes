@@ -35,7 +35,7 @@ export async function createPlanOrder(input: {
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, course_id, gold_price_inr, validity_months")
+    .select("id, title, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs")
     .eq("id", input.subjectId)
     .single();
   if (!subject) return { ok: false, reason: "error" };
@@ -50,12 +50,19 @@ export async function createPlanOrder(input: {
     .maybeSingle();
   if (!plan) return { ok: false, reason: "noplan" };
 
-  // Silver = a flat price for the subject's standard validity. Gold = the
-  // subject's own price, scaled to the validity the student chose.
+  // Price = a per-subject slab ladder if set (marginal per-month rates by
+  // duration), else the legacy flat/linear pricing. Computed SERVER-SIDE only —
+  // never trust a client-sent amount.
+  const { parseSlabs, slabTotal } = await import("@/lib/pricing");
   const baseMonths = subject.validity_months || 12;
+  const slabs = parseSlabs(input.tier === "gold" ? (subject as { gold_slabs?: unknown }).gold_slabs : (subject as { silver_slabs?: unknown }).silver_slabs);
   let months = baseMonths;
   let baseAmount: number | null;
-  if (input.tier === "gold") {
+  if (slabs) {
+    // Slab-priced tiers let the student choose the number of months.
+    months = input.months ? Math.min(60, Math.max(1, Math.round(input.months))) : baseMonths;
+    baseAmount = slabTotal(slabs, months);
+  } else if (input.tier === "gold") {
     if (!subject.gold_price_inr || subject.gold_price_inr <= 0) return { ok: false, reason: "noprice" };
     months = input.months ? Math.min(60, Math.max(1, Math.round(input.months))) : baseMonths;
     baseAmount = Math.max(1, Math.round((subject.gold_price_inr * months) / baseMonths));

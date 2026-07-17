@@ -292,6 +292,17 @@ export async function editSubjectMaterial(formData: FormData) {
   redirect(`/admin/subjects/${subjectId}?edited=material#subject-content`);
 }
 
+// Parse a "3:600, 6:500, 12:400, 24:300" ladder into slab JSON (or null).
+function parseSlabInput(raw: string): { upto: number; rate: number }[] | null {
+  const slabs = raw
+    .split(/[,\n]/)
+    .map((p) => p.split(":").map((x) => parseInt(x.trim(), 10)))
+    .filter((pair) => pair.length === 2 && Number.isFinite(pair[0]) && pair[0] > 0 && Number.isFinite(pair[1]) && pair[1] >= 0)
+    .map(([upto, rate]) => ({ upto, rate }))
+    .sort((a, b) => a.upto - b.upto);
+  return slabs.length ? slabs : null;
+}
+
 export async function updateSubjectInline(formData: FormData) {
   const id = str(formData.get("id"));
   const title = str(formData.get("title"));
@@ -309,6 +320,9 @@ export async function updateSubjectInline(formData: FormData) {
       order_index: num(formData.get("order_index")),
       gold_price_inr: goldStr ? Number(goldStr) : null,
       validity_months: validity > 0 ? validity : 12,
+      // Slab ladders ("months:₹/mo, …"); blank clears → falls back to flat pricing.
+      gold_slabs: parseSlabInput(str(formData.get("gold_slabs"))),
+      silver_slabs: parseSlabInput(str(formData.get("silver_slabs"))),
     })
     .eq("id", id);
   revalidatePath(`/admin/subjects/${id}`);

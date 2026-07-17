@@ -34,7 +34,7 @@ export default async function CoursePlans(
     await Promise.all([
       supabase
         .from("subjects")
-        .select("id, title, gold_price_inr, validity_months, subject_faculty(faculties(full_name))")
+        .select("id, title, gold_price_inr, validity_months, gold_slabs, silver_slabs, subject_faculty(faculties(full_name))")
         .eq("course_id", course.id)
         .order("order_index"),
       supabase
@@ -167,6 +167,8 @@ export default async function CoursePlans(
             title: selected.title,
             gold_price_inr: selected.gold_price_inr,
             validity_months: selected.validity_months ?? 12,
+            gold_slabs: (selected as { gold_slabs?: unknown }).gold_slabs,
+            silver_slabs: (selected as { silver_slabs?: unknown }).silver_slabs,
           }}
           facultyNames={facultyNames}
           silverPrice={silverPlan?.web_price_inr ?? null}

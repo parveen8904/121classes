@@ -31,7 +31,7 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, telegram_group_url, remarks, miq_rev1, miq_rev2, valid_from_attempt, valid_to_attempt, courses(title)")
+    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs, telegram_group_url, remarks, miq_rev1, miq_rev2, valid_from_attempt, valid_to_attempt, courses(title)")
     .eq("id", subjectId)
     .single();
 
@@ -391,6 +391,22 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
                   defaultValue={subject.validity_months ?? 12}
                 />
               </div>
+            </div>
+            <div style={{ marginTop: 8, border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px" }}>
+              <strong style={{ fontSize: ".9rem" }}>💸 Duration price ladder (per month, cheaper the longer they enrol)</strong>
+              <p className="muted" style={{ fontSize: ".78rem", margin: "2px 0 8px" }}>
+                Format: <code>months:₹per-month</code>, comma-separated. e.g. <code>3:600, 6:500, 12:400, 24:300</code>
+                {" "}= ₹600/mo for months 1–3, ₹500/mo for 4–6, etc. (totals add up). Blank = use the flat Gold price above.
+              </p>
+              {(() => {
+                const fmt = (v: unknown) => (Array.isArray(v) ? v.map((s: { upto: number; rate: number }) => `${s.upto}:${s.rate}`).join(", ") : "");
+                return (
+                  <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+                    <div><label htmlFor="su-goldslabs">🥇 Gold ladder</label><input id="su-goldslabs" name="gold_slabs" defaultValue={fmt((subject as { gold_slabs?: unknown }).gold_slabs)} placeholder="3:600, 6:500, 12:400, 24:300" /></div>
+                    <div><label htmlFor="su-silverslabs">🥈 Silver ladder</label><input id="su-silverslabs" name="silver_slabs" defaultValue={fmt((subject as { silver_slabs?: unknown }).silver_slabs)} placeholder="blank = flat Silver price" /></div>
+                  </div>
+                );
+              })()}
             </div>
             <div style={{ marginTop: 4 }}>
               <label htmlFor="su-tg">✈️ Telegram group link (this subject only)</label>

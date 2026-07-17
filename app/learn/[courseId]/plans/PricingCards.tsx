@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Script from "next/script";
-import { formatINR } from "@/lib/pricing";
+import { formatINR, parseSlabs, slabTotal, slabMonthOptions, type Slab } from "@/lib/pricing";
 import { TIER_META, TIER_RANK } from "@/lib/tiers";
 import { createPlanOrder, verifyPlanPayment } from "./payActions";
 import Help from "@/app/components/Help";
@@ -13,6 +13,8 @@ type Subject = {
   title: string;
   gold_price_inr: number | null;
   validity_months: number;
+  gold_slabs?: unknown;
+  silver_slabs?: unknown;
 };
 
 type RazorpayOptions = {
@@ -58,29 +60,39 @@ export default function PricingCards({
   const [busy, setBusy] = useState<string | null>(null);
   const [coupon, setCoupon] = useState("");
 
+  // Slab ladders (per-subject) take precedence over the legacy flat pricing.
+  const goldSlabs: Slab[] | null = parseSlabs(subject.gold_slabs);
+  const silverSlabs: Slab[] | null = parseSlabs(subject.silver_slabs);
+  const goldChoices = goldSlabs ? slabMonthOptions(goldSlabs) : goldValidityOptions;
+
   const goldBase = subject.validity_months || 12;
-  const defaultMonths = goldValidityOptions.includes(goldBase)
+  const defaultMonths = goldChoices.includes(goldBase)
     ? goldBase
-    : goldValidityOptions[0] ?? goldBase;
+    : goldChoices[0] ?? goldBase;
   const [goldMonths, setGoldMonths] = useState<number>(defaultMonths);
   const [custom, setCustom] = useState("");
 
-  // Gold price scales with the chosen validity from the subject's base price.
-  const goldTotal =
-    subject.gold_price_inr == null
+  // Gold price: slab total if a ladder is set, else scale the flat base price.
+  const goldTotal = goldSlabs
+    ? slabTotal(goldSlabs, goldMonths)
+    : subject.gold_price_inr == null
       ? null
       : Math.max(1, Math.round((subject.gold_price_inr * goldMonths) / goldBase));
 
+  // Silver: slab ladder if set (student chooses months), else the flat price.
+  const silverTotal = silverSlabs ? slabTotal(silverSlabs, goldMonths) : silverPrice;
+
   const tierPrice: Record<string, number | null> = {
     bronze: 0,
-    silver: silverPrice,
+    silver: silverTotal,
     gold: goldTotal,
   };
   const tierMonths: Record<string, number> = {
     bronze: 0,
-    silver: subject.validity_months,
+    silver: silverSlabs ? goldMonths : subject.validity_months,
     gold: goldMonths,
   };
+  const tierSlabbed: Record<string, boolean> = { bronze: false, silver: !!silverSlabs, gold: !!goldSlabs };
 
   function setCustomMonths(v: string) {
     setCustom(v);
@@ -174,7 +186,7 @@ export default function PricingCards({
                     <Help text="How long you want Gold access for. A longer validity costs more but works out cheaper per month. Pick a preset or enter your own number of months." />
                   </label>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-                    {goldValidityOptions.map((m) => (
+                    {goldChoices.map((m) => (
                       <button
                         key={m}
                         type="button"
@@ -214,7 +226,12 @@ export default function PricingCards({
               ) : (
                 <>
                   <div className="plan-price">{formatINR(price as number)}</div>
-                  <div className="plan-permonth">{tierMonths[tier]} months access</div>
+                  <div className="plan-permonth">
+                    {tierMonths[tier]} month{tierMonths[tier] === 1 ? "" : "s"} access
+                    {tierSlabbed[tier] && tierMonths[tier] > 0 && (
+                      <> · ≈ {formatINR(Math.round((price as number) / tierMonths[tier]))}/month</>
+                    )}
+                  </div>
                 </>
               )}
 

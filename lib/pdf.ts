@@ -112,6 +112,20 @@ export async function notesToPdf(title: string, text: string): Promise<Uint8Arra
   return doc.save();
 }
 
+// ICAI/BoS PDFs draw the rupee sign with a custom font whose glyph extracts as
+// a backtick — "` 1,551" really means "₹1,551". Backtick has no legitimate use
+// in CA study material, so map it to ₹ and tidy the spacing before amounts.
+// Also normalise ligatures/soft hyphens that PDF extraction leaves behind.
+export function cleanPdfText(raw: string): string {
+  return raw
+    .replace(/`/g, "₹")
+    .replace(/₹\s+(?=[\d.])/g, "₹")
+    .replace(/­/g, "")            // soft hyphen
+    .replace(/ﬁ/g, "fi").replace(/ﬂ/g, "fl").replace(/ﬀ/g, "ff").replace(/ﬃ/g, "ffi").replace(/ﬄ/g, "ffl")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
+}
+
 // Pull the text out of a PDF at a URL. Serverless-friendly (unpdf). Returns "" on
 // failure so callers can fall back to manually-pasted text.
 export async function extractPdfText(url: string): Promise<string> {
@@ -119,7 +133,7 @@ export async function extractPdfText(url: string): Promise<string> {
     const buf = await fetch(url, { cache: "no-store" }).then((r) => r.arrayBuffer());
     const pdf = await getDocumentProxy(new Uint8Array(buf));
     const { text } = await extractText(pdf, { mergePages: true });
-    return (typeof text === "string" ? text : (text as string[]).join("\n")).trim();
+    return cleanPdfText(typeof text === "string" ? text : (text as string[]).join("\n"));
   } catch {
     return "";
   }

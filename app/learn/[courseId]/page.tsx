@@ -365,8 +365,8 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                     nMtp > 0 && `${nMtp} MTP${nMtp === 1 ? "" : "s"}`,
                     nRtp > 0 && `${nRtp} RTP${nRtp === 1 ? "" : "s"}`,
                     nPast > 0 && `${nPast} past exam paper${nPast === 1 ? "" : "s"}`,
-                    nCases > 0 && `${nCases} case scenario${nCases === 1 ? "" : "s"}`,
                   ].filter(Boolean).join(" · ");
+                  const nCaseSets = (subjCaseSets.get(s.id) ?? []).length;
                   return (
                     <div className="card" style={{ margin: "4px 0 14px" }}>
                       <strong style={{ fontSize: ".95rem" }}>📊 What this subject contains</strong>
@@ -375,6 +375,7 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                         <div>🎬 <strong>{sumRev.get(s.id) ?? 0}</strong> revision videos · ⏱️ {fmtMins(sumRevMins.get(s.id) ?? 0)} total</div>
                         <div>🧠 <strong>{sumMcq.get(s.id) ?? 0}</strong> MCQ tests · ✍️ <strong>{sumDesc.get(s.id) ?? 0}</strong> descriptive tests</div>
                         {paperLine && <div>📄 Practice papers: {paperLine}</div>}
+                        {nCases > 0 && <div>🧩 <strong>{nCases}</strong> case scenario{nCases === 1 ? "" : "s"}{nCaseSets > 1 ? ` (${nCaseSets} sets)` : ""} — practise below</div>}
                         <div>📌 Important-question lists — First revision: {hasRev1 ? "✓ available" : "— not added"} · Second revision: {hasRev2 ? "✓ available" : "— not added"}</div>
                         <div>📚 Materials: {mats.length ? mats.join(" · ") : "coming soon"}</div>
                         <div>📅 Applicable {applicable || "for all attempts"}</div>
@@ -388,13 +389,16 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                   );
                 })()}
                 {(subjCaseSets.get(s.id) ?? []).length > 0 && (
-                  <div style={{ display: "grid", gap: 8, margin: "0 0 14px" }}>
-                    {(subjCaseSets.get(s.id) ?? []).map((cset) => (
-                      <Link key={cset.id} href={`/learn/cases/${cset.id}`} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, color: "var(--text)", border: "2px solid var(--accent)" }}>
-                        <span style={{ fontWeight: 700 }}>🧩 {cset.title}</span>
-                        <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap" }}>Practise cases →</span>
-                      </Link>
-                    ))}
+                  <div className="card" style={{ margin: "0 0 14px" }}>
+                    <strong style={{ fontSize: ".95rem" }}>🧩 Case scenarios (new exam pattern)</strong>
+                    <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                      {(subjCaseSets.get(s.id) ?? []).map((cset) => (
+                        <Link key={cset.id} href={`/learn/cases/${cset.id}`} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, color: "var(--text)", border: "2px solid var(--accent)" }}>
+                          <span style={{ fontWeight: 700 }}>🧩 {cset.title}</span>
+                          <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap" }}>Practise cases →</span>
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {(subjResources.get(s.id) ?? []).length > 0 && (

@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
+import { caseDisplayNumbers } from "@/lib/caseOrder";
 import { submitCaseAttempt } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,10 @@ export default async function CasePage({
     .order("seq");
   const questions = (qRows ?? []) as Q[];
 
+  // Same scrambled number the list page shows (deterministic from the id).
+  const { data: sibCases } = await svc.from("case_studies").select("id").eq("set_id", set.id);
+  const caseNo = caseDisplayNumbers((sibCases ?? []) as { id: string }[]).get(cs.id as string) ?? cs.seq;
+
   // Results mode: show the attempt the student was just redirected to.
   let attempt: { answers: Record<string, number>; score: number; total: number } | null = null;
   if (searchParams.attempt) {
@@ -55,7 +60,7 @@ export default async function CasePage({
         <p className="crumb"><Link href={`/learn/cases/${set.id}`}>← {set.title}</Link></p>
         <div className="learn-hero">
           <span className="badge">🧩 Case study</span>
-          <h1 style={{ fontSize: "1.5rem" }}>{cs.title || `Case ${cs.seq}`}</h1>
+          <h1 style={{ fontSize: "1.5rem" }}>Case Scenario {caseNo}</h1>
           {attempt && (
             <p className="meta" style={{ fontWeight: 800, fontSize: "1.05rem", color: attempt.score === attempt.total ? "#16a34a" : "var(--accent)" }}>
               Your score: {attempt.score} / {attempt.total} {attempt.score === attempt.total ? "🎉 Perfect!" : ""}

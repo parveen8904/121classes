@@ -51,7 +51,7 @@ export default async function TryCasesPage({ searchParams }: { searchParams: { v
       ]);
       questions = (qRows ?? []) as typeof questions;
       caseData = {
-        title: cs.title as string,
+        title: "Sample Case Scenario",
         scenario: cs.scenario as string,
         subject: (set.subjects as { title?: string } | null)?.title ?? "CA",
         total: total ?? 1,

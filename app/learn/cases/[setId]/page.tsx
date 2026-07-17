@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { caseDisplayNumbers } from "@/lib/caseOrder";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +20,16 @@ export default async function CaseSetPage({ params }: { params: { setId: string 
   const isStaff = me?.role === "admin" || me?.role === "faculty";
   if (!set || set.status !== "ready" || (!set.is_published && !isStaff)) notFound();
 
-  const [{ data: cases }, { data: myAttempts }] = await Promise.all([
-    svc.from("case_studies").select("id, seq, title").eq("set_id", set.id).order("seq"),
+  const [{ data: casesRaw }, { data: myAttempts }] = await Promise.all([
+    svc.from("case_studies").select("id, seq").eq("set_id", set.id),
     svc.from("case_attempts").select("case_id, score, total").eq("student_id", user.id),
   ]);
-  const caseIds = (cases ?? []).map((c) => c.id as string);
+  // Scrambled display numbers, then show the list in 1..N order.
+  const displayNo = caseDisplayNumbers((casesRaw ?? []) as { id: string }[]);
+  const cases = [...((casesRaw ?? []) as { id: string; seq: number }[])].sort(
+    (a, b) => (displayNo.get(a.id) ?? 0) - (displayNo.get(b.id) ?? 0),
+  );
+  const caseIds = cases.map((c) => c.id);
   const qCounts = new Map<string, number>();
   if (caseIds.length) {
     const { data: qRows } = await svc.from("case_questions").select("case_id").in("case_id", caseIds);
@@ -51,12 +57,12 @@ export default async function CaseSetPage({ params }: { params: { setId: string 
           </p>
         </div>
         <div style={{ display: "grid", gap: 8, marginTop: 18 }}>
-          {(cases ?? []).map((c) => {
-            const b = best.get(c.id as string);
-            const n = qCounts.get(c.id as string) ?? 0;
+          {cases.map((c) => {
+            const b = best.get(c.id);
+            const n = qCounts.get(c.id) ?? 0;
             return (
               <Link key={c.id} href={`/learn/cases/${set.id}/${c.id}`} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, color: "var(--text)" }}>
-                <span style={{ fontWeight: 700 }}>{c.title || `Case ${c.seq}`}</span>
+                <span style={{ fontWeight: 700 }}>🧩 Case Scenario {displayNo.get(c.id) ?? "?"}</span>
                 <span style={{ whiteSpace: "nowrap", textAlign: "right" }}>
                   <span className="muted" style={{ fontSize: ".85rem" }}>{n} MCQ{n === 1 ? "" : "s"}</span>
                   {b && <span style={{ display: "block", fontSize: ".85rem", fontWeight: 700, color: b.score === b.total ? "#16a34a" : "var(--accent)" }}>✓ Best: {b.score}/{b.total}</span>}

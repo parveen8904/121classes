@@ -4,6 +4,20 @@ import { deviceKind } from "@/lib/device";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
+// Resilience against a Supabase blip: race any auth/DB call against a short
+// timeout so a stalled dependency can't hang the request for 25s (→ 504 for
+// the whole site). On timeout we degrade gracefully — public pages render, and
+// protected pages fall through to their OWN server-side auth check (every
+// dashboard/admin/learn page re-verifies the user), so nobody is falsely
+// logged out and no page dies just because the middleware couldn't reach the DB.
+const TIMEOUT = Symbol("timeout");
+function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T | typeof TIMEOUT> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<typeof TIMEOUT>((resolve) => setTimeout(() => resolve(TIMEOUT), ms)),
+  ]);
+}
+
 // Refreshes the Supabase session on every request and guards portal routes.
 export async function middleware(request: NextRequest) {
   // Expose the current path to server layouts (the admin layout uses it to gate
@@ -30,9 +44,11 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Validate the session, but never wait more than 4s for Supabase. If it
+  // stalls (a Supabase outage/slowdown), we proceed rather than 504.
+  const authRes = await withTimeout(supabase.auth.getUser(), 4000);
+  const authTimedOut = authRes === TIMEOUT;
+  const user = authTimedOut ? null : authRes.data.user;
 
   const path = request.nextUrl.pathname;
 
@@ -51,7 +67,10 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/learn") ||
     path.startsWith("/live");
 
-  if (!user && isProtected) {
+  // Only redirect to login when we KNOW there's no user. If the auth check
+  // timed out, let the request through — the destination page re-verifies auth
+  // itself, so we avoid falsely logging real users out during a Supabase blip.
+  if (!user && isProtected && !authTimedOut) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", path);
@@ -75,12 +94,11 @@ export async function middleware(request: NextRequest) {
     if (dsid) {
       try {
         const kind = deviceKind(request.headers.get("user-agent") || "");
-        const { data: ds } = await supabase
-          .from("device_sessions")
-          .select("token")
-          .eq("user_id", user.id)
-          .eq("device_kind", kind)
-          .maybeSingle();
+        const dsRes = await withTimeout(
+          supabase.from("device_sessions").select("token").eq("user_id", user.id).eq("device_kind", kind).maybeSingle(),
+          3000,
+        );
+        const ds = dsRes === TIMEOUT ? null : dsRes.data;
         if (ds && ds.token !== dsid) {
           const url = request.nextUrl.clone();
           url.pathname = "/auth/signout";
@@ -95,11 +113,11 @@ export async function middleware(request: NextRequest) {
 
     // 2) Mandatory password: first-timers must set one before using the portal.
     try {
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select("has_password")
-        .eq("id", user.id)
-        .maybeSingle();
+      const profRes = await withTimeout(
+        supabase.from("profiles").select("has_password").eq("id", user.id).maybeSingle(),
+        3000,
+      );
+      const prof = profRes === TIMEOUT ? null : profRes.data;
       if (prof && prof.has_password === false) {
         const url = request.nextUrl.clone();
         url.pathname = "/auth/set-password";

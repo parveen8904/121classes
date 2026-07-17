@@ -14,6 +14,8 @@ export default async function AccessLimitsPage(props: { searchParams: Promise<{ 
   const svc = createServiceClient();
   const { data } = await svc.from("plan_limits").select("plan, category, lim");
   const cur = new Map((data ?? []).map((r) => [`${r.plan}:${r.category}`, Number(r.lim)]));
+  const { data: fuRow } = await svc.from("site_settings").select("value").eq("key", "fair_use_multiplier").maybeSingle();
+  const fairUseMult = (fuRow?.value as string) || "2";
   const cell = (plan: string, cat: string) => {
     const v = cur.get(`${plan}:${cat}`);
     return v === undefined || v === -1 ? "" : String(v); // blank shown = unlimited
@@ -66,6 +68,16 @@ export default async function AccessLimitsPage(props: { searchParams: Promise<{ 
           <strong>Blank</strong> = unlimited (∞) · type a <strong>number</strong> for the cap (e.g. 5) · type <strong>0</strong> to lock it.
           Free-plan limits are one-time (a free student gets these totals once, then must upgrade). Revision videos are free for everyone.
         </p>
+        <div className="card" style={{ marginTop: 18, background: "var(--bg-soft)" }}>
+          <strong>⏳ Fair-use video watch limit</strong>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
+            Per subject, a student can watch its recorded classes for this many times the total class length
+            before hitting a fair-use limit. Live classes are never counted. Example: 2 × a 100-hour subject = 200 hours of watching.
+          </p>
+          <label htmlFor="fu" style={{ fontSize: ".85rem", fontWeight: 600 }}>Multiplier (× total class hours)</label>
+          <input id="fu" name="fair_use_multiplier" defaultValue={fairUseMult} inputMode="decimal" style={{ width: 90, textAlign: "center", marginLeft: 10 }} placeholder="2" />
+        </div>
+
         <SubmitButton className="btn" savedLabel="✓ Saved" style={{ marginTop: 8 }}>Save access limits</SubmitButton>
       </form>
 

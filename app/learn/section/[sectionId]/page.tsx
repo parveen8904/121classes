@@ -102,6 +102,43 @@ export default async function SectionPage(
   const { data: dlRows } = await supabase.rpc("list_downloadable_classes");
   const dl = ((dlRows ?? []) as Downloadable[]).find((d) => d.section_id === section.id) ?? null;
 
+  // Fair-usage: a student may watch a subject's recorded Bunny classes for a
+  // total of (multiplier × raw class hours). Live classes aren't Bunny
+  // recordings, so they're never counted. Admins/faculty are exempt.
+  if (c.bunny_video_id && !isAdmin) {
+    const { data: tRow } = await supabase.from("topics").select("subject_id").eq("id", section.topic_id).maybeSingle();
+    const subjectId = (tRow as { subject_id?: string } | null)?.subject_id;
+    if (subjectId) {
+      const { data: fu } = await supabase.rpc("fair_use_status", { p_subject: subjectId });
+      const row = Array.isArray(fu) ? fu[0] : fu;
+      const budget = Number(row?.budget_seconds) || 0;
+      const used = Number(row?.used_seconds) || 0;
+      if (budget > 0 && used >= budget) {
+        const hrs = (budget / 3600).toFixed(1);
+        return (
+          <main>
+            <section className="container" style={{ paddingTop: 40, paddingBottom: 70, maxWidth: 620 }}>
+              <p className="crumb"><Link href={`/learn/topic/${section.topic_id}`}>← Back to topic</Link></p>
+              <div className="card" style={{ textAlign: "center", border: "2px solid var(--accent)" }}>
+                <div style={{ fontSize: "2rem" }}>⏳</div>
+                <h2 style={{ margin: "8px 0" }}>Fair-use watch limit reached</h2>
+                <p className="muted">
+                  To keep classes fair for everyone, recorded video watch time for this subject is capped
+                  at about <strong>{hrs} hours</strong> (roughly twice the total class length). You&apos;ve
+                  reached that limit for this subject.
+                </p>
+                <p className="muted" style={{ fontSize: ".85rem" }}>
+                  Live classes are never counted. If you genuinely need more time, please contact us and we&apos;ll help.
+                </p>
+                <Link className="btn" href={`/learn/topic/${section.topic_id}`} style={{ marginTop: 8 }}>← Back to topic</Link>
+              </div>
+            </section>
+          </main>
+        );
+      }
+    }
+  }
+
   const src = c.bunny_video_id ? bunnyEmbedUrl(c.bunny_video_id, c.bunny_drm !== "off") : videoEmbedSrc(cfgRow?.config ?? null);
   const isRev = section.type === "revision_video";
   const numLabel = c.class_no ? (isRev ? `Revision ${c.class_no}` : `Class ${c.class_no}`) : "";

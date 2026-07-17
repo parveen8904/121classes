@@ -38,29 +38,66 @@ export default function MockInterview() {
   const recRef = useRef<any>(null);
   const spokenCount = useRef(0);                       // interviewer turns already spoken
 
+  const keepAlive = useRef<ReturnType<typeof setInterval> | null>(null);
+  const unlocked = useRef(false);
+
   useEffect(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     setCanListen(!!SR);
-    // Warm the voice list (Chrome populates it async).
-    window.speechSynthesis?.getVoices?.();
+    // Warm the voice list (Chrome populates it async via voiceschanged).
+    const synth = window.speechSynthesis;
+    synth?.getVoices?.();
+    synth?.addEventListener?.("voiceschanged", () => synth.getVoices());
     return () => {
+      if (keepAlive.current) clearInterval(keepAlive.current);
       window.speechSynthesis?.cancel?.();
       try { recRef.current?.stop?.(); } catch { /* already stopped */ }
     };
   }, []);
 
-  function speak(text: string) {
+  // Browsers only allow speech that a user gesture "unlocked". The first
+  // question arrives AFTER an async server call, so we unlock synchronously
+  // inside the button click with a silent utterance — then later speaks work
+  // everywhere (including iPhone/iPad).
+  function unlockSpeech() {
+    if (unlocked.current) return;
     const synth = window.speechSynthesis;
     if (!synth) return;
+    try {
+      const u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0;
+      synth.speak(u);
+      unlocked.current = true;
+    } catch { /* not supported */ }
+  }
+
+  function speak(text: string) {
+    const synth = window.speechSynthesis;
+    if (!synth || !text.trim()) return;
     synth.cancel();
-    const u = new SpeechSynthesisUtterance(text);
+    if (keepAlive.current) clearInterval(keepAlive.current);
+    // Chrome stalls on long utterances (~15s) — split into sentence-sized
+    // chunks and queue them; each chunk is short enough to finish reliably.
+    const chunks: string[] = [];
+    let buf = "";
+    for (const part of text.replace(/\s+/g, " ").split(/(?<=[.!?।])\s+/)) {
+      if ((buf + " " + part).trim().length > 200 && buf) { chunks.push(buf.trim()); buf = part; }
+      else buf = (buf ? buf + " " : "") + part;
+    }
+    if (buf.trim()) chunks.push(buf.trim());
     const v = pickVoice();
-    if (v) u.voice = v;
-    u.rate = 0.95;
-    u.onstart = () => setSpeaking(true);
-    u.onend = () => setSpeaking(false);
-    u.onerror = () => setSpeaking(false);
-    synth.speak(u);
+    chunks.forEach((chunk, i) => {
+      const u = new SpeechSynthesisUtterance(chunk);
+      if (v) u.voice = v;
+      u.rate = 0.95;
+      if (i === 0) u.onstart = () => setSpeaking(true);
+      if (i === chunks.length - 1) { u.onend = () => setSpeaking(false); u.onerror = () => setSpeaking(false); }
+      // Chrome swallows a speak() issued immediately after cancel() — queue a
+      // beat later. resume() first: Chrome can be stuck in a paused state.
+      setTimeout(() => {
+        try { synth.resume(); synth.speak(u); } catch { /* not supported */ }
+      }, 120);
+    });
   }
 
   // Speak each NEW interviewer turn as it arrives (when voice is on).
@@ -118,6 +155,7 @@ export default function MockInterview() {
   }
 
   function begin() {
+    unlockSpeech(); // inside the click — allows the async first question to be spoken
     setError("");
     start(async () => {
       try {
@@ -135,6 +173,7 @@ export default function MockInterview() {
   }
 
   function send(end = false) {
+    unlockSpeech(); // keep speech allowed for the async reply
     const answer = input.trim();
     if (listening) { try { recRef.current?.stop?.(); } catch { /* noop */ } }
     const mine: Turn[] = answer ? [{ who: "you", text: answer }] : [];

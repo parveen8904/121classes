@@ -586,11 +586,11 @@ export default async function LearnTopic({ params }: { params: { topicId: string
         {locked ? (
           <div className="lock-row">
             <span className="txt">
-              🔒 Locked. Unlock all <strong>{planName}</strong> content for{" "}
-              <strong>{subject?.title ?? "this subject"}</strong>.
+              🔒 Locked. Enroll in <strong>{planName}</strong> to unlock the full{" "}
+              <strong>{subject?.title ?? "this subject"}</strong> course.
             </span>
             <Link className="btn small" href={plansHref}>
-              Unlock →
+              Enroll →
             </Link>
           </div>
         ) : (

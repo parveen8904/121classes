@@ -236,11 +236,11 @@ export default function PricingCards({
                 <div className="plan-current">{isCurrent ? "✓ Your current plan" : "Included in your plan"}</div>
               ) : noPrice || !configured ? (
                 <a className="btn block" href={contactHref}>
-                  Get {tierName} →
+                  Enroll in {tierName} →
                 </a>
               ) : (
                 <button className="btn block" type="button" disabled={busy === tier} onClick={() => buy(tier)}>
-                  {busy === tier ? "Starting…" : `Get ${tierName} →`}
+                  {busy === tier ? "Starting…" : `Enroll in ${tierName} →`}
                 </button>
               )}
             </div>
@@ -251,7 +251,7 @@ export default function PricingCards({
       <p className="muted" style={{ textAlign: "center", fontSize: ".85rem", marginTop: 22 }}>
         {configured
           ? "🔒 Secure checkout by Razorpay. Access unlocks the moment your payment succeeds."
-          : "Online checkout is being set up. Tap Get to enquire and we'll enrol you right away. 🙌"}
+          : "Online checkout is being set up. Tap Enroll to enquire and we'll enrol you right away. 🙌"}
       </p>
     </>
   );

@@ -227,7 +227,7 @@ export default async function CoursesPage() {
                     Includes the study planner, AI doubts, tests &amp; performance reports.
                   </p>
                   <p style={{ marginTop: 12 }}>
-                    <Link className="btn small" href="/login">Start this subject →</Link>
+                    <Link className="btn small" href="/login">Enroll in this course →</Link>
                   </p>
                 </div>
               );

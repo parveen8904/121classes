@@ -14,6 +14,18 @@ async function requireAdmin(): Promise<boolean> {
 
 const orNull = (v: FormDataEntryValue | null) => str(v).trim() || null;
 
+// Process a batch of pending content now (transcripts → class summaries, PDFs →
+// text, handwritten notes → text). Runs immediately instead of waiting for the
+// overnight cron. Uses Haiku (cheap+fast); resumable — click again for more.
+export async function runIngestNow() {
+  if (!(await requireAdmin())) return;
+  try {
+    const { ingestPending } = await import("@/lib/knowledge");
+    await ingestPending({ digests: 40, pdfs: 20, notes: 8 });
+  } catch { /* best-effort */ }
+  revalidatePath("/admin/repository");
+}
+
 export async function addRepositoryItem(formData: FormData) {
   if (!(await requireAdmin())) return;
   const title = str(formData.get("title")).trim();

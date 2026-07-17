@@ -321,16 +321,22 @@ export default async function LearnCourse({ params }: { params: { courseId: stri
                       facultyEmail={facultyContacts.find((f) => f.email)?.email ?? null}
                     />
                     <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0 0" }}>
-                      ⚡ Instant reply from your class material. Not satisfied? Send it to the faculty on WhatsApp or email.
+                      ⚡ Instant reply from your class material.
                     </p>
                     {facultyContacts.length > 0 && (
-                      <p className="muted" style={{ fontSize: ".74rem", margin: "4px 0 0" }}>
-                        {facultyContacts.map((f, i) => (
-                          <span key={i}>
-                            👩‍🏫 {f.full_name}{f.phone ? ` · 📞 ${f.phone}` : ""}{f.email ? ` · ✉️ ${f.email}` : ""}
-                            {i < facultyContacts.length - 1 ? "  |  " : ""}
-                          </span>
-                        ))}
+                      <p style={{ fontSize: ".78rem", margin: "6px 0 0", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                        {facultyContacts.map((f) => {
+                          const wa = (f.phone ?? "").replace(/\D/g, "").slice(-10);
+                          return (
+                            <span key={f.full_name} style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                              <span className="muted">👩‍🏫 {f.full_name}:</span>
+                              {wa.length === 10 && (
+                                <a href={`https://wa.me/91${wa}`} target="_blank" rel="noopener noreferrer" style={{ color: "#25D366", fontWeight: 700 }}>💬 WhatsApp</a>
+                              )}
+                              {f.email && <a href={`mailto:${f.email}`} style={{ color: "var(--accent)", fontWeight: 700 }}>✉️ Email</a>}
+                            </span>
+                          );
+                        })}
                       </p>
                     )}
                   </div>

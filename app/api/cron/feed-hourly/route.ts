@@ -86,7 +86,10 @@ export async function GET(req: NextRequest) {
     // Pre-digest transcripts into clean saved notes so doubts answer cheaply.
     // Bigger batches: this only runs in the quiet overnight window (3 runs), so
     // the backlog (e.g. 269 handwritten notes) clears in nights, not months.
-    try { const { ingestPending } = await import("@/lib/knowledge"); knowledge = await ingestPending({ digests: 12, pdfs: 10, notes: 20 }); } catch { /* never block the feed */ }
+    // Haiku is cheap + fast (founder: process the repository tonight regardless
+    // of cost), so digest a big batch each off-peak run — the backlog (e.g. 156
+    // FR transcripts) clears in one night. Ingest is resumable if a run is cut short.
+    try { const { ingestPending } = await import("@/lib/knowledge"); knowledge = await ingestPending({ digests: 60, pdfs: 30, notes: 15 }); } catch { /* never block the feed */ }
     // Keep the visitor log lean: 60 days is plenty for the admin report.
     try {
       const svc = createServiceClient();

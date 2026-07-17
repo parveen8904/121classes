@@ -4,7 +4,7 @@ import { aiConfigured } from "@/lib/ai";
 import SubmitButton from "@/app/components/SubmitButton";
 import AdminHero from "../_components/AdminHero";
 import PdfUpload from "../_components/PdfUpload";
-import { addRepositoryItem, deleteRepositoryItem, toggleRepositoryItem, extractItemText } from "./actions";
+import { addRepositoryItem, deleteRepositoryItem, toggleRepositoryItem, extractItemText, runIngestNow } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "AI Repository — Admin" };
@@ -99,6 +99,14 @@ export default async function RepositoryPage() {
           book/ICAI PDFs, amendments, tests — is turned into AI teaching content by itself, every hour. No separate upload here.
           {cov.notes_have - cov.notes_ocr > 0 ? ` Still processing: ${cov.notes_have - cov.notes_ocr} handwritten notes.` : " Everything is ingested."}
         </p>
+        {cov.digest < cov.transcript && (
+          <form action={runIngestNow} style={{ marginTop: 10 }}>
+            <SubmitButton className="btn small" savedLabel="✓ Processed a batch — click again for more">
+              ▶ Process a batch now ({cov.transcript - cov.digest} transcripts left)
+            </SubmitButton>
+            <p className="muted" style={{ fontSize: ".76rem", marginTop: 4 }}>Runs immediately (Haiku). Click again to continue; the overnight job also keeps going on its own.</p>
+          </form>
+        )}
       </div>
 
       {!ai && (

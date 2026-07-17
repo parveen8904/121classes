@@ -101,10 +101,13 @@ export default async function RepositoryPage() {
         </p>
         {cov.digest < cov.transcript && (
           <form action={runIngestNow} style={{ marginTop: 10 }}>
-            <SubmitButton className="btn small" savedLabel="✓ Processed a batch — click again for more">
-              ▶ Process a batch now ({cov.transcript - cov.digest} transcripts left)
+            <SubmitButton className="btn small" savedLabel="✓ Started — processing in the background">
+              ▶ Process now ({cov.transcript - cov.digest} transcripts left)
             </SubmitButton>
-            <p className="muted" style={{ fontSize: ".76rem", marginTop: 4 }}>Runs immediately (Haiku). Click again to continue; the overnight job also keeps going on its own.</p>
+            <p className="muted" style={{ fontSize: ".76rem", marginTop: 4 }}>
+              Click once — it now works through the whole backlog in the background (Haiku). Wait a minute and
+              <strong> refresh this page</strong> to watch the count drop; the overnight job also keeps going on its own.
+            </p>
           </form>
         )}
       </div>

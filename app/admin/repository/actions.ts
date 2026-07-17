@@ -14,15 +14,26 @@ async function requireAdmin(): Promise<boolean> {
 
 const orNull = (v: FormDataEntryValue | null) => str(v).trim() || null;
 
-// Process a batch of pending content now (transcripts → class summaries, PDFs →
-// text, handwritten notes → text). Runs immediately instead of waiting for the
-// overnight cron. Uses Haiku (cheap+fast); resumable — click again for more.
+// Kick off repository ingest in the BACKGROUND (transcripts → class summaries,
+// PDFs → text, handwritten notes → text). Fires the self-chaining /api/repo-ingest
+// route and returns immediately, so the whole backlog drains hands-free instead
+// of timing out on a big synchronous run. Refresh the page to watch the count drop.
 export async function runIngestNow() {
   if (!(await requireAdmin())) return;
   try {
-    const { ingestPending } = await import("@/lib/knowledge");
-    await ingestPending({ digests: 40, pdfs: 20, notes: 8 });
-  } catch { /* best-effort */ }
+    const { headers } = await import("next/headers");
+    const { getSecret } = await import("@/lib/secrets");
+    const h = await headers();
+    const host = h.get("host");
+    const proto = h.get("x-forwarded-proto") ?? "https";
+    const secret = await getSecret("CRON_SECRET");
+    if (host) {
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 1500);
+      await fetch(`${proto}://${host}/api/repo-ingest${secret ? `?key=${encodeURIComponent(secret)}` : ""}`, { signal: ac.signal, cache: "no-store" }).catch(() => null);
+      clearTimeout(timer);
+    }
+  } catch { /* background route + overnight cron continue the queue */ }
   revalidatePath("/admin/repository");
 }
 

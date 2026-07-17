@@ -539,6 +539,11 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
     if (s.type === "full_class_video") rightLabel = classNoLabel.get(s.id);
     else if (s.type === "revision_video" && c.class_no) rightLabel = `Revision ${c.class_no}`;
     const hasSummary = s.type === "full_class_video" && !!c.ai_summary && !locked;
+    // First-5-free demo classes are marked by min_plan = null on a main class.
+    const isFreeDemo = s.type === "full_class_video" && s.min_plan == null;
+    const freeDemoBadge = isFreeDemo ? (
+      <span style={{ fontSize: ".72rem", fontWeight: 700, color: "#16a34a", border: "1px solid #16a34a", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>🆓 Free demo</span>
+    ) : null;
     // Universal description + link, shown to students for any content.
     const descLink = (c.description || c.link_url) ? (
       <div style={{ marginTop: 8 }}>
@@ -564,6 +569,7 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
           </div>
           <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
             {rightLabel && <span className="muted" style={{ fontSize: ".92rem", fontWeight: 400, fontStyle: "italic", whiteSpace: "nowrap" }}>{rightLabel}</span>}
+            {freeDemoBadge}
             {hasSummary && (
               <span style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>📋 Summary</span>
             )}

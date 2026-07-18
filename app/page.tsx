@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { lightImg } from "@/lib/img";
 import SiteNav from "./components/SiteNav";
 import SiteFooter from "./components/SiteFooter";
 import AnnouncementSplash from "./components/AnnouncementSplash";
@@ -129,7 +130,7 @@ export default async function Home() {
         <a href={sale.ctaUrl || "/login"} style={{ display: "block", textDecoration: "none" }}>
           {sale.bannerHome ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={sale.bannerHome} alt={sale.headline} style={{ width: "100%", display: "block" }} />
+            <img src={lightImg(sale.bannerHome, 1080)} alt={sale.headline} style={{ width: "100%", display: "block" }} />
           ) : (
             <div style={{ background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", padding: "12px 18px", textAlign: "center", fontWeight: 700 }}>
               🎉 {sale.headline} — {sale.discountPct}% OFF{sale.endsAt ? ` · ends ${new Date(sale.endsAt).toLocaleDateString("en-IN")}` : ""}
@@ -218,7 +219,7 @@ export default async function Home() {
         <div className="container" style={{ marginTop: 6, maxWidth: 1140 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={heroBanner}
+            src={lightImg(heroBanner, 1200)}
             alt="CA Parveen Sharma"
             style={{ width: "100%", borderRadius: 16, border: "1px solid var(--border)", display: "block" }}
           />
@@ -282,7 +283,7 @@ export default async function Home() {
             <div className="imgph" style={{ padding: 0, overflow: "hidden" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={founderPhoto}
+                src={lightImg(founderPhoto, 750)} loading="lazy" decoding="async"
                 alt="CA Parveen Sharma"
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
@@ -377,7 +378,7 @@ export default async function Home() {
           {studioPhoto ? (
             <div className="imgph" style={{ padding: 0, overflow: "hidden" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={studioPhoto} alt="CA Parveen Sharma teaching from the studio"
+              <img src={lightImg(studioPhoto, 1080)} loading="lazy" decoding="async" alt="CA Parveen Sharma teaching from the studio"
                 style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
           ) : (
@@ -615,7 +616,7 @@ export default async function Home() {
                 >
                   {r.photo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.photo_url} alt={r.student_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <img src={lightImg(r.photo_url, 256)} loading="lazy" decoding="async" alt={r.student_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : (
                     "🎓"
                   )}

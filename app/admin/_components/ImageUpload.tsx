@@ -21,18 +21,41 @@ export default function ImageUpload({
   const [busy, setBusy] = useState(false);
   const supabase = createClient();
 
+  // Photos straight off a camera are 3-8 MB PNGs/JPEGs — far bigger than any
+  // screen needs. Downscale to max 1920px and re-encode as JPEG (q0.85) before
+  // uploading, so the stored original is already light (~100-400 KB).
+  async function shrink(file: File): Promise<{ blob: Blob; ext: string; ct: string }> {
+    const asIs = { blob: file as Blob, ext: (file.name.split(".").pop() || "jpg").toLowerCase(), ct: file.type || "image/jpeg" };
+    if (!file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") return asIs;
+    if (file.size < 300 * 1024) return asIs; // already small
+    try {
+      const url = URL.createObjectURL(file);
+      const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+      const scale = Math.min(1, 1920 / Math.max(img.width || 1920, img.height || 1920));
+      const w = Math.max(1, Math.round((img.width || 1920) * scale));
+      const h = Math.max(1, Math.round((img.height || 1920) * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return asIs;
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", 0.85));
+      if (blob && blob.size < file.size) return { blob, ext: "jpg", ct: "image/jpeg" };
+      return asIs;
+    } catch { return asIs; }
+  }
+
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setBusy(true);
     try {
-      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-      const ct = file.type || "image/jpeg";
-      // Images are small — always go straight to Supabase Storage.
+      const { blob, ext, ct } = await shrink(file);
       const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const { error } = await supabase.storage
         .from("media")
-        .upload(path, file, { upsert: false, contentType: ct });
+        .upload(path, blob, { upsert: false, contentType: ct });
       if (error) {
         alert("Upload failed: " + error.message);
         return;

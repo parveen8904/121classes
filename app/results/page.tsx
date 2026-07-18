@@ -1,4 +1,5 @@
 import { tryServiceClient } from "@/lib/supabase/service";
+import { lightImg } from "@/lib/img";
 import CountUp from "@/app/components/CountUp";
 
 // Public marketing page — cache it and refresh every 5 minutes.
@@ -20,7 +21,7 @@ function Card({ r }: { r: Result }) {
       <div style={{ width: 104, height: 104, borderRadius: "50%", margin: "0 auto 12px", overflow: "hidden", border: "3px solid var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.8rem", fontWeight: 800, background: "var(--bg-soft,#eef2f1)", color: "var(--accent)" }}>
         {r.photo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={r.photo_url} alt={r.student_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img src={lightImg(r.photo_url, 256)} loading="lazy" decoding="async" alt={r.student_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           initials(r.student_name)
         )}

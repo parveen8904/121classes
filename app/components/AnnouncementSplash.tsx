@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { lightImg } from "@/lib/img";
 
 // Dynamic pop-up banner. The image + duration + link are set in
 // Admin → Site images → "Pop-up banner". Shows once per visit and auto-closes
@@ -42,7 +43,7 @@ export default function AnnouncementSplash({
 
   const img = (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={banner} alt="Announcement" style={{ display: "block", width: "100%", height: "auto" }} />
+    <img src={lightImg(banner, 1080)} alt="Announcement" style={{ display: "block", width: "100%", height: "auto" }} />
   );
 
   return (

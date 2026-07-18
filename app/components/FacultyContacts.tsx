@@ -1,3 +1,5 @@
+import { lightImg } from "@/lib/img";
+
 type Faculty = {
   id: string;
   full_name: string;
@@ -24,7 +26,7 @@ export default function FacultyContacts({ faculty, title = "👩‍🏫 Your fac
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {f.photo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={f.photo_url} alt={f.full_name}
+                <img src={lightImg(f.photo_url, 128)} loading="lazy" decoding="async" alt={f.full_name}
                   style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover" }} />
               ) : (
                 <span style={{ fontSize: "1.8rem" }}>👩‍🏫</span>

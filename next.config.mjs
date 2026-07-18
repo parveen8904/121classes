@@ -1,6 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Vercel's image optimizer may resize/convert our Supabase Storage images
+  // (uploaded photos are multi-MB PNGs; optimized AVIF/WebP is ~30-100 KB).
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "xmeltwyfvzhhurtcjfiu.supabase.co", pathname: "/storage/v1/object/public/**" },
+    ],
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 86400,
+  },
   // Allow bigger server-action payloads so students can attach an image/PDF to
   // a doubt (photographed question). Downscaled client-side; 8mb is plenty.
   experimental: { serverActions: { bodySizeLimit: "8mb" } },

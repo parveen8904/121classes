@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { lightImg } from "@/lib/img";
 import { tryServiceClient } from "@/lib/supabase/service";
 import CountUp from "@/app/components/CountUp";
 import { studentsTaught } from "@/lib/studentsTaught";
@@ -199,7 +200,7 @@ export default async function CoursesPage() {
                       <div style={{ display: "flex", alignItems: "center" }}>
                         {pics.map((p, idx) => (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img key={idx} src={p.photo_url} alt={p.student_name} title={p.headline ? `${p.student_name} — ${p.headline}` : p.student_name}
+                          <img key={idx} src={lightImg(p.photo_url, 96)} loading="lazy" decoding="async" alt={p.student_name} title={p.headline ? `${p.student_name} — ${p.headline}` : p.student_name}
                             style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--bg,#fff)", marginLeft: idx === 0 ? 0 : -10, boxShadow: "0 0 0 1px var(--border)" }} />
                         ))}
                       </div>

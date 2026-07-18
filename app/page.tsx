@@ -93,9 +93,17 @@ export default async function Home() {
   // Every rank holder, AIR 1 at the top moving downwards (rank parsed from
   // the "AIR N" headline; non-rank results stay on /results).
   const airRank = (h?: string | null) => { const m = /AIR\s*(\d+)/i.exec(h ?? ""); return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY; };
+  // Same rank → the LATEST exam attempt comes first (attempt parsed to year+month).
+  const MONTHS: Record<string, number> = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
+  const attemptKey = (a?: string | null) => {
+    const m = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[^0-9]*(\d{4})/i.exec((a ?? "").toUpperCase());
+    return m ? Number(m[2]) * 12 + MONTHS[m[1]] : 0;
+  };
   const topResults = (allResults ?? [])
     .filter((r) => Number.isFinite(airRank(r.headline as string)))
-    .sort((a, b) => airRank(a.headline as string) - airRank(b.headline as string));
+    .sort((a, b) =>
+      (airRank(a.headline as string) - airRank(b.headline as string)) ||
+      (attemptKey(b.attempt as string) - attemptKey(a.attempt as string)));
   const { data: liveUpcoming } = await supabase
     .from("live_sessions")
     .select("id, title, audience, starts_at, faculties(full_name)")

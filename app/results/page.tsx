@@ -54,7 +54,15 @@ export default async function ResultsPage() {
   // One combined list: every ranker, AIR 1 at the top moving downwards; results
   // without an AIR rank follow at the end. No Final/Inter separation.
   const airRank = (h?: string | null) => { const m = /AIR\s*(\d+)/i.exec(h ?? ""); return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY; };
-  const sorted = [...results].sort((a, b) => airRank(a.headline) - airRank(b.headline));
+  // Same rank → the LATEST exam attempt comes first.
+  const MONTHS: Record<string, number> = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
+  const attemptKey = (a?: string | null) => {
+    const m = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[^0-9]*(\d{4})/i.exec((a ?? "").toUpperCase());
+    return m ? Number(m[2]) * 12 + MONTHS[m[1]] : 0;
+  };
+  const sorted = [...results].sort((a, b) =>
+    (airRank(a.headline) - airRank(b.headline)) ||
+    (attemptKey(b.attempt) - attemptKey(a.attempt)));
   const groups: { title: string; match: (r: Result) => boolean }[] = [
     { title: "🏆 Our rankers", match: (r) => Number.isFinite(airRank(r.headline)) },
     { title: "🌟 Our achievers", match: (r) => !Number.isFinite(airRank(r.headline)) },

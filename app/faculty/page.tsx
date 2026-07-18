@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { lightImg } from "@/lib/img";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export default async function FacultyPage() {
               >
                 {f.photo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={f.photo_url} alt={f.full_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <img src={lightImg(f.photo_url, 256)} loading="lazy" decoding="async" alt={f.full_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
                   "👨‍🏫"
                 )}

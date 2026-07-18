@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { lightImg } from "@/lib/img";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { razorpayConfigured } from "@/lib/razorpay";
@@ -140,7 +141,7 @@ export default async function CoursePlans(
           <a href={sale.ctaUrl || undefined} style={{ display: "block", maxWidth: 900, margin: "0 auto 20px", textDecoration: "none" }}>
             {sale.bannerPlans ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={sale.bannerPlans} alt={sale.headline} style={{ width: "100%", borderRadius: 14, display: "block" }} />
+              <img src={lightImg(sale.bannerPlans, 1080)} alt={sale.headline} style={{ width: "100%", borderRadius: 14, display: "block" }} />
             ) : (
               <div style={{ background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", borderRadius: 14, padding: "14px 18px", textAlign: "center", fontWeight: 700 }}>
                 🎉 {sale.headline} — {sale.discountPct}% OFF{sale.endsAt ? ` · ends ${new Date(sale.endsAt).toLocaleDateString("en-IN")}` : ""}

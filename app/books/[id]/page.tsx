@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { lightImg } from "@/lib/img";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatINR } from "@/lib/pricing";
@@ -30,7 +31,7 @@ export default async function BookDetail(props: { params: Promise<{ id: string }
           {book.cover_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             (<img
-              src={book.cover_url}
+              src={lightImg(book.cover_url, 750)}
               alt={book.title}
               style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 16 }}
             />)

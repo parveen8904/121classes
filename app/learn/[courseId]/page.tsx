@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { topicVisible, effectiveAttemptWindow } from "../_lib/attempt";
+import FacultyContacts from "@/app/components/FacultyContacts";
 import { setAutoRenew } from "./actions";
 import { addMySubject, removeMySubject } from "../mycourses";
 import AskDoubts from "./AskDoubts";
@@ -10,7 +11,7 @@ import { fmtMins, fmtAt125, AT125_NOTE } from "@/lib/duration";
 
 export const dynamic = "force-dynamic";
 
-type SubjectFacultyRow = { faculties: { full_name: string; phone: string | null; email: string | null } | null };
+type SubjectFacultyRow = { faculties: { id: string; full_name: string; phone: string | null; email: string | null; photo_url: string | null } | null };
 
 function fmtDate(s: string | null): string {
   if (!s) return "—";
@@ -33,7 +34,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
     supabase.from("courses").select("id, title").eq("id", params.courseId).single(),
     supabase
       .from("subjects")
-      .select("id, title, order_index, telegram_group_url, valid_from_attempt, valid_to_attempt, subject_faculty(faculties(full_name, phone, email))")
+      .select("id, title, order_index, telegram_group_url, valid_from_attempt, valid_to_attempt, subject_faculty(faculties(id, full_name, phone, email, photo_url))")
       .eq("course_id", params.courseId)
       .order("order_index")
       .order("title"),
@@ -333,23 +334,21 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                     </p>
                   </div>
                 </div>
-                {/* Faculty contact — small row under the banner (number stays
-                    hidden behind the /api/faculty-wa bridge). */}
+                {/* This subject's OWN faculty tile (photo + WhatsApp/Email;
+                    the number stays hidden behind the /api/faculty-wa bridge). */}
                 {facultyContacts.length > 0 && (
-                  <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 10px", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                    {facultyContacts.map((f) => {
-                      const hasWhatsApp = ((f.phone ?? "").replace(/\D/g, "").length >= 10);
-                      return (
-                        <span key={f.full_name} style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-                          <span>👩‍🏫 {f.full_name}:</span>
-                          {hasWhatsApp && (
-                            <a href={`/api/faculty-wa?subject=${s.id}`} target="_blank" rel="noopener noreferrer" style={{ color: "#25D366", fontWeight: 700 }}>💬 WhatsApp</a>
-                          )}
-                          {f.email && <a href={`mailto:${f.email}`} style={{ color: "var(--accent)", fontWeight: 700 }}>✉️ Email</a>}
-                        </span>
-                      );
-                    })}
-                  </p>
+                  <div style={{ marginBottom: 12 }}>
+                    <FacultyContacts
+                      title={`👩‍🏫 Your ${s.title} faculty`}
+                      faculty={facultyContacts.map((f) => ({
+                        id: f.id,
+                        full_name: f.full_name,
+                        email: f.email,
+                        photo_url: f.photo_url,
+                        hasPhone: ((f.phone ?? "").replace(/\D/g, "").length >= 10),
+                      }))}
+                    />
+                  </div>
                 )}
                 {mySubjIds.has(s.id) && ((s as { telegram_group_url?: string | null }).telegram_group_url || tgChannel || dcLink) && (
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>

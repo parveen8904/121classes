@@ -4,7 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 import SetPassword from "./set-password";
 import ConnectTelegram from "./ConnectTelegram";
 import MyCourses from "./MyCourses";
-import FacultyContacts from "./FacultyContacts";
 import { announcementKindLabel } from "@/lib/announcements";
 import WellnessTip from "@/app/components/WellnessTip";
 import TodayPlan from "@/app/components/TodayPlan";
@@ -83,22 +82,9 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
     if (optedSubjectIds.size === 0) activeCourseSubs.forEach((s) => optedSubjectIds.add(s));
   }
 
-  let faculty: { id: string; full_name: string; phone: string | null; email: string | null; photo_url: string | null }[] = [];
-  if (optedSubjectIds.size > 0) {
-    const { data: sf } = await supabase
-      .from("subject_faculty")
-      .select("faculty_id")
-      .in("subject_id", [...optedSubjectIds]);
-    const facIds = [...new Set((sf ?? []).map((r) => r.faculty_id as string))];
-    if (facIds.length > 0) {
-      const { data: facs } = await supabase
-        .from("faculties")
-        .select("id, full_name, phone, email, photo_url")
-        .in("id", facIds)
-        .order("full_name");
-      faculty = facs ?? [];
-    }
-  }
+  // (Faculty contacts moved to the subject blocks on the course page — each
+  // subject shows its OWN faculty there; different subjects can have different
+  // faculty, so a single dashboard card was misleading.)
 
   // 📡 Live classes TODAY — standalone sessions + topic live-classes in the
   // student's opted subjects, that start today.
@@ -289,7 +275,6 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
         {/* Sponsor view: the students they've gifted a subscription to. */}
         {isSponsor && !needsSetup && <SponsoredStudents gifterId={user.id} />}
 
-        {!isSponsor && <FacultyContacts faculty={(faculty ?? []).map((f) => ({ id: f.id, full_name: f.full_name, email: f.email, photo_url: f.photo_url, hasPhone: !!(f.phone && f.phone.replace(/\D/g, "").length >= 10) }))} />}
 
         {!isSponsor && <MyCourses courses={myCourses.map((c) => ({ id: c.id, title: c.title }))} />}
 

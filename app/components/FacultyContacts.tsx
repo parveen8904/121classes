@@ -6,17 +6,18 @@ type Faculty = {
   photo_url: string | null;
 };
 
-// "Your faculty" — names + contact links, shown to students on the dashboard.
-// Only faculty who have a phone or email are listed. The phone NUMBER is never
-// sent to the browser: the WhatsApp button goes through the /api/faculty-wa
-// bridge, which looks the number up server-side and forwards into a chat.
-export default function FacultyContacts({ faculty }: { faculty: Faculty[] }) {
+// "Your faculty" — names + contact links, shown per SUBJECT (each subject can
+// have different faculty). Only faculty who have a phone or email are listed.
+// The phone NUMBER is never sent to the browser: the WhatsApp button goes
+// through the /api/faculty-wa bridge, which looks the number up server-side
+// and forwards into a chat.
+export default function FacultyContacts({ faculty, title = "👩‍🏫 Your faculty" }: { faculty: Faculty[]; title?: string }) {
   const withContact = faculty.filter((f) => f.hasPhone || f.email);
   if (withContact.length === 0) return null;
 
   return (
     <>
-      <h2 style={{ margin: "32px 0 12px", fontSize: "1.2rem" }}>👩‍🏫 Your faculty</h2>
+      <h2 style={{ margin: "18px 0 10px", fontSize: "1.05rem" }}>{title}</h2>
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))" }}>
         {withContact.map((f) => (
           <div key={f.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>

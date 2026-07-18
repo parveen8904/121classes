@@ -636,16 +636,16 @@ export default async function Home() {
             <p>All India Rank holders mentored by CA Parveen Sharma &amp; team.</p>
           </div>
           {/* Dense "wall of rankers" — many small punchy cards, AIR 1 downwards. */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10, maxWidth: 1140, margin: "0 auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(112px, 1fr))", gap: 8, maxWidth: 1140, margin: "0 auto" }}>
             {topResults.map((r) => (
               <div key={r.id} style={{
                 textAlign: "center",
                 background: "linear-gradient(160deg, color-mix(in srgb, var(--accent) 10%, var(--card)), var(--card))",
                 border: "1px solid var(--border)",
-                borderRadius: 14,
-                padding: "14px 8px 12px",
+                borderRadius: 12,
+                padding: "10px 6px 8px",
               }}>
-                <div style={{ width: 62, height: 62, borderRadius: "50%", margin: "0 auto 8px", overflow: "hidden", border: "2px solid var(--accent)", background: "var(--bg-soft)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem" }}>
+                <div style={{ width: 78, height: 78, borderRadius: "50%", margin: "0 auto 6px", overflow: "hidden", border: "2px solid var(--accent)", background: "var(--bg-soft)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem" }}>
                   {r.photo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={lightImg(r.photo_url, 128)} loading="lazy" decoding="async" alt={r.student_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -653,9 +653,9 @@ export default async function Home() {
                     "🎓"
                   )}
                 </div>
-                {r.headline && <div className="grad" style={{ fontWeight: 900, fontSize: "1.35rem", lineHeight: 1.1, letterSpacing: ".5px" }}>{r.headline}</div>}
-                <div style={{ fontWeight: 800, fontSize: ".9rem", marginTop: 3, lineHeight: 1.2 }}>{r.student_name}</div>
-                <div className="muted" style={{ fontSize: ".7rem", marginTop: 3 }}>
+                {r.headline && <div className="grad" style={{ fontWeight: 900, fontSize: "1.45rem", lineHeight: 1.05, letterSpacing: ".5px" }}>{r.headline}</div>}
+                <div style={{ fontWeight: 800, fontSize: ".95rem", marginTop: 2, lineHeight: 1.15 }}>{r.student_name}</div>
+                <div className="muted" style={{ fontSize: ".68rem", marginTop: 2 }}>
                   {[(r as { level?: string | null }).level?.replace("CA ", ""), r.attempt].filter(Boolean).join(" · ")}
                 </div>
               </div>

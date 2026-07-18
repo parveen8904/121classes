@@ -21,10 +21,10 @@ function Card({ r }: { r: Result }) {
       textAlign: "center",
       background: "linear-gradient(160deg, color-mix(in srgb, var(--accent) 10%, var(--card)), var(--card))",
       border: "1px solid var(--border)",
-      borderRadius: 14,
-      padding: "14px 8px 12px",
+      borderRadius: 12,
+      padding: "10px 6px 8px",
     }}>
-      <div style={{ width: 62, height: 62, borderRadius: "50%", margin: "0 auto 8px", overflow: "hidden", border: "2px solid var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", fontWeight: 800, background: "var(--bg-soft,#eef2f1)", color: "var(--accent)" }}>
+      <div style={{ width: 78, height: 78, borderRadius: "50%", margin: "0 auto 6px", overflow: "hidden", border: "2px solid var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", fontWeight: 800, background: "var(--bg-soft,#eef2f1)", color: "var(--accent)" }}>
         {r.photo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={lightImg(r.photo_url, 128)} loading="lazy" decoding="async" alt={r.student_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -32,9 +32,9 @@ function Card({ r }: { r: Result }) {
           initials(r.student_name)
         )}
       </div>
-      {r.headline && <div style={{ fontWeight: 900, fontSize: "1.35rem", lineHeight: 1.1, letterSpacing: ".5px", color: "var(--accent)" }}>{r.headline}</div>}
-      <div style={{ fontWeight: 800, fontSize: ".9rem", marginTop: 3, lineHeight: 1.2 }}>{r.student_name}</div>
-      <div className="muted" style={{ fontSize: ".7rem", marginTop: 3 }}>{[r.level?.replace("CA ", ""), r.attempt, r.marks].filter(Boolean).join(" · ")}</div>
+      {r.headline && <div style={{ fontWeight: 900, fontSize: "1.45rem", lineHeight: 1.05, letterSpacing: ".5px", color: "var(--accent)" }}>{r.headline}</div>}
+      <div style={{ fontWeight: 800, fontSize: ".95rem", marginTop: 2, lineHeight: 1.15 }}>{r.student_name}</div>
+      <div className="muted" style={{ fontSize: ".68rem", marginTop: 2 }}>{[r.level?.replace("CA ", ""), r.attempt, r.marks].filter(Boolean).join(" · ")}</div>
       {r.quote && <p style={{ fontSize: ".78rem", marginTop: 6, fontStyle: "italic" }}>&ldquo;{r.quote}&rdquo;</p>}
     </div>
   );
@@ -83,7 +83,7 @@ export default async function ResultsPage() {
           return (
             <div key={g.title} style={{ marginBottom: 8 }}>
               <h3 style={{ fontSize: "1.15rem", margin: "26px 0 14px" }}>{g.title}</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(112px, 1fr))", gap: 8 }}>
                 {list.map((r) => <Card key={r.id} r={r} />)}
               </div>
             </div>

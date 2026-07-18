@@ -134,8 +134,12 @@ export async function GET(req: NextRequest) {
           if (!adminEmails.length) notes.push("social reminder: no email set");
           else {
             // Platform-specific variants when the post carries them (campaign packs).
+            const cardUrl = `https://caparveensharma.com/api/campaign-card/${p.id}`;
             const igBlock = p.to_instagram
-              ? `<p style="margin:14px 0 4px"><strong>📷 Instagram caption</strong></p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(p.ig_text ?? text))}</div>`
+              ? `<p style="margin:14px 0 4px"><strong>📷 Instagram caption</strong></p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(p.ig_text ?? text))}</div>
+                 <p style="margin:14px 0 4px"><strong>🖼️ Ready-made image (1080×1080)</strong> — long-press / right-click to save, then attach in Instagram:</p>
+                 <a href="${cardUrl}" target="_blank"><img src="${cardUrl}" alt="Instagram card" width="270" height="270" style="border-radius:12px;display:block" /></a>
+                 <p style="font-size:13px;color:#666;margin:6px 0 0"><a href="${cardUrl}">Open full-size image</a></p>`
               : "";
             const ytBlock = p.to_youtube
               ? `<p style="margin:14px 0 4px"><strong>▶️ YouTube community post</strong></p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(p.yt_text ?? text))}</div>`

@@ -265,6 +265,11 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
               </p>
             </div>
             <div className="row-actions">
+              {p.to_instagram && (
+                <a className="btn small secondary" href={`/api/campaign-card/${p.id}`} target="_blank" rel="noopener noreferrer" title="Auto-generated 1080×1080 image for this post — save it and attach in Instagram">
+                  🖼️ IG card
+                </a>
+              )}
               <form action={sendPostNow} style={{ display: "inline" }}>
                 <input type="hidden" name="id" value={p.id} />
                 <SubmitButton className="btn small">Send now</SubmitButton>
@@ -307,6 +312,11 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
               </p>
             </div>
             <div className="row-actions">
+              {p.to_instagram && (
+                <a className="btn small secondary" href={`/api/campaign-card/${p.id}`} target="_blank" rel="noopener noreferrer" title="Auto-generated 1080×1080 image for this post">
+                  🖼️ IG card
+                </a>
+              )}
               <DeleteButton action={deletePost} id={p.id} message="Remove from history?" />
             </div>
           </div>

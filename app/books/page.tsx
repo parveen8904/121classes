@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatINR } from "@/lib/pricing";
+import { lightImg } from "@/lib/img";
+import { AddToCartButton, CartBar } from "./cartClient";
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +25,15 @@ export default async function BookStore() {
       {books && books.length > 0 ? (
         <div className="grid grid-4">
           {books.map((b) => (
-            <Link key={b.id} href={`/books/${b.id}`} style={{ display: "block" }}>
-              <div className="tile book" style={{ height: "100%" }}>
+            <div key={b.id} className="tile book" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+              <Link href={`/books/${b.id}`} style={{ color: "var(--text)", display: "block" }}>
                 <div className="cover">
                   {b.cover_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={b.cover_url}
+                      src={lightImg(b.cover_url, 384)}
+                      loading="lazy"
+                      decoding="async"
                       alt={b.title}
                       style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12 }}
                     />
@@ -42,11 +46,12 @@ export default async function BookStore() {
                 <p className="price" style={{ marginTop: 8 }}>
                   {formatINR(b.price_inr)}
                 </p>
-                <p className="muted" style={{ fontSize: ".8rem" }}>
-                  {b.stock_qty > 0 ? "✅ In stock" : "⏳ Out of stock"}
-                </p>
+              </Link>
+              <div style={{ marginTop: "auto", paddingTop: 10, display: "flex", gap: 8, alignItems: "center", justifyContent: "center" }}>
+                <AddToCartButton bookId={b.id} inStock={b.stock_qty > 0} />
+                <Link className="btn small secondary" href={`/books/${b.id}`}>Details</Link>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       ) : (
@@ -54,6 +59,7 @@ export default async function BookStore() {
           📭 No books available right now — please check back soon.
         </p>
       )}
+      <CartBar />
     </section>
   );
 }

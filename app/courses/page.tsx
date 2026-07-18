@@ -42,8 +42,11 @@ export default async function CoursesPage() {
   const topicSubject = new Map((topics ?? []).map((t) => [t.id as string, t.subject_id as string]));
   const topicIds = (topics ?? []).map((t) => t.id as string);
 
+  // section_stats, NOT sections.config — selecting config across rows drags
+  // megabytes of transcripts (it caused statement timeouts on every ISR pass
+  // and contributed to an OOM restart on 2026-07-18).
   const { data: sections } = topicIds.length
-    ? await svc.from("sections").select("topic_id, type, config").eq("is_published", true).in("topic_id", topicIds)
+    ? await svc.from("section_stats").select("topic_id, type, duration_minutes, class_no, has_notes").eq("is_published", true).in("topic_id", topicIds)
     : { data: [] as any[] };
 
   const { data: amendments } = subjectIds.length
@@ -96,12 +99,11 @@ export default async function CoursesPage() {
     const sid = topicSubject.get(sec.topic_id as string);
     const st = sid ? stats.get(sid) : null;
     if (!st) continue;
-    const c = (sec.config ?? {}) as any;
     // "Part" continuations (e.g. 7B) add their minutes but aren't a separate class.
-    if (sec.type === "full_class_video") { if (!/[A-Za-z]/.test(String(c.class_no ?? ""))) st.classes++; st.minutes += dur(c); }
+    if (sec.type === "full_class_video") { if (!/[A-Za-z]/.test(String(sec.class_no ?? ""))) st.classes++; st.minutes += Number(sec.duration_minutes) || 0; }
     else if (sec.type === "revision_video") st.revisions++;
     else if (sec.type === "mcq_test" || sec.type === "subjective_test") st.tests++;
-    if (sec.type === "pdf" || c.notes_hand_url || c.notes_typed_url || c.pdf_url) st.notes++;
+    if (sec.type === "pdf" || sec.has_notes) st.notes++;
   }
   for (const a of amendments ?? []) {
     const st = stats.get(a.subject_id as string);

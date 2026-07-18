@@ -83,7 +83,12 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
                 maxWidth: 340,
               }}
             >
-              {String(post.campaign).slice(0, 24)}
+              {(() => {
+                const c = String(post.campaign);
+                if (c.length <= 26) return c;
+                const cut = c.slice(0, 26);
+                return cut.slice(0, cut.lastIndexOf(" ") > 8 ? cut.lastIndexOf(" ") : 26);
+              })()}
             </div>
           ) : null}
         </div>

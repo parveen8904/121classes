@@ -26,7 +26,7 @@ export default async function ArticlesIndex() {
         .select("slug, title, description, category, created_at")
         .eq("is_published", true)
         .order("created_at", { ascending: false })
-        .limit(200)
+        .limit(1000)
     : { data: [] };
   const articles = data ?? [];
   const byCat = new Map<string, typeof articles>();

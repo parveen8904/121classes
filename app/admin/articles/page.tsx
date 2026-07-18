@@ -10,11 +10,15 @@ export const metadata = { title: "Articles — Admin" };
 
 export default async function AdminArticlesPage() {
   const svc = createServiceClient();
-  const [{ data: articles }, { data: topics }] = await Promise.all([
+  // The list fetches the latest 100 (each row carries body_md for the inline
+  // editor — fetching every body would weigh megabytes). The COUNT is exact.
+  const [{ data: articles }, { data: topics }, { count: totalArticles }] = await Promise.all([
     svc.from("articles").select("id, slug, title, description, body_md, category, is_published, created_at").order("created_at", { ascending: false }).limit(100),
     svc.from("article_topics").select("id, topic, status").order("created_at").limit(200),
+    svc.from("articles").select("id", { count: "exact", head: true }),
   ]);
   const pendingTopics = (topics ?? []).filter((t) => t.status === "pending");
+  const total = totalArticles ?? (articles ?? []).length;
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 860 }}>
@@ -28,7 +32,7 @@ export default async function AdminArticlesPage() {
       {/* Queue status */}
       <div className="card" style={{ marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div>
-          <strong>✍️ Writing queue: {pendingTopics.length} topic{pendingTopics.length === 1 ? "" : "s"} waiting · {(articles ?? []).length} article{(articles ?? []).length === 1 ? "" : "s"} written</strong>
+          <strong>✍️ Writing queue: {pendingTopics.length} topic{pendingTopics.length === 1 ? "" : "s"} waiting · {total} article{total === 1 ? "" : "s"} written</strong>
           <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
             The writer works through the queue automatically (and hourly as a safety net). Each article is original —
             never copied from the internet — and publishes itself to <Link href="/articles">/articles</Link>.
@@ -83,6 +87,12 @@ export default async function AdminArticlesPage() {
 
       {/* Articles list */}
       <h2 className="admin-section-title" style={{ marginTop: 24 }}>📄 Written articles</h2>
+      {total > (articles ?? []).length && (
+        <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 10px" }}>
+          Showing the latest {(articles ?? []).length} of <strong>{total}</strong> — every article (old and new) stays
+          live on <Link href="/articles">/articles</Link> and in the Google sitemap.
+        </p>
+      )}
       <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
         {(articles ?? []).length === 0 && <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing written yet — press &ldquo;▶ Write now&rdquo; above to start the queue.</p></div>}
         {(articles ?? []).map((a) => (

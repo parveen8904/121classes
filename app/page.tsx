@@ -635,36 +635,29 @@ export default async function Home() {
             <h2>Our rankers. Our pride.</h2>
             <p>All India Rank holders mentored by CA Parveen Sharma &amp; team.</p>
           </div>
-          <div className="grid grid-3">
+          {/* Dense "wall of rankers" — many small punchy cards, AIR 1 downwards. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10, maxWidth: 1140, margin: "0 auto" }}>
             {topResults.map((r) => (
-              <div className="tile" key={r.id} style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    width: 84,
-                    height: 84,
-                    borderRadius: "50%",
-                    margin: "0 auto 12px",
-                    overflow: "hidden",
-                    border: "2px solid var(--accent)",
-                    background: "var(--bg-soft)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "1.8rem",
-                  }}
-                >
+              <div key={r.id} style={{
+                textAlign: "center",
+                background: "linear-gradient(160deg, color-mix(in srgb, var(--accent) 10%, var(--card)), var(--card))",
+                border: "1px solid var(--border)",
+                borderRadius: 14,
+                padding: "14px 8px 12px",
+              }}>
+                <div style={{ width: 62, height: 62, borderRadius: "50%", margin: "0 auto 8px", overflow: "hidden", border: "2px solid var(--accent)", background: "var(--bg-soft)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem" }}>
                   {r.photo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={lightImg(r.photo_url, 256)} loading="lazy" decoding="async" alt={r.student_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <img src={lightImg(r.photo_url, 128)} loading="lazy" decoding="async" alt={r.student_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : (
                     "🎓"
                   )}
                 </div>
-                {r.headline && <p className="grad" style={{ fontWeight: 900, fontSize: "1.5rem", margin: "0 0 2px", letterSpacing: ".5px" }}>🏅 {r.headline}</p>}
-                <h3 style={{ fontSize: "1.1rem", fontWeight: 800, margin: 0 }}>{r.student_name}</h3>
-                <p className="muted" style={{ fontSize: ".82rem", marginTop: 4 }}>
-                  {[(r as { level?: string | null }).level, r.attempt, r.marks].filter(Boolean).join(" · ")}
-                </p>
+                {r.headline && <div className="grad" style={{ fontWeight: 900, fontSize: "1.35rem", lineHeight: 1.1, letterSpacing: ".5px" }}>{r.headline}</div>}
+                <div style={{ fontWeight: 800, fontSize: ".9rem", marginTop: 3, lineHeight: 1.2 }}>{r.student_name}</div>
+                <div className="muted" style={{ fontSize: ".7rem", marginTop: 3 }}>
+                  {[(r as { level?: string | null }).level?.replace("CA ", ""), r.attempt].filter(Boolean).join(" · ")}
+                </div>
               </div>
             ))}
           </div>

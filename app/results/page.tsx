@@ -17,19 +17,25 @@ const initials = (n: string) => n.split(/\s+/).map((w) => w[0]).filter(Boolean).
 
 function Card({ r }: { r: Result }) {
   return (
-    <div className="tile" style={{ textAlign: "center" }}>
-      <div style={{ width: 104, height: 104, borderRadius: "50%", margin: "0 auto 12px", overflow: "hidden", border: "3px solid var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.8rem", fontWeight: 800, background: "var(--bg-soft,#eef2f1)", color: "var(--accent)" }}>
+    <div style={{
+      textAlign: "center",
+      background: "linear-gradient(160deg, color-mix(in srgb, var(--accent) 10%, var(--card)), var(--card))",
+      border: "1px solid var(--border)",
+      borderRadius: 14,
+      padding: "14px 8px 12px",
+    }}>
+      <div style={{ width: 62, height: 62, borderRadius: "50%", margin: "0 auto 8px", overflow: "hidden", border: "2px solid var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", fontWeight: 800, background: "var(--bg-soft,#eef2f1)", color: "var(--accent)" }}>
         {r.photo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={lightImg(r.photo_url, 256)} loading="lazy" decoding="async" alt={r.student_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img src={lightImg(r.photo_url, 128)} loading="lazy" decoding="async" alt={r.student_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           initials(r.student_name)
         )}
       </div>
-      {r.headline && <div style={{ fontWeight: 900, fontSize: "1.5rem", letterSpacing: ".5px", color: "var(--accent)", margin: "0 0 2px" }}>🏅 {r.headline}</div>}
-      <h3 style={{ fontSize: "1.1rem", fontWeight: 800, margin: "0 0 4px" }}>{r.student_name}</h3>
-      <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 0" }}>{[r.level, r.attempt, r.marks].filter(Boolean).join(" · ")}</p>
-      {r.quote && <p style={{ fontSize: ".9rem", marginTop: 8, fontStyle: "italic" }}>&ldquo;{r.quote}&rdquo;</p>}
+      {r.headline && <div style={{ fontWeight: 900, fontSize: "1.35rem", lineHeight: 1.1, letterSpacing: ".5px", color: "var(--accent)" }}>{r.headline}</div>}
+      <div style={{ fontWeight: 800, fontSize: ".9rem", marginTop: 3, lineHeight: 1.2 }}>{r.student_name}</div>
+      <div className="muted" style={{ fontSize: ".7rem", marginTop: 3 }}>{[r.level?.replace("CA ", ""), r.attempt, r.marks].filter(Boolean).join(" · ")}</div>
+      {r.quote && <p style={{ fontSize: ".78rem", marginTop: 6, fontStyle: "italic" }}>&ldquo;{r.quote}&rdquo;</p>}
     </div>
   );
 }
@@ -77,7 +83,7 @@ export default async function ResultsPage() {
           return (
             <div key={g.title} style={{ marginBottom: 8 }}>
               <h3 style={{ fontSize: "1.15rem", margin: "26px 0 14px" }}>{g.title}</h3>
-              <div className="grid grid-3">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
                 {list.map((r) => <Card key={r.id} r={r} />)}
               </div>
             </div>

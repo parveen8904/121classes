@@ -484,7 +484,8 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                 {!windowMismatch && target && subjTopics.length > 0 && (
                   <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 8px" }}>
                     🎯 Showing content applicable to your <strong>{target}</strong> exam — anything meant only for
-                    other attempts is hidden.
+                    other attempts is hidden.{" "}
+                    <Link href="/dashboard/profile" style={{ fontWeight: 700 }}>Change attempt</Link>
                   </p>
                 )}
                 {subjTopics.length > 0 ? (

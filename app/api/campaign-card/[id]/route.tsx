@@ -35,8 +35,9 @@ function displayText(raw: string): { headline: string; lines: string[] } {
   return { headline: headline.slice(0, 120), lines: rest.map((l) => l.slice(0, 140)) };
 }
 
-export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
+  const wantJpeg = new URL(req.url).searchParams.get("fmt") === "jpg";
   const svc = createServiceClient();
   const { data: post } = await svc
     .from("scheduled_posts")
@@ -49,7 +50,7 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
   const card = pickCard(post.id as string);
   const headSize = headline.length > 90 ? 52 : headline.length > 60 ? 62 : 74;
 
-  return new ImageResponse(
+  const png = new ImageResponse(
     (
       <div
         style={{
@@ -123,4 +124,13 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
     ),
     { width: 1080, height: 1080 },
   );
+
+  // Instagram's Graph API only accepts JPEG image URLs — ?fmt=jpg converts.
+  if (wantJpeg) {
+    const sharp = (await import("sharp")).default;
+    const buf = Buffer.from(await png.arrayBuffer());
+    const jpeg = await sharp(buf).jpeg({ quality: 90 }).toBuffer();
+    return new Response(new Uint8Array(jpeg), { headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=3600" } });
+  }
+  return png;
 }

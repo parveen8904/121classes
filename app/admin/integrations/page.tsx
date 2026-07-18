@@ -211,6 +211,8 @@ export default async function IntegrationsPage(
           <KeyField name="DISCORD_PUBLIC_KEY" label="Discord Public Key (for the /ask bot)" placeholder="Developer Portal → your app → Public Key" />
           <KeyField name="DISCORD_BOT_TOKEN" label="Discord Bot Token (for the /ask bot)" placeholder="Developer Portal → your app → Bot → Reset Token → Copy" />
           <KeyField name="DISCORD_ASK_CHANNELS" label="Limit /ask to these channel IDs (comma-separated; blank = any channel)" placeholder="e.g. 123456789012345678, 234567…  (right-click a channel → Copy Channel ID)" />
+          <KeyField name="INSTAGRAM_ACCESS_TOKEN" label="Instagram access token (auto-posts campaigns — needs your professional IG account linked to a Facebook Page)" placeholder="developers.facebook.com → your app → long-lived token with instagram_basic + instagram_content_publish" />
+          <KeyField name="INSTAGRAM_USER_ID" label="Instagram user ID (numeric IG business-account id)" placeholder="Graph API → me/accounts → page → instagram_business_account id" />
           <KeyField name="ANTHROPIC_API_KEY" label="Anthropic (AI) key" placeholder="sk-ant-…" />
           <KeyField name="BUNNY_STREAM_API_KEY" label="Bunny Stream API key (video uploads)" placeholder="from dash.bunny.net → Stream → API" />
           <KeyField name="BUNNY_LIBRARY_ID" label="Bunny Library ID (optional)" placeholder="e.g. 682810" />

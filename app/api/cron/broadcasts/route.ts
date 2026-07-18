@@ -123,11 +123,27 @@ export async function GET(req: NextRequest) {
           }
           notes.push(`direct: ${ok} delivered${fail ? `, ${fail} failed (blocked the bot / left)` : ""}`);
         }
-        // Instagram / YouTube — prepare-and-remind: email the drafted post to
-        // the admins to publish manually (auto-posting isn't reliably possible).
-        if (p.to_instagram || p.to_youtube || p.to_twitter) {
+        // Instagram — AUTO-POST via the Meta Graph API when keys are set
+        // (professional account + long-lived token in Admin → Integrations).
+        // The auto-generated 1080×1080 card is the image; ig_text the caption.
+        let igPosted = false;
+        if (p.to_instagram) {
+          const { igConfigured, publishInstagramImage } = await import("@/lib/instagram");
+          if (await igConfigured()) {
+            const res = await publishInstagramImage({
+              imageUrl: `https://caparveensharma.com/api/campaign-card/${p.id}?fmt=jpg`,
+              caption: String(p.ig_text ?? text),
+            });
+            if (res.ok) { igPosted = true; notes.push("instagram: posted ✅"); }
+            else notes.push(`instagram: auto-post failed (${res.error}) — reminder emailed instead`);
+          }
+        }
+
+        // Instagram (fallback) / YouTube — prepare-and-remind: email the drafted
+        // post to the admins to publish manually.
+        if ((p.to_instagram && !igPosted) || p.to_youtube || p.to_twitter) {
           const platforms = [
-            p.to_instagram ? "Instagram" : null,
+            p.to_instagram && !igPosted ? "Instagram" : null,
             p.to_youtube ? "YouTube" : null,
             p.to_twitter ? "Twitter/X" : null,
           ].filter(Boolean).join(", ");
@@ -135,7 +151,7 @@ export async function GET(req: NextRequest) {
           else {
             // Platform-specific variants when the post carries them (campaign packs).
             const cardUrl = `https://caparveensharma.com/api/campaign-card/${p.id}`;
-            const igBlock = p.to_instagram
+            const igBlock = p.to_instagram && !igPosted
               ? `<p style="margin:14px 0 4px"><strong>📷 Instagram caption</strong></p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(p.ig_text ?? text))}</div>
                  <p style="margin:14px 0 4px"><strong>🖼️ Ready-made image (1080×1080)</strong> — long-press / right-click to save, then attach in Instagram:</p>
                  <a href="${cardUrl}" target="_blank"><img src="${cardUrl}" alt="Instagram card" width="270" height="270" style="border-radius:12px;display:block" /></a>

@@ -333,6 +333,24 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                     </p>
                   </div>
                 </div>
+                {/* Faculty contact — small row under the banner (number stays
+                    hidden behind the /api/faculty-wa bridge). */}
+                {facultyContacts.length > 0 && (
+                  <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 10px", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                    {facultyContacts.map((f) => {
+                      const hasWhatsApp = ((f.phone ?? "").replace(/\D/g, "").length >= 10);
+                      return (
+                        <span key={f.full_name} style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                          <span>👩‍🏫 {f.full_name}:</span>
+                          {hasWhatsApp && (
+                            <a href={`/api/faculty-wa?subject=${s.id}`} target="_blank" rel="noopener noreferrer" style={{ color: "#25D366", fontWeight: 700 }}>💬 WhatsApp</a>
+                          )}
+                          {f.email && <a href={`mailto:${f.email}`} style={{ color: "var(--accent)", fontWeight: 700 }}>✉️ Email</a>}
+                        </span>
+                      );
+                    })}
+                  </p>
+                )}
                 {mySubjIds.has(s.id) && ((s as { telegram_group_url?: string | null }).telegram_group_url || tgChannel || dcLink) && (
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                     {(s as { telegram_group_url?: string | null }).telegram_group_url && (

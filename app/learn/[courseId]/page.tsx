@@ -285,11 +285,17 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
               .filter((f): f is NonNullable<SubjectFacultyRow["faculties"]> => !!f);
             const faculty = facultyRows.map((f) => f.full_name).filter(Boolean);
             const facultyContacts = facultyRows.filter((f) => f.phone || f.email);
-            const subjTopics = (topics ?? []).filter((t) => {
-              if (t.subject_id !== s.id) return false;
+            const allSubjTopics = (topics ?? []).filter((t) => t.subject_id === s.id);
+            let subjTopics = allSubjTopics.filter((t) => {
               const w = topicWindow(t);
               return topicVisible(target, w.from, w.to);
             });
+            // FAIL OPEN: if the attempt filter would hide the ENTIRE subject
+            // (e.g. target "May 2026" vs a "Nov 2026 onwards" subject), show
+            // everything with a notice instead of a bewildering empty course.
+            const windowMismatch = subjTopics.length === 0 && allSubjTopics.length > 0;
+            if (windowMismatch) subjTopics = allSubjTopics;
+            const sw = subjWindow.get(s.id) ?? { from: null, to: null };
             return (
               <div key={s.id} className="subj-block">
                 {/* Prominent subject banner — carries the faculty contact. */}
@@ -463,6 +469,14 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                         );
                       })}
                     </div>
+                  </div>
+                )}
+                {windowMismatch && (
+                  <div className="notice" style={{ marginBottom: 10, border: "1px solid var(--accent)", borderRadius: 10, padding: "10px 14px", fontSize: ".85rem" }}>
+                    📅 This subject&apos;s content is prepared for the{" "}
+                    <strong>{[sw.from, sw.to].filter(Boolean).join(" – ") || "current"}</strong> attempts, while your
+                    target attempt is <strong>{target}</strong> — showing everything anyway.{" "}
+                    <Link href="/dashboard/profile" style={{ fontWeight: 700 }}>Update your target attempt →</Link>
                   </div>
                 )}
                 {subjTopics.length > 0 ? (

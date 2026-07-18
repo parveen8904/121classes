@@ -26,9 +26,9 @@ function Card({ r }: { r: Result }) {
           initials(r.student_name)
         )}
       </div>
-      <h3 style={{ fontSize: "1.05rem", margin: "0 0 4px" }}>{r.student_name}</h3>
-      {r.headline && <div style={{ display: "inline-block", background: "var(--accent)", color: "#fff", fontSize: ".74rem", fontWeight: 700, padding: "3px 10px", borderRadius: 999 }}>{r.headline}</div>}
-      <p className="muted" style={{ fontSize: ".82rem", margin: "8px 0 0" }}>{[r.attempt, r.marks].filter(Boolean).join(" · ")}</p>
+      {r.headline && <div style={{ fontWeight: 900, fontSize: "1.5rem", letterSpacing: ".5px", color: "var(--accent)", margin: "0 0 2px" }}>🏅 {r.headline}</div>}
+      <h3 style={{ fontSize: "1.1rem", fontWeight: 800, margin: "0 0 4px" }}>{r.student_name}</h3>
+      <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 0" }}>{[r.level, r.attempt, r.marks].filter(Boolean).join(" · ")}</p>
       {r.quote && <p style={{ fontSize: ".9rem", marginTop: 8, fontStyle: "italic" }}>&ldquo;{r.quote}&rdquo;</p>}
     </div>
   );
@@ -45,10 +45,13 @@ export default async function ResultsPage() {
     .order("created_at", { ascending: false });
   const results = (data ?? []) as Result[];
 
+  // One combined list: every ranker, AIR 1 at the top moving downwards; results
+  // without an AIR rank follow at the end. No Final/Inter separation.
+  const airRank = (h?: string | null) => { const m = /AIR\s*(\d+)/i.exec(h ?? ""); return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY; };
+  const sorted = [...results].sort((a, b) => airRank(a.headline) - airRank(b.headline));
   const groups: { title: string; match: (r: Result) => boolean }[] = [
-    { title: "🏆 CA Final", match: (r) => (r.level || "") === "CA Final" },
-    { title: "🏅 CA Intermediate", match: (r) => (r.level || "") === "CA Intermediate" },
-    { title: "🌟 Our achievers", match: (r) => !["CA Final", "CA Intermediate"].includes(r.level || "") },
+    { title: "🏆 Our rankers", match: (r) => Number.isFinite(airRank(r.headline)) },
+    { title: "🌟 Our achievers", match: (r) => !Number.isFinite(airRank(r.headline)) },
   ];
 
   return (
@@ -69,7 +72,7 @@ export default async function ResultsPage() {
         <p className="muted" style={{ textAlign: "center" }}>🎓 Results will be published here soon.</p>
       ) : (
         groups.map((g) => {
-          const list = results.filter(g.match);
+          const list = sorted.filter(g.match);
           if (list.length === 0) return null;
           return (
             <div key={g.title} style={{ marginBottom: 8 }}>

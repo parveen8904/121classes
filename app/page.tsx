@@ -85,12 +85,17 @@ export default async function Home() {
     .eq("is_active", true)
     .order("created_at", { ascending: false })
     .limit(3);
-  const { data: topResults } = await supabase
+  const { data: allResults } = await supabase
     .from("results")
-    .select("id, student_name, headline, attempt, marks, photo_url")
+    .select("id, student_name, headline, attempt, marks, photo_url, level")
     .eq("is_published", true)
-    .order("order_index")
-    .limit(6);
+    .limit(200);
+  // Every rank holder, AIR 1 at the top moving downwards (rank parsed from
+  // the "AIR N" headline; non-rank results stay on /results).
+  const airRank = (h?: string | null) => { const m = /AIR\s*(\d+)/i.exec(h ?? ""); return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY; };
+  const topResults = (allResults ?? [])
+    .filter((r) => Number.isFinite(airRank(r.headline as string)))
+    .sort((a, b) => airRank(a.headline as string) - airRank(b.headline as string));
   const { data: liveUpcoming } = await supabase
     .from("live_sessions")
     .select("id, title, audience, starts_at, faculties(full_name)")
@@ -626,9 +631,9 @@ export default async function Home() {
       {topResults && topResults.length > 0 && (
         <section className="section" id="results">
           <div className="section-head">
-            <div className="eyebrow">🏆 Results</div>
-            <h2>Our students. Our pride.</h2>
-            <p>Rank-holders mentored by CA Parveen Sharma &amp; team.</p>
+            <div className="eyebrow">🏆 Our rankers</div>
+            <h2>Our rankers. Our pride.</h2>
+            <p>All India Rank holders mentored by CA Parveen Sharma &amp; team.</p>
           </div>
           <div className="grid grid-3">
             {topResults.map((r) => (
@@ -655,10 +660,10 @@ export default async function Home() {
                     "🎓"
                   )}
                 </div>
-                <h3 style={{ fontSize: "1.05rem" }}>{r.student_name}</h3>
-                {r.headline && <p className="grad" style={{ fontWeight: 800, marginTop: 2 }}>{r.headline}</p>}
-                <p className="muted" style={{ fontSize: ".82rem", marginTop: 2 }}>
-                  {[r.attempt, r.marks].filter(Boolean).join(" · ")}
+                {r.headline && <p className="grad" style={{ fontWeight: 900, fontSize: "1.5rem", margin: "0 0 2px", letterSpacing: ".5px" }}>🏅 {r.headline}</p>}
+                <h3 style={{ fontSize: "1.1rem", fontWeight: 800, margin: 0 }}>{r.student_name}</h3>
+                <p className="muted" style={{ fontSize: ".82rem", marginTop: 4 }}>
+                  {[(r as { level?: string | null }).level, r.attempt, r.marks].filter(Boolean).join(" · ")}
                 </p>
               </div>
             ))}

@@ -53,11 +53,11 @@ const testimonials = [
 ];
 
 const APP_PLATFORMS = [
-  { key: "app_url_web", icon: "🌐", label: "Web app", cta: "Open in browser", fallback: "/login" },
-  { key: "app_url_mac", icon: "🍎", label: "Mac app", cta: "Download for Mac" },
-  { key: "app_url_windows", icon: "🪟", label: "Windows app", cta: "Download for Windows" },
-  { key: "app_url_ios", icon: "📱", label: "iPhone", cta: "Install on iPhone", fallback: "/install" },
-  { key: "app_url_android", icon: "🤖", label: "Android", cta: "Install on Android", fallback: "/install" },
+  { key: "app_url_web", icon: "🌐", label: "Web app", desc: "Opens in your browser — nothing to install. Works on any device.", cta: "Open now", fallback: "/login" },
+  { key: "app_url_windows", icon: "🪟", label: "Windows app", desc: "Install on your Windows laptop — download classes & watch offline.", cta: "Download" },
+  { key: "app_url_mac", icon: "🍎", label: "Mac app", desc: "Install on your MacBook — download classes & watch offline.", cta: "Download" },
+  { key: "app_url_ios", icon: "📱", label: "iPhone app", desc: "From the App Store — learn on the go.", cta: "Install", fallback: "/install" },
+  { key: "app_url_android", icon: "🤖", label: "Android app", desc: "From Google Play — learn on the go.", cta: "Install", fallback: "/install" },
 ];
 
 export default async function Home() {
@@ -244,6 +244,82 @@ export default async function Home() {
           />
         </div>
       )}
+
+      {/* GET THE APP — prime real estate, right under the hero */}
+      <section className="section alt" id="apps" style={{ paddingTop: 34, paddingBottom: 34 }}>
+        <div className="section-head" style={{ marginBottom: 18 }}>
+          <div className="eyebrow">Study anywhere</div>
+          <h2>One account. Five ways to learn.</h2>
+          <p>
+            The <strong>Web app</strong> runs in your browser (no installation); the <strong>Windows &amp; Mac apps</strong>{" "}
+            add secure offline class downloads; the phone apps keep you learning on the go.
+          </p>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, maxWidth: 1050, margin: "0 auto" }}>
+          {APP_PLATFORMS.map((p) => {
+            const url = siteImg.get(p.key) || p.fallback || "";
+            const inner = (
+              <>
+                <div style={{ fontSize: "2rem" }}>{p.icon}</div>
+                <h3 style={{ fontSize: "1rem", margin: "6px 0 4px" }}>{p.label}</h3>
+                <p className="muted" style={{ fontSize: ".76rem", margin: 0, minHeight: 44 }}>{p.desc}</p>
+                <p style={{ color: url ? "var(--accent)" : "var(--muted)", fontWeight: 800, margin: "8px 0 0", fontSize: ".9rem" }}>
+                  {url ? `${p.cta} →` : "Coming soon"}
+                </p>
+              </>
+            );
+            const style = { textAlign: "center" as const, display: "flex", flexDirection: "column" as const, alignItems: "center", padding: "18px 12px", opacity: url ? 1 : 0.65, height: "100%" };
+            return url
+              ? <a className="tile" key={p.key} href={url} style={style}>{inner}</a>
+              : <div className="tile" key={p.key} style={style}>{inner}</div>;
+          })}
+        </div>
+        <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".85rem" }}>
+          Need help installing?{" "}
+          <Link href="/help" style={{ color: "var(--accent)", fontWeight: 700 }}>Step-by-step guide →</Link>
+        </p>
+      </section>
+
+      {/* RESULTS / TOPPERS */}
+      {topResults && topResults.length > 0 && (
+        <section className="section" id="results">
+          <div className="section-head">
+            <div className="eyebrow">🏆 Our rankers</div>
+            <h2>Our rankers. Our pride.</h2>
+            <p>All India Rank holders mentored by CA Parveen Sharma &amp; team.</p>
+          </div>
+          {/* Dense "wall of rankers" — many small punchy cards, AIR 1 downwards. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(112px, 1fr))", gap: 8, maxWidth: 1140, margin: "0 auto" }}>
+            {topResults.map((r) => (
+              <div key={r.id} style={{
+                textAlign: "center",
+                background: "linear-gradient(160deg, color-mix(in srgb, var(--accent) 10%, var(--card)), var(--card))",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: "10px 6px 8px",
+              }}>
+                <div style={{ width: 78, height: 78, borderRadius: "50%", margin: "0 auto 6px", overflow: "hidden", border: "2px solid var(--accent)", background: "var(--bg-soft)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem" }}>
+                  {r.photo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={lightImg(r.photo_url, 128)} loading="lazy" decoding="async" alt={r.student_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    "🎓"
+                  )}
+                </div>
+                {r.headline && <div className="grad" style={{ fontWeight: 900, fontSize: "1.45rem", lineHeight: 1.05, letterSpacing: ".5px" }}>{r.headline}</div>}
+                <div style={{ fontWeight: 800, fontSize: ".95rem", marginTop: 2, lineHeight: 1.15 }}>{r.student_name}</div>
+                <div className="muted" style={{ fontSize: ".68rem", marginTop: 2 }}>
+                  {[(r as { level?: string | null }).level?.replace("CA ", ""), r.attempt].filter(Boolean).join(" · ")}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign: "center", marginTop: 26 }}>
+            <a className="btn secondary" href="/results">See all results →</a>
+          </div>
+        </section>
+      )}
+
 
       {/* HIGHLIGHT BANNER — latest announcement / course */}
       {latestHighlight && (
@@ -598,82 +674,6 @@ export default async function Home() {
           <Link className="btn secondary" href="/calendar">🗓️ See full calendar →</Link>
         </div>
       </section>
-
-      {/* GET THE APP */}
-      <section className="section alt" id="apps">
-        <div className="section-head">
-          <div className="eyebrow">Study anywhere</div>
-          <h2>Get the app</h2>
-          <p>
-            Learn on the web, or download your classes to watch offline on the desktop app — securely,
-            with your name watermarked on every video.
-          </p>
-        </div>
-        <div className="grid grid-3" style={{ maxWidth: 880, margin: "0 auto" }}>
-          {APP_PLATFORMS.map((p) => {
-            const url = siteImg.get(p.key) || p.fallback || "";
-            return url ? (
-              <a className="tile" key={p.key} href={url} style={{ textAlign: "center" }}>
-                <div className="ic">{p.icon}</div>
-                <h3>{p.label}</h3>
-                <p style={{ color: "var(--accent)", fontWeight: 700 }}>{p.cta} →</p>
-              </a>
-            ) : (
-              <div className="tile" key={p.key} style={{ textAlign: "center", opacity: 0.6 }}>
-                <div className="ic">{p.icon}</div>
-                <h3>{p.label}</h3>
-                <p className="muted">Coming soon</p>
-              </div>
-            );
-          })}
-        </div>
-        <p className="muted" style={{ textAlign: "center", marginTop: 18 }}>
-          Need help installing?{" "}
-          <Link href="/help" style={{ color: "var(--accent)", fontWeight: 700 }}>
-            See the step-by-step guide →
-          </Link>
-        </p>
-      </section>
-
-      {/* RESULTS / TOPPERS */}
-      {topResults && topResults.length > 0 && (
-        <section className="section" id="results">
-          <div className="section-head">
-            <div className="eyebrow">🏆 Our rankers</div>
-            <h2>Our rankers. Our pride.</h2>
-            <p>All India Rank holders mentored by CA Parveen Sharma &amp; team.</p>
-          </div>
-          {/* Dense "wall of rankers" — many small punchy cards, AIR 1 downwards. */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(112px, 1fr))", gap: 8, maxWidth: 1140, margin: "0 auto" }}>
-            {topResults.map((r) => (
-              <div key={r.id} style={{
-                textAlign: "center",
-                background: "linear-gradient(160deg, color-mix(in srgb, var(--accent) 10%, var(--card)), var(--card))",
-                border: "1px solid var(--border)",
-                borderRadius: 12,
-                padding: "10px 6px 8px",
-              }}>
-                <div style={{ width: 78, height: 78, borderRadius: "50%", margin: "0 auto 6px", overflow: "hidden", border: "2px solid var(--accent)", background: "var(--bg-soft)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem" }}>
-                  {r.photo_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={lightImg(r.photo_url, 128)} loading="lazy" decoding="async" alt={r.student_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    "🎓"
-                  )}
-                </div>
-                {r.headline && <div className="grad" style={{ fontWeight: 900, fontSize: "1.45rem", lineHeight: 1.05, letterSpacing: ".5px" }}>{r.headline}</div>}
-                <div style={{ fontWeight: 800, fontSize: ".95rem", marginTop: 2, lineHeight: 1.15 }}>{r.student_name}</div>
-                <div className="muted" style={{ fontSize: ".68rem", marginTop: 2 }}>
-                  {[(r as { level?: string | null }).level?.replace("CA ", ""), r.attempt].filter(Boolean).join(" · ")}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ textAlign: "center", marginTop: 26 }}>
-            <a className="btn secondary" href="/results">See all results →</a>
-          </div>
-        </section>
-      )}
 
       {/* TESTIMONIALS */}
       <section className="section alt" id="testimonials">

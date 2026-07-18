@@ -71,7 +71,28 @@ export default async function LivePage() {
     };
   });
 
-  const all = [...shape((data ?? []) as unknown as LiveRow[]), ...standalone];
+  // Batch livestream schedule (recorded classes played on Zoom per the planner).
+  const { data: schedRows } = await supabase
+    .from("class_schedule")
+    .select("id, title, class_no, batch, scheduled_at, join_url, subject_id, subjects(title)")
+    .gte("scheduled_at", new Date(Date.now() - 2 * 3600 * 1000).toISOString())
+    .eq("status", "scheduled")
+    .order("scheduled_at")
+    .limit(30);
+  const scheduled = (schedRows ?? []).map((r) => ({
+    id: `sched-${r.id}`,
+    title: `Class ${r.class_no ?? ""} — ${r.title}`.trim(),
+    topicId: "",
+    course: (r.batch as string) || "Batch livestream",
+    subject: ((r as { subjects?: { title?: string } | null }).subjects?.title as string) || "",
+    topic: "",
+    when: new Date(r.scheduled_at as string),
+    join: (r.join_url as string) || "",
+    internal: false,
+    recording: "",
+  }));
+
+  const all = [...shape((data ?? []) as unknown as LiveRow[]), ...standalone, ...scheduled];
   const now = Date.now();
   const upcoming = all
     .filter((x) => !x.when || x.when.getTime() >= now - 2 * 3600 * 1000)

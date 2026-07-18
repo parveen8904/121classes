@@ -24,7 +24,7 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 const stats = (taught: string) => [
-  { num: "20+", lbl: "Years teaching CA" },
+  { num: "36+", lbl: "Years teaching CA" },
   { num: taught, lbl: "Students taught" },
   { num: "1-on-1", lbl: "Personalised focus" },
 ];
@@ -79,6 +79,12 @@ export default async function Home() {
       .limit(3),
     supabase.from("site_settings").select("key, value"),
   ]);
+  const { data: books } = await supabase
+    .from("books")
+    .select("id, title, cover_url, price_inr")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(3);
   const { data: topResults } = await supabase
     .from("results")
     .select("id, student_name, headline, attempt, marks, photo_url")
@@ -298,13 +304,13 @@ export default async function Home() {
             </div>
           )}
           <div>
-            <div className="ribbon">Your mentor · 30+ years teaching CA</div>
+            <div className="ribbon">Your mentor · 36+ years teaching CA</div>
             <h2>CA Parveen Sharma</h2>
             <div className="role">Founder &amp; Lead Faculty · Personalised Learning</div>
             <p className="muted">
               CA Parveen Sharma is one of India&apos;s most renowned Accountancy educators,
               deeply respected by CA students across the country.
-              With <strong>30+ years of teaching experience</strong>, he has mentored thousands of
+              With <strong>36+ years of teaching experience</strong>, he has mentored thousands of
               aspiring Chartered Accountants across the country. A <strong>rank holder in both
               CA Intermediate and CA Final</strong>, he specialises in <strong>Advanced Accounting
               and Financial Reporting</strong> and is loved for his concept-based teaching style
@@ -450,6 +456,34 @@ export default async function Home() {
           <Link className="btn" href="/courses">Explore all courses →</Link>
         </div>
       </section>
+
+      {/* BOOKS STORE */}
+      {books && books.length > 0 && (
+        <section className="section" id="books">
+          <div className="section-head">
+            <div className="eyebrow">Books</div>
+            <h2>Books by CA Parveen Sharma</h2>
+            <p>Printed hardcopy books, delivered to your door — anyone can order, no enrolment needed.</p>
+          </div>
+          <div className="grid grid-3" style={{ maxWidth: 980, margin: "0 auto" }}>
+            {books.map((b) => (
+              <Link key={b.id} href="/books" className="tile" style={{ color: "var(--text)" }}>
+                {b.cover_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={lightImg(b.cover_url as string, 384)} loading="lazy" decoding="async" alt={b.title as string} style={{ width: "100%", maxWidth: 180, borderRadius: 10, margin: "0 auto 10px", display: "block", boxShadow: "0 4px 14px rgba(0,0,0,.15)" }} />
+                ) : (
+                  <div className="ic">📦</div>
+                )}
+                <h3 style={{ fontSize: "1rem" }}>{b.title}</h3>
+                {b.price_inr != null && <p style={{ fontWeight: 800, marginTop: 6 }}>₹{Number(b.price_inr).toLocaleString("en-IN")}</p>}
+              </Link>
+            ))}
+          </div>
+          <div style={{ textAlign: "center", marginTop: 26 }}>
+            <Link className="btn" href="/books">📦 See all books &amp; order →</Link>
+          </div>
+        </section>
+      )}
 
       {/* BUILD YOUR PLAN */}
       <section className="section" id="build-your-plan">

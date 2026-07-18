@@ -16,11 +16,17 @@ export type PaperAttempt = {
   awarded?: number | null;
   total?: number | null;
   report?: DescriptiveGrade | null;
+  underReview?: boolean;
+  examinerRemarks?: string | null;
+  examinerName?: string | null;
 };
 
 type Row = {
   id: string;
   status: string;
+  review_status?: string | null;
+  examiner_remarks?: string | null;
+  examiner_name?: string | null;
   started_at: string;
   deadline_at: string;
   submitted_at: string | null;
@@ -166,6 +172,19 @@ function toAttempt(row: Row | null): PaperAttempt {
   if (!row) return { status: "none" };
   // Past deadline and never submitted → the window is closed.
   const expired = row.status === "started" && new Date(row.deadline_at).getTime() < Date.now();
+  // AI has graded it, but the EXAMINER hasn't released it yet → the student
+  // sees it as still under evaluation (no marks, no report, no checked copy).
+  if (row.status === "graded" && row.review_status && row.review_status !== "checked") {
+    return {
+      status: "submitted",
+      startedAt: row.started_at,
+      deadlineAt: row.deadline_at,
+      submittedAt: row.submitted_at ?? undefined,
+      fileUrl: row.file_url ?? undefined,
+      total: row.total_marks,
+      underReview: true,
+    };
+  }
   return {
     status: expired ? "expired" : (row.status as PaperAttempt["status"]),
     startedAt: row.started_at,
@@ -176,6 +195,8 @@ function toAttempt(row: Row | null): PaperAttempt {
     awarded: row.awarded_marks,
     total: row.total_marks,
     report: row.report,
+    examinerRemarks: row.examiner_remarks ?? null,
+    examinerName: row.examiner_name ?? null,
   };
 }
 
@@ -249,8 +270,9 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
     } catch {
       annotatedUrl = null;
     }
-    await svc.from("descriptive_attempts").update({ status: "graded", awarded_marks: graded.awarded, total_marks: graded.total, report: graded, annotated_url: annotatedUrl }).eq("id", row.id);
-    return { status: "graded", fileUrl: row.file_url ?? undefined, annotatedUrl: annotatedUrl ?? undefined, submittedAt: row.submitted_at ?? undefined, deadlineAt: row.deadline_at, awarded: graded.awarded, total: graded.total, report: graded };
+    await svc.from("descriptive_attempts").update({ status: "graded", awarded_marks: graded.awarded, total_marks: graded.total, report: graded, annotated_url: annotatedUrl, review_status: "pending" }).eq("id", row.id);
+    // The student does NOT get the report yet — an examiner verifies first.
+    return { status: "submitted", fileUrl: row.file_url ?? undefined, submittedAt: row.submitted_at ?? undefined, deadlineAt: row.deadline_at, total: graded.total, underReview: true };
   }
   return { status: "submitted", fileUrl: row.file_url ?? undefined, submittedAt: row.submitted_at ?? undefined, deadlineAt: row.deadline_at, total: row.total_marks };
 }

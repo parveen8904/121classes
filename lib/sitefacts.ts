@@ -26,7 +26,7 @@ export async function getSiteFacts(): Promise<string> {
 
   const lines: string[] = [];
   lines.push("BRAND: CA Parveen Sharma — Personalised CA coaching. Personalised one-on-one CA coaching.");
-  lines.push("FOUNDER & LEAD FACULTY: CA Parveen Sharma (30+ years teaching CA; rank holder; specialises in Advanced Accounting & Financial Reporting).");
+  lines.push("FOUNDER & LEAD FACULTY: CA Parveen Sharma (36+ years teaching CA; rank holder; specialises in Advanced Accounting & Financial Reporting).");
 
   const facList = (faculties.data ?? []).map((f) => f.full_name).filter(Boolean);
   if (facList.length) lines.push("FACULTY: " + facList.join(", ") + ".");

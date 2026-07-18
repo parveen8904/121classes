@@ -215,6 +215,9 @@ export default function DescriptivePaper(props: Props) {
       <div style={{ display: "grid", gap: 16 }}>
         <div className="card" style={{ border: "2px solid var(--accent)" }}>
           <h3 style={{ marginTop: 0 }}>{pct >= 50 ? "🎉 Well done!" : "📝 Keep practising!"}</h3>
+        {attempt.examinerName && (
+          <p style={{ margin: "6px 0 0", fontWeight: 600 }}>🧑‍🏫 Checked &amp; verified by {attempt.examinerName}{attempt.examinerRemarks ? <> — <span style={{ fontWeight: 400 }}>&ldquo;{attempt.examinerRemarks}&rdquo;</span></> : null}</p>
+        )}
           <p style={{ fontSize: "1.5rem", fontWeight: 800, margin: "6px 0" }}>
             {r.awarded} / {r.total} <span className="muted" style={{ fontSize: "1rem" }}>({pct}%)</span>
           </p>
@@ -268,9 +271,13 @@ export default function DescriptivePaper(props: Props) {
     return (
       <div className="card" style={{ border: "2px solid var(--accent)" }}>
         <h3 style={{ marginTop: 0 }}>✅ Your paper is submitted</h3>
-        <p className="muted">We&apos;re checking it against the solution. This usually takes under a minute.</p>
+        {attempt.underReview ? (
+          <p className="muted">🧑‍🏫 Your copy is being evaluated by the examiner. Your checked copy, marks and feedback will appear here as soon as the examiner releases them — we&apos;ll also email you.</p>
+        ) : (
+          <p className="muted">We&apos;re checking it against the solution. This usually takes under a minute.</p>
+        )}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-          <button className="btn small" type="button" disabled={busy} onClick={regrade}>{busy ? "Checking…" : "🔄 Show my result"}</button>
+          {!attempt.underReview && <button className="btn small" type="button" disabled={busy} onClick={regrade}>{busy ? "Checking…" : "🔄 Show my result"}</button>}
           {attempt.fileUrl && <a className="btn small secondary" href={fileHref(attempt.fileUrl, "My uploaded answers")} target={fileTarget} rel="noopener noreferrer">📄 My uploaded answers</a>}
           {solutionPdf && <a className="btn small secondary" href={fileHref(solutionPdf, "Official solution")} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
         </div>

@@ -380,7 +380,8 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
     supabase.rpc("list_downloadable_classes"),
     svcP.from("repository_items").select("id, title, kind, file_url").eq("topic_id", topic.id).eq("is_active", true).eq("student_visible", true).not("file_url", "is", null).order("created_at", { ascending: false }),
     svcP.from("amendments").select("id, title, body, discussion, bunny_video_id, bunny_drm, youtube_url, embed_url, notes_hand_url, valid_from_attempt, valid_to_attempt").eq("topic_id", topic.id).eq("is_published", true).order("order_index"),
-    svcP.from("sections").select("id, type, duration_minutes:config->>duration_minutes, class_no:config->>class_no").eq("topic_id", topic.id).eq("is_published", true),
+    // section_stats, not config->> — even key-extraction detoasts whole configs.
+    svcP.from("section_stats").select("id:section_id, type, duration_minutes, class_no").eq("topic_id", topic.id).eq("is_published", true),
   ]);
   const groupList = topicGroups ?? [];
 

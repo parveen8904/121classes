@@ -8,6 +8,7 @@ const nextConfig = {
       { protocol: "https", hostname: "xmeltwyfvzhhurtcjfiu.supabase.co", pathname: "/storage/v1/object/public/**" },
     ],
     formats: ["image/avif", "image/webp"],
+    qualities: [60, 75],
     minimumCacheTTL: 86400,
   },
   // Allow bigger server-action payloads so students can attach an image/PDF to

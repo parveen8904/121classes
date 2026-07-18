@@ -8,7 +8,8 @@
 
 const STORAGE_PREFIX = "https://xmeltwyfvzhhurtcjfiu.supabase.co/storage/v1/object/public/";
 
-export function lightImg(url: string | null | undefined, w: 64 | 96 | 128 | 256 | 384 | 640 | 750 | 828 | 1080 | 1200 | 1920 = 828, q = 70): string {
+// q must be listed in next.config images.qualities (Next 16 rejects others).
+export function lightImg(url: string | null | undefined, w: 64 | 96 | 128 | 256 | 384 | 640 | 750 | 828 | 1080 | 1200 | 1920 = 828, q: 60 | 75 = 75): string {
   const u = (url ?? "").trim();
   if (!u.startsWith(STORAGE_PREFIX)) return u; // local /public assets or external — leave as is
   return `/_next/image?url=${encodeURIComponent(u)}&w=${w}&q=${q}`;

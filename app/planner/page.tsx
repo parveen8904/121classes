@@ -15,7 +15,8 @@ import DoneToggle from "./DoneToggle";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Study planner — CA Parveen Sharma" };
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+import { todayIST } from "@/lib/dates";
+const todayISO = () => todayIST();
 // No weekday here — the row already prints the weekday above the date.
 const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 

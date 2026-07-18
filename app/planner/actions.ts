@@ -1,5 +1,7 @@
 "use server";
 
+import { todayIST } from "@/lib/dates";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -155,7 +157,7 @@ export async function rebalanceFromToday() {
   const scoped = scope === "skip" ? [] : picked ? base.classes.filter((c) => picked.has(c.topicId)) : base.classes.filter((c) => (scope === "a" ? c.importance === "A" : scope === "ab" ? c.importance === "A" || c.importance === "B" : true));
   const doneCount = scoped.filter((c) => completed.has(c.sectionId)).length;
 
-  const newSetup: PlanSetup = { ...setup, startDate: new Date().toISOString().slice(0, 10), doneClasses: doneCount };
+  const newSetup: PlanSetup = { ...setup, startDate: todayIST(), doneClasses: doneCount };
   let schedule: SchedEntry[] = [];
   const input = await loadPlanInput({ subjectId: newSetup.subjectId, startDate: newSetup.startDate, examDate: newSetup.examDate, doneClasses: newSetup.doneClasses });
   if (input) { applySetup(input, newSetup); schedule = toSchedule(generatePlan(input)); }

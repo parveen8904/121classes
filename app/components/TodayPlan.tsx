@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { todayIST } from "@/lib/dates";
 
 type Entry = { iso: string; date: string; label: string; mock?: boolean };
 
@@ -43,8 +44,7 @@ export default async function TodayPlan() {
     );
   }
 
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const today = todayIST(); // Indian today — the server clock is UTC
   const todays = schedule.filter((e) => e.iso === today);
 
   return (

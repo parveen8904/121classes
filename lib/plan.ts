@@ -1,3 +1,4 @@
+import { todayISTParts } from "./dates";
 // Day-by-day study planner in THREE stages:
 //   1. Exhaustive — watch classes, homework, MCQ/descriptive tests, master
 //      important questions (per subject, from the AI repository).
@@ -102,7 +103,8 @@ export function buildDayPlan(
     return false;
   };
 
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ist = todayISTParts(); // Indian today — server clock is UTC
+  const start = new Date(ist.y, ist.m - 1, ist.d);
   // The last revision is the final `bufferDays` (default 5) days before the exam.
   // Everything else must finish before it starts.
   const lastRevStart = new Date(examMs - bufferDays * DAY);

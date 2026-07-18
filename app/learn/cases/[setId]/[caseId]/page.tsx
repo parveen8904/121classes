@@ -109,7 +109,7 @@ export default async function CasePage(
                   <strong>Q{qi + 1}. {tidyAmounts(q.question)}</strong>
                   <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
                     {q.options.map((opt, oi) => (
-                      <label key={oi} style={{ display: "flex", gap: 10, alignItems: "flex-start", background: "var(--bg-soft)", borderRadius: 8, padding: "8px 12px", cursor: "pointer" }}>
+                      <label key={oi} className="mcq-opt" style={{ background: "var(--bg-soft)", borderRadius: 8, padding: "8px 12px" }}>
                         <input type="radio" name={`q_${q.id}`} value={oi} required style={{ marginTop: 3 }} />
                         <span><strong>{letters[oi] ?? oi + 1}.</strong> {tidyAmounts(opt)}</span>
                       </label>

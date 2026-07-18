@@ -132,9 +132,10 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
   const subjMatCount = (sid: string, kind: string) => (subjResources.get(sid) ?? []).filter((r) => r.kind === kind).length;
   if (topicIds2.length) {
     const [{ data: secRows }, { data: matRowsP }] = await Promise.all([
-      // Only the two tiny config keys we need — configs also hold transcripts
-      // (megabytes across a course), which made this page take seconds.
-      svc.from("sections").select("topic_id, type, duration_minutes:config->>duration_minutes, class_no:config->>class_no").in("topic_id", topicIds2).eq("is_published", true),
+      // section_stats mirrors the tiny hot keys (trigger-synced) — reading
+      // config->>' keys' across rows detoasts megabytes of transcripts and
+      // took 2.5–6s; this takes milliseconds.
+      svc.from("section_stats").select("topic_id, type, duration_minutes, class_no").in("topic_id", topicIds2).eq("is_published", true),
       svc.from("repository_items").select("topic_id, kind").in("topic_id", topicIds2).eq("is_active", true).not("file_url", "is", null),
     ]);
     for (const r of secRows ?? []) {
@@ -286,15 +287,14 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
             const faculty = facultyRows.map((f) => f.full_name).filter(Boolean);
             const facultyContacts = facultyRows.filter((f) => f.phone || f.email);
             const allSubjTopics = (topics ?? []).filter((t) => t.subject_id === s.id);
-            let subjTopics = allSubjTopics.filter((t) => {
+            const subjTopics = allSubjTopics.filter((t) => {
               const w = topicWindow(t);
               return topicVisible(target, w.from, w.to);
             });
-            // FAIL OPEN: if the attempt filter would hide the ENTIRE subject
-            // (e.g. target "May 2026" vs a "Nov 2026 onwards" subject), show
-            // everything with a notice instead of a bewildering empty course.
+            // Attempt mismatch: the student's target attempt is outside this
+            // subject's window — show a clear notice (no content) telling them
+            // to update their target attempt, instead of a bewildering empty page.
             const windowMismatch = subjTopics.length === 0 && allSubjTopics.length > 0;
-            if (windowMismatch) subjTopics = allSubjTopics;
             const sw = subjWindow.get(s.id) ?? { from: null, to: null };
             return (
               <div key={s.id} className="subj-block">
@@ -472,12 +472,20 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                   </div>
                 )}
                 {windowMismatch && (
-                  <div className="notice" style={{ marginBottom: 10, border: "1px solid var(--accent)", borderRadius: 10, padding: "10px 14px", fontSize: ".85rem" }}>
-                    📅 This subject&apos;s content is prepared for the{" "}
-                    <strong>{[sw.from, sw.to].filter(Boolean).join(" – ") || "current"}</strong> attempts, while your
-                    target attempt is <strong>{target}</strong> — showing everything anyway.{" "}
-                    <Link href="/dashboard/profile" style={{ fontWeight: 700 }}>Update your target attempt →</Link>
+                  <div className="card" style={{ marginBottom: 10, border: "2px solid var(--accent)", padding: "16px 18px" }}>
+                    <strong>📅 This subject&apos;s content is prepared for the {[sw.from, sw.to].filter(Boolean).join(" – ") || "current"} attempts</strong>
+                    <p className="muted" style={{ margin: "6px 0 10px" }}>
+                      Your target attempt is <strong>{target}</strong>. Update your target attempt to see the content
+                      applicable for your exam.
+                    </p>
+                    <Link className="btn small" href="/dashboard/profile">🎯 Update my target attempt →</Link>
                   </div>
+                )}
+                {!windowMismatch && target && subjTopics.length > 0 && (
+                  <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 8px" }}>
+                    🎯 Showing content applicable to your <strong>{target}</strong> exam — anything meant only for
+                    other attempts is hidden.
+                  </p>
                 )}
                 {subjTopics.length > 0 ? (
                   <div style={{ display: "grid", gap: 8 }}>

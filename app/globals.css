@@ -266,6 +266,19 @@ input[type="radio"], input[type="checkbox"] {
 .remember { display: flex; align-items: center; gap: 8px; margin: 2px 0 14px; font-size: .85rem; color: var(--muted); }
 .remember input { width: auto; margin: 0; }
 
+/* MCQ answer options (case scenarios + chapter tests): full-size readable text,
+   not the muted small `label` default meant for form field captions. */
+.mcq-opt {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text);
+  line-height: 1.55;
+  cursor: pointer;
+}
+
 .imgph {
   position: relative; border-radius: 16px; border: 1px solid var(--border); overflow: hidden;
   background: var(--bg-soft);

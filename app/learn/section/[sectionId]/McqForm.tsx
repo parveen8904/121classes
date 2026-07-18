@@ -277,7 +277,7 @@ export default function McqForm({
           <p style={{ fontWeight: 600, marginBottom: 12 }}>{current + 1}. {q.question}</p>
           <div style={{ display: "grid", gap: 8 }}>
             {q.options.map((opt, oi) => (
-              <label key={oi} className="remember" style={{ margin: 0, cursor: "pointer" }}>
+              <label key={oi} className="mcq-opt" style={{ background: "var(--bg-soft)", borderRadius: 8, padding: "8px 12px" }}>
                 <input
                   type="radio"
                   name={`q-${q.id}`}

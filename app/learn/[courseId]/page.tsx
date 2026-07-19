@@ -8,6 +8,7 @@ import { setAutoRenew } from "./actions";
 import { addMySubject, removeMySubject } from "../mycourses";
 import AskDoubts from "./AskDoubts";
 import { fmtMins, fmtAt125, AT125_NOTE } from "@/lib/duration";
+import { summarizeSchedule, type ScheduleSummary } from "@/lib/schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -73,21 +74,24 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
   const batchSubjects = ((subjects ?? []) as SubjRow[]).filter((s) => (Number(s.batch_months) || 0) > 0);
   const batchByParent = new Map<string, SubjRow>();
   for (const b of batchSubjects) if (b.included_with_subject_id) batchByParent.set(b.included_with_subject_id, b);
-  const batchWindows = new Map<string, { from: Date; to: Date; sessions: number }>();
+  const batchWindows = new Map<string, ScheduleSummary>();
   if (batchSubjects.length) {
     const { data: schedRows } = await supabase
       .from("class_schedule")
       .select("subject_id, scheduled_at")
       .in("subject_id", batchSubjects.map((b) => b.id));
+    const bySubj = new Map<string, { scheduled_at: string }[]>();
     for (const r of schedRows ?? []) {
       const sid = r.subject_id as string;
-      const at = new Date(r.scheduled_at as string);
-      const w = batchWindows.get(sid);
-      if (!w) batchWindows.set(sid, { from: at, to: at, sessions: 1 });
-      else { if (at < w.from) w.from = at; if (at > w.to) w.to = at; w.sessions += 1; }
+      const arr = bySubj.get(sid) ?? [];
+      arr.push({ scheduled_at: r.scheduled_at as string });
+      bySubj.set(sid, arr);
+    }
+    for (const [sid, rows] of bySubj) {
+      const sum = summarizeSchedule(rows);
+      if (sum) batchWindows.set(sid, sum);
     }
   }
-  const fmtDay = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
   // YouTube watch/short links → embeddable player URL (anything else passes through).
   const ytEmbed = (url: string) => {
     const m = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{6,})/);
@@ -370,7 +374,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                     </div>
                     {isBatch && win && (
                       <div style={{ fontSize: ".84rem" }}>
-                        🗓️ LIVE <strong>{fmtDay(win.from)} → {fmtDay(win.to)}</strong> · {win.sessions} sessions
+                        🗓️ LIVE <strong>{win.daysLabel}</strong> at <strong>{win.timeLabel} IST</strong> · {win.from} → {win.to} · {win.sessions} sessions
                       </div>
                     )}
                     {child && (
@@ -436,7 +440,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                     style={{ display: "block", background: "linear-gradient(90deg, #b91c1c, #dc2626)", color: "#fff", borderRadius: 12, padding: "12px 16px", marginBottom: 12, textDecoration: "none" }}
                   >
                     <strong>🔴 {childTitle}</strong>
-                    {childWin && <> — being taught LIVE from <strong>{fmtDay(childWin.from)}</strong> to <strong>{fmtDay(childWin.to)}</strong> ({childWin.sessions} sessions)</>}
+                    {childWin && <> — being taught LIVE, <strong>{childWin.daysLabel}</strong> at <strong>{childWin.timeLabel} IST</strong> · {childWin.from} to {childWin.to} ({childWin.sessions} sessions)</>}
                     <div style={{ fontSize: ".84rem", opacity: 0.95, marginTop: 2 }}>
                       Included FREE with your {s.title} Gold plan · recordings added after every class · plan your studies around these dates. Tap to open →
                     </div>
@@ -453,8 +457,8 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                       {faculty.length > 0 && <span className="subj-faculty">with {faculty.join(", ")}</span>}
                       {isBatch && batchWin && (
                         <div style={{ fontSize: ".88rem", marginTop: 4 }}>
-                          🗓️ Live classes <strong>{fmtDay(batchWin.from)} → {fmtDay(batchWin.to)}</strong> · {batchWin.sessions} sessions ·{" "}
-                          <Link href="/live" style={{ fontWeight: 700, color: "var(--accent)" }}>see timings →</Link>
+                          🗓️ LIVE <strong>{batchWin.daysLabel}</strong> at <strong>{batchWin.timeLabel} IST</strong> · {batchWin.from} → {batchWin.to} · {batchWin.sessions} sessions ·{" "}
+                          <Link href="/live" style={{ fontWeight: 700, color: "var(--accent)" }}>Full class-by-class schedule →</Link>
                           <div className="muted" style={{ fontSize: ".8rem", marginTop: 2 }}>Recordings are added here after every live class.</div>
                         </div>
                       )}

@@ -70,7 +70,7 @@ export default function PricingCards({
   subMonthsTotal?: number | null;
   subEndsAt?: string | null;
   maxMonths?: number;
-  batchWindow?: { from: string; to: string; sessions: number } | null;
+  batchWindow?: { from: string; to: string; sessions: number; daysLabel?: string; timeLabel?: string } | null;
   batchCredit?: number;
   batchCreditTitle?: string;
 }) {
@@ -223,8 +223,14 @@ export default function PricingCards({
           </div>
           {batchWindow && (
             <div style={{ background: "var(--bg-soft)", borderRadius: 10, padding: "8px 12px", margin: "10px 0", fontSize: ".88rem" }}>
+              {batchWindow.daysLabel && batchWindow.timeLabel && (
+                <div>🕡 <strong>{batchWindow.daysLabel}</strong> at <strong>{batchWindow.timeLabel} IST</strong></div>
+              )}
               🗓️ <strong>{batchWindow.from} → {batchWindow.to}</strong> · {batchWindow.sessions} live sessions
-              <div className="muted" style={{ fontSize: ".8rem" }}>See exact timings on the Live page after enrolling.</div>
+              <div className="muted" style={{ fontSize: ".8rem" }}>
+                <Link href="/live" style={{ color: "var(--accent)", fontWeight: 700 }}>Full class-by-class schedule →</Link>
+                {" "}· dates and timings may be adjusted — the schedule page is always current.
+              </div>
             </div>
           )}
           {owned ? (

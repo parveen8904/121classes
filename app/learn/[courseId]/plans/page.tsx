@@ -6,6 +6,7 @@ import { razorpayConfigured } from "@/lib/razorpay";
 import PricingCards from "./PricingCards";
 import { ACCESS_CATEGORIES, getAllLimits, limitFor } from "@/lib/entitlements";
 import { saleFromSettings } from "@/lib/sale";
+import { summarizeSchedule } from "@/lib/schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -84,18 +85,15 @@ export default async function CoursePlans(
   const selBatchMonths = Number((selected as { batch_months?: number | null }).batch_months) || 0;
   const selIncludedWith = (selected as { included_with_subject_id?: string | null }).included_with_subject_id ?? null;
 
-  // Live-batch subjects: the scheduled live window (for the card's dates line).
-  let batchWindow: { from: string; to: string; sessions: number } | null = null;
+  // Live-batch subjects: schedule summary for the card — dates, weekdays and
+  // start time all DERIVED from the actual schedule (admin changes flow through).
+  let batchWindow: ReturnType<typeof summarizeSchedule> = null;
   if (selBatchMonths > 0) {
     const { data: sched } = await supabase
       .from("class_schedule")
       .select("scheduled_at")
-      .eq("subject_id", selected.id)
-      .order("scheduled_at");
-    if (sched && sched.length > 0) {
-      const fmt = (s: string) => new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-      batchWindow = { from: fmt(sched[0].scheduled_at as string), to: fmt(sched[sched.length - 1].scheduled_at as string), sessions: sched.length };
-    }
+      .eq("subject_id", selected.id);
+    batchWindow = summarizeSchedule((sched ?? []) as { scheduled_at: string }[]);
   }
 
   // Highest active tier the student already has for the selected subject

@@ -316,7 +316,7 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
 
   const { data: topic } = await supabase
     .from("topics")
-    .select("id, title, subject_id, topic_code, weightage_marks, importance, important_qs_rev1, important_qs_rev2, valid_from_attempt, valid_to_attempt, amendments_upto, application_notes, update_coming, update_on, update_for, update_note, subjects(title, course_id, valid_from_attempt, valid_to_attempt)")
+    .select("id, title, subject_id, topic_code, weightage_marks, importance, important_qs_rev1, important_qs_rev2, valid_from_attempt, valid_to_attempt, amendments_upto, application_notes, update_coming, update_on, update_for, update_note, supersedes_topic_id, subjects(title, course_id, valid_from_attempt, valid_to_attempt, batch_months, included_with_subject_id)")
     .eq("id", params.topicId)
     .single();
   if (!topic) notFound();
@@ -332,6 +332,29 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
 
   // Is a LIVE batch re-teaching this chapter? (a batch subject's topic points
   // here via supersedes_topic_id) → banner: these are the previous recordings.
+  // A BATCH topic surfaces the original chapter's tests — tests are COMMON
+  // between the batch and the parent subject (single copy, edited in one place;
+  // batch holders have Silver-level access to the parent, so they open fine).
+  let sharedTests: { id: string; type: string; title: string }[] = [];
+  {
+    const topicSubj = (topic as { subjects?: { batch_months?: number | null } | null }).subjects;
+    const supId = (topic as { supersedes_topic_id?: string | null }).supersedes_topic_id;
+    if (supId && (Number(topicSubj?.batch_months) || 0) > 0) {
+      const svcT = createServiceClient();
+      const { data: testStats } = await svcT
+        .from("section_stats")
+        .select("section_id, type")
+        .eq("topic_id", supId)
+        .eq("is_published", true)
+        .in("type", ["mcq_test", "subjective_test"]);
+      const ids = (testStats ?? []).map((t) => t.section_id as string);
+      if (ids.length) {
+        const { data: titles } = await svcT.from("sections").select("id, title, type").in("id", ids).order("title");
+        sharedTests = ((titles ?? []) as { id: string; title: string; type: string }[]);
+      }
+    }
+  }
+
   let liveBatchReteach: { id: string; title: string; courseId: string } | null = null;
   {
     const { data: supTopic } = await supabase
@@ -706,6 +729,20 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
               included with your Gold plan. Tap to open →
             </div>
           </Link>
+        )}
+
+        {sharedTests.length > 0 && (
+          <div className="card" style={{ marginTop: 16 }}>
+            <strong>🧠 Chapter tests <span className="muted" style={{ fontWeight: 400, fontSize: ".8rem" }}>· shared with the main subject</span></strong>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              {sharedTests.map((st) => (
+                <Link key={st.id} href={`/learn/section/${st.id}`} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, color: "var(--text)" }}>
+                  <span style={{ fontWeight: 700 }}>{st.type === "mcq_test" ? "🧠" : "✍️"} {st.title}</span>
+                  <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap" }}>Attempt →</span>
+                </Link>
+              ))}
+            </div>
+          </div>
         )}
 
         {catStyle && (

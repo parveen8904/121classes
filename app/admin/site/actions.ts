@@ -12,6 +12,7 @@ const KEYS = [
   "splash_banner",
   "splash_link",
   "splash_seconds",
+  "intro_video_url",
   "support_whatsapp",
   "whatsapp_faculty",
   "support_phone",

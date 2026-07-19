@@ -141,6 +141,11 @@ export default async function Home() {
   const cityList = (homeCities.length ? homeCities : ["Delhi", "Gurgaon", "Mumbai", "Pune", "Bengaluru", "Hyderabad", "Chennai", "Kolkata"]).slice(0, 12);
   const cityJobUrl = (c: string) => `https://www.google.com/search?q=${encodeURIComponent(`chartered accountant jobs in ${c}`)}&ibp=htl;jobs`;
   const sale = saleFromSettings(siteImg);
+  // Homepage intro video — editable in Admin → Site images. YouTube links are
+  // converted to embeds; any other URL is used as the iframe src directly.
+  const rawVideo = (siteImg.get("intro_video_url") || "").trim();
+  const yt = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/.exec(rawVideo);
+  const introVideo = yt ? `https://www.youtube.com/embed/${yt[1]}` : (rawVideo || "https://app.heygen.com/embeds/c2bcd7138f2c42b6b607fe6588910b89");
   const splashBanner = siteImg.get("splash_banner") || "";
   const splashLink = siteImg.get("splash_link") || "";
   const splashSeconds = Number(siteImg.get("splash_seconds")) || 5;
@@ -550,15 +555,13 @@ export default async function Home() {
             </p>
             <div className="video-frame" style={{ paddingBottom: "56.25%" }}>
               <iframe
-                src="https://app.heygen.com/embeds/c2bcd7138f2c42b6b607fe6588910b89"
+                src={introVideo}
                 title="CA Parveen Sharma intro"
                 allow="encrypted-media; fullscreen"
                 allowFullScreen
               />
             </div>
-            <p className="muted" style={{ marginTop: 10, fontSize: ".8rem" }}>
-              Sample intro video — replace with your own anytime.
-            </p>
+
           </div>
         </div>
       </section>

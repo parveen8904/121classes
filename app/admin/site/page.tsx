@@ -77,6 +77,10 @@ export default async function SiteImagesPage() {
           students see them).
         </p>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr", marginTop: 4 }}>
+          <div style={{ marginTop: 18 }}>
+            <label htmlFor="si-video">🎬 Homepage intro video (YouTube link or embed URL)</label>
+            <input id="si-video" name="intro_video_url" defaultValue={m.get("intro_video_url") ?? ""} placeholder="e.g. https://www.youtube.com/watch?v=XXXX — shown in the 'Studio-quality teaching' section" />
+          </div>
           <div>
             <label>💬 Technical-team WhatsApp (Admin)</label>
             <input name="support_whatsapp" defaultValue={m.get("support_whatsapp") ?? ""} placeholder="e.g. 919812345678 or https://wa.me/91…" />

@@ -6,7 +6,7 @@ export const revalidate = 3600;
 export const metadata = {
   title: "Startups — Nova Seed Capital",
   description:
-    "Nova Seed Capital — founded by CA Parveen Sharma — grooms, mentors and invests in new startups. Have an idea or an early-stage venture? Get in touch.",
+    "Nova Seed Capital — headed by CA Parveen Sharma — grooms, mentors and invests in new startups. Have an idea or an early-stage venture? Get in touch.",
 };
 
 const GRAD = "linear-gradient(135deg,#0d9488,#134e4a)";
@@ -33,7 +33,7 @@ export default async function StartupsPage() {
           Building a startup? We groom — and we invest.
         </h1>
         <p style={{ maxWidth: 660, margin: "0 auto", fontSize: "1.05rem", color: "rgba(255,255,255,.95)" }}>
-          <strong>Nova Seed Capital</strong> is headed by <strong>CA Parveen Sharma</strong> and grooms new
+          <strong>Nova Seed Capital</strong>, headed by <strong>CA Parveen Sharma</strong>, grooms new
           startups and offers <strong>investment and seed funding</strong> — turning early ideas into disciplined,
           investable businesses.
         </p>

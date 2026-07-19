@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BackButton from "./BackButton";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 import MobileMenu from "./MobileMenu";
@@ -25,9 +26,12 @@ export default function SiteNav() {
   return (
     <nav className="lp-nav">
       <div className="lp-nav-inner">
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+        <BackButton />
         <Link href="/" aria-label="CA Parveen Sharma home" className="lp-brand">
           <Logo />
         </Link>
+        </span>
         <div className="lp-nav-links">
           {NAV_LINKS.map((l) => (
             <Link key={l.href} className="hide-sm" href={l.href}>

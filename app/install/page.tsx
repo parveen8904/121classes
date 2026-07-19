@@ -1,5 +1,3 @@
-import SiteNav from "../components/SiteNav";
-import SiteFooter from "../components/SiteFooter";
 import InstallHelper from "./InstallHelper";
 
 export const metadata = {
@@ -9,7 +7,6 @@ export const metadata = {
 export default function InstallPage() {
   return (
     <main>
-      <SiteNav />
       <section className="section" style={{ paddingTop: 50 }}>
         <div className="section-head">
           <div className="eyebrow">Get the app</div>
@@ -18,7 +15,6 @@ export default function InstallPage() {
         </div>
         <InstallHelper />
       </section>
-      <SiteFooter />
     </main>
   );
 }

@@ -1,7 +1,5 @@
 import Link from "next/link";
 import { lightImg } from "@/lib/img";
-import SiteNav from "./components/SiteNav";
-import SiteFooter from "./components/SiteFooter";
 import AnnouncementSplash from "./components/AnnouncementSplash";
 import NotifyButton from "./components/NotifyButton";
 import CountUp from "./components/CountUp";
@@ -150,7 +148,6 @@ export default async function Home() {
   return (
     <main>
       <AnnouncementSplash banner={splashBanner} link={splashLink} seconds={splashSeconds} />
-      <SiteNav />
 
       {sale && (
         <a href={sale.ctaUrl || "/login"} style={{ display: "block", textDecoration: "none" }}>
@@ -871,7 +868,6 @@ export default async function Home() {
         </div>
       </section>
 
-      <SiteFooter />
     </main>
   );
 }

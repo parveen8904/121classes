@@ -1,6 +1,4 @@
 import Link from "next/link";
-import SiteNav from "../components/SiteNav";
-import SiteFooter from "../components/SiteFooter";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +29,6 @@ export default async function InstallHelpPage() {
 
   return (
     <main>
-      <SiteNav />
       <section className="section" style={{ paddingTop: 50 }}>
         <div className="section-head">
           <div className="eyebrow">Help</div>
@@ -113,7 +110,6 @@ export default async function InstallHelpPage() {
           Stuck? Message us on WhatsApp or Telegram using the buttons in the bottom-right corner. 💬
         </p>
       </section>
-      <SiteFooter />
     </main>
   );
 }

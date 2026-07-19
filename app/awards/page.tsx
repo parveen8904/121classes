@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import SiteNav from "@/app/components/SiteNav";
-import SiteFooter from "@/app/components/SiteFooter";
 import SubmitButton from "@/app/components/SubmitButton";
 import SecureFileInput from "@/app/components/SecureFileInput";
 import { submitAward } from "./actions";
@@ -18,7 +16,6 @@ export default async function AwardsPage(props: { searchParams: Promise<{ done?:
 
   return (
     <main>
-      <SiteNav />
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 640 }}>
         <div style={{ background: "linear-gradient(135deg,#0d9488,#10b981)", color: "#fff", borderRadius: 18, padding: "28px 26px" }}>
           <h1 style={{ color: "#fff", margin: 0 }}>🏆 Tell us your result — get an award</h1>
@@ -51,7 +48,6 @@ export default async function AwardsPage(props: { searchParams: Promise<{ done?:
         </div>
         <p style={{ marginTop: 14 }}><Link className="grad" href="/results">← See our students&apos; results</Link></p>
       </section>
-      <SiteFooter />
     </main>
   );
 }

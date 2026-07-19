@@ -8,7 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 export default function BackButton() {
   const router = useRouter();
   const pathname = usePathname();
-  if (pathname === "/dashboard") return null;
+  if (pathname === "/dashboard" || pathname === "/") return null;
   return (
     <button
       type="button"

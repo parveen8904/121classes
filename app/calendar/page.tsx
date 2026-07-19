@@ -1,5 +1,3 @@
-import SiteNav from "../components/SiteNav";
-import SiteFooter from "../components/SiteFooter";
 import NotifyButton from "../components/NotifyButton";
 import { createClient } from "@/lib/supabase/server";
 
@@ -47,7 +45,6 @@ export default async function CalendarPage() {
 
   return (
     <main>
-      <SiteNav />
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 820 }}>
         <div className="section-head" style={{ marginBottom: 24 }}>
           <div className="eyebrow">🗓️ Calendar</div>
@@ -86,7 +83,6 @@ export default async function CalendarPage() {
           </div>
         )}
       </section>
-      <SiteFooter />
     </main>
   );
 }

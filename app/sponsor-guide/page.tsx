@@ -1,6 +1,4 @@
 import Link from "next/link";
-import SiteNav from "@/app/components/SiteNav";
-import SiteFooter from "@/app/components/SiteFooter";
 import { SPONSOR_GUIDE } from "@/lib/sponsorGuide";
 
 export const revalidate = 3600;
@@ -10,7 +8,6 @@ export default function SponsorGuidePage() {
   const g = SPONSOR_GUIDE;
   return (
     <main>
-      <SiteNav />
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
         <div style={{ background: "linear-gradient(135deg,#0d9488,#10b981)", color: "#fff", borderRadius: 18, padding: "28px 26px" }}>
           <h1 style={{ color: "#fff", margin: 0 }}>🎁 {g.title}</h1>
@@ -43,7 +40,6 @@ export default function SponsorGuidePage() {
         </div>
         <p className="muted" style={{ marginTop: 16 }}>{g.contact}</p>
       </section>
-      <SiteFooter />
     </main>
   );
 }

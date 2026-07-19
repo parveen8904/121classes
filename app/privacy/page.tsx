@@ -1,12 +1,9 @@
-import SiteNav from "../components/SiteNav";
-import SiteFooter from "../components/SiteFooter";
 
 export const metadata = { title: "Privacy Policy — CA Parveen Sharma" };
 
 export default function Privacy() {
   return (
     <main>
-      <SiteNav />
       <article className="legal">
         <h1>Privacy Policy</h1>
         <p className="muted">Last updated: 14 June 2026</p>
@@ -117,7 +114,6 @@ export default function Privacy() {
           professional before relying on it for compliance.
         </p>
       </article>
-      <SiteFooter />
     </main>
   );
 }

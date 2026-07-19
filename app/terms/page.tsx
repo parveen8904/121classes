@@ -1,12 +1,9 @@
-import SiteNav from "../components/SiteNav";
-import SiteFooter from "../components/SiteFooter";
 
 export const metadata = { title: "Terms of Service — CA Parveen Sharma" };
 
 export default function Terms() {
   return (
     <main>
-      <SiteNav />
       <article className="legal">
         <h1>Terms of Service</h1>
         <p className="muted">Last updated: 14 June 2026</p>
@@ -98,7 +95,6 @@ export default function Terms() {
           professional before relying on it.
         </p>
       </article>
-      <SiteFooter />
     </main>
   );
 }

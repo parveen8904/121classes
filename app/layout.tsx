@@ -1,4 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import SiteChrome from "./components/SiteChrome";
+import SiteNav from "./components/SiteNav";
+import SiteFooter from "./components/SiteFooter";
 import { unstable_cache } from "next/cache";
 import NextTopLoader from "nextjs-toploader";
 import "./globals.css";
@@ -117,7 +120,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         {/* Top progress bar shown on every page load / navigation */}
         <NextTopLoader color="#0d9488" height={4} showSpinner={true} shadow="0 0 8px #0d9488" />
-        {children}
+        <SiteChrome nav={<SiteNav />} footer={<SiteFooter />}>{children}</SiteChrome>
         <FloatingSupport
           whatsapp={m.get("support_whatsapp")}
           phone={m.get("support_phone")}

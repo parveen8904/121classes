@@ -2,8 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import SiteNav from "@/app/components/SiteNav";
-import SiteFooter from "@/app/components/SiteFooter";
 import SubmitButton from "@/app/components/SubmitButton";
 import SecureFileInput from "@/app/components/SecureFileInput";
 import { submitScholarship } from "./actions";
@@ -23,7 +21,6 @@ export default async function ScholarshipPage(props: { searchParams: Promise<{ d
 
   return (
     <main>
-      <SiteNav />
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 640 }}>
         <div style={{ background: "linear-gradient(135deg,#0d9488,#10b981)", color: "#fff", borderRadius: 18, padding: "26px 24px" }}>
           <h1 style={{ color: "#fff", margin: 0 }}>💚 Need a little help to join?</h1>
@@ -68,7 +65,6 @@ export default async function ScholarshipPage(props: { searchParams: Promise<{ d
         </div>
         <p style={{ marginTop: 14 }}><Link className="grad" href="/courses">← Back to courses</Link></p>
       </section>
-      <SiteFooter />
     </main>
   );
 }

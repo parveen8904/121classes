@@ -1,12 +1,9 @@
-import SiteNav from "../components/SiteNav";
-import SiteFooter from "../components/SiteFooter";
 
 export const metadata = { title: "Refund Policy — CA Parveen Sharma" };
 
 export default function Refund() {
   return (
     <main>
-      <SiteNav />
       <article className="legal">
         <h1>Refund &amp; Cancellation Policy</h1>
         <p className="muted">Last updated: 14 June 2026</p>
@@ -65,7 +62,6 @@ export default function Refund() {
           professional before relying on it.
         </p>
       </article>
-      <SiteFooter />
     </main>
   );
 }

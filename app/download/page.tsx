@@ -1,6 +1,4 @@
 import Link from "next/link";
-import SiteNav from "../components/SiteNav";
-import SiteFooter from "../components/SiteFooter";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +36,6 @@ export default async function DownloadPage() {
 
   return (
     <main>
-      <SiteNav />
       <section className="section" style={{ paddingTop: 40 }}>
         <div style={{ background: GRAD, color: "#fff", borderRadius: 22, padding: "40px 28px", textAlign: "center" }}>
           <span style={{ display: "inline-block", background: "rgba(255,255,255,.18)", padding: "4px 12px", borderRadius: 999, fontSize: ".8rem", fontWeight: 700 }}>💻 Desktop app</span>
@@ -88,7 +85,6 @@ export default async function DownloadPage() {
           Already installed? Just open the app and <Link href="/login" className="grad">log in</Link> — your dashboard opens straight away.
         </p>
       </section>
-      <SiteFooter />
     </main>
   );
 }

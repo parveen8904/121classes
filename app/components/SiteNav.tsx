@@ -10,14 +10,11 @@ const NAV_LINKS = [
   { href: "/results", label: "Results" },
   { href: "/books", label: "Books" },
   { href: "/startups", label: "Startups" },
+  { href: "/placements", label: "Career" },
   { href: "/#contact", label: "Contact" },
 ];
 
-// Shown in the mobile menu (and footer) but kept out of the desktop bar to
-// avoid congestion.
-const MENU_ONLY_LINKS = [
-  { href: "/placements", label: "Placements" },
-];
+const MENU_ONLY_LINKS: { href: string; label: string }[] = [];
 
 // No server-side auth read here — reading cookies would force every marketing
 // page to render dynamically (no caching). AuthCta/MobileMenu detect the session

@@ -52,7 +52,6 @@ export default async function SiteFooter() {
           <Link href="/articles">Study Articles</Link>
           <Link href="/#books">Books</Link>
           <Link href="/#whats-new">What&apos;s New</Link>
-          <Link href="/#team">Team</Link>
         </div>
         <div>
           <h4>Company</h4>

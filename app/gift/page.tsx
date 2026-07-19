@@ -16,7 +16,7 @@ export default async function GiftPage() {
   const svc = createServiceClient();
   const { data: subjects } = await svc
     .from("subjects")
-    .select("id, title, gold_price_inr, courses(title)")
+    .select("id, title, gold_price_inr, validity_months, gold_slabs, courses(title)")
     .order("order_index");
   // Sponsors can gift the GOLD subscription only.
   const { data: plans } = await svc.from("plans").select("tier, name, web_price_inr").eq("is_active", true).eq("tier", "gold").order("rank");
@@ -36,7 +36,7 @@ export default async function GiftPage() {
         )}
         <GiftForm
           configured={configured}
-          subjects={(subjects ?? []).map((s) => ({ id: s.id as string, title: s.title as string, course: (s as { courses?: { title?: string } | null }).courses?.title ?? "", gold: (s as { gold_price_inr?: number | null }).gold_price_inr ?? null }))}
+          subjects={(subjects ?? []).map((s) => ({ id: s.id as string, title: s.title as string, course: (s as { courses?: { title?: string } | null }).courses?.title ?? "", gold: (s as { gold_price_inr?: number | null }).gold_price_inr ?? null, validityMonths: (s as { validity_months?: number | null }).validity_months ?? 12, goldSlabs: (s as { gold_slabs?: unknown }).gold_slabs ?? null }))}
           plans={(plans ?? []).map((p) => ({ tier: p.tier as string, name: p.name as string, price: (p as { web_price_inr?: number | null }).web_price_inr ?? null }))}
         />
       </section>

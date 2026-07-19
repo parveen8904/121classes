@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { parseSlabs, slabTotal, slabMonthOptions, formatINR } from "@/lib/pricing";
 import Script from "next/script";
 import AttemptPicker from "@/app/components/AttemptPicker";
 import { createGiftOrder, verifyGiftPayment } from "./actions";
 
-type Subject = { id: string; title: string; course: string; gold: number | null };
+type Subject = { id: string; title: string; course: string; gold: number | null; validityMonths: number; goldSlabs: unknown };
 type Plan = { tier: string; name: string; price: number | null };
 
 const STATES = ["Delhi", "Haryana", "Uttar Pradesh", "Punjab", "Rajasthan", "Maharashtra", "Gujarat", "Karnataka", "Tamil Nadu", "Telangana", "West Bengal", "Bihar", "Madhya Pradesh", "Kerala", "Andhra Pradesh", "Uttarakhand", "Himachal Pradesh", "Jharkhand", "Chhattisgarh", "Odisha", "Assam", "Goa", "Chandigarh", "Jammu and Kashmir", "Other"];
@@ -66,16 +67,40 @@ export default function GiftForm({ configured, subjects, plans }: { configured: 
             {subjects.map((s) => <option key={s.id} value={s.id}>{s.title}{s.course ? ` — ${s.course}` : ""}</option>)}
           </select>
         </div>
-        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
-          <div>
-            <label>Plan</label>
-            <input value={plans[0]?.name ? `${plans[0].name} (full premium access)` : "Gold"} readOnly style={{ background: "var(--bg-soft)" }} />
-          </div>
-          <div>
-            <label>Months</label>
-            <input type="number" min={1} max={60} value={months} onChange={(e) => setMonths(Number(e.target.value) || 12)} />
-          </div>
+        <div>
+          <label>Plan</label>
+          <input value={plans[0]?.name ? `${plans[0].name} (full premium access)` : "Gold"} readOnly style={{ background: "var(--bg-soft)" }} />
         </div>
+        {(() => {
+          const subj = subjects.find((x) => x.id === subjectId);
+          const slabs = parseSlabs(subj?.goldSlabs);
+          const choices = slabs ? slabMonthOptions(slabs) : [3, 6, 12, 24];
+          const base = subj?.validityMonths || 12;
+          const total = slabs
+            ? slabTotal(slabs, months)
+            : subj?.gold ? Math.max(1, Math.round((subj.gold * months) / base)) : null;
+          return (
+            <div>
+              <label>Duration (longer = cheaper per month)</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                {choices.map((m) => (
+                  <button key={m} type="button" onClick={() => setMonths(m)} className="btn small secondary"
+                    style={months === m ? { background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", borderColor: "transparent" } : undefined}>
+                    {m}m{slabs ? ` · ${formatINR(slabTotal(slabs, m))}` : ""}
+                  </button>
+                ))}
+              </div>
+              <input type="number" min={1} max={60} value={months} onChange={(e) => setMonths(Number(e.target.value) || 12)} placeholder="…or custom months" style={{ maxWidth: 180 }} />
+              {total != null && (
+                <p style={{ fontWeight: 800, margin: "8px 0 0" }}>
+                  🎁 Gift value: {formatINR(total)}
+                  {months > 0 && <span className="muted" style={{ fontWeight: 500 }}> · ≈ {formatINR(Math.round(total / months))}/month</span>}
+                  <span className="muted" style={{ fontWeight: 500, fontSize: ".8rem" }}> (+ GST at checkout)</span>
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
         <h3 style={{ margin: "8px 0 0" }}>2️⃣ Who it&apos;s for (the recipient)</h3>
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>

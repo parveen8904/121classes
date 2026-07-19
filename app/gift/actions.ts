@@ -35,7 +35,7 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
   if (!user) return { ok: false, reason: "auth" };
 
   const svc = createServiceClient();
-  const { data: subject } = await svc.from("subjects").select("id, title, course_id, gold_price_inr, validity_months").eq("id", input.subjectId).single();
+  const { data: subject } = await svc.from("subjects").select("id, title, course_id, gold_price_inr, validity_months, gold_slabs").eq("id", input.subjectId).single();
   if (!subject) return { ok: false, reason: "error" };
   const { data: plan } = await svc.from("plans").select("id, name, web_price_inr").eq("tier", input.tier).eq("is_active", true).order("rank").limit(1).maybeSingle();
   if (!plan) return { ok: false, reason: "noplan" };
@@ -43,9 +43,13 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
   const baseMonths = subject.validity_months || 12;
   let months = baseMonths, amount: number | null;
   if (input.tier === "gold") {
-    if (!subject.gold_price_inr || subject.gold_price_inr <= 0) return { ok: false, reason: "noprice" };
     months = input.months ? Math.min(60, Math.max(1, Math.round(input.months))) : baseMonths;
-    amount = Math.max(1, Math.round((subject.gold_price_inr * months) / baseMonths));
+    // Same ladder as student checkout: slabTotal when the subject has one.
+    const { parseSlabs, slabTotal } = await import("@/lib/pricing");
+    const slabs = parseSlabs((subject as { gold_slabs?: unknown }).gold_slabs);
+    if (slabs) amount = slabTotal(slabs, months);
+    else if (subject.gold_price_inr && subject.gold_price_inr > 0) amount = Math.max(1, Math.round((subject.gold_price_inr * months) / baseMonths));
+    else return { ok: false, reason: "noprice" };
   } else {
     amount = plan.web_price_inr;
     if (!amount || amount <= 0) return { ok: false, reason: "noprice" };

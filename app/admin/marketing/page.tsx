@@ -48,6 +48,21 @@ export default async function MarketingOverviewPage() {
   const svc = createServiceClient();
   const { data } = await svc.rpc("admin_marketing_report");
   const r = (data ?? {}) as Report;
+
+  // Instagram auto-posting status + recent activity.
+  const { igConfigured } = await import("@/lib/instagram");
+  const igOn = await igConfigured();
+  const { count: igPosts30 } = await svc
+    .from("scheduled_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("to_instagram", true)
+    .eq("status", "sent")
+    .gte("sent_at", new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString());
+  const { count: igQueued } = await svc
+    .from("scheduled_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("to_instagram", true)
+    .eq("status", "pending");
   const yt = await getChannelOverview().catch(() => null);
 
   // Funnel conversion (30 days).
@@ -82,6 +97,32 @@ export default async function MarketingOverviewPage() {
         <div className="card" style={{ padding: "10px 16px" }}><strong>{r.signups_month ?? 0}</strong> <span className="muted">signups (30d)</span></div>
         {yt && <div className="card" style={{ padding: "10px 16px" }}><strong>{yt.subscribers.toLocaleString("en-IN")}</strong> <span className="muted">YouTube subs</span></div>}
       </div>
+
+      {/* Instagram at a glance */}
+      <h2 className="admin-section-title" style={{ marginTop: 26 }}>📷 Instagram</h2>
+      <div className="card" style={{ marginTop: 10, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+          {igOn ? (
+            <span style={{ color: "#16a34a", fontWeight: 800 }}>🟢 Auto-posting connected</span>
+          ) : (
+            <span style={{ color: "#b45309", fontWeight: 800 }}>🟠 Not connected yet</span>
+          )}
+          <span className="muted">·</span>
+          <span><strong>{igPosts30 ?? 0}</strong> <span className="muted">posts sent (30d)</span></span>
+          <span className="muted">·</span>
+          <span><strong>{igQueued ?? 0}</strong> <span className="muted">queued</span></span>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link className="btn small" href="/admin/broadcasts">📣 Post a campaign</Link>
+          <Link className="btn small secondary" href="/admin/integrations/meta">{igOn ? "⚙️ Connection" : "🔌 Connect Instagram"}</Link>
+        </div>
+      </div>
+      {!igOn && (
+        <p className="muted" style={{ fontSize: ".78rem", marginTop: 6 }}>
+          Paste your Meta access token on Integrations, then use <Link href="/admin/integrations/meta" style={{ color: "var(--accent)", fontWeight: 700 }}>Instagram / Facebook check</Link> to
+          connect with one tap — campaigns will then post to Instagram automatically with an auto-designed 1080×1080 image.
+        </p>
+      )}
 
       {/* Which platform brings traffic */}
       <h2 className="admin-section-title" style={{ marginTop: 26 }}>🌐 Where visitors come from (30 days, tagged links)</h2>

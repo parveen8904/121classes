@@ -11,7 +11,7 @@ export const metadata = {
 
 const GRAD = "linear-gradient(135deg,#0d9488,#134e4a)";
 
-// Nova Seed Capital — the founder's startup venture: grooming, mentorship and
+// Nova Seed Capital — headed by CA Parveen Sharma: grooming, mentorship and
 // seed investment for new startups. The venture lives at novaseed.capital.
 export default async function StartupsPage() {
   const svc = tryServiceClient();
@@ -33,7 +33,7 @@ export default async function StartupsPage() {
           Building a startup? We groom — and we invest.
         </h1>
         <p style={{ maxWidth: 660, margin: "0 auto", fontSize: "1.05rem", color: "rgba(255,255,255,.95)" }}>
-          <strong>Nova Seed Capital</strong> is a venture by <strong>CA Parveen Sharma</strong> that grooms new
+          <strong>Nova Seed Capital</strong> is headed by <strong>CA Parveen Sharma</strong> and grooms new
           startups and offers <strong>investment and seed funding</strong> — turning early ideas into disciplined,
           investable businesses.
         </p>
@@ -78,7 +78,7 @@ export default async function StartupsPage() {
         <div style={{ flex: 1, minWidth: 260 }}>
           <h3 style={{ margin: "0 0 6px" }}>CA Parveen Sharma</h3>
           <p className="muted" style={{ margin: 0 }}>
-            Founder, Nova Seed Capital — and one of India&apos;s most renowned CA faculty with <strong>36+ years of
+            Head of Nova Seed Capital — and one of India&apos;s most renowned CA faculty with <strong>36+ years of
             teaching</strong>. The same discipline that builds rank-holders now grooms and funds founders: clear
             numbers, honest structure, and a plan that survives contact with reality.
           </p>

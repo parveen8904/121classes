@@ -84,7 +84,7 @@ export default async function CareerPage(props: { searchParams: Promise<{ city?:
           <div style={{ flex: 1, minWidth: 220 }}>
             <strong>Have a startup? Nova Seed Capital grooms new startups.</strong>
             <p className="muted" style={{ margin: "3px 0 0", fontSize: ".85rem" }}>
-              A venture by CA Parveen Sharma — bring your idea or early-stage startup and get it groomed. Tap to learn more →
+              Headed by CA Parveen Sharma — bring your idea or early-stage startup and get it groomed. Tap to learn more →
             </p>
           </div>
         </div>
@@ -97,7 +97,7 @@ export default async function CareerPage(props: { searchParams: Promise<{ city?:
           <div style={{ flex: 1, minWidth: 220 }}>
             <strong>Have a startup? Nova Seed Capital grooms new startups.</strong>
             <p className="muted" style={{ margin: "3px 0 0", fontSize: ".85rem" }}>
-              A venture by CA Parveen Sharma — bring your idea or early-stage startup and get it groomed. Tap to learn more →
+              Headed by CA Parveen Sharma — bring your idea or early-stage startup and get it groomed. Tap to learn more →
             </p>
           </div>
         </div>

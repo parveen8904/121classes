@@ -226,7 +226,7 @@ input[type="radio"], input[type="checkbox"] {
 }
 
 /* uploaded brand logo image */
-.brand-logo { height: 52px; width: auto; max-width: 400px; object-fit: contain; display: block; }
+.brand-logo { height: 46px; width: auto; max-width: 320px; object-fit: contain; display: block; }
 @media (max-width: 560px) { .brand-logo { height: 40px; max-width: 240px; } }
 /* theme-aware built-in logo: light-text on dark theme, dark-text on light theme */
 .logo-on-light { display: none; }
@@ -335,7 +335,7 @@ input[type="radio"], input[type="checkbox"] {
   max-width: 1140px; margin: 0 auto; padding: 14px 24px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
 }
-.lp-nav-links { display: flex; align-items: center; gap: 22px; }
+.lp-nav-links { display: flex; align-items: center; gap: 16px; }
 .lp-nav-links a { color: var(--muted); font-size: .92rem; transition: color .2s; }
 .lp-nav-links a:hover { color: var(--text); }
 @media (max-width: 880px) { .lp-nav-links .hide-sm { display: none; } }

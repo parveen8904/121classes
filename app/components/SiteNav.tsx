@@ -6,12 +6,17 @@ import AuthCta from "./AuthCta";
 
 const NAV_LINKS = [
   { href: "/courses", label: "Courses" },
-  { href: "/build-your-plan", label: "Build your plan" },
+  { href: "/build-your-plan", label: "Planner" },
   { href: "/results", label: "Results" },
   { href: "/books", label: "Books" },
   { href: "/startups", label: "Startups" },
-  { href: "/placements", label: "Placements" },
   { href: "/#contact", label: "Contact" },
+];
+
+// Shown in the mobile menu (and footer) but kept out of the desktop bar to
+// avoid congestion.
+const MENU_ONLY_LINKS = [
+  { href: "/placements", label: "Placements" },
 ];
 
 // No server-side auth read here — reading cookies would force every marketing
@@ -34,7 +39,7 @@ export default function SiteNav() {
           ))}
           <ThemeToggle />
           <AuthCta initialSignedIn={signedIn} />
-          <MobileMenu links={NAV_LINKS} initialSignedIn={signedIn} />
+          <MobileMenu links={[...NAV_LINKS, ...MENU_ONLY_LINKS]} initialSignedIn={signedIn} />
         </div>
       </div>
     </nav>

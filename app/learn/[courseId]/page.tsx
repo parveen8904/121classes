@@ -362,7 +362,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                     key={s.id}
                     href={`/learn/${course.id}?subject=${s.id}`}
                     className="card"
-                    style={{ color: "var(--text)", display: "flex", flexDirection: "column", gap: 6, border: isBatch ? "2px solid #dc2626" : undefined }}
+                    style={{ color: "var(--text)", display: "flex", flexDirection: "column", gap: 6, border: isBatch ? "2px solid #dc2626" : "2px solid var(--accent)" }}
                   >
                     <div style={{ fontWeight: 800, fontSize: "1.12rem", lineHeight: 1.25 }}>
                       {isBatch && <span style={{ background: "#dc2626", color: "#fff", borderRadius: 8, padding: "1px 8px", fontSize: ".78rem", marginRight: 8, verticalAlign: "middle" }}>🔴 LIVE</span>}

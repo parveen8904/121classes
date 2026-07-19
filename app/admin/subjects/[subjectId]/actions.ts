@@ -330,6 +330,16 @@ export async function updateSubjectInline(formData: FormData) {
       intro_video_url: str(formData.get("intro_video_url")) || null,
     })
     .eq("id", id);
+
+  // Live batch: which old chapter this batch re-teaches (stored on the batch's
+  // first topic as supersedes_topic_id). Field only exists on bundled batches.
+  const reteach = formData.get("reteaches_topic_id");
+  if (reteach !== null) {
+    const svc = createServiceClient();
+    const { data: ft } = await svc.from("topics").select("id").eq("subject_id", id).order("order_index").limit(1).maybeSingle();
+    if (ft) await svc.from("topics").update({ supersedes_topic_id: str(reteach) || null }).eq("id", ft.id);
+  }
+
   revalidatePath(`/admin/subjects/${id}`);
 }
 

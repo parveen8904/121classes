@@ -53,6 +53,11 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
   const { data: parentTopics } = parentSubjectId
     ? await supabase.from("topics").select("id, title").eq("subject_id", parentSubjectId).order("order_index")
     : { data: null };
+  // The batch's first topic — its supersedes_topic_id marks WHICH old chapter
+  // this batch re-teaches ("previous recordings" notice + shared tests).
+  const { data: firstTopic } = parentSubjectId
+    ? await supabase.from("topics").select("id, supersedes_topic_id").eq("subject_id", subjectId).order("order_index").limit(1).maybeSingle()
+    : { data: null };
 
   const [{ data: topics }, { data: faculties }, { data: assigned }] = await Promise.all([
     supabase
@@ -451,6 +456,17 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
                   </select>
                 </div>
               </div>
+              {(parentTopics ?? []).length > 0 && firstTopic && (
+                <div style={{ marginTop: 10 }}>
+                  <label htmlFor="su-reteach">Re-teaches (old) chapter — shows the &ldquo;previous recordings&rdquo; notice there and shares its tests here</label>
+                  <select id="su-reteach" name="reteaches_topic_id" defaultValue={(firstTopic as { supersedes_topic_id?: string | null }).supersedes_topic_id ?? ""}>
+                    <option value="">— none</option>
+                    {(parentTopics ?? []).map((t) => (
+                      <option key={t.id} value={t.id}>{t.title}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <div style={{ marginTop: 4 }}>
               <label htmlFor="su-intro">🎬 Intro video URL (YouTube) — students watch it before starting the classes</label>

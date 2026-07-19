@@ -221,6 +221,13 @@ export default function PricingCards({
           <div className="tagline">
             Taught LIVE by CA Parveen Sharma — recordings added after every class.
           </div>
+          <ul className="feat-list" style={{ textAlign: "left", marginTop: 10 }}>
+            <li>🥇 <strong>Gold</strong> access to this chapter — every live class + its recording</li>
+            {subject.included_with_title && (
+              <li>🥈 <strong>Silver</strong> access to the full <strong>{subject.included_with_title}</strong> — all MCQ &amp; descriptive tests + AI doubt-solving</li>
+            )}
+            <li>📚 Shared resources — RTPs, MTPs, past papers &amp; case scenarios</li>
+          </ul>
           {batchWindow && (
             <div style={{ background: "var(--bg-soft)", borderRadius: 10, padding: "8px 12px", margin: "10px 0", fontSize: ".88rem" }}>
               {batchWindow.daysLabel && batchWindow.timeLabel && (

@@ -43,18 +43,26 @@ export async function generateSchedule(formData: FormData) {
   const titleById = new Map((secTitles ?? []).map((s) => [s.id as string, s.title as string]));
 
   // Numeric sort on class_no; letter parts (7A/7B) keep their place after the number.
-  const classes = (stats ?? [])
+  let classes = (stats ?? [])
     .filter((s) => s.class_no)
-    .map((s) => ({ id: s.section_id as string, no: String(s.class_no), n: parseFloat(String(s.class_no)) || 0 }))
+    .map((s) => ({ id: s.section_id as string | null, no: String(s.class_no), n: parseFloat(String(s.class_no)) || 0 }))
     .sort((a, b) => (a.n - b.n) || a.no.localeCompare(b.no))
     .filter((c) => c.n >= fromClass)
     .slice(0, count);
+  // LIVE batch: no recordings exist yet — schedule numbered live sessions
+  // instead (section_id stays empty; each recording is uploaded afterwards).
+  let liveTitleBase = "";
+  if (!classes.length) {
+    const { data: subjRow } = await svc.from("subjects").select("title").eq("id", subjectId).maybeSingle();
+    liveTitleBase = (subjRow?.title as string) ?? "Live";
+    classes = Array.from({ length: count }, (_, i) => ({ id: null, no: String(fromClass + i), n: fromClass + i }));
+  }
   if (!classes.length) return;
 
   // Walk forward from the start date, using only the allowed weekdays. Times
   // are IST; store as UTC instants (IST = UTC+5:30).
   const [hh, mm] = time.split(":").map(Number);
-  const rows: { subject_id: string; section_id: string; title: string; class_no: string; batch: string | null; scheduled_at: string; join_url: string | null }[] = [];
+  const rows: { subject_id: string; section_id: string | null; title: string; class_no: string; batch: string | null; scheduled_at: string; join_url: string | null }[] = [];
   // cursor = IST midnight of the current candidate day (as a UTC instant).
   const cursor = new Date(`${startDate}T00:00:00+05:30`);
   const istWeekday = (d: Date) => new Date(d.getTime() + 5.5 * 3600 * 1000).getUTCDay();
@@ -66,7 +74,7 @@ export async function generateSchedule(formData: FormData) {
     rows.push({
       subject_id: subjectId,
       section_id: cls.id,
-      title: titleById.get(cls.id) ?? `Class ${cls.no}`,
+      title: cls.id ? (titleById.get(cls.id) ?? `Class ${cls.no}`) : `${liveTitleBase} — Live Class ${cls.no}`,
       class_no: cls.no,
       batch: batch || null,
       scheduled_at: scheduled.toISOString(),

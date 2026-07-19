@@ -108,9 +108,14 @@ export default async function Home() {
   // in a top banner while their schedule has upcoming sessions.
   const { data: batchRows } = await supabase
     .from("subjects")
-    .select("id, title, course_id, batch_price_inr, courses(title)")
+    .select("id, title, course_id, batch_price_inr, included_with_subject_id, courses(title)")
     .not("batch_months", "is", null);
-  const liveBatches: { id: string; title: string; courseId: string; course: string; from: string; to: string; sessions: number; daysLabel: string; timeLabel: string; price: number }[] = [];
+  const parentIds = [...new Set((batchRows ?? []).map((b) => (b as { included_with_subject_id?: string | null }).included_with_subject_id).filter(Boolean))] as string[];
+  const { data: parentRows } = parentIds.length
+    ? await supabase.from("subjects").select("id, title").in("id", parentIds)
+    : { data: [] as { id: string; title: string }[] };
+  const parentTitle = new Map((parentRows ?? []).map((p) => [p.id as string, p.title as string]));
+  const liveBatches: { id: string; title: string; courseId: string; course: string; from: string; to: string; sessions: number; daysLabel: string; timeLabel: string; parent: string; price: number }[] = [];
   for (const b of batchRows ?? []) {
     const { data: sched } = await supabase
       .from("class_schedule")
@@ -132,6 +137,7 @@ export default async function Home() {
       sessions: sum.sessions,
       daysLabel: sum.daysLabel,
       timeLabel: sum.timeLabel,
+      parent: parentTitle.get((b as { included_with_subject_id?: string | null }).included_with_subject_id ?? "") ?? "",
       price: Number((b as { batch_price_inr?: number | null }).batch_price_inr) || 0,
     });
   }
@@ -301,6 +307,7 @@ export default async function Home() {
                 </div>
                 <div style={{ opacity: 0.95, fontSize: ".92rem", marginTop: 4 }}>
                   Taught LIVE by CA Parveen Sharma · <strong>{lb.daysLabel}</strong> at <strong>{lb.timeLabel} IST</strong> · {lb.from} to {lb.to} · {lb.sessions} classes · recordings included
+                  {lb.parent && <> · <strong>+ Silver access to full {lb.parent}</strong> (all tests &amp; AI doubts)</>}
                 </div>
               </div>
               <span style={{ background: "#fff", color: "#dc2626", borderRadius: 999, padding: "10px 20px", fontWeight: 800, whiteSpace: "nowrap" }}>

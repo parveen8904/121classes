@@ -118,7 +118,7 @@ export default async function Home() {
     supabase.from("results").select("id", { count: "exact", head: true }).eq("is_published", true),
     supabase.from("job_listings").select("id", { count: "exact", head: true }).eq("status", "approved"),
   ]);
-  // YouTube channel (@parveensharmaofficial) — latest uploads for the homepage.
+  // YouTube channel (@caparveensharmaofficial) — latest uploads for the homepage.
   const ytOverview = await getChannelOverview().catch(() => null);
   const ytVideos = ytOverview?.uploadsPlaylist
     ? await getRecentVideos(ytOverview.uploadsPlaylist, 6).catch(() => [])
@@ -345,14 +345,14 @@ export default async function Home() {
         </Link>
       </section>
 
-      {/* YOUTUBE CHANNEL — @parveensharmaofficial */}
+      {/* YOUTUBE CHANNEL — @caparveensharmaofficial */}
       <section className="section alt" id="youtube">
         <div className="section-head">
           <div className="eyebrow">▶️ YouTube</div>
           <h2>Watch us on YouTube</h2>
           <p>
             Podcasts, revision videos, classes and community updates on{" "}
-            <a href="https://www.youtube.com/@parveensharmaofficial" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 800 }}>@parveensharmaofficial</a>
+            <a href="https://www.youtube.com/@caparveensharmaofficial" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 800 }}>@caparveensharmaofficial</a>
             {ytOverview ? <> · <strong>{ytOverview.subscribers.toLocaleString("en-IN")}</strong> subscribers</> : null}
           </p>
         </div>
@@ -373,7 +373,7 @@ export default async function Home() {
           <p className="muted" style={{ textAlign: "center" }}>Fresh videos, podcasts and revision classes — on the channel now.</p>
         )}
         <div style={{ textAlign: "center", marginTop: 24 }}>
-          <a className="btn" href="https://www.youtube.com/@parveensharmaofficial?sub_confirmation=1" target="_blank" rel="noopener noreferrer" style={{ background: "#FF0000", color: "#fff" }}>
+          <a className="btn" href="https://www.youtube.com/@caparveensharmaofficial?sub_confirmation=1" target="_blank" rel="noopener noreferrer" style={{ background: "#FF0000", color: "#fff" }}>
             ▶️ Subscribe on YouTube →
           </a>
         </div>

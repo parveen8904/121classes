@@ -119,7 +119,7 @@ export default function CartCheckout({ configured }: { configured: boolean }) {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "16px 4px" }}>
         <Link href="/books" style={{ color: "var(--accent)", fontWeight: 700 }}>← Add more books</Link>
-        <div style={{ fontSize: "1.25rem", fontWeight: 800 }}>Total: ₹{total.toLocaleString("en-IN")} <span className="muted" style={{ fontSize: ".8rem", fontWeight: 500 }}>· free shipping 🚚</span></div>
+        <div style={{ fontSize: "1.25rem", fontWeight: 800 }}>Total: ₹{total.toLocaleString("en-IN")} <span className="muted" style={{ fontSize: ".8rem", fontWeight: 500 }}>· incl. GST · free shipping 🚚</span></div>
       </div>
 
       {/* Delivery details */}

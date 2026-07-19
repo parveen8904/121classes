@@ -95,7 +95,7 @@ export default function GiftForm({ configured, subjects, plans }: { configured: 
                 <p style={{ fontWeight: 800, margin: "8px 0 0" }}>
                   🎁 Gift value: {formatINR(total)}
                   {months > 0 && <span className="muted" style={{ fontWeight: 500 }}> · ≈ {formatINR(Math.round(total / months))}/month</span>}
-                  <span className="muted" style={{ fontWeight: 500, fontSize: ".8rem" }}> (+ GST at checkout)</span>
+                  <span className="muted" style={{ fontWeight: 500, fontSize: ".8rem" }}> · includes GST</span>
                 </p>
               )}
             </div>

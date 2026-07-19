@@ -367,7 +367,7 @@ export default function PricingCards({
 
       <p className="muted" style={{ textAlign: "center", fontSize: ".85rem", marginTop: 22 }}>
         {configured
-          ? "🔒 Secure checkout by Razorpay. Access unlocks the moment your payment succeeds."
+          ? "🔒 Secure checkout by Razorpay · all prices include GST. Access unlocks the moment your payment succeeds."
           : "Online checkout is being set up. Tap Enroll to enquire and we'll enrol you right away. 🙌"}
       </p>
     </>

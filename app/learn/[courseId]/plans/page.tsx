@@ -247,7 +247,10 @@ export default async function CoursePlans(
         />
         </div>
 
-        {/* What the FREE plan includes (from the admin access-limits matrix). */}
+        {/* What the FREE plan includes (from the admin access-limits matrix).
+            Hidden on live-batch cards — a fixed-price product's page shouldn't
+            distract with free-tier details. */}
+        {selBatchMonths === 0 && (
         <div className="card" style={{ maxWidth: 640, margin: "24px auto 0" }}>
           <strong>🆓 Free plan includes</strong>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
@@ -259,6 +262,7 @@ export default async function CoursePlans(
             A one-time free trial. Upgrade to Silver or Gold for unlimited access.
           </p>
         </div>
+        )}
       </section>
     </main>
   );

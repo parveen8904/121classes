@@ -405,6 +405,7 @@ export default async function Home() {
             <div style={{ minWidth: 260, flex: 1 }}>
               <div style={{ fontSize: "clamp(1.2rem,2.6vw,1.7rem)", fontWeight: 800, margin: "0 0 4px" }}>Have a startup? We groom — and invest.</div>
               <div style={{ opacity: 0.92, fontSize: ".95rem" }}>Nova Seed Capital, headed by CA Parveen Sharma — grooming, mentorship and seed funding for new startups.</div>
+              <div style={{ opacity: 0.95, fontSize: ".92rem", marginTop: 6 }}>🎤 We also hold <strong>regular startup sessions for budding entrepreneurs</strong> — you&apos;re welcome to join.</div>
             </div>
             <span className="btn" style={{ background: "#fff", color: "#0d9488", fontWeight: 800, whiteSpace: "nowrap" }}>Learn more →</span>
           </div>

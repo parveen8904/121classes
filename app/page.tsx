@@ -8,6 +8,7 @@ import CountUp from "./components/CountUp";
 import { tryServiceClient } from "@/lib/supabase/service";
 import { studentsTaught } from "@/lib/studentsTaught";
 import { saleFromSettings } from "@/lib/sale";
+import { getChannelOverview, getRecentVideos } from "@/lib/youtubeStats";
 
 // Public marketing homepage — no per-user content (only public, published rows).
 // Serve it from the edge cache and refresh every 5 minutes instead of running
@@ -117,6 +118,12 @@ export default async function Home() {
     supabase.from("results").select("id", { count: "exact", head: true }).eq("is_published", true),
     supabase.from("job_listings").select("id", { count: "exact", head: true }).eq("status", "approved"),
   ]);
+  // YouTube channel (@parveensharmaofficial) — latest uploads for the homepage.
+  const ytOverview = await getChannelOverview().catch(() => null);
+  const ytVideos = ytOverview?.uploadsPlaylist
+    ? await getRecentVideos(ytOverview.uploadsPlaylist, 6).catch(() => [])
+    : [];
+
   const heroStats = [
     { n: taught, suffix: "+", label: "students taught" },
     { n: resultCount ?? 0, suffix: "+", label: "success stories" },
@@ -320,6 +327,54 @@ export default async function Home() {
         </section>
       )}
 
+
+      {/* NOVA SEED CAPITAL — startup grooming banner */}
+      <section className="section" style={{ paddingTop: 26, paddingBottom: 26 }}>
+        <Link href="/startups" style={{ display: "block", maxWidth: 1140, margin: "0 auto", textDecoration: "none" }}>
+          <div style={{ background: "linear-gradient(120deg, #134e4a, #0d9488 70%, #2dd4bf)", color: "#fff", borderRadius: 20, padding: "30px 28px", display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>
+            <div style={{ minWidth: 260, flex: 1 }}>
+              <div style={{ fontSize: ".8rem", fontWeight: 800, letterSpacing: 1.5, opacity: 0.9 }}>🚀 NOVA SEED CAPITAL</div>
+              <div style={{ fontSize: "clamp(1.2rem,2.6vw,1.7rem)", fontWeight: 800, margin: "6px 0 4px" }}>Have a startup? We groom new startups.</div>
+              <div style={{ opacity: 0.92, fontSize: ".95rem" }}>A venture by CA Parveen Sharma — bring your idea or early-stage startup.</div>
+            </div>
+            <span className="btn" style={{ background: "#fff", color: "#0d9488", fontWeight: 800, whiteSpace: "nowrap" }}>Learn more →</span>
+          </div>
+        </Link>
+      </section>
+
+      {/* YOUTUBE CHANNEL — @parveensharmaofficial */}
+      <section className="section alt" id="youtube">
+        <div className="section-head">
+          <div className="eyebrow">▶️ YouTube</div>
+          <h2>Watch us on YouTube</h2>
+          <p>
+            Podcasts, revision videos, classes and community updates on{" "}
+            <a href="https://www.youtube.com/@parveensharmaofficial" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 800 }}>@parveensharmaofficial</a>
+            {ytOverview ? <> · <strong>{ytOverview.subscribers.toLocaleString("en-IN")}</strong> subscribers</> : null}
+          </p>
+        </div>
+        {ytVideos.length > 0 ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12, maxWidth: 1140, margin: "0 auto" }}>
+            {ytVideos.map((v) => (
+              <a key={v.id} href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="tile" style={{ padding: 0, overflow: "hidden", color: "var(--text)", textAlign: "left" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`} alt={v.title} loading="lazy" decoding="async" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
+                <div style={{ padding: "10px 12px 12px" }}>
+                  <div style={{ fontWeight: 700, fontSize: ".88rem", lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.title}</div>
+                  <div className="muted" style={{ fontSize: ".74rem", marginTop: 4 }}>▶ {Number(v.views ?? 0).toLocaleString("en-IN")} views</div>
+                </div>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <p className="muted" style={{ textAlign: "center" }}>Fresh videos, podcasts and revision classes — on the channel now.</p>
+        )}
+        <div style={{ textAlign: "center", marginTop: 24 }}>
+          <a className="btn" href="https://www.youtube.com/@parveensharmaofficial?sub_confirmation=1" target="_blank" rel="noopener noreferrer" style={{ background: "#FF0000", color: "#fff" }}>
+            ▶️ Subscribe on YouTube →
+          </a>
+        </div>
+      </section>
 
       {/* HIGHLIGHT BANNER — latest announcement / course */}
       {latestHighlight && (

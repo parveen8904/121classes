@@ -219,6 +219,20 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
   const tgChannel = linkMap.get("support_telegram") || "";
   const dcLink = linkMap.get("support_discord") || "";
 
+  // A live batch shares its parent subject's COMMON content — subject-level
+  // resources (RTPs / MTPs / past papers / notes / books) and case scenarios —
+  // instead of duplicating them. (These practice surfaces only need login.)
+  for (const b of batchSubjects) {
+    const pid = b.included_with_subject_id;
+    if (!pid) continue;
+    const sharedRes = subjResources.get(pid) ?? [];
+    if (sharedRes.length) subjResources.set(b.id, [...(subjResources.get(b.id) ?? []), ...sharedRes]);
+    const sharedSets = subjCaseSets.get(pid) ?? [];
+    if (sharedSets.length) subjCaseSets.set(b.id, [...(subjCaseSets.get(b.id) ?? []), ...sharedSets]);
+    const sharedCases = subjCaseCount.get(pid) ?? 0;
+    if (sharedCases) subjCaseCount.set(b.id, (subjCaseCount.get(b.id) ?? 0) + sharedCases);
+  }
+
   const target = profile?.target_attempt ?? null;
 
   // Default applicability shown when a subject has no explicit window set — by
@@ -373,9 +387,20 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
         )}
         {!showPicker && (visibleSubjects.length > 0 ? (
           visibleSubjects.map((s) => {
-            const facultyRows = ((s.subject_faculty ?? []) as unknown as SubjectFacultyRow[])
+            // A live batch inherits its parent subject's faculty details and
+            // Telegram group when it has none of its own.
+            const parentId = (s as { included_with_subject_id?: string | null }).included_with_subject_id ?? null;
+            const parentSubj = parentId ? allSubjects.find((x) => x.id === parentId) ?? null : null;
+            let facultyRows = ((s.subject_faculty ?? []) as unknown as SubjectFacultyRow[])
               .map((sf) => sf.faculties)
               .filter((f): f is NonNullable<SubjectFacultyRow["faculties"]> => !!f);
+            if (facultyRows.length === 0 && parentSubj) {
+              facultyRows = (((parentSubj as { subject_faculty?: unknown }).subject_faculty ?? []) as SubjectFacultyRow[])
+                .map((sf) => sf.faculties)
+                .filter((f): f is NonNullable<SubjectFacultyRow["faculties"]> => !!f);
+            }
+            const tgGroup = ((s as { telegram_group_url?: string | null }).telegram_group_url
+              || (parentSubj as { telegram_group_url?: string | null } | null)?.telegram_group_url) ?? null;
             const faculty = facultyRows.map((f) => f.full_name).filter(Boolean);
             const facultyContacts = facultyRows.filter((f) => f.phone || f.email);
             const allSubjTopics = (topics ?? []).filter((t) => t.subject_id === s.id);
@@ -490,11 +515,11 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                     />
                   </div>
                 )}
-                {mySubjIds.has(s.id) && ((s as { telegram_group_url?: string | null }).telegram_group_url || tgChannel || dcLink) && (
+                {mySubjIds.has(s.id) && (tgGroup || tgChannel || dcLink) && (
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-                    {(s as { telegram_group_url?: string | null }).telegram_group_url && (
-                      <a className="btn small" href={(s as { telegram_group_url?: string }).telegram_group_url} target="_blank" rel="noopener noreferrer" style={{ background: "#229ED9", color: "#fff" }}>
-                        👥 Join {s.title} group
+                    {tgGroup && (
+                      <a className="btn small" href={tgGroup} target="_blank" rel="noopener noreferrer" style={{ background: "#229ED9", color: "#fff" }}>
+                        👥 Join {(parentSubj && !((s as { telegram_group_url?: string | null }).telegram_group_url) ? parentSubj.title : s.title)} group
                       </a>
                     )}
                     {tgChannel && (
@@ -570,7 +595,10 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                 })()}
                 {(subjCaseSets.get(s.id) ?? []).length > 0 && (
                   <div className="card" style={{ margin: "0 0 14px" }}>
-                    <strong style={{ fontSize: ".95rem" }}>🧩 Case scenarios (new exam pattern)</strong>
+                    <strong style={{ fontSize: ".95rem" }}>
+                      🧩 Case scenarios (new exam pattern)
+                      {parentSubj && <span className="muted" style={{ fontWeight: 400, fontSize: ".8rem" }}> · shared with {parentSubj.title}</span>}
+                    </strong>
                     <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
                       {(subjCaseSets.get(s.id) ?? []).map((cset) => (
                         <Link key={cset.id} href={`/learn/cases/${cset.id}`} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, color: "var(--text)", border: "2px solid var(--accent)" }}>
@@ -583,7 +611,10 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                 )}
                 {(subjResources.get(s.id) ?? []).length > 0 && (
                   <div style={{ margin: "0 0 14px" }}>
-                    <strong style={{ fontSize: ".95rem" }}>📚 Subject resources</strong>
+                    <strong style={{ fontSize: ".95rem" }}>
+                      📚 Subject resources
+                      {parentSubj && <span className="muted" style={{ fontWeight: 400, fontSize: ".8rem" }}> · shared with {parentSubj.title}</span>}
+                    </strong>
                     <p className="muted" style={{ fontSize: ".78rem", margin: "2px 0 8px" }}>Tap a category to open its papers / notes.</p>
                     <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
                       {/* Standard categories → tap to open their papers/notes. */}

@@ -48,6 +48,15 @@ export async function addMyCourse(formData: FormData) {
     { student_id: user.id, course_id: courseId },
     { onConflict: "student_id,course_id" },
   );
+  // Auto-add ALL the course's subjects — students kept wondering how to "add"
+  // them. Any subject can still be removed from the course page.
+  const { data: subs } = await supabase.from("subjects").select("id").eq("course_id", courseId);
+  if (subs?.length) {
+    await supabase.from("my_subjects").upsert(
+      subs.map((sub) => ({ student_id: user.id, subject_id: sub.id })),
+      { onConflict: "student_id,subject_id" },
+    );
+  }
   revalidatePath("/dashboard");
 }
 

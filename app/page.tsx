@@ -332,10 +332,13 @@ export default async function Home() {
       <section className="section" style={{ paddingTop: 26, paddingBottom: 26 }}>
         <Link href="/startups" style={{ display: "block", maxWidth: 1140, margin: "0 auto", textDecoration: "none" }}>
           <div style={{ background: "linear-gradient(120deg, #134e4a, #0d9488 70%, #2dd4bf)", color: "#fff", borderRadius: 20, padding: "30px 28px", display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>
+            <div style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", flexShrink: 0 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/novaseed-logo.png" alt="Nova Seed Capital" style={{ height: 54, width: "auto", display: "block" }} />
+            </div>
             <div style={{ minWidth: 260, flex: 1 }}>
-              <div style={{ fontSize: ".8rem", fontWeight: 800, letterSpacing: 1.5, opacity: 0.9 }}>🚀 NOVA SEED CAPITAL</div>
-              <div style={{ fontSize: "clamp(1.2rem,2.6vw,1.7rem)", fontWeight: 800, margin: "6px 0 4px" }}>Have a startup? We groom new startups.</div>
-              <div style={{ opacity: 0.92, fontSize: ".95rem" }}>A venture by CA Parveen Sharma — bring your idea or early-stage startup.</div>
+              <div style={{ fontSize: "clamp(1.2rem,2.6vw,1.7rem)", fontWeight: 800, margin: "0 0 4px" }}>Have a startup? We groom — and invest.</div>
+              <div style={{ opacity: 0.92, fontSize: ".95rem" }}>Nova Seed Capital, a venture by CA Parveen Sharma — grooming, mentorship and seed funding for new startups.</div>
             </div>
             <span className="btn" style={{ background: "#fff", color: "#0d9488", fontWeight: 800, whiteSpace: "nowrap" }}>Learn more →</span>
           </div>

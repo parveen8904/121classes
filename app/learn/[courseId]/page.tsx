@@ -34,7 +34,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
     supabase.from("courses").select("id, title").eq("id", params.courseId).single(),
     supabase
       .from("subjects")
-      .select("id, title, order_index, telegram_group_url, valid_from_attempt, valid_to_attempt, batch_months, batch_price_inr, included_with_subject_id, subject_faculty(faculties(id, full_name, phone, email, photo_url))")
+      .select("id, title, order_index, telegram_group_url, valid_from_attempt, valid_to_attempt, batch_months, batch_price_inr, included_with_subject_id, intro_video_url, subject_faculty(faculties(id, full_name, phone, email, photo_url))")
       .eq("course_id", params.courseId)
       .order("order_index")
       .order("title"),
@@ -87,6 +87,11 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
     }
   }
   const fmtDay = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  // YouTube watch/short links → embeddable player URL (anything else passes through).
+  const ytEmbed = (url: string) => {
+    const m = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{6,})/);
+    return m ? `https://www.youtube.com/embed/${m[1]}` : url;
+  };
 
   const { data: topics } = subjectIds.length
     ? await supabase
@@ -390,6 +395,22 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                     </p>
                   </div>
                 </div>
+                {/* Orientation video — watch before starting the classes. */}
+                {(s as { intro_video_url?: string | null }).intro_video_url && (
+                  <div className="card" style={{ marginBottom: 12, padding: 14 }}>
+                    <strong style={{ fontSize: ".95rem" }}>🎬 Watch this first — understand {s.title} before you start</strong>
+                    <div style={{ position: "relative", paddingTop: "56.25%", marginTop: 10, borderRadius: 10, overflow: "hidden" }}>
+                      <iframe
+                        src={ytEmbed((s as { intro_video_url?: string }).intro_video_url as string)}
+                        title={`${s.title} — introduction`}
+                        loading="lazy"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }}
+                      />
+                    </div>
+                  </div>
+                )}
                 {/* This subject's OWN faculty tile (photo + WhatsApp/Email;
                     the number stays hidden behind the /api/faculty-wa bridge). */}
                 {facultyContacts.length > 0 && (

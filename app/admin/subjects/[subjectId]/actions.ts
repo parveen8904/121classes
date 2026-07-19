@@ -327,9 +327,58 @@ export async function updateSubjectInline(formData: FormData) {
       batch_months: num(formData.get("batch_months")) || null,
       batch_price_inr: num(formData.get("batch_price_inr")) || null,
       included_with_subject_id: str(formData.get("included_with_subject_id")) || null,
+      intro_video_url: str(formData.get("intro_video_url")) || null,
     })
     .eq("id", id);
   revalidatePath(`/admin/subjects/${id}`);
+}
+
+// Copy another topic's resources into this subject's first topic — used when a
+// live batch re-teaches an existing chapter and the UNCHANGED materials (book,
+// ICAI, question bank, papers, amendments) should carry over without
+// re-uploading. Files aren't duplicated in storage — only the catalog rows.
+export async function copyTopicResources(formData: FormData) {
+  const subjectId = str(formData.get("subjectId"));
+  const fromTopicId = str(formData.get("from_topic_id"));
+  if (!subjectId || !fromTopicId) return;
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: me } = user ? await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle() : { data: null };
+  if (me?.role !== "admin") return;
+
+  const svc = createServiceClient();
+  const { data: toTopic } = await svc.from("topics").select("id").eq("subject_id", subjectId).order("order_index").limit(1).maybeSingle();
+  if (!toTopic) return;
+
+  // 1) Topic-level materials (books / ICAI / question banks / papers / notes).
+  const { data: items } = await svc
+    .from("repository_items")
+    .select("title, kind, course_id, file_url, content, valid_from, valid_to, valid_from_attempt, valid_to_attempt, is_active, share_to_resources, resource_label, student_visible, solution_url, public_sample")
+    .eq("topic_id", fromTopicId)
+    .eq("is_active", true);
+  const already = await svc.from("repository_items").select("title").eq("topic_id", toTopic.id);
+  const have = new Set((already.data ?? []).map((r) => r.title as string));
+  const copies = (items ?? [])
+    .filter((r) => !have.has(r.title as string))
+    .map((r) => ({ ...r, subject_id: subjectId, topic_id: toTopic.id }));
+  if (copies.length) await svc.from("repository_items").insert(copies);
+
+  // 2) Topic resource URL fields — fill only the ones still empty on the target.
+  const FIELDS = ["book_pdf_url", "icai_material_url", "revision_video_url", "revision_notes_hand_url", "revision_notes_typed_url", "revision_paper_url", "amendments_pdf_url", "amendments_upto", "weightage_marks"] as const;
+  const { data: src } = await svc.from("topics").select(FIELDS.join(", ")).eq("id", fromTopicId).maybeSingle();
+  const { data: dst } = await svc.from("topics").select(FIELDS.join(", ")).eq("id", toTopic.id).maybeSingle();
+  if (src && dst) {
+    const patch: Record<string, unknown> = {};
+    for (const f of FIELDS) {
+      const s = (src as unknown as Record<string, unknown>)[f];
+      const d = (dst as unknown as Record<string, unknown>)[f];
+      if (s != null && s !== "" && (d == null || d === "")) patch[f] = s;
+    }
+    if (Object.keys(patch).length) await svc.from("topics").update(patch).eq("id", toTopic.id);
+  }
+
+  revalidatePath(`/admin/subjects/${subjectId}`);
+  redirect(`/admin/subjects/${subjectId}?edited=resources-copied`);
 }
 
 // Replace the subject's faculty set with whatever is checked.

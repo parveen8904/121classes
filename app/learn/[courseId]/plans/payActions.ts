@@ -90,6 +90,33 @@ export async function createPlanOrder(input: {
     if (sale && baseAmount != null) baseAmount = applySaleDiscount(baseAmount, sale);
   }
 
+  // Migration credit: a student who bought a live batch bundled to THIS subject
+  // gets the batch price adjusted when upgrading to the full subject's Gold —
+  // they only pay the difference. (Computed server-side, like everything else.)
+  if (batchMonths === 0 && input.tier === "gold" && baseAmount != null) {
+    const { data: childBatches } = await supabase
+      .from("subjects")
+      .select("id, batch_price_inr")
+      .eq("included_with_subject_id", subject.id)
+      .not("batch_months", "is", null);
+    const creditable = (childBatches ?? []).filter((b) => (Number(b.batch_price_inr) || 0) > 0);
+    if (creditable.length) {
+      const { data: owned } = await supabase
+        .from("subscriptions")
+        .select("subject_id")
+        .eq("student_id", user.id)
+        .eq("status", "active")
+        .gte("ends_at", new Date().toISOString())
+        .in("subject_id", creditable.map((b) => b.id))
+        .limit(1);
+      const ownedId = owned?.[0]?.subject_id as string | undefined;
+      if (ownedId) {
+        const credit = Number(creditable.find((b) => b.id === ownedId)?.batch_price_inr) || 0;
+        baseAmount = Math.max(1, baseAmount - credit);
+      }
+    }
+  }
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name, email, phone")
@@ -246,12 +273,14 @@ export async function createExtendOrder(input: {
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, course_id, gold_price_inr, validity_months, gold_slabs, batch_months")
+    .select("id, title, course_id, gold_price_inr, validity_months, gold_slabs, batch_months, batch_price_inr")
     .eq("id", input.subjectId)
     .single();
   if (!subject) return { ok: false, reason: "error" };
-  // Live batches have a fixed access window — no extensions.
-  if ((Number((subject as { batch_months?: number | null }).batch_months) || 0) > 0) return { ok: false, reason: "atcap" };
+  // Live batches extend at their flat per-month rate (batch price ÷ batch months).
+  const extBatchMonths = Number((subject as { batch_months?: number | null }).batch_months) || 0;
+  const extBatchPrice = Number((subject as { batch_price_inr?: number | null }).batch_price_inr) || 0;
+  if (extBatchMonths > 0 && extBatchPrice <= 0) return { ok: false, reason: "noprice" };
 
   // The student's active subscription for this subject (latest expiry).
   const { data: sub } = await supabase
@@ -282,7 +311,9 @@ export async function createExtendOrder(input: {
   const { parseSlabs, slabTotal } = await import("@/lib/pricing");
   const slabs = parseSlabs((subject as { gold_slabs?: unknown }).gold_slabs);
   let baseAmount: number;
-  if (slabs) {
+  if (extBatchMonths > 0) {
+    baseAmount = Math.max(1, Math.round((extBatchPrice / extBatchMonths) * effAdd));
+  } else if (slabs) {
     baseAmount = slabTotal(slabs, newTotal) - slabTotal(slabs, current);
   } else {
     if (!subject.gold_price_inr || subject.gold_price_inr <= 0) return { ok: false, reason: "noprice" };

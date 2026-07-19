@@ -122,6 +122,21 @@ export default async function CoursePlans(
   }
   const maxMonths = Number(course.max_subscription_months) || 36;
 
+  // Migration credit: viewing a normal subject while owning its bundled live
+  // batch → the batch price is adjusted off a Gold upgrade (server recomputes).
+  let batchCredit = 0;
+  let batchCreditTitle = "";
+  if (!selBatchMonths) {
+    type BRow = { id: string; title: string; batch_months?: number | null; batch_price_inr?: number | null; included_with_subject_id?: string | null };
+    const childBatch = (subjectList as BRow[]).find(
+      (x) => (Number(x.batch_months) || 0) > 0 && x.included_with_subject_id === selected.id && (Number(x.batch_price_inr) || 0) > 0,
+    );
+    if (childBatch && (subs ?? []).some((r) => (r as { subject_id: string | null }).subject_id === childBatch.id)) {
+      batchCredit = Number(childBatch.batch_price_inr) || 0;
+      batchCreditTitle = childBatch.title;
+    }
+  }
+
   const facultyNames = ((selected as {
     subject_faculty?: { faculties?: { full_name?: string } | null }[];
   }).subject_faculty ?? [])
@@ -218,6 +233,8 @@ export default async function CoursePlans(
             included_with_title: selIncludedWith ? (subjectList.find((x) => x.id === selIncludedWith)?.title ?? null) : null,
           }}
           batchWindow={batchWindow}
+          batchCredit={batchCredit}
+          batchCreditTitle={batchCreditTitle}
           facultyNames={facultyNames}
           silverPrice={silverPlan?.web_price_inr ?? null}
           goldValidityOptions={goldValidityOptions}

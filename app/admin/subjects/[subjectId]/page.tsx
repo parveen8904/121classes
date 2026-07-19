@@ -22,6 +22,7 @@ import {
   continueCaseParse,
   toggleCaseSetPublish,
   deleteCaseSet,
+  copyTopicResources,
 } from "./actions";
 
 export default async function SubjectDetail(props: { params: Promise<{ subjectId: string }> }) {
@@ -31,7 +32,7 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs, batch_months, batch_price_inr, included_with_subject_id, telegram_group_url, remarks, miq_rev1, miq_rev2, valid_from_attempt, valid_to_attempt, courses(title)")
+    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs, batch_months, batch_price_inr, included_with_subject_id, intro_video_url, telegram_group_url, remarks, miq_rev1, miq_rev2, valid_from_attempt, valid_to_attempt, courses(title)")
     .eq("id", subjectId)
     .single();
 
@@ -45,6 +46,13 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
     .eq("course_id", subject.course_id)
     .neq("id", subjectId)
     .order("order_index");
+
+  // For a live batch bundled to a parent subject: the parent's topics, so the
+  // admin can copy the original chapter's unchanged resources across.
+  const parentSubjectId = (subject as { included_with_subject_id?: string | null }).included_with_subject_id ?? null;
+  const { data: parentTopics } = parentSubjectId
+    ? await supabase.from("topics").select("id, title").eq("subject_id", parentSubjectId).order("order_index")
+    : { data: null };
 
   const [{ data: topics }, { data: faculties }, { data: assigned }] = await Promise.all([
     supabase
@@ -445,6 +453,10 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
               </div>
             </div>
             <div style={{ marginTop: 4 }}>
+              <label htmlFor="su-intro">🎬 Intro video URL (YouTube) — students watch it before starting the classes</label>
+              <input id="su-intro" name="intro_video_url" defaultValue={(subject as { intro_video_url?: string | null }).intro_video_url ?? ""} placeholder="https://www.youtube.com/watch?v=… — shown at the top of this subject" />
+            </div>
+            <div style={{ marginTop: 4 }}>
               <label htmlFor="su-tg">✈️ Telegram group link (this subject only)</label>
               <input id="su-tg" name="telegram_group_url" defaultValue={(subject as { telegram_group_url?: string }).telegram_group_url ?? ""} placeholder="https://t.me/+… — shown only to students who added this subject" />
             </div>
@@ -458,6 +470,29 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
             </SubmitButton>
           </form>
         </div>
+
+        {parentSubjectId && (parentTopics ?? []).length > 0 && (
+          <div className="form-card" style={{ marginTop: 10 }}>
+            <h3>📚 Copy resources from the original chapter</h3>
+            <p className="muted" style={{ fontSize: ".82rem" }}>
+              Copies the selected topic&apos;s materials (book, ICAI, question bank, papers, amendments…) into this
+              batch&apos;s topic — only items not already here, and only fields still empty. Nothing is re-uploaded;
+              class recordings and notes you teach fresh are NOT copied.
+            </p>
+            <form action={copyTopicResources} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
+              <input type="hidden" name="subjectId" value={subject.id} />
+              <div style={{ flex: 1, minWidth: 240 }}>
+                <label htmlFor="cp-topic">Copy from</label>
+                <select id="cp-topic" name="from_topic_id" style={{ marginBottom: 0 }}>
+                  {(parentTopics ?? []).map((t) => (
+                    <option key={t.id} value={t.id}>{t.title}</option>
+                  ))}
+                </select>
+              </div>
+              <SubmitButton className="btn secondary">Copy resources →</SubmitButton>
+            </form>
+          </div>
+        )}
 
         <div className="form-card" style={{ marginTop: 10 }}>
           <h3>👩‍🏫 Faculty for this subject</h3>

@@ -103,6 +103,35 @@ export default async function Home() {
     .sort((a, b) =>
       (airRank(a.headline as string) - airRank(b.headline as string)) ||
       (attemptKey(b.attempt as string) - attemptKey(a.attempt as string)));
+  // Live-batch products (a chapter taught LIVE, sold standalone) — highlighted
+  // in a top banner while their schedule has upcoming sessions.
+  const { data: batchRows } = await supabase
+    .from("subjects")
+    .select("id, title, course_id, batch_price_inr, courses(title)")
+    .not("batch_months", "is", null);
+  const liveBatches: { id: string; title: string; courseId: string; course: string; from: string; to: string; sessions: number; price: number }[] = [];
+  for (const b of batchRows ?? []) {
+    const { data: sched } = await supabase
+      .from("class_schedule")
+      .select("scheduled_at")
+      .eq("subject_id", b.id)
+      .order("scheduled_at");
+    if (!sched?.length) continue;
+    const last = new Date(sched[sched.length - 1].scheduled_at as string);
+    if (last.getTime() < Date.now()) continue; // batch over → banner retires itself
+    const f = (s: string) => new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+    liveBatches.push({
+      id: b.id as string,
+      title: b.title as string,
+      courseId: b.course_id as string,
+      course: (b as { courses?: { title?: string } | null }).courses?.title ?? "",
+      from: f(sched[0].scheduled_at as string),
+      to: f(sched[sched.length - 1].scheduled_at as string),
+      sessions: sched.length,
+      price: Number((b as { batch_price_inr?: number | null }).batch_price_inr) || 0,
+    });
+  }
+
   const { data: liveUpcoming } = await supabase
     .from("live_sessions")
     .select("id, title, audience, starts_at, faculties(full_name)")
@@ -252,6 +281,31 @@ export default async function Home() {
           />
         </div>
       )}
+
+      {/* LIVE BATCH — a chapter being taught live; enrol banner at the very top */}
+      {liveBatches.map((lb) => (
+        <div key={lb.id} className="container" style={{ marginTop: 10, maxWidth: 1140 }}>
+          <Link
+            href={`/learn/${lb.courseId}/plans?subject=${lb.id}`}
+            style={{ display: "block", background: "linear-gradient(90deg, #b91c1c, #dc2626)", color: "#fff", borderRadius: 16, padding: "18px 22px", textDecoration: "none" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: "1.15rem" }}>
+                  <span style={{ background: "#fff", color: "#dc2626", borderRadius: 8, padding: "2px 10px", fontSize: ".85rem", marginRight: 10, verticalAlign: "middle" }}>🔴 LIVE</span>
+                  Join LIVE classes of {lb.title.replace(/\s*—\s*Live Batch$/i, "")}{lb.course ? ` (${lb.course})` : ""}
+                </div>
+                <div style={{ opacity: 0.95, fontSize: ".92rem", marginTop: 4 }}>
+                  Taught LIVE by CA Parveen Sharma · <strong>{lb.from}</strong> to <strong>{lb.to}</strong> · {lb.sessions} classes · recordings included
+                </div>
+              </div>
+              <span style={{ background: "#fff", color: "#dc2626", borderRadius: 999, padding: "10px 20px", fontWeight: 800, whiteSpace: "nowrap" }}>
+                Enrol &amp; join →
+              </span>
+            </div>
+          </Link>
+        </div>
+      ))}
 
       {/* GET THE APP — prime real estate, right under the hero */}
       <section className="section alt" id="apps" style={{ paddingTop: 34, paddingBottom: 34 }}>

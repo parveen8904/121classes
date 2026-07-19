@@ -35,14 +35,21 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
   if (!user) return { ok: false, reason: "auth" };
 
   const svc = createServiceClient();
-  const { data: subject } = await svc.from("subjects").select("id, title, course_id, gold_price_inr, validity_months, gold_slabs").eq("id", input.subjectId).single();
+  const { data: subject } = await svc.from("subjects").select("id, title, course_id, gold_price_inr, validity_months, gold_slabs, batch_months, batch_price_inr").eq("id", input.subjectId).single();
   if (!subject) return { ok: false, reason: "error" };
   const { data: plan } = await svc.from("plans").select("id, name, web_price_inr").eq("tier", input.tier).eq("is_active", true).order("rank").limit(1).maybeSingle();
   if (!plan) return { ok: false, reason: "noplan" };
 
   const baseMonths = subject.validity_months || 12;
+  const batchMonths = Number((subject as { batch_months?: number | null }).batch_months) || 0;
   let months = baseMonths, amount: number | null;
-  if (input.tier === "gold") {
+  if (batchMonths > 0) {
+    // Live batch: one fixed-price package, fixed duration.
+    const price = Number((subject as { batch_price_inr?: number | null }).batch_price_inr) || 0;
+    if (price <= 0) return { ok: false, reason: "noprice" };
+    months = batchMonths;
+    amount = price;
+  } else if (input.tier === "gold") {
     months = input.months ? Math.min(60, Math.max(1, Math.round(input.months))) : baseMonths;
     // Same ladder as student checkout: slabTotal when the subject has one.
     const { parseSlabs, slabTotal } = await import("@/lib/pricing");

@@ -36,7 +36,7 @@ export default async function CoursePlans(
     await Promise.all([
       supabase
         .from("subjects")
-        .select("id, title, gold_price_inr, validity_months, gold_slabs, silver_slabs, subject_faculty(faculties(full_name))")
+        .select("id, title, gold_price_inr, validity_months, gold_slabs, silver_slabs, batch_months, batch_price_inr, included_with_subject_id, subject_faculty(faculties(full_name))")
         .eq("course_id", course.id)
         .order("order_index"),
       supabase
@@ -81,16 +81,34 @@ export default async function CoursePlans(
 
   const selected =
     subjectList.find((s) => s.id === searchParams.subject) ?? subjectList[0];
+  const selBatchMonths = Number((selected as { batch_months?: number | null }).batch_months) || 0;
+  const selIncludedWith = (selected as { included_with_subject_id?: string | null }).included_with_subject_id ?? null;
+
+  // Live-batch subjects: the scheduled live window (for the card's dates line).
+  let batchWindow: { from: string; to: string; sessions: number } | null = null;
+  if (selBatchMonths > 0) {
+    const { data: sched } = await supabase
+      .from("class_schedule")
+      .select("scheduled_at")
+      .eq("subject_id", selected.id)
+      .order("scheduled_at");
+    if (sched && sched.length > 0) {
+      const fmt = (s: string) => new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+      batchWindow = { from: fmt(sched[0].scheduled_at as string), to: fmt(sched[sched.length - 1].scheduled_at as string), sessions: sched.length };
+    }
+  }
 
   // Highest active tier the student already has for the selected subject
-  // (a whole-course subscription has subject_id = null and covers everything).
+  // (a whole-course subscription has subject_id = null and covers everything;
+  // a live batch is also covered by a plan on the subject it's bundled with).
   let currentTier: string | null = null;
   let currentRank = 0;
   let subMonthsTotal: number | null = null;
   let subEndsAt: string | null = null;
   for (const row of subs ?? []) {
     const r = row as { subject_id: string | null; months_total: number | null; ends_at: string | null; plans?: { tier?: string; rank?: number } | null };
-    const covers = r.subject_id === null || r.subject_id === selected.id;
+    const covers = r.subject_id === null || r.subject_id === selected.id ||
+      (selIncludedWith != null && r.subject_id === selIncludedWith);
     const rank = r.plans?.rank ?? 0;
     if (covers && rank > currentRank) {
       currentRank = rank;
@@ -181,7 +199,7 @@ export default async function CoursePlans(
                   color: active ? "#fff" : "var(--muted)",
                 }}
               >
-                {s.title}
+                {(Number((s as { batch_months?: number | null }).batch_months) || 0) > 0 ? "🔴 " : ""}{s.title}
               </Link>
             );
           })}
@@ -195,7 +213,11 @@ export default async function CoursePlans(
             validity_months: selected.validity_months ?? 12,
             gold_slabs: (selected as { gold_slabs?: unknown }).gold_slabs,
             silver_slabs: (selected as { silver_slabs?: unknown }).silver_slabs,
+            batch_months: selBatchMonths || null,
+            batch_price_inr: (selected as { batch_price_inr?: number | null }).batch_price_inr ?? null,
+            included_with_title: selIncludedWith ? (subjectList.find((x) => x.id === selIncludedWith)?.title ?? null) : null,
           }}
+          batchWindow={batchWindow}
           facultyNames={facultyNames}
           silverPrice={silverPlan?.web_price_inr ?? null}
           goldValidityOptions={goldValidityOptions}

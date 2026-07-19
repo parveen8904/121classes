@@ -6,7 +6,7 @@ import Script from "next/script";
 import AttemptPicker from "@/app/components/AttemptPicker";
 import { createGiftOrder, verifyGiftPayment } from "./actions";
 
-type Subject = { id: string; title: string; course: string; gold: number | null; validityMonths: number; goldSlabs: unknown };
+type Subject = { id: string; title: string; course: string; gold: number | null; validityMonths: number; goldSlabs: unknown; batchMonths?: number | null; batchPriceInr?: number | null };
 type Plan = { tier: string; name: string; price: number | null };
 
 const STATES = ["Delhi", "Haryana", "Uttar Pradesh", "Punjab", "Rajasthan", "Maharashtra", "Gujarat", "Karnataka", "Tamil Nadu", "Telangana", "West Bengal", "Bihar", "Madhya Pradesh", "Kerala", "Andhra Pradesh", "Uttarakhand", "Himachal Pradesh", "Jharkhand", "Chhattisgarh", "Odisha", "Assam", "Goa", "Chandigarh", "Jammu and Kashmir", "Other"];
@@ -73,6 +73,27 @@ export default function GiftForm({ configured, subjects, plans }: { configured: 
         </div>
         {(() => {
           const subj = subjects.find((x) => x.id === subjectId);
+          // Live batches are one fixed-price package — no duration choice.
+          const batchM = Number(subj?.batchMonths) || 0;
+          if (batchM > 0) {
+            const price = Number(subj?.batchPriceInr) || 0;
+            return (
+              <div>
+                <label>Package</label>
+                <p style={{ margin: "4px 0 0" }}>
+                  🔴 Live batch — {batchM} month{batchM === 1 ? "" : "s"} access (live classes + recordings)
+                </p>
+                {price > 0 ? (
+                  <p style={{ fontWeight: 800, margin: "8px 0 0" }}>
+                    🎁 Gift value: {formatINR(price)}
+                    <span className="muted" style={{ fontWeight: 500, fontSize: ".8rem" }}> · includes GST</span>
+                  </p>
+                ) : (
+                  <p className="muted" style={{ margin: "8px 0 0" }}>Price to be announced — please check back soon.</p>
+                )}
+              </div>
+            );
+          }
           const slabs = parseSlabs(subj?.goldSlabs);
           const choices = slabs ? slabMonthOptions(slabs) : [3, 6, 12, 24];
           const base = subj?.validityMonths || 12;

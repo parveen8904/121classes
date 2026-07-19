@@ -35,10 +35,15 @@ export async function createPlanOrder(input: {
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs")
+    .select("id, title, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs, batch_months, batch_price_inr")
     .eq("id", input.subjectId)
     .single();
   if (!subject) return { ok: false, reason: "error" };
+
+  // Live-batch subjects sell as ONE fixed-price Gold package — no Silver, no
+  // month choice; the student always gets exactly batch_months of access.
+  const batchMonths = Number((subject as { batch_months?: number | null }).batch_months) || 0;
+  if (batchMonths > 0 && input.tier !== "gold") return { ok: false, reason: "error" };
 
   const { data: plan } = await supabase
     .from("plans")
@@ -58,7 +63,13 @@ export async function createPlanOrder(input: {
   const slabs = parseSlabs(input.tier === "gold" ? (subject as { gold_slabs?: unknown }).gold_slabs : (subject as { silver_slabs?: unknown }).silver_slabs);
   let months = baseMonths;
   let baseAmount: number | null;
-  if (slabs) {
+  if (batchMonths > 0) {
+    // Fixed price set by the admin; NULL means not announced yet.
+    const price = Number((subject as { batch_price_inr?: number | null }).batch_price_inr) || 0;
+    if (price <= 0) return { ok: false, reason: "noprice" };
+    months = batchMonths;
+    baseAmount = price;
+  } else if (slabs) {
     // Slab-priced tiers let the student choose the number of months.
     months = input.months ? Math.min(60, Math.max(1, Math.round(input.months))) : baseMonths;
     baseAmount = slabTotal(slabs, months);
@@ -235,10 +246,12 @@ export async function createExtendOrder(input: {
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, course_id, gold_price_inr, validity_months, gold_slabs")
+    .select("id, title, course_id, gold_price_inr, validity_months, gold_slabs, batch_months")
     .eq("id", input.subjectId)
     .single();
   if (!subject) return { ok: false, reason: "error" };
+  // Live batches have a fixed access window — no extensions.
+  if ((Number((subject as { batch_months?: number | null }).batch_months) || 0) > 0) return { ok: false, reason: "atcap" };
 
   // The student's active subscription for this subject (latest expiry).
   const { data: sub } = await supabase

@@ -323,6 +323,10 @@ export async function updateSubjectInline(formData: FormData) {
       // Slab ladders ("months:₹/mo, …"); blank clears → falls back to flat pricing.
       gold_slabs: parseSlabInput(str(formData.get("gold_slabs"))),
       silver_slabs: parseSlabInput(str(formData.get("silver_slabs"))),
+      // Live batch: fixed months + one fixed GST-inclusive price; blank = normal subject.
+      batch_months: num(formData.get("batch_months")) || null,
+      batch_price_inr: num(formData.get("batch_price_inr")) || null,
+      included_with_subject_id: str(formData.get("included_with_subject_id")) || null,
     })
     .eq("id", id);
   revalidatePath(`/admin/subjects/${id}`);

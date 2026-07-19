@@ -15,6 +15,9 @@ type Subject = {
   validity_months: number;
   gold_slabs?: unknown;
   silver_slabs?: unknown;
+  batch_months?: number | null;
+  batch_price_inr?: number | null;
+  included_with_title?: string | null;
 };
 
 type RazorpayOptions = {
@@ -51,6 +54,7 @@ export default function PricingCards({
   subMonthsTotal = null,
   subEndsAt = null,
   maxMonths = 36,
+  batchWindow = null,
 }: {
   subject: Subject;
   facultyNames: string;
@@ -64,6 +68,7 @@ export default function PricingCards({
   subMonthsTotal?: number | null;
   subEndsAt?: string | null;
   maxMonths?: number;
+  batchWindow?: { from: string; to: string; sessions: number } | null;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [coupon, setCoupon] = useState("");
@@ -192,6 +197,79 @@ export default function PricingCards({
   }
 
   const tiers = ["bronze", "silver", "gold"];
+
+  // ---- Live batch: ONE fixed-price card (no Bronze/Silver, no month picker) ----
+  const batchM = Number(subject.batch_months) || 0;
+  if (batchM > 0) {
+    const price = Number(subject.batch_price_inr) || 0;
+    const owned = currentTier === "gold";
+    const net = price > 0 && saleDiscountPct > 0 ? Math.max(1, Math.round(price * (1 - saleDiscountPct / 100))) : price;
+    return (
+      <>
+        {configured && <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />}
+        <div className="plan-card featured" style={{ maxWidth: 460, margin: "0 auto" }}>
+          <span className="plan-pop">🔴 LIVE batch</span>
+          <div className="tier-name">{subject.title}</div>
+          <div className="tagline">
+            Taught LIVE by CA Parveen Sharma — recordings added after every class.
+          </div>
+          {batchWindow && (
+            <div style={{ background: "var(--bg-soft)", borderRadius: 10, padding: "8px 12px", margin: "10px 0", fontSize: ".88rem" }}>
+              🗓️ <strong>{batchWindow.from} → {batchWindow.to}</strong> · {batchWindow.sessions} live sessions
+              <div className="muted" style={{ fontSize: ".8rem" }}>See exact timings on the Live page after enrolling.</div>
+            </div>
+          )}
+          {owned ? (
+            <div className="plan-current" style={{ marginTop: 10 }}>✓ Included in your plan</div>
+          ) : price <= 0 ? (
+            <>
+              <div className="plan-price" style={{ fontSize: "1.3rem" }}>Price to be announced</div>
+              <a className="btn block" href={contactHref}>Enquire →</a>
+            </>
+          ) : (
+            <>
+              <div className="plan-price">
+                {net !== price && (
+                  <span style={{ textDecoration: "line-through", opacity: 0.5, fontSize: "1rem", marginRight: 8, fontWeight: 500 }}>{formatINR(price)}</span>
+                )}
+                {formatINR(net)}
+              </div>
+              <div className="plan-permonth">
+                {net !== price && <span style={{ color: "#16a34a", fontWeight: 700 }}>🎉 {saleDiscountPct}% off · </span>}
+                One-time · {batchM} month{batchM === 1 ? "" : "s"} access (live month + recordings) · includes GST
+              </div>
+              {configured ? (
+                <button className="btn block" type="button" disabled={busy === "gold"} onClick={() => buy("gold")} style={{ marginTop: 10 }}>
+                  {busy === "gold" ? "Starting…" : "Join the Live Batch →"}
+                </button>
+              ) : (
+                <a className="btn block" href={contactHref} style={{ marginTop: 10 }}>Join the Live Batch →</a>
+              )}
+              {configured && (
+                <input
+                  value={coupon}
+                  onChange={(e) => setCoupon(e.target.value.toUpperCase())}
+                  placeholder="🏷️ Coupon code (optional)"
+                  style={{ marginTop: 10, marginBottom: 0, textAlign: "center" }}
+                />
+              )}
+            </>
+          )}
+          {subject.included_with_title && (
+            <p className="muted" style={{ fontSize: ".82rem", marginTop: 12 }}>
+              💡 Already have <strong>{subject.included_with_title} Gold</strong>? This live batch is{" "}
+              <strong>included free</strong> with your plan — nothing to buy.
+            </p>
+          )}
+        </div>
+        <p className="muted" style={{ textAlign: "center", fontSize: ".85rem", marginTop: 22 }}>
+          {configured
+            ? "🔒 Secure checkout by Razorpay · all prices include GST. Access unlocks the moment your payment succeeds."
+            : "Online checkout is being set up. Tap the button to enquire and we'll enrol you right away. 🙌"}
+        </p>
+      </>
+    );
+  }
 
   return (
     <>

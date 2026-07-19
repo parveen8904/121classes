@@ -31,11 +31,20 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs, telegram_group_url, remarks, miq_rev1, miq_rev2, valid_from_attempt, valid_to_attempt, courses(title)")
+    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs, batch_months, batch_price_inr, included_with_subject_id, telegram_group_url, remarks, miq_rev1, miq_rev2, valid_from_attempt, valid_to_attempt, courses(title)")
     .eq("id", subjectId)
     .single();
 
   if (!subject) notFound();
+
+  // Sibling subjects of the same course — for the live-batch "included free
+  // with" picker (e.g. the FI live batch is included with FR Gold).
+  const { data: siblingSubjects } = await supabase
+    .from("subjects")
+    .select("id, title")
+    .eq("course_id", subject.course_id)
+    .neq("id", subjectId)
+    .order("order_index");
 
   const [{ data: topics }, { data: faculties }, { data: assigned }] = await Promise.all([
     supabase
@@ -407,6 +416,33 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
                   </div>
                 );
               })()}
+            </div>
+            <div style={{ marginTop: 8, border: "2px solid #dc2626", borderRadius: 8, padding: "10px 12px" }}>
+              <strong style={{ fontSize: ".9rem" }}>🔴 Live batch (optional — leave blank for a normal subject)</strong>
+              <p className="muted" style={{ fontSize: ".78rem", margin: "2px 0 8px" }}>
+                A live batch sells as ONE fixed-price package for a fixed number of months — no Silver, no month
+                choice, no extensions. Until a price is set, students see &ldquo;Price to be announced&rdquo; and
+                nothing can be bought.
+              </p>
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr 1fr" }}>
+                <div>
+                  <label htmlFor="su-batchm">Access months</label>
+                  <input id="su-batchm" name="batch_months" type="number" min={1} max={24} defaultValue={(subject as { batch_months?: number | null }).batch_months ?? ""} placeholder="e.g. 2" />
+                </div>
+                <div>
+                  <label htmlFor="su-batchp">Fixed price ₹ (incl. GST)</label>
+                  <input id="su-batchp" name="batch_price_inr" type="number" min={0} defaultValue={(subject as { batch_price_inr?: number | null }).batch_price_inr ?? ""} placeholder="blank = not announced" />
+                </div>
+                <div>
+                  <label htmlFor="su-incw">Included free with</label>
+                  <select id="su-incw" name="included_with_subject_id" defaultValue={(subject as { included_with_subject_id?: string | null }).included_with_subject_id ?? ""}>
+                    <option value="">— nobody (standalone)</option>
+                    {(siblingSubjects ?? []).map((sib) => (
+                      <option key={sib.id} value={sib.id}>{sib.title} (Gold)</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
             <div style={{ marginTop: 4 }}>
               <label htmlFor="su-tg">✈️ Telegram group link (this subject only)</label>

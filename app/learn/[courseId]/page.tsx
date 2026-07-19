@@ -34,7 +34,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
     supabase.from("courses").select("id, title").eq("id", params.courseId).single(),
     supabase
       .from("subjects")
-      .select("id, title, order_index, telegram_group_url, valid_from_attempt, valid_to_attempt, subject_faculty(faculties(id, full_name, phone, email, photo_url))")
+      .select("id, title, order_index, telegram_group_url, valid_from_attempt, valid_to_attempt, batch_months, batch_price_inr, included_with_subject_id, subject_faculty(faculties(id, full_name, phone, email, photo_url))")
       .eq("course_id", params.courseId)
       .order("order_index")
       .order("title"),
@@ -65,6 +65,29 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
     const sw = subjWindow.get((t.subject_id as string) ?? "") ?? { from: null, to: null };
     return effectiveAttemptWindow(t.valid_from_attempt, t.valid_to_attempt, sw.from, sw.to);
   };
+  // Live-batch subjects in this course: their live window (from the schedule)
+  // and a parent→batch map so the parent subject can carry the "re-taught
+  // LIVE" banner (e.g. FR banners its Financial Instruments live batch).
+  type SubjRow = { id: string; batch_months?: number | null; batch_price_inr?: number | null; included_with_subject_id?: string | null };
+  const batchSubjects = ((subjects ?? []) as SubjRow[]).filter((s) => (Number(s.batch_months) || 0) > 0);
+  const batchByParent = new Map<string, SubjRow>();
+  for (const b of batchSubjects) if (b.included_with_subject_id) batchByParent.set(b.included_with_subject_id, b);
+  const batchWindows = new Map<string, { from: Date; to: Date; sessions: number }>();
+  if (batchSubjects.length) {
+    const { data: schedRows } = await supabase
+      .from("class_schedule")
+      .select("subject_id, scheduled_at")
+      .in("subject_id", batchSubjects.map((b) => b.id));
+    for (const r of schedRows ?? []) {
+      const sid = r.subject_id as string;
+      const at = new Date(r.scheduled_at as string);
+      const w = batchWindows.get(sid);
+      if (!w) batchWindows.set(sid, { from: at, to: at, sessions: 1 });
+      else { if (at < w.from) w.from = at; if (at > w.to) w.to = at; w.sessions += 1; }
+    }
+  }
+  const fmtDay = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+
   const { data: topics } = subjectIds.length
     ? await supabase
         .from("topics")
@@ -297,14 +320,47 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
             // to update their target attempt, instead of a bewildering empty page.
             const windowMismatch = subjTopics.length === 0 && allSubjTopics.length > 0;
             const sw = subjWindow.get(s.id) ?? { from: null, to: null };
+            const isBatch = (Number((s as { batch_months?: number | null }).batch_months) || 0) > 0;
+            const batchWin = batchWindows.get(s.id) ?? null;
+            const childBatch = batchByParent.get(s.id) ?? null;
+            const childWin = childBatch ? (batchWindows.get(childBatch.id) ?? null) : null;
+            const childTitle = childBatch ? ((subjects ?? []).find((x) => x.id === childBatch.id)?.title ?? "Live batch") : "";
             return (
-              <div key={s.id} className="subj-block">
+              <div key={s.id} id={`subj-${s.id}`} className="subj-block">
+                {/* Parent of a live batch (e.g. FR): the "re-taught LIVE" banner. */}
+                {childBatch && (
+                  <a
+                    href={`#subj-${childBatch.id}`}
+                    style={{ display: "block", background: "linear-gradient(90deg, #b91c1c, #dc2626)", color: "#fff", borderRadius: 12, padding: "12px 16px", marginBottom: 12, textDecoration: "none" }}
+                  >
+                    <strong>🔴 {childTitle}</strong>
+                    {childWin && <> — being taught LIVE from <strong>{fmtDay(childWin.from)}</strong> to <strong>{fmtDay(childWin.to)}</strong> ({childWin.sessions} sessions)</>}
+                    <div style={{ fontSize: ".84rem", opacity: 0.95, marginTop: 2 }}>
+                      Included FREE with your {s.title} Gold plan · recordings added after every class · plan your studies around these dates. Tap to open ↓
+                    </div>
+                  </a>
+                )}
                 {/* Prominent subject banner — carries the faculty contact. */}
                 <div style={{ border: "2px solid var(--accent)", background: "var(--bg-soft)", borderRadius: 12, padding: "16px 18px", marginBottom: 14 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                     <div>
-                      <h2 style={{ margin: 0, fontSize: "1.6rem" }}>{s.title}</h2>
+                      <h2 style={{ margin: 0, fontSize: "1.6rem" }}>
+                        {isBatch && <span style={{ background: "#dc2626", color: "#fff", borderRadius: 8, padding: "2px 10px", fontSize: ".9rem", verticalAlign: "middle", marginRight: 10 }}>🔴 LIVE</span>}
+                        {s.title}
+                      </h2>
                       {faculty.length > 0 && <span className="subj-faculty">with {faculty.join(", ")}</span>}
+                      {isBatch && batchWin && (
+                        <div style={{ fontSize: ".88rem", marginTop: 4 }}>
+                          🗓️ Live classes <strong>{fmtDay(batchWin.from)} → {fmtDay(batchWin.to)}</strong> · {batchWin.sessions} sessions ·{" "}
+                          <Link href="/live" style={{ fontWeight: 700, color: "var(--accent)" }}>see timings →</Link>
+                          <div className="muted" style={{ fontSize: ".8rem", marginTop: 2 }}>Recordings are added here after every live class.</div>
+                        </div>
+                      )}
+                      {isBatch && !subs.some((x) => x.plans?.tier === "gold" && (!x.subject_id || x.subject_id === s.id || x.subject_id === ((s as { included_with_subject_id?: string | null }).included_with_subject_id ?? ""))) && (
+                        <Link className="btn small" href={`/learn/${course.id}/plans?subject=${s.id}`} style={{ marginTop: 8, display: "inline-block" }}>
+                          Join the Live Batch →
+                        </Link>
+                      )}
                     </div>
                     {mySubjIds.has(s.id) ? (
                       <form action={removeMySubject} style={{ margin: 0 }}>

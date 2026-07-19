@@ -297,20 +297,20 @@ export default async function Home() {
         <div key={lb.id} className="container" style={{ marginTop: 10, maxWidth: 1140 }}>
           <Link
             href={`/learn/${lb.courseId}/plans?subject=${lb.id}`}
-            style={{ display: "block", background: "linear-gradient(90deg, #b91c1c, #dc2626)", color: "#fff", borderRadius: 16, padding: "18px 22px", textDecoration: "none" }}
+            style={{ display: "block", background: "var(--bg-soft)", color: "var(--text)", border: "2px solid var(--accent)", borderRadius: 16, padding: "18px 22px", textDecoration: "none", boxShadow: "0 4px 18px rgba(13,148,136,.12)" }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", justifyContent: "space-between" }}>
               <div>
                 <div style={{ fontWeight: 800, fontSize: "1.15rem" }}>
-                  <span style={{ background: "#fff", color: "#dc2626", borderRadius: 8, padding: "2px 10px", fontSize: ".85rem", marginRight: 10, verticalAlign: "middle" }}>🔴 LIVE</span>
+                  <span style={{ background: "#dc2626", color: "#fff", borderRadius: 999, padding: "2px 12px", fontSize: ".82rem", marginRight: 10, verticalAlign: "middle" }}>🔴 LIVE</span>
                   Join LIVE classes of {lb.title.replace(/\s*—\s*Live Batch$/i, "")}{lb.course ? ` (${lb.course})` : ""}
                 </div>
-                <div style={{ opacity: 0.95, fontSize: ".92rem", marginTop: 4 }}>
-                  Taught LIVE by CA Parveen Sharma · <strong>{lb.daysLabel}</strong> at <strong>{lb.timeLabel} IST</strong> · {lb.from} to {lb.to} · {lb.sessions} classes · recordings included
-                  {lb.parent && <> · <strong>+ Silver access to full {lb.parent}</strong> (all tests &amp; AI doubts)</>}
+                <div className="muted" style={{ fontSize: ".92rem", marginTop: 4 }}>
+                  Taught LIVE by CA Parveen Sharma · <strong style={{ color: "var(--text)" }}>{lb.daysLabel}</strong> at <strong style={{ color: "var(--text)" }}>{lb.timeLabel} IST</strong> · {lb.from} to {lb.to} · {lb.sessions} classes · recordings included
+                  {lb.parent && <> · <strong style={{ color: "var(--accent)" }}>+ Silver access to full {lb.parent}</strong> (all tests &amp; AI doubts)</>}
                 </div>
               </div>
-              <span style={{ background: "#fff", color: "#dc2626", borderRadius: 999, padding: "10px 20px", fontWeight: 800, whiteSpace: "nowrap" }}>
+              <span className="btn" style={{ whiteSpace: "nowrap" }}>
                 Enrol &amp; join →
               </span>
             </div>

@@ -26,7 +26,7 @@ export default async function PlansPage() {
       <AdminHero
         badge="💳 Plans & pricing"
         title="Plans & pricing"
-        subtitle="Bronze is free · Silver is one flat price for every subject · Gold is priced per subject. 💰"
+        subtitle="This page defines the TIERS (names, active on/off, Silver's flat price, gift pricing). The actual Gold AMOUNTS now come from each subject's 💸 Duration price ladder (Admin → Courses → subject) — a ladder always overrides what's here. 💰"
         back={{ href: "/admin", label: "Admin" }}
       />
 
@@ -34,8 +34,8 @@ export default async function PlansPage() {
       <div className="form-card" style={{ marginTop: 24 }}>
         <h3>⏳ Gold validity options</h3>
         <p className="muted" style={{ fontSize: ".82rem", marginTop: -4, marginBottom: 10 }}>
-          Months a student can pick for Gold (comma-separated). The price scales from each subject&apos;s
-          Gold price. Students can also type a custom number of months.
+          FALLBACK only: used when a subject has no Duration price ladder. Subjects WITH a ladder show the
+          ladder&apos;s own month choices (1/3/6/12/24) automatically.
         </p>
         <form action={setGoldValidityOptions} style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 220 }}>

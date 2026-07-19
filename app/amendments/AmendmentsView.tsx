@@ -66,7 +66,7 @@ export default function AmendmentsView({ items, defaultAttempt }: { items: Amend
               {it.body && <p style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{it.body}</p>}
               {it.videoSrc && (
                 <div className="video-frame" style={{ marginTop: 10 }}>
-                  <iframe src={it.videoSrc} allow="encrypted-media; fullscreen" allowFullScreen title={it.title} />
+                  <iframe src={it.videoSrc} allow="encrypted-media; fullscreen" allowFullScreen loading="lazy" title={it.title} />
                 </div>
               )}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>

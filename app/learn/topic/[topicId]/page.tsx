@@ -138,7 +138,7 @@ function SectionBody({
         )}
         {src ? (
           <div className="video-frame" style={{ marginTop: 14 }}>
-            <iframe src={src} allow="encrypted-media; fullscreen" allowFullScreen title="Video" />
+            <iframe src={src} allow="encrypted-media; fullscreen" allowFullScreen loading="lazy" title="Video" />
             {watermark && <span className="vwm">{watermark}</span>}
           </div>
         ) : hasDownload ? (
@@ -773,7 +773,7 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
                   {a.body && <p style={{ whiteSpace: "pre-wrap", margin: "6px 0 0" }}>{a.body}</p>}
                   {a.videoSrc && (
                     <div className="video-frame" style={{ marginTop: 10 }}>
-                      <iframe src={a.videoSrc} allow="encrypted-media; fullscreen" allowFullScreen title={a.title} />
+                      <iframe src={a.videoSrc} allow="encrypted-media; fullscreen" allowFullScreen loading="lazy" title={a.title} />
                     </div>
                   )}
                   {a.notes_hand_url && (

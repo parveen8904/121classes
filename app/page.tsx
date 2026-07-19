@@ -559,6 +559,7 @@ export default async function Home() {
                 title="CA Parveen Sharma intro"
                 allow="encrypted-media; fullscreen"
                 allowFullScreen
+                loading="lazy"
               />
             </div>
 

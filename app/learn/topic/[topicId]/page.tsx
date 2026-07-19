@@ -330,6 +330,28 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
   const isAdmin = wmProfile?.role === "admin" || wmProfile?.role === "faculty";
   const watermarkText = [wmProfile?.full_name, user.email ?? wmProfile?.phone].filter(Boolean).join(" · ");
 
+  // Is a LIVE batch re-teaching this chapter? (a batch subject's topic points
+  // here via supersedes_topic_id) → banner: these are the previous recordings.
+  let liveBatchReteach: { id: string; title: string; courseId: string } | null = null;
+  {
+    const { data: supTopic } = await supabase
+      .from("topics")
+      .select("subject_id")
+      .eq("supersedes_topic_id", topic.id)
+      .limit(1)
+      .maybeSingle();
+    if (supTopic?.subject_id) {
+      const { data: bs } = await supabase
+        .from("subjects")
+        .select("id, title, course_id, batch_months")
+        .eq("id", supTopic.subject_id)
+        .maybeSingle();
+      if (bs && (Number((bs as { batch_months?: number | null }).batch_months) || 0) > 0) {
+        liveBatchReteach = { id: bs.id as string, title: bs.title as string, courseId: bs.course_id as string };
+      }
+    }
+  }
+
   const configById = new Map<string, Record<string, unknown> | null>();
   const sectionGroupId = new Map<string, string | null>(); // section item → its Section (group)
   let sections: SectionMeta[] = [];
@@ -672,6 +694,19 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
               : ""}
           </p>
         </div>
+
+        {liveBatchReteach && (
+          <Link
+            href={`/learn/${liveBatchReteach.courseId}?subject=${liveBatchReteach.id}`}
+            style={{ display: "block", marginTop: 16, background: "linear-gradient(90deg, #b91c1c, #dc2626)", color: "#fff", padding: "12px 16px", borderRadius: 10, textDecoration: "none" }}
+          >
+            <strong>🎥 You are viewing the previous recordings of this chapter.</strong>
+            <div style={{ fontSize: ".88rem", opacity: 0.95, marginTop: 2 }}>
+              It is being re-taught LIVE — the new recordings appear in <strong>{liveBatchReteach.title}</strong>,
+              included with your Gold plan. Tap to open →
+            </div>
+          </Link>
+        )}
 
         {catStyle && (
           <div style={{ marginTop: 16, background: catStyle.bg, color: catStyle.fg, padding: "10px 14px", borderRadius: 8, fontWeight: 700 }}>

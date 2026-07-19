@@ -97,11 +97,20 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
   const { data: topics } = subjectIds.length
     ? await supabase
         .from("topics")
-        .select("id, title, subject_id, order_index, valid_from_attempt, valid_to_attempt, amendments_upto, important_qs_rev1, important_qs_rev2")
+        .select("id, title, subject_id, order_index, valid_from_attempt, valid_to_attempt, amendments_upto, important_qs_rev1, important_qs_rev2, supersedes_topic_id")
         .in("subject_id", subjectIds)
         .order("order_index")
         .order("title")
     : { data: [] as never[] };
+
+  // Old chapters that a live batch re-teaches (batch topic → supersedes_topic_id):
+  // their cards say "previous recordings — new ones are in the Live Batch".
+  const batchIds = new Set(batchSubjects.map((b) => b.id));
+  const oldTopicToBatch = new Map<string, string>();
+  for (const t of topics ?? []) {
+    const sup = (t as { supersedes_topic_id?: string | null }).supersedes_topic_id;
+    if (sup && batchIds.has(t.subject_id as string)) oldTopicToBatch.set(sup, t.subject_id as string);
+  }
 
   // Per-subject summary (classes, revision videos, tests, materials, important
   // questions) + per-topic class-number ranges — the same overview admins see.
@@ -692,6 +701,12 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                             {(t as { amendments_upto?: string | null }).amendments_upto && (
                               <span className="muted" style={{ fontSize: ".78rem", fontWeight: 400, marginLeft: 8 }}>
                                 📝 Amended up to {(t as { amendments_upto?: string }).amendments_upto}
+                              </span>
+                            )}
+                            {oldTopicToBatch.has(t.id) && (
+                              <span style={{ display: "block", fontSize: ".78rem", fontWeight: 600, color: "#b45309", marginTop: 3 }}>
+                                🎥 These are the previous recordings — this chapter is being re-taught LIVE.
+                                New recordings appear in the Live Batch (included with your Gold plan).
                               </span>
                             )}
                           </span>

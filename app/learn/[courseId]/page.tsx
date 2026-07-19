@@ -19,8 +19,9 @@ function fmtDate(s: string | null): string {
 }
 
 
-export default async function LearnCourse(props: { params: Promise<{ courseId: string }> }) {
+export default async function LearnCourse(props: { params: Promise<{ courseId: string }>; searchParams: Promise<{ subject?: string }> }) {
   const params = await props.params;
+  const { subject: subjectParam } = await props.searchParams;
   const supabase = createClient();
   const {
     data: { user },
@@ -258,6 +259,13 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
     subjects: { title: string } | null;
   };
   const subs = (subscription as unknown as Sub[] | null) ?? [];
+  // Multi-subject courses open as a subject CHOOSER (cards) — tapping one shows
+  // only that subject, instead of every subject stacked on one long page.
+  const allSubjects = subjects ?? [];
+  const showPicker = allSubjects.length > 1 && !allSubjects.some((s) => s.id === subjectParam);
+  const visibleSubjects = allSubjects.length > 1 && !showPicker
+    ? allSubjects.filter((s) => s.id === subjectParam)
+    : allSubjects;
   const wholeCourseSub = subs.find((s) => !s.subject_id) ?? null;
   const accessLabels = subs.map((s) =>
     s.subject_id
@@ -307,9 +315,64 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
           </div>
         )}
 
+        {/* Subject chooser — one card per subject, tap to open just that one. */}
+        {showPicker && (
+          <>
+            <p className="muted" style={{ margin: "14px 0 10px", fontSize: ".92rem" }}>
+              Choose a subject to open its classes, resources and tests:
+            </p>
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+              {allSubjects.map((s) => {
+                const isBatch = (Number((s as { batch_months?: number | null }).batch_months) || 0) > 0;
+                const win = batchWindows.get(s.id) ?? null;
+                const child = batchByParent.get(s.id) ?? null;
+                const childName = child ? ((allSubjects.find((x) => x.id === child.id)?.title ?? "").replace(/\s*—\s*Live Batch$/i, "")) : "";
+                const fac = ((s.subject_faculty ?? []) as unknown as SubjectFacultyRow[])
+                  .map((sf) => sf.faculties?.full_name).filter(Boolean).join(", ");
+                const nTopics = (topics ?? []).filter((t) => t.subject_id === s.id && (topicClassCount.get(t.id) ?? 0) > 0).length;
+                return (
+                  <Link
+                    key={s.id}
+                    href={`/learn/${course.id}?subject=${s.id}`}
+                    className="card"
+                    style={{ color: "var(--text)", display: "flex", flexDirection: "column", gap: 6, border: isBatch ? "2px solid #dc2626" : undefined }}
+                  >
+                    <div style={{ fontWeight: 800, fontSize: "1.12rem", lineHeight: 1.25 }}>
+                      {isBatch && <span style={{ background: "#dc2626", color: "#fff", borderRadius: 8, padding: "1px 8px", fontSize: ".78rem", marginRight: 8, verticalAlign: "middle" }}>🔴 LIVE</span>}
+                      {s.title}
+                    </div>
+                    {fac && <span className="muted" style={{ fontSize: ".84rem" }}>with {fac}</span>}
+                    <div className="muted" style={{ fontSize: ".85rem" }}>
+                      🎓 <strong>{sumClasses.get(s.id) ?? 0}</strong> classes · ⏱️ {fmtAt125(sumClassMins.get(s.id) ?? 0)} · {nTopics} topic{nTopics === 1 ? "" : "s"}
+                    </div>
+                    {isBatch && win && (
+                      <div style={{ fontSize: ".84rem" }}>
+                        🗓️ LIVE <strong>{fmtDay(win.from)} → {fmtDay(win.to)}</strong> · {win.sessions} sessions
+                      </div>
+                    )}
+                    {child && (
+                      <div style={{ color: "#dc2626", fontWeight: 700, fontSize: ".8rem" }}>
+                        🔴 {childName} is being re-taught LIVE — see its card
+                      </div>
+                    )}
+                    <span style={{ marginTop: "auto", color: "var(--accent)", fontWeight: 800 }}>Open →</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </>
+        )}
+
         {/* Subjects → topics */}
-        {subjects && subjects.length > 0 ? (
-          subjects.map((s) => {
+        {!showPicker && allSubjects.length > 1 && (
+          <p style={{ margin: "4px 0 12px" }}>
+            <Link href={`/learn/${course.id}`} style={{ color: "var(--accent)", fontWeight: 700 }}>
+              ← All {course.title} subjects
+            </Link>
+          </p>
+        )}
+        {!showPicker && (visibleSubjects.length > 0 ? (
+          visibleSubjects.map((s) => {
             const facultyRows = ((s.subject_faculty ?? []) as unknown as SubjectFacultyRow[])
               .map((sf) => sf.faculties)
               .filter((f): f is NonNullable<SubjectFacultyRow["faculties"]> => !!f);
@@ -334,16 +397,16 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
               <div key={s.id} id={`subj-${s.id}`} className="subj-block">
                 {/* Parent of a live batch (e.g. FR): the "re-taught LIVE" banner. */}
                 {childBatch && (
-                  <a
-                    href={`#subj-${childBatch.id}`}
+                  <Link
+                    href={`/learn/${course.id}?subject=${childBatch.id}`}
                     style={{ display: "block", background: "linear-gradient(90deg, #b91c1c, #dc2626)", color: "#fff", borderRadius: 12, padding: "12px 16px", marginBottom: 12, textDecoration: "none" }}
                   >
                     <strong>🔴 {childTitle}</strong>
                     {childWin && <> — being taught LIVE from <strong>{fmtDay(childWin.from)}</strong> to <strong>{fmtDay(childWin.to)}</strong> ({childWin.sessions} sessions)</>}
                     <div style={{ fontSize: ".84rem", opacity: 0.95, marginTop: 2 }}>
-                      Included FREE with your {s.title} Gold plan · recordings added after every class · plan your studies around these dates. Tap to open ↓
+                      Included FREE with your {s.title} Gold plan · recordings added after every class · plan your studies around these dates. Tap to open →
                     </div>
-                  </a>
+                  </Link>
                 )}
                 {/* Prominent subject banner — carries the faculty contact. */}
                 <div style={{ border: "2px solid var(--accent)", background: "var(--bg-soft)", borderRadius: 12, padding: "16px 18px", marginBottom: 14 }}>
@@ -629,7 +692,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
           <div className="card" style={{ marginTop: 28 }}>
             <p className="muted">No subjects published yet for this course.</p>
           </div>
-        )}
+        ))}
       </section>
     </main>
   );

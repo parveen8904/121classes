@@ -53,6 +53,8 @@ export default async function SiteFooter() {
           <Link href="/#books">Books</Link>
           <Link href="/#whats-new">What&apos;s New</Link>
           <Link href="/#team">Team</Link>
+          <Link href="/startups">Startups — Nova Seed</Link>
+          <Link href="/startups">Startups — Nova Seed</Link>
         </div>
         <div>
           <h4>Company</h4>

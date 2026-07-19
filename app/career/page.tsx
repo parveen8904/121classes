@@ -77,6 +77,32 @@ export default async function CareerPage(props: { searchParams: Promise<{ city?:
         <Link className="btn secondary" href="/career/interview">🎤 AI mock interview</Link>
       </div>
 
+      {/* Nova Seed Capital — the founder's startup-grooming venture */}
+      <Link href="/startups" className="card" style={{ display: "block", marginTop: 16, border: "2px solid var(--accent)", color: "var(--text)" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "1.9rem" }}>🚀</span>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <strong>Have a startup? Nova Seed Capital grooms new startups.</strong>
+            <p className="muted" style={{ margin: "3px 0 0", fontSize: ".85rem" }}>
+              A venture by CA Parveen Sharma — bring your idea or early-stage startup and get it groomed. Tap to learn more →
+            </p>
+          </div>
+        </div>
+      </Link>
+
+      {/* Nova Seed Capital — the founder's startup-grooming venture */}
+      <Link href="/startups" className="card" style={{ display: "block", marginTop: 16, border: "2px solid var(--accent)", color: "var(--text)" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "1.9rem" }}>🚀</span>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <strong>Have a startup? Nova Seed Capital grooms new startups.</strong>
+            <p className="muted" style={{ margin: "3px 0 0", fontSize: ".85rem" }}>
+              A venture by CA Parveen Sharma — bring your idea or early-stage startup and get it groomed. Tap to learn more →
+            </p>
+          </div>
+        </div>
+      </Link>
+
 
       {/* City filter */}
       {cities.length > 1 && (

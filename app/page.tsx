@@ -164,7 +164,6 @@ export default async function Home() {
 
       {/* HERO */}
       <section className="hero">
-        <span className="ribbon flash">A venture by CA Parveen Sharma</span>
         <h1>
           Learn CA from <span style={{ color: "var(--accent)" }}>CA Parveen Sharma</span> — one of
           India&apos;s most renowned faculty.

@@ -771,7 +771,7 @@ export default async function Home() {
       <section className="section alt" id="vision">
         <div className="section-head">
           <div className="eyebrow">Vision</div>
-          <h2>My vision for the next 5 years</h2>
+          <h2>Vision for the next 5 years</h2>
           <p>Taught directly by <span className="grad">CA Parveen Sharma</span> — personal, disciplined and result-driven.</p>
         </div>
         <ul style={{ listStyle: "none", maxWidth: 720, margin: "0 auto", display: "grid", gap: 14, padding: 0 }}>

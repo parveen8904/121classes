@@ -353,7 +353,7 @@ export default async function Home() {
           <p>
             Podcasts, revision videos, classes and community updates on{" "}
             <a href="https://www.youtube.com/@caparveensharmaofficial" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 800 }}>@caparveensharmaofficial</a>
-            {ytOverview ? <> · <strong>{ytOverview.subscribers.toLocaleString("en-IN")}</strong> subscribers</> : null}
+            {ytOverview ? <> · <strong>{ytOverview.subscribers >= 100000 ? `${Math.round(ytOverview.subscribers / 1000)}K` : ytOverview.subscribers.toLocaleString("en-IN")}</strong> subscribers</> : null}
           </p>
         </div>
         {ytVideos.length > 0 ? (

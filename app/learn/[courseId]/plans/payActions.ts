@@ -78,8 +78,11 @@ export async function createPlanOrder(input: {
     months = input.months ? Math.min(60, Math.max(1, Math.round(input.months))) : baseMonths;
     baseAmount = Math.max(1, Math.round((subject.gold_price_inr * months) / baseMonths));
   } else {
-    baseAmount = plan.web_price_inr;
-    if (!baseAmount || baseAmount <= 0) return { ok: false, reason: "noprice" };
+    // Silver without a ladder: scale the flat Silver price by the chosen months
+    // (base = the subject's validity, matching the card's display).
+    if (!plan.web_price_inr || plan.web_price_inr <= 0) return { ok: false, reason: "noprice" };
+    months = input.months ? Math.min(60, Math.max(1, Math.round(input.months))) : baseMonths;
+    baseAmount = Math.max(1, Math.round((plan.web_price_inr * months) / baseMonths));
   }
 
   // Live sale: the discount % comes off the computed price before any coupon.

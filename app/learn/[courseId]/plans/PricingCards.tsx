@@ -96,8 +96,17 @@ export default function PricingCards({
       ? null
       : Math.max(1, Math.round((subject.gold_price_inr * goldMonths) / goldBase));
 
-  // Silver: slab ladder if set (student chooses months), else the flat price.
-  const silverTotal = silverSlabs ? slabTotal(silverSlabs, goldMonths) : silverPrice;
+  // Silver gets its own duration picker too: slab ladder if set, else the flat
+  // Silver price scaled by the chosen months (base = the subject's validity).
+  const silverChoices = silverSlabs ? slabMonthOptions(silverSlabs) : goldValidityOptions;
+  const silverDefault = silverChoices.includes(goldBase) ? goldBase : silverChoices[0] ?? goldBase;
+  const [silverMonths, setSilverMonths] = useState<number>(silverDefault);
+  const [silverCustom, setSilverCustom] = useState("");
+  const silverTotal = silverSlabs
+    ? slabTotal(silverSlabs, silverMonths)
+    : silverPrice == null
+      ? null
+      : Math.max(1, Math.round((silverPrice * silverMonths) / goldBase));
 
   const tierPrice: Record<string, number | null> = {
     bronze: 0,
@@ -106,15 +115,20 @@ export default function PricingCards({
   };
   const tierMonths: Record<string, number> = {
     bronze: 0,
-    silver: silverSlabs ? goldMonths : subject.validity_months,
+    silver: silverMonths,
     gold: goldMonths,
   };
-  const tierSlabbed: Record<string, boolean> = { bronze: false, silver: !!silverSlabs, gold: !!goldSlabs };
+  const tierSlabbed: Record<string, boolean> = { bronze: false, silver: silverTotal != null, gold: !!goldSlabs };
 
   function setCustomMonths(v: string) {
     setCustom(v);
     const n = parseInt(v, 10);
     if (Number.isFinite(n) && n > 0) setGoldMonths(Math.min(60, n));
+  }
+  function setSilverCustomMonths(v: string) {
+    setSilverCustom(v);
+    const n = parseInt(v, 10);
+    if (Number.isFinite(n) && n > 0) setSilverMonths(Math.min(60, n));
   }
 
   async function buy(tier: string) {
@@ -127,7 +141,7 @@ export default function PricingCards({
       const res = await createPlanOrder({
         subjectId: subject.id,
         tier,
-        months: tier === "gold" ? goldMonths : undefined,
+        months: tier === "gold" ? goldMonths : tier === "silver" ? silverMonths : undefined,
         couponCode: coupon,
       });
       if (!res.ok) {
@@ -360,6 +374,45 @@ export default function PricingCards({
               {tier === "gold" && <span className="plan-pop">Full classes</span>}
               <div className="tier-name">{tierName}</div>
               <div className="tagline">{meta?.tagline}</div>
+
+              {/* Silver validity selector — same experience as Gold. */}
+              {tier === "silver" && !noPrice && !owned && (
+                <div style={{ margin: "8px 0 12px" }}>
+                  <label style={{ fontSize: ".78rem" }}>
+                    Choose validity
+                    <Help text="How long you want Silver access for. Pick a preset or enter your own number of months." />
+                  </label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                    {silverChoices.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => {
+                          setSilverMonths(m);
+                          setSilverCustom("");
+                        }}
+                        className="btn small secondary"
+                        style={
+                          silverMonths === m && !silverCustom
+                            ? { background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", borderColor: "transparent" }
+                            : undefined
+                        }
+                      >
+                        {m}m
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={silverCustom}
+                    onChange={(e) => setSilverCustomMonths(e.target.value)}
+                    placeholder="…or custom months"
+                    style={{ marginBottom: 0, fontSize: ".85rem" }}
+                  />
+                </div>
+              )}
 
               {/* Gold validity selector */}
               {tier === "gold" && !noPrice && !owned && (

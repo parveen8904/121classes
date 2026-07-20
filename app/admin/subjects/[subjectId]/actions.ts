@@ -293,12 +293,16 @@ export async function editSubjectMaterial(formData: FormData) {
 }
 
 // Parse a "3:600, 6:500, 12:400, 24:300" ladder into slab JSON (or null).
+// Rates may carry paise (e.g. "12:287.50"); month caps stay whole numbers.
 function parseSlabInput(raw: string): { upto: number; rate: number }[] | null {
   const slabs = raw
     .split(/[,\n]/)
-    .map((p) => p.split(":").map((x) => parseInt(x.trim(), 10)))
-    .filter((pair) => pair.length === 2 && Number.isFinite(pair[0]) && pair[0] > 0 && Number.isFinite(pair[1]) && pair[1] >= 0)
-    .map(([upto, rate]) => ({ upto, rate }))
+    .map((p) => {
+      const [u, r] = p.split(":");
+      return [parseInt((u ?? "").trim(), 10), parseFloat((r ?? "").trim())] as const;
+    })
+    .filter(([upto, rate]) => Number.isFinite(upto) && upto > 0 && Number.isFinite(rate) && rate >= 0)
+    .map(([upto, rate]) => ({ upto, rate: Math.round(rate * 100) / 100 }))
     .sort((a, b) => a.upto - b.upto);
   return slabs.length ? slabs : null;
 }

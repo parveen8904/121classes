@@ -72,7 +72,7 @@ type Visitors = {
   signup_failed_today: number;
   new_accounts_today: number;
   top_pages: { path: string; views: number; visitors: number }[];
-  activity: { name: string | null; email: string | null; phone?: string | null; level?: string | null; first_seen: string; last_seen: string; minutes: number; pages: number }[];
+  activity: { name: string | null; email: string | null; phone?: string | null; level?: string | null; first_seen: string; last_seen: string; minutes: number; visits?: number; pages: number }[];
 };
 
 export default async function HealthPage() {
@@ -180,7 +180,8 @@ export default async function HealthPage() {
                           <th style={{ padding: "6px 8px" }}>Email</th>
                           <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>First seen</th>
                           <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Last seen</th>
-                          <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Time on site</th>
+                          <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Active time</th>
+                          <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Visits</th>
                           <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Pages</th>
                         </tr>
                       </thead>
@@ -194,6 +195,7 @@ export default async function HealthPage() {
                             <td style={{ padding: "6px 8px" }}>{a.first_seen}</td>
                             <td style={{ padding: "6px 8px" }}>{a.last_seen}</td>
                             <td style={{ padding: "6px 8px" }}>{a.minutes >= 60 ? `${Math.floor(a.minutes / 60)}h ${a.minutes % 60}m` : `${a.minutes}m`}</td>
+                            <td style={{ padding: "6px 8px" }}>{a.visits ?? 1}</td>
                             <td style={{ padding: "6px 8px" }}>{a.pages}</td>
                           </tr>
                         ))}
@@ -201,7 +203,8 @@ export default async function HealthPage() {
                     </table>
                   </div>
                   <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
-                    &ldquo;Time on site&rdquo; is from first to last page opened today (IST), longest first. 🕶 rows are real
+                    &ldquo;Active time&rdquo; counts only time actually spent using the site — a gap of 30+ minutes starts a
+                    new visit (so two short sittings never show as &ldquo;20 hours&rdquo;). 🕶 rows are real
                     visitors who haven&apos;t registered — no website can know a visitor&apos;s name or phone until they give
                     it (that&apos;s the job of the case-test popup and the free-planner page).
                   </p>

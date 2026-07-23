@@ -10,7 +10,7 @@ import RemarkBox from "./RemarkBox";
 import PrintButton from "./PrintButton";
 import TopicPicker from "./TopicPicker";
 import TemplatePicker from "./TemplatePicker";
-import { savePlanSetup, clearPlan, emailMyPlan, rebalanceFromToday } from "./actions";
+import { savePlanSetup, emailMyPlan, rebalanceFromToday } from "./actions";
 import DoneToggle from "./DoneToggle";
 
 export const dynamic = "force-dynamic";
@@ -271,7 +271,8 @@ export default async function PlannerPage(
       <div style={{ display: "flex", gap: 10, alignItems: "center", margin: "20px 0 8px", flexWrap: "wrap" }}>
         <h2 style={{ fontSize: "1.15rem", margin: 0 }}>📅 Full plan</h2>
         <Link href="/planner?new=1" className="btn small secondary no-print">Change / regenerate</Link>
-        <form action={clearPlan} className="no-print"><button className="btn small secondary" type="submit">Delete plan</button></form>
+        {/* Resetting/deleting a plan is an ADMIN action (founder's call) —
+            students only modify or regenerate. */}
       </div>
 
       <table className="plan-table" style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 13 }}>

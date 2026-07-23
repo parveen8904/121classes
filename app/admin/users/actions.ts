@@ -122,3 +122,16 @@ export async function updateUser(formData: FormData) {
   revalidatePath(`/admin/users/${id}`);
   revalidatePath("/admin/users");
 }
+
+// Wipe a student's study plan COMPLETELY (plan, schedule, remarks, progress
+// ticks) so they start fresh, exactly like a brand-new student.
+export async function resetStudyPlan(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  await svc.from("study_plans").delete().eq("user_id", id);
+  await svc.from("class_watch").delete().eq("student_id", id);
+  revalidatePath(`/admin/users/${id}`);
+  redirect(`/admin/users/${id}?planreset=1`);
+}

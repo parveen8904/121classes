@@ -28,7 +28,8 @@ export default async function PortalHeader() {
     { href: "/learn/downloads", label: "📥 Downloads" },
     { href: "/amendments", label: "📜 Amendments" },
     { href: "/career", label: "🎓 Career" },
-    { href: "/discuss", label: "💬 Discuss" },
+    // Discuss is staff-only in the header — students use Community/doubts.
+    ...(isAdmin ? [{ href: "/discuss", label: "💬 Discuss" }] : []),
     { href: "/community", label: "📣 Community" },
     { href: "/inbox", label: "📥 Inbox" },
     { href: "/dashboard/profile", label: "👤 Profile" },

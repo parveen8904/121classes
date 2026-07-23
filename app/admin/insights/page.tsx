@@ -22,6 +22,29 @@ export default async function InsightsPage() {
   const { data, error } = await svc.rpc("admin_insights_report");
   const r = data as Insights | null;
 
+  // Study-plan adoption: who has built a plan, for which subject, and whether
+  // they emailed it to themselves.
+  const { data: planRows } = await svc.from("study_plans").select("user_id, setup, emailed_at, updated_at").not("setup", "is", null);
+  const { data: subjTitles } = await svc.from("subjects").select("id, title");
+  const subjTitle = new Map((subjTitles ?? []).map((s) => [s.id as string, s.title as string]));
+  const planIds = (planRows ?? []).map((p) => p.user_id as string);
+  const { data: planProfiles } = planIds.length
+    ? await svc.from("profiles").select("id, full_name, email").in("id", planIds)
+    : { data: [] as { id: string; full_name: string | null; email: string | null }[] };
+  const profById = new Map((planProfiles ?? []).map((p) => [p.id as string, p]));
+  const plans = (planRows ?? []).map((p) => {
+    const s = (p.setup ?? {}) as { subjectId?: string; examDate?: string };
+    return {
+      name: profById.get(p.user_id as string)?.full_name || "(no name)",
+      email: profById.get(p.user_id as string)?.email || "—",
+      subject: subjTitle.get(s.subjectId ?? "") ?? "—",
+      examDate: s.examDate ?? "—",
+      emailed: !!p.emailed_at,
+      updated: p.updated_at as string | null,
+    };
+  }).sort((a, b) => (b.updated ?? "").localeCompare(a.updated ?? ""));
+  const emailedCount = plans.filter((p) => p.emailed).length;
+
   const th = { padding: "6px 8px", textAlign: "left" as const, color: "var(--muted)" };
   const td = { padding: "6px 8px" };
 
@@ -38,6 +61,31 @@ export default async function InsightsPage() {
         <div className="card" style={{ marginTop: 16 }}><p className="muted">Couldn&apos;t load insights{error ? `: ${error.message}` : ""}. Refresh in a moment.</p></div>
       ) : (
         <>
+          {/* Study-plan adoption */}
+          <h3 style={{ margin: "22px 0 8px" }}>🗓️ Study plans — {plans.length} student{plans.length === 1 ? "" : "s"} have a plan · {emailedCount} emailed it to themselves</h3>
+          <div className="card">
+            {plans.length > 0 ? (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".82rem" }}>
+                  <thead><tr><th style={th}>Name</th><th style={th}>Email</th><th style={th}>Subject</th><th style={th}>Exam date</th><th style={th}>Emailed plan?</th></tr></thead>
+                  <tbody>
+                    {plans.slice(0, 100).map((p, i) => (
+                      <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                        <td style={{ ...td, fontWeight: 600 }}>{p.name}</td>
+                        <td style={td}>{p.email}</td>
+                        <td style={td}>{p.subject}</td>
+                        <td style={td}>{p.examDate}</td>
+                        <td style={{ ...td, fontWeight: 700 }}>{p.emailed ? "📧 Yes" : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="muted" style={{ margin: 0 }}>No study plans yet.</p>
+            )}
+          </div>
+
           {/* Drop-off call-list — the actionable one first. */}
           <h3 style={{ margin: "22px 0 8px" }}>📞 Call-list — students slipping away ({r.dropoffs.length})</h3>
           <div className="card">

@@ -69,46 +69,65 @@ export async function savePlanSetup(formData: FormData) {
 }
 
 // One-tap READY-MADE plan: "N days before exam" with sensible expert defaults
-// for that horizon. The student can modify or regenerate it anytime — the
-// planner page says so right on top of the result.
-export async function applyPlanTemplate(formData: FormData) {
+// for that horizon. Templates are generated ONCE per subject+horizon+day and
+// SAVED (plan_templates) — every other student the same day just copies the
+// ready plan (only the dates differ from one day to the next). The student can
+// still modify or regenerate anytime.
+export async function applyPlanTemplate(subjectId: string, days: number) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-
-  const subjectId = String(formData.get("subject") || "");
-  const days = Number(formData.get("days")) || 0;
   if (!subjectId || ![15, 30, 60, 90, 150, 180].includes(days)) return;
 
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const svc = createServiceClient();
   const start = todayIST();
-  const exam = new Date(start + "T00:00:00Z");
-  exam.setUTCDate(exam.getUTCDate() + days);
-  const examDate = exam.toISOString().slice(0, 10);
 
-  // Horizon-tuned defaults: short runways watch faster, cover the most
-  // important topics and keep fewer revision rounds.
-  const setup: PlanSetup = {
-    subjectId,
-    startDate: start,
-    examDate,
-    speed: days <= 30 ? 1.5 : 1.25,
-    doneClasses: 0,
-    revisions: days <= 30 ? 1 : days <= 60 ? 2 : 3,
-    exhaustiveScope: (days <= 15 ? "a" : days <= 30 ? "ab" : "all") as PlanSetup["exhaustiveScope"],
-    pickedTopicIds: [],
-    revScope1: "all" as PlanSetup["revScope1"],
-    revScope2: "all" as PlanSetup["revScope2"],
-    stageDays: {},
-    holidays: [],
-    extraDays: [],
-    sundaysOn: days <= 30,
-  };
+  // Ready on the shelf? Copy it — no regeneration.
+  const { data: cached } = await svc
+    .from("plan_templates")
+    .select("setup, schedule")
+    .eq("subject_id", subjectId).eq("days", days).eq("start_date", start)
+    .maybeSingle();
 
-  let schedule: SchedEntry[] = [];
-  const input = await loadPlanInput({ subjectId, startDate: setup.startDate, examDate, doneClasses: 0 });
-  if (input) {
-    applySetup(input, setup);
-    schedule = toSchedule(generatePlan(input));
+  let setup: PlanSetup;
+  let schedule: SchedEntry[];
+  if (cached) {
+    setup = cached.setup as PlanSetup;
+    schedule = (cached.schedule ?? []) as SchedEntry[];
+  } else {
+    const exam = new Date(start + "T00:00:00Z");
+    exam.setUTCDate(exam.getUTCDate() + days);
+    const examDate = exam.toISOString().slice(0, 10);
+    // Horizon-tuned defaults: short runways watch faster, cover the most
+    // important topics and keep fewer revision rounds.
+    setup = {
+      subjectId,
+      startDate: start,
+      examDate,
+      speed: days <= 30 ? 1.5 : 1.25,
+      doneClasses: 0,
+      revisions: days <= 30 ? 1 : days <= 60 ? 2 : 3,
+      exhaustiveScope: (days <= 15 ? "a" : days <= 30 ? "ab" : "all") as PlanSetup["exhaustiveScope"],
+      pickedTopicIds: [],
+      revScope1: "all" as PlanSetup["revScope1"],
+      revScope2: "all" as PlanSetup["revScope2"],
+      stageDays: {},
+      holidays: [],
+      extraDays: [],
+      sundaysOn: days <= 30,
+    };
+    schedule = [];
+    const input = await loadPlanInput({ subjectId, startDate: start, examDate, doneClasses: 0 });
+    if (input) {
+      applySetup(input, setup);
+      schedule = toSchedule(generatePlan(input));
+    }
+    // Save on the shelf for everyone else today (races just overwrite alike).
+    await svc.from("plan_templates").upsert(
+      { subject_id: subjectId, days, start_date: start, setup, schedule },
+      { onConflict: "subject_id,days,start_date" },
+    );
   }
 
   await supabase.from("study_plans").upsert(
@@ -161,6 +180,8 @@ export async function emailMyPlan() {
     attached = await sendEmailWithAttachment(to, subject, html, { filename: "study-plan.pdf", content: buf, contentType: "application/pdf" });
   } catch { attached = false; }
   if (!attached) await sendEmail(to, subject, html);
+  // Recorded for the admin report: how many students email themselves the plan.
+  await supabase.from("study_plans").update({ emailed_at: new Date().toISOString() }).eq("user_id", user.id);
   redirect("/planner?emailed=1");
 }
 

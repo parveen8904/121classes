@@ -9,7 +9,8 @@ import SubmitButton from "@/app/components/SubmitButton";
 import RemarkBox from "./RemarkBox";
 import PrintButton from "./PrintButton";
 import TopicPicker from "./TopicPicker";
-import { savePlanSetup, clearPlan, emailMyPlan, rebalanceFromToday, applyPlanTemplate } from "./actions";
+import TemplatePicker from "./TemplatePicker";
+import { savePlanSetup, clearPlan, emailMyPlan, rebalanceFromToday } from "./actions";
 import DoneToggle from "./DoneToggle";
 
 export const dynamic = "force-dynamic";
@@ -33,8 +34,15 @@ export default async function PlannerPage(
   const { data: myCourses } = await supabase.from("my_courses").select("course_id").eq("student_id", user.id);
   const courseIds = (myCourses ?? []).map((r) => r.course_id as string);
   const { data: subjOpts } = courseIds.length
-    ? await supabase.from("subjects").select("id, title").in("course_id", courseIds).order("order_index")
-    : await supabase.from("subjects").select("id, title").order("title");
+    ? await supabase.from("subjects").select("id, title, batch_months").in("course_id", courseIds).order("order_index")
+    : await supabase.from("subjects").select("id, title, batch_months").order("title");
+
+  // Ready-made templates exist ONLY for the two flagship subjects (founder's
+  // choice) — never for live batches.
+  const templateSubjects = (subjOpts ?? [])
+    .filter((s) => !(Number((s as { batch_months?: number | null }).batch_months) || 0))
+    .filter((s) => /financial reporting|advanced accounting/i.test(s.title as string))
+    .map((s) => ({ id: s.id as string, title: s.title as string }));
 
   const { data: planRow } = await supabase.from("study_plans").select("setup, remarks").eq("user_id", user.id).maybeSingle();
   const setup = (planRow?.setup ?? null) as Setup | null;
@@ -58,28 +66,15 @@ export default async function PlannerPage(
         <p className="muted">Pick your subject and dates — we&apos;ll lay out exactly what to do each day, through to exam day.</p>
 
         {/* One-tap ready-made plans: pick a subject, tap a horizon, done. */}
-        <div className="card" style={{ marginTop: 18, border: "2px solid var(--accent)" }}>
-          <strong>⚡ Ready-made plans — one tap</strong>
-          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
-            Get a complete day-by-day plan instantly, tuned for how far your exam is. You can modify it or
-            generate it again anytime with your own details.
-          </p>
-          <form action={applyPlanTemplate}>
-            <label style={{ fontSize: ".8rem" }}>Subject</label>
-            <select name="subject" defaultValue={preSubject || setup?.subjectId || (subjOpts ?? [])[0]?.id || ""} style={{ marginBottom: 10 }}>
-              {(subjOpts ?? []).map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
-            </select>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {[15, 30, 60, 90, 150, 180].map((d) => (
-                <SubmitButton key={d} className="btn small secondary" name="days" value={String(d)} savedLabel="✓ Plan ready">
-                  {d} days before exam
-                </SubmitButton>
-              ))}
-            </div>
-          </form>
+        <div style={{ marginTop: 18 }}>
+          <TemplatePicker subjects={templateSubjects} />
         </div>
 
-        <p className="muted" style={{ margin: "16px 0 0", fontSize: ".85rem" }}>…or build it your way, with every option:</p>
+        {/* The full custom builder stays tucked away until asked for. */}
+        <details style={{ marginTop: 16 }}>
+          <summary className="btn secondary" style={{ cursor: "pointer", display: "inline-block" }}>
+            🛠️ …or build your own custom plan (every option) ▾
+          </summary>
         <form action={savePlanSetup} className="form-card" style={{ marginTop: 10, display: "grid", gap: 14 }}>
           <TopicPicker
             subjects={(subjOpts ?? []).map((s) => ({ id: s.id as string, title: s.title as string }))}
@@ -158,6 +153,7 @@ export default async function PlannerPage(
           </details>
           <SubmitButton className="btn" savedLabel="✓ Building…">Generate my plan</SubmitButton>
         </form>
+        </details>
         {setup?.subjectId && <p className="muted" style={{ fontSize: ".82rem", marginTop: 10 }}>Your watched classes stay tracked automatically when you regenerate.</p>}
       </main>
     );
@@ -228,6 +224,11 @@ export default async function PlannerPage(
         <PrintButton />
         <form action={emailMyPlan}><button type="submit" className="btn small secondary">📧 Email me my plan (PDF)</button></form>
         <form action={rebalanceFromToday}><button type="submit" className="btn small secondary">🔄 Re-balance from today</button></form>
+      </div>
+
+      {/* Templates stay available even with a plan in place — switching is one tap. */}
+      <div className="no-print" style={{ marginTop: 14 }}>
+        <TemplatePicker subjects={templateSubjects} />
       </div>
 
       <div className="card" style={{ marginTop: 16, border: "2px solid var(--accent)" }}>

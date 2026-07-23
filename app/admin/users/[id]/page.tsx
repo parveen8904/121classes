@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../../_components/AdminHero";
-import { updateUser, sendSetPasswordEmail, adminSetPassword } from "../actions";
+import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan } from "../actions";
 import { ADMIN_AREAS } from "@/lib/adminAccess";
 
 function fmt(s: string | null): string {
@@ -110,6 +110,22 @@ export default async function UserDetail(
           ) : (
             <p className="muted">This user has no email on file.</p>
           )}
+        </div>
+      </details>
+
+      {/* Fresh start: wipes the plan + its progress ticks, like a new student. */}
+      <details style={{ marginTop: 10 }}>
+        <summary className="btn small secondary as-btn">🗓️ Study plan — reset</summary>
+        <div className="form-card" style={{ marginTop: 10 }}>
+          <h3 style={{ marginTop: 0 }}>Reset this student&apos;s study plan</h3>
+          <p className="muted" style={{ fontSize: ".85rem", marginBottom: 8 }}>
+            Deletes their plan, remarks and class-done ticks — the planner starts completely fresh, exactly like a
+            brand-new student. This cannot be undone.
+          </p>
+          <form action={resetStudyPlan}>
+            <input type="hidden" name="id" value={u.id} />
+            <SubmitButton className="btn small" savedLabel="✓ Plan reset">🔄 Reset study plan</SubmitButton>
+          </form>
         </div>
       </details>
 

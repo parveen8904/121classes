@@ -9,7 +9,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import RemarkBox from "./RemarkBox";
 import PrintButton from "./PrintButton";
 import TopicPicker from "./TopicPicker";
-import { savePlanSetup, clearPlan, emailMyPlan, rebalanceFromToday } from "./actions";
+import { savePlanSetup, clearPlan, emailMyPlan, rebalanceFromToday, applyPlanTemplate } from "./actions";
 import DoneToggle from "./DoneToggle";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN",
 type Setup = PlanSetup;
 
 export default async function PlannerPage(
-  props: { searchParams: Promise<{ new?: string; emailed?: string; rebalanced?: string; subject?: string }> }
+  props: { searchParams: Promise<{ new?: string; emailed?: string; rebalanced?: string; subject?: string; template?: string }> }
 ) {
   const searchParams = await props.searchParams;
   const supabase = createClient();
@@ -57,7 +57,30 @@ export default async function PlannerPage(
         <h1 style={{ margin: "12px 0 4px" }}>Build your study plan</h1>
         <p className="muted">Pick your subject and dates — we&apos;ll lay out exactly what to do each day, through to exam day.</p>
 
-        <form action={savePlanSetup} className="form-card" style={{ marginTop: 18, display: "grid", gap: 14 }}>
+        {/* One-tap ready-made plans: pick a subject, tap a horizon, done. */}
+        <div className="card" style={{ marginTop: 18, border: "2px solid var(--accent)" }}>
+          <strong>⚡ Ready-made plans — one tap</strong>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
+            Get a complete day-by-day plan instantly, tuned for how far your exam is. You can modify it or
+            generate it again anytime with your own details.
+          </p>
+          <form action={applyPlanTemplate}>
+            <label style={{ fontSize: ".8rem" }}>Subject</label>
+            <select name="subject" defaultValue={preSubject || setup?.subjectId || (subjOpts ?? [])[0]?.id || ""} style={{ marginBottom: 10 }}>
+              {(subjOpts ?? []).map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+            </select>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {[15, 30, 60, 90, 150, 180].map((d) => (
+                <SubmitButton key={d} className="btn small secondary" name="days" value={String(d)} savedLabel="✓ Plan ready">
+                  {d} days before exam
+                </SubmitButton>
+              ))}
+            </div>
+          </form>
+        </div>
+
+        <p className="muted" style={{ margin: "16px 0 0", fontSize: ".85rem" }}>…or build it your way, with every option:</p>
+        <form action={savePlanSetup} className="form-card" style={{ marginTop: 10, display: "grid", gap: 14 }}>
           <TopicPicker
             subjects={(subjOpts ?? []).map((s) => ({ id: s.id as string, title: s.title as string }))}
             topicsBySubject={topicsBySubject}
@@ -190,6 +213,13 @@ export default async function PlannerPage(
       <h1 style={{ margin: "12px 0 2px" }}>{subjectTitle}</h1>
       <p className="muted">Exam {fmt(setup.examDate)} · watching at {setup.speed}× · {plan.totals.classCount} classes left</p>
 
+      {searchParams.template && (
+        <div className="notice ok no-print" style={{ marginTop: 12 }}>
+          ⚡ This is the ready-made <strong>{searchParams.template}-days-before-exam</strong> plan with recommended
+          settings. You can modify it or generate it again with your own details —{" "}
+          <Link href="/planner?new=1" style={{ fontWeight: 700 }}>Change / regenerate →</Link>
+        </div>
+      )}
       {searchParams.emailed && <div className="notice ok no-print" style={{ marginTop: 12 }}>📧 Your plan has been emailed to you.</div>}
       {searchParams.rebalanced && <div className="notice ok no-print" style={{ marginTop: 12 }}>🔄 Plan re-balanced from today — remaining work spread over the days left.</div>}
 

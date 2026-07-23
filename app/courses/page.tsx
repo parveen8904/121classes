@@ -229,8 +229,10 @@ export default async function CoursesPage() {
                   <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
                     Includes the study planner, AI doubts, tests &amp; performance reports.
                   </p>
-                  <p style={{ marginTop: 12 }}>
-                    <Link className="btn small" href="/login">Enroll in this course →</Link>
+                  <p style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {/* Visitors explore freely first; login is only for enrolling/watching. */}
+                    <Link className="btn small" href={`/courses/${s.id}`}>Explore this subject →</Link>
+                    <Link className="btn small secondary" href={`/login?next=${encodeURIComponent(`/learn/${s.course_id}/plans?subject=${s.id}`)}`}>Enroll →</Link>
                   </p>
                 </div>
               );

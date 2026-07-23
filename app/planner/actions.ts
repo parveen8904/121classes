@@ -191,6 +191,11 @@ export async function setClassDone(sectionId: string, done: boolean) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user || !sectionId) return;
+  // A student can only tick classes they can actually OPEN — the RLS-scoped
+  // read returns nothing for locked (e.g. Gold) sections. Without this, a free
+  // account could mark paid classes "done" in seconds (seen in the wild).
+  const { data: allowed } = await supabase.from("sections").select("id").eq("id", sectionId).maybeSingle();
+  if (!allowed) return;
   const { data: existing } = await supabase.from("class_watch").select("id").eq("student_id", user.id).eq("section_id", sectionId).maybeSingle();
   if (existing) await supabase.from("class_watch").update({ completed: done, last_watched_at: new Date().toISOString() }).eq("id", existing.id);
   else if (done) await supabase.from("class_watch").insert({ student_id: user.id, section_id: sectionId, completed: true });
@@ -204,6 +209,9 @@ export async function markClassDone(formData: FormData) {
   if (!user) return;
   const sectionId = String(formData.get("sectionId") || "");
   if (!sectionId) return;
+  // Same access gate as setClassDone: no ticking classes you cannot open.
+  const { data: allowed } = await supabase.from("sections").select("id").eq("id", sectionId).maybeSingle();
+  if (!allowed) return;
   const { data: existing } = await supabase.from("class_watch").select("id").eq("student_id", user.id).eq("section_id", sectionId).maybeSingle();
   if (existing) await supabase.from("class_watch").update({ completed: true, last_watched_at: new Date().toISOString() }).eq("id", existing.id);
   else await supabase.from("class_watch").insert({ student_id: user.id, section_id: sectionId, completed: true });

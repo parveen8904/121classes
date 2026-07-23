@@ -38,6 +38,17 @@ export default async function UserDetail(
     .maybeSingle();
   if (!u) notFound();
 
+  // Level (CA Final / CA Inter) — from the student's course shelf.
+  const { data: myCourseRows } = await supabase
+    .from("my_courses")
+    .select("courses(title)")
+    .eq("student_id", u.id);
+  const levels = [...new Set((myCourseRows ?? [])
+    .map((r) => ((r as { courses?: { title?: string } | null }).courses?.title ?? "").toLowerCase())
+    .map((t) => (t.includes("final") ? "CA Final" : t.includes("inter") ? "CA Intermediate" : ""))
+    .filter(Boolean))];
+  const levelLabel = levels.join(" + ");
+
   const { data: subsData } = await supabase
     .from("subscriptions")
     .select("id, status, ends_at, channel, courses(title), subjects(title), plans(tier)")
@@ -75,7 +86,7 @@ export default async function UserDetail(
       <AdminHero
         badge="👤 User"
         title={u.full_name || u.email || "User"}
-        subtitle={`${u.email ?? u.phone ?? ""} · joined ${fmt(u.created_at)} · role: ${u.role}`}
+        subtitle={`${u.email ?? u.phone ?? ""}${levelLabel ? ` · 📘 ${levelLabel}` : ""}${u.target_attempt ? ` · 🎯 ${u.target_attempt}` : ""} · joined ${fmt(u.created_at)} · role: ${u.role}`}
         back={{ href: "/admin/users", label: "Users" }}
       />
 

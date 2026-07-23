@@ -8,11 +8,11 @@ export async function getBunnyBilling(): Promise<{ thisMonth: number; balance: n
   const key = await getSecret("BUNNY_ACCOUNT_API_KEY");
   if (!key) return null;
   try {
-    // Cached 30 min + hard 2.5s timeout: this runs on the Admin home page, and
-    // a slow Bunny billing API must never hold the page hostage.
+    // External billing API: called at most ONCE A DAY (founder's rule) with a
+    // hard 2.5s timeout — it must never hold the Admin page hostage.
     const res = await fetch("https://api.bunny.net/billing", {
       headers: { AccessKey: key, accept: "application/json" },
-      next: { revalidate: 1800 },
+      next: { revalidate: 86400 },
       signal: AbortSignal.timeout(2500),
     });
     if (!res.ok) return null;

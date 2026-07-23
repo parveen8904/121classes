@@ -41,7 +41,7 @@ export async function getChannelOverview(): Promise<ChannelOverview | null> {
   try {
     const res = await fetch(
       `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,contentDetails&${sel}&key=${key}`,
-      { next: { revalidate: 1800 } },
+      { next: { revalidate: 86400 }, signal: AbortSignal.timeout(4000) },
     );
     if (!res.ok) return null;
     const j = await res.json();
@@ -65,13 +65,13 @@ export async function getRecentVideos(uploadsPlaylist: string, count = 12): Prom
   try {
     const pl = await fetch(
       `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${encodeURIComponent(uploadsPlaylist)}&maxResults=${count}&key=${key}`,
-      { next: { revalidate: 1800 } },
+      { next: { revalidate: 86400 }, signal: AbortSignal.timeout(4000) },
     ).then((r) => (r.ok ? r.json() : null));
     const ids = (pl?.items ?? []).map((i: any) => i.contentDetails?.videoId).filter(Boolean);
     if (!ids.length) return [];
     const vids = await fetch(
       `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${ids.join(",")}&key=${key}`,
-      { next: { revalidate: 1800 } },
+      { next: { revalidate: 86400 }, signal: AbortSignal.timeout(4000) },
     ).then((r) => (r.ok ? r.json() : null));
     return (vids?.items ?? []).map((v: any) => ({
       id: v.id,

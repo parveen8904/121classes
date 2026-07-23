@@ -69,7 +69,11 @@ export async function loadPlanInput(opts: {
     .select("id, title, order_index, importance, important_qs_rev1, important_qs_rev2")
     .eq("subject_id", opts.subjectId).eq("is_published", true);
 
-  const sorted = (topics ?? []).slice().sort((a, b) => impRank(a.importance) - impRank(b.importance) || ((a.order_index ?? 0) - (b.order_index ?? 0)));
+  // CHAPTER order, always — a fresh plan must start at Class 1. (It used to
+  // sort importance-A chapters first, so plans began mid-syllabus, e.g. at
+  // Class 15 — students read that as "my plan is broken". Importance still
+  // decides WHICH chapters are included via the A/A+B scopes, not the order.)
+  const sorted = (topics ?? []).slice().sort((a, b) => ((a.order_index ?? 0) - (b.order_index ?? 0)) || (impRank(a.importance) - impRank(b.importance)));
   const topicIds = sorted.map((t) => t.id as string);
 
   const secs: StatRow[] = topicIds.length

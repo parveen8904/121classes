@@ -226,11 +226,6 @@ export default async function PlannerPage(
         <form action={rebalanceFromToday}><button type="submit" className="btn small secondary">🔄 Re-balance from today</button></form>
       </div>
 
-      {/* Templates stay available even with a plan in place — switching is one tap. */}
-      <div className="no-print" style={{ marginTop: 14 }}>
-        <TemplatePicker subjects={templateSubjects} />
-      </div>
-
       <div className="card" style={{ marginTop: 16, border: "2px solid var(--accent)" }}>
         <strong style={{ fontSize: "1.1rem" }}>🎯 Today&apos;s target</strong>
         {todays.length ? (
@@ -271,6 +266,9 @@ export default async function PlannerPage(
       <div style={{ display: "flex", gap: 10, alignItems: "center", margin: "20px 0 8px", flexWrap: "wrap" }}>
         <h2 style={{ fontSize: "1.15rem", margin: 0 }}>📅 Full plan</h2>
         <Link href="/planner?new=1" className="btn small secondary no-print">Change / regenerate</Link>
+        <Link href="/planner?new=1" className="no-print" style={{ fontSize: ".84rem", fontWeight: 700, color: "var(--accent)" }}>
+          ⚡ Want a ready-made plan again? Click here
+        </Link>
         {/* Resetting/deleting a plan is an ADMIN action (founder's call) —
             students only modify or regenerate. */}
       </div>

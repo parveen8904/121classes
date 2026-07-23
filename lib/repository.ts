@@ -16,12 +16,16 @@ export async function getRepositoryContext(
   const today = new Date().toISOString().slice(0, 10);
 
   // --- Source 1: repository_items ---
-  const { data: items } = await svc
+  // Scoped at the QUERY level: this runs on every AI doubt, and fetching the
+  // whole site's content to keep 40k chars was starving the database.
+  let itemsQ = svc
     .from("repository_items")
     .select("title, content, subject_id, topic_id, valid_from, valid_to")
     .eq("is_active", true)
     .not("content", "is", null)
     .order("created_at", { ascending: false });
+  if (subjectId) itemsQ = itemsQ.or(`subject_id.eq.${subjectId},subject_id.is.null`);
+  const { data: items } = await itemsQ;
 
   const itemRows = (items ?? []).filter((r) => {
     if (!r.content) return false;
@@ -31,11 +35,18 @@ export async function getRepositoryContext(
   });
 
   // --- Source 2: structured topics + their classes ---
-  const { data: topics } = await svc
+  // Topics are scoped to the subject (or focus topic) in the DB; the per-class
+  // configs (transcripts, digests — the HEAVY part) are only fetched for that
+  // scope, never site-wide.
+  let topicsQ = svc
     .from("topics")
     .select("id, title, subject_id, weightage_marks, important_qs_rev1, important_qs_rev2, valid_from_attempt, valid_to_attempt, subjects(title)")
     .eq("is_published", true);
-  const topicIds = (topics ?? []).map((t) => t.id);
+  if (subjectId) topicsQ = topicsQ.eq("subject_id", subjectId);
+  else if (opts.topicId) topicsQ = topicsQ.eq("id", opts.topicId);
+  const { data: topics } = await topicsQ;
+  const scoped = !!(subjectId || opts.topicId);
+  const topicIds = scoped ? (topics ?? []).map((t) => t.id) : [];
   const { data: sections } = topicIds.length
     ? await svc.from("sections").select("topic_id, title, config").in("topic_id", topicIds).eq("is_published", true)
     : { data: [] as { topic_id: string; title: string; config: Record<string, unknown> | null }[] };

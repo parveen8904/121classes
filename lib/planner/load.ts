@@ -37,12 +37,16 @@ function impRank(imp: unknown): number {
   const m: Record<string, number> = { A: 1, B: 2, C: 3 };
   return m[impLetter(imp)] ?? 4;
 }
-const dur = (cfg: any) => Number(cfg?.duration_minutes) || 0;
+// Rows come from section_stats (the tiny trigger-synced mirror) — NEVER from
+// sections.config: selecting config across a subject detoasts megabytes of
+// transcripts per call (measured 3.7s each) and starves the whole database.
+type StatRow = { section_id: string; topic_id: string; type: string; duration_minutes: string | number | null; class_no: string | null };
+const dur = (r: StatRow) => Number(r?.duration_minutes) || 0;
 // Use the FINAL (continuous) class number, not the within-topic number.
 // Class numbers may carry a "part" letter (7A, 7B — short continuations of
 // class 7). Numeric part for ordering/labels; the letter marks a part.
-const classNo = (cfg: any) => parseInt(String(cfg?.class_no ?? cfg?.topic_class_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
-const partSuffix = (cfg: any) => (String(cfg?.class_no ?? "").match(/[A-Za-z]+$/)?.[0] ?? "");
+const classNo = (r: StatRow) => parseInt(String(r?.class_no ?? "").replace(/[^0-9]/g, ""), 10) || 0;
+const partSuffix = (r: StatRow) => (String(r?.class_no ?? "").match(/[A-Za-z]+$/)?.[0] ?? "");
 
 // Build the engine input for one subject from the live content + planner config.
 export async function loadPlanInput(opts: {
@@ -68,8 +72,8 @@ export async function loadPlanInput(opts: {
   const sorted = (topics ?? []).slice().sort((a, b) => impRank(a.importance) - impRank(b.importance) || ((a.order_index ?? 0) - (b.order_index ?? 0)));
   const topicIds = sorted.map((t) => t.id as string);
 
-  const secs = topicIds.length
-    ? (await svc.from("sections").select("id, topic_id, type, config").in("topic_id", topicIds).eq("is_published", true)).data ?? []
+  const secs: StatRow[] = topicIds.length
+    ? (((await svc.from("section_stats").select("section_id, topic_id, type, duration_minutes, class_no").in("topic_id", topicIds).eq("is_published", true)).data ?? []) as StatRow[])
     : [];
 
   const classes: ClassItem[] = [];
@@ -81,7 +85,7 @@ export async function loadPlanInput(opts: {
       .filter((s) => s.type === "full_class_video")
       // Order by class number; within a number the main class ("7") comes
       // before its parts ("7A", "7B").
-      .sort((a, b) => classNo(a.config) - classNo(b.config) || partSuffix(a.config).localeCompare(partSuffix(b.config)));
+      .sort((a, b) => classNo(a) - classNo(b) || partSuffix(a).localeCompare(partSuffix(b)));
     // A "part" (7A/7B — a ≤100-min continuation) is the SAME class sitting, so
     // merge it into its main class row: one plan entry, combined minutes. This
     // keeps the planner's class count equal to everywhere else on the site
@@ -89,13 +93,13 @@ export async function loadPlanInput(opts: {
     type Row = { sectionId: string; no: number; minutes: number; parts: number };
     const merged: Row[] = [];
     for (const s of cls) {
-      const no = classNo(s.config);
+      const no = classNo(s);
       const prev = merged[merged.length - 1];
-      if (partSuffix(s.config) && prev && prev.no === no) {
-        prev.minutes += dur(s.config) || 60;
+      if (partSuffix(s) && prev && prev.no === no) {
+        prev.minutes += dur(s) || 60;
         prev.parts++;
       } else {
-        merged.push({ sectionId: s.id as string, no, minutes: dur(s.config) || 60, parts: 0 });
+        merged.push({ sectionId: s.section_id, no, minutes: dur(s) || 60, parts: 0 });
       }
     }
     merged.forEach((r, i) =>
@@ -108,9 +112,9 @@ export async function loadPlanInput(opts: {
         minutes: r.minutes,
       }),
     );
-    const classTotal = cls.reduce((x, s) => x + (dur(s.config) || 60), 0);
+    const classTotal = cls.reduce((x, s) => x + (dur(s) || 60), 0);
     for (const s of mine.filter((s) => s.type === "revision_video")) {
-      revisions.push({ topicTitle: t.title as string, minutes: dur(s.config) || Math.round(classTotal * 0.25) || 30 });
+      revisions.push({ topicTitle: t.title as string, minutes: dur(s) || Math.round(classTotal * 0.25) || 30 });
     }
   }
 

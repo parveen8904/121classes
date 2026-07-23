@@ -44,7 +44,12 @@ export async function GET(req: NextRequest, props: { params: Promise<{ sectionId
       const stamp = `Downloaded by ${[prof?.full_name, user.email].filter(Boolean).join(" · ")} — caparveensharma.com`;
       const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
       const font = await doc.embedFont(StandardFonts.Helvetica);
-      for (const page of doc.getPages()) {
+      // Stamp SELECTED pages only (first, last, and every 10th in between) —
+      // still traceable if shared, but big scanned PDFs stay fast to prepare.
+      const pages = doc.getPages();
+      for (let i = 0; i < pages.length; i++) {
+        if (!(i === 0 || i === pages.length - 1 || i % 10 === 0)) continue;
+        const page = pages[i];
         const { width } = page.getSize();
         const size = 8;
         const w = font.widthOfTextAtSize(stamp, size);

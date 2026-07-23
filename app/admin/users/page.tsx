@@ -26,6 +26,23 @@ export default async function UsersPage(
 
   const { data: users } = await query;
 
+  // Level (Final / Inter / both) per user — from their course shelf.
+  const levelByUser = new Map<string, string>();
+  const ids = (users ?? []).map((u) => u.id as string);
+  if (ids.length) {
+    const { data: mc } = await supabase
+      .from("my_courses")
+      .select("student_id, courses(title)")
+      .in("student_id", ids);
+    for (const r of mc ?? []) {
+      const t = ((r as { courses?: { title?: string } | null }).courses?.title ?? "").toLowerCase();
+      const lvl = t.includes("final") ? "Final" : t.includes("inter") ? "Inter" : "";
+      if (!lvl) continue;
+      const cur = levelByUser.get(r.student_id as string);
+      levelByUser.set(r.student_id as string, cur && cur !== lvl ? "Final + Inter" : (cur ?? lvl) === lvl ? lvl : "Final + Inter");
+    }
+  }
+
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
       <AdminHero
@@ -110,6 +127,7 @@ export default async function UsersPage(
                   </span>
                   <p className="row-sub">
                     {u.email ?? u.phone ?? "—"} · {u.role}
+                    {levelByUser.get(u.id as string) ? ` · 📘 ${levelByUser.get(u.id as string)}` : ""}
                     {u.target_attempt ? ` · 🎯 ${u.target_attempt}` : ""}
                   </p>
                 </div>

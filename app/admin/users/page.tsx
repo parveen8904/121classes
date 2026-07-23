@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../_components/AdminHero";
 import { addUsers } from "./actions";
@@ -62,7 +63,7 @@ export default async function UsersPage(
             </select>
             <label style={{ marginTop: 10 }}>Users (one per line)</label>
             <textarea name="bulk" rows={6} placeholder={"Riya Sharma, riya@example.com\nAmit Verma, amit@example.com"} required />
-            <button className="btn" type="submit" style={{ marginTop: 8 }}>Create &amp; email set-password links</button>
+            <SubmitButton className="btn" style={{ marginTop: 8 }}>Create &amp; email set-password links</SubmitButton>
           </form>
         </div>
       </details>
@@ -82,9 +83,9 @@ export default async function UsersPage(
               <option value="admin">🛠️ Admins</option>
             </select>
           </div>
-          <button className="btn" type="submit">
+          <SubmitButton className="btn">
             Filter
-          </button>
+          </SubmitButton>
         </div>
       </form>
 

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import SubmitButton from "@/app/components/SubmitButton";
 import { formatINR } from "@/lib/pricing";
 import AdminHero from "../_components/AdminHero";
 import { setOrderStatus, sendDispatchEmail } from "./actions";
@@ -59,9 +60,9 @@ export default async function AdminOrdersPage(
       )}
 
       <form action={sendDispatchEmail} style={{ marginTop: 18 }}>
-        <button className="btn small" type="submit">
+        <SubmitButton className="btn small">
           📧 Email dispatch list to warehouse
-        </button>
+        </SubmitButton>
         <span className="muted" style={{ fontSize: ".8rem", marginLeft: 10 }}>
           Also runs automatically each evening.
         </span>
@@ -93,18 +94,18 @@ export default async function AdminOrdersPage(
                       <form action={setOrderStatus} style={{ margin: 0 }}>
                         <input type="hidden" name="id" value={o.id} />
                         <input type="hidden" name="status" value="dispatched" />
-                        <button className="btn small" type="submit">
+                        <SubmitButton className="btn small">
                           Mark dispatched 🚚
-                        </button>
+                        </SubmitButton>
                       </form>
                     )}
                     {o.status === "dispatched" && (
                       <form action={setOrderStatus} style={{ margin: 0 }}>
                         <input type="hidden" name="id" value={o.id} />
                         <input type="hidden" name="status" value="delivered" />
-                        <button className="btn small" type="submit">
+                        <SubmitButton className="btn small">
                           Mark delivered ✅
-                        </button>
+                        </SubmitButton>
                       </form>
                     )}
                   </div>

@@ -8,7 +8,7 @@ type Insights = {
   topic_views: { topic: string; subject: string | null; views: number; students: number }[];
   doubt_areas: { area: string; doubts: number }[];
   heard_from: { source: string; students: number }[];
-  dropoffs: { name: string | null; email: string; phone: string | null; joined: string; last_login: string | null; bucket: string }[];
+  dropoffs: { name: string | null; email: string; phone: string | null; level?: string | null; joined: string; last_login: string | null; bucket: string }[];
 };
 
 const HEARD_LABEL: Record<string, string> = {
@@ -47,11 +47,12 @@ export default async function InsightsPage() {
             </p>
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".82rem" }}>
-                <thead><tr><th style={th}>Name</th><th style={th}>Email</th><th style={th}>WhatsApp</th><th style={th}>Joined</th><th style={th}>Last login</th><th style={th}>Status</th></tr></thead>
+                <thead><tr><th style={th}>Name</th><th style={th}>Level</th><th style={th}>Email</th><th style={th}>WhatsApp</th><th style={th}>Joined</th><th style={th}>Last login</th><th style={th}>Status</th></tr></thead>
                 <tbody>
                   {r.dropoffs.map((d, i) => (
                     <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
                       <td style={{ ...td, fontWeight: 600 }}>{d.name || "—"}</td>
+                      <td style={{ ...td, fontWeight: 600 }}>{d.level || "—"}</td>
                       <td style={td}>{d.email}</td>
                       <td style={td}>{d.phone || "—"}</td>
                       <td style={td}>{d.joined}</td>
@@ -61,7 +62,7 @@ export default async function InsightsPage() {
                       </td>
                     </tr>
                   ))}
-                  {r.dropoffs.length === 0 && <tr><td style={td} colSpan={6} className="muted">Nobody slipping — great! 🎉</td></tr>}
+                  {r.dropoffs.length === 0 && <tr><td style={td} colSpan={7} className="muted">Nobody slipping — great! 🎉</td></tr>}
                 </tbody>
               </table>
             </div>

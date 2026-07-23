@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
+import SubmitButton from "@/app/components/SubmitButton";
 import AdminHero from "../_components/AdminHero";
 import { markQuestionDone, replyToQuestion } from "./actions";
 
@@ -73,9 +74,9 @@ export default async function AdminInbox() {
                 <form action={markQuestionDone} style={{ margin: 0 }}>
                   <input type="hidden" name="id" value={q.id} />
                   <input type="hidden" name="status" value={q.status === "open" ? "done" : "open"} />
-                  <button className="btn small secondary" type="submit">
+                  <SubmitButton className="btn small secondary">
                     {q.status === "open" ? "Mark done" : "Reopen"}
-                  </button>
+                  </SubmitButton>
                 </form>
               </div>
               <p style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{q.question}</p>
@@ -84,7 +85,7 @@ export default async function AdminInbox() {
                 <form action={replyToQuestion} style={{ marginTop: 8 }}>
                   <input type="hidden" name="id" value={q.id} />
                   <textarea name="reply" rows={3} required placeholder="Type your reply — sent to the student by Telegram (if connected) or email…" />
-                  <button className="btn small" type="submit" style={{ marginTop: 6 }}>Send reply</button>
+                  <SubmitButton className="btn small" style={{ marginTop: 6 }}>Send reply</SubmitButton>
                 </form>
                 {!q.email && !q.user_id && (
                   <p className="muted" style={{ fontSize: ".78rem", marginTop: 6 }}>⚠️ No email/account on this question — can&apos;t deliver a reply.</p>

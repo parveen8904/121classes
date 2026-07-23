@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import SubmitButton from "@/app/components/SubmitButton";
 import { formatINR } from "@/lib/pricing";
 import DeleteButton from "../_components/DeleteButton";
 import AdminHero from "../_components/AdminHero";
@@ -52,9 +53,9 @@ export default async function AdminBooksPage() {
           <label className="remember" style={{ marginTop: 0 }}>
             <input type="checkbox" name="is_active" defaultChecked /> Active (visible in store)
           </label>
-          <button className="btn" type="submit">
+          <SubmitButton className="btn">
             Add book
-          </button>
+          </SubmitButton>
         </form>
       </div></div>
       </details>
@@ -93,9 +94,9 @@ export default async function AdminBooksPage() {
                   <input type="checkbox" name="is_active" defaultChecked={b.is_active} /> Active
                 </label>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <button className="btn small" type="submit">
+                  <SubmitButton className="btn small">
                     Save
-                  </button>
+                  </SubmitButton>
                   <DeleteButton action={deleteBook} id={b.id} message="Delete this book?" />
                   <span className="muted" style={{ fontSize: ".8rem" }}>
                     {formatINR(b.price_inr)} · {b.stock_qty} in stock · {b.is_active ? "🟢 active" : "⚪ hidden"}

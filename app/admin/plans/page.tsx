@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import { formatINR } from "@/lib/pricing";
 import AdminHero from "../_components/AdminHero";
@@ -42,9 +43,9 @@ export default async function PlansPage() {
             <label>Validity months</label>
             <input name="gold_validity_options" defaultValue={goldValidity} style={{ marginBottom: 0 }} />
           </div>
-          <button className="btn small" type="submit">
+          <SubmitButton className="btn small">
             Save
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
@@ -102,9 +103,9 @@ export default async function PlansPage() {
                   </div>
                 )}
 
-                <button className="btn small" type="submit">
+                <SubmitButton className="btn small">
                   Save plan
-                </button>
+                </SubmitButton>
               </form>
             </div>
           );

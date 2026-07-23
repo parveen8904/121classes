@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import SubmitButton from "@/app/components/SubmitButton";
 import { formatINR, DURATIONS, durationLabel } from "@/lib/pricing";
 import AdminHero from "../_components/AdminHero";
 import DeleteButton from "../_components/DeleteButton";
@@ -94,9 +95,9 @@ export default async function CombosPage() {
           <label className="remember" style={{ marginTop: 0 }}>
             <input type="checkbox" name="is_active" defaultChecked /> Active
           </label>
-          <button className="btn" type="submit">
+          <SubmitButton className="btn">
             Create combo
-          </button>
+          </SubmitButton>
         </form>
       </div></div>
       </details>
@@ -118,9 +119,9 @@ export default async function CombosPage() {
                 <form action={toggleCombo} style={{ margin: 0 }}>
                   <input type="hidden" name="id" value={c.id} />
                   <input type="hidden" name="next" value={c.is_active ? "false" : "true"} />
-                  <button className="btn small secondary" type="submit">
+                  <SubmitButton className="btn small secondary">
                     {c.is_active ? "Disable" : "Enable"}
-                  </button>
+                  </SubmitButton>
                 </form>
                 <DeleteButton action={deleteCombo} id={c.id} message="Delete this combo?" />
               </div>

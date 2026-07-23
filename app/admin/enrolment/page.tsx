@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import SubmitButton from "@/app/components/SubmitButton";
 import { DURATIONS, durationLabel } from "@/lib/pricing";
 import AdminHero from "../_components/AdminHero";
 import EnrolForm from "./EnrolForm";
@@ -111,16 +112,16 @@ export default async function EnrolmentPage(
                       </option>
                     ))}
                   </select>
-                  <button className="btn small secondary" type="submit">
+                  <SubmitButton className="btn small secondary">
                     Extend
-                  </button>
+                  </SubmitButton>
                 </form>
                 {s.status === "active" && (
                   <form action={revokeSubscription} style={{ display: "inline", margin: 0 }}>
                     <input type="hidden" name="id" value={s.id} />
-                    <button className="btn small secondary" type="submit">
+                    <SubmitButton className="btn small secondary">
                       Revoke
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
               </div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
@@ -135,9 +136,9 @@ export default async function AdminLivePage(
             <label className="remember" style={{ marginTop: 8 }}>
               <input type="checkbox" name="is_published" defaultChecked /> Published (visible to students + landing)
             </label>
-            <button className="btn" type="submit">
+            <SubmitButton className="btn">
               Schedule class
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </details>
@@ -177,9 +178,9 @@ export default async function AdminLivePage(
                   <label className="remember" style={{ marginTop: 0 }}>
                     <input type="checkbox" name="is_published" defaultChecked={s.is_published} /> Published
                   </label>
-                  <button className="btn small" type="submit">
+                  <SubmitButton className="btn small">
                     Save
-                  </button>
+                  </SubmitButton>
                 </form>
               </div>
             ))}
@@ -209,9 +210,9 @@ export default async function AdminLivePage(
                   {zoomOn && (
                     <form action={createZoomForLive} style={{ margin: 0 }}>
                       <input type="hidden" name="id" value={x.id} />
-                      <button className="btn small" type="submit">
+                      <SubmitButton className="btn small">
                         🎥 Auto-create Zoom link
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                   <Link className="btn small secondary" href={`/admin/topics/${x.topicId}`}>
@@ -234,9 +235,9 @@ export default async function AdminLivePage(
                 </div>
                 <label>Recording link (after the class)</label>
                 <input name="recording_url" defaultValue={x.recording_url} placeholder="https://… (optional)" />
-                <button className="btn small" type="submit">
+                <SubmitButton className="btn small">
                   Save schedule
-                </button>
+                </SubmitButton>
               </form>
             </div>
           ))

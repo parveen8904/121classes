@@ -112,9 +112,9 @@ export default async function ResultsAdminPage() {
                   <input type="checkbox" name="is_published" defaultChecked={r.is_published} /> Published
                 </label>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button className="btn small" type="submit">
+                  <SubmitButton className="btn small" savedLabel="✓ Result updated">
                     Save
-                  </button>
+                  </SubmitButton>
                   <DeleteButton action={deleteResult} id={r.id} message="Delete this result?" />
                 </div>
               </form>

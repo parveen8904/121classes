@@ -99,11 +99,15 @@ export default async function Home() {
     const m = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[^0-9]*(\d{4})/i.exec((a ?? "").toUpperCase());
     return m ? Number(m[2]) * 12 + MONTHS[m[1]] : 0;
   };
-  const topResults = (allResults ?? [])
+  const rankedResults = (allResults ?? [])
     .filter((r) => Number.isFinite(airRank(r.headline as string)))
     .sort((a, b) =>
       (airRank(a.headline as string) - airRank(b.headline as string)) ||
       (attemptKey(b.attempt as string) - attemptKey(a.attempt as string)));
+  // Homepage stays light: only the top ~50 rankers here (5 full rows of 9);
+  // the dedicated /results page carries everything.
+  const topResults = rankedResults.slice(0, 45);
+  const moreRanked = Math.max(0, rankedResults.length - topResults.length);
   // Live-batch products (a chapter taught LIVE, sold standalone) — highlighted
   // in a top banner while their schedule has upcoming sessions.
   const { data: batchRows } = await supabase
@@ -182,9 +186,12 @@ export default async function Home() {
   const sale = saleFromSettings(siteImg);
   // Homepage intro video — editable in Admin → Site images. YouTube links are
   // converted to embeds; any other URL is used as the iframe src directly.
+  // When nothing is set, it SELF-UPDATES to the channel's newest video, so the
+  // homepage always shows the latest content without any manual step.
   const rawVideo = (siteImg.get("intro_video_url") || "").trim();
   const yt = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/.exec(rawVideo);
-  const introVideo = yt ? `https://www.youtube.com/embed/${yt[1]}` : (rawVideo || "https://app.heygen.com/embeds/c2bcd7138f2c42b6b607fe6588910b89");
+  const latestYt = (ytVideos ?? [])[0]?.id ? `https://www.youtube.com/embed/${(ytVideos ?? [])[0].id}` : "";
+  const introVideo = yt ? `https://www.youtube.com/embed/${yt[1]}` : (rawVideo || latestYt || "https://app.heygen.com/embeds/c2bcd7138f2c42b6b607fe6588910b89");
   const splashBanner = siteImg.get("splash_banner") || "";
   const splashLink = siteImg.get("splash_link") || "";
   const splashSeconds = Number(siteImg.get("splash_seconds")) || 5;
@@ -388,7 +395,9 @@ export default async function Home() {
             ))}
           </div>
           <div style={{ textAlign: "center", marginTop: 26 }}>
-            <a className="btn secondary" href="/results">See all results →</a>
+            <a className="btn" href="/results">
+              {moreRanked > 0 ? `See all our rankers (${moreRanked}+ more) →` : "See all results →"}
+            </a>
           </div>
         </section>
       )}

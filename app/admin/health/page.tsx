@@ -72,7 +72,7 @@ type Visitors = {
   signup_failed_today: number;
   new_accounts_today: number;
   top_pages: { path: string; views: number; visitors: number }[];
-  activity: { name: string | null; email: string | null; phone?: string | null; first_seen: string; last_seen: string; minutes: number; pages: number }[];
+  activity: { name: string | null; email: string | null; phone?: string | null; level?: string | null; first_seen: string; last_seen: string; minutes: number; pages: number }[];
 };
 
 export default async function HealthPage() {
@@ -175,6 +175,7 @@ export default async function HealthPage() {
                       <thead>
                         <tr style={{ textAlign: "left", color: "var(--muted)" }}>
                           <th style={{ padding: "6px 8px" }}>Name</th>
+                          <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Level</th>
                           <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Phone</th>
                           <th style={{ padding: "6px 8px" }}>Email</th>
                           <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>First seen</th>
@@ -187,6 +188,7 @@ export default async function HealthPage() {
                         {v.activity.map((a, i) => (
                           <tr key={i} style={{ borderTop: "1px solid var(--border)", opacity: a.name || a.email ? 1 : 0.72 }}>
                             <td style={{ padding: "6px 8px", fontWeight: 600 }}>{a.name || "🕶 Visitor (not registered)"}</td>
+                            <td style={{ padding: "6px 8px", whiteSpace: "nowrap", fontWeight: 600 }}>{a.level || "—"}</td>
                             <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{a.phone ? <a href={`tel:${a.phone}`}>{a.phone}</a> : "—"}</td>
                             <td style={{ padding: "6px 8px" }}>{a.email || "—"}</td>
                             <td style={{ padding: "6px 8px" }}>{a.first_seen}</td>

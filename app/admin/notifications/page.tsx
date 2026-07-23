@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
+import SubmitButton from "@/app/components/SubmitButton";
 import { emailConfigured, whatsappConfigured, telegramConfigured } from "@/lib/notify";
 import AdminHero from "../_components/AdminHero";
 import { broadcast } from "./actions";
@@ -85,9 +86,9 @@ export default async function NotificationsPage(
             </label>
           </div>
 
-          <button className="btn" type="submit" style={{ marginTop: 16 }}>
+          <SubmitButton className="btn" style={{ marginTop: 16 }}>
             Send notification
-          </button>
+          </SubmitButton>
         </form>
       </div>
 

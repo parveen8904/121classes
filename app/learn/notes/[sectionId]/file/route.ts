@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 export const dynamic = "force-dynamic";
+// Stamping a big scanned PDF (load + per-page draw + re-save) can exceed the
+// default function time limit — that surfaced to students as "Preparing…" for
+// a while and then an error. Give the route ample time.
+export const maxDuration = 120;
 
 // Streams a class PDF (handwritten/typed/notes/homework) through OUR domain so
 // students never see the raw storage URL. Access is enforced by RLS: the user
@@ -34,8 +38,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ sectionId
   // ?dl=1 → student downloads/prints/shares the PDF, stamped on every page with
   // their identity so any shared copy is traceable back to them.
   if (req.nextUrl.searchParams.get("dl") === "1") {
+    const bytes = new Uint8Array(await upstream.arrayBuffer());
     try {
-      const bytes = new Uint8Array(await upstream.arrayBuffer());
       const { data: prof } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
       const stamp = `Downloaded by ${[prof?.full_name, user.email].filter(Boolean).join(" · ")} — caparveensharma.com`;
       const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
@@ -55,12 +59,12 @@ export async function GET(req: NextRequest, props: { params: Promise<{ sectionId
         },
       });
     } catch {
-      /* stamping failed (odd PDF) — fall through to plain passthrough below */
+      // Stamping failed (odd/encrypted PDF) — serve the bytes we ALREADY have
+      // rather than re-downloading the whole file from storage.
+      return new NextResponse(Buffer.from(bytes), {
+        headers: { "content-type": "application/pdf", "content-disposition": "attachment; filename=\"notes.pdf\"", "cache-control": "no-store" },
+      });
     }
-    const again = await fetch(url, { cache: "no-store" });
-    return new NextResponse(again.body, {
-      headers: { "content-type": "application/pdf", "content-disposition": "attachment; filename=\"notes.pdf\"", "cache-control": "no-store" },
-    });
   }
 
   return new NextResponse(upstream.body, {

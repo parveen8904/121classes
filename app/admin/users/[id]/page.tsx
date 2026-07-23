@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../../_components/AdminHero";
 import { updateUser, sendSetPasswordEmail, adminSetPassword } from "../actions";
@@ -93,7 +94,7 @@ export default async function UserDetail(
                 <p className="muted" style={{ fontSize: ".85rem", marginBottom: 8 }}>
                   Email them a link to set their own password (recommended).
                 </p>
-                <button className="btn small" type="submit">📧 Send set-password email</button>
+                <SubmitButton className="btn small">📧 Send set-password email</SubmitButton>
               </form>
               <form action={adminSetPassword}>
                 <input type="hidden" name="id" value={u.id} />
@@ -102,7 +103,7 @@ export default async function UserDetail(
                 </p>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <input name="password" type="text" placeholder="New password (min 6)" style={{ marginBottom: 0, maxWidth: 240 }} />
-                  <button className="btn small secondary" type="submit">Set password</button>
+                  <SubmitButton className="btn small secondary">Set password</SubmitButton>
                 </div>
               </form>
             </>
@@ -192,9 +193,9 @@ export default async function UserDetail(
           </div>
         </div>
 
-        <button className="btn" type="submit" style={{ marginTop: 18 }}>
+        <SubmitButton className="btn" style={{ marginTop: 18 }}>
           Save user
-        </button>
+        </SubmitButton>
       </form>
 
       <h2 className="admin-section-title">📺 Watch progress ({watchRows.length})</h2>

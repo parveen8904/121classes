@@ -53,15 +53,29 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
   const topicIds = (topics ?? []).map((t) => t.id as string);
 
   const { data: secs } = topicIds.length
-    ? await svc.from("section_stats").select("topic_id, type, duration_minutes, class_no, has_notes").eq("is_published", true).in("topic_id", topicIds)
-    : { data: [] as { topic_id: string; type: string; duration_minutes: string | null; class_no: string | null; has_notes: boolean | null }[] };
+    ? await svc.from("section_stats").select("section_id, topic_id, type, duration_minutes, class_no, has_notes").eq("is_published", true).in("topic_id", topicIds)
+    : { data: [] as { section_id: string; topic_id: string; type: string; duration_minutes: string | null; class_no: string | null; has_notes: boolean | null }[] };
 
-  // Per-topic classes + minutes; subject-wide totals for the chips.
+  // Item titles for the shop-window display (small columns only — NEVER config).
+  const secIds = (secs ?? []).map((r) => r.section_id as string);
+  const { data: secTitles } = secIds.length
+    ? await svc.from("sections").select("id, title, order_index").in("id", secIds)
+    : { data: [] as { id: string; title: string; order_index: number | null }[] };
+  const titleBySec = new Map((secTitles ?? []).map((r) => [r.id as string, { title: r.title as string, order: Number(r.order_index) || 0 }]));
+
+  // Per-topic classes + minutes; subject-wide totals for the chips; and the
+  // full item list per chapter — the "shop window" a visitor can browse.
+  type Item = { id: string; type: string; title: string; classNo: string; mins: number; order: number };
   const tClasses = new Map<string, number>(), tMins = new Map<string, number>();
+  const tItems = new Map<string, Item[]>();
   let classes = 0, minutes = 0, revisions = 0, tests = 0, notes = 0;
   for (const r of secs ?? []) {
     const tid = r.topic_id as string;
     const d = Number(r.duration_minutes) || 0;
+    const meta = titleBySec.get(r.section_id as string);
+    const arr = tItems.get(tid) ?? [];
+    arr.push({ id: r.section_id as string, type: r.type as string, title: meta?.title ?? "", classNo: String(r.class_no ?? ""), mins: d, order: meta?.order ?? 0 });
+    tItems.set(tid, arr);
     if (r.type === "full_class_video") {
       tMins.set(tid, (tMins.get(tid) ?? 0) + d);
       minutes += d;
@@ -70,6 +84,15 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
     else if (r.type === "mcq_test" || r.type === "subjective_test") tests++;
     if (r.type === "pdf" || r.has_notes) notes++;
   }
+  for (const arr of tItems.values()) arr.sort((a, b) => (a.order - b.order) || a.title.localeCompare(b.title));
+  const ITEM_ICON: Record<string, string> = {
+    full_class_video: "🎬", revision_video: "🔁", mcq_test: "🧠", subjective_test: "✍️",
+    pdf: "📝", live_class: "📡", case_set: "🧩",
+  };
+  const ITEM_LABEL: Record<string, string> = {
+    full_class_video: "Class", revision_video: "Revision video", mcq_test: "MCQ test",
+    subjective_test: "Descriptive test", pdf: "Notes / PDF", live_class: "Live class",
+  };
 
   // Chapter class ranges in display order (Classes 1–22, 23–25, …).
   const range = new Map<string, { start: number; end: number }>();
@@ -165,22 +188,53 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
         </div>
       </div>
 
-      {/* Chapter by chapter */}
+      {/* Chapter by chapter — the full shop window. Every class, note, test and
+          revision is displayed BY NAME; opening any of them asks for login. */}
       {(topics ?? []).length > 0 && (
         <>
-          <h2 style={{ fontSize: "1.2rem", margin: "20px 0 8px" }}>📚 Chapter by chapter</h2>
+          <h2 style={{ fontSize: "1.2rem", margin: "20px 0 4px" }}>📚 Chapter by chapter — see everything inside</h2>
+          <p className="muted" style={{ fontSize: ".84rem", margin: "0 0 8px" }}>
+            Tap a chapter to see every class, note and test it contains. Opening any item needs a free account.
+          </p>
           <div style={{ display: "grid", gap: 8 }}>
             {(topics ?? []).map((t) => {
               const r = range.get(t.id as string);
               const m = tMins.get(t.id as string) ?? 0;
+              const items = tItems.get(t.id as string) ?? [];
               return (
-                <div key={t.id as string} className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <span style={{ fontWeight: 700 }}>{t.title}</span>
-                  <span className="muted" style={{ textAlign: "right", whiteSpace: "nowrap", fontSize: ".85rem" }}>
-                    {r ? (r.start === r.end ? `Class ${r.start}` : `Classes ${r.start}–${r.end}`) : "—"}
-                    {m > 0 && <><br />⏱️ {hrs(m)}</>}
-                  </span>
-                </div>
+                <details key={t.id as string} className="card" style={{ padding: 0, overflow: "hidden" }}>
+                  <summary style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px" }}>
+                    <span style={{ fontWeight: 700 }}>{t.title}</span>
+                    <span className="muted" style={{ textAlign: "right", whiteSpace: "nowrap", fontSize: ".85rem" }}>
+                      {r ? (r.start === r.end ? `Class ${r.start}` : `Classes ${r.start}–${r.end}`) : "—"}
+                      {m > 0 && <> · ⏱️ {hrs(m)}</>}
+                      {" "}▾
+                    </span>
+                  </summary>
+                  {items.length > 0 ? (
+                    <div style={{ borderTop: "1px solid var(--border)", padding: "6px 16px 12px" }}>
+                      {items.map((it) => (
+                        <a
+                          key={it.id}
+                          href={`/login?next=${encodeURIComponent(`/learn/topic/${t.id}`)}`}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px dashed var(--border)", color: "var(--text)", fontSize: ".88rem" }}
+                        >
+                          <span>
+                            {ITEM_ICON[it.type] ?? "📄"}{" "}
+                            {it.type === "full_class_video" && it.classNo ? <strong>Class {it.classNo} — </strong> : null}
+                            {it.title || ITEM_LABEL[it.type] || "Item"}
+                            {it.type !== "full_class_video" && ITEM_LABEL[it.type] ? <span className="muted"> · {ITEM_LABEL[it.type]}</span> : null}
+                          </span>
+                          <span className="muted" style={{ whiteSpace: "nowrap", fontSize: ".8rem" }}>
+                            {it.mins > 0 ? `⏱️ ${it.mins}m · ` : ""}🔒 Login to open
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="muted" style={{ padding: "0 16px 12px", margin: 0, fontSize: ".85rem" }}>Content being uploaded.</p>
+                  )}
+                </details>
               );
             })}
           </div>

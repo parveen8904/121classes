@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../../_components/AdminHero";
+import DeleteButton from "../../_components/DeleteButton";
 import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan } from "../actions";
 import { ADMIN_AREAS } from "@/lib/adminAccess";
 
@@ -124,21 +125,22 @@ export default async function UserDetail(
         </div>
       </details>
 
-      {/* Fresh start: wipes the plan + its progress ticks, like a new student. */}
-      <details style={{ marginTop: 10 }}>
-        <summary className="btn small secondary as-btn">🗓️ Study plan — reset</summary>
-        <div className="form-card" style={{ marginTop: 10 }}>
-          <h3 style={{ marginTop: 0 }}>Reset this student&apos;s study plan</h3>
-          <p className="muted" style={{ fontSize: ".85rem", marginBottom: 8 }}>
-            Deletes their plan, remarks and class-done ticks — the planner starts completely fresh, exactly like a
-            brand-new student. This cannot be undone.
+      {/* Fresh start: wipes the plan + its progress ticks, like a new student.
+          Kept ALWAYS VISIBLE — the founder couldn't find it when collapsed. */}
+      <div className="card" style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <strong>🗓️ Study plan</strong>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "2px 0 0" }}>
+            Reset deletes their plan, remarks and class-done ticks — the planner starts fresh, like a brand-new student.
           </p>
-          <form action={resetStudyPlan}>
-            <input type="hidden" name="id" value={u.id} />
-            <SubmitButton className="btn small" savedLabel="✓ Plan reset">🔄 Reset study plan</SubmitButton>
-          </form>
         </div>
-      </details>
+        <DeleteButton
+          action={resetStudyPlan}
+          id={u.id}
+          label="🔄 Reset study plan"
+          message="Reset this student's study plan? Their plan, remarks and done-ticks will be wiped so they start fresh. This cannot be undone."
+        />
+      </div>
 
       <form action={updateUser} style={{ marginTop: 16 }}>
         <input type="hidden" name="id" value={u.id} />

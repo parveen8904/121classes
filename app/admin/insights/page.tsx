@@ -24,7 +24,7 @@ export default async function InsightsPage() {
 
   // Study-plan adoption: who has built a plan, for which subject, and whether
   // they emailed it to themselves.
-  const { data: planRows } = await svc.from("study_plans").select("user_id, setup, emailed_at, updated_at").not("setup", "is", null);
+  const { data: planRows } = await svc.from("study_plans").select("user_id, setup, emailed_at, downloaded_at, updated_at").not("setup", "is", null);
   const { data: subjTitles } = await svc.from("subjects").select("id, title");
   const subjTitle = new Map((subjTitles ?? []).map((s) => [s.id as string, s.title as string]));
   const planIds = (planRows ?? []).map((p) => p.user_id as string);
@@ -40,10 +40,12 @@ export default async function InsightsPage() {
       subject: subjTitle.get(s.subjectId ?? "") ?? "—",
       examDate: s.examDate ?? "—",
       emailed: !!p.emailed_at,
+      downloaded: !!p.downloaded_at,
       updated: p.updated_at as string | null,
     };
   }).sort((a, b) => (b.updated ?? "").localeCompare(a.updated ?? ""));
   const emailedCount = plans.filter((p) => p.emailed).length;
+  const downloadedCount = plans.filter((p) => p.downloaded).length;
 
   const th = { padding: "6px 8px", textAlign: "left" as const, color: "var(--muted)" };
   const td = { padding: "6px 8px" };
@@ -62,12 +64,12 @@ export default async function InsightsPage() {
       ) : (
         <>
           {/* Study-plan adoption */}
-          <h3 style={{ margin: "22px 0 8px" }}>🗓️ Study plans — {plans.length} student{plans.length === 1 ? "" : "s"} have a plan · {emailedCount} emailed it to themselves</h3>
+          <h3 style={{ margin: "22px 0 8px" }}>🗓️ Study plans — {plans.length} student{plans.length === 1 ? "" : "s"} have a plan · {downloadedCount} downloaded the PDF · {emailedCount} emailed it</h3>
           <div className="card">
             {plans.length > 0 ? (
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".82rem" }}>
-                  <thead><tr><th style={th}>Name</th><th style={th}>Email</th><th style={th}>Subject</th><th style={th}>Exam date</th><th style={th}>Emailed plan?</th></tr></thead>
+                  <thead><tr><th style={th}>Name</th><th style={th}>Email</th><th style={th}>Subject</th><th style={th}>Exam date</th><th style={th}>Downloaded PDF?</th><th style={th}>Emailed plan?</th></tr></thead>
                   <tbody>
                     {plans.slice(0, 100).map((p, i) => (
                       <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
@@ -75,6 +77,7 @@ export default async function InsightsPage() {
                         <td style={td}>{p.email}</td>
                         <td style={td}>{p.subject}</td>
                         <td style={td}>{p.examDate}</td>
+                        <td style={{ ...td, fontWeight: 700 }}>{p.downloaded ? "⬇️ Yes" : "—"}</td>
                         <td style={{ ...td, fontWeight: 700 }}>{p.emailed ? "📧 Yes" : "—"}</td>
                       </tr>
                     ))}

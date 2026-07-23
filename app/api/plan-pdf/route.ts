@@ -23,6 +23,8 @@ export async function GET(req: NextRequest) {
     const plan = generatePlan(input);
     const { renderPlanPdf } = await import("@/lib/planner/pdf");
     const buf = await renderPlanPdf(plan, { subjectTitle: input.subjectTitle, examDate: setup.examDate });
+    // Recorded for the admin report: who downloaded their plan as a PDF.
+    await supabase.from("study_plans").update({ downloaded_at: new Date().toISOString() }).eq("user_id", user.id);
     return new NextResponse(new Uint8Array(buf), {
       headers: {
         "Content-Type": "application/pdf",

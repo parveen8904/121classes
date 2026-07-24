@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import Logo from "@/app/components/Logo";
 import { claimDevice } from "../auth/session-actions";
 import { registerWithVerification, sendPasswordReset, requestLoginHelp } from "../auth/email-actions";
 
@@ -91,11 +90,10 @@ export default function LoginForm() {
 
   return (
     <main>
-      <header className="topbar">
-        <Link href="/"><Logo /></Link>
-      </header>
-
-      <section className="narrow" style={{ paddingTop: 60 }}>
+      {/* No brand header here — the global site header already shows the logo
+          + tagline; a second one directly below it looked duplicated (seen on
+          the iPhone app's login screen). */}
+      <section className="narrow" style={{ paddingTop: 40 }}>
         <div className="card">
           <h1 style={{ fontSize: "1.5rem", marginBottom: 6 }}>
             {mode === "signup" ? "Create your account" : mode === "forgot" ? "Forgot password" : "Log in"}

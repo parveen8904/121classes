@@ -14,7 +14,7 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 export default async function LeadsPage(
-  props: { searchParams: Promise<{ msg?: string; added?: string; students?: string; dupes?: string }> }
+  props: { searchParams: Promise<{ msg?: string; added?: string; students?: string; dupes?: string; level?: string }> }
 ) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
@@ -23,6 +23,29 @@ export default async function LeadsPage(
     svc.from("leads").select("id", { count: "exact", head: true }),
     svc.from("leads").select("id", { count: "exact", head: true }).not("matched_user_id", "is", null),
   ]);
+
+  // Level (Final / Inter) for leads who are students — shown inline and
+  // filterable, so nobody has to open Manage users to know the level.
+  const matchedIds = [...new Set((leads ?? []).map((l) => l.matched_user_id as string | null).filter(Boolean))] as string[];
+  const levelByUser = new Map<string, string>();
+  if (matchedIds.length) {
+    const { data: mc } = await svc.from("my_courses").select("student_id, courses(title)").in("student_id", matchedIds);
+    for (const r of mc ?? []) {
+      const t = ((r as { courses?: { title?: string } | null }).courses?.title ?? "").toLowerCase();
+      const lvl = t.includes("final") ? "Final" : t.includes("inter") ? "Inter" : "";
+      if (!lvl) continue;
+      const cur = levelByUser.get(r.student_id as string);
+      levelByUser.set(r.student_id as string, cur && cur !== lvl ? "Final + Inter" : lvl);
+    }
+  }
+  const levelFilter = searchParams.level ?? "";
+  const leadLevel = (l: { matched_user_id: string | null }) => (l.matched_user_id ? levelByUser.get(l.matched_user_id) ?? "" : "");
+  const shownLeads = (leads ?? []).filter((l) => {
+    if (!levelFilter) return true;
+    const lvl = leadLevel(l as { matched_user_id: string | null });
+    if (levelFilter === "none") return !lvl;
+    return lvl.includes(levelFilter);
+  });
 
   const m = searchParams.msg;
 
@@ -105,12 +128,30 @@ export default async function LeadsPage(
 
       {/* List */}
       <h2 className="admin-section-title" style={{ marginTop: 24 }}>📇 Latest leads {total && total > 200 ? `(showing 200 of ${total})` : ""}</h2>
+      {/* Level filter — see at a glance which course level each contact is. */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+        {[["", "All"], ["Final", "📘 CA Final"], ["Inter", "📗 CA Inter"], ["none", "Not a student"]].map(([v, label]) => (
+          <a
+            key={v}
+            href={v ? `/admin/leads?level=${v}` : "/admin/leads"}
+            className="btn small secondary"
+            style={levelFilter === v ? { background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", borderColor: "transparent" } : undefined}
+          >
+            {label}
+          </a>
+        ))}
+      </div>
       <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-        {(leads ?? []).length === 0 && <div className="card"><p className="muted" style={{ margin: 0 }}>📭 No leads yet — import your first list above.</p></div>}
-        {(leads ?? []).map((l) => (
+        {shownLeads.length === 0 && <div className="card"><p className="muted" style={{ margin: 0 }}>📭 No leads {levelFilter ? "match this filter" : "yet — import your first list above"}.</p></div>}
+        {shownLeads.map((l) => {
+          const lvl = leadLevel(l as { matched_user_id: string | null });
+          return (
           <div className="list-row" key={l.id}>
             <div>
-              <span className="row-title">{l.name || l.phone || l.email}</span>
+              <span className="row-title">
+                {l.name || l.phone || l.email}
+                {lvl && <span style={{ background: "var(--bg-soft)", border: "1px solid var(--accent)", color: "var(--accent)", borderRadius: 999, padding: "1px 10px", fontSize: ".74rem", fontWeight: 700, marginLeft: 8, verticalAlign: "middle" }}>📘 {lvl}</span>}
+              </span>
               <p className="row-sub">
                 {l.phone ? `📞 ${l.phone}` : ""}{l.phone && l.email ? " · " : ""}{l.email ? `✉️ ${l.email}` : ""}
                 {" · "}{SOURCE_LABEL[l.source] ?? l.source}
@@ -121,7 +162,8 @@ export default async function LeadsPage(
             </div>
             <DeleteButton action={deleteLead} id={l.id} message="Remove this lead?" />
           </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

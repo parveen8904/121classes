@@ -107,7 +107,6 @@ export default async function Home() {
   // Homepage stays light: only the top ~50 rankers here (5 full rows of 9);
   // the dedicated /results page carries everything.
   const topResults = rankedResults.slice(0, 45);
-  const moreRanked = Math.max(0, rankedResults.length - topResults.length);
   // Live-batch products (a chapter taught LIVE, sold standalone) — highlighted
   // in a top banner while their schedule has upcoming sessions.
   const { data: batchRows } = await supabase
@@ -395,9 +394,8 @@ export default async function Home() {
             ))}
           </div>
           <div style={{ textAlign: "center", marginTop: 26 }}>
-            <a className="btn" href="/results">
-              {moreRanked > 0 ? `See all our rankers (${moreRanked}+ more) →` : "See all results →"}
-            </a>
+            {/* No counts disclosed — just the invitation. */}
+            <a className="btn" href="/results">See all our rankers →</a>
           </div>
         </section>
       )}

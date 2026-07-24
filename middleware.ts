@@ -88,10 +88,23 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // 1) Single active session per device kind. Only enforced once a session has
-    //    claimed a device (has the dsid cookie); older/grandfathered sessions pass.
+    // One profile read serves both checks below (password + role).
+    let prof: { has_password: boolean | null; role: string | null } | null = null;
+    try {
+      const profRes = await withTimeout(
+        supabase.from("profiles").select("has_password, role").eq("id", user.id).maybeSingle(),
+        3000,
+      );
+      prof = profRes === TIMEOUT ? null : (profRes.data as typeof prof);
+    } catch {
+      /* fail-open */
+    }
+    const isStaff = prof?.role === "admin" || prof?.role === "faculty";
+
+    // 1) Single active session per device kind — STUDENTS only. Staff test on
+    //    many devices/browsers; the rule kept logging the founder out.
     const dsid = request.cookies.get("dsid")?.value;
-    if (dsid) {
+    if (dsid && !isStaff) {
       try {
         const kind = deviceKind(request.headers.get("user-agent") || "");
         const dsRes = await withTimeout(
@@ -112,21 +125,12 @@ export async function middleware(request: NextRequest) {
     }
 
     // 2) Mandatory password: first-timers must set one before using the portal.
-    try {
-      const profRes = await withTimeout(
-        supabase.from("profiles").select("has_password").eq("id", user.id).maybeSingle(),
-        3000,
-      );
-      const prof = profRes === TIMEOUT ? null : profRes.data;
-      if (prof && prof.has_password === false) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/auth/set-password";
-        url.search = "";
-        url.searchParams.set("next", path);
-        return NextResponse.redirect(url);
-      }
-    } catch {
-      /* fail-open */
+    if (prof && prof.has_password === false) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/set-password";
+      url.search = "";
+      url.searchParams.set("next", path);
+      return NextResponse.redirect(url);
     }
   }
 

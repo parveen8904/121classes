@@ -49,13 +49,28 @@ export async function GET(req: NextRequest) {
     .order("created_at")
     .limit(budget);
 
-  // Queue dry → REFILL with evergreen topics, then continue writing.
+  // Queue dry → REFILL, NEWS-FIRST (founder: articles must cover accounting
+  // topics IN THE NEWS, not only syllabus explainers). The hourly news feed
+  // already stores fresh accounting headlines; turn those into article topics,
+  // then top up with evergreen study topics for volume.
   if (!pending?.length) {
     const { data: existingT } = await svc
       .from("article_topics").select("topic").order("created_at", { ascending: false }).limit(250);
-    const { proposeEvergreenTopics } = await import("@/lib/ai");
-    const ideas = await proposeEvergreenTopics((existingT ?? []).map((r) => r.topic as string));
-    if (ideas?.length) {
+    const existing = (existingT ?? []).map((r) => r.topic as string);
+    const { proposeTrendingTopics, proposeEvergreenTopics } = await import("@/lib/ai");
+
+    // Fresh accounting-world headlines pulled by the hourly feed (last 14 days).
+    const { data: newsRows } = await svc
+      .from("announcements").select("title")
+      .gte("created_at", new Date(Date.now() - 14 * 864e5).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(60);
+    const headlines = (newsRows ?? []).map((r) => r.title as string).filter(Boolean);
+
+    const newsIdeas = headlines.length ? (await proposeTrendingTopics(headlines, existing)) ?? [] : [];
+    const evergreen = (await proposeEvergreenTopics([...existing, ...newsIdeas.map((i) => i.topic)])) ?? [];
+    const ideas = [...newsIdeas, ...evergreen].slice(0, 15);
+    if (ideas.length) {
       await svc.from("article_topics").insert(ideas.map((i) => ({ topic: i.topic, category: i.category, keywords: i.keywords, status: "pending" })));
       ({ data: pending } = await svc
         .from("article_topics").select("id, topic, category, keywords")

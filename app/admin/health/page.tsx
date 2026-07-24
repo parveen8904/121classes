@@ -79,12 +79,18 @@ type Visitors = {
 
 export default async function HealthPage() {
   const svc = createServiceClient();
-  const [{ data, error }, { data: vData }] = await Promise.all([
+  const dayStartIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  dayStartIST.setHours(0, 0, 0, 0);
+  const [{ data, error }, { data: vData }, { data: peakToday }, { data: peak7d }] = await Promise.all([
     svc.rpc("admin_server_health"),
     svc.rpc("admin_visitor_report"),
+    // Peak connections — the DB samples itself every 5 minutes (pg_cron).
+    svc.from("conn_samples").select("at, total, active").gte("at", dayStartIST.toISOString()).order("total", { ascending: false }).order("at", { ascending: false }).limit(1).maybeSingle(),
+    svc.from("conn_samples").select("at, total, active").gte("at", new Date(Date.now() - 7 * 864e5).toISOString()).order("total", { ascending: false }).order("at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   const h = data as Health | null;
   const v = vData as Visitors | null;
+  const peakAt = (s: string) => new Date(s).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 1000 }}>
@@ -124,6 +130,11 @@ export default async function HealthPage() {
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
             <Stat label="Students active (approx.)" value={String(h.active_students_1h)} sub={`${h.active_students_20m} in the last 20 min`} />
             <Stat label="Database connections" value={`${h.connections.total} / ${h.connections.max}`} sub={`${h.connections.active} working · ${h.connections.idle} idle`} />
+            <Stat
+              label="Peak connections (today)"
+              value={peakToday ? `${peakToday.total} / ${h.connections.max}` : "—"}
+              sub={`${peakToday ? `at ${peakAt(peakToday.at as string)}` : "sampling every 5 min"}${peak7d ? ` · 7-day peak ${peak7d.total}` : ""}`}
+            />
             <Stat label="Queries running now" value={String(h.queries.running)} sub={h.queries.waiting_on_lock ? `${h.queries.waiting_on_lock} waiting on a lock` : "none waiting"} />
             <Stat label="Longest query now" value={`${h.queries.longest_seconds}s`} sub={h.queries.longest_seconds >= 5 ? "⚠️ something is slow" : "healthy"} />
             <Stat label="Memory cache hit" value={h.cache_hit_ratio != null ? `${h.cache_hit_ratio}%` : "—"} sub={(h.cache_hit_ratio ?? 100) >= 99 ? "excellent" : "watch this"} />

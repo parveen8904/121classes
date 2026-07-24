@@ -89,13 +89,14 @@ export async function middleware(request: NextRequest) {
     }
 
     // One profile read serves both checks below (password + role).
-    let prof: { has_password: boolean | null; role: string | null } | null = null;
+    type Prof = { has_password: boolean | null; role: string | null };
+    let prof: Prof | null = null;
     try {
       const profRes = await withTimeout(
         supabase.from("profiles").select("has_password, role").eq("id", user.id).maybeSingle(),
         3000,
       );
-      prof = profRes === TIMEOUT ? null : (profRes.data as typeof prof);
+      prof = profRes === TIMEOUT ? null : ((profRes.data ?? null) as Prof | null);
     } catch {
       /* fail-open */
     }

@@ -19,6 +19,11 @@ export async function postToGroup(input: { subjectId: string; text: string }): P
 
   const svc = createServiceClient();
 
+  // Discuss is STAFF-ONLY (founder's call) — enforced here too, not just on
+  // the page, so students can't post via a direct call.
+  const { data: gate } = await svc.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (gate?.role !== "admin" && gate?.role !== "faculty") return { ok: false, error: "Group discussion is available to faculty only — please use Community." };
+
   // Student must have opted into this subject.
   const { data: opted } = await supabase.from("my_subjects").select("subject_id").eq("student_id", user.id).eq("subject_id", input.subjectId).maybeSingle();
   if (!opted) return { ok: false, error: "You're not in this group." };

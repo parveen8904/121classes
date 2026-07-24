@@ -11,7 +11,9 @@ export default async function DiscussPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/discuss");
 
-  const { data: prof } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+  // Discuss is STAFF-ONLY (founder's call): students use Community instead.
+  const { data: prof } = await supabase.from("profiles").select("full_name, role").eq("id", user.id).maybeSingle();
+  if (prof?.role !== "admin" && prof?.role !== "faculty") redirect("/community");
   const { data: mine } = await supabase.from("my_subjects").select("subject_id").eq("student_id", user.id);
   const ids = (mine ?? []).map((r) => r.subject_id as string);
 

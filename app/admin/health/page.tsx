@@ -21,11 +21,13 @@ type Health = {
 function verdict(h: Health): { light: string; label: string; note: string; color: string; bg: string } {
   const c = h.connections;
   const q = h.queries;
+  // Idle pooler connections are normal plumbing (Supabase keeps ~20-30 open) —
+  // they must NOT read as "busy". Only high totals or real work trigger colors.
   const connPct = c.max ? c.total / c.max : 0;
   const red =
-    connPct >= 0.85 || q.longest_seconds >= 30 || q.waiting_on_lock >= 3;
+    connPct >= 0.92 || q.longest_seconds >= 30 || q.waiting_on_lock >= 3;
   const amber =
-    connPct >= 0.6 || q.running >= 10 || q.longest_seconds >= 8 || (h.cache_hit_ratio ?? 100) < 95;
+    connPct >= 0.8 || q.running >= 10 || q.longest_seconds >= 8 || (h.cache_hit_ratio ?? 100) < 95;
   if (red)
     return {
       light: "🔴",

@@ -26,11 +26,14 @@ export default async function UsersPage(
 
   const { data: users } = await query;
 
-  // Level (Final / Inter / both) per user — from their course shelf.
+  // Level (Final / Inter / both) per user — from their course shelf. MUST use
+  // the service client: my_courses RLS is own-rows-only, so the admin's user
+  // client silently reads nothing for other students.
   const levelByUser = new Map<string, string>();
   const ids = (users ?? []).map((u) => u.id as string);
   if (ids.length) {
-    const { data: mc } = await supabase
+    const { createServiceClient } = await import("@/lib/supabase/service");
+    const { data: mc } = await createServiceClient()
       .from("my_courses")
       .select("student_id, courses(title)")
       .in("student_id", ids);

@@ -39,8 +39,11 @@ export default async function UserDetail(
     .maybeSingle();
   if (!u) notFound();
 
-  // Level (CA Final / CA Inter) — from the student's course shelf.
-  const { data: myCourseRows } = await supabase
+  // Level (CA Final / CA Inter) — from the student's course shelf. Service
+  // client: my_courses RLS is own-rows-only, so the admin's user client
+  // reads nothing for other students.
+  const { createServiceClient: svcClient } = await import("@/lib/supabase/service");
+  const { data: myCourseRows } = await svcClient()
     .from("my_courses")
     .select("courses(title)")
     .eq("student_id", u.id);

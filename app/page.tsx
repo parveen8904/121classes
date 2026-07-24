@@ -198,6 +198,12 @@ export default async function Home() {
   // converted to embeds; any other URL is used as the iframe src directly.
   // When nothing is set, it SELF-UPDATES to the channel's newest video, so the
   // homepage always shows the latest content without any manual step.
+  // Homepage YouTube tiles: the admin's HAND-PICKED selection (max 3, chosen
+  // on Admin → Marketing); if none picked, the latest 3 show automatically.
+  let curatedVideos: { id: string; title: string }[] = [];
+  try { curatedVideos = JSON.parse(siteImg.get("homepage_yt_videos") || "[]"); } catch { /* fall back */ }
+  const homeVideos = (curatedVideos.length ? curatedVideos : ytVideos).slice(0, 3);
+
   const rawVideo = (siteImg.get("intro_video_url") || "").trim();
   const yt = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/.exec(rawVideo);
   const latestYt = (ytVideos ?? [])[0]?.id ? `https://www.youtube.com/embed/${(ytVideos ?? [])[0].id}` : "";
@@ -441,15 +447,15 @@ export default async function Home() {
             {ytOverview ? <> · <strong>{ytOverview.subscribers >= 100000 ? `${Math.round(ytOverview.subscribers / 1000)}K` : ytOverview.subscribers.toLocaleString("en-IN")}</strong> subscribers</> : null}
           </p>
         </div>
-        {ytVideos.length > 0 ? (
+        {homeVideos.length > 0 ? (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12, maxWidth: 1140, margin: "0 auto" }}>
-            {ytVideos.map((v) => (
+            {homeVideos.map((v) => (
               <a key={v.id} href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="tile" style={{ padding: 0, overflow: "hidden", color: "var(--text)", textAlign: "left" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`} alt={v.title} loading="lazy" decoding="async" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
                 <div style={{ padding: "10px 12px 12px" }}>
+                  {/* No view counts (founder's call) — just the title. */}
                   <div style={{ fontWeight: 700, fontSize: ".88rem", lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.title}</div>
-                  <div className="muted" style={{ fontSize: ".74rem", marginTop: 4 }}>▶ {Number(v.views ?? 0).toLocaleString("en-IN")} views</div>
                 </div>
               </a>
             ))}

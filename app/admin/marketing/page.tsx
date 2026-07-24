@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
+import SubmitButton from "@/app/components/SubmitButton";
+import { saveHomepageVideos } from "./actions";
 import { getChannelOverview } from "@/lib/youtubeStats";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +67,13 @@ export default async function MarketingOverviewPage() {
     .eq("status", "pending");
   const yt = await getChannelOverview().catch(() => null);
 
+  // All recent channel videos + the admin's current homepage selection.
+  const { getRecentVideos } = await import("@/lib/youtubeStats");
+  const allVideos = yt?.uploadsPlaylist ? await getRecentVideos(yt.uploadsPlaylist, 24).catch(() => []) : [];
+  const { data: selRow } = await svc.from("site_settings").select("value").eq("key", "homepage_yt_videos").maybeSingle();
+  let selectedIds: string[] = [];
+  try { selectedIds = (JSON.parse((selRow?.value as string) || "[]") as { id: string }[]).map((v) => v.id); } catch { /* fresh */ }
+
   // Funnel conversion (30 days).
   const visitToLead = r.visits_month ? ((r.leads_total ? r.leads_week : 0) / r.visits_week * 100) : 0;
 
@@ -76,6 +85,36 @@ export default async function MarketingOverviewPage() {
         subtitle="Every number that matters in one place — leads, signups, and which platform actually brings students. Check it once a week. 📈"
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {/* Homepage YouTube curation — the homepage shows ONLY what's ticked here. */}
+      <h2 className="admin-section-title" style={{ marginTop: 20 }}>🎬 Homepage YouTube videos</h2>
+      <div className="card" style={{ marginTop: 10 }}>
+        <p className="muted" style={{ fontSize: ".84rem", marginTop: 0 }}>
+          Tick <strong>up to 3</strong> videos — only these appear on the homepage (no view counts shown).
+          If none are ticked, the latest 3 from the channel show automatically. Ticking more than 3 keeps the first 3.
+        </p>
+        {allVideos.length > 0 ? (
+          <form action={saveHomepageVideos}>
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
+              {allVideos.map((v) => (
+                <label key={v.id} style={{ border: selectedIds.includes(v.id) ? "2px solid var(--accent)" : "1px solid var(--border)", borderRadius: 10, overflow: "hidden", cursor: "pointer", display: "block" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`} alt={v.title} loading="lazy" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 10px" }}>
+                    <input type="checkbox" name="vid" value={`${v.id}:::${v.title}`} defaultChecked={selectedIds.includes(v.id)} style={{ marginTop: 2 }} />
+                    <span style={{ fontSize: ".8rem", fontWeight: 600, lineHeight: 1.25 }}>{v.title}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <SubmitButton className="btn" savedLabel="✓ Homepage videos updated" style={{ marginTop: 12 }}>
+              Save homepage videos
+            </SubmitButton>
+          </form>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>Couldn&apos;t load the channel&apos;s videos right now — refresh in a minute.</p>
+        )}
+      </div>
 
       {/* Funnel */}
       <h2 className="admin-section-title" style={{ marginTop: 20 }}>🔽 This week's funnel</h2>

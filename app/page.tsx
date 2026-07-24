@@ -164,16 +164,21 @@ export default async function Home() {
     ? await getRecentVideos(ytOverview.uploadsPlaylist, 6).catch(() => [])
     : [];
 
-  // Three RUNNING counters (founder's choice), each a live fact from the DB:
-  // enrolled students, live job openings, recorded classes on the portal.
-  const [{ count: enrolledCount }, { count: classCount }] = await Promise.all([
-    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "student"),
-    supabase.from("section_stats").select("section_id", { count: "exact", head: true }).eq("type", "full_class_video").eq("is_published", true),
-  ]);
+  // Three RUNNING counters (founder's choice), each self-growing:
+  // 1) enrolled students (every signup), 2) RANKS — the founder's actual
+  // all-time tally, 3) live job openings.
+  const { count: enrolledCount } = await supabase
+    .from("profiles").select("id", { count: "exact", head: true }).eq("role", "student");
+  // Ranks: 4,761 is the REAL all-time count (teaching since 1990), frozen as
+  // the baseline on 24 Jul 2026 when the site held 147 published AIR results.
+  // Every NEW ranked result published after that grows the counter by itself.
+  const RANKS_ALL_TIME_BASELINE = 4761;
+  const RANKED_RESULTS_AT_BASELINE = 147;
+  const ranksNow = RANKS_ALL_TIME_BASELINE + Math.max(0, rankedResults.length - RANKED_RESULTS_AT_BASELINE);
   const heroStats: { n?: number; suffix?: string; text?: string; label: string }[] = [
     { n: enrolledCount ?? 0, suffix: "+", label: "students enrolled" },
+    { n: ranksNow, suffix: "", label: "ranks achieved by our students" },
     { n: openingCount ?? 0, suffix: "+", label: "live job openings" },
-    { n: classCount ?? 0, suffix: "+", label: "recorded classes on the portal" },
   ].filter((s) => (s.n ?? 0) > 0);
   // Cached page → no per-request auth. Logged-in visitors simply use the same
   // email "Notify me" flow as everyone else on the public homepage.

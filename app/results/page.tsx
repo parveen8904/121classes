@@ -1,6 +1,5 @@
 import { tryServiceClient } from "@/lib/supabase/service";
 import { lightImg } from "@/lib/img";
-import CountUp from "@/app/components/CountUp";
 
 // Public marketing page — cache it and refresh every 5 minutes.
 export const revalidate = 300;
@@ -76,7 +75,8 @@ export default async function ResultsPage() {
         <p style={{ maxWidth: 620, margin: "0 auto", fontSize: "1.02rem", color: "rgba(255,255,255,.95)" }}>
           Real rank-holders mentored by <strong>CA Parveen Sharma &amp; team</strong> — with disciplined plans, doubt-solving and revision that actually work. 🎯
         </p>
-        {results.length > 0 && <div style={{ fontSize: "2rem", fontWeight: 800, marginTop: 16 }}><CountUp value={results.length} suffix="+" /> <span style={{ fontSize: ".9rem", fontWeight: 500, opacity: .92 }}>success stories</span></div>}
+        {/* No count disclosed (founder's call) — just the scale. */}
+        {results.length > 0 && <div style={{ fontSize: "1.6rem", fontWeight: 800, marginTop: 16 }}>Thousands of success stories</div>}
         <div style={{ marginTop: 18 }}>
           <a className="btn" href="/awards" style={{ background: "#fff", color: "#0d9488", fontWeight: 800 }}>🎖️ Studied with us? Tell us your result &amp; get an award →</a>
         </div>

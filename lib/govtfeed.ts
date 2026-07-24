@@ -11,12 +11,22 @@ import { ANNOUNCEMENT_KIND_LABEL } from "@/lib/announcements";
 
 export type FeedItem = { title: string; link: string; body: string; kind: string };
 
-function decode(s: string): string {
+function unescapeEntities(s: string): string {
   return s
+    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))   // &#160; etc.
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&amp;/g, "&"); // LAST — so "&amp;nbsp;" resolves next pass, not to raw text
+}
+
+function decode(s: string): string {
+  const stripped = s
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">") // un-escape any escaped tags first…
-    .replace(/<[^>]+>/g, " ")                    // …then strip ALL tags (real + previously-escaped)
-    .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/<[^>]+>/g, " ");                   // …then strip ALL tags (real + previously-escaped)
+  // Google News DOUBLE-encodes ("&amp;nbsp;") — one pass left literal "&nbsp;"
+  // on the amendments page. Two passes resolve nested encodings.
+  return unescapeEntities(unescapeEntities(stripped))
     .replace(/https?:\/\/\S+/g, " ")             // drop stray raw URLs (Google-News blobs)
     .replace(/\s+/g, " ")
     .trim();

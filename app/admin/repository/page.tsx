@@ -96,7 +96,8 @@ export default async function RepositoryPage() {
         )}
         <p className="muted" style={{ fontSize: ".8rem", marginTop: 10, marginBottom: 0 }}>
           ✨ <strong>Fully automatic:</strong> whatever you upload for students anywhere — class videos, handwritten notes,
-          book/ICAI PDFs, amendments, tests — is turned into AI teaching content by itself, every hour. No separate upload here.
+          book/ICAI PDFs, amendments, tests — is turned into AI teaching content automatically <strong>every night
+          (01:30–05:30 IST)</strong>, or immediately when you press Process now. No separate upload here.
           {cov.notes_have - cov.notes_ocr > 0 ? ` Still processing: ${cov.notes_have - cov.notes_ocr} handwritten notes.` : " Everything is ingested."}
         </p>
         {cov.digest < cov.transcript && (

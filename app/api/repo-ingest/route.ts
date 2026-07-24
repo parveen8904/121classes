@@ -10,7 +10,10 @@ export const maxDuration = 300;
 // re-triggers itself until nothing is left — so one "Process now" click drains
 // the whole queue hands-free instead of timing out on a giant synchronous run.
 // Also runs on the overnight cron as a safety net.
-const BATCH = { digests: 8, pdfs: 6, notes: 3 };
+// Sized to finish inside the 300s function budget (a digest ≈ 5–15s of AI
+// time, a handwritten-notes OCR ≈ 20–60s). The overnight cron calls this
+// every 10 minutes, so the backlog drains in nights, not months.
+const BATCH = { digests: 15, pdfs: 8, notes: 4 };
 
 export async function GET(req: NextRequest) {
   const secret = await getSecret("CRON_SECRET");
@@ -34,12 +37,15 @@ export async function GET(req: NextRequest) {
 
   if (progress > 0) revalidatePath("/admin/repository");
 
-  // Made progress and more remains → chain the next batch in the background.
+  // Made progress and more remains → chain the next batch. Wait long enough
+  // for the next invocation to actually START (the old 1.5s abort often killed
+  // it before it began — the reason one "Process now" click barely moved the
+  // backlog); 8s is plenty for the handoff, then we let go.
   if (progress > 0 && remaining > 0) {
     try {
       const url = new URL(req.url);
       const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), 1500);
+      const timer = setTimeout(() => ac.abort(), 8000);
       await fetch(`${url.origin}/api/repo-ingest${secret ? `?key=${encodeURIComponent(secret)}` : ""}`, { signal: ac.signal, cache: "no-store" }).catch(() => null);
       clearTimeout(timer);
     } catch { /* overnight cron continues the queue */ }

@@ -28,8 +28,10 @@ export async function runIngestNow() {
     const proto = h.get("x-forwarded-proto") ?? "https";
     const secret = await getSecret("CRON_SECRET");
     if (host) {
+      // 8s handoff window: the old 1.5s abort frequently killed the ingest
+      // request before it even started — clicks looked like they did nothing.
       const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), 1500);
+      const timer = setTimeout(() => ac.abort(), 8000);
       await fetch(`${proto}://${host}/api/repo-ingest${secret ? `?key=${encodeURIComponent(secret)}` : ""}`, { signal: ac.signal, cache: "no-store" }).catch(() => null);
       clearTimeout(timer);
     }

@@ -16,6 +16,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/repo-ingest",
+      "schedule": "*/10 20-23 * * *"
+    },
+    {
       "path": "/api/cron/offline-drain",
       "schedule": "*/5 * * * *"
     },

@@ -83,13 +83,12 @@ export async function GET(req: NextRequest) {
     try { offline = await prepareNextPending(120_000); } catch { /* never block the feed */ }
     // Keep class durations true to Bunny's encoded length. No-op once synced.
     try { durations = await syncClassDurations(120); } catch { /* never block the feed */ }
-    // Pre-digest transcripts into clean saved notes so doubts answer cheaply.
-    // Bigger batches: this only runs in the quiet overnight window (3 runs), so
-    // the backlog (e.g. 269 handwritten notes) clears in nights, not months.
-    // Haiku is cheap + fast (founder: process the repository tonight regardless
-    // of cost), so digest a big batch each off-peak run — the backlog (e.g. 156
-    // FR transcripts) clears in one night. Ingest is resumable if a run is cut short.
-    try { const { ingestPending } = await import("@/lib/knowledge"); knowledge = await ingestPending({ digests: 60, pdfs: 30, notes: 15 }); } catch { /* never block the feed */ }
+    // AI-repository ingest has MOVED to its own overnight cron
+    // (/api/repo-ingest every 10 min, 01:30–05:30 IST). Running it here too
+    // never worked: prepareNextPending + syncClassDurations ate most of this
+    // function's 300s budget first, so ingest was killed after a few items —
+    // the backlog crawled for weeks while this page claimed "every hour".
+    knowledge = "moved-to-repo-ingest-cron";
     // Keep the visitor log lean: 60 days is plenty for the admin report.
     try {
       const svc = createServiceClient();

@@ -164,13 +164,17 @@ export default async function Home() {
     ? await getRecentVideos(ytOverview.uploadsPlaylist, 6).catch(() => [])
     : [];
 
-  // `text` renders as the big value instead of an animated number — used where
-  // a word says it better than a figure (founder: never an exact count here).
+  // Three RUNNING counters (founder's choice), each a live fact from the DB:
+  // enrolled students, live job openings, recorded classes on the portal.
+  const [{ count: enrolledCount }, { count: classCount }] = await Promise.all([
+    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "student"),
+    supabase.from("section_stats").select("section_id", { count: "exact", head: true }).eq("type", "full_class_video").eq("is_published", true),
+  ]);
   const heroStats: { n?: number; suffix?: string; text?: string; label: string }[] = [
-    { n: taught, suffix: "+", label: "students taught" },
-    { text: "Thousands", label: "of success stories since 1990" },
+    { n: enrolledCount ?? 0, suffix: "+", label: "students enrolled" },
     { n: openingCount ?? 0, suffix: "+", label: "live job openings" },
-  ].filter((s) => s.text || (s.n ?? 0) > 0);
+    { n: classCount ?? 0, suffix: "+", label: "recorded classes on the portal" },
+  ].filter((s) => (s.n ?? 0) > 0);
   // Cached page → no per-request auth. Logged-in visitors simply use the same
   // email "Notify me" flow as everyone else on the public homepage.
   const signedIn = false;

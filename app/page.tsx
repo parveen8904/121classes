@@ -166,7 +166,9 @@ export default async function Home() {
 
   const heroStats = [
     { n: taught, suffix: "+", label: "students taught" },
-    { n: resultCount ?? 0, suffix: "+", label: "success stories" },
+    // Not the count of results uploaded to the site (that read "148+") — the
+    // real history: teaching since 1990. Counter lands as "1000s".
+    { n: 1000, suffix: "s", label: "of success stories since 1990" },
     { n: openingCount ?? 0, suffix: "+", label: "live job openings" },
   ].filter((s) => s.n > 0);
   // Cached page → no per-request auth. Logged-in visitors simply use the same

@@ -28,7 +28,7 @@ export async function getRepositoryContext(
   const { data: items } = await itemsQ;
 
   const itemRows = (items ?? []).filter((r) => {
-    if (!r.content) return false;
+    if (!r.content || r.content === "__unreadable__") return false;
     if (r.valid_from && r.valid_from > today) return false;
     if (r.valid_to && r.valid_to < today) return false;
     return true;

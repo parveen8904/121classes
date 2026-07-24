@@ -14,10 +14,10 @@ type CapGlobal = {
 // 3) desktop → classic file download.
 // The server stamps the student's identity on every page (dl=1).
 export default function NotesActions({ fileUrl, title }: { fileUrl: string; title: string }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"share" | "download" | null>(null);
 
-  async function saveShare() {
-    setBusy(true);
+  async function saveShare(mode: "share" | "download") {
+    setBusy(mode);
     try {
       const res = await fetch(`${fileUrl}&dl=1`);
       if (!res.ok) throw new Error("download failed");
@@ -27,7 +27,8 @@ export default function NotesActions({ fileUrl, title }: { fileUrl: string; titl
       const cap = (window as unknown as { Capacitor?: CapGlobal }).Capacitor;
       const share = cap?.Plugins?.OfflineClasses?.shareFile;
       if (cap?.isNativePlatform?.() && share) {
-        // Native app: hand the bytes to the OS share sheet.
+        // Native app: the OS share sheet is the only save path (its "Save to
+        // Files" option is the download) — used for BOTH buttons.
         const bytes = new Uint8Array(await blob.arrayBuffer());
         let bin = "";
         const CH = 0x8000;
@@ -36,12 +37,16 @@ export default function NotesActions({ fileUrl, title }: { fileUrl: string; titl
         return;
       }
 
-      const file = new File([blob], name, { type: "application/pdf" });
-      const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
-      if (nav.share && nav.canShare?.({ files: [file] })) {
-        await nav.share({ files: [file], title: name });
-        return;
+      // Browser + "share" → the share sheet when available.
+      if (mode === "share") {
+        const file = new File([blob], name, { type: "application/pdf" });
+        const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
+        if (nav.share && nav.canShare?.({ files: [file] })) {
+          await nav.share({ files: [file], title: name });
+          return;
+        }
       }
+      // "download" (or share unsupported) → direct file download to the device.
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -57,13 +62,18 @@ export default function NotesActions({ fileUrl, title }: { fileUrl: string; titl
         alert("Could not prepare the notes — please check your internet and try again.");
       }
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   return (
-    <button className="btn small" type="button" disabled={busy} onClick={saveShare}>
-      {busy ? "⏳ Preparing…" : "📤 Save / Share / Print"}
-    </button>
+    <span style={{ display: "inline-flex", gap: 6 }}>
+      <button className="btn small" type="button" disabled={busy !== null} onClick={() => saveShare("download")}>
+        {busy === "download" ? "⏳ Preparing…" : "⬇️ Download"}
+      </button>
+      <button className="btn small secondary" type="button" disabled={busy !== null} onClick={() => saveShare("share")}>
+        {busy === "share" ? "⏳ Preparing…" : "📤 Share / Print"}
+      </button>
+    </span>
   );
 }

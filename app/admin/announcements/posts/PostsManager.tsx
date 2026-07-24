@@ -142,11 +142,12 @@ export default function PostsManager({ posts, actions }: { posts: Post[]; action
                     <label className="remember" style={{ marginTop: 0 }}>
                       <input type="checkbox" name="is_published" defaultChecked={a.is_published} /> Published
                     </label>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <SubmitButton className="btn small" closeDetails>Save changes</SubmitButton>
-                      <DeleteButton action={actions.deleteAnnouncement} id={a.id} label="🗑️ Remove" message="Remove this post? This cannot be undone." />
-                    </div>
+                    <SubmitButton className="btn small" closeDetails>Save changes</SubmitButton>
                   </form>
+                  {/* Outside the edit form — nested forms are dropped by the browser. */}
+                  <div style={{ marginTop: 8 }}>
+                    <DeleteButton action={actions.deleteAnnouncement} id={a.id} label="🗑️ Remove" message="Remove this post? This cannot be undone." />
+                  </div>
 
                   <form action={actions.broadcast} style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
                     <input type="hidden" name="id" value={a.id} />

@@ -83,11 +83,12 @@ export default async function FacultyPage() {
                 </div>
                 <label>Bio</label>
                 <textarea name="bio" rows={3} defaultValue={f.bio ?? ""} />
-                <div style={{ display: "flex", gap: 8 }}>
-                  <SubmitButton className="btn small" closeDetails>Save</SubmitButton>
-                  <DeleteButton action={deleteFaculty} id={f.id} message="Delete this faculty member?" />
-                </div>
+                <SubmitButton className="btn small" closeDetails>Save</SubmitButton>
               </form>
+              {/* Outside the edit form — nested forms are dropped by the browser. */}
+              <div style={{ marginTop: 8 }}>
+                <DeleteButton action={deleteFaculty} id={f.id} message="Delete this faculty member?" />
+              </div>
             </details>
           ))
         ) : (

@@ -111,13 +111,16 @@ export default async function ResultsAdminPage() {
                 <label className="remember" style={{ marginTop: 0 }}>
                   <input type="checkbox" name="is_published" defaultChecked={r.is_published} /> Published
                 </label>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <SubmitButton className="btn small" savedLabel="✓ Result updated">
-                    Save
-                  </SubmitButton>
-                  <DeleteButton action={deleteResult} id={r.id} message="Delete this result?" />
-                </div>
+                <SubmitButton className="btn small" savedLabel="✓ Result updated">
+                  Save
+                </SubmitButton>
               </form>
+              {/* OUTSIDE the edit form — a form can't nest inside a form; the
+                  browser silently dropped the nested delete form, so Delete
+                  never fired (it re-submitted Save instead). */}
+              <div style={{ marginTop: 8 }}>
+                <DeleteButton action={deleteResult} id={r.id} message="Delete this result? This cannot be undone." />
+              </div>
             </div>
           ))
         ) : (

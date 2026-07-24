@@ -97,12 +97,15 @@ export default async function AdminBooksPage() {
                   <SubmitButton className="btn small">
                     Save
                   </SubmitButton>
-                  <DeleteButton action={deleteBook} id={b.id} message="Delete this book?" />
                   <span className="muted" style={{ fontSize: ".8rem" }}>
                     {formatINR(b.price_inr)} · {b.stock_qty} in stock · {b.is_active ? "🟢 active" : "⚪ hidden"}
                   </span>
                 </div>
               </form>
+              {/* Outside the edit form — nested forms are dropped by the browser. */}
+              <div style={{ marginTop: 8 }}>
+                <DeleteButton action={deleteBook} id={b.id} message="Delete this book?" />
+              </div>
             </div>
           ))
         ) : (

@@ -51,11 +51,18 @@ export default function ImageUpload({
     if (!file) return;
     setBusy(true);
     try {
+      // Renew a stale auth token first (a long-open page otherwise hangs on
+      // "uploading…" until refreshed) and cap the wait at 2 minutes.
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess.session || (sess.session.expires_at ?? 0) * 1000 < Date.now() + 30_000) {
+        await supabase.auth.refreshSession();
+      }
       const { blob, ext, ct } = await shrink(file);
       const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { error } = await supabase.storage
-        .from("media")
-        .upload(path, blob, { upsert: false, contentType: ct });
+      const { error } = await Promise.race([
+        supabase.storage.from("media").upload(path, blob, { upsert: false, contentType: ct }),
+        new Promise<{ error: Error }>((res) => setTimeout(() => res({ error: new Error("Upload took too long — please check your internet and try again (no refresh needed).") }), 120_000)),
+      ]);
       if (error) {
         alert("Upload failed: " + error.message);
         return;

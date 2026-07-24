@@ -52,7 +52,17 @@ export async function ingestPending(limits = { digests: 4, pdfs: 6, notes: 2 }):
     .from("repository_items").select("id, file_url").eq("is_active", true).is("content", null).not("file_url", "is", null);
   for (const it of (repoRows ?? []).slice(0, limits.pdfs)) {
     const txt = await extractPdfText(it.file_url as string);
-    if (txt && txt.length > 50) { await svc.from("repository_items").update({ content: txt }).eq("id", it.id); out.pdfsExtracted++; }
+    if (txt && txt.length > 50) {
+      await svc.from("repository_items").update({ content: txt }).eq("id", it.id);
+      out.pdfsExtracted++;
+    } else {
+      // Scanned/image PDF — no readable text. Mark it with a sentinel so it
+      // stops eating the batch budget on every run (13 scanned past papers
+      // were retried forever and blocked everything queued behind them).
+      // The admin list shows these as unreadable; re-upload a text PDF or
+      // paste the text to fix one.
+      await svc.from("repository_items").update({ content: "__unreadable__" }).eq("id", it.id);
+    }
   }
 
   // --- 2b. Backfill class-attached PDFs (question PDFs / typed notes) into

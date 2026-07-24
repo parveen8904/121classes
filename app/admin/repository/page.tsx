@@ -195,12 +195,14 @@ export default async function RepositoryPage() {
                     {KIND_LABEL[it.kind] ?? it.kind}
                     {it.subject_id ? ` · ${subjMap.get(it.subject_id) ?? "Subject"}` : ""}
                     {" · "}{fmtRange(it.valid_from, it.valid_to, it.valid_from_attempt)}
-                    {it.content ? ` · ${it.content.length.toLocaleString()} chars of text` : it.file_url ? " · file only (no text yet)" : " · empty"}
+                    {it.content === "__unreadable__"
+                      ? <strong style={{ color: "#b45309" }}> · ⚠️ scanned PDF — no readable text (re-upload a text PDF, or paste the text below)</strong>
+                      : it.content ? ` · ${it.content.length.toLocaleString()} chars of text` : it.file_url ? " · file only (no text yet)" : " · empty"}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   {it.file_url && <a className="btn small secondary" href={it.file_url} target="_blank" rel="noreferrer">View</a>}
-                  {it.file_url && !it.content && /\.pdf($|\?)/i.test(it.file_url) && (
+                  {it.file_url && (!it.content || it.content === "__unreadable__") && /\.pdf($|\?)/i.test(it.file_url) && (
                     <form action={extractItemText} style={{ margin: 0 }}>
                       <input type="hidden" name="id" value={it.id} />
                       <button className="btn small secondary" type="submit">Extract text</button>

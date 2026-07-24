@@ -73,14 +73,19 @@ export async function getRecentVideos(uploadsPlaylist: string, count = 12): Prom
       `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${ids.join(",")}&key=${key}`,
       { next: { revalidate: 86400 }, signal: AbortSignal.timeout(4000) },
     ).then((r) => (r.ok ? r.json() : null));
-    return (vids?.items ?? []).map((v: any) => ({
-      id: v.id,
-      title: v.snippet?.title ?? "",
-      publishedAt: v.snippet?.publishedAt ?? "",
-      views: Number(v.statistics?.viewCount) || 0,
-      likes: Number(v.statistics?.likeCount) || 0,
-      comments: Number(v.statistics?.commentCount) || 0,
-    }));
+    return (vids?.items ?? [])
+      // Videos made PRIVATE (or deleted) must never show on the homepage: the
+      // uploads playlist can still list them, but the videos endpoint returns
+      // them without a public snippet/statistics — filter those out.
+      .filter((v: any) => v.snippet?.title && v.snippet.title !== "Private video" && v.snippet.title !== "Deleted video" && v.statistics)
+      .map((v: any) => ({
+        id: v.id,
+        title: v.snippet?.title ?? "",
+        publishedAt: v.snippet?.publishedAt ?? "",
+        views: Number(v.statistics?.viewCount) || 0,
+        likes: Number(v.statistics?.likeCount) || 0,
+        comments: Number(v.statistics?.commentCount) || 0,
+      }));
   } catch {
     return [];
   }

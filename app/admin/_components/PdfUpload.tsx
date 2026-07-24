@@ -26,6 +26,19 @@ export default function PdfUpload({
     if (!file) return;
     setBusy(true);
     try {
+      // A page left open for a while holds an EXPIRED auth token — uploads then
+      // hang on "uploading…" forever until a refresh. Renew the session first,
+      // and never wait more than 2 minutes without telling the user.
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess.session || (sess.session.expires_at ?? 0) * 1000 < Date.now() + 30_000) {
+        await supabase.auth.refreshSession();
+      }
+      const withTimeout = <T,>(p: Promise<T>): Promise<T> =>
+        Promise.race([
+          p,
+          new Promise<T>((_, rej) => setTimeout(() => rej(new Error("Upload took too long — please check your internet and try again (no refresh needed).")), 120_000)),
+        ]);
+
       const ct = file.type || "application/pdf";
       const MB = file.size / (1024 * 1024);
 
@@ -33,7 +46,7 @@ export default function PdfUpload({
       // reliable. Only big files (e.g. full books) use Cloudflare R2.
       if (MB <= 50) {
         const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
-        const { error } = await supabase.storage.from("media").upload(path, file, { upsert: false, contentType: ct });
+        const { error } = await withTimeout(supabase.storage.from("media").upload(path, file, { upsert: false, contentType: ct }));
         if (error) { alert("Upload failed: " + error.message); return; }
         const { data } = supabase.storage.from("media").getPublicUrl(path);
         setUrl(data.publicUrl);

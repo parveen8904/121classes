@@ -8,10 +8,11 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 // Works through the article_topics queue: writes up to BATCH articles per
-// invocation, then re-triggers itself until the queue is empty — so seeding 50
-// topics turns into 50 published articles hands-free. Also on the hourly cron
-// as a safety net.
+// invocation. When the queue runs DRY it refills itself with fresh evergreen
+// topics (the queue emptied on 20 Jul and articles silently stopped for days),
+// and a daily cap keeps output a steady SEO drip instead of a burst.
 const BATCH = 3;
+const DAILY_CAP = 6; // articles per rolling 24h — steady beats bursty for SEO
 
 function slugify(title: string): string {
   return title
@@ -33,12 +34,34 @@ export async function GET(req: NextRequest) {
   }
 
   const svc = createServiceClient();
-  const { data: pending } = await svc
+
+  // Steady drip: never more than DAILY_CAP articles in a rolling 24 hours.
+  const { count: last24h } = await svc
+    .from("articles").select("id", { count: "exact", head: true })
+    .gte("created_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString());
+  if ((last24h ?? 0) >= DAILY_CAP) return NextResponse.json({ ok: true, capped: true, written: 0 });
+  const budget = Math.min(BATCH, DAILY_CAP - (last24h ?? 0));
+
+  let { data: pending } = await svc
     .from("article_topics")
     .select("id, topic, category, keywords")
     .eq("status", "pending")
     .order("created_at")
-    .limit(BATCH);
+    .limit(budget);
+
+  // Queue dry → REFILL with evergreen topics, then continue writing.
+  if (!pending?.length) {
+    const { data: existingT } = await svc
+      .from("article_topics").select("topic").order("created_at", { ascending: false }).limit(250);
+    const { proposeEvergreenTopics } = await import("@/lib/ai");
+    const ideas = await proposeEvergreenTopics((existingT ?? []).map((r) => r.topic as string));
+    if (ideas?.length) {
+      await svc.from("article_topics").insert(ideas.map((i) => ({ topic: i.topic, category: i.category, keywords: i.keywords, status: "pending" })));
+      ({ data: pending } = await svc
+        .from("article_topics").select("id, topic, category, keywords")
+        .eq("status", "pending").order("created_at").limit(budget));
+    }
+  }
   if (!pending?.length) return NextResponse.json({ ok: true, done: true, written: 0 });
 
   let written = 0;
@@ -72,9 +95,9 @@ export async function GET(req: NextRequest) {
     revalidatePath("/sitemap.xml");
   }
 
-  // More in the queue and this batch made progress → chain the next batch.
+  // More in the queue, progress made, AND still under the daily cap → chain.
   const { count: left } = await svc.from("article_topics").select("id", { count: "exact", head: true }).eq("status", "pending");
-  if (written > 0 && (left ?? 0) > 0) {
+  if (written > 0 && (left ?? 0) > 0 && (last24h ?? 0) + written < DAILY_CAP) {
     try {
       const url = new URL(req.url);
       const ac = new AbortController();

@@ -999,6 +999,34 @@ const TRENDS_SYSTEM =
   "Include the source headline inside keywords so the writer has context. category must be one of: fr | advanced-accounting | strategy | career | news (use 'news' for scams/NFRA/SEBI/forensic/current-affairs topics). " +
   'Respond ONLY as compact JSON: {"topics":[{"topic":"...","category":"news","keywords":"... | headline: ..."}]}';
 
+// Evergreen topic brainstorm — keeps the article queue from EVER running dry
+// (it emptied on 20 Jul and no articles were written for days). No headlines
+// needed: study-guide topics for CA students, never repeating existing ones.
+const EVERGREEN_SYSTEM =
+  "You pick article topics for a CA-student education site (caparveensharma.com) run by CA Parveen Sharma (Financial Reporting for CA Final, Advanced Accounting for CA Inter). " +
+  "Propose up to 15 NEW evergreen article topics students actually search for: specific Ind AS / AS explainers, tricky concepts (EIR, deferred tax, consolidation steps), exam strategy, revision plans, common mistakes, answer-writing, career paths after CA, articleship. " +
+  "Each topic must be concrete and searchable (not generic like 'how to study'). Do NOT duplicate or closely repeat any EXISTING topic. " +
+  "category must be one of: fr | advanced-accounting | strategy | career | news. " +
+  'Respond ONLY as compact JSON: {"topics":[{"topic":"...","category":"fr","keywords":"comma, separated, keywords"}]}';
+
+export async function proposeEvergreenTopics(existing: string[]): Promise<TrendTopic[] | null> {
+  const user = `EXISTING topics (do not repeat any of these):\n${existing.slice(0, 250).map((t) => `- ${t}`).join("\n")}`;
+  const text = await callClaude(EVERGREEN_SYSTEM, user, 2000, { feature: "articles" });
+  if (!text) return null;
+  const json = parseLooseJson(text);
+  const arr = Array.isArray(json?.topics) ? json.topics : null;
+  if (!arr) return null;
+  const CATS = ["fr", "advanced-accounting", "strategy", "career", "news"];
+  return arr
+    .map((t: { topic?: unknown; category?: unknown; keywords?: unknown }) => ({
+      topic: String(t.topic ?? "").trim(),
+      category: CATS.includes(String(t.category)) ? String(t.category) : "strategy",
+      keywords: String(t.keywords ?? "").trim(),
+    }))
+    .filter((t: TrendTopic) => t.topic.length > 15)
+    .slice(0, 15);
+}
+
 export async function proposeTrendingTopics(headlines: string[], existing: string[]): Promise<TrendTopic[] | null> {
   const user =
     `FRESH HEADLINES (this week):\n${headlines.slice(0, 60).map((h) => `- ${h}`).join("\n")}\n\n` +

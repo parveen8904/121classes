@@ -474,18 +474,30 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
       .order("title");
     const orderedTopicIds = (subjTopics ?? []).map((t) => t.id);
     if (orderedTopicIds.length) {
-      const { data: classRows } = await svc
-        .from("sections")
-        .select("id, topic_id, order_index, title, class_no:config->>class_no")
-        .in("topic_id", orderedTopicIds)
-        .eq("type", "full_class_video")
-        .eq("is_published", true)
-        .order("order_index")
-        .order("title");
+      // class_no comes from section_stats (the fast mirror) — extracting
+      // config->>'class_no' across a whole subject detoasts every multi-MB
+      // config (measured 472ms per topic-page open on this hot path).
+      const [{ data: classRows }, { data: statRows }] = await Promise.all([
+        svc
+          .from("sections")
+          .select("id, topic_id, order_index, title")
+          .in("topic_id", orderedTopicIds)
+          .eq("type", "full_class_video")
+          .eq("is_published", true)
+          .order("order_index")
+          .order("title"),
+        svc
+          .from("section_stats")
+          .select("section_id, class_no")
+          .in("topic_id", orderedTopicIds)
+          .eq("type", "full_class_video")
+          .eq("is_published", true),
+      ]);
+      const noBySec = new Map((statRows ?? []).map((r) => [r.section_id as string, (r as { class_no?: string | null }).class_no ?? null]));
       const byTopic = new Map<string, { id: string; class_no: string | null }[]>();
       for (const r of classRows ?? []) {
         const arr = byTopic.get(r.topic_id as string) ?? [];
-        arr.push({ id: r.id as string, class_no: (r as { class_no?: string | null }).class_no ?? null });
+        arr.push({ id: r.id as string, class_no: noBySec.get(r.id as string) ?? null });
         byTopic.set(r.topic_id as string, arr);
       }
       let running = 0;

@@ -165,10 +165,11 @@ export default async function Home() {
     : [];
 
   // Three RUNNING counters (founder's choice), each self-growing:
-  // 1) enrolled students (every signup), 2) RANKS — the founder's actual
-  // all-time tally, 3) live job openings.
-  const { count: enrolledCount } = await supabase
-    .from("profiles").select("id", { count: "exact", head: true }).eq("role", "student");
+  // 1) enrolments = LIFETIME figure (9.7 lakh+ base since 1990) + every new
+  //    website signup on top — NOT the mere portal-signup count (that read
+  //    "177" and looked absurd against reality),
+  // 2) RANKS — the founder's actual all-time tally,
+  // 3) live job openings.
   // Ranks: 4,761 is the REAL all-time count (teaching since 1990), frozen as
   // the baseline on 24 Jul 2026 when the site held 147 published AIR results.
   // Every NEW ranked result published after that grows the counter by itself.
@@ -176,7 +177,7 @@ export default async function Home() {
   const RANKED_RESULTS_AT_BASELINE = 147;
   const ranksNow = RANKS_ALL_TIME_BASELINE + Math.max(0, rankedResults.length - RANKED_RESULTS_AT_BASELINE);
   const heroStats: { n?: number; suffix?: string; text?: string; label: string }[] = [
-    { n: enrolledCount ?? 0, suffix: "+", label: "students enrolled" },
+    { n: taught, suffix: "+", label: "students enrolled" },
     { n: ranksNow, suffix: "", label: "ranks achieved by our students" },
     { n: openingCount ?? 0, suffix: "+", label: "live job openings" },
   ].filter((s) => (s.n ?? 0) > 0);
@@ -184,7 +185,9 @@ export default async function Home() {
   // email "Notify me" flow as everyone else on the public homepage.
   const signedIn = false;
   const latestHighlight = announcements?.[0] ?? null;
-  const amendments = (announcements ?? []).filter((a) => a.kind === "amendment").slice(0, 3);
+  // Never show the SAME item twice: whatever is already in the highlight
+  // banner is excluded from the amendments strip below it.
+  const amendments = (announcements ?? []).filter((a) => a.kind === "amendment" && a.id !== latestHighlight?.id).slice(0, 3);
   const siteImg = new Map((settings ?? []).map((r) => [r.key, r.value as string | null]));
   const founderPhoto = siteImg.get("founder_photo") || "";
   const heroBanner = siteImg.get("hero_banner") || "";

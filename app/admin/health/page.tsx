@@ -74,10 +74,12 @@ type Visitors = {
   signup_failed_today: number;
   new_accounts_today: number;
   top_pages: { path: string; views: number; visitors: number }[];
-  activity: { name: string | null; email: string | null; phone?: string | null; level?: string | null; first_seen: string; last_seen: string; minutes: number; visits?: number; pages: number }[];
+  activity: { name: string | null; email: string | null; phone?: string | null; level?: string | null; first_seen: string; last_seen: string; last_at?: string | null; minutes: number; visits?: number; pages: number }[];
 };
 
-export default async function HealthPage() {
+export default async function HealthPage(props: { searchParams: Promise<{ sort?: string }> }) {
+  const { sort } = await props.searchParams;
+  const latestFirst = sort === "latest";
   const svc = createServiceClient();
   const dayStartIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   dayStartIST.setHours(0, 0, 0, 0);
@@ -182,7 +184,19 @@ export default async function HealthPage() {
 
               {v.activity.length > 0 && (
                 <>
-                  <h4 style={{ margin: "18px 0 6px" }}>🧑‍🎓 Everyone on the site today — longest time first ({v.activity.length})</h4>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", margin: "18px 0 6px" }}>
+                    <h4 style={{ margin: 0 }}>
+                      🧑‍🎓 Everyone on the site today — {latestFirst ? "latest activity first" : "longest time first"} ({v.activity.length})
+                    </h4>
+                    <a className="btn small secondary" href="/admin/health"
+                      style={!latestFirst ? { background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", borderColor: "transparent" } : undefined}>
+                      ⏱️ Longest first
+                    </a>
+                    <a className="btn small secondary" href="/admin/health?sort=latest"
+                      style={latestFirst ? { background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", borderColor: "transparent" } : undefined}>
+                      🕐 Latest first
+                    </a>
+                  </div>
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".82rem" }}>
                       <thead>
@@ -199,7 +213,10 @@ export default async function HealthPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {v.activity.map((a, i) => (
+                        {(latestFirst
+                          ? [...v.activity].sort((x, y) => (y.last_at ?? "").localeCompare(x.last_at ?? ""))
+                          : v.activity
+                        ).map((a, i) => (
                           <tr key={i} style={{ borderTop: "1px solid var(--border)", opacity: a.name || a.email ? 1 : 0.72 }}>
                             <td style={{ padding: "6px 8px", fontWeight: 600 }}>{a.name || "🕶 Visitor (not registered)"}</td>
                             <td style={{ padding: "6px 8px", whiteSpace: "nowrap", fontWeight: 600 }}>{a.level || "—"}</td>

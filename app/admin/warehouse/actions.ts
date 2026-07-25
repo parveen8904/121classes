@@ -17,7 +17,7 @@ export async function saveTracking(formData: FormData) {
   const id = str(formData.get("id"));
   const table = str(formData.get("table"));
   const tracking = str(formData.get("tracking")).trim();
-  if (!id || !tracking || !["orders", "book_orders"].includes(table)) return;
+  if (!id || !tracking || !["orders", "book_orders", "gift_orders"].includes(table)) return;
   const svc = createServiceClient();
   await svc.from(table).update({
     tracking_code: tracking,

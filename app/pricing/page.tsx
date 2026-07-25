@@ -116,7 +116,8 @@ export default async function PricingPage() {
                 const goldSlabs: Slab[] | null = parseSlabs(s.gold_slabs);
                 const silverSlabs: Slab[] | null = parseSlabs(s.silver_slabs);
                 const base = s.validity_months || 12;
-                const months = goldSlabs ? slabMonthOptions(goldSlabs) : [1, 3, 6, 12, 24];
+                // 9 months is always shown — it's the FREE-printed-books threshold.
+                const months = [...new Set([...(goldSlabs ? slabMonthOptions(goldSlabs) : [1, 3, 6, 12, 24]), 9])].sort((a, b) => a - b);
                 const goldAt = (m: number) => goldSlabs ? slabTotal(goldSlabs, m) : s.gold_price_inr ? Math.max(1, Math.round((s.gold_price_inr * m) / base)) : 0;
                 const silverAt = (m: number) => silverSlabs ? slabTotal(silverSlabs, m) : silverFlat ? Math.max(1, Math.round((silverFlat * m) / base)) : 0;
                 const hasPrice = months.some((m) => goldAt(m) > 0 || silverAt(m) > 0);
@@ -136,7 +137,8 @@ export default async function PricingPage() {
                             <tr style={{ textAlign: "left", color: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
                               <th style={{ padding: "6px 8px" }}>Validity</th>
                               <th style={{ padding: "6px 8px" }}>🥈 Silver</th>
-                              <th style={{ padding: "6px 8px" }}>🥇 Gold (full classes + FREE books on 9+ months)</th>
+                              <th style={{ padding: "6px 8px" }}>🥇 Gold (full classes)</th>
+                              <th style={{ padding: "6px 8px" }}>📚 Books with Gold</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -145,12 +147,18 @@ export default async function PricingPage() {
                                 <td style={{ padding: "6px 8px", fontWeight: 600 }}>{m} month{m === 1 ? "" : "s"}</td>
                                 <td style={{ padding: "6px 8px" }}>{silverAt(m) > 0 ? formatINR(silverAt(m)) : "—"}</td>
                                 <td style={{ padding: "6px 8px", fontWeight: 700 }}>{goldAt(m) > 0 ? formatINR(goldAt(m)) : "—"}</td>
+                                <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
+                                  {m >= 9
+                                    ? <strong style={{ color: "#16a34a" }}>📦 FREE printed books</strong>
+                                    : <span className="muted">📄 PDF books</span>}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                         <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
-                          📦 Gold plans of 9 months or longer include FREE printed books, couriered to your address ·
+                          📦 Gold plans of 9 months or longer include FREE printed books couriered to your address; shorter plans get PDF books ·
+                          ⏱️ every class comes with 2× its duration as watch time, and revision classes &amp; exam-essential content stay open till your validity ends ·
                           longer validity works out cheaper per month · custom durations available at enrolment · Bronze is free.
                         </p>
                       </div>
@@ -168,9 +176,10 @@ export default async function PricingPage() {
       <div className="card" style={{ maxWidth: 640, margin: "0 auto 16px", textAlign: "center", border: "2px solid var(--accent)" }}>
         <strong>📦 Gold = FREE printed books, delivered home</strong>
         <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0" }}>
-          Every Gold subscription of <strong>9 months or longer</strong> includes the printed study books — real
-          hard copies (not PDFs), couriered FREE to your shipping address anywhere in India. Shorter plans can
-          add the books at checkout.
+          Every Gold subscription of <strong>9 months or longer</strong> — bought for yourself or gifted — includes the
+          printed study books: real hard copies couriered FREE to the shipping address anywhere in India.
+          Shorter Gold plans include the books as PDFs and can add printed copies at checkout.
+          ⏱️ Watch time: 2× each class&apos;s duration, and revision classes &amp; exam-essential content stay open till your validity ends.
         </p>
       </div>
 

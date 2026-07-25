@@ -25,7 +25,8 @@ export const TIER_META: Record<string, TierMeta> = {
   gold: {
     tagline: "The complete experience — premium classes + FREE printed books.",
     features: [
-      "📦 FREE printed books on 9+ month plans — couriered to your address",
+      "📦 Books included: PDF on every plan, FREE printed hard copies couriered on 9+ month plans",
+      "⏱️ 2× watch time per class — revision & exam-essential content open till validity ends",
       "Everything in Silver",
       "Premium full coaching-class videos",
       "Live classes on Zoom",

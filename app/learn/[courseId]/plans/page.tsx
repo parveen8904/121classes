@@ -59,7 +59,7 @@ export default async function CoursePlans(
   const { data: saleSettings } = await supabase.from("site_settings").select("key, value");
   const sale = saleFromSettings(new Map((saleSettings ?? []).map((r) => [r.key, r.value as string | null])));
 
-  const goldValidityOptions = ((validitySetting?.value as string) ?? "1,2,3,6,12,18,24")
+  const goldValidityOptions = ((validitySetting?.value as string) ?? "1,2,3,6,9,12,18,24")
     .split(",")
     .map((x) => parseInt(x.trim(), 10))
     .filter((n) => Number.isFinite(n) && n > 0);
@@ -233,7 +233,11 @@ export default async function CoursePlans(
             Wrong level or subject? Change it above before paying.
           </p>
           <p style={{ fontSize: ".85rem", fontWeight: 700, margin: "6px 0 0" }}>
-            📦 Gold plans of 9+ months include FREE printed books — real hard copies couriered to your shipping address.
+            📦 Gold plans of 9+ months include FREE printed books couriered to your shipping address — shorter plans get PDF books.
+          </p>
+          <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
+            ⏱️ Watch time: every class can be watched up to 2× its duration; revision classes and exam-essential
+            content stay open till your validity ends.
           </p>
         </div>
 

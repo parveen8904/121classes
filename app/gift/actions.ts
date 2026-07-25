@@ -87,6 +87,9 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
       billing_address: input.billing.address || null, billing_state: input.billing.state,
       amount_inr: amount, taxable_value: gst.taxable, gst_rate: gst.rate, cgst: gst.cgst, sgst: gst.sgst, igst: gst.igst,
       razorpay_order_id: order.id, status: "created",
+      // Gifted Gold of 9+ months ships the FREE printed books to the recipient
+      // (unlike admin grants, which never include books).
+      books_due: input.tier === "gold" && months >= 9,
     });
     const { data: prof } = await svc.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle();
     return {

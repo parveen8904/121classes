@@ -80,7 +80,8 @@ export default function PricingCards({
   // Slab ladders (per-subject) take precedence over the legacy flat pricing.
   const goldSlabs: Slab[] | null = parseSlabs(subject.gold_slabs);
   const silverSlabs: Slab[] | null = parseSlabs(subject.silver_slabs);
-  const goldChoices = goldSlabs ? slabMonthOptions(goldSlabs) : goldValidityOptions;
+  // 9 months is always offered — it's the FREE-printed-books threshold.
+  const goldChoices = [...new Set([...(goldSlabs ? slabMonthOptions(goldSlabs) : goldValidityOptions), 9])].sort((a, b) => a - b);
 
   const goldBase = subject.validity_months || 12;
   const defaultMonths = goldChoices.includes(goldBase)
@@ -500,7 +501,8 @@ export default function PricingCards({
                   </div>
                 ) : (
                   <div style={{ fontSize: ".8rem", margin: "6px 0", padding: "8px 10px", borderRadius: 10, background: "color-mix(in srgb, #f59e0b 12%, transparent)", border: "1px solid #f59e0b" }}>
-                    📦 Free books come with <strong>9+ month</strong> Gold plans — a {tierMonths.gold}-month plan does <strong>not</strong> include them.{" "}
+                    📄 A {tierMonths.gold}-month plan includes the books as <strong>PDFs</strong> — FREE printed hard
+                    copies come with <strong>9+ month</strong> plans.{" "}
                     <a className="grad" href="/books" target="_blank" rel="noopener noreferrer" style={{ fontWeight: 700 }}>🛒 Add printed books →</a>
                   </div>
                 )

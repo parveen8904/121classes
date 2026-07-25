@@ -13,7 +13,7 @@ type OrderRow = {
 // One parcel the warehouse must courier — a book order OR the free books set
 // of a 9+ month Gold subscription.
 export type DispatchItem = {
-  table: "orders" | "book_orders";
+  table: "orders" | "book_orders" | "gift_orders";
   id: string;
   orderNo: string;
   name: string;
@@ -28,13 +28,18 @@ export type DispatchItem = {
 // newest first. `pendingOnly` drops parcels that already have a tracking ID.
 export async function listDispatchQueue(pendingOnly = true): Promise<DispatchItem[]> {
   const svc = createServiceClient();
-  const [{ data: bookRows }, { data: goldRows }] = await Promise.all([
+  const [{ data: bookRows }, { data: goldRows }, { data: giftRows }] = await Promise.all([
     svc.from("book_orders")
       .select("id, order_no, guest_contact, ship_to, items, created_at, tracking_code, status")
       .in("status", ["paid", "dispatched"])
       .order("created_at", { ascending: false }).limit(200),
     svc.from("orders")
       .select("id, order_no, created_at, tracking_code, subjects:subject_id(title), profiles:student_id(full_name, phone, address_line1, address_line2, city, state, pincode)")
+      .eq("books_due", true).eq("status", "paid")
+      .order("created_at", { ascending: false }).limit(200),
+    // Gifted 9+ month Gold also ships books — to the RECIPIENT's address.
+    svc.from("gift_orders")
+      .select("id, order_no, created_at, tracking_code, recipient_name, recipient_phone, recipient_address, subjects:subject_id(title)")
       .eq("books_due", true).eq("status", "paid")
       .order("created_at", { ascending: false }).limit(200),
   ]);
@@ -69,6 +74,17 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       createdAt: g.created_at, tracking: g.tracking_code,
     });
   }
+  type GiftRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; recipient_name: string | null; recipient_phone: string | null; recipient_address: string | null; subjects: { title: string } | null };
+  for (const g of (giftRows ?? []) as unknown as GiftRow[]) {
+    out.push({
+      table: "gift_orders", id: g.id, orderNo: g.order_no ? `#${g.order_no}` : "—",
+      name: g.recipient_name ?? "Gift recipient",
+      address: g.recipient_address ?? "",
+      phone: g.recipient_phone ?? "",
+      contents: `🎁 GIFT — ${g.subjects?.title ?? "Gold"} FREE printed books set (9+ month Gold)`,
+      createdAt: g.created_at, tracking: g.tracking_code,
+    });
+  }
   out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return pendingOnly ? out.filter((i) => !i.tracking) : out;
 }
@@ -82,7 +98,7 @@ export async function runWarehouseDispatch(): Promise<{ ok: boolean; count: numb
   }
 
   const svc = createServiceClient();
-  const [{ data: orders }, { data: goldOrders }] = await Promise.all([
+  const [{ data: orders }, { data: goldOrders }, { data: giftOrders }] = await Promise.all([
     svc.from("book_orders")
       .select("id, order_no, guest_contact, ship_to, items")
       .eq("status", "paid")
@@ -94,12 +110,20 @@ export async function runWarehouseDispatch(): Promise<{ ok: boolean; count: numb
       .eq("books_due", true).eq("status", "paid")
       .is("warehouse_notified_at", null)
       .order("created_at", { ascending: true }),
+    // …and gifted 9+ month Gold, shipped to the recipient.
+    svc.from("gift_orders")
+      .select("id, order_no, recipient_name, recipient_phone, recipient_address, subjects:subject_id(title)")
+      .eq("books_due", true).eq("status", "paid")
+      .is("warehouse_notified_at", null)
+      .order("created_at", { ascending: true }),
   ]);
 
   const list = (orders ?? []) as unknown as (OrderRow & { order_no?: number | null })[];
   type GoldRow = { id: string; order_no: number | null; subjects: { title: string } | null; profiles: { full_name: string | null; phone: string | null; address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; pincode: string | null } | null };
   const goldList = (goldOrders ?? []) as unknown as GoldRow[];
-  if (!list.length && !goldList.length) return { ok: true, count: 0 };
+  type GiftDispatchRow = { id: string; order_no: number | null; recipient_name: string | null; recipient_phone: string | null; recipient_address: string | null; subjects: { title: string } | null };
+  const giftList = (giftOrders ?? []) as unknown as GiftDispatchRow[];
+  if (!list.length && !goldList.length && !giftList.length) return { ok: true, count: 0 };
 
   const ids = [...new Set(list.flatMap((o) => (o.items ?? []).map((i) => i.book_id).filter(Boolean)))] as string[];
   const { data: books } = ids.length
@@ -132,7 +156,15 @@ export async function runWarehouseDispatch(): Promise<{ ok: boolean; count: numb
     })
     .join("");
 
-  const total = list.length + goldList.length;
+  const giftRowsHtml = giftList
+    .map((g) => `<tr>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">${g.order_no ? `#${g.order_no}` : ""}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">🎁 GIFT — ${g.subjects?.title ?? "Gold"} FREE printed books set (9+ month Gold)</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">${g.recipient_name ?? ""}<br>${g.recipient_address ?? ""}<br>📞 ${g.recipient_phone ?? ""}</td>
+      </tr>`)
+    .join("");
+
+  const total = list.length + goldList.length + giftList.length;
   const html = emailShell(
     `📦 Dispatch list — ${total} parcel${total === 1 ? "" : "s"}`,
     `<p>Please pack and ship the following (free shipping). Print the shipping labels and enter each courier
@@ -141,7 +173,7 @@ export async function runWarehouseDispatch(): Promise<{ ok: boolean; count: numb
        <tr><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #0d9488">Order no</th>
            <th style="text-align:left;padding:6px 10px;border-bottom:2px solid #0d9488">Contents</th>
            <th style="text-align:left;padding:6px 10px;border-bottom:2px solid #0d9488">Ship to</th></tr>
-       ${bookRows}${goldRows}
+       ${bookRows}${goldRows}${giftRowsHtml}
      </table>`,
   );
 
@@ -150,6 +182,7 @@ export async function runWarehouseDispatch(): Promise<{ ok: boolean; count: numb
     const now = new Date().toISOString();
     if (list.length) await svc.from("book_orders").update({ warehouse_notified_at: now }).in("id", list.map((o) => o.id));
     if (goldList.length) await svc.from("orders").update({ warehouse_notified_at: now }).in("id", goldList.map((g) => g.id));
+    if (giftList.length) await svc.from("gift_orders").update({ warehouse_notified_at: now }).in("id", giftList.map((g) => g.id));
   }
   return { ok, count: total };
 }

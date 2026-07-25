@@ -20,6 +20,19 @@ function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T | typeof
 
 // Refreshes the Supabase session on every request and guards portal routes.
 export async function middleware(request: NextRequest) {
+  // Heal mangled URLs where the query separator got percent-encoded into the
+  // path ("/plans%3Fsubject=…" → 404). Sources include email-client link
+  // rewriting and copy-paste; whatever produced it, redirect to the real page.
+  const rawPath = request.nextUrl.pathname;
+  if (/%3F/i.test(rawPath)) {
+    const [path, rest] = rawPath.split(/%3F/i, 2);
+    const qs = (rest ?? "").replace(/%3D/gi, "=").replace(/%26/gi, "&");
+    const url = request.nextUrl.clone();
+    url.pathname = path;
+    url.search = qs ? `?${qs}${url.search ? "&" + url.search.slice(1) : ""}` : url.search;
+    return NextResponse.redirect(url, 308);
+  }
+
   // Expose the current path to server layouts (the admin layout uses it to gate
   // operators/faculty to their permitted areas).
   request.headers.set("x-pathname", request.nextUrl.pathname);

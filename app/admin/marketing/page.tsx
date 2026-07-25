@@ -91,7 +91,7 @@ export default async function MarketingOverviewPage() {
       <div className="card" style={{ marginTop: 10 }}>
         <p className="muted" style={{ fontSize: ".84rem", marginTop: 0 }}>
           Tick <strong>up to 3</strong> videos — only these appear on the homepage (no view counts shown).
-          If none are ticked, the latest 3 from the channel show automatically. Ticking more than 3 keeps the first 3.
+          If none are ticked, the latest 8 from the channel show automatically. Ticking more than 8 keeps the first 8.
         </p>
         {allVideos.length > 0 ? (
           <form action={saveHomepageVideos}>

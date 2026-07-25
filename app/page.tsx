@@ -201,11 +201,11 @@ export default async function Home() {
   // converted to embeds; any other URL is used as the iframe src directly.
   // When nothing is set, it SELF-UPDATES to the channel's newest video, so the
   // homepage always shows the latest content without any manual step.
-  // Homepage YouTube tiles: the admin's HAND-PICKED selection (max 3, chosen
+  // Homepage YouTube tiles: the admin's HAND-PICKED selection (max 8, chosen
   // on Admin → Marketing); if none picked, the latest 3 show automatically.
   let curatedVideos: { id: string; title: string }[] = [];
   try { curatedVideos = JSON.parse(siteImg.get("homepage_yt_videos") || "[]"); } catch { /* fall back */ }
-  const homeVideos = (curatedVideos.length ? curatedVideos : ytVideos).slice(0, 3);
+  const homeVideos = (curatedVideos.length ? curatedVideos : ytVideos).slice(0, 8);
 
   const rawVideo = (siteImg.get("intro_video_url") || "").trim();
   const yt = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/.exec(rawVideo);
@@ -453,10 +453,18 @@ export default async function Home() {
         {homeVideos.length > 0 ? (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12, maxWidth: 1140, margin: "0 auto" }}>
             {homeVideos.map((v) => (
-              <a key={v.id} href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="tile" style={{ padding: 0, overflow: "hidden", color: "var(--text)", textAlign: "left" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`} alt={v.title} loading="lazy" decoding="async" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
-                <div style={{ padding: "10px 12px 12px" }}>
+              // Brand-framed video tile: we can't change the image YouTube
+              // serves, so the FRAME carries the colour scheme — accent border,
+              // brand-gradient wash over the thumbnail and a teal play badge.
+              <a key={v.id} href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="tile" style={{ padding: 0, overflow: "hidden", color: "var(--text)", textAlign: "left", border: "2px solid var(--accent)", borderRadius: 14 }}>
+                <div style={{ position: "relative" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`} alt={v.title} loading="lazy" decoding="async" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
+                  {/* Brand wash + play badge */}
+                  <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 45%, color-mix(in srgb, var(--accent) 78%, #000) 130%)" }} />
+                  <span style={{ position: "absolute", left: 10, bottom: 10, width: 34, height: 34, borderRadius: 999, background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: ".8rem", fontWeight: 800, boxShadow: "0 2px 8px rgba(0,0,0,.35)" }}>▶</span>
+                </div>
+                <div style={{ padding: "10px 12px 12px", borderTop: "2px solid var(--accent)" }}>
                   {/* No view counts (founder's call) — just the title. */}
                   <div style={{ fontWeight: 700, fontSize: ".88rem", lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.title}</div>
                 </div>

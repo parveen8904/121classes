@@ -12,11 +12,11 @@ async function requireAdmin(): Promise<boolean> {
   return data?.role === "admin";
 }
 
-// Which YouTube videos the HOMEPAGE shows — hand-picked by the admin (max 3).
+// Which YouTube videos the HOMEPAGE shows — hand-picked by the admin (max 8).
 // Stored as JSON [{id,title}] in site_settings; empty = latest 3 automatically.
 export async function saveHomepageVideos(formData: FormData) {
   if (!(await requireAdmin())) return;
-  const picks = formData.getAll("vid").map(String).slice(0, 3);
+  const picks = formData.getAll("vid").map(String).slice(0, 8);
   const videos = picks
     .map((v) => {
       const i = v.indexOf(":::");

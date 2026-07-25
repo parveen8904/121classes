@@ -7,6 +7,7 @@ import PricingCards from "./PricingCards";
 import { ACCESS_CATEGORIES, getAllLimits, limitFor } from "@/lib/entitlements";
 import { saleFromSettings } from "@/lib/sale";
 import { summarizeSchedule } from "@/lib/schedule";
+import PlanComparison from "@/app/components/PlanComparison";
 
 export const dynamic = "force-dynamic";
 
@@ -270,21 +271,24 @@ export default async function CoursePlans(
         />
         </div>
 
-        {/* What the FREE plan includes (from the admin access-limits matrix).
+        {/* Full plan-by-plan comparison (from the admin access-limits matrix).
             Hidden on live-batch cards — a fixed-price product's page shouldn't
-            distract with free-tier details. */}
+            distract with tier details. */}
         {selBatchMonths === 0 && (
-        <div className="card" style={{ maxWidth: 640, margin: "24px auto 0" }}>
-          <strong>🆓 Free plan includes</strong>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-            {freeIncludes.map((f) => (
-              <span key={f} style={{ background: "var(--bg-soft)", borderRadius: 999, padding: "4px 12px", fontSize: ".84rem" }}>{f}</span>
-            ))}
+          <div style={{ maxWidth: 900, margin: "28px auto 0" }}>
+            <PlanComparison />
+            <div className="card" style={{ maxWidth: 640, margin: "0 auto" }}>
+              <strong>🆓 Free plan includes</strong>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                {freeIncludes.map((f) => (
+                  <span key={f} style={{ background: "var(--bg-soft)", borderRadius: 999, padding: "4px 12px", fontSize: ".84rem" }}>{f}</span>
+                ))}
+              </div>
+              <p className="muted" style={{ fontSize: ".78rem", marginTop: 8, marginBottom: 0 }}>
+                A one-time free trial. Upgrade to Silver or Gold for unlimited access.
+              </p>
+            </div>
           </div>
-          <p className="muted" style={{ fontSize: ".78rem", marginTop: 8, marginBottom: 0 }}>
-            A one-time free trial. Upgrade to Silver or Gold for unlimited access.
-          </p>
-        </div>
         )}
       </section>
     </main>

@@ -3,6 +3,7 @@ import { tryServiceClient } from "@/lib/supabase/service";
 import { parseSlabs, slabTotal, slabMonthOptions, formatINR, type Slab } from "@/lib/pricing";
 import { saleFromSettings } from "@/lib/sale";
 import { summarizeSchedule } from "@/lib/schedule";
+import PlanComparison from "@/app/components/PlanComparison";
 
 // PUBLIC pricing page — every plan and price, visible WITHOUT login, so a
 // student can simply check "what does CA Final / CA Inter / the live batch
@@ -53,6 +54,8 @@ export default async function PricingPage() {
         <h1>Plans &amp; Pricing</h1>
         <p>Every price on one page — no login needed. All prices include GST.</p>
       </div>
+
+      <PlanComparison />
 
       {sale && (
         <div style={{ background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", borderRadius: 14, padding: "12px 18px", textAlign: "center", fontWeight: 700, marginBottom: 18 }}>

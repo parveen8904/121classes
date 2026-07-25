@@ -71,13 +71,13 @@ export default async function ReportsPage() {
 
   const toDispatch = paidBookOrders.filter((o) => o.status === "paid").length;
 
-  const kpis = [
-    { icon: "💰", label: "Total revenue", value: formatINR(totalRevenue) },
-    { icon: "📅", label: "This month", value: formatINR(monthRevenue) },
-    { icon: "🎓", label: "Active subscriptions", value: String(activeSubs.length) },
-    { icon: "👥", label: "Students", value: String(students ?? 0) },
-    { icon: "📦", label: "Book orders", value: String(paidBookOrders.length) },
-    { icon: "🚚", label: "Awaiting dispatch", value: String(toDispatch) },
+  const kpis: { icon: string; label: string; value: string; href?: string }[] = [
+    { icon: "💰", label: "Total revenue", value: formatINR(totalRevenue), href: "/admin/orders" },
+    { icon: "📅", label: "This month", value: formatINR(monthRevenue), href: "/admin/orders" },
+    { icon: "🎓", label: "Active subscriptions", value: String(activeSubs.length), href: "/admin/reports/subscribers" },
+    { icon: "👥", label: "Students", value: String(students ?? 0), href: "/admin/users" },
+    { icon: "📦", label: "Book orders", value: String(paidBookOrders.length), href: "/admin/orders" },
+    { icon: "🚚", label: "Awaiting dispatch", value: String(toDispatch), href: "/admin/orders" },
   ];
 
   return (
@@ -91,11 +91,11 @@ export default async function ReportsPage() {
 
       <div className="admin-cards" style={{ marginTop: 24, gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))" }}>
         {kpis.map((k) => (
-          <div className="admin-tile" key={k.label}>
+          <a className="admin-tile" key={k.label} href={k.href} style={{ textDecoration: "none", color: "inherit" }}>
             <div className="tile-ic">{k.icon}</div>
             <h3 style={{ fontSize: "1.5rem" }}>{k.value}</h3>
             <p>{k.label}</p>
-          </div>
+          </a>
         ))}
       </div>
 
@@ -112,13 +112,16 @@ export default async function ReportsPage() {
         <div className="card">
           <h3 style={{ marginBottom: 12 }}>🎓 Active plans by tier</h3>
           <p style={{ display: "flex", justifyContent: "space-between" }}>
-            <span className="muted">🥉 Bronze</span> <strong>{byTier.bronze}</strong>
+            <span className="muted">🥉 Bronze</span>
+            <a className="grad" href="/admin/reports/subscribers?tier=bronze" title="See who they are"><strong>{byTier.bronze}</strong> →</a>
           </p>
           <p style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-            <span className="muted">🥈 Silver</span> <strong>{byTier.silver}</strong>
+            <span className="muted">🥈 Silver</span>
+            <a className="grad" href="/admin/reports/subscribers?tier=silver" title="See who they are"><strong>{byTier.silver}</strong> →</a>
           </p>
           <p style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-            <span className="muted">🥇 Gold</span> <strong>{byTier.gold}</strong>
+            <span className="muted">🥇 Gold</span>
+            <a className="grad" href="/admin/reports/subscribers?tier=gold" title="See who they are"><strong>{byTier.gold}</strong> →</a>
           </p>
         </div>
       </div>

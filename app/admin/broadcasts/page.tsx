@@ -9,7 +9,7 @@ export const metadata = { title: "Campaigns — Admin" };
 
 type Audience = {
   name: string | null; email: string | null; telegram_id: string;
-  level: string; enrolled: string; queries: number; source: string;
+  level: string; enrolled: string; ai_questions: number; group_messages: number; source: string;
 };
 
 type Post = {
@@ -179,7 +179,8 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
                   <th style={{ padding: "6px 8px" }}>Email</th>
                   <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Telegram ID</th>
                   <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Enrolled</th>
-                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Queries asked</th>
+                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>AI questions</th>
+                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Group messages</th>
                   <th style={{ padding: "6px 8px" }}>Type</th>
                 </tr>
               </thead>
@@ -191,7 +192,8 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
                     <td style={{ padding: "6px 8px" }}>{a.email || "—"}</td>
                     <td style={{ padding: "6px 8px", fontFamily: "monospace", fontSize: ".76rem" }}>{a.telegram_id}</td>
                     <td style={{ padding: "6px 8px" }}>{a.enrolled}</td>
-                    <td style={{ padding: "6px 8px", fontWeight: 700 }}>{a.queries}</td>
+                    <td style={{ padding: "6px 8px", fontWeight: 700 }}>{a.ai_questions}</td>
+                    <td style={{ padding: "6px 8px" }}>{a.group_messages}</td>
                     <td style={{ padding: "6px 8px" }}>{a.source === "portal student" ? "🎓 portal student" : "💬 bot subscriber"}</td>
                   </tr>
                 ))}

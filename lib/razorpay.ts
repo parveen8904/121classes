@@ -63,16 +63,24 @@ export type RazorpayPayment = {
   created_at: number; notes: Record<string, string> | null; fee: number | null; order_id: string | null;
 };
 
-export async function listRazorpayPayments(days = 90, max = 100): Promise<RazorpayPayment[]> {
+export async function listRazorpayPayments(days = 90, max = 500): Promise<RazorpayPayment[]> {
   const from = Math.floor(Date.now() / 1000) - days * 86400;
-  const res = await fetch(`https://api.razorpay.com/v1/payments?from=${from}&count=${Math.min(100, max)}`, {
-    headers: { Authorization: await authHeader() },
-    cache: "no-store",
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!res.ok) throw new Error(`Razorpay list payments failed: ${res.status}`);
-  const d = await res.json();
-  return (d?.items ?? []) as RazorpayPayment[];
+  const auth = await authHeader();
+  const out: RazorpayPayment[] = [];
+  // Razorpay pages at 100 per call — walk with skip until done or max reached.
+  for (let skip = 0; out.length < max; skip += 100) {
+    const res = await fetch(`https://api.razorpay.com/v1/payments?from=${from}&count=100&skip=${skip}`, {
+      headers: { Authorization: auth },
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) throw new Error(`Razorpay list payments failed: ${res.status}`);
+    const d = await res.json();
+    const items = (d?.items ?? []) as RazorpayPayment[];
+    out.push(...items);
+    if (items.length < 100) break;
+  }
+  return out.slice(0, max);
 }
 
 // Verify the checkout signature (proves Razorpay produced this payment).

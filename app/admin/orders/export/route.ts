@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { listRazorpayPayments } from "@/lib/razorpay";
 import { getGstSettings, computeGst } from "@/lib/invoice";
 
 export const dynamic = "force-dynamic";
 
-// Excel-ready CSV of EVERY Razorpay collection (site checkouts, payment links,
-// QR/UPI — everything), one row per payment: name, level, phone, email,
-// address, GSTIN, taxable value (without GST), GST amount, total paid.
+// Excel-ready CSV of OUR OWN website sales — subscriptions/extensions (orders)
+// and book orders — from our database, one row per sale: name, level, phone,
+// email, address, GSTIN, taxable value (without GST), GST amount, total paid.
+// Razorpay-account data has its own export at /admin/orders/razorpay/export.
+type Ship = { name?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string; phone?: string };
+type Contact = { name?: string; email?: string; phone?: string };
+
 export async function GET() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -16,20 +19,23 @@ export async function GET() {
   const { data: prof } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
   if (prof?.role !== "admin") return new NextResponse("Admins only", { status: 403 });
 
-  let payments;
-  try { payments = await listRazorpayPayments(365, 100); }
-  catch { return new NextResponse("Could not reach Razorpay — check the keys and try again.", { status: 502 }); }
-
   const svc = createServiceClient();
   const s = await getGstSettings();
 
-  // Match payers to student profiles by email (level, address, GSTIN).
-  const emails = [...new Set(payments.map((p) => (p.email || "").toLowerCase()).filter(Boolean))];
-  const { data: profs } = emails.length
-    ? await svc.from("profiles").select("id, email, full_name, phone, state, gstin, address_line1, address_line2, city, pincode").in("email", emails)
-    : { data: [] as never[] };
-  const profByEmail = new Map((profs ?? []).map((p) => [String(p.email).toLowerCase(), p]));
-  const ids = (profs ?? []).map((p) => p.id as string);
+  const [{ data: orderRows }, { data: bookRows }] = await Promise.all([
+    svc.from("orders")
+      .select("kind, amount_inr, status, created_at, invoice_no, profiles:student_id(id, full_name, email, phone, state, gstin, address_line1, address_line2, city, pincode)")
+      .order("created_at", { ascending: false }).limit(1000),
+    svc.from("book_orders")
+      .select("amount_inr, status, created_at, guest_contact, ship_to, invoice_no")
+      .order("created_at", { ascending: false }).limit(1000),
+  ]);
+
+  type OrderProf = { id: string; full_name: string | null; email: string | null; phone: string | null; state: string | null; gstin: string | null; address_line1: string | null; address_line2: string | null; city: string | null; pincode: string | null };
+  const subs = (orderRows ?? []) as unknown as { kind: string; amount_inr: number; status: string; created_at: string; invoice_no: string | null; profiles: OrderProf | null }[];
+
+  // Level (Final / Inter) from each buyer's course shelf.
+  const ids = [...new Set(subs.map((o) => o.profiles?.id).filter(Boolean))] as string[];
   const levelByUser = new Map<string, string>();
   if (ids.length) {
     const { data: mc } = await svc.from("my_courses").select("student_id, courses(title)").in("student_id", ids);
@@ -43,37 +49,43 @@ export async function GET() {
   }
 
   const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
+  const dt = (iso: string) => new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" });
   const rows = [[
-    "Date", "Payment ID", "Status", "Method", "Name", "Level", "Phone", "Email",
-    "Address", "GSTIN", "Description", "Amount without GST", "GST amount", "Total paid (Rs)", "Discount",
+    "Date", "Sale type", "Status", "Invoice no", "Name", "Level", "Phone", "Email",
+    "Address", "GSTIN", "Amount without GST", "GST amount", "Total paid (Rs)",
   ].join(",")];
 
-  for (const p of payments) {
-    const total = (p.amount || 0) / 100;
-    const pr = profByEmail.get((p.email || "").toLowerCase());
-    const gst = computeGst(total, (pr?.state as string) || "", s);
+  for (const o of subs) {
+    const pr = o.profiles;
+    const gst = computeGst(o.amount_inr ?? 0, pr?.state ?? "", s);
     const address = pr ? [pr.address_line1, pr.address_line2, [pr.city, pr.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
     rows.push([
-      esc(new Date(p.created_at * 1000).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" })),
-      esc(p.id), esc(p.status), esc(p.method),
-      esc((pr?.full_name as string) || p.notes?.name || ""),
-      esc(pr ? levelByUser.get(pr.id as string) ?? "" : ""),
-      esc((pr?.phone as string) || p.contact || ""),
-      esc(p.email || ""),
-      esc(address),
-      esc((pr?.gstin as string) || ""),
-      esc(p.description || p.notes?.kind || ""),
-      esc(gst.taxable.toFixed(2)),
-      esc((gst.cgst + gst.sgst + gst.igst).toFixed(2)),
-      esc(total.toFixed(2)),
-      esc(""), // discount is not recorded by Razorpay; site coupons apply before payment
+      esc(dt(o.created_at)), esc(o.kind), esc(o.status), esc(o.invoice_no ?? ""),
+      esc(pr?.full_name ?? ""), esc(pr ? levelByUser.get(pr.id) ?? "" : ""),
+      esc(pr?.phone ?? ""), esc(pr?.email ?? ""), esc(address), esc(pr?.gstin ?? ""),
+      esc(gst.taxable.toFixed(2)), esc((gst.cgst + gst.sgst + gst.igst).toFixed(2)),
+      esc((o.amount_inr ?? 0).toFixed(2)),
+    ].join(","));
+  }
+
+  for (const b of (bookRows ?? []) as unknown as { amount_inr: number; status: string; created_at: string; guest_contact: Contact | null; ship_to: Ship | null; invoice_no: string | null }[]) {
+    const ship = b.ship_to ?? {};
+    const gst = computeGst(b.amount_inr ?? 0, ship.state ?? "", s);
+    const address = [ship.line1, ship.line2, [ship.city, ship.state, ship.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+    rows.push([
+      esc(dt(b.created_at)), esc("book order"), esc(b.status), esc(b.invoice_no ?? ""),
+      esc(b.guest_contact?.name ?? ship.name ?? ""), esc(""),
+      esc(b.guest_contact?.phone ?? ship.phone ?? ""), esc(b.guest_contact?.email ?? ""),
+      esc(address), esc(""),
+      esc(gst.taxable.toFixed(2)), esc((gst.cgst + gst.sgst + gst.igst).toFixed(2)),
+      esc((b.amount_inr ?? 0).toFixed(2)),
     ].join(","));
   }
 
   return new NextResponse("﻿" + rows.join("\r\n"), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="sales-${new Date().toISOString().slice(0, 10)}.csv"`,
+      "Content-Disposition": `attachment; filename="website-sales-${new Date().toISOString().slice(0, 10)}.csv"`,
       "Cache-Control": "no-store",
     },
   });

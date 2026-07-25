@@ -1,0 +1,47 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { listRazorpayPayments } from "@/lib/razorpay";
+
+export const dynamic = "force-dynamic";
+
+// Excel-ready CSV of Razorpay-account collections, honouring the same options
+// as /admin/orders/razorpay (days / status / method). This is CROSS-CHECK data:
+// the same Razorpay key is used outside this website, so rows here are not
+// necessarily this website's sales.
+export async function GET(req: NextRequest) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return new NextResponse("Login required", { status: 401 });
+  const { data: prof } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (prof?.role !== "admin") return new NextResponse("Admins only", { status: 403 });
+
+  const sp = req.nextUrl.searchParams;
+  const days = Math.min(365, Math.max(1, parseInt(sp.get("days") ?? "90", 10) || 90));
+  const status = sp.get("status") && sp.get("status") !== "all" ? sp.get("status")! : "";
+  const method = sp.get("method") && sp.get("method") !== "all" ? sp.get("method")! : "";
+
+  let payments;
+  try { payments = await listRazorpayPayments(days, 500); }
+  catch { return new NextResponse("Could not reach Razorpay — check the keys and try again.", { status: 502 }); }
+  if (status) payments = payments.filter((p) => p.status === status);
+  if (method) payments = payments.filter((p) => p.method === method);
+
+  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
+  const rows = [["Date", "Payment ID", "Status", "Method", "Email", "Phone", "Description", "Amount (Rs)"].join(",")];
+  for (const p of payments) {
+    rows.push([
+      esc(new Date(p.created_at * 1000).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" })),
+      esc(p.id), esc(p.status), esc(p.method), esc(p.email || ""), esc(p.contact || ""),
+      esc(p.description || p.notes?.kind || ""),
+      esc(((p.amount || 0) / 100).toFixed(2)),
+    ].join(","));
+  }
+
+  return new NextResponse("﻿" + rows.join("\r\n"), {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="razorpay-${days}d.csv"`,
+      "Cache-Control": "no-store",
+    },
+  });
+}

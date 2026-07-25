@@ -2,7 +2,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import DeleteButton from "../_components/DeleteButton";
 import SubmitButton from "@/app/components/SubmitButton";
-import { importLeads, deleteLead, addLeadManual } from "./actions";
+import { deleteLead, addLeadManual } from "./actions";
+import ImportClient from "./ImportClient";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Leads — Admin" };
@@ -68,6 +69,7 @@ export default async function LeadsPage(
           {Number(searchParams.dupes) > 0 && <> · {searchParams.dupes} skipped (already in the list)</>}.
         </div>
       )}
+      {m === "imported" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Import complete — the counts below are up to date.</div>}
       {m === "empty" && <div className="notice err" style={{ marginTop: 16 }}>Choose a CSV file or paste some contacts first.</div>}
       {m === "none" && <div className="notice err" style={{ marginTop: 16 }}>Couldn&apos;t find any phone numbers or emails in that file. Each line needs at least a 10-digit mobile or an email.</div>}
       {m === "exists" && <div className="notice err" style={{ marginTop: 16 }}>That contact is already in the leads list.</div>}
@@ -81,38 +83,8 @@ export default async function LeadsPage(
         <div className="card" style={{ padding: "10px 16px" }}><strong>{(total ?? 0) - (matched ?? 0)}</strong> <span className="muted">new prospects</span></div>
       </div>
 
-      {/* Import */}
-      <div className="form-card" style={{ marginTop: 18 }}>
-        <h3>📥 Import contacts (CSV or paste)</h3>
-        <p className="muted" style={{ fontSize: ".84rem", marginTop: 0 }}>
-          Works with the contact export from <strong>Interakt</strong> (Contacts → Export) and any other CSV —
-          column order doesn&apos;t matter, we find the phone/email on each line automatically. Duplicates and
-          existing students are detected, never double-added.
-        </p>
-        <form action={importLeads}>
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
-            <div>
-              <label>CSV file</label>
-              <input type="file" name="csv" accept=".csv,.txt,text/csv,text/plain" />
-            </div>
-            <div>
-              <label>Where are these contacts from?</label>
-              <select name="source" defaultValue="interakt">
-                <option value="interakt">Interakt (WhatsApp) export</option>
-                <option value="meta">Meta / Instagram lead ad (Forms Library CSV)</option>
-                <option value="google">Google ad leads</option>
-                <option value="whatsapp">WhatsApp (collected manually)</option>
-                <option value="youtube">YouTube</option>
-                <option value="csv">Other CSV</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-          </div>
-          <label style={{ marginTop: 8 }}>…or paste contacts (one per line — name, phone, email in any order)</label>
-          <textarea name="pasted" rows={4} placeholder={"Rahul Verma, 9812345678\nPriya S, priya@gmail.com, 9876543210"} />
-          <SubmitButton className="btn" savedLabel="✓ Imported" style={{ marginTop: 10 }}>Import contacts</SubmitButton>
-        </form>
-      </div>
+      {/* Import — batched in the browser, so file size is not a limit. */}
+      <ImportClient />
 
       {/* Add one */}
       <details className="card" style={{ marginTop: 14 }}>

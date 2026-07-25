@@ -67,10 +67,6 @@ export default async function PlanComparison() {
                 <td style={{ ...td, fontWeight: 600, whiteSpace: "normal", minWidth: 170 }}>🔁 Revision video watch time</td>
                 <td style={td}>✅ Unlimited</td><td style={td}>✅ Unlimited</td><td style={td}>✅ Unlimited</td>
               </tr>
-              <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                <td style={{ ...td, fontWeight: 600, whiteSpace: "normal", minWidth: 170 }}>📄 PDF books (our notes &amp; question banks)</td>
-                <td style={td}>✅ Free</td><td style={td}>✅ Free</td><td style={td}>✅ Free</td>
-              </tr>
               <tr>
                 <td style={{ ...td, fontWeight: 600, whiteSpace: "normal", minWidth: 170 }}>📦 FREE printed books, couriered (India)</td>
                 <td style={{ ...td, color: "var(--muted)" }}>❌ Not included</td>

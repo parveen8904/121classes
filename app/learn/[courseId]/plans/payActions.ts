@@ -158,6 +158,9 @@ export async function createPlanOrder(input: {
       amount_inr: amountInr,
       status: "created",
       subject_id: subject.id,
+      // Free printed books ship with Gold plans of 9+ months — flag the sale
+      // so the warehouse flow picks it up once paid.
+      books_due: input.tier === "gold" && months >= 9,
     });
     return {
       ok: true,

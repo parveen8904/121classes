@@ -21,6 +21,7 @@ export const ADMIN_AREAS: AdminArea[] = [
   { key: "live", label: "📡 Live classes", prefixes: ["/admin/live"] },
   { key: "results", label: "🏆 Results", prefixes: ["/admin/results"] },
   { key: "store", label: "💳 Sales, orders & books", prefixes: ["/admin/books", "/admin/orders"] },
+  { key: "warehouse", label: "🏭 Warehouse & shipping", prefixes: ["/admin/warehouse"] },
   { key: "career", label: "🎓 Career & placement", prefixes: ["/admin/content", "/admin/placement"] },
   { key: "planner", label: "🗓️ Study planner settings", prefixes: ["/admin/planner"] },
   { key: "repository", label: "📚 AI repository", prefixes: ["/admin/repository"] },

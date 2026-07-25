@@ -24,15 +24,15 @@ export async function GET() {
 
   const [{ data: orderRows }, { data: bookRows }] = await Promise.all([
     svc.from("orders")
-      .select("kind, amount_inr, status, created_at, invoice_no, subject_id, subjects:subject_id(title), profiles:student_id(id, full_name, email, phone, state, gstin, address_line1, address_line2, city, pincode)")
+      .select("kind, amount_inr, status, created_at, invoice_no, order_no, subject_id, subjects:subject_id(title), profiles:student_id(id, full_name, email, phone, state, gstin, address_line1, address_line2, city, pincode)")
       .order("created_at", { ascending: false }).limit(1000),
     svc.from("book_orders")
-      .select("amount_inr, status, created_at, guest_contact, ship_to, invoice_no")
+      .select("amount_inr, status, created_at, guest_contact, ship_to, invoice_no, order_no")
       .order("created_at", { ascending: false }).limit(1000),
   ]);
 
   type OrderProf = { id: string; full_name: string | null; email: string | null; phone: string | null; state: string | null; gstin: string | null; address_line1: string | null; address_line2: string | null; city: string | null; pincode: string | null };
-  const subs = (orderRows ?? []) as unknown as { kind: string; amount_inr: number; status: string; created_at: string; invoice_no: string | null; subject_id: string | null; subjects: { title: string } | null; profiles: OrderProf | null }[];
+  const subs = (orderRows ?? []) as unknown as { kind: string; amount_inr: number; status: string; created_at: string; invoice_no: string | null; order_no: number | null; subject_id: string | null; subjects: { title: string } | null; profiles: OrderProf | null }[];
 
   // Level (Final / Inter) + subscription dates from each buyer's records.
   const ids = [...new Set(subs.map((o) => o.profiles?.id).filter(Boolean))] as string[];
@@ -60,7 +60,7 @@ export async function GET() {
   const d = (iso: string | null | undefined) =>
     iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
   const rows = [[
-    "Date", "Sale type", "Subject", "Status", "Invoice no", "Name", "Level", "Phone", "Email",
+    "Order no", "Date", "Sale type", "Subject", "Status", "Invoice no", "Name", "Level", "Phone", "Email",
     "Address", "GSTIN", "Subscription start", "Subscription end",
     "Amount without GST", "GST amount", "Total paid (Rs)",
   ].join(",")];
@@ -71,6 +71,7 @@ export async function GET() {
     const address = pr ? [pr.address_line1, pr.address_line2, [pr.city, pr.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
     const dates = pr && o.subject_id ? subDates.get(`${pr.id}:${o.subject_id}`) : undefined;
     rows.push([
+      esc(o.order_no != null ? `#${o.order_no}` : ""),
       esc(dt(o.created_at)), esc(o.kind), esc(o.subjects?.title ?? ""), esc(o.status), esc(o.invoice_no ?? ""),
       esc(pr?.full_name ?? ""), esc(pr ? levelByUser.get(pr.id) ?? "" : ""),
       esc(pr?.phone ?? ""), esc(pr?.email ?? ""), esc(address), esc(pr?.gstin ?? ""),
@@ -80,11 +81,12 @@ export async function GET() {
     ].join(","));
   }
 
-  for (const b of (bookRows ?? []) as unknown as { amount_inr: number; status: string; created_at: string; guest_contact: Contact | null; ship_to: Ship | null; invoice_no: string | null }[]) {
+  for (const b of (bookRows ?? []) as unknown as { amount_inr: number; status: string; created_at: string; guest_contact: Contact | null; ship_to: Ship | null; invoice_no: string | null; order_no: number | null }[]) {
     const ship = b.ship_to ?? {};
     const gst = computeGst(b.amount_inr ?? 0, ship.state ?? "", s);
     const address = [ship.line1, ship.line2, [ship.city, ship.state, ship.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
     rows.push([
+      esc(b.order_no != null ? `#${b.order_no}` : ""),
       esc(dt(b.created_at)), esc("book order"), esc(""), esc(b.status), esc(b.invoice_no ?? ""),
       esc(b.guest_contact?.name ?? ship.name ?? ""), esc(""),
       esc(b.guest_contact?.phone ?? ship.phone ?? ""), esc(b.guest_contact?.email ?? ""),

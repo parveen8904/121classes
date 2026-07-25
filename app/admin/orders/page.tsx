@@ -54,6 +54,8 @@ type OrderRow = {
   ship_to: Ship | null;
   items: Item[] | null;
   zoho_status?: string | null;
+  order_no?: number | null;
+  tracking_code?: string | null;
 };
 
 const STATUS_EMOJI: Record<string, string> = {
@@ -70,7 +72,7 @@ function fmt(s: string): string {
 type PayRow = {
   id: string; kind: string; amount_inr: number; status: string; created_at: string;
   razorpay_order_id: string | null; invoice_no: string | null; invoice_url: string | null;
-  zoho_status: string | null; subject_id: string | null;
+  zoho_status: string | null; subject_id: string | null; order_no: number | null;
   subjects: { title: string } | null;
   profiles: {
     id: string; full_name: string | null; email: string | null; phone: string | null;
@@ -91,13 +93,13 @@ export default async function AdminOrdersPage(
   const [{ data }, { data: payData }] = await Promise.all([
     supabase
       .from("book_orders")
-      .select("id, amount_inr, status, created_at, guest_contact, ship_to, items, invoice_no, invoice_url, zoho_status")
+      .select("id, amount_inr, status, created_at, guest_contact, ship_to, items, invoice_no, invoice_url, zoho_status, order_no, tracking_code")
       .order("created_at", { ascending: false })
       .limit(200),
     // ALL website payments (subscriptions / extensions / gifts) — OUR sales register.
     svc
       .from("orders")
-      .select("id, kind, amount_inr, status, created_at, razorpay_order_id, invoice_no, invoice_url, zoho_status, subject_id, subjects:subject_id(title), profiles:student_id(id, full_name, email, phone, address_line1, address_line2, city, state, pincode)")
+      .select("id, kind, amount_inr, status, created_at, razorpay_order_id, invoice_no, invoice_url, zoho_status, subject_id, order_no, subjects:subject_id(title), profiles:student_id(id, full_name, email, phone, address_line1, address_line2, city, state, pincode)")
       .order("created_at", { ascending: false })
       .limit(200),
   ]);
@@ -127,9 +129,9 @@ export default async function AdminOrdersPage(
 
   const match = (parts: (string | null | undefined)[]) => !q || parts.some((p) => (p ?? "").toLowerCase().includes(q));
   const orders = ((data ?? []) as unknown as (OrderRow & { invoice_no?: string | null; invoice_url?: string | null })[])
-    .filter((o) => match([o.guest_contact?.name, o.guest_contact?.email, o.guest_contact?.phone, o.ship_to?.name, o.ship_to?.phone, o.invoice_no]));
+    .filter((o) => match([o.guest_contact?.name, o.guest_contact?.email, o.guest_contact?.phone, o.ship_to?.name, o.ship_to?.phone, o.invoice_no, o.order_no != null ? String(o.order_no) : null, o.tracking_code]));
   const payments = payRowsRaw
-    .filter((p) => match([p.profiles?.full_name, p.profiles?.email, p.profiles?.phone, p.invoice_no, p.razorpay_order_id, p.subjects?.title]));
+    .filter((p) => match([p.profiles?.full_name, p.profiles?.email, p.profiles?.phone, p.invoice_no, p.razorpay_order_id, p.subjects?.title, p.order_no != null ? String(p.order_no) : null]));
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -143,7 +145,7 @@ export default async function AdminOrdersPage(
       {/* Search everything on this page */}
       <form style={{ marginTop: 16 }}>
         <div style={{ display: "flex", gap: 8, maxWidth: 520 }}>
-          <input name="q" defaultValue={searchParams.q ?? ""} placeholder="🔍 Search name, email, phone, invoice no…" style={{ marginBottom: 0 }} />
+          <input name="q" defaultValue={searchParams.q ?? ""} placeholder="🔍 Search order no, name, email, phone, invoice no…" style={{ marginBottom: 0 }} />
           <SubmitButton className="btn small" savedLabel="✓">Search</SubmitButton>
         </div>
       </form>
@@ -183,6 +185,7 @@ export default async function AdminOrdersPage(
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".84rem" }}>
               <thead>
                 <tr style={{ textAlign: "left", color: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
+                  <th style={{ padding: "6px 8px" }}>Order no</th>
                   <th style={{ padding: "6px 8px" }}>Date</th><th style={{ padding: "6px 8px" }}>Student</th>
                   <th style={{ padding: "6px 8px" }}>Level</th><th style={{ padding: "6px 8px" }}>Subject</th>
                   <th style={{ padding: "6px 8px" }}>Product</th><th style={{ padding: "6px 8px" }}>Amount</th>
@@ -202,6 +205,7 @@ export default async function AdminOrdersPage(
                     : "";
                   return (
                   <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "6px 8px", fontWeight: 800, whiteSpace: "nowrap" }}>{p.order_no != null ? `#${p.order_no}` : "—"}</td>
                     <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{fmt(p.created_at)}</td>
                     <td style={{ padding: "6px 8px" }}>
                       <strong>{pr?.full_name ?? "—"}</strong>
@@ -267,10 +271,11 @@ export default async function AdminOrdersPage(
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div>
                     <strong>
-                      {o.guest_contact?.name ?? ship.name ?? "Customer"} · {formatINR(o.amount_inr)}
+                      {o.order_no != null ? `#${o.order_no} · ` : ""}{o.guest_contact?.name ?? ship.name ?? "Customer"} · {formatINR(o.amount_inr)}
                     </strong>
                     <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
                       {qty} item{qty === 1 ? "" : "s"} · {STATUS_EMOJI[o.status] ?? o.status} · {fmt(o.created_at)}
+                      {o.tracking_code && <> · 🚚 {o.tracking_code}</>}
                       {o.invoice_url && <> · <a className="grad" href={viaProxy(o.invoice_url)} target="_blank" rel="noopener noreferrer">🧾 {o.invoice_no ?? "Invoice"} ↓</a></>}
                     </p>
                     <p className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>

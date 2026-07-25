@@ -44,4 +44,7 @@ export async function saveAccessLimits(formData: FormData) {
   clearLimitsCache();
   revalidatePath("/admin/access");
   revalidatePath("/courses");
+  // The public pricing page renders the SAME limits in its comparison table
+  // (ISR, 5 min) — bust it so a saved change shows immediately.
+  revalidatePath("/pricing");
 }

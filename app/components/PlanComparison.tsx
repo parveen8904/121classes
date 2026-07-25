@@ -11,10 +11,14 @@ const PLAN_COLS = [
   { key: "gold", label: "🥇 Gold" },
 ] as const;
 
-function cell(lim: number): { text: string; ok: boolean } {
-  if (lim === UNLIMITED || lim < 0) return { text: "✅ Unlimited", ok: true };
-  if (lim === 0) return { text: "❌ Not included", ok: false };
-  return { text: `✅ ${lim} included`, ok: true };
+// Colour language: GREEN only for truly unlimited; AMBER for a capped count
+// (so the differences between plans jump out); muted for locked.
+const GREEN = "#16a34a";
+const AMBER = "#b45309";
+function cell(lim: number): { text: string; color?: string; bold?: boolean } {
+  if (lim === UNLIMITED || lim < 0) return { text: "✅ Unlimited", color: GREEN, bold: true };
+  if (lim === 0) return { text: "❌ Not included", color: "var(--muted)" };
+  return { text: `${lim} included`, color: AMBER, bold: true };
 }
 
 export default async function PlanComparison() {
@@ -29,8 +33,8 @@ export default async function PlanComparison() {
   const watchCells = PLAN_COLS.map((p) => {
     const mult = limitFor(limits, p.key, WATCH_CATEGORY);
     return mult <= 0 || mult === UNLIMITED
-      ? { text: "✅ Unlimited", ok: true }
-      : { text: `${mult}× class hours`, ok: true };
+      ? { text: "✅ Unlimited", color: GREEN, bold: true }
+      : { text: `${mult}× class hours`, color: AMBER, bold: true };
   });
 
   const td: React.CSSProperties = { padding: "7px 10px", whiteSpace: "nowrap", fontSize: ".85rem" };
@@ -55,17 +59,17 @@ export default async function PlanComparison() {
                 <tr key={r.label} style={{ borderBottom: "1px solid var(--border)" }}>
                   <td style={{ ...td, fontWeight: 600, whiteSpace: "normal", minWidth: 170 }}>{r.label}</td>
                   {r.cells.map((c, i) => (
-                    <td key={i} style={{ ...td, color: c.ok ? undefined : "var(--muted)" }}>{c.text}</td>
+                    <td key={i} style={{ ...td, color: c.color, fontWeight: c.bold ? 700 : undefined }}>{c.text}</td>
                   ))}
                 </tr>
               ))}
               <tr style={{ borderBottom: "1px solid var(--border)" }}>
                 <td style={{ ...td, fontWeight: 600, whiteSpace: "normal", minWidth: 170 }}>⏱️ Class watch time</td>
-                {watchCells.map((c, i) => <td key={i} style={td}>{c.text}</td>)}
+                {watchCells.map((c, i) => <td key={i} style={{ ...td, color: c.color, fontWeight: c.bold ? 700 : undefined }}>{c.text}</td>)}
               </tr>
               <tr style={{ borderBottom: "1px solid var(--border)" }}>
                 <td style={{ ...td, fontWeight: 600, whiteSpace: "normal", minWidth: 170 }}>🔁 Revision video watch time</td>
-                <td style={td}>✅ Unlimited</td><td style={td}>✅ Unlimited</td><td style={td}>✅ Unlimited</td>
+                {[0, 1, 2].map((i) => <td key={i} style={{ ...td, color: GREEN, fontWeight: 700 }}>✅ Unlimited</td>)}
               </tr>
               <tr>
                 <td style={{ ...td, fontWeight: 600, whiteSpace: "normal", minWidth: 170 }}>📦 FREE printed books, couriered (India)</td>

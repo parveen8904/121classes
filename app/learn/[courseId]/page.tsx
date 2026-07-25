@@ -636,7 +636,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                         if (rows.length === 0) return null;
                         const catLabel = RES_CAT_LABEL[cat.kind] ?? cat.label;
                         return (
-                          <details key={cat.kind} style={{ border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", overflow: "hidden" }}>
+                          <details key={cat.kind} className="res-tile" style={{ border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", overflow: "hidden" }}>
                             <summary style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", fontWeight: 700 }}>
                               <span style={{ fontSize: "1.4rem", lineHeight: 1 }}>{cat.icon}</span>
                               <span style={{ flex: 1, fontSize: ".9rem" }}>{catLabel}</span>

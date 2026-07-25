@@ -732,3 +732,8 @@ button.is-saving::before {
 /* ---- iOS app (notch) safe areas: zero on normal browsers ---- */
 .lp-nav, .portal-header, .topbar { padding-top: env(safe-area-inset-top); }
 body { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Resource-category tiles (public subject page + student course page): an
+   expanded tile takes the FULL grid row, so its file list gets proper width
+   instead of being squeezed into one narrow column while neighbours stretch. */
+.res-tile[open] { grid-column: 1 / -1; }

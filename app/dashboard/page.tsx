@@ -206,7 +206,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
               ))}
             </div>
             <p className="muted" style={{ fontSize: ".76rem", margin: "8px 0 0" }}>
-              ⏱️ Watch time = 2× each class&apos;s duration. Revision classes and exam-essential content stay open till your validity ends.
+              ⏱️ Watch time = 2× each class&apos;s duration. Revision videos have <strong>no watch-time limit</strong> — open till your validity ends.
             </p>
           </div>
         )}

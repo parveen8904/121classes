@@ -104,8 +104,9 @@ export default async function SectionPage(
 
   // Fair-usage: a student may watch a subject's recorded Bunny classes for a
   // total of (multiplier × raw class hours). Live classes aren't Bunny
-  // recordings, so they're never counted. Admins/faculty are exempt.
-  if (c.bunny_video_id && !isAdmin) {
+  // recordings, so they're never counted. Revision videos are UNLIMITED —
+  // never gated, never counted. Admins/faculty are exempt.
+  if (c.bunny_video_id && !isAdmin && section.type !== "revision_video") {
     const { data: tRow } = await supabase.from("topics").select("subject_id").eq("id", section.topic_id).maybeSingle();
     const subjectId = (tRow as { subject_id?: string } | null)?.subject_id;
     if (subjectId) {

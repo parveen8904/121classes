@@ -233,11 +233,11 @@ export default async function CoursePlans(
             Wrong level or subject? Change it above before paying.
           </p>
           <p style={{ fontSize: ".85rem", fontWeight: 700, margin: "6px 0 0" }}>
-            📦 Gold plans of 9+ months include FREE printed books couriered to your shipping address — shorter plans get PDF books.
+            📦 Gold plans of 9+ months include FREE printed books couriered to your shipping address (the book PDFs are free for every student).
           </p>
           <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
-            ⏱️ Watch time: every class can be watched up to 2× its duration; revision classes and exam-essential
-            content stay open till your validity ends.
+            ⏱️ Watch time: every class can be watched up to 2× its duration — revision videos have NO limit and
+            stay open till your validity ends.
           </p>
         </div>
 

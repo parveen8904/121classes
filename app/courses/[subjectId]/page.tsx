@@ -102,13 +102,23 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
     if (n > 0) { range.set(t.id as string, { start: run + 1, end: run + n }); run += n; }
   }
 
+  // Student-visible subject content BY NAME — the visitor sees exactly what
+  // they'd get; downloading needs a (free) login. AI-only items stay hidden.
   const { data: repoRows } = await svc
     .from("repository_items")
-    .select("kind, subject_id, topic_id")
+    .select("kind, title, subject_id, topic_id")
     .eq("is_active", true)
+    .eq("student_visible", true)
     .or(`subject_id.eq.${subject.id},topic_id.in.(${topicIds.join(",") || "00000000-0000-0000-0000-000000000000"})`);
   const kinds = new Map<string, number>();
-  for (const r of repoRows ?? []) kinds.set(r.kind as string, (kinds.get(r.kind as string) ?? 0) + 1);
+  const materialsByKind = new Map<string, string[]>();
+  for (const r of repoRows ?? []) {
+    if (r.kind === "transcript") continue;
+    kinds.set(r.kind as string, (kinds.get(r.kind as string) ?? 0) + 1);
+    const arr = materialsByKind.get(r.kind as string) ?? [];
+    arr.push((r.title as string) || (r.kind as string).toUpperCase());
+    materialsByKind.set(r.kind as string, arr);
+  }
   const KIND_LABEL: Record<string, string> = { mtp: "MTPs", rtp: "RTPs", past_papers: "Past exam papers", question_bank: "Question banks", book: "Books", notes: "Handwritten notes", icai: "ICAI material" };
 
   // Live batch: show the derived schedule right here.
@@ -166,7 +176,7 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
       )}
 
       {/* What's inside */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8, marginBottom: 8 }}>
         {chips.map((c) => (
           <div key={c.label} style={{ background: "var(--bg-soft,#f6f7f9)", borderRadius: 10, padding: "12px 8px", textAlign: "center" }}>
             <div style={{ fontSize: "1.3rem", fontWeight: 800 }}>{c.value}</div>
@@ -174,6 +184,10 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
           </div>
         ))}
       </div>
+      <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 16px" }}>
+        🔁 <strong>Revision videos have NO watch-time limit</strong> — watch them as many times as you like till your
+        validity ends. Regular classes come with 2× their duration as watch time.
+      </p>
 
       {/* Free demo pitch */}
       <div className="card" style={{ border: "2px solid var(--accent)", marginBottom: 16 }}>
@@ -241,15 +255,33 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
         </>
       )}
 
-      {/* Resources overview */}
+      {/* Subject content BY NAME — visible without login, download after login. */}
       {kinds.size > 0 && (
         <>
-          <h2 style={{ fontSize: "1.2rem", margin: "22px 0 8px" }}>📄 Study material included</h2>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {[...kinds.entries()].filter(([k]) => k !== "transcript").map(([k, n]) => (
-              <span key={k} style={{ background: "var(--bg-soft)", borderRadius: 999, padding: "6px 14px", fontSize: ".86rem" }}>
-                <strong>{n}</strong> {KIND_LABEL[k] ?? k}
-              </span>
+          <h2 style={{ fontSize: "1.2rem", margin: "22px 0 4px" }}>📄 Study material included — see every file</h2>
+          <p className="muted" style={{ fontSize: ".84rem", margin: "0 0 8px" }}>
+            All of this comes with the subject. Downloading needs a free account.
+          </p>
+          <div style={{ display: "grid", gap: 8 }}>
+            {[...materialsByKind.entries()].map(([k, titles]) => (
+              <details key={k} className="card" style={{ padding: 0, overflow: "hidden" }}>
+                <summary style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 16px" }}>
+                  <span style={{ fontWeight: 700 }}>📄 {KIND_LABEL[k] ?? k}</span>
+                  <span className="muted" style={{ whiteSpace: "nowrap", fontSize: ".85rem" }}>{titles.length} file{titles.length === 1 ? "" : "s"} ▾</span>
+                </summary>
+                <div style={{ borderTop: "1px solid var(--border)", padding: "6px 16px 12px" }}>
+                  {titles.map((t, i) => (
+                    <a
+                      key={i}
+                      href={`/login?next=${loginNext}`}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px dashed var(--border)", color: "var(--text)", fontSize: ".88rem" }}
+                    >
+                      <span>📄 {t}</span>
+                      <span className="muted" style={{ whiteSpace: "nowrap", fontSize: ".8rem" }}>🔒 Login to download</span>
+                    </a>
+                  ))}
+                </div>
+              </details>
             ))}
           </div>
         </>

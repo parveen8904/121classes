@@ -150,15 +150,15 @@ export default async function PricingPage() {
                                 <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
                                   {m >= 9
                                     ? <strong style={{ color: "#16a34a" }}>📦 FREE printed books</strong>
-                                    : <span className="muted">📄 PDF books</span>}
+                                    : <span className="muted">📄 PDF books (free for all)</span>}
                                 </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                         <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
-                          📦 Gold plans of 9 months or longer include FREE printed books couriered to your address; shorter plans get PDF books ·
-                          ⏱️ every class comes with 2× its duration as watch time, and revision classes &amp; exam-essential content stay open till your validity ends ·
+                          📦 Gold plans of 9 months or longer include FREE printed books couriered to your address; the book PDFs are free for every student, including Bronze ·
+                          ⏱️ every class comes with 2× its duration as watch time — revision videos have NO limit and stay open till your validity ends ·
                           longer validity works out cheaper per month · custom durations available at enrolment · Bronze is free.
                         </p>
                       </div>
@@ -178,8 +178,8 @@ export default async function PricingPage() {
         <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0" }}>
           Every Gold subscription of <strong>9 months or longer</strong> — bought for yourself or gifted — includes the
           printed study books: real hard copies couriered FREE to the shipping address anywhere in India.
-          Shorter Gold plans include the books as PDFs and can add printed copies at checkout.
-          ⏱️ Watch time: 2× each class&apos;s duration, and revision classes &amp; exam-essential content stay open till your validity ends.
+          The book PDFs are free for every student on the portal (including Bronze); printed copies can also be added at checkout.
+          ⏱️ Watch time: 2× each class&apos;s duration — <strong>revision videos have NO watch-time limit</strong> and stay open till your validity ends.
         </p>
       </div>
 

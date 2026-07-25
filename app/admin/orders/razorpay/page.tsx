@@ -29,7 +29,7 @@ const METHOD_OPTIONS = [
 ];
 
 export default async function RazorpayDataPage(props: {
-  searchParams: Promise<{ days?: string; status?: string; method?: string }>;
+  searchParams: Promise<{ days?: string; status?: string; method?: string; from?: string; to?: string }>;
 }) {
   const sp = await props.searchParams;
   const supabase = createClient();
@@ -44,15 +44,22 @@ export default async function RazorpayDataPage(props: {
   const days = Math.min(365, Math.max(1, parseInt(sp.days ?? "90", 10) || 90));
   const status = sp.status && sp.status !== "all" ? sp.status : "";
   const method = sp.method && sp.method !== "all" ? sp.method : "";
+  // Custom date range (IST) — takes priority over the preset period. For a
+  // single day, set From and To to the same date.
+  const okDate = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+  const from = okDate(sp.from), to = okDate(sp.to);
 
   let payments: RazorpayPayment[] = [];
   let error = false;
-  try { payments = await listRazorpayPayments(days, 500); } catch { error = true; }
+  try { payments = await listRazorpayPayments(days, 500, { from, to }); } catch { error = true; }
   if (status) payments = payments.filter((p) => p.status === status || (status === "refunded" && p.status === "refunded"));
   if (method) payments = payments.filter((p) => p.method === method);
 
   const receivedTotal = payments.filter((p) => p.status === "captured").reduce((s, p) => s + (p.amount || 0), 0) / 100;
-  const exportQs = `?days=${days}&status=${sp.status ?? "all"}&method=${sp.method ?? "all"}`;
+  const exportQs = `?days=${days}&status=${sp.status ?? "all"}&method=${sp.method ?? "all"}&from=${from}&to=${to}`;
+  const rangeLabel = from || to
+    ? `${from || "start"} → ${to || "today"}`
+    : `last ${days} days`;
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -80,6 +87,14 @@ export default async function RazorpayDataPage(props: {
             </select>
           </div>
           <div>
+            <label>From date (custom)</label>
+            <input type="date" name="from" defaultValue={from} style={{ marginBottom: 0 }} />
+          </div>
+          <div>
+            <label>To date (custom)</label>
+            <input type="date" name="to" defaultValue={to} style={{ marginBottom: 0 }} />
+          </div>
+          <div>
             <label>Status</label>
             <select name="status" defaultValue={sp.status ?? "all"}>
               {STATUS_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
@@ -94,10 +109,13 @@ export default async function RazorpayDataPage(props: {
           <button className="btn small" type="submit">Pull data</button>
           <a className="btn small secondary" href={`/admin/orders/razorpay/export${exportQs}`}>⬇️ Download Excel (CSV)</a>
         </form>
+        <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
+          Custom dates win over the preset period. For a single day&apos;s collections, set From and To to the same date.
+        </p>
       </div>
 
       <h2 className="admin-section-title" style={{ marginTop: 22 }}>
-        {payments.length} payment{payments.length === 1 ? "" : "s"} · {formatINR(receivedTotal)} received
+        {payments.length} payment{payments.length === 1 ? "" : "s"} · {formatINR(receivedTotal)} received · {rangeLabel}
       </h2>
       <div className="card" style={{ marginTop: 10 }}>
         {error ? (

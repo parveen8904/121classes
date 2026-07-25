@@ -63,13 +63,25 @@ export type RazorpayPayment = {
   created_at: number; notes: Record<string, string> | null; fee: number | null; order_id: string | null;
 };
 
-export async function listRazorpayPayments(days = 90, max = 500): Promise<RazorpayPayment[]> {
-  const from = Math.floor(Date.now() / 1000) - days * 86400;
+export async function listRazorpayPayments(
+  days = 90,
+  max = 500,
+  // Optional custom range (IST calendar dates, YYYY-MM-DD) — overrides `days`.
+  range?: { from?: string | null; to?: string | null },
+): Promise<RazorpayPayment[]> {
+  let from = Math.floor(Date.now() / 1000) - days * 86400;
+  let to: number | null = null;
+  if (range?.from && /^\d{4}-\d{2}-\d{2}$/.test(range.from)) {
+    from = Math.floor(new Date(`${range.from}T00:00:00+05:30`).getTime() / 1000);
+  }
+  if (range?.to && /^\d{4}-\d{2}-\d{2}$/.test(range.to)) {
+    to = Math.floor(new Date(`${range.to}T23:59:59+05:30`).getTime() / 1000);
+  }
   const auth = await authHeader();
   const out: RazorpayPayment[] = [];
   // Razorpay pages at 100 per call — walk with skip until done or max reached.
   for (let skip = 0; out.length < max; skip += 100) {
-    const res = await fetch(`https://api.razorpay.com/v1/payments?from=${from}&count=100&skip=${skip}`, {
+    const res = await fetch(`https://api.razorpay.com/v1/payments?from=${from}${to ? `&to=${to}` : ""}&count=100&skip=${skip}`, {
       headers: { Authorization: auth },
       cache: "no-store",
       signal: AbortSignal.timeout(8000),

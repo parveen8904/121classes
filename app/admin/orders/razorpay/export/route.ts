@@ -19,9 +19,11 @@ export async function GET(req: NextRequest) {
   const days = Math.min(365, Math.max(1, parseInt(sp.get("days") ?? "90", 10) || 90));
   const status = sp.get("status") && sp.get("status") !== "all" ? sp.get("status")! : "";
   const method = sp.get("method") && sp.get("method") !== "all" ? sp.get("method")! : "";
+  const okDate = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+  const from = okDate(sp.get("from")), to = okDate(sp.get("to"));
 
   let payments;
-  try { payments = await listRazorpayPayments(days, 500); }
+  try { payments = await listRazorpayPayments(days, 500, { from, to }); }
   catch { return new NextResponse("Could not reach Razorpay — check the keys and try again.", { status: 502 }); }
   if (status) payments = payments.filter((p) => p.status === status);
   if (method) payments = payments.filter((p) => p.method === method);
@@ -40,7 +42,7 @@ export async function GET(req: NextRequest) {
   return new NextResponse("﻿" + rows.join("\r\n"), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="razorpay-${days}d.csv"`,
+      "Content-Disposition": `attachment; filename="razorpay-${from || to ? `${from || "start"}_to_${to || "today"}` : `${days}d`}.csv"`,
       "Cache-Control": "no-store",
     },
   });

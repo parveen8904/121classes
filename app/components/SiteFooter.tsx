@@ -49,7 +49,6 @@ export default async function SiteFooter() {
         <div>
           <h4>Explore</h4>
           <Link href="/#courses">Courses</Link>
-          <Link href="/pricing">💰 Plans &amp; Pricing</Link>
           <Link href="/pricing#ca-intermediate">Prices — CA Intermediate</Link>
           <Link href="/pricing#ca-final">Prices — CA Final</Link>
           <Link href="/articles">Study Articles</Link>

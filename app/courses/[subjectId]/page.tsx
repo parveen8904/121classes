@@ -119,7 +119,16 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
     arr.push((r.title as string) || (r.kind as string).toUpperCase());
     materialsByKind.set(r.kind as string, arr);
   }
-  const KIND_LABEL: Record<string, string> = { mtp: "MTPs", rtp: "RTPs", past_papers: "Past exam papers", question_bank: "Question banks", book: "Books", notes: "Handwritten notes", icai: "ICAI material" };
+  // Same category tiles (order + icon + label) the student dashboard shows.
+  const RES_ORDER: { kind: string; icon: string; label: string }[] = [
+    { kind: "notes", icon: "✍️", label: "Handwritten notes / book" },
+    { kind: "book", icon: "📕", label: "Books" },
+    { kind: "question_bank", icon: "📚", label: "Question bank" },
+    { kind: "past_papers", icon: "🗂️", label: "Past exam papers" },
+    { kind: "rtp", icon: "📝", label: "RTPs — Revision Test Papers" },
+    { kind: "mtp", icon: "📝", label: "MTPs — Mock Test Papers" },
+    { kind: "custom", icon: "✨", label: "Additional resources" },
+  ];
 
   // Live batch: show the derived schedule right here.
   const isBatch = (Number((subject as { batch_months?: number | null }).batch_months) || 0) > 0;
@@ -189,6 +198,47 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
         validity ends. Regular classes come with 2× their duration as watch time.
       </p>
 
+      {/* 📚 Subject resources — SAME tile layout the student dashboard uses,
+          shown at the TOP of the shop window. Tap a category to see every file
+          by name; downloading needs a (free) login. */}
+      {kinds.size > 0 && (
+        <div style={{ margin: "0 0 18px" }}>
+          <h2 style={{ fontSize: "1.2rem", margin: "0 0 2px" }}>📚 Subject resources — everything included</h2>
+          <p className="muted" style={{ fontSize: ".8rem", margin: "2px 0 8px" }}>
+            Our own handwritten notes &amp; question banks are FREE for every student as PDFs — 9+ month Gold
+            subscribers also get them as FREE printed hard copies couriered home (within India).
+            Tap a category to see every file; downloading needs a free account.
+          </p>
+          <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+            {RES_ORDER.map((cat) => {
+              const titles = materialsByKind.get(cat.kind) ?? [];
+              if (titles.length === 0) return null;
+              return (
+                <details key={cat.kind} style={{ border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", overflow: "hidden" }}>
+                  <summary style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", fontWeight: 700 }}>
+                    <span style={{ fontSize: "1.4rem", lineHeight: 1 }}>{cat.icon}</span>
+                    <span style={{ flex: 1, fontSize: ".9rem" }}>{cat.label}</span>
+                    <span style={{ background: "var(--accent)", color: "#fff", borderRadius: 999, padding: "1px 10px", fontSize: ".8rem" }}>{titles.length}</span>
+                  </summary>
+                  <div style={{ display: "grid", gap: 6, padding: "0 12px 12px" }}>
+                    {titles.map((t, i) => (
+                      <a
+                        key={i}
+                        href={`/login?next=${loginNext}`}
+                        style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", background: "var(--card)", borderRadius: 8, padding: "8px 12px", color: "var(--text)" }}
+                      >
+                        <span style={{ fontSize: ".88rem" }}><strong>{t}</strong></span>
+                        <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap", fontSize: ".82rem" }}>🔒 Login →</span>
+                      </a>
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Free demo pitch */}
       <div className="card" style={{ border: "2px solid var(--accent)", marginBottom: 16 }}>
         <strong>🎁 Try it free</strong>
@@ -254,65 +304,6 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
           </div>
         </>
       )}
-
-      {/* Subject content BY NAME — visible without login, download after login.
-          Our own PDF Books (handwritten notes + question banks + books) get
-          top billing; ICAI-cycle material (RTP/MTP/papers) follows. */}
-      {kinds.size > 0 && (() => {
-        const BOOK_KINDS = ["book", "notes", "question_bank"];
-        const bookEntries = [...materialsByKind.entries()].filter(([k]) => BOOK_KINDS.includes(k));
-        const otherEntries = [...materialsByKind.entries()].filter(([k]) => !BOOK_KINDS.includes(k));
-        const bookCount = bookEntries.reduce((s, [, t]) => s + t.length, 0);
-        return (
-        <>
-          <h2 style={{ fontSize: "1.2rem", margin: "22px 0 4px" }}>📄 Study material included — see every file</h2>
-          <p className="muted" style={{ fontSize: ".84rem", margin: "0 0 8px" }}>
-            All of this comes with the subject. Downloading needs a free account.
-          </p>
-          {bookCount > 0 && (
-            <div className="card" style={{ border: "2px solid var(--accent)", marginBottom: 10 }}>
-              <strong>📚 PDF Books — {bookCount} file{bookCount === 1 ? "" : "s"}, FREE for every student</strong>
-              <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 6px" }}>
-                Our own handwritten notes and question banks, made by CA Parveen Sharma&apos;s team.
-                Gold subscribers of 9+ months also get these as FREE printed hard copies couriered home (within India).
-              </p>
-              {bookEntries.flatMap(([k, titles]) => titles.map((t, i) => (
-                <a
-                  key={`${k}:${i}`}
-                  href={`/login?next=${loginNext}`}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px dashed var(--border)", color: "var(--text)", fontSize: ".88rem" }}
-                >
-                  <span>📚 {t}<span className="muted"> · {KIND_LABEL[k] ?? k}</span></span>
-                  <span className="muted" style={{ whiteSpace: "nowrap", fontSize: ".8rem" }}>🔒 Login to download</span>
-                </a>
-              )))}
-            </div>
-          )}
-          <div style={{ display: "grid", gap: 8 }}>
-            {otherEntries.map(([k, titles]) => (
-              <details key={k} className="card" style={{ padding: 0, overflow: "hidden" }}>
-                <summary style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 16px" }}>
-                  <span style={{ fontWeight: 700 }}>📄 {KIND_LABEL[k] ?? k}</span>
-                  <span className="muted" style={{ whiteSpace: "nowrap", fontSize: ".85rem" }}>{titles.length} file{titles.length === 1 ? "" : "s"} ▾</span>
-                </summary>
-                <div style={{ borderTop: "1px solid var(--border)", padding: "6px 16px 12px" }}>
-                  {titles.map((t, i) => (
-                    <a
-                      key={i}
-                      href={`/login?next=${loginNext}`}
-                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px dashed var(--border)", color: "var(--text)", fontSize: ".88rem" }}
-                    >
-                      <span>📄 {t}</span>
-                      <span className="muted" style={{ whiteSpace: "nowrap", fontSize: ".8rem" }}>🔒 Login to download</span>
-                    </a>
-                  ))}
-                </div>
-              </details>
-            ))}
-          </div>
-        </>
-        );
-      })()}
 
       {/* The polite wall — only now. */}
       <div className="card" style={{ textAlign: "center", margin: "26px auto 0", maxWidth: 560 }}>

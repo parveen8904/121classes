@@ -40,6 +40,8 @@ export default async function BillingPage() {
           <div><label>GST rate %</label><input name="gst_rate" type="number" step="0.01" defaultValue={v("gst_rate", "18")} /></div>
           <div><label>SAC code</label><input name="gst_sac" defaultValue={v("gst_sac", "999293")} /></div>
           <div><label>Invoice prefix</label><input name="invoice_prefix" defaultValue={v("invoice_prefix", "CAPS/")} /></div>
+          <div><label>CIN (optional — invoice header)</label><input name="gst_cin" defaultValue={v("gst_cin", "")} placeholder="U80904DL2014PTC265872" /></div>
+          <div><label>PAN (optional — invoice header)</label><input name="gst_pan" defaultValue={v("gst_pan", "")} placeholder="AAYPS3155J" /></div>
         </div>
         <label className="remember" style={{ margin: 0 }}>
           <input type="checkbox" name="gst_inclusive" defaultChecked={v("gst_inclusive", "1") === "1"} /> Prices already include GST (extract tax from the price; recommended)

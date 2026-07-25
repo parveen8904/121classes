@@ -13,24 +13,28 @@ export async function issueOrderInvoice(opts: {
   description: string;
   amountInr: number; // GST-inclusive total actually paid
   table?: "orders" | "book_orders"; // where this payment lives (default: orders)
+  paymentRef?: string | null; // Razorpay payment id when the caller has it
 }): Promise<void> {
   try {
     const svc = createServiceClient();
     const table = opts.table ?? "orders";
     const { data: ord } = await svc
-      .from(table).select("id, invoice_no")
+      .from(table).select("id, invoice_no, order_no" + (table === "orders" ? ", subject_id" : ""))
       .eq("razorpay_order_id", opts.razorpayOrderId).maybeSingle();
-    if (!ord || ord.invoice_no) return; // unknown order / already invoiced
+    if (!ord || (ord as { invoice_no?: string | null }).invoice_no) return; // unknown / already invoiced
+    const orderNo = (ord as { order_no?: number | null }).order_no;
+    const subjectId = (ord as { subject_id?: string | null }).subject_id ?? null;
 
     let name = opts.payerName ?? "";
     let email = opts.payerEmail ?? "";
     let state = "";
     let gstin: string | null = null;
     let address: string | null = null;
+    let regNo: number | null = null;
     if (opts.payerUserId) {
       const { data: p } = await svc
         .from("profiles")
-        .select("full_name, email, state, gstin, business_name, address_line1, address_line2, city, pincode")
+        .select("full_name, email, state, gstin, business_name, address_line1, address_line2, city, pincode, registration_no")
         .eq("id", opts.payerUserId).maybeSingle();
       name = (p?.business_name as string) || (p?.full_name as string) || name;
       email = (p?.email as string) || email;
@@ -38,6 +42,20 @@ export async function issueOrderInvoice(opts: {
       gstin = (p?.gstin as string) || null;
       address = [p?.address_line1, p?.address_line2, [p?.city, p?.pincode].filter(Boolean).join(" ")]
         .filter(Boolean).join("\n") || null;
+      regNo = (p?.registration_no as number) ?? null;
+    }
+
+    // Receipt line: the exact validity window this payment created.
+    let receiptDetail: string | null = null;
+    if (opts.payerUserId && subjectId) {
+      const { data: sub } = await svc
+        .from("subscriptions").select("starts_at, ends_at")
+        .eq("student_id", opts.payerUserId).eq("subject_id", subjectId)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (sub) {
+        const d = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
+        receiptDetail = `Starting: ${d(sub.starts_at as string | null) || "on payment"}  ·  Valid till: ${d(sub.ends_at as string | null) || "-"}`;
+      }
     }
 
     const s = await getGstSettings();
@@ -48,6 +66,13 @@ export async function issueOrderInvoice(opts: {
       invoiceNo, date: now, s, gst,
       buyerName: name || "Student", buyerGstin: gstin, buyerAddress: address,
       buyerState: state || s.state, itemDescription: opts.description,
+      // Printed books ship as goods (HSN 4901); coaching services use the SAC.
+      itemHsn: table === "book_orders" ? "4901" : undefined,
+      registrationNo: regNo,
+      receiptNo: orderNo != null ? String(orderNo) : null,
+      paymentRef: opts.paymentRef ?? opts.razorpayOrderId,
+      paymentMode: "Online Payment [Razorpay]",
+      receiptDetail,
     });
 
     const path = `invoices/${invoiceNo.replace(/[^\w-]/g, "_")}.pdf`;

@@ -157,10 +157,16 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
   const desc = `${subj?.title ?? "Subject"} — ${g.tier} (${g.months} months) — gift for ${g.recipient_name}`;
   let invoiceRef: string | null = null;
   try {
+    const { data: gifterProf } = await svc.from("profiles").select("registration_no").eq("id", user.id).maybeSingle();
     const pdf = await buildInvoicePdf({
       invoiceNo, date: now, s, gst,
       buyerName: g.billing_name || g.recipient_name, buyerGstin: g.billing_gstin, buyerAddress: g.billing_address, buyerState: String(g.billing_state),
       itemDescription: desc,
+      registrationNo: (gifterProf?.registration_no as number | null) ?? null,
+      receiptNo: (g as { order_no?: number | null }).order_no != null ? String((g as { order_no?: number | null }).order_no) : null,
+      paymentRef: input.razorpay_payment_id,
+      paymentMode: "Online Payment [Razorpay]",
+      receiptDetail: `Gift for ${g.recipient_name} · ${g.months} months`,
     });
     const path = `invoices/${invoiceNo.replace(/[^\w-]/g, "_")}.pdf`;
     const up = await svc.storage.from("secure").upload(path, Buffer.from(pdf), { contentType: "application/pdf", upsert: true });

@@ -52,7 +52,13 @@ export default async function ProfilePage(props: { searchParams: Promise<{ saved
           </div>
         )}
 
-        {searchParams.need && (
+        {searchParams.need === "address" ? (
+          <div className="notice" style={{ marginTop: 18, background: "rgba(234,179,8,0.14)", border: "2px solid #eab308", color: "var(--text)" }}>
+            📦 Your 9+ month Gold plan includes <strong>FREE printed books couriered to you</strong> — please fill your
+            full shipping address below (address, city, state, PIN code), tap <strong>Save profile</strong>, then go
+            back and complete the payment.
+          </div>
+        ) : searchParams.need && (
           <div className="notice" style={{ marginTop: 18, background: "rgba(234,179,8,0.14)", border: "2px solid #eab308", color: "var(--text)" }}>
             ⚠️ Both your <strong>target exam attempt</strong> and your <strong>course / level</strong> are required. Please set them below, then tap <strong>Save profile</strong>. We use these to tailor your classes, amendments, study plan and tests to your attempt.
           </div>

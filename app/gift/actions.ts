@@ -72,6 +72,12 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
   const s = await getGstSettings();
   const gst = computeGst(amount, input.billing.state, s);
 
+  // 9+ month Gold gifts ship FREE printed books — the recipient's address is
+  // mandatory BEFORE payment so no order ever needs a chase-up call.
+  if (input.tier === "gold" && months >= 9 && !(input.recipient.address ?? "").trim()) {
+    return { ok: false, reason: "address" };
+  }
+
   try {
     const order = await createRazorpayOrder(amount, `gift_${Date.now()}`, {
       kind: "gift", subjectId: subject.id, courseId: subject.course_id, tier: input.tier,

@@ -33,7 +33,12 @@ export default function GiftForm({ configured, subjects, plans }: { configured: 
         recipient: { name: rName, email: rEmail, phone: rPhone, attempt: rAttempt, address: rAddr },
         billing: { name: bName || rName, gstin: bGstin, address: bAddr, state: bState },
       });
-      if (!res.ok) { setErr(res.reason === "unconfigured" ? "Payment isn't enabled yet." : "Couldn't start checkout — please check the details and try again."); return; }
+      if (!res.ok) {
+        setErr(res.reason === "unconfigured" ? "Payment isn't enabled yet."
+          : res.reason === "address" ? "This 9+ month Gold gift includes FREE printed books — please fill the recipient's delivery address before paying."
+          : "Couldn't start checkout — please check the details and try again.");
+        return;
+      }
       const Rzp = (window as unknown as { Razorpay: new (o: Record<string, unknown>) => { open: () => void } }).Razorpay;
       const rzp = new Rzp({
         key: res.keyId, amount: res.amount, currency: "INR", name: res.name, description: res.description,

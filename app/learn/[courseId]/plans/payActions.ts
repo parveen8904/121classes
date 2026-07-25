@@ -16,7 +16,7 @@ const PAID_TIERS = ["silver", "gold"];
 
 export type CreateOrderResult =
   | { ok: true; orderId: string; amount: number; keyId: string; name: string; description: string; prefill: { name?: string; email?: string; contact?: string } }
-  | { ok: false; reason: "unconfigured" | "auth" | "noplan" | "noprice" | "error" };
+  | { ok: false; reason: "unconfigured" | "auth" | "noplan" | "noprice" | "address" | "error" };
 
 export async function createPlanOrder(input: {
   subjectId: string;
@@ -122,9 +122,18 @@ export async function createPlanOrder(input: {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, email, phone")
+    .select("full_name, email, phone, address_line1, city, state, pincode")
     .eq("id", user.id)
     .single();
+
+  // 9+ month Gold ships FREE printed books — a complete shipping address is
+  // required BEFORE payment so the warehouse never has to chase the student.
+  if (input.tier === "gold" && months >= 9) {
+    const p = profile as { address_line1?: string | null; city?: string | null; state?: string | null; pincode?: string | null } | null;
+    if (!(p?.address_line1 ?? "").trim() || !(p?.city ?? "").trim() || !(p?.state ?? "").trim() || !(p?.pincode ?? "").trim()) {
+      return { ok: false, reason: "address" };
+    }
+  }
 
   let amountInr = baseAmount;
   let couponId = "";

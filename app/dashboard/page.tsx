@@ -128,16 +128,36 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
 
   // Active subscriptions — highlighted so every student always knows exactly
   // what they have and till when (no "why did I pay?" confusion).
-  type ActiveSub = { ends_at: string | null; plans: { name: string; tier: string } | null; subjects: { title: string } | null; courses: { title: string } | null };
+  type ActiveSub = { subject_id: string | null; ends_at: string | null; plans: { name: string; tier: string } | null; subjects: { title: string } | null; courses: { title: string } | null };
   const { data: mySubs } = await supabase
     .from("subscriptions")
-    .select("ends_at, plans(name, tier), subjects:subject_id(title), courses:course_id(title)")
+    .select("subject_id, ends_at, plans(name, tier), subjects:subject_id(title), courses:course_id(title)")
     .eq("student_id", user.id)
     .eq("status", "active");
   const activeSubsList = ((mySubs ?? []) as unknown as ActiveSub[])
     .filter((s) => !s.ends_at || new Date(s.ends_at) > nowD)
     .sort((a, b) => (a.ends_at ?? "9999").localeCompare(b.ends_at ?? "9999"));
   const tierEmoji: Record<string, string> = { gold: "🥇", silver: "🥈", bronze: "🥉" };
+
+  // Remaining class watch time per subscribed subject (fair-use budget is
+  // 2× the subject's class hours; revision/exam-essential content is open
+  // till validity regardless). Shown so nobody has to wonder how much is left.
+  const watchLeft = new Map<string, string>();
+  if (activeSubsList.length) {
+    const { getAllLimits, limitFor, WATCH_CATEGORY } = await import("@/lib/entitlements");
+    const limitsMap = await getAllLimits();
+    await Promise.all(activeSubsList.map(async (s) => {
+      if (!s.subject_id || !s.plans?.tier) return;
+      const mult = limitFor(limitsMap, s.plans.tier, WATCH_CATEGORY);
+      if (mult <= 0) { watchLeft.set(s.subject_id, "unlimited during validity"); return; }
+      const { data } = await supabase.rpc("fair_use_status", { p_subject: s.subject_id, p_multiplier: mult });
+      const row = (data as { budget_seconds: number; used_seconds: number }[] | null)?.[0];
+      if (!row || !row.budget_seconds) return;
+      const leftH = Math.max(0, (row.budget_seconds - row.used_seconds) / 3600);
+      const totalH = row.budget_seconds / 3600;
+      watchLeft.set(s.subject_id, `${leftH.toFixed(1)} h of ${totalH.toFixed(0)} h left`);
+    }));
+  }
 
   // Faculty messages / updates — shown to every student on login.
   const { data: announcements } = await supabase
@@ -173,6 +193,9 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
                   <span>
                     {tierEmoji[s.plans?.tier ?? ""] ?? "⭐"} <strong>{s.subjects?.title ?? s.courses?.title ?? "Full access"}</strong>
                     <span className="muted"> · {s.plans?.name ?? s.plans?.tier ?? ""}</span>
+                    {s.subject_id && watchLeft.has(s.subject_id) && (
+                      <span className="muted" style={{ fontSize: ".8rem" }}> · ⏱️ watch time: {watchLeft.get(s.subject_id)}</span>
+                    )}
                   </span>
                   <span className="badge">
                     valid till {s.ends_at
@@ -182,6 +205,9 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
                 </div>
               ))}
             </div>
+            <p className="muted" style={{ fontSize: ".76rem", margin: "8px 0 0" }}>
+              ⏱️ Watch time = 2× each class&apos;s duration. Revision classes and exam-essential content stay open till your validity ends.
+            </p>
           </div>
         )}
 

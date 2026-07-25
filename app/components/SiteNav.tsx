@@ -7,6 +7,7 @@ import AuthCta from "./AuthCta";
 
 const NAV_LINKS = [
   { href: "/courses", label: "Courses" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/build-your-plan", label: "Planner" },
   { href: "/results", label: "Results" },
   { href: "/books", label: "Books" },

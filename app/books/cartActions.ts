@@ -137,6 +137,20 @@ export async function verifyCartPayment(input: {
   }
   const lines = items.map((i) => `<li><strong>${titleById.get(i.b)?.title ?? "Book"}</strong> × ${i.q}</li>`).join("");
 
+  // GST invoice → emailed to the payer (works for guests too); admin-only view.
+  {
+    const { issueOrderInvoice } = await import("@/lib/orderInvoice");
+    await issueOrderInvoice({
+      razorpayOrderId: order.id,
+      payerUserId: (n.userId as string) || null,
+      payerName: (n.name as string) || null,
+      payerEmail: (n.email as string) || null,
+      description: `Books: ${items.map((i) => `${titleById.get(i.b)?.title ?? "Book"} × ${i.q}`).join(", ")}`.slice(0, 180),
+      amountInr: order.amount / 100,
+      table: "book_orders",
+    });
+  }
+
   await notifyByEmail({
     studentId: n.userId || null,
     email: n.email || null,

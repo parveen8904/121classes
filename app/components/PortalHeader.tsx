@@ -15,9 +15,13 @@ export default async function PortalHeader() {
   } = await supabase.auth.getUser();
 
   let isAdmin = false;
+  let isStaff = false;
   if (user) {
     const { data } = await supabase.from("profiles").select("role").eq("id", user.id).single();
     isAdmin = data?.role === "admin";
+    // Operators & faculty are staff too — without this they had NO Admin
+    // button after login and thought their new role "didn't work".
+    isStaff = isAdmin || data?.role === "faculty" || data?.role === "operator";
   }
 
   const links = [
@@ -29,11 +33,11 @@ export default async function PortalHeader() {
     { href: "/amendments", label: "📜 Amendments" },
     { href: "/career", label: "🎓 Career" },
     // Discuss is staff-only in the header — students use Community/doubts.
-    ...(isAdmin ? [{ href: "/discuss", label: "💬 Discuss" }] : []),
+    ...(isStaff ? [{ href: "/discuss", label: "💬 Discuss" }] : []),
     { href: "/community", label: "📣 Community" },
     { href: "/inbox", label: "📥 Inbox" },
     { href: "/dashboard/profile", label: "👤 Profile" },
-    ...(isAdmin ? [{ href: "/admin", label: "🛠️ Admin" }] : []),
+    ...(isStaff ? [{ href: "/admin", label: "🛠️ Admin" }] : []),
   ];
 
   return (

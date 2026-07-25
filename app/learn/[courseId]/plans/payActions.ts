@@ -235,6 +235,20 @@ export async function verifyPlanPayment(input: {
     .select("title")
     .eq("id", n.subjectId)
     .maybeSingle();
+
+  // GST invoice → emailed to the payer; visible to admin on the Sales panel
+  // only (never inside the student login).
+  {
+    const { issueOrderInvoice } = await import("@/lib/orderInvoice");
+    await issueOrderInvoice({
+      razorpayOrderId: input.razorpay_order_id,
+      payerUserId: user.id,
+      payerEmail: user.email ?? null,
+      description: `${subject?.title ?? "Subscription"} · ${String(n.tier).toUpperCase()} plan (${months} month${months === 1 ? "" : "s"})`,
+      amountInr: (Number(order.amount) || 0) / 100,
+    });
+  }
+
   await notifyByEmail({
     studentId: user.id,
     email: user.email ?? null,
@@ -424,6 +438,18 @@ export async function verifyExtendPayment(input: {
     .update({ status: "paid", store_txn_id: input.razorpay_payment_id })
     .eq("razorpay_order_id", input.razorpay_order_id);
   if (n.couponId) await redeemCoupon(n.couponId);
+
+  // Extension invoice → emailed to the payer; admin-only visibility.
+  {
+    const { issueOrderInvoice } = await import("@/lib/orderInvoice");
+    await issueOrderInvoice({
+      razorpayOrderId: input.razorpay_order_id,
+      payerUserId: user.id,
+      payerEmail: user.email ?? null,
+      description: `Subscription extension (+${addMonths} month${addMonths === 1 ? "" : "s"})`,
+      amountInr: (Number(order.amount) || 0) / 100,
+    });
+  }
 
   return { ok: true, courseId: n.courseId };
 }

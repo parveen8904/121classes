@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
 import { formatINR } from "@/lib/pricing";
+import { viaProxy } from "@/lib/fileProxy";
 import AdminHero from "../_components/AdminHero";
 import { setOrderStatus, sendDispatchEmail } from "./actions";
 
@@ -28,28 +30,102 @@ function fmt(s: string): string {
   return new Date(s).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" });
 }
 
+type PayRow = {
+  id: string; kind: string; amount_inr: number; status: string; created_at: string;
+  razorpay_order_id: string | null; invoice_no: string | null; invoice_url: string | null;
+  profiles: { full_name: string | null; email: string | null; phone: string | null } | null;
+};
+
 export default async function AdminOrdersPage(
   props: {
-    searchParams: Promise<{ dispatch?: string }>;
+    searchParams: Promise<{ dispatch?: string; q?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
+  const q = (searchParams.q ?? "").trim().toLowerCase();
   const supabase = createClient();
-  const { data } = await supabase
-    .from("book_orders")
-    .select("id, amount_inr, status, created_at, guest_contact, ship_to, items")
-    .order("created_at", { ascending: false })
-    .limit(200);
-  const orders = (data ?? []) as unknown as OrderRow[];
+  const svc = createServiceClient();
+
+  const [{ data }, { data: payData }] = await Promise.all([
+    supabase
+      .from("book_orders")
+      .select("id, amount_inr, status, created_at, guest_contact, ship_to, items, invoice_no, invoice_url")
+      .order("created_at", { ascending: false })
+      .limit(200),
+    // ALL payments (subscriptions / extensions / gifts) — the sales register.
+    svc
+      .from("orders")
+      .select("id, kind, amount_inr, status, created_at, razorpay_order_id, invoice_no, invoice_url, profiles:student_id(full_name, email, phone)")
+      .order("created_at", { ascending: false })
+      .limit(200),
+  ]);
+  const match = (parts: (string | null | undefined)[]) => !q || parts.some((p) => (p ?? "").toLowerCase().includes(q));
+  const orders = ((data ?? []) as unknown as (OrderRow & { invoice_no?: string | null; invoice_url?: string | null })[])
+    .filter((o) => match([o.guest_contact?.name, o.guest_contact?.email, o.guest_contact?.phone, o.ship_to?.name, o.ship_to?.phone, o.invoice_no]));
+  const payments = ((payData ?? []) as unknown as PayRow[])
+    .filter((p) => match([p.profiles?.full_name, p.profiles?.email, p.profiles?.phone, p.invoice_no, p.razorpay_order_id]));
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
       <AdminHero
-        badge="🚚 Book orders"
-        title="Book orders"
-        subtitle="Ship the paid orders, then mark them dispatched. Free shipping across India. 📦"
+        badge="💳 Sales & orders"
+        title="Sales & orders"
+        subtitle="Every payment — subscriptions, extensions and books — with GST invoices, plus book dispatching. 📦"
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {/* Search everything on this page */}
+      <form style={{ marginTop: 16 }}>
+        <div style={{ display: "flex", gap: 8, maxWidth: 520 }}>
+          <input name="q" defaultValue={searchParams.q ?? ""} placeholder="🔍 Search name, email, phone, invoice no…" style={{ marginBottom: 0 }} />
+          <SubmitButton className="btn small" savedLabel="✓">Search</SubmitButton>
+        </div>
+      </form>
+
+      {/* Payments register */}
+      <h2 className="admin-section-title" style={{ marginTop: 22 }}>💳 Payments — subscriptions &amp; extensions ({payments.length})</h2>
+      <div className="card" style={{ marginTop: 10 }}>
+        {payments.length > 0 ? (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".84rem" }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
+                  <th style={{ padding: "6px 8px" }}>Date</th><th style={{ padding: "6px 8px" }}>Payer</th>
+                  <th style={{ padding: "6px 8px" }}>Type</th><th style={{ padding: "6px 8px" }}>Amount</th>
+                  <th style={{ padding: "6px 8px" }}>Status</th><th style={{ padding: "6px 8px" }}>Invoice</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map((p) => (
+                  <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{fmt(p.created_at)}</td>
+                    <td style={{ padding: "6px 8px" }}>
+                      <strong>{p.profiles?.full_name ?? "—"}</strong>
+                      <div className="muted" style={{ fontSize: ".76rem" }}>{p.profiles?.email ?? ""}{p.profiles?.phone ? ` · ${p.profiles.phone}` : ""}</div>
+                    </td>
+                    <td style={{ padding: "6px 8px" }}>{p.kind}</td>
+                    <td style={{ padding: "6px 8px", fontWeight: 700 }}>{formatINR(p.amount_inr)}</td>
+                    <td style={{ padding: "6px 8px" }}>{p.status === "paid" ? "✅ paid" : p.status}</td>
+                    <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
+                      {p.invoice_url
+                        ? <a className="grad" href={viaProxy(p.invoice_url)} target="_blank" rel="noopener noreferrer">{p.invoice_no ?? "PDF"} ↓</a>
+                        : (p.invoice_no ?? "—")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>{q ? "No payments match your search." : "No payments yet."}</p>
+        )}
+      </div>
+      <p className="muted" style={{ fontSize: ".78rem", marginTop: 6 }}>
+        Invoices are emailed to the payer automatically on payment and stored privately — students never see them
+        inside their login. Gift invoices remain on <a href="/admin/reports" className="grad">Reports</a>.
+      </p>
+
+      <h2 className="admin-section-title" style={{ marginTop: 26 }}>🚚 Book orders ({orders.length})</h2>
 
       {searchParams.dispatch && (
         <div className={`notice ${searchParams.dispatch === "skipped" ? "err" : "ok"}`} style={{ marginTop: 16 }}>
@@ -82,6 +158,7 @@ export default async function AdminOrdersPage(
                     </strong>
                     <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
                       {qty} item{qty === 1 ? "" : "s"} · {STATUS_EMOJI[o.status] ?? o.status} · {fmt(o.created_at)}
+                      {o.invoice_url && <> · <a className="grad" href={viaProxy(o.invoice_url)} target="_blank" rel="noopener noreferrer">🧾 {o.invoice_no ?? "Invoice"} ↓</a></>}
                     </p>
                     <p className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>
                       📍 {ship.line1}

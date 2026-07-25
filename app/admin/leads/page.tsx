@@ -14,12 +14,15 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 export default async function LeadsPage(
-  props: { searchParams: Promise<{ msg?: string; added?: string; students?: string; dupes?: string; level?: string }> }
+  props: { searchParams: Promise<{ msg?: string; added?: string; students?: string; dupes?: string; level?: string; q?: string }> }
 ) {
   const searchParams = await props.searchParams;
+  const q = (searchParams.q ?? "").trim();
   const svc = createServiceClient();
+  let leadsQ = svc.from("leads").select("id, name, phone, email, source, note, matched_user_id, created_at").order("created_at", { ascending: false }).limit(200);
+  if (q) leadsQ = leadsQ.or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,note.ilike.%${q}%`);
   const [{ data: leads }, { count: total }, { count: matched }] = await Promise.all([
-    svc.from("leads").select("id, name, phone, email, source, note, matched_user_id, created_at").order("created_at", { ascending: false }).limit(200),
+    leadsQ,
     svc.from("leads").select("id", { count: "exact", head: true }),
     svc.from("leads").select("id", { count: "exact", head: true }).not("matched_user_id", "is", null),
   ]);
@@ -128,6 +131,14 @@ export default async function LeadsPage(
 
       {/* List */}
       <h2 className="admin-section-title" style={{ marginTop: 24 }}>📇 Latest leads {total && total > 200 ? `(showing 200 of ${total})` : ""}</h2>
+      {/* Search */}
+      <form style={{ marginTop: 10 }}>
+        {searchParams.level && <input type="hidden" name="level" value={searchParams.level} />}
+        <div style={{ display: "flex", gap: 8, maxWidth: 480 }}>
+          <input name="q" defaultValue={q} placeholder="🔍 Search name, phone, email, note…" style={{ marginBottom: 0 }} />
+          <SubmitButton className="btn small" savedLabel="✓">Search</SubmitButton>
+        </div>
+      </form>
       {/* Level filter — see at a glance which course level each contact is. */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
         {[["", "All"], ["Final", "📘 CA Final"], ["Inter", "📗 CA Inter"], ["none", "Not a student"]].map(([v, label]) => (

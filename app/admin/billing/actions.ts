@@ -27,8 +27,6 @@ export async function saveGstSettings(formData: FormData) {
     set("gst_sac", str(formData.get("gst_sac")).trim() || "999293"),
     set("gst_inclusive", formData.get("gst_inclusive") === "on" ? "1" : "0"),
     set("invoice_prefix", str(formData.get("invoice_prefix")) || "CAPS/"),
-    set("gst_cin", str(formData.get("gst_cin")).trim()),
-    set("gst_pan", str(formData.get("gst_pan")).trim()),
   ]);
   revalidatePath("/admin/billing");
 }

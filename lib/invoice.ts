@@ -10,13 +10,12 @@ import { createServiceClient } from "@/lib/supabase/service";
 export type GstSettings = {
   enabled: boolean; gstin: string; legalName: string; address: string;
   state: string; rate: number; sac: string; inclusive: boolean; prefix: string;
-  cin: string; pan: string;
 };
 
 export async function getGstSettings(): Promise<GstSettings> {
   const svc = createServiceClient();
   const { data } = await svc.from("site_settings").select("key, value").in("key", [
-    "gst_enabled", "gst_number", "gst_legal_name", "gst_address", "gst_state", "gst_rate", "gst_sac", "gst_inclusive", "invoice_prefix", "gst_cin", "gst_pan",
+    "gst_enabled", "gst_number", "gst_legal_name", "gst_address", "gst_state", "gst_rate", "gst_sac", "gst_inclusive", "invoice_prefix",
   ]);
   const m = new Map((data ?? []).map((r) => [r.key, r.value as string]));
   return {
@@ -29,8 +28,6 @@ export async function getGstSettings(): Promise<GstSettings> {
     sac: (m.get("gst_sac") ?? "999293").trim(),
     inclusive: (m.get("gst_inclusive") ?? "1") === "1",
     prefix: m.get("invoice_prefix") ?? "CAPS/",
-    cin: (m.get("gst_cin") ?? "").trim(),
-    pan: (m.get("gst_pan") ?? "").trim(),
   };
 }
 
@@ -167,11 +164,7 @@ export async function buildInvoicePdf(input: {
   txtAt("Date:", 420, y, 9, font, grey); txtAt(dmy(input.date), 448, y, 10, bold);
   y -= 14;
   hline(y + 6);
-  const regLine = [
-    s.gstin ? `GSTIN:${s.gstin}` : "",
-    s.cin ? `CIN:${s.cin}` : "",
-    s.pan ? `PAN:${s.pan}` : "",
-  ].filter(Boolean).join("  |  ");
+  const regLine = s.gstin ? `GSTIN:${s.gstin}` : "";
   if (regLine) { txtAt(regLine, (595.28 - bold.widthOfTextAtSize(regLine, 8.5)) / 2, y - 5, 8.5, bold); y -= 16; }
   hline(y + 2);
 
@@ -200,9 +193,9 @@ export async function buildInvoicePdf(input: {
   hline(y);
 
   // ---------- ITEMS TABLE ----------
-  // Columns (x left edges); last two are the tax columns.
-  const C = { sr: M, desc: M + 30, hsn: 188, qty: 230, unit: 258, rate: 286, total: 334, disc: 384, taxable: 426, t1: 476, t2: 518 };
-  const colXs = [C.sr, C.desc, C.hsn, C.qty, C.unit, C.rate, C.total, C.disc, C.taxable, C.t1, C.t2, R];
+  // Columns (x left edges); last two are the tax columns. No discount column.
+  const C = { sr: M, desc: M + 30, hsn: 196, qty: 240, unit: 268, rate: 296, total: 352, taxable: 408, t1: 466, t2: 512 };
+  const colXs = [C.sr, C.desc, C.hsn, C.qty, C.unit, C.rate, C.total, C.taxable, C.t1, C.t2, R];
   const th = (t: string[], x: number, w: number, yTop: number) => {
     let yy = yTop - 10;
     for (const l of t) { txtAt(l, x + (w - bold.widthOfTextAtSize(l, 7.5)) / 2, yy, 7.5, bold); yy -= 9; }
@@ -210,8 +203,8 @@ export async function buildInvoicePdf(input: {
   const headH = 30;
   th(["Sr.No."], C.sr, C.desc - C.sr, y); th(["Services", "Supplied"], C.desc, C.hsn - C.desc, y);
   th(["HSN/ SAC"], C.hsn, C.qty - C.hsn, y); th(["Qty"], C.qty, C.unit - C.qty, y); th(["Unit"], C.unit, C.rate - C.unit, y);
-  th(["Rate per", "Item"], C.rate, C.total - C.rate, y); th(["Total"], C.total, C.disc - C.total, y);
-  th(["Discount"], C.disc, C.taxable - C.disc, y); th(["Taxable", "Amount"], C.taxable, C.t1 - C.taxable, y);
+  th(["Rate per", "Item"], C.rate, C.total - C.rate, y); th(["Total"], C.total, C.taxable - C.total, y);
+  th(["Taxable", "Amount"], C.taxable, C.t1 - C.taxable, y);
   th([intra ? "CGST" : "IGST"], C.t1, C.t2 - C.t1, y); th([intra ? "SGST" : ""], C.t2, R - C.t2, y);
   const headBottom = y - headH;
   hline(headBottom);
@@ -224,9 +217,7 @@ export async function buildInvoicePdf(input: {
   txtAt(hsn, C.hsn + 6, yy, 7.5);
   txtAt("NA", C.qty + 8, yy, 7.5); txtAt("NA", C.unit + 6, yy, 7.5);
   const num = (v: number, xr: number, b = false, size = 7) => txtAt(NUM(v), xr - (b ? bold : font).widthOfTextAtSize(NUM(v), size), yy, size, b ? bold : font);
-  num(g.total, C.total - 4); num(g.total, C.disc - 4);
-  const discount = Math.round((g.total - g.taxable - (g.cgst + g.sgst + g.igst)) * 100) / 100; // usually 0
-  num(Math.max(0, discount), C.taxable - 4);
+  num(g.total, C.total - 4); num(g.total, C.taxable - 4);
   num(g.taxable, C.t1 - 4, true);
   if (intra) {
     num(g.cgst, C.t2 - 3, true);
@@ -244,7 +235,7 @@ export async function buildInvoicePdf(input: {
   yy = rowBottom - 12;
   txtAt("Total", C.rate + 8, yy, 8, bold);
   const numT = (v: number, xr: number) => txtAt(NUM(v), xr - bold.widthOfTextAtSize(NUM(v), 7), yy, 7, bold);
-  numT(g.total, C.disc - 4); numT(Math.max(0, discount), C.taxable - 4);
+  numT(g.total, C.taxable - 4);
   numT(g.taxable, C.t1 - 4);
   if (intra) { numT(g.cgst, C.t2 - 3); numT(g.sgst, R - 3); } else if (g.applied) numT(g.igst, C.t2 - 3);
   const totalBottom = rowBottom - 20;
@@ -297,11 +288,9 @@ export async function buildInvoicePdf(input: {
   // over the same edges so nothing can collide.
   const RCno = M, RCitem = M + 22;
   const REdges = [
-    { x: 344, head: ["Fees"] },
-    { x: 388, head: ["Previous", "Discount"] },
-    { x: 432, head: ["Previous", "Net Paid"] },
-    { x: 476, head: ["Current", "Discount"] },
-    { x: 520, head: ["Current", "Net Paid"] },
+    { x: 380, head: ["Fees"] },
+    { x: 440, head: ["Previous", "Net Paid"] },
+    { x: 505, head: ["Current", "Net Paid"] },
     { x: 558, head: ["Balance", "Fees*"] },
   ];
   hline(yy + 8);
@@ -314,7 +303,7 @@ export async function buildInvoicePdf(input: {
   yy -= 20; hline(yy + 6);
   txtAt("1", RCno + 4, yy - 4, 8);
   txtAt(input.itemDescription.slice(0, 58), RCitem + 2, yy - 4, 8, bold);
-  const rvals = [g.total, 0, 0, 0, g.total, 0];
+  const rvals = [g.total, 0, g.total, 0];
   rvals.forEach((v, i) => txtAt(NUM(v), REdges[i].x - font.widthOfTextAtSize(NUM(v), 7.5), yy - 4, 7.5));
   yy -= 14;
   if (input.receiptDetail) { txtAt(input.receiptDetail, RCitem + 2, yy, 7.5, font, grey); yy -= 11; }

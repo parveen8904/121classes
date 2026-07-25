@@ -147,7 +147,10 @@ export async function createPlanOrder(input: {
       userId: user.id,
       couponId,
     });
-    await supabase.from("orders").insert({
+    // SERVICE client: orders has no student INSERT policy, so the old
+    // user-client insert silently failed — every sale was missing from the
+    // ledger (the founder's Rs 600 AA-Gold sale was invisible).
+    await createServiceClient().from("orders").insert({
       student_id: user.id,
       kind: "subscription",
       channel: "web",
@@ -370,7 +373,9 @@ export async function createExtendOrder(input: {
       userId: user.id,
       couponId,
     });
-    await supabase.from("orders").insert({
+    // Service client — see createPlanOrder: user-client inserts were silently
+    // dropped by RLS and the ledger stayed empty.
+    await createServiceClient().from("orders").insert({
       student_id: user.id,
       kind: "subscription",
       channel: "web",

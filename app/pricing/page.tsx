@@ -76,7 +76,7 @@ export default async function PricingPage() {
             <h2 style={{ margin: "0 0 4px" }}>📘 {course.title}</h2>
             <p className="muted" style={{ margin: "0 0 14px", fontSize: ".88rem" }}>
               Bronze is free for everyone. Silver adds all tests &amp; AI doubt-solving. Gold unlocks the full premium
-              classes <strong style={{ color: "var(--text)" }}>+ FREE printed books couriered to your address</strong>.
+              classes <strong style={{ color: "var(--text)" }}>+ FREE printed books couriered to your address on 9-month-or-longer plans</strong>.
             </p>
             <div style={{ display: "grid", gap: 14 }}>
               {courseSubs.map((s) => {
@@ -136,7 +136,7 @@ export default async function PricingPage() {
                             <tr style={{ textAlign: "left", color: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
                               <th style={{ padding: "6px 8px" }}>Validity</th>
                               <th style={{ padding: "6px 8px" }}>🥈 Silver</th>
-                              <th style={{ padding: "6px 8px" }}>🥇 Gold (full classes + FREE printed books)</th>
+                              <th style={{ padding: "6px 8px" }}>🥇 Gold (full classes + FREE books on 9+ months)</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -150,7 +150,7 @@ export default async function PricingPage() {
                           </tbody>
                         </table>
                         <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
-                          📦 Every Gold subscription includes FREE printed books, couriered to your address ·
+                          📦 Gold plans of 9 months or longer include FREE printed books, couriered to your address ·
                           longer validity works out cheaper per month · custom durations available at enrolment · Bronze is free.
                         </p>
                       </div>
@@ -168,8 +168,9 @@ export default async function PricingPage() {
       <div className="card" style={{ maxWidth: 640, margin: "0 auto 16px", textAlign: "center", border: "2px solid var(--accent)" }}>
         <strong>📦 Gold = FREE printed books, delivered home</strong>
         <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0" }}>
-          Every Gold subscription includes the printed study books — real hard copies (not PDFs), couriered
-          FREE to your shipping address anywhere in India.
+          Every Gold subscription of <strong>9 months or longer</strong> includes the printed study books — real
+          hard copies (not PDFs), couriered FREE to your shipping address anywhere in India. Shorter plans can
+          add the books at checkout.
         </p>
       </div>
 

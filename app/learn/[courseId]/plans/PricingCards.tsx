@@ -491,8 +491,23 @@ export default function PricingCards({
                 })()
               )}
 
+              {/* Free printed books need a 9+ month Gold plan. Below that, offer
+                  the Book Store so nobody checks out expecting free books. */}
+              {tier === "gold" && !noPrice && !owned && (
+                (tierMonths.gold ?? 0) >= 9 ? (
+                  <div style={{ fontSize: ".82rem", fontWeight: 700, color: "#16a34a", margin: "6px 0" }}>
+                    📦 Includes FREE printed books — hard copies couriered to your address.
+                  </div>
+                ) : (
+                  <div style={{ fontSize: ".8rem", margin: "6px 0", padding: "8px 10px", borderRadius: 10, background: "color-mix(in srgb, #f59e0b 12%, transparent)", border: "1px solid #f59e0b" }}>
+                    📦 Free books come with <strong>9+ month</strong> Gold plans — a {tierMonths.gold}-month plan does <strong>not</strong> include them.{" "}
+                    <a className="grad" href="/books" target="_blank" rel="noopener noreferrer" style={{ fontWeight: 700 }}>🛒 Add printed books →</a>
+                  </div>
+                )
+              )}
+
               <ul className="feat-list">
-                {meta?.features.map((f) => (
+                {(tier === "gold" ? meta?.features.filter((f) => !f.includes("printed books")) : meta?.features)?.map((f) => (
                   <li key={f}>{f}</li>
                 ))}
               </ul>

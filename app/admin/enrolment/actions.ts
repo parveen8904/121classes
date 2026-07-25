@@ -42,7 +42,10 @@ function enrolledEmail(name: string | null, courseTitle: string, tier: string, m
     html: emailShell(
       "You're enrolled! 🎉",
       `<p>Hi ${name || "there"},</p>
-       <p>You now have <strong>${tier}</strong> access to <strong>${courseTitle}</strong> for ${months} month${months === 1 ? "" : "s"}.</p>
+       <p>You have been granted <strong>free ${tier}</strong> access to <strong>${courseTitle}</strong> for ${months} month${months === 1 ? "" : "s"}.</p>
+       <p>Please note: printed books are not included with granted subscriptions. If you would like the
+       hard-copy books, you can order them online at
+       <a href="https://caparveensharma.com/books">caparveensharma.com/books</a> — they are couriered to your address.</p>
        <p>Log in to start learning. 📚 Good luck with your prep! 💪</p>`,
     ),
   };

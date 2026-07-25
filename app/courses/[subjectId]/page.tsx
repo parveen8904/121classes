@@ -255,15 +255,41 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
         </>
       )}
 
-      {/* Subject content BY NAME — visible without login, download after login. */}
-      {kinds.size > 0 && (
+      {/* Subject content BY NAME — visible without login, download after login.
+          Our own PDF Books (handwritten notes + question banks + books) get
+          top billing; ICAI-cycle material (RTP/MTP/papers) follows. */}
+      {kinds.size > 0 && (() => {
+        const BOOK_KINDS = ["book", "notes", "question_bank"];
+        const bookEntries = [...materialsByKind.entries()].filter(([k]) => BOOK_KINDS.includes(k));
+        const otherEntries = [...materialsByKind.entries()].filter(([k]) => !BOOK_KINDS.includes(k));
+        const bookCount = bookEntries.reduce((s, [, t]) => s + t.length, 0);
+        return (
         <>
           <h2 style={{ fontSize: "1.2rem", margin: "22px 0 4px" }}>📄 Study material included — see every file</h2>
           <p className="muted" style={{ fontSize: ".84rem", margin: "0 0 8px" }}>
             All of this comes with the subject. Downloading needs a free account.
           </p>
+          {bookCount > 0 && (
+            <div className="card" style={{ border: "2px solid var(--accent)", marginBottom: 10 }}>
+              <strong>📚 PDF Books — {bookCount} file{bookCount === 1 ? "" : "s"}, FREE for every student</strong>
+              <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 6px" }}>
+                Our own handwritten notes and question banks, made by CA Parveen Sharma&apos;s team.
+                Gold subscribers of 9+ months also get these as FREE printed hard copies couriered home (within India).
+              </p>
+              {bookEntries.flatMap(([k, titles]) => titles.map((t, i) => (
+                <a
+                  key={`${k}:${i}`}
+                  href={`/login?next=${loginNext}`}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px dashed var(--border)", color: "var(--text)", fontSize: ".88rem" }}
+                >
+                  <span>📚 {t}<span className="muted"> · {KIND_LABEL[k] ?? k}</span></span>
+                  <span className="muted" style={{ whiteSpace: "nowrap", fontSize: ".8rem" }}>🔒 Login to download</span>
+                </a>
+              )))}
+            </div>
+          )}
           <div style={{ display: "grid", gap: 8 }}>
-            {[...materialsByKind.entries()].map(([k, titles]) => (
+            {otherEntries.map(([k, titles]) => (
               <details key={k} className="card" style={{ padding: 0, overflow: "hidden" }}>
                 <summary style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 16px" }}>
                   <span style={{ fontWeight: 700 }}>📄 {KIND_LABEL[k] ?? k}</span>
@@ -285,7 +311,8 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
             ))}
           </div>
         </>
-      )}
+        );
+      })()}
 
       {/* The polite wall — only now. */}
       <div className="card" style={{ textAlign: "center", margin: "26px auto 0", maxWidth: 560 }}>

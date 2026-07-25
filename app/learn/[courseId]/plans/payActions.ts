@@ -23,6 +23,9 @@ export async function createPlanOrder(input: {
   tier: string;
   months?: number;
   couponCode?: string;
+  // 9+ month Gold only: false = student declined the printed books
+  // (outside India / doesn't want hard copies) — PDFs are free regardless.
+  wantBooks?: boolean;
 }): Promise<CreateOrderResult> {
   if (!(await razorpayConfigured())) return { ok: false, reason: "unconfigured" };
   if (!PAID_TIERS.includes(input.tier)) return { ok: false, reason: "error" };
@@ -126,9 +129,13 @@ export async function createPlanOrder(input: {
     .eq("id", user.id)
     .single();
 
-  // 9+ month Gold ships FREE printed books — a complete shipping address is
-  // required BEFORE payment so the warehouse never has to chase the student.
-  if (input.tier === "gold" && months >= 9) {
+  // 9+ month Gold ships FREE printed books (India delivery only). The student
+  // can decline them (outside India / doesn't want hard copies) — then no
+  // address is needed and no parcel is created; PDFs are free anyway. When
+  // books ARE wanted, a complete shipping address is required BEFORE payment
+  // so the warehouse never has to chase the student.
+  const wantsBooks = input.tier === "gold" && months >= 9 && input.wantBooks !== false;
+  if (wantsBooks) {
     const p = profile as { address_line1?: string | null; city?: string | null; state?: string | null; pincode?: string | null } | null;
     if (!(p?.address_line1 ?? "").trim() || !(p?.city ?? "").trim() || !(p?.state ?? "").trim() || !(p?.pincode ?? "").trim()) {
       return { ok: false, reason: "address" };
@@ -168,8 +175,8 @@ export async function createPlanOrder(input: {
       status: "created",
       subject_id: subject.id,
       // Free printed books ship with Gold plans of 9+ months — flag the sale
-      // so the warehouse flow picks it up once paid.
-      books_due: input.tier === "gold" && months >= 9,
+      // so the warehouse flow picks it up once paid (unless declined).
+      books_due: wantsBooks,
     });
     return {
       ok: true,

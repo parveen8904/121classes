@@ -35,7 +35,7 @@ export default function GiftForm({ configured, subjects, plans }: { configured: 
       });
       if (!res.ok) {
         setErr(res.reason === "unconfigured" ? "Payment isn't enabled yet."
-          : res.reason === "address" ? "This 9+ month Gold gift includes FREE printed books — please fill the recipient's delivery address before paying."
+          : res.reason === "address" ? "This 9+ month Gold gift includes FREE printed books (delivered within India only) — please fill the recipient's Indian delivery address before paying."
           : "Couldn't start checkout — please check the details and try again.");
         return;
       }

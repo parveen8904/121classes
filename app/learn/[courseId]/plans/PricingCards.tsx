@@ -89,6 +89,9 @@ export default function PricingCards({
     : goldChoices[0] ?? goldBase;
   const [goldMonths, setGoldMonths] = useState<number>(defaultMonths);
   const [custom, setCustom] = useState("");
+  // 9+ month Gold: printed books ship free within India; untick to decline
+  // (outside India / PDF-only preference).
+  const [wantBooks, setWantBooks] = useState(true);
 
   // Gold price: slab total if a ladder is set, else scale the flat base price.
   const goldTotal = goldSlabs
@@ -144,6 +147,7 @@ export default function PricingCards({
         tier,
         months: tier === "gold" ? goldMonths : tier === "silver" ? silverMonths : undefined,
         couponCode: coupon,
+        wantBooks,
       });
       if (!res.ok) {
         if (res.reason === "unconfigured") window.location.href = contactHref;
@@ -497,11 +501,21 @@ export default function PricingCards({
               )}
 
               {/* Free printed books need a 9+ month Gold plan. Below that, offer
-                  the Book Store so nobody checks out expecting free books. */}
+                  the Book Store so nobody checks out expecting free books.
+                  Delivery is within India only — students abroad (or who just
+                  don't want hard copies) can untick and use the free PDFs. */}
               {tier === "gold" && !noPrice && !owned && (
                 (tierMonths.gold ?? 0) >= 9 ? (
-                  <div style={{ fontSize: ".82rem", fontWeight: 700, color: "#16a34a", margin: "6px 0" }}>
-                    📦 Includes FREE printed books — hard copies couriered to your address.
+                  <div style={{ fontSize: ".82rem", margin: "6px 0", padding: "8px 10px", borderRadius: 10, background: "color-mix(in srgb, #16a34a 10%, transparent)", border: "1px solid #16a34a" }}>
+                    <label className="remember" style={{ margin: 0, fontWeight: 700, color: "#16a34a" }}>
+                      <input type="checkbox" checked={wantBooks} onChange={(e) => setWantBooks(e.target.checked)} />{" "}
+                      📦 Courier my FREE printed books (delivery within India only)
+                    </label>
+                    <span className="muted" style={{ display: "block", fontSize: ".76rem", marginTop: 4 }}>
+                      {wantBooks
+                        ? "Hard copies ship free to your profile address. Outside India? Untick — you still get the free PDF books."
+                        : "No parcel will be sent — you'll use the free PDF books instead."}
+                    </span>
                   </div>
                 ) : (
                   <div style={{ fontSize: ".8rem", margin: "6px 0", padding: "8px 10px", borderRadius: 10, background: "color-mix(in srgb, #f59e0b 12%, transparent)", border: "1px solid #f59e0b" }}>

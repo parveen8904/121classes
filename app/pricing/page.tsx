@@ -177,7 +177,8 @@ export default async function PricingPage() {
         <strong>📦 Gold = FREE printed books, delivered home</strong>
         <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0" }}>
           Every Gold subscription of <strong>9 months or longer</strong> — bought for yourself or gifted — includes the
-          printed study books: real hard copies couriered FREE to the shipping address anywhere in India.
+          printed study books: real hard copies couriered FREE to the shipping address, <strong>within India only</strong>
+          (outside India you use the free PDF books).
           The book PDFs are free for every student on the portal (including Bronze); printed copies can also be added at checkout.
           ⏱️ Watch time: 2× each class&apos;s duration — <strong>revision videos have NO watch-time limit</strong> and stay open till your validity ends.
         </p>

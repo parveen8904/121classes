@@ -4,19 +4,41 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { formatINR } from "@/lib/pricing";
 import { viaProxy } from "@/lib/fileProxy";
 import AdminHero from "../_components/AdminHero";
-import { setOrderStatus, sendDispatchEmail, approveForZoho } from "./actions";
+import { setOrderStatus, sendDispatchEmail, approveForZoho, approveDayForZoho, holdForZoho } from "./actions";
 
-// Zoho posting state → what the admin sees in the register.
+// Zoho posting state → what the admin sees in the register. Normal flow is
+// the one-click DAY approval above the table; per-row buttons are for
+// exceptions (hold something fishy, or approve one sale early).
 function ZohoCell({ id, table, status }: { id: string; table: string; status: string | null }) {
   if (status === "posted") return <span title="Posted to Zoho Books">✅ in Zoho</span>;
   if (status === "approved") return <span className="muted" title="Will post to Zoho Books tonight">⏳ posts tonight</span>;
-  if (status === "skipped") return <span className="muted">—</span>;
+  if (status === "skipped") {
+    return (
+      <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+        <span title="Held — will never post to Zoho">🚫 held</span>
+        <form action={holdForZoho} style={{ margin: 0, display: "inline" }}>
+          <input type="hidden" name="id" value={id} />
+          <input type="hidden" name="table" value={table} />
+          <input type="hidden" name="to" value="pending" />
+          <SubmitButton className="btn small secondary" savedLabel="✓">Undo</SubmitButton>
+        </form>
+      </span>
+    );
+  }
   return (
-    <form action={approveForZoho} style={{ margin: 0, display: "inline" }}>
-      <input type="hidden" name="id" value={id} />
-      <input type="hidden" name="table" value={table} />
-      <SubmitButton className="btn small secondary" savedLabel="✓">Approve → Zoho</SubmitButton>
-    </form>
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <form action={approveForZoho} style={{ margin: 0, display: "inline" }}>
+        <input type="hidden" name="id" value={id} />
+        <input type="hidden" name="table" value={table} />
+        <SubmitButton className="btn small secondary" savedLabel="✓">Approve</SubmitButton>
+      </form>
+      <form action={holdForZoho} style={{ margin: 0, display: "inline" }} title="Fishy? Hold it — excluded from day approval, never posts">
+        <input type="hidden" name="id" value={id} />
+        <input type="hidden" name="table" value={table} />
+        <input type="hidden" name="to" value="skipped" />
+        <SubmitButton className="btn small secondary" savedLabel="✓">✋ Hold</SubmitButton>
+      </form>
+    </span>
   );
 }
 
@@ -125,6 +147,22 @@ export default async function AdminOrdersPage(
           <SubmitButton className="btn small" savedLabel="✓">Search</SubmitButton>
         </div>
       </form>
+
+      {/* One-click day approval for Zoho — review the day's rows below, hold
+          anything fishy, then send the whole calendar date in one press. */}
+      <div className="card" style={{ marginTop: 18, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between" }}>
+        <div style={{ minWidth: 240, flex: 1 }}>
+          <strong>🧾 Send a whole day to Zoho Books</strong>
+          <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
+            Check the rows below first. Something fishy? Press <strong>✋ Hold</strong> on that row — held sales are
+            excluded and never post. Then approve the date here; it posts to Zoho tonight automatically.
+          </p>
+        </div>
+        <form action={approveDayForZoho} style={{ display: "flex", gap: 8, alignItems: "center", margin: 0 }}>
+          <input type="date" name="day" defaultValue={new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10)} required style={{ marginBottom: 0 }} />
+          <SubmitButton className="btn small" savedLabel="✓ Approved">✅ Approve this date → Zoho</SubmitButton>
+        </form>
+      </div>
 
       {/* Website payments register — OUR sales only (from our own database).
           Razorpay account data lives on its own page: the same Razorpay key is

@@ -59,7 +59,16 @@ export default async function AdminOrdersPage(
       .order("created_at", { ascending: false })
       .limit(200),
   ]);
+  // Razorpay = source of truth for money received (payment links & QR too).
+  let rzp: import("@/lib/razorpay").RazorpayPayment[] = [];
+  let rzpError = false;
+  try {
+    const { listRazorpayPayments } = await import("@/lib/razorpay");
+    rzp = await listRazorpayPayments(180, 100);
+  } catch { rzpError = true; }
+
   const match = (parts: (string | null | undefined)[]) => !q || parts.some((p) => (p ?? "").toLowerCase().includes(q));
+  rzp = rzp.filter((p) => match([p.email, p.contact, p.description, p.id]));
   const orders = ((data ?? []) as unknown as (OrderRow & { invoice_no?: string | null; invoice_url?: string | null })[])
     .filter((o) => match([o.guest_contact?.name, o.guest_contact?.email, o.guest_contact?.phone, o.ship_to?.name, o.ship_to?.phone, o.invoice_no]));
   const payments = ((payData ?? []) as unknown as PayRow[])
@@ -82,8 +91,47 @@ export default async function AdminOrdersPage(
         </div>
       </form>
 
+      {/* Razorpay collections — EVERYTHING, incl. payment links / QR / UPI
+          taken outside the website. Source of truth for money received. */}
+      <h2 className="admin-section-title" style={{ marginTop: 22 }}>📈 All collections (from Razorpay) {rzp.length > 0 ? `(${rzp.length})` : ""}</h2>
+      <div className="card" style={{ marginTop: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+          <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>
+            Every rupee collected on the Razorpay account — website checkouts AND payment links / QR / UPI taken outside the site.
+          </p>
+          <a className="btn small" href="/admin/orders/export">⬇️ Download Excel (CSV)</a>
+        </div>
+        {rzp.length > 0 ? (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".84rem" }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
+                  <th style={{ padding: "6px 8px" }}>Date</th><th style={{ padding: "6px 8px" }}>Payer</th>
+                  <th style={{ padding: "6px 8px" }}>Method</th><th style={{ padding: "6px 8px" }}>Description</th>
+                  <th style={{ padding: "6px 8px" }}>Amount</th><th style={{ padding: "6px 8px" }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rzp.map((p) => (
+                  <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{new Date(p.created_at * 1000).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</td>
+                    <td style={{ padding: "6px 8px" }}>{p.email || p.contact || "—"}</td>
+                    <td style={{ padding: "6px 8px" }}>{p.method}</td>
+                    <td style={{ padding: "6px 8px" }}>{p.description || p.notes?.kind || "—"}</td>
+                    <td style={{ padding: "6px 8px", fontWeight: 700 }}>{formatINR((p.amount || 0) / 100)}</td>
+                    <td style={{ padding: "6px 8px" }}>{p.status === "captured" ? "✅ received" : p.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>{rzpError ? "Couldn't reach Razorpay right now — refresh in a minute." : "No collections yet."}</p>
+        )}
+      </div>
+
       {/* Payments register */}
-      <h2 className="admin-section-title" style={{ marginTop: 22 }}>💳 Payments — subscriptions &amp; extensions ({payments.length})</h2>
+      <h2 className="admin-section-title" style={{ marginTop: 22 }}>💳 Website payments — subscriptions &amp; extensions ({payments.length})</h2>
       <div className="card" style={{ marginTop: 10 }}>
         {payments.length > 0 ? (
           <div style={{ overflowX: "auto" }}>

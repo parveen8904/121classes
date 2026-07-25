@@ -149,13 +149,20 @@ async function callClaude(system: string, user: string, maxTokens = 1024, opts: 
   }
 }
 
+// Founder's rule: doubt answers must be PLAIN language — no markdown stars,
+// no #, no special characters, no emojis. Simple sentences and 1. 2. 3. lists.
+const PLAIN_STYLE =
+  " WRITE IN PLAIN SIMPLE LANGUAGE ONLY: no markdown, no asterisks, no bold markers, no # headings, " +
+  "no special characters and NO emojis. Use plain sentences; when listing, use simple numbering like 1. 2. 3.";
+
 const ASSISTANT_SYSTEM =
   "You are the AI study assistant for CA Parveen Sharma (CA coaching). " +
   "You help Indian CA (Foundation/Intermediate/Final) students with clear, accurate, exam-focused explanations. " +
-  "ALWAYS answer in short bullet points (never paragraphs) and keep the WHOLE answer under 100 words. " +
+  "ALWAYS answer in short points (never long paragraphs) and keep the WHOLE answer under 100 words. " +
   "Use Indian accounting/tax/law context, and reference relevant standards or sections where useful. " +
   "If a question is outside the CA syllabus or you are unsure, say so and suggest asking the faculty. " +
-  "You assist under CA Parveen Sharma's guidance — never claim to be a human teacher.";
+  "You assist under CA Parveen Sharma's guidance — never claim to be a human teacher." +
+  PLAIN_STYLE;
 
 export async function answerDoubt(question: string, context?: string): Promise<string | null> {
   const user = (context ? `Topic context: ${context}\n\n` : "") + `Student's doubt: ${question}`;
@@ -168,13 +175,25 @@ export const NEED_FACULTY = "NEED_FACULTY";
 // Shown under every AI answer until the formal launch: sets expectations and
 // protects trust if an answer is imperfect. Remove at launch.
 export const BETA_NOTE =
-  "⚠️ Beta version — the portal has not been formally launched yet. AI answers can make mistakes; please verify important points with the faculty.";
+  "Note: Beta version — the portal has not been formally launched yet. AI answers can make mistakes; please verify important points with the faculty.";
+
+// Belt-and-braces: even if the model slips, strip markdown symbols and emojis
+// so the student always sees clean plain text (founder's rule).
+function plainText(t: string): string {
+  return t
+    .replace(/\*\*|__|~~|`+/g, "")
+    .replace(/^\s{0,3}#{1,6}\s*/gm, "")
+    .replace(/^\s*[-•▪◦]\s+/gm, "- ")
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{FE0F}\u{2B00}-\u{2BFF}]/gu, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
 
 // Append the beta note to a successful AI answer (never to the NEED_FACULTY
 // sentinel, which callers compare verbatim).
 function withBeta(text: string | null): string | null {
   if (!text || text.trim() === NEED_FACULTY) return text;
-  return `${text.trim()}\n\n${BETA_NOTE}`;
+  return `${plainText(text)}\n\n${BETA_NOTE}`;
 }
 
 const REPO_SYSTEM =
@@ -187,11 +206,12 @@ const REPO_SYSTEM =
   "— then give a complete step-by-step solution (working notes, journal entries, relevant AS/Ind AS/section) " +
   "and length may exceed 120 words as needed.\n" +
   "ALWAYS end with one short line telling the student WHICH CLASS to watch for this — use the 'Class N' " +
-  "labels in the material, e.g. '📺 Covered in Class 42.' If several, name them; if you truly can't tell, omit it.\n" +
+  "labels in the material, e.g. 'Covered in Class 42.' If several, name them; if you truly can't tell, omit it.\n" +
   "For 'solve question 15 of Amalgamation / Q6 of ICAI / question 10 of RTP May 2026': find it in the material " +
   "and solve fully. If it is NOT in the uploaded material, say so in one line and offer to solve if they paste it.\n" +
   `Only reply with exactly "${NEED_FACULTY}" if the request is genuinely NOT about the CA syllabus ` +
-  "(personal, fees, login, or account matters).";
+  "(personal, fees, login, or account matters)." +
+  PLAIN_STYLE;
 
 // Answer strictly from the repository material. Returns the answer, the literal
 // NEED_FACULTY sentinel (escalate to faculty), or null if AI/material unavailable.

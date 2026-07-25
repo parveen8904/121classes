@@ -53,6 +53,28 @@ export async function fetchRazorpayOrder(orderId: string): Promise<RazorpayOrder
   return res.json();
 }
 
+// EVERY captured payment on the Razorpay account — including payment links,
+// QR/UPI collections and anything taken OUTSIDE the website checkout. This is
+// the source of truth for the admin Sales report (the site's own tables only
+// know website-checkout sales).
+export type RazorpayPayment = {
+  id: string; amount: number; currency: string; status: string; method: string;
+  email: string | null; contact: string | null; description: string | null;
+  created_at: number; notes: Record<string, string> | null; fee: number | null; order_id: string | null;
+};
+
+export async function listRazorpayPayments(days = 90, max = 100): Promise<RazorpayPayment[]> {
+  const from = Math.floor(Date.now() / 1000) - days * 86400;
+  const res = await fetch(`https://api.razorpay.com/v1/payments?from=${from}&count=${Math.min(100, max)}`, {
+    headers: { Authorization: await authHeader() },
+    cache: "no-store",
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) throw new Error(`Razorpay list payments failed: ${res.status}`);
+  const d = await res.json();
+  return (d?.items ?? []) as RazorpayPayment[];
+}
+
 // Verify the checkout signature (proves Razorpay produced this payment).
 export async function verifyRazorpaySignature(
   orderId: string,

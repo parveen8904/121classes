@@ -187,7 +187,8 @@ export default async function CoursePlans(
           </h1>
           <p className="muted">
             Each subject is priced on its own. Bronze is free, Silver adds tests &amp; AI doubt-solving,
-            and Gold unlocks the full premium classes with CA Parveen Sharma&apos;s team.
+            and Gold unlocks the full premium classes with CA Parveen Sharma&apos;s team —{" "}
+            <strong style={{ color: "var(--text)" }}>plus FREE printed books couriered to your address</strong>.
           </p>
           <p style={{ marginTop: 8 }}>
             💚 Need help affording Gold? <Link className="grad" href="/scholarship" style={{ fontWeight: 700 }}>Apply for a merit or need-based discount →</Link>
@@ -231,9 +232,8 @@ export default async function CoursePlans(
             Any payment on this page buys access to <strong>this subject at this level only</strong>.
             Wrong level or subject? Change it above before paying.
           </p>
-          <p className="muted" style={{ fontSize: ".8rem", margin: "6px 0 0" }}>
-            📦 Want printed study books too? They&apos;re real hard copies couriered to your home —{" "}
-            <Link className="grad" href="/books" style={{ fontWeight: 700 }}>Book Store</Link> (free shipping).
+          <p style={{ fontSize: ".85rem", fontWeight: 700, margin: "6px 0 0" }}>
+            📦 Gold includes FREE printed books — real hard copies couriered to your shipping address.
           </p>
         </div>
 

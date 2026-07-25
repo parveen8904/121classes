@@ -75,7 +75,8 @@ export default async function PricingPage() {
           <div key={course.id} id={slug(course.title)} style={{ marginBottom: 34, scrollMarginTop: 90 }}>
             <h2 style={{ margin: "0 0 4px" }}>📘 {course.title}</h2>
             <p className="muted" style={{ margin: "0 0 14px", fontSize: ".88rem" }}>
-              Bronze is free for everyone. Silver adds all tests &amp; AI doubt-solving. Gold unlocks the full premium classes.
+              Bronze is free for everyone. Silver adds all tests &amp; AI doubt-solving. Gold unlocks the full premium
+              classes <strong style={{ color: "var(--text)" }}>+ FREE printed books couriered to your address</strong>.
             </p>
             <div style={{ display: "grid", gap: 14 }}>
               {courseSubs.map((s) => {
@@ -135,7 +136,7 @@ export default async function PricingPage() {
                             <tr style={{ textAlign: "left", color: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
                               <th style={{ padding: "6px 8px" }}>Validity</th>
                               <th style={{ padding: "6px 8px" }}>🥈 Silver</th>
-                              <th style={{ padding: "6px 8px" }}>🥇 Gold (full classes)</th>
+                              <th style={{ padding: "6px 8px" }}>🥇 Gold (full classes + FREE printed books)</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -149,7 +150,8 @@ export default async function PricingPage() {
                           </tbody>
                         </table>
                         <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
-                          Longer validity works out cheaper per month · custom durations available at enrolment · Bronze is free.
+                          📦 Every Gold subscription includes FREE printed books, couriered to your address ·
+                          longer validity works out cheaper per month · custom durations available at enrolment · Bronze is free.
                         </p>
                       </div>
                     ) : (
@@ -163,11 +165,11 @@ export default async function PricingPage() {
         );
       })}
 
-      <div className="card" style={{ maxWidth: 640, margin: "0 auto 16px", textAlign: "center" }}>
-        <strong>📦 Physical books available</strong>
+      <div className="card" style={{ maxWidth: 640, margin: "0 auto 16px", textAlign: "center", border: "2px solid var(--accent)" }}>
+        <strong>📦 Gold = FREE printed books, delivered home</strong>
         <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0" }}>
-          Our study books are printed hard copies physically couriered to your home (free shipping across India) —{" "}
-          <Link href="/books" style={{ fontWeight: 700, color: "var(--accent)" }}>visit the Book Store</Link>.
+          Every Gold subscription includes the printed study books — real hard copies (not PDFs), couriered
+          FREE to your shipping address anywhere in India.
         </p>
       </div>
 

@@ -157,6 +157,7 @@ export async function createPlanOrder(input: {
       razorpay_order_id: order.id,
       amount_inr: amountInr,
       status: "created",
+      subject_id: subject.id,
     });
     return {
       ok: true,
@@ -382,6 +383,7 @@ export async function createExtendOrder(input: {
       razorpay_order_id: order.id,
       amount_inr: amountInr,
       status: "created",
+      subject_id: input.subjectId,
     });
     return {
       ok: true,

@@ -48,8 +48,12 @@ function fmt(s: string): string {
 type PayRow = {
   id: string; kind: string; amount_inr: number; status: string; created_at: string;
   razorpay_order_id: string | null; invoice_no: string | null; invoice_url: string | null;
-  zoho_status: string | null;
-  profiles: { full_name: string | null; email: string | null; phone: string | null } | null;
+  zoho_status: string | null; subject_id: string | null;
+  subjects: { title: string } | null;
+  profiles: {
+    id: string; full_name: string | null; email: string | null; phone: string | null;
+    address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; pincode: string | null;
+  } | null;
 };
 
 export default async function AdminOrdersPage(
@@ -71,16 +75,39 @@ export default async function AdminOrdersPage(
     // ALL website payments (subscriptions / extensions / gifts) — OUR sales register.
     svc
       .from("orders")
-      .select("id, kind, amount_inr, status, created_at, razorpay_order_id, invoice_no, invoice_url, zoho_status, profiles:student_id(full_name, email, phone)")
+      .select("id, kind, amount_inr, status, created_at, razorpay_order_id, invoice_no, invoice_url, zoho_status, subject_id, subjects:subject_id(title), profiles:student_id(id, full_name, email, phone, address_line1, address_line2, city, state, pincode)")
       .order("created_at", { ascending: false })
       .limit(200),
   ]);
 
+  // Level (Final/Inter) + the exact subscription dates each payment created.
+  const payRowsRaw = (payData ?? []) as unknown as PayRow[];
+  const payerIds = [...new Set(payRowsRaw.map((p) => p.profiles?.id).filter(Boolean))] as string[];
+  const levelByUser = new Map<string, string>();
+  const subDates = new Map<string, { starts_at: string | null; ends_at: string | null }>();
+  if (payerIds.length) {
+    const [{ data: mc }, { data: subRows }] = await Promise.all([
+      svc.from("my_courses").select("student_id, courses(title)").in("student_id", payerIds),
+      svc.from("subscriptions").select("student_id, subject_id, starts_at, ends_at, created_at").in("student_id", payerIds).order("created_at"),
+    ]);
+    for (const r of mc ?? []) {
+      const t = ((r as { courses?: { title?: string } | null }).courses?.title ?? "").toLowerCase();
+      const lvl = t.includes("final") ? "Final" : t.includes("inter") ? "Inter" : "";
+      if (!lvl) continue;
+      const cur = levelByUser.get(r.student_id as string);
+      levelByUser.set(r.student_id as string, cur && cur !== lvl ? "Final + Inter" : lvl);
+    }
+    // Later rows overwrite earlier ones → each student+subject keeps its latest dates.
+    for (const s of subRows ?? []) {
+      subDates.set(`${s.student_id}:${s.subject_id}`, { starts_at: s.starts_at as string | null, ends_at: s.ends_at as string | null });
+    }
+  }
+
   const match = (parts: (string | null | undefined)[]) => !q || parts.some((p) => (p ?? "").toLowerCase().includes(q));
   const orders = ((data ?? []) as unknown as (OrderRow & { invoice_no?: string | null; invoice_url?: string | null })[])
     .filter((o) => match([o.guest_contact?.name, o.guest_contact?.email, o.guest_contact?.phone, o.ship_to?.name, o.ship_to?.phone, o.invoice_no]));
-  const payments = ((payData ?? []) as unknown as PayRow[])
-    .filter((p) => match([p.profiles?.full_name, p.profiles?.email, p.profiles?.phone, p.invoice_no, p.razorpay_order_id]));
+  const payments = payRowsRaw
+    .filter((p) => match([p.profiles?.full_name, p.profiles?.email, p.profiles?.phone, p.invoice_no, p.razorpay_order_id, p.subjects?.title]));
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -118,22 +145,37 @@ export default async function AdminOrdersPage(
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".84rem" }}>
               <thead>
                 <tr style={{ textAlign: "left", color: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
-                  <th style={{ padding: "6px 8px" }}>Date</th><th style={{ padding: "6px 8px" }}>Payer</th>
-                  <th style={{ padding: "6px 8px" }}>Type</th><th style={{ padding: "6px 8px" }}>Amount</th>
+                  <th style={{ padding: "6px 8px" }}>Date</th><th style={{ padding: "6px 8px" }}>Student</th>
+                  <th style={{ padding: "6px 8px" }}>Level</th><th style={{ padding: "6px 8px" }}>Subject</th>
+                  <th style={{ padding: "6px 8px" }}>Product</th><th style={{ padding: "6px 8px" }}>Amount</th>
+                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Sub. start</th>
+                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Sub. end</th>
+                  <th style={{ padding: "6px 8px" }}>Address</th>
                   <th style={{ padding: "6px 8px" }}>Status</th><th style={{ padding: "6px 8px" }}>Invoice</th>
                   <th style={{ padding: "6px 8px" }}>Zoho Books</th>
                 </tr>
               </thead>
               <tbody>
-                {payments.map((p) => (
+                {payments.map((p) => {
+                  const pr = p.profiles;
+                  const dates = pr && p.subject_id ? subDates.get(`${pr.id}:${p.subject_id}`) : undefined;
+                  const address = pr
+                    ? [pr.address_line1, pr.address_line2, [pr.city, pr.state, pr.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ")
+                    : "";
+                  return (
                   <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{fmt(p.created_at)}</td>
                     <td style={{ padding: "6px 8px" }}>
-                      <strong>{p.profiles?.full_name ?? "—"}</strong>
-                      <div className="muted" style={{ fontSize: ".76rem" }}>{p.profiles?.email ?? ""}{p.profiles?.phone ? ` · ${p.profiles.phone}` : ""}</div>
+                      <strong>{pr?.full_name ?? "—"}</strong>
+                      <div className="muted" style={{ fontSize: ".76rem" }}>{pr?.email ?? ""}{pr?.phone ? ` · ${pr.phone}` : ""}</div>
                     </td>
+                    <td style={{ padding: "6px 8px" }}>{pr ? levelByUser.get(pr.id) ?? "—" : "—"}</td>
+                    <td style={{ padding: "6px 8px" }}>{p.subjects?.title ?? "—"}</td>
                     <td style={{ padding: "6px 8px" }}>{p.kind}</td>
                     <td style={{ padding: "6px 8px", fontWeight: 700 }}>{formatINR(p.amount_inr)}</td>
+                    <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{dates?.starts_at ? fmt(dates.starts_at) : "—"}</td>
+                    <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{dates?.ends_at ? fmt(dates.ends_at) : "—"}</td>
+                    <td style={{ padding: "6px 8px", minWidth: 140 }}>{address || "—"}</td>
                     <td style={{ padding: "6px 8px" }}>{p.status === "paid" ? "✅ paid" : p.status}</td>
                     <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
                       {p.invoice_url
@@ -144,7 +186,8 @@ export default async function AdminOrdersPage(
                       <ZohoCell id={p.id} table="orders" status={p.zoho_status} />
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

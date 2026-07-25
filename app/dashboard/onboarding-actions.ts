@@ -42,10 +42,18 @@ export async function completeOnboarding(formData: FormData) {
   const heardFrom = str(formData.get("heard_from"));
   if (heardFrom) await supabase.from("profiles").update({ heard_from: heardFrom }).eq("id", user.id);
 
-  // Students study ONE level: the chosen course replaces anything else on the shelf.
+  // Students study ONE level: the chosen course replaces anything else on the
+  // shelf — EXCEPT courses they hold an active subscription for (paid or
+  // granted access must never disappear because of a level pop-up choice).
   const { data: prof } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
   if (prof?.role !== "admin") {
-    await supabase.from("my_courses").delete().eq("student_id", user.id).neq("course_id", courseId);
+    const { data: subbed } = await supabase
+      .from("subscriptions").select("course_id").eq("student_id", user.id)
+      .eq("status", "active").or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`);
+    const keep = new Set([courseId, ...(subbed ?? []).map((s) => s.course_id as string)]);
+    const { data: mine } = await supabase.from("my_courses").select("course_id").eq("student_id", user.id);
+    const drop = (mine ?? []).map((r) => r.course_id as string).filter((id) => !keep.has(id));
+    if (drop.length) await supabase.from("my_courses").delete().eq("student_id", user.id).in("course_id", drop);
   }
   await supabase.from("my_courses").upsert(
     { student_id: user.id, course_id: courseId },

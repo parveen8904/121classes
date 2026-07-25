@@ -36,8 +36,16 @@ export async function updateProfile(formData: FormData) {
   // ever switches back to a level, its subjects are restored automatically.
   const courseId = str(formData.get("course_id"));
   if (courseId) {
-    await supabase.from("my_courses").delete().eq("student_id", user.id);
-    await supabase.from("my_courses").insert({ student_id: user.id, course_id: courseId });
+    // Keep any course the student holds an active subscription for — switching
+    // level must never hide paid or granted access.
+    const { data: subbed } = await supabase
+      .from("subscriptions").select("course_id").eq("student_id", user.id)
+      .eq("status", "active").or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`);
+    const keep = new Set([courseId, ...(subbed ?? []).map((s) => s.course_id as string)]);
+    const { data: mine } = await supabase.from("my_courses").select("course_id").eq("student_id", user.id);
+    const drop = (mine ?? []).map((r) => r.course_id as string).filter((id) => !keep.has(id));
+    if (drop.length) await supabase.from("my_courses").delete().eq("student_id", user.id).in("course_id", drop);
+    await supabase.from("my_courses").upsert({ student_id: user.id, course_id: courseId }, { onConflict: "student_id,course_id" });
   }
 
   revalidatePath("/dashboard/profile");

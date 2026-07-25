@@ -4,7 +4,21 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { formatINR } from "@/lib/pricing";
 import { viaProxy } from "@/lib/fileProxy";
 import AdminHero from "../_components/AdminHero";
-import { setOrderStatus, sendDispatchEmail } from "./actions";
+import { setOrderStatus, sendDispatchEmail, approveForZoho } from "./actions";
+
+// Zoho posting state → what the admin sees in the register.
+function ZohoCell({ id, table, status }: { id: string; table: string; status: string | null }) {
+  if (status === "posted") return <span title="Posted to Zoho Books">✅ in Zoho</span>;
+  if (status === "approved") return <span className="muted" title="Will post to Zoho Books tonight">⏳ posts tonight</span>;
+  if (status === "skipped") return <span className="muted">—</span>;
+  return (
+    <form action={approveForZoho} style={{ margin: 0, display: "inline" }}>
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="table" value={table} />
+      <SubmitButton className="btn small secondary" savedLabel="✓">Approve → Zoho</SubmitButton>
+    </form>
+  );
+}
 
 type Ship = { name?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string; phone?: string };
 type Contact = { name?: string; email?: string; phone?: string };
@@ -17,6 +31,7 @@ type OrderRow = {
   guest_contact: Contact | null;
   ship_to: Ship | null;
   items: Item[] | null;
+  zoho_status?: string | null;
 };
 
 const STATUS_EMOJI: Record<string, string> = {
@@ -33,6 +48,7 @@ function fmt(s: string): string {
 type PayRow = {
   id: string; kind: string; amount_inr: number; status: string; created_at: string;
   razorpay_order_id: string | null; invoice_no: string | null; invoice_url: string | null;
+  zoho_status: string | null;
   profiles: { full_name: string | null; email: string | null; phone: string | null } | null;
 };
 
@@ -49,13 +65,13 @@ export default async function AdminOrdersPage(
   const [{ data }, { data: payData }] = await Promise.all([
     supabase
       .from("book_orders")
-      .select("id, amount_inr, status, created_at, guest_contact, ship_to, items, invoice_no, invoice_url")
+      .select("id, amount_inr, status, created_at, guest_contact, ship_to, items, invoice_no, invoice_url, zoho_status")
       .order("created_at", { ascending: false })
       .limit(200),
     // ALL website payments (subscriptions / extensions / gifts) — OUR sales register.
     svc
       .from("orders")
-      .select("id, kind, amount_inr, status, created_at, razorpay_order_id, invoice_no, invoice_url, profiles:student_id(full_name, email, phone)")
+      .select("id, kind, amount_inr, status, created_at, razorpay_order_id, invoice_no, invoice_url, zoho_status, profiles:student_id(full_name, email, phone)")
       .order("created_at", { ascending: false })
       .limit(200),
   ]);
@@ -105,6 +121,7 @@ export default async function AdminOrdersPage(
                   <th style={{ padding: "6px 8px" }}>Date</th><th style={{ padding: "6px 8px" }}>Payer</th>
                   <th style={{ padding: "6px 8px" }}>Type</th><th style={{ padding: "6px 8px" }}>Amount</th>
                   <th style={{ padding: "6px 8px" }}>Status</th><th style={{ padding: "6px 8px" }}>Invoice</th>
+                  <th style={{ padding: "6px 8px" }}>Zoho Books</th>
                 </tr>
               </thead>
               <tbody>
@@ -122,6 +139,9 @@ export default async function AdminOrdersPage(
                       {p.invoice_url
                         ? <a className="grad" href={viaProxy(p.invoice_url)} target="_blank" rel="noopener noreferrer">{p.invoice_no ?? "PDF"} ↓</a>
                         : (p.invoice_no ?? "—")}
+                    </td>
+                    <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
+                      <ZohoCell id={p.id} table="orders" status={p.zoho_status} />
                     </td>
                   </tr>
                 ))}
@@ -179,6 +199,7 @@ export default async function AdminOrdersPage(
                     </p>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    <ZohoCell id={o.id} table="book_orders" status={o.zoho_status ?? null} />
                     {o.status === "paid" && (
                       <form action={setOrderStatus} style={{ margin: 0 }}>
                         <input type="hidden" name="id" value={o.id} />

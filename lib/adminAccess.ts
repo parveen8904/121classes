@@ -16,6 +16,7 @@ export const ADMIN_AREAS: AdminArea[] = [
   { key: "inbox", label: "📥 Inbox & student doubts", prefixes: ["/admin/inbox"] },
   { key: "tickets", label: "🎫 Support tickets", prefixes: ["/admin/tickets"] },
   { key: "articles", label: "📝 Articles & SEO", prefixes: ["/admin/articles"] },
+  { key: "reengage", label: "🔁 Re-engagement emails", prefixes: ["/admin/reengage"] },
   { key: "moderation", label: "🛡️ Group chat moderation", prefixes: ["/admin/discussion"] },
   { key: "live", label: "📡 Live classes", prefixes: ["/admin/live"] },
   { key: "results", label: "🏆 Results", prefixes: ["/admin/results"] },

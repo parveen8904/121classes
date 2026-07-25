@@ -18,6 +18,18 @@ export async function setOrderStatus(formData: FormData) {
   revalidatePath("/admin/orders");
 }
 
+// Team approval for Zoho: only sales approved here are posted to Zoho Books
+// (by the nightly cron) — so a mistaken sale never reaches the books.
+export async function approveForZoho(formData: FormData) {
+  if (!(await requireArea("store"))) return;
+  const id = str(formData.get("id"));
+  const table = str(formData.get("table"));
+  if (!id || !["orders", "book_orders"].includes(table)) return;
+  const supabase = createServiceClient();
+  await supabase.from(table).update({ zoho_status: "approved" }).eq("id", id).eq("zoho_status", "pending");
+  revalidatePath("/admin/orders");
+}
+
 // Manually email the warehouse the current paid-but-unshipped orders.
 export async function sendDispatchEmail() {
   if (!(await requireArea("store"))) return;

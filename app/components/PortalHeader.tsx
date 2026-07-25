@@ -16,12 +16,32 @@ export default async function PortalHeader() {
 
   let isAdmin = false;
   let isStaff = false;
+  let subChip: string | null = null;
   if (user) {
     const { data } = await supabase.from("profiles").select("role").eq("id", user.id).single();
     isAdmin = data?.role === "admin";
     // Operators & faculty are staff too — without this they had NO Admin
     // button after login and thought their new role "didn't work".
     isStaff = isAdmin || data?.role === "faculty" || data?.role === "operator";
+
+    // Always-visible reminder of what the student's access runs till — so
+    // nobody wonders whether (or till when) they are subscribed.
+    if (!isStaff) {
+      const { data: subs } = await supabase
+        .from("subscriptions")
+        .select("ends_at, plans(tier)")
+        .eq("student_id", user.id)
+        .eq("status", "active");
+      const now = new Date();
+      const active = ((subs ?? []) as unknown as { ends_at: string | null; plans: { tier: string } | null }[])
+        .filter((s) => !s.ends_at || new Date(s.ends_at) > now);
+      if (active.length) {
+        const last = active.reduce<string | null>((m, s) => (!s.ends_at ? m : !m || s.ends_at > m ? s.ends_at : m), null);
+        const tiers = new Set(active.map((s) => s.plans?.tier));
+        const emoji = tiers.has("gold") ? "🥇" : tiers.has("silver") ? "🥈" : "⭐";
+        subChip = `${emoji} Subscribed till ${last ? new Date(last).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "further notice"}`;
+      }
+    }
   }
 
   const links = [
@@ -57,6 +77,19 @@ export default async function PortalHeader() {
               {l.label}
             </Link>
           ))}
+          {subChip && (
+            <Link
+              href="/dashboard"
+              title="Your active subscription — see the dashboard for details"
+              style={{
+                whiteSpace: "nowrap", fontSize: ".74rem", fontWeight: 700,
+                padding: "4px 10px", borderRadius: 999,
+                background: "var(--accent)", color: "#fff", textDecoration: "none",
+              }}
+            >
+              {subChip}
+            </Link>
+          )}
           <ThemeToggle />
           {user && (
             <span className="portal-signout">

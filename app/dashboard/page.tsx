@@ -126,6 +126,19 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
   }
   liveToday.sort((a, b) => (a.whenISO < b.whenISO ? -1 : 1));
 
+  // Active subscriptions — highlighted so every student always knows exactly
+  // what they have and till when (no "why did I pay?" confusion).
+  type ActiveSub = { ends_at: string | null; plans: { name: string; tier: string } | null; subjects: { title: string } | null; courses: { title: string } | null };
+  const { data: mySubs } = await supabase
+    .from("subscriptions")
+    .select("ends_at, plans(name, tier), subjects:subject_id(title), courses:course_id(title)")
+    .eq("student_id", user.id)
+    .eq("status", "active");
+  const activeSubsList = ((mySubs ?? []) as unknown as ActiveSub[])
+    .filter((s) => !s.ends_at || new Date(s.ends_at) > nowD)
+    .sort((a, b) => (a.ends_at ?? "9999").localeCompare(b.ends_at ?? "9999"));
+  const tierEmoji: Record<string, string> = { gold: "🥇", silver: "🥈", bronze: "🥉" };
+
   // Faculty messages / updates — shown to every student on login.
   const { data: announcements } = await supabase
     .from("announcements")
@@ -149,6 +162,27 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
 
         {searchParams?.saved === "profile" && (
           <div className="notice ok" style={{ marginTop: 14 }}>✅ Profile saved.</div>
+        )}
+
+        {activeSubsList.length > 0 && (
+          <div className="card" style={{ marginTop: 16, border: "2px solid var(--accent)" }}>
+            <strong style={{ fontSize: "1.05rem" }}>⭐ Your subscriptions</strong>
+            <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+              {activeSubsList.map((s, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span>
+                    {tierEmoji[s.plans?.tier ?? ""] ?? "⭐"} <strong>{s.subjects?.title ?? s.courses?.title ?? "Full access"}</strong>
+                    <span className="muted"> · {s.plans?.name ?? s.plans?.tier ?? ""}</span>
+                  </span>
+                  <span className="badge">
+                    valid till {s.ends_at
+                      ? new Date(s.ends_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                      : "further notice"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {liveToday.length > 0 && (

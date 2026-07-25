@@ -46,6 +46,14 @@
     {
       "path": "/api/cron/topics-trends",
       "schedule": "0 1 * * 1"
+    },
+    {
+      "path": "/api/cron/zoho-post",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/cron/reengage",
+      "schedule": "30 22 * * *"
     }
   ]
 }

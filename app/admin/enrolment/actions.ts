@@ -3,8 +3,36 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { str, num } from "../_lib/util";
 import { notifyByEmail, emailShell } from "@/lib/notify";
+
+// A granted subscription must also appear on the student's "My courses" shelf,
+// or they can't see what they were given (service client — shelf RLS is
+// own-rows-only). subjectId null = whole-course grant → shelve every subject.
+async function addToShelf(studentIds: string[], courseId: string, subjectId: string | null) {
+  if (!studentIds.length) return;
+  const svc = createServiceClient();
+  let subjectIds: string[] = subjectId ? [subjectId] : [];
+  if (!subjectId) {
+    const { data } = await svc.from("subjects").select("id").eq("course_id", courseId);
+    subjectIds = (data ?? []).map((s) => s.id as string);
+  }
+  const [{ data: haveC }, { data: haveS }] = await Promise.all([
+    svc.from("my_courses").select("student_id").eq("course_id", courseId).in("student_id", studentIds),
+    subjectIds.length
+      ? svc.from("my_subjects").select("student_id, subject_id").in("subject_id", subjectIds).in("student_id", studentIds)
+      : Promise.resolve({ data: [] as { student_id: string; subject_id: string }[] }),
+  ]);
+  const hasCourse = new Set((haveC ?? []).map((r) => r.student_id as string));
+  const hasSubject = new Set((haveS ?? []).map((r) => `${r.student_id}:${r.subject_id}`));
+  const newCourses = studentIds.filter((id) => !hasCourse.has(id)).map((id) => ({ student_id: id, course_id: courseId }));
+  const newSubjects = studentIds.flatMap((id) =>
+    subjectIds.filter((sid) => !hasSubject.has(`${id}:${sid}`)).map((sid) => ({ student_id: id, subject_id: sid })),
+  );
+  if (newCourses.length) await svc.from("my_courses").insert(newCourses);
+  if (newSubjects.length) await svc.from("my_subjects").insert(newSubjects);
+}
 
 const TIERS = ["bronze", "silver", "gold"];
 
@@ -79,6 +107,7 @@ export async function grantSubscription(formData: FormData) {
     auto_renew: false,
     granted_by_admin_id: user?.id ?? null,
   });
+  await addToShelf([profile.id], courseId, subjectId);
 
   const { data: course } = await supabase.from("courses").select("title").eq("id", courseId).maybeSingle();
   const msg = enrolledEmail(profile.full_name, course?.title ?? "your course", tier, months);
@@ -146,6 +175,7 @@ export async function bulkGrant(formData: FormData) {
         granted_by_admin_id: user?.id ?? null,
       })),
     );
+    await addToShelf(found.map((p) => p.id), courseId, subjectId);
 
     const { data: course } = await supabase.from("courses").select("title").eq("id", courseId).maybeSingle();
     const title = course?.title ?? "your course";

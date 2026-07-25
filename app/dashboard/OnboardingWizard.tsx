@@ -62,11 +62,33 @@ export default function OnboardingWizard({
       {mode === "student" && (
         <form action={completeOnboarding} style={{ marginTop: 8 }}>
           <input type="hidden" name="phone" value={phone} />
-          <p style={{ fontWeight: 700, margin: "18px 0 8px" }}>1️⃣ Which level are you studying? *</p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {courses.map((c) => (
-              <button key={c.id} type="button" className={`btn small ${courseId === c.id ? "" : "secondary"}`} onClick={() => pickCourse(c.id)}>📘 {c.title}</button>
-            ))}
+          <p style={{ fontWeight: 700, margin: "18px 0 4px" }}>1️⃣ Which level are you studying? *</p>
+          <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 8px" }}>
+            Choose carefully — your subjects, classes and prices all come from this level.
+          </p>
+          <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
+            {courses.map((c) => {
+              const isFinal = c.title.toLowerCase().includes("final");
+              const active = courseId === c.id;
+              return (
+                <button
+                  key={c.id} type="button" onClick={() => pickCourse(c.id)}
+                  style={{
+                    textAlign: "left", padding: "12px 14px", borderRadius: 12, cursor: "pointer",
+                    border: active ? "2px solid var(--accent)" : "1px solid var(--border)",
+                    background: active ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent",
+                    color: "inherit", font: "inherit",
+                  }}
+                >
+                  <strong>{active ? "✅ " : ""}📘 {c.title}</strong>
+                  <span className="muted" style={{ display: "block", fontSize: ".78rem", marginTop: 2 }}>
+                    {isFinal
+                      ? "The FINAL (last) stage of the CA course"
+                      : "The INTERMEDIATE (middle) stage — after Foundation, before Final"}
+                  </span>
+                </button>
+              );
+            })}
           </div>
           <input type="hidden" name="course_id" value={courseId} />
 
@@ -101,6 +123,15 @@ export default function OnboardingWizard({
                 <option value="attended_before">Attended CA Parveen Sharma&apos;s classes before</option><option value="other">Other</option>
               </select>
             </>
+          )}
+
+          {courseId && chosen.size > 0 && (
+            <div className="notice ok" style={{ marginTop: 16, fontSize: ".85rem" }}>
+              📋 You are setting up: <strong>{courses.find((c) => c.id === courseId)?.title}</strong>
+              {" → "}
+              <strong>{subjects.filter((s) => chosen.has(s.id)).map((s) => s.title).join(", ")}</strong>
+              <span className="muted"> — wrong level? Just tap the other one above.</span>
+            </div>
           )}
 
           <button className="btn" type="submit" style={{ marginTop: 18 }} disabled={!phoneOk || !courseId || chosen.size === 0 || (needAttempt && false)}>

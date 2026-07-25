@@ -218,6 +218,21 @@ export default async function CoursePlans(
           })}
         </div>
 
+        {/* No-mistakes confirmation of EXACTLY what any payment below buys —
+            students were paying for the wrong level/subject. */}
+        <div
+          className="card"
+          style={{ maxWidth: 660, margin: "0 auto 22px", textAlign: "center", border: "2px solid var(--accent)" }}
+        >
+          <strong style={{ fontSize: "1.02rem" }}>
+            🛒 You are viewing plans for: {course.title} → {selected.title}
+          </strong>
+          <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
+            Any payment on this page buys access to <strong>this subject at this level only</strong>.
+            Wrong level or subject? Change it above before paying.
+          </p>
+        </div>
+
         <PricingCards
           subject={{
             id: selected.id,

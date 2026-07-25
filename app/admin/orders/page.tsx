@@ -4,7 +4,8 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { formatINR } from "@/lib/pricing";
 import { viaProxy } from "@/lib/fileProxy";
 import AdminHero from "../_components/AdminHero";
-import { setOrderStatus, sendDispatchEmail, approveForZoho, approveDayForZoho, holdForZoho } from "./actions";
+import { setOrderStatus, sendDispatchEmail, approveForZoho, approveDayForZoho, holdForZoho, approveSelectedForZoho, generateInvoice } from "./actions";
+import SelectAll from "./SelectAll";
 
 // Zoho posting state → what the admin sees in the register. Normal flow is
 // the one-click DAY approval above the table; per-row buttons are for
@@ -168,74 +169,78 @@ export default async function AdminOrdersPage(
 
       {/* Website payments register — OUR sales only (from our own database).
           Razorpay account data lives on its own page: the same Razorpay key is
-          used by other businesses too, so it is NOT our sales register. */}
+          used by other businesses too, so it is NOT our sales register.
+          Card layout on purpose: every detail visible, NO horizontal scrolling. */}
       <h2 className="admin-section-title" style={{ marginTop: 22 }}>💳 Website payments — subscriptions &amp; extensions ({payments.length})</h2>
-      <div className="card" style={{ marginTop: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
-          <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>
-            Sales made through this website only — the register you verify Razorpay against.
-          </p>
-          <span style={{ display: "inline-flex", gap: 8 }}>
-            <a className="btn small" href="/admin/orders/export">⬇️ Download Excel (CSV)</a>
-            <a className="btn small secondary" href="/admin/orders/razorpay">📈 Razorpay account data</a>
-          </span>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center", margin: "10px 0" }}>
+        <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>
+          Sales made through this website only — the register you verify Razorpay against.
+        </p>
+        <span style={{ display: "inline-flex", gap: 8 }}>
+          <a className="btn small" href="/admin/orders/export">⬇️ Download Excel (CSV)</a>
+          <a className="btn small secondary" href="/admin/orders/razorpay">📈 Razorpay account data</a>
+        </span>
+      </div>
+
+      {/* Accountant's Zoho push: tick sales below (form= links the boxes here,
+          so nothing nests inside the per-row action forms). */}
+      <form id="zoho-bulk" action={approveSelectedForZoho} className="card" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+          <strong>🧾 Push to Zoho Books</strong>
+          <SelectAll />
+          <span className="muted" style={{ fontSize: ".78rem" }}>Tick the sales below, then push — they post to Zoho tonight automatically.</span>
         </div>
-        {payments.length > 0 ? (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".84rem" }}>
-              <thead>
-                <tr style={{ textAlign: "left", color: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
-                  <th style={{ padding: "6px 8px" }}>Order no</th>
-                  <th style={{ padding: "6px 8px" }}>Date</th><th style={{ padding: "6px 8px" }}>Student</th>
-                  <th style={{ padding: "6px 8px" }}>Level</th><th style={{ padding: "6px 8px" }}>Subject</th>
-                  <th style={{ padding: "6px 8px" }}>Product</th><th style={{ padding: "6px 8px" }}>Amount</th>
-                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Sub. start</th>
-                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Sub. end</th>
-                  <th style={{ padding: "6px 8px" }}>Address</th>
-                  <th style={{ padding: "6px 8px" }}>Status</th><th style={{ padding: "6px 8px" }}>Invoice</th>
-                  <th style={{ padding: "6px 8px" }}>Zoho Books</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payments.map((p) => {
-                  const pr = p.profiles;
-                  const dates = pr && p.subject_id ? subDates.get(`${pr.id}:${p.subject_id}`) : undefined;
-                  const address = pr
-                    ? [pr.address_line1, pr.address_line2, [pr.city, pr.state, pr.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ")
-                    : "";
-                  return (
-                  <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ padding: "6px 8px", fontWeight: 800, whiteSpace: "nowrap" }}>{p.order_no != null ? `#${p.order_no}` : "—"}</td>
-                    <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{fmt(p.created_at)}</td>
-                    <td style={{ padding: "6px 8px" }}>
-                      <strong>{pr?.full_name ?? "—"}</strong>
-                      <div className="muted" style={{ fontSize: ".76rem" }}>{pr?.email ?? ""}{pr?.phone ? ` · ${pr.phone}` : ""}</div>
-                    </td>
-                    <td style={{ padding: "6px 8px" }}>{pr ? levelByUser.get(pr.id) ?? "—" : "—"}</td>
-                    <td style={{ padding: "6px 8px" }}>{p.subjects?.title ?? "—"}</td>
-                    <td style={{ padding: "6px 8px" }}>{p.kind}</td>
-                    <td style={{ padding: "6px 8px", fontWeight: 700 }}>{formatINR(p.amount_inr)}</td>
-                    <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{dates?.starts_at ? fmt(dates.starts_at) : "—"}</td>
-                    <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{dates?.ends_at ? fmt(dates.ends_at) : "—"}</td>
-                    <td style={{ padding: "6px 8px", minWidth: 140 }}>{address || "—"}</td>
-                    <td style={{ padding: "6px 8px" }}>{p.status === "paid" ? "✅ paid" : p.status}</td>
-                    <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-                      {p.invoice_url
-                        ? <a className="grad" href={viaProxy(p.invoice_url)} target="_blank" rel="noopener noreferrer">{p.invoice_no ?? "PDF"} ↓</a>
-                        : (p.invoice_no ?? "—")}
-                    </td>
-                    <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-                      <ZohoCell id={p.id} table="orders" status={p.zoho_status} />
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="muted" style={{ margin: 0 }}>{q ? "No payments match your search." : "No payments yet."}</p>
+        <SubmitButton className="btn small" savedLabel="✓ Pushed">✅ Push selected → Zoho</SubmitButton>
+      </form>
+
+      <div style={{ display: "grid", gap: 10 }}>
+        {payments.length === 0 && (
+          <div className="card"><p className="muted" style={{ margin: 0 }}>{q ? "No payments match your search." : "No payments yet."}</p></div>
         )}
+        {payments.map((p) => {
+          const pr = p.profiles;
+          const dates = pr && p.subject_id ? subDates.get(`${pr.id}:${p.subject_id}`) : undefined;
+          const address = pr
+            ? [pr.address_line1, pr.address_line2, [pr.city, pr.state, pr.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ")
+            : "";
+          return (
+            <div className="card" key={p.id}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 10, minWidth: 260, flex: 1 }}>
+                  {p.zoho_status === "pending" && (
+                    <input type="checkbox" name="zoho_ids" value={`orders:${p.id}`} form="zoho-bulk" style={{ marginTop: 4 }} title="Tick to include in the Zoho push" />
+                  )}
+                  <div>
+                    <strong style={{ fontSize: ".98rem" }}>
+                      {p.order_no != null ? `#${p.order_no} · ` : ""}{pr?.full_name ?? "—"} · {formatINR(p.amount_inr)}
+                    </strong>
+                    <p className="muted" style={{ fontSize: ".82rem", margin: "3px 0 0" }}>
+                      {p.status === "paid" ? "✅ paid" : p.status} · {fmt(p.created_at)} · {p.kind}
+                      {pr ? ` · 🎓 ${levelByUser.get(pr.id) ?? "—"}` : ""} · 📘 {p.subjects?.title ?? "—"}
+                    </p>
+                    <p className="muted" style={{ fontSize: ".82rem", margin: "3px 0 0" }}>
+                      🗓️ {dates?.starts_at ? fmt(dates.starts_at) : "—"} → {dates?.ends_at ? fmt(dates.ends_at) : "—"}
+                      {" · "}✉️ {pr?.email ?? "—"}{pr?.phone ? ` · 📞 ${pr.phone}` : ""}
+                    </p>
+                    {address && <p className="muted" style={{ fontSize: ".82rem", margin: "3px 0 0" }}>📍 {address}</p>}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  {p.invoice_url ? (
+                    <a className="btn small secondary" href={viaProxy(p.invoice_url)} target="_blank" rel="noopener noreferrer">🧾 {p.invoice_no ?? "Invoice"} ↓</a>
+                  ) : p.status === "paid" ? (
+                    <form action={generateInvoice} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={p.id} />
+                      <input type="hidden" name="table" value="orders" />
+                      <SubmitButton className="btn small" savedLabel="✓ Generated">🧾 Generate invoice</SubmitButton>
+                    </form>
+                  ) : <span className="muted" style={{ fontSize: ".8rem" }}>—</span>}
+                  <ZohoCell id={p.id} table="orders" status={p.zoho_status} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
       <p className="muted" style={{ fontSize: ".78rem", marginTop: 6 }}>
         Invoices are emailed to the payer automatically on payment and stored privately — students never see them
@@ -269,6 +274,10 @@ export default async function AdminOrdersPage(
             return (
               <div className="card" key={o.id}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 10 }}>
+                  {o.zoho_status === "pending" && (
+                    <input type="checkbox" name="zoho_ids" value={`book_orders:${o.id}`} form="zoho-bulk" style={{ marginTop: 4 }} title="Tick to include in the Zoho push" />
+                  )}
                   <div>
                     <strong>
                       {o.order_no != null ? `#${o.order_no} · ` : ""}{o.guest_contact?.name ?? ship.name ?? "Customer"} · {formatINR(o.amount_inr)}
@@ -284,7 +293,15 @@ export default async function AdminOrdersPage(
                       📞 {ship.phone ?? o.guest_contact?.phone} · ✉️ {o.guest_contact?.email}
                     </p>
                   </div>
+                  </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    {!o.invoice_url && o.status !== "cancelled" && (
+                      <form action={generateInvoice} style={{ margin: 0 }}>
+                        <input type="hidden" name="id" value={o.id} />
+                        <input type="hidden" name="table" value="book_orders" />
+                        <SubmitButton className="btn small" savedLabel="✓ Generated">🧾 Generate invoice</SubmitButton>
+                      </form>
+                    )}
                     <ZohoCell id={o.id} table="book_orders" status={o.zoho_status ?? null} />
                     {o.status === "paid" && (
                       <form action={setOrderStatus} style={{ margin: 0 }}>

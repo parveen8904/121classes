@@ -22,6 +22,14 @@ export default async function BookStore() {
         <p>Free shipping across India 🚚 · Guest checkout — no account needed.</p>
       </div>
 
+      {/* Students kept asking whether books are physical — say it loudly. */}
+      <div className="card" style={{ maxWidth: 640, margin: "0 auto 22px", textAlign: "center", border: "2px solid var(--accent)" }}>
+        <strong>📦 These are PRINTED books — real hard copies, not PDFs.</strong>
+        <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0" }}>
+          Every order is physically couriered to your address anywhere in India, with free shipping.
+        </p>
+      </div>
+
       {books && books.length > 0 ? (
         <div className="grid grid-4">
           {books.map((b) => (

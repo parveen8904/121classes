@@ -231,6 +231,10 @@ export default async function CoursePlans(
             Any payment on this page buys access to <strong>this subject at this level only</strong>.
             Wrong level or subject? Change it above before paying.
           </p>
+          <p className="muted" style={{ fontSize: ".8rem", margin: "6px 0 0" }}>
+            📦 Want printed study books too? They&apos;re real hard copies couriered to your home —{" "}
+            <Link className="grad" href="/books" style={{ fontWeight: 700 }}>Book Store</Link> (free shipping).
+          </p>
         </div>
 
         <PricingCards

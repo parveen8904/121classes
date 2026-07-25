@@ -110,19 +110,22 @@ export default async function ReportsPage() {
           </p>
         </div>
         <div className="card">
-          <h3 style={{ marginBottom: 12 }}>🎓 Active plans by tier</h3>
-          <p style={{ display: "flex", justifyContent: "space-between" }}>
-            <span className="muted">🥉 Bronze</span>
-            <a className="grad" href="/admin/reports/subscribers?tier=bronze" title="See who they are"><strong>{byTier.bronze}</strong> →</a>
-          </p>
-          <p style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-            <span className="muted">🥈 Silver</span>
-            <a className="grad" href="/admin/reports/subscribers?tier=silver" title="See who they are"><strong>{byTier.silver}</strong> →</a>
-          </p>
-          <p style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-            <span className="muted">🥇 Gold</span>
-            <a className="grad" href="/admin/reports/subscribers?tier=gold" title="See who they are"><strong>{byTier.gold}</strong> →</a>
-          </p>
+          <h3 style={{ marginBottom: 4 }}>🎓 Active plans by tier</h3>
+          <p className="muted" style={{ fontSize: ".78rem", margin: "0 0 10px" }}>Click any tier to see the full subscriber list with dates, amounts &amp; contact details.</p>
+          {([["bronze", "🥉 Bronze", byTier.bronze], ["silver", "🥈 Silver", byTier.silver], ["gold", "🥇 Gold", byTier.gold]] as const).map(([tier, label, count]) => (
+            <a
+              key={tier}
+              href={`/admin/reports/subscribers?tier=${tier}`}
+              style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "8px 10px", marginTop: 6, borderRadius: 10,
+                border: "1px solid var(--border)", textDecoration: "none", color: "inherit",
+              }}
+            >
+              <span>{label}</span>
+              <span style={{ fontWeight: 800 }}>{count} <span style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".82rem" }}>See list →</span></span>
+            </a>
+          ))}
         </div>
       </div>
 

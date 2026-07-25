@@ -49,6 +49,9 @@ export default async function BookDetail(props: { params: Promise<{ id: string }
           <p className="muted" style={{ fontSize: ".85rem" }}>
             {book.stock_qty > 0 ? "✅ In stock" : "⏳ Out of stock"} · 🚚 Free shipping
           </p>
+          <p style={{ fontSize: ".88rem", fontWeight: 600, marginTop: 6 }}>
+            📦 This is a printed hard copy (not a PDF) — physically delivered to your address by courier.
+          </p>
         </div>
       </div>
       <div style={{ marginTop: 28, maxWidth: 620 }}>

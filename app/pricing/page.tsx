@@ -163,6 +163,14 @@ export default async function PricingPage() {
         );
       })}
 
+      <div className="card" style={{ maxWidth: 640, margin: "0 auto 16px", textAlign: "center" }}>
+        <strong>📦 Physical books available</strong>
+        <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0" }}>
+          Our study books are printed hard copies physically couriered to your home (free shipping across India) —{" "}
+          <Link href="/books" style={{ fontWeight: 700, color: "var(--accent)" }}>visit the Book Store</Link>.
+        </p>
+      </div>
+
       <p className="muted" style={{ textAlign: "center", fontSize: ".85rem" }}>
         🔒 Secure checkout by Razorpay · all prices include GST · scholarships available —{" "}
         <Link href="/scholarship" style={{ fontWeight: 700, color: "var(--accent)" }}>apply here</Link>.

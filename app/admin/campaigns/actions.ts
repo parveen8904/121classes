@@ -141,6 +141,18 @@ export async function scheduleCampaign(formData: FormData) {
   redirect(`/admin/campaigns/${campaignId}?scheduled=1`);
 }
 
+// Who receives the ready-to-paste text for the accounts a person must post to.
+// Blank = the admins. Lives with the channel list, because that is where he can
+// see which accounts need a person in the first place.
+export async function savePosterEmails(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  await createServiceClient().from("site_settings").upsert(
+    { key: "marketing_poster_emails", value: str(formData.get("poster_emails")).trim() },
+    { onConflict: "key" },
+  );
+  revalidatePath("/admin/campaigns");
+}
+
 // The two facts that decide how everything is written: which attempt the
 // students are sitting, and where they actually are in preparing for it. It
 // used to be four boxes on another page; it is two boxes here because these

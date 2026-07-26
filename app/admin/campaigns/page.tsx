@@ -1,7 +1,7 @@
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { markTeamDone, saveSituation } from "./actions";
+import { markTeamDone, saveSituation, savePosterEmails } from "./actions";
 import { FIELD_LABEL } from "@/lib/campaignChannels";
 import { channelStatus, STATE_ICON } from "@/lib/channelStatus";
 import { loadBrief } from "@/lib/marketingBrief";
@@ -34,6 +34,11 @@ export default async function MarketingHome() {
     channelStatus(),
   ]);
   const brief = await loadBrief(svc);
+  // Shown against "Direct to students" so the number is where the channel is.
+  const { data: audData } = await svc.rpc("admin_dm_audience");
+  const reachable = (audData ?? []).length;
+  const { data: posterRow } = await svc.from("site_settings").select("value").eq("key", "marketing_poster_emails").maybeSingle();
+  const posterEmails = (posterRow?.value as string) ?? "";
   const posts = (postRows ?? []) as Post[];
 
   // Things a person still has to post by hand, that are already due.
@@ -139,7 +144,12 @@ export default async function MarketingHome() {
             const s = status[f];
             return (
               <div key={f} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: ".83rem", borderTop: "1px solid var(--border)", padding: "5px 0" }}>
-                <span style={{ fontWeight: 600 }}>{STATE_ICON[s?.state ?? "manual"]} {FIELD_LABEL[f]}</span>
+                <span style={{ fontWeight: 600 }}>
+                  {STATE_ICON[s?.state ?? "manual"]}{" "}
+                  {f === "to_direct"
+                    ? <a href="/admin/campaigns/audience">{FIELD_LABEL[f]} — {reachable} reachable</a>
+                    : FIELD_LABEL[f]}
+                </span>
                 <span className="muted" style={{ textAlign: "right" }}>
                   {s?.note}
                   {s?.state === "needs-keys" && s.keys ? <><br /><code style={{ fontSize: ".7rem" }}>{s.keys.join(", ")}</code></> : null}
@@ -148,6 +158,13 @@ export default async function MarketingHome() {
             );
           })}
         </div>
+        <form action={savePosterEmails} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+          <label style={{ margin: 0, fontSize: ".82rem", minWidth: 200, flex: 1 }}>
+            Send the ⚠️ and ✋ ones to
+            <input name="poster_emails" defaultValue={posterEmails} placeholder="blank = to the admins" style={{ marginTop: 4 }} />
+          </label>
+          <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 18 }}>Save</SubmitButton>
+        </form>
         {Object.values(status).some((s) => s.state === "needs-keys") && (
           <p style={{ fontSize: ".82rem", margin: "10px 0 0" }}>
             The ⚠️ ones are built and tested — they are only waiting for their keys. Paste them on{" "}

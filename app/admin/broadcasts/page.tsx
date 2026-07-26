@@ -2,15 +2,10 @@ import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import DeleteButton from "../_components/DeleteButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { deletePost, sendPostNow, updatePost, saveMarketingSettings } from "./actions";
+import { deletePost, sendPostNow, updatePost } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Campaigns — Admin" };
-
-type Audience = {
-  name: string | null; email: string | null; telegram_id: string;
-  level: string; enrolled: string; ai_questions: number; group_messages: number; source: string;
-};
 
 type Post = {
   id: string; body: string; link_url: string | null; send_at: string;
@@ -105,10 +100,6 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ ma
     .order("send_at", { ascending: false })
     .limit(60);
   const posts = (data ?? []) as Post[];
-  const { data: audData } = await svc.rpc("admin_dm_audience");
-  const audience = (audData ?? []) as Audience[];
-  const { data: settingRows } = await svc.from("site_settings").select("key, value").eq("key", "marketing_poster_emails");
-  const posterEmails = (settingRows ?? [])[0]?.value as string ?? "";
   const pending = posts.filter((p) => p.status === "pending").sort((a, b) => a.send_at.localeCompare(b.send_at));
   const done = posts.filter((p) => p.status !== "pending");
 
@@ -117,7 +108,7 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ ma
       <AdminHero
         badge="📣 Campaigns"
         title="Posts & settings"
-        subtitle="Every post scheduled or sent, and who receives the reminders for the accounts a person has to post to. ⏰"
+        subtitle="Every post scheduled or sent — read it, change it, move it, or delete it. ⏰"
         back={{ href: "/admin/campaigns", label: "Marketing" }}
       />
 
@@ -127,65 +118,6 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ ma
           anything, delete what you don&apos;t want.
         </div>
       )}
-      {/* Who does the Instagram/YouTube/Twitter pasting */}
-      <div className="card" style={{ marginTop: 12 }}>
-        <strong>📧 Who posts on Instagram / YouTube / Twitter?</strong>
-        <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 8px" }}>
-          These platforms can&apos;t auto-post, so we email the ready-to-paste text at post time. Enter a staff
-          member&apos;s email to send those reminders to them instead of you (comma-separate for more than one). Blank = they come to the admins.
-        </p>
-        <form action={saveMarketingSettings} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <input name="poster_emails" type="text" defaultValue={posterEmails} placeholder="assistant@example.com, social@example.com" style={{ flex: 1, minWidth: 240 }} />
-          <SubmitButton className="btn small" savedLabel="✓ Saved">Save</SubmitButton>
-        </form>
-      </div>
-
-      {/* Who receives direct messages */}
-      <details className="card" style={{ marginTop: 16 }}>
-        <summary style={{ cursor: "pointer", fontWeight: 700 }}>
-          📩 Direct-message audience — {audience.length} {audience.length === 1 ? "person" : "people"} reachable
-        </summary>
-        <p className="muted" style={{ fontSize: ".82rem", margin: "8px 0" }}>
-          Everyone here has pressed <strong>Start</strong> on the bot, so Telegram allows us to message them
-          personally. Grows every time a student taps the bot (see the pinned &ldquo;press Start&rdquo; post).
-        </p>
-        {audience.length === 0 ? (
-          <p className="muted" style={{ fontSize: ".85rem" }}>Nobody yet — once students press Start on @Caclassesbot they appear here with full details.</p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".82rem" }}>
-              <thead>
-                <tr style={{ textAlign: "left", color: "var(--muted)" }}>
-                  <th style={{ padding: "6px 8px" }}>Name</th>
-                  <th style={{ padding: "6px 8px" }}>Level</th>
-                  <th style={{ padding: "6px 8px" }}>Email</th>
-                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Telegram ID</th>
-                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Enrolled</th>
-                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>AI questions</th>
-                  <th style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>Group messages</th>
-                  <th style={{ padding: "6px 8px" }}>Type</th>
-                </tr>
-              </thead>
-              <tbody>
-                {audience.map((a, i) => (
-                  <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ padding: "6px 8px", fontWeight: 600 }}>{a.name || "—"}</td>
-                    <td style={{ padding: "6px 8px" }}>{a.level}</td>
-                    <td style={{ padding: "6px 8px" }}>{a.email || "—"}</td>
-                    <td style={{ padding: "6px 8px", fontFamily: "monospace", fontSize: ".76rem" }}>{a.telegram_id}</td>
-                    <td style={{ padding: "6px 8px" }}>{a.enrolled}</td>
-                    <td style={{ padding: "6px 8px", fontWeight: 700 }}>{a.ai_questions}</td>
-                    <td style={{ padding: "6px 8px" }}>{a.group_messages}</td>
-                    <td style={{ padding: "6px 8px" }}>{a.source === "portal student" ? "🎓 portal student" : "💬 bot subscriber"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </details>
-
-
       {/* Upcoming */}
       <h3 style={{ margin: "22px 0 8px" }}>⏳ Upcoming ({pending.length})</h3>
       <div style={{ display: "grid", gap: 8 }}>

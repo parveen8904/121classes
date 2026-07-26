@@ -13,18 +13,6 @@ async function requireAdmin(): Promise<boolean> {
   return data?.role === "admin";
 }
 
-// Who receives the "post this on Instagram/YouTube/Twitter now" reminder emails
-// (comma-separated). Blank = the admins. Lets the founder hand pasting to staff.
-export async function saveMarketingSettings(formData: FormData) {
-  if (!(await requireAdmin())) return;
-  const emails = str(formData.get("poster_emails")).trim();
-  await createServiceClient().from("site_settings").upsert(
-    { key: "marketing_poster_emails", value: emails },
-    { onConflict: "key" },
-  );
-  revalidatePath("/admin/broadcasts");
-}
-
 export async function deletePost(formData: FormData) {
   if (!(await requireAdmin())) return;
   const id = str(formData.get("id"));

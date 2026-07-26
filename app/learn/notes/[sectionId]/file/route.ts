@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { resolveFileUrl } from "@/lib/storage";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,12 @@ export async function GET(req: NextRequest, props: { params: Promise<{ sectionId
 
   // RLS-scoped read: locked/unpublished sections return nothing for this student.
   const { data: sec } = await supabase.from("sections").select("config").eq("id", params.sectionId).maybeSingle();
-  const url = ((sec?.config ?? {}) as Record<string, string>)[kindKey] || "";
+  const ref = ((sec?.config ?? {}) as Record<string, string>)[kindKey] || "";
+  // A "secure:<path>" reference lives in the private bucket and becomes a
+  // short-lived signed URL here; a legacy public URL is used as-is. Either way
+  // the file is fetched server-side and streamed, so the student never sees a
+  // storage address and cannot pass one on.
+  const url = await resolveFileUrl(ref, 120);
   if (!url || !/^https?:\/\//.test(url)) return new NextResponse("Not available", { status: 404 });
 
   const upstream = await fetch(url, { cache: "no-store" });

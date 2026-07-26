@@ -15,6 +15,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     tagline: "Every way you reach students and the world — campaigns, contacts, content, announcements.",
     panels: [
       { icon: "📣", title: "Marketing & campaigns", desc: "Everything that goes out: build a campaign from a news item, an article, an event or a festival; the weekly autopilot; articles & SEO; and what your team still has to post by hand.", href: "/admin/campaigns" },
+      { icon: "📄", title: "Free downloads (SEO)", desc: "Which PDFs get a public page on caparveensharma.com so Google credits us — and the title it shows for each.", href: "/admin/notes" },
       { icon: "📇", title: "Contacts & leads", desc: "Import contacts (Interakt/CSV/call lists); leads join WhatsApp campaigns and the phone system recognises them.", href: "/admin/leads" },
       { icon: "🔁", title: "Re-engagement", desc: "Bring-them-back emails for students who never started or went quiet — drafted nightly, sent ONLY after your team approves each one.", href: "/admin/reengage" },
       { icon: "▶️", title: "YouTube performance", desc: "Channel stats next to what YouTube actually sends the site — visits, leads and signups from your videos.", href: "/admin/youtube" },

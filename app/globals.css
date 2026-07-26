@@ -109,6 +109,11 @@ input[type="radio"], input[type="checkbox"] {
 .notice { font-size: 0.85rem; padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; }
 .notice.ok { background: rgba(34,197,94,0.12); color: #86efac; }
 .notice.err { background: rgba(239,68,68,0.12); color: #fca5a5; }
+/* Those two greens/reds are pale on purpose — they sit on the dark theme. On
+   the light theme the same text washes out to near-invisible, which reads as
+   the page having gone wrong. */
+:root[data-theme="light"] .notice.ok { color: #15803d; }
+:root[data-theme="light"] .notice.err { color: #b91c1c; }
 
 .topbar {
   display: flex; align-items: center; justify-content: space-between;

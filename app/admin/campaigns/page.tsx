@@ -206,10 +206,6 @@ export default async function MarketingHome() {
           <strong>📊 Where students come from</strong>
           <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>Leads, signups and which platform actually brings students.</p>
         </a>
-        <a href="/admin/leads" style={tile}>
-          <strong>📇 Contacts &amp; leads</strong>
-          <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>Imported contacts and the WhatsApp audience.</p>
-        </a>
       </div>
     </section>
   );

@@ -9,7 +9,7 @@ import { ANNOUNCEMENT_KIND_LABEL } from "@/lib/announcements";
 // founder controls in Admin → Announcements; obvious noise (exam results,
 // toppers, vacancies …) is dropped via FEED_NOISE before anything is saved.
 
-export type FeedItem = { title: string; link: string; body: string; kind: string };
+export type FeedItem = { title: string; link: string; body: string; kind: string; publishedAt: string | null };
 
 function unescapeEntities(s: string): string {
   return s
@@ -57,22 +57,49 @@ function escapeHtml(s: string): string {
 }
 
 // --- keyword → Google News feed URLs --------------------------------------
-const CTX_IN =
-  '(amendment OR notification OR circular OR rule OR "accounting standard" OR "exposure draft" OR "guidance note")';
-const CTX_GLOBAL = '(amendment OR "new standard" OR "exposure draft" OR update)';
+// How far back a headline may be and still count as news.
+const FRESH_DAYS = 14;
+
+// A few keywords mean something else entirely on their own — "IAS" is the
+// civil service, "MCA" is anything, "RBI" is the whole economy — so those get
+// a couple of words of context. The rest are searched as the founder wrote
+// them.
+const QUALIFIER: Record<string, string> = {
+  ias: "accounting standard",
+  mca: "companies act",
+  rbi: "banks regulation",
+  sebi: "(disclosure OR audit OR accounting)",
+  nfra: "(audit OR auditor)",
+  nclt: "insolvency",
+  sfio: "investigation fraud",
+  "ind as": "(amendment OR ICAI OR notification)",
+  "indian accounting standards": "(ICAI OR MCA OR amendment)",
+  "corporate governance": "india",
+  "forensic accounting": "india",
+};
 
 function gnews(q: string, hl: string, gl: string): string {
   return `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=${hl}&gl=${gl}&ceid=${gl}:${hl.split("-")[0]}`;
 }
 
+// ONE FEED PER KEYWORD, not one giant query.
+//
+// The old build put all fifteen keywords in a single OR group and required an
+// "amendment OR notification OR circular…" clause alongside. Google answered
+// that by relevance rather than by date, and every run came back with the same
+// evergreen explainer pages — the EY and KPMG "recent amendments to Ind AS"
+// articles — which were already saved, so nothing was ever added. Measured on
+// the live feed: of 94 results, ZERO were less than three weeks old.
+//
+// Asked one keyword at a time, Google honours "when:14d" exactly: "ICAI
+// when:7d" returned 36 items, all 36 from the last week. So that is how we ask.
 function buildKeywordFeeds(csv: string): string[] {
   const kws = csv.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
-  if (kws.length === 0) return [];
-  const orGroup = kws.map((k) => (k.includes(" ") ? `"${k}"` : k)).join(" OR ");
-  return [
-    gnews(`(${orGroup}) ${CTX_IN}`, "en-IN", "IN"),         // India regulators / standards
-    gnews(`(IFRS OR IASB OR IAS) ${CTX_GLOBAL}`, "en", "US"), // global standard-setters
-  ];
+  return kws.map((k) => {
+    const q = k.includes(" ") ? `"${k}"` : k;
+    const extra = QUALIFIER[k.toLowerCase()];
+    return gnews(`${q}${extra ? ` ${extra}` : ""} when:${FRESH_DAYS}d`, "en-IN", "IN");
+  });
 }
 
 // Suggest a category from the headline so the draft lands pre-tagged; the
@@ -95,7 +122,12 @@ export function parseFeed(xml: string, noise: string[]): FeedItem[] {
     const lc = title.toLowerCase();
     if (noise.some((n) => n && lc.includes(n))) continue; // drop obvious noise
     const body = pick(block, "description") || pick(block, "summary") || pick(block, "content");
-    items.push({ title, link, body: body.slice(0, 600), kind: guessCategory(title) });
+    // When the story is actually from — so old pages can be dropped and the
+    // newest shown first, instead of trusting Google's relevance order.
+    const raw = pick(block, "pubDate") || pick(block, "published") || pick(block, "updated");
+    const when = raw ? new Date(raw) : null;
+    const publishedAt = when && !Number.isNaN(when.getTime()) ? when.toISOString() : null;
+    items.push({ title, link, body: body.slice(0, 600), kind: guessCategory(title), publishedAt });
   }
   return items;
 }
@@ -141,8 +173,14 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
       trouble.push(`${new URL(url).hostname}: ${e instanceof Error ? e.message : "fetch failed"}`);
       continue;
     }
-    const items = parseFeed(xml, noise).slice(0, 20);
-    if (!items.length) trouble.push(`${new URL(url).hostname}: returned nothing usable (${xml.length} bytes)`);
+    // Newest first, nothing older than the window, and a handful per keyword —
+    // fifteen keywords otherwise flood the approval list in one run.
+    const cutoff = Date.now() - (FRESH_DAYS + 7) * 86400e3;
+    const items = parseFeed(xml, noise)
+      .filter((it) => !it.publishedAt || new Date(it.publishedAt).getTime() >= cutoff)
+      .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
+      .slice(0, 5);
+    if (!items.length) trouble.push(`${new URL(url).hostname}: nothing fresh (${xml.length} bytes)`);
     for (const it of items) {
       checked++;
       const { data: existing } = await svc
@@ -156,6 +194,8 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
         title: it.title.slice(0, 280),
         body: it.body || null,
         link_url: it.link,
+        // The story's own date, so "newest first" means what it says.
+        published_at: it.publishedAt ?? new Date().toISOString(),
         is_published: false, // pending faculty approval
         from_feed: true,
       });

@@ -48,7 +48,13 @@ export default async function AnnouncementsPage(
       />
 
       {searchParams.feeds === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Feed settings saved.</div>}
-      {searchParams.fetched !== undefined && <div className="notice ok" style={{ marginTop: 16 }}>✅ Fetched {searchParams.fetched} new item(s) — see them under &ldquo;All posts&rdquo;, awaiting your approval.</div>}
+      {searchParams.fetched !== undefined && (
+        <div className="notice ok" style={{ marginTop: 16 }}>
+          {Number(searchParams.fetched) > 0
+            ? <>✅ Fetched {searchParams.fetched} new item(s) — see them under &ldquo;All posts&rdquo;.</>
+            : <>Checked the feeds — <strong>nothing new</strong>. Everything they returned is already in your list.</>}
+        </div>
+      )}
       {searchParams.digest !== undefined && (
         <div className="notice ok" style={{ marginTop: 16 }}>
           {Number(searchParams.digest) > 0 ? `✉️ Digest emailed with ${searchParams.digest} pending item(s).` : "No pending feed items to email right now."}

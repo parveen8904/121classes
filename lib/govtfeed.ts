@@ -37,6 +37,21 @@ function pick(block: string, tag: string): string {
   return m ? decode(m[1]) : "";
 }
 
+// The link must NOT go through decode(): decode() deletes URLs from text (they
+// were leaking into announcement bodies as Google-News blobs), and running the
+// <link> through it emptied every link — so every single item was thrown away
+// for "having no link" and the feed silently stopped saving anything from
+// 22 June onwards. Links are extracted on their own, entities and CDATA
+// resolved, nothing stripped.
+function pickLink(block: string): string {
+  const m = block.match(/<link[^>]*>([\s\S]*?)<\/link>/i);
+  const text = unescapeEntities((m?.[1] ?? "").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")).trim();
+  if (/^https?:\/\//i.test(text)) return text;
+  // Atom feeds carry it as an attribute instead: <link href="…" />
+  const href = block.match(/<link[^>]*href=["']([^"']+)["']/i);
+  return href ? href[1].trim() : "";
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -70,16 +85,12 @@ export function guessCategory(title: string): string {
   return "industry";
 }
 
-function parseFeed(xml: string, noise: string[]): FeedItem[] {
+export function parseFeed(xml: string, noise: string[]): FeedItem[] {
   const items: FeedItem[] = [];
   const blocks = xml.match(/<(item|entry)[\s\S]*?<\/(item|entry)>/gi) ?? [];
   for (const block of blocks) {
     const title = pick(block, "title");
-    let link = pick(block, "link");
-    if (!link) {
-      const href = block.match(/<link[^>]*href=["']([^"']+)["']/i);
-      if (href) link = href[1].trim();
-    }
+    const link = pickLink(block);
     if (!title || !link) continue;
     const lc = title.toLowerCase();
     if (noise.some((n) => n && lc.includes(n))) continue; // drop obvious noise

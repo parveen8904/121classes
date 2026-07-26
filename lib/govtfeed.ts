@@ -97,13 +97,33 @@ function gnews(q: string, hl: string, gl: string): string {
 //
 // Asked one keyword at a time, Google honours "when:14d" exactly: "ICAI
 // when:7d" returned 36 items, all 36 from the last week. So that is how we ask.
-function buildKeywordFeeds(csv: string): string[] {
+type Feed = { url: string; keyword: string | null };
+
+function buildKeywordFeeds(csv: string): Feed[] {
   const kws = csv.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
   return kws.map((k) => {
     const q = k.includes(" ") ? `"${k}"` : k;
     const extra = QUALIFIER[k.toLowerCase()];
-    return gnews(`${q}${extra ? ` ${extra}` : ""} when:${FRESH_DAYS}d`, "en-IN", "IN");
+    return { url: gnews(`${q}${extra ? ` ${extra}` : ""} when:${FRESH_DAYS}d`, "en-IN", "IN"), keyword: k };
   });
+}
+
+// THE WORD MUST ACTUALLY BE THERE.
+//
+// Google matches loosely: searching "MCA" or "IAS" returned a municipal
+// corporation appointment and a civil-services piece — nothing the founder had
+// asked for. Whatever Google decides is related, an item is only kept if the
+// keyword we searched for appears in its own title or summary. Short acronyms
+// must match as whole words, so "IAS" never matches "bias" and "MCA" never
+// matches "MCAfee".
+function mentions(keyword: string, item: FeedItem): boolean {
+  const hay = `${item.title} ${item.body}`.toLowerCase();
+  const k = keyword.toLowerCase().trim();
+  if (!k) return true;
+  if (k.length <= 6 && !k.includes(" ")) {
+    return new RegExp(`(^|[^a-z0-9])${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`, "i").test(hay);
+  }
+  return hay.includes(k);
 }
 
 // Suggest a category from the headline so the draft lands pre-tagged; the
@@ -144,9 +164,10 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
   const extra = await getSecret("GOVT_FEEDS"); // optional manual feed URLs
   const noise = (await getSecret("FEED_NOISE")).split(/[\n,]/).map((s) => s.trim().toLowerCase()).filter(Boolean);
 
-  const urls = [
+  const urls: Feed[] = [
     ...buildKeywordFeeds(keywords),
-    ...extra.split(/[\n,]/).map((u) => u.trim()).filter(Boolean),
+    // Hand-added feed URLs have no keyword behind them, so nothing to verify.
+    ...extra.split(/[\n,]/).map((u) => u.trim()).filter(Boolean).map((url) => ({ url, keyword: null })),
   ];
   if (urls.length === 0) return { added: 0, checked: 0, items: [] };
 
@@ -158,7 +179,8 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
   // now records what happened, and Admin → Announcements shows it.
   const trouble: string[] = [];
 
-  for (const url of urls) {
+  let rejected = 0;
+  for (const { url, keyword } of urls) {
     let xml = "";
     try {
       // A plain bot user-agent gets refused by some news sources; 8 seconds
@@ -180,11 +202,14 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
     // Newest first, nothing older than the window, and a handful per keyword —
     // fifteen keywords otherwise flood the approval list in one run.
     const cutoff = Date.now() - (FRESH_DAYS + 7) * 86400e3;
-    const items = parseFeed(xml, noise)
-      .filter((it) => !it.publishedAt || new Date(it.publishedAt).getTime() >= cutoff)
+    const parsed = parseFeed(xml, noise)
+      .filter((it) => !it.publishedAt || new Date(it.publishedAt).getTime() >= cutoff);
+    const onTopic = keyword ? parsed.filter((it) => mentions(keyword, it)) : parsed;
+    rejected += parsed.length - onTopic.length;
+    const items = onTopic
       .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
-      .slice(0, 5);
-    if (!items.length) trouble.push(`${new URL(url).hostname}: nothing fresh (${xml.length} bytes)`);
+      .slice(0, 8);
+    if (!items.length && keyword) trouble.push(`"${keyword}": nothing fresh and on-topic`);
     for (const it of items) {
       checked++;
       const { data: existing } = await svc
@@ -217,6 +242,7 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
       feeds: urls.length,
       checked,
       added: added.length,
+      offTopic: rejected,
       trouble: trouble.slice(0, 5),
     }),
   }, { onConflict: "key" }).then(() => undefined, () => undefined);

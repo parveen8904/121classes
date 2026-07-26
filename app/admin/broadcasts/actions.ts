@@ -38,6 +38,7 @@ export async function schedulePost(formData: FormData) {
     // at send time the drafted post is emailed to the admins to publish manually.
     to_instagram: formData.get("to_instagram") === "on",
     to_youtube: formData.get("to_youtube") === "on",
+    to_yt_video: formData.get("to_yt_video") === "on",
     to_twitter: formData.get("to_twitter") === "on",
     to_linkedin: formData.get("to_linkedin") === "on",
     to_facebook: formData.get("to_facebook") === "on",
@@ -130,6 +131,7 @@ export async function generatePack(formData: FormData) {
     wa_template: str(formData.get("wa_template")) || null,
     to_instagram: toIg,
     to_youtube: toYt,
+    to_yt_video: false,
     to_twitter: formData.get("to_twitter") === "on",
     to_linkedin: formData.get("to_linkedin") === "on",
     to_facebook: formData.get("to_facebook") === "on",

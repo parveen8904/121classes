@@ -3,6 +3,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import DeleteButton from "../_components/DeleteButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import { schedulePost, deletePost, sendPostNow, generatePack, updatePost, toggleAutopilot, saveMarketingSettings } from "./actions";
+import { CHANNELS, cadenceLabel } from "@/lib/marketingRhythm";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Campaigns — Admin" };
@@ -16,7 +17,7 @@ type Post = {
   id: string; body: string; link_url: string | null; send_at: string;
   to_tg_channel: boolean; to_tg_groups: boolean; to_discord: boolean; to_direct: boolean;
   campaign: string | null; to_whatsapp: boolean; wa_template: string | null;
-  to_instagram: boolean; to_youtube: boolean; to_twitter: boolean;
+  to_instagram: boolean; to_youtube: boolean; to_yt_video: boolean; to_twitter: boolean;
   to_linkedin: boolean; to_facebook: boolean; to_substack: boolean; to_medium: boolean;
   to_reddit: boolean; to_quora: boolean; to_google: boolean;
   ig_text: string | null; yt_text: string | null; created_by: string | null;
@@ -39,6 +40,7 @@ function Targets({ p }: { p: Post }) {
       {p.to_whatsapp && <span className="badge">💬 WhatsApp</span>}
       {p.to_instagram && <span className="badge">📷 Instagram (remind)</span>}
       {p.to_youtube && <span className="badge">▶️ YouTube (remind)</span>}
+      {p.to_yt_video && <span className="badge">🎥 YouTube video brief</span>}
       {p.to_twitter && <span className="badge">🐦 Twitter (remind)</span>}
       {p.to_linkedin && <span className="badge">💼 LinkedIn (remind)</span>}
       {p.to_facebook && <span className="badge">📘 Facebook (remind)</span>}
@@ -92,11 +94,14 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
       {/* Weekly autopilot */}
       <div className="card" style={{ marginTop: 16, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ minWidth: 260, flex: 1 }}>
-          <strong>{autopilotOn ? "🟢" : "⚪"} Weekly marketing autopilot</strong>
+          <strong>{autopilotOn ? "🟢" : "⚪"} Weekly autopilot — quiet marketing</strong>
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 0" }}>
-            Every Monday morning it writes the week&apos;s posts (rotating your FREE tools — planner, MCQ tests, case studies),
-            schedules them daily at 7 pm IST, and emails you the plan. You only delete what you don&apos;t like.
-            Telegram posts itself; Instagram &amp; YouTube text reaches you by email at post time. WhatsApp is never auto-included.
+            Every Monday morning it plans the whole week: <strong>one idea a day</strong>, written to teach — a concept
+            students get wrong, an exam habit, an honest question — and rewritten in each platform&apos;s own voice.
+            Roughly <strong>one day in three</strong> carries a single quiet line about something on the site; the rest
+            ask for nothing. No offers, no &ldquo;join now&rdquo;, nothing that reads as an advertisement. Every post is
+            scheduled below where you can edit or delete it, and the full week reaches you by email on Monday.
+            WhatsApp is never included.
           </p>
         </div>
         <form action={toggleAutopilot} style={{ margin: 0 }}>
@@ -106,6 +111,30 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
           </SubmitButton>
         </form>
       </div>
+
+      {/* The rhythm each platform speaks on */}
+      <details className="card" style={{ marginTop: 12 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>📅 How often each place hears from us</summary>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "8px 0" }}>
+          A feed that fills up every day reads like an ad account. This is the rhythm the autopilot follows —
+          daily only in our own rooms, and spaced out everywhere public.
+        </p>
+        <div style={{ display: "grid", gap: 4 }}>
+          {CHANNELS.map((c) => (
+            <div key={c.key} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: ".82rem", borderTop: "1px solid var(--border)", padding: "5px 0" }}>
+              <span style={{ fontWeight: 600 }}>{c.label}</span>
+              <span className="muted" style={{ whiteSpace: "nowrap" }}>
+                {cadenceLabel(c)} · {String(c.hour).padStart(2, "0")}:{String(c.minute).padStart(2, "0")} IST
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="muted" style={{ fontSize: ".76rem", margin: "8px 0 0" }}>
+          Subject Telegram groups are deliberately left out — those are study rooms, and a daily post there is the
+          one thing students would notice as marketing. To change a rhythm, tell the developer: it lives in
+          <code style={{ fontSize: ".72rem" }}> lib/marketingRhythm.ts</code>.
+        </p>
+      </details>
 
       {/* Who does the Instagram/YouTube/Twitter pasting */}
       <div className="card" style={{ marginTop: 12 }}>
@@ -168,7 +197,8 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
           </div>
           <SubmitButton className="btn" savedLabel="✓ Pack scheduled" style={{ marginTop: 12 }}>✨ Write & schedule the pack</SubmitButton>
           <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
-            The AI writes one post per day (different angle each day, no invented claims). Everything lands in
+            The AI writes one post per day, each written to teach rather than to sell — a different angle every day,
+            no invented claims, and the site mentioned only in passing. Everything lands in
             &ldquo;Upcoming&rdquo; below where you can edit or delete before it goes out.
           </p>
         </form>
@@ -255,6 +285,7 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
           <div style={{ display: "grid", gap: 6, marginTop: 4 }}>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_instagram" /> 📷 Instagram — at send time you get an email with the ready-to-paste post</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_youtube" /> ▶️ YouTube (community post) — same reminder email</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_yt_video" /> 🎥 YouTube video brief — emailed as a &ldquo;record this&rdquo; note, not a post</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_twitter" /> 🐦 Twitter/X — auto when keys set, else reminder email</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_linkedin" /> 💼 LinkedIn — auto when keys set, else reminder email</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_facebook" /> 📘 Facebook page — auto when keys set, else reminder email</label>

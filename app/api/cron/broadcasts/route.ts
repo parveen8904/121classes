@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   const svc = createServiceClient();
   const { data: due } = await svc
     .from("scheduled_posts")
-    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, to_twitter, to_linkedin, to_facebook, to_substack, to_medium, to_reddit, to_quora, to_google, ig_text, yt_text, status_note")
+    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, to_yt_video, to_twitter, to_linkedin, to_facebook, to_substack, to_medium, to_reddit, to_quora, to_google, ig_text, yt_text, status_note")
     .eq("status", "pending")
     .lte("send_at", new Date().toISOString())
     .order("send_at")
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
   // Who receives the Instagram/YouTube/Twitter "post this now" reminders. The
   // founder can route them to a staff member (site_settings marketing_poster_
   // emails, comma-separated); falls back to the admins.
-  const needRemind = due.some((p) => (p.to_instagram || p.to_youtube || p.to_twitter || p.to_linkedin || p.to_facebook || p.to_substack || p.to_medium || p.to_reddit || p.to_quora || p.to_google) && (p.wa_offset ?? 0) === 0);
+  const needRemind = due.some((p) => (p.to_instagram || p.to_youtube || p.to_yt_video || p.to_twitter || p.to_linkedin || p.to_facebook || p.to_substack || p.to_medium || p.to_reddit || p.to_quora || p.to_google) && (p.wa_offset ?? 0) === 0);
   let adminEmails: string[] = [];
   if (needRemind) {
     const { data: cfg } = await svc.from("site_settings").select("value").eq("key", "marketing_poster_emails").maybeSingle();
@@ -161,8 +161,14 @@ export async function GET(req: NextRequest) {
             else notes.push(`facebook: auto-post failed (${r.error}) — reminder emailed instead`);
           }
           if (p.to_reddit && (await social.redditConfigured())) {
-            const title = String(p.campaign || text).split("\n")[0].slice(0, 290);
-            const r = await social.postToReddit(title, full);
+            // Reddit posts are title + body. The copy is written with its own
+            // title on the first line; fall back to the campaign name only if
+            // that line is missing or unusable as a title.
+            const lines = String(p.body).split("\n");
+            const head = lines[0].trim();
+            const ownTitle = head.length >= 15 && head.length <= 290;
+            const title = ownTitle ? head : String(p.campaign || text).split("\n")[0].slice(0, 290);
+            const r = await social.postToReddit(title, ownTitle ? lines.slice(1).join("\n").trim() : full);
             if (r.ok) { rdPosted = true; notes.push("reddit: posted ✅"); }
             else notes.push(`reddit: auto-post failed (${r.error}) — reminder emailed instead`);
           }
@@ -170,10 +176,11 @@ export async function GET(req: NextRequest) {
 
         // Prepare-and-remind channels — email the drafted post to the team to
         // publish manually (none of these allow reliable auto-posting).
-        if ((p.to_instagram && !igPosted) || p.to_youtube || (p.to_twitter && !xPosted) || (p.to_linkedin && !liPosted) || (p.to_facebook && !fbPosted) || p.to_substack || p.to_medium || (p.to_reddit && !rdPosted) || p.to_quora || p.to_google) {
+        if ((p.to_instagram && !igPosted) || p.to_youtube || p.to_yt_video || (p.to_twitter && !xPosted) || (p.to_linkedin && !liPosted) || (p.to_facebook && !fbPosted) || p.to_substack || p.to_medium || (p.to_reddit && !rdPosted) || p.to_quora || p.to_google) {
           const platforms = [
             p.to_instagram && !igPosted ? "Instagram" : null,
             p.to_youtube ? "YouTube" : null,
+            p.to_yt_video ? "a YouTube video" : null,
             p.to_twitter && !xPosted ? "Twitter/X" : null,
             p.to_linkedin && !liPosted ? "LinkedIn" : null,
             p.to_facebook && !fbPosted ? "Facebook" : null,
@@ -201,6 +208,9 @@ export async function GET(req: NextRequest) {
               : "";
             const plainBlock = (label: string, hint = "") =>
               `<p style="margin:14px 0 4px"><strong>${label}</strong>${hint ? ` <span style="color:#888;font-size:12px">${hint}</span>` : ""}</p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(text))}</div>`;
+            const ytvBlock = p.to_yt_video
+              ? plainBlock("🎥 This week's YouTube video", "(the brief — record and publish it before the week ends)")
+              : "";
             const liBlock = p.to_linkedin && !liPosted ? plainBlock("💼 LinkedIn post") : "";
             const fbBlock = p.to_facebook && !fbPosted ? plainBlock("📘 Facebook page post") : "";
             const ssBlock = p.to_substack ? plainBlock("📰 Substack", "(use as the opening — expand into a full newsletter)") : "";
@@ -210,7 +220,7 @@ export async function GET(req: NextRequest) {
             const gbBlock = p.to_google ? plainBlock("📍 Google Business Profile", "(post as an Update on the profile — shows in Google Search/Maps)") : "";
             const html = emailShell(`📣 Post this on ${platforms}`,
               `<p>Your campaign${p.campaign ? ` <strong>${esc(String(p.campaign))}</strong>` : ""} is going out now. Ready-to-paste content:</p>
-               ${igBlock}${ytBlock}${twBlock}${liBlock}${fbBlock}${ssBlock}${mdBlock}${rdBlock}${qrBlock}${gbBlock}
+               ${igBlock}${ytBlock}${ytvBlock}${twBlock}${liBlock}${fbBlock}${ssBlock}${mdBlock}${rdBlock}${qrBlock}${gbBlock}
                <p style="font-size:13px;color:#666">Copy the text into each app. (These platforms don't allow reliable auto-posting, so this reminder is your cue.)</p>`);
             let ok = 0;
             for (const to of adminEmails) if (await sendEmail(to, `📣 Post to ${platforms} now — campaign is live`, html).catch(() => false)) ok++;

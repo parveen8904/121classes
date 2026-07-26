@@ -940,13 +940,22 @@ export type PackPost = {
   youtube: string;    // community-post text
 };
 
+// The founder's standing rule for everything this platform publishes: no
+// advertising voice, anywhere. A post has to be worth reading on its own — a
+// concept cleared, a habit, an honest question — and the site is named only
+// now and then, in one plain line, the way a teacher mentions where something
+// is kept. A reader should never feel they are being marketed to.
+export const SOFT_RULES =
+  "You ghost-write for CA Parveen Sharma, who has taught Indian CA students (Foundation/Intermediate/Final) for 36 years. Write in his voice: first person, warm, plain English, an experienced teacher talking to students he knows. " +
+  "THIS IS NOT ADVERTISING. Never write 'enroll', 'join now', 'sign up', 'register', 'don't miss', 'limited', 'hurry', 'best coaching', 'India's leading', 'check out our', 'DM us', 'link in bio', 'offer', 'discount' — or any other call to action. No urgency, no superlatives, no ALL-CAPS words, no strings of exclamation marks, no emoji walls (one emoji at most, and none where the channel brief says none). Never open with a sales hook. " +
+  "Every piece must be worth reading for a student who will never buy anything: it teaches one thing, corrects one mistake, asks one honest question, or says one true thing about studying. Substance first, always. " +
+  "NEVER invent facts, numbers, pass percentages, dates, deadlines, fees, discounts, student stories or testimonials. General observations from years of teaching are fine; specific anecdotes are not. If an exam rule may have changed, say it should be checked in the latest ICAI material instead of stating it. " +
+  "The only claims you may make about the platform: CA Parveen Sharma has 36 years of teaching experience; the site has a free day-by-day study planner, free chapter MCQ tests with a concept-wise report, case-scenario practice for the new exam pattern, recorded classes, live classes, free articles, and doubt-solving help. ";
+
 const PACK_SYSTEM =
-  "You write marketing posts for CA Parveen Sharma's CA coaching platform (caparveensharma.com) aimed at Indian CA students (Foundation/Intermediate/Final). " +
-  "STRICT RULES: never invent facts, numbers, discounts, deadlines or testimonials. The ONLY approved claims: " +
-  "CA Parveen Sharma has 36 years of teaching experience; the platform offers a FREE day-by-day study planner, FREE chapter MCQ tests with rank & concept reports, case-study (case-scenario) practice for the new exam pattern, recorded classes, live classes, and a doubt-solving AI + faculty. " +
-  "Tone: warm, encouraging senior-teacher voice; simple English with a light Indian touch; emojis welcome but not overdone. " +
-  "Each day must take a DIFFERENT angle (a feature, a study tip that ends in the feature, a question to the reader, exam-mindset encouragement). Lead with FREE offerings. " +
-  "Always include the exact link given for that focus. " +
+  SOFT_RULES +
+  "Each day must take a DIFFERENT angle and stand on its own as teaching. At most one day in three may mention the platform at all, and then in ONE quiet sentence placed in the middle or at the end — never as the point of the post, never with a call to action. " +
+  "Include a link only in a post that carries such a mention, at most one, plain. " +
   "Respond ONLY as compact JSON, no prose, no code fences: " +
   '{"posts":[{"day":0,"focus":"...","message":"...","instagram":"...","youtube":"..."}]}';
 
@@ -958,12 +967,12 @@ export async function generateCampaignPack(
   const user =
     `Campaign theme: ${theme}\n` +
     `Number of daily posts: ${days}\n\n` +
-    `Links to use (pick the one matching each post's focus; keep the ?src= tag):\n` +
+    `Links available for the occasional mention (keep the ?src= tag; never more than one link in a post):\n` +
     `- Free study planner: https://caparveensharma.com/free-planner?src=ig (use ?src=yt in the youtube text, ?src=tg in the message)\n` +
     `- Courses: https://caparveensharma.com/courses\n` +
     `- Live classes: https://caparveensharma.com/live\n\n` +
-    `What's happening on the platform right now (mention when relevant, never invent more):\n${context}\n\n` +
-    `Per-post limits: message ≤ 450 characters; instagram = caption ≤ 500 characters + 8-12 relevant hashtags on a new line; youtube ≤ 350 characters.`;
+    `What's happening on the platform right now (mention only where it fits naturally, never invent more):\n${context}\n\n` +
+    `Per-post limits: message ≤ 450 characters; instagram = caption ≤ 500 characters + up to 4 relevant hashtags on a new line; youtube ≤ 350 characters.`;
   const text = await callClaude(PACK_SYSTEM, user, Math.min(300 + days * 550, 8000), { feature: "marketing" });
   if (!text) return null;
   const json = parseLooseJson(text);
@@ -979,6 +988,60 @@ export async function generateCampaignPack(
     }))
     .filter((p: PackPost) => p.message.length > 0)
     .slice(0, Math.max(1, days));
+}
+
+// ---- One day of the passive rhythm ------------------------------------------
+// The autopilot asks for a day at a time: one idea, rewritten properly for each
+// channel that speaks that day (Instagram twice a week, LinkedIn twice a week,
+// Reddit once, and so on — see lib/marketingRhythm). Same thought, genuinely
+// different voice each place, so nobody following two of our accounts sees the
+// same paragraph twice and recognises a marketing machine behind it.
+export type SoftDay = { focus: string; posts: Record<string, string> };
+
+const SOFT_DAY_SYSTEM =
+  SOFT_RULES +
+  "You are given ONE idea for the day and a list of places it has to be said. Write each piece from scratch in that platform's own voice — never paste the same sentences into two channels. Respect each channel's character limit. " +
+  "Respond ONLY as compact JSON, no prose, no code fences: " +
+  '{"focus":"5-8 words naming today\'s idea","posts":{"<channel key>":"<the text for that channel>"}}';
+
+export async function generateSoftDay(input: {
+  dayLabel: string;
+  angle: string;
+  channels: { key: string; label: string; brief: string; maxChars: number }[];
+  context: string;
+  avoid: string[];
+  mention: string | null; // the one thing today may quietly point at, or null
+}): Promise<SoftDay | null> {
+  if (!input.channels.length) return null;
+  const mentionRule = input.mention
+    ? `Today ONE of the pieces (pick the channel where it fits most naturally, and not the Reddit one) may carry a single quiet sentence mentioning ${input.mention}. ` +
+      `Put it in the middle or at the end, phrased as something that exists and is there if it helps — not as something being offered. No call to action, no second mention anywhere, and at most one link (https://caparveensharma.com/free-planner?src=social for the planner, otherwise https://caparveensharma.com). Every other piece today mentions nothing at all.`
+    : `Today NO piece mentions the platform, the site, any course or any link. Today we only teach.`;
+  const user =
+    `Day: ${input.dayLabel}\n\n` +
+    `Today's one idea (every channel carries this same idea, said its own way):\n${input.angle}\n\n` +
+    `${mentionRule}\n\n` +
+    `Real things happening on the platform right now (use only if one genuinely fits; never invent more):\n${input.context}\n\n` +
+    (input.avoid.length
+      ? `Ideas already used in recent weeks — do not repeat or rephrase any of these:\n${input.avoid.slice(0, 40).map((a) => `- ${a}`).join("\n")}\n\n`
+      : "") +
+    `Write one piece for each channel below:\n\n` +
+    input.channels
+      .map((c) => `CHANNEL "${c.key}" — ${c.label} (max ${c.maxChars} characters)\n${c.brief}`)
+      .join("\n\n");
+  const budget = input.channels.reduce((n, c) => n + c.maxChars, 0);
+  const text = await callClaude(SOFT_DAY_SYSTEM, user, Math.min(700 + Math.ceil(budget / 2), 5000), { feature: "marketing" });
+  if (!text) return null;
+  const json = parseLooseJson(text);
+  const raw = json?.posts;
+  if (!raw || typeof raw !== "object") return null;
+  const posts: Record<string, string> = {};
+  for (const c of input.channels) {
+    const v = String((raw as Record<string, unknown>)[c.key] ?? "").trim();
+    if (v) posts[c.key] = v;
+  }
+  if (!Object.keys(posts).length) return null;
+  return { focus: String(json?.focus ?? "").trim() || input.angle.slice(0, 60), posts };
 }
 
 // ---- SEO articles ------------------------------------------------------------

@@ -19,7 +19,6 @@ type Post = {
   team_done_at: string | null; created_by: string | null;
 } & Record<string, unknown>;
 
-const istFmt = (s: string) => new Date(s).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 const fieldOf = (p: Post) => Object.keys(FIELD_LABEL).find((f) => p[f] === true) ?? "";
 const KIND: Record<string, string> = { news: "📰 news", article: "📝 article", greeting: "🎉 greeting", event: "📅 event", idea: "💡 idea" };
 
@@ -52,15 +51,12 @@ export default async function MarketingHome() {
       <AdminHero
         badge="📣 Marketing"
         title="Marketing & campaigns"
-        subtitle="Everything that goes out to the world — campaigns, the weekly rhythm, articles, greetings and what your team still has to post by hand. 🌍"
+        subtitle="What needs you: campaigns half-written, posts waiting on a person, and what each account can publish by itself. 🌍"
         back={{ href: "/admin", label: "Admin" }}
       />
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
+      <div style={{ marginTop: 16 }}>
         <a className="btn" href="/admin/campaigns/new">✨ Start a campaign</a>
-        <a className="btn secondary" href="/admin/broadcasts">Posts &amp; settings</a>
-        <a className="btn secondary" href="/admin/articles">Articles &amp; SEO</a>
-        <a className="btn secondary" href="/admin/marketing">Where students come from</a>
       </div>
 
       {/* Waiting on a person */}
@@ -111,32 +107,6 @@ export default async function MarketingHome() {
         </>
       )}
 
-      {/* What is coming */}
-      <h3 style={{ margin: "24px 0 8px" }}>⏳ Going out next ({upcoming.length})</h3>
-      <div style={{ display: "grid", gap: 6 }}>
-        {upcoming.length === 0 && (
-          <div className="card"><p className="muted" style={{ margin: 0 }}>
-            Nothing scheduled — every campaign is written by your team, so nothing goes out until you make one.
-          </p></div>
-        )}
-        {upcoming.slice(0, 12).map((p) => (
-          <div className="list-row" key={p.id}>
-            <div style={{ minWidth: 0 }}>
-              <span className="row-title" style={{ fontWeight: 500 }}>{p.body.slice(0, 110)}{p.body.length > 110 ? "…" : ""}</span>
-              <p className="row-sub">
-                {FIELD_LABEL[fieldOf(p)]} · 🕐 {istFmt(p.send_at)} IST
-                {p.source_kind ? ` · ${KIND[p.source_kind] ?? p.source_kind}` : p.created_by === "autopilot" ? " · 🤖 autopilot" : ""}
-              </p>
-            </div>
-            <div className="row-actions">
-              {p.campaign_id
-                ? <a className="btn small secondary" href={`/admin/campaigns/${p.campaign_id}`}>Open</a>
-                : <a className="btn small secondary" href="/admin/broadcasts">Edit</a>}
-            </div>
-          </div>
-        ))}
-      </div>
-
       {/* What posts itself, and what is waiting on you */}
       <h3 style={{ margin: "24px 0 8px" }}>🔌 What can post by itself</h3>
       <div className="card">
@@ -169,7 +139,10 @@ export default async function MarketingHome() {
         <a href="/admin/broadcasts" style={tile}>
           <strong>⚙️ Posts &amp; settings</strong>
           <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
-            Every post scheduled or sent, the situation your students are in, and who receives the pasting reminders.
+            {upcoming.length > 0
+              ? `${upcoming.length} post(s) scheduled — read, edit or delete any of them.`
+              : "Nothing scheduled right now."}{" "}
+            Also the situation your students are in, and who receives the pasting reminders.
           </p>
         </a>
         <a href="/admin/broadcasts/festivals" style={tile}>

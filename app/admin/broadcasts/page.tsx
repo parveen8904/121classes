@@ -2,8 +2,9 @@ import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import DeleteButton from "../_components/DeleteButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { schedulePost, deletePost, sendPostNow, generatePack, updatePost, toggleAutopilot, saveMarketingSettings } from "./actions";
+import { schedulePost, deletePost, sendPostNow, generatePack, updatePost, toggleAutopilot, saveMarketingSettings, saveScenario } from "./actions";
 import { CHANNELS, cadenceLabel } from "@/lib/marketingRhythm";
+import { loadBrief } from "@/lib/marketingBrief";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Campaigns — Admin" };
@@ -20,7 +21,7 @@ type Post = {
   to_instagram: boolean; to_youtube: boolean; to_yt_video: boolean; to_twitter: boolean;
   to_linkedin: boolean; to_facebook: boolean; to_substack: boolean; to_medium: boolean;
   to_reddit: boolean; to_quora: boolean; to_google: boolean;
-  ig_text: string | null; yt_text: string | null; created_by: string | null;
+  ig_text: string | null; yt_text: string | null; x_text: string | null; created_by: string | null;
   status: string; status_note: string | null; sent_at: string | null;
 };
 
@@ -53,9 +54,31 @@ function Targets({ p }: { p: Post }) {
   );
 }
 
+// Every channel a post can go to — one list, used by the compose form and by
+// each post's own edit form so a post can be re-routed after it was written.
+const CHANNEL_BOXES: { name: string; label: string; auto: boolean }[] = [
+  { name: "to_tg_channel", label: "✈️ Telegram channel", auto: true },
+  { name: "to_tg_groups", label: "👥 Subject Telegram groups", auto: true },
+  { name: "to_discord", label: "🎮 Discord", auto: true },
+  { name: "to_direct", label: "📩 Direct to every connected student", auto: true },
+  { name: "to_whatsapp", label: "💬 WhatsApp (every student + lead)", auto: true },
+  { name: "to_instagram", label: "📷 Instagram", auto: false },
+  { name: "to_youtube", label: "▶️ YouTube community post", auto: false },
+  { name: "to_yt_video", label: "🎥 YouTube video brief", auto: false },
+  { name: "to_twitter", label: "🐦 Twitter/X", auto: false },
+  { name: "to_linkedin", label: "💼 LinkedIn", auto: false },
+  { name: "to_facebook", label: "📘 Facebook page", auto: false },
+  { name: "to_reddit", label: "👽 Reddit", auto: false },
+  { name: "to_substack", label: "📰 Substack", auto: false },
+  { name: "to_medium", label: "✒️ Medium", auto: false },
+  { name: "to_quora", label: "❓ Quora", auto: false },
+  { name: "to_google", label: "📍 Google Business Profile", auto: false },
+];
+
 export default async function BroadcastsPage(props: { searchParams: Promise<{ pack?: string }> }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
+  const brief = await loadBrief(svc);
   const { data } = await svc
     .from("scheduled_posts")
     .select("*")
@@ -91,6 +114,42 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
         </div>
       )}
 
+      {/* What is going on right now — read before every post is written */}
+      <div className="form-card" style={{ marginTop: 16, borderLeft: "3px solid var(--accent)" }}>
+        <h3 style={{ marginTop: 0 }}>📌 What is going on right now</h3>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 12px" }}>
+          Every post — autopilot or pack — is written against these four notes. Keep them current and the writing
+          stays true to the month: no exam-eve talk in July, no telling students to revise when they are still
+          reading the syllabus for the first time. Plain sentences are enough.
+        </p>
+        <form action={saveScenario}>
+          <label>Which attempt are they preparing for?</label>
+          <input name="attempt" defaultValue={brief.attempt} placeholder="e.g. September 2026 attempt (CA Final &amp; Inter)" />
+
+          <label style={{ marginTop: 10 }}>Where are the students right now? <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>— the most important box</span></label>
+          <textarea name="stage" rows={4} defaultValue={brief.stage}
+            placeholder={"e.g. Two months to go. Most students are in their first exhaustive study of the syllabus — reading chapters properly for the first time, not revising.\nA smaller group who took the classes earlier are on their first revision.\nNobody is in exam mode yet, so no last-minute or exam-eve talk."} />
+
+          <label style={{ marginTop: 10 }}>Festivals &amp; dates worth a greeting <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>— one per line, with the date</span></label>
+          <textarea name="festivals" rows={3} defaultValue={brief.festivals}
+            placeholder={"15 August — Independence Day\n5 September — Teachers' Day"} />
+          <p className="muted" style={{ fontSize: ".76rem", margin: "4px 0 0" }}>
+            A greeting goes out only on a date written here — the AI is forbidden from guessing festival dates.
+            On that day the Telegram and Instagram posts become a plain warm wish with nothing about us in them.
+          </p>
+
+          <label style={{ marginTop: 10 }}>Anything going on in the profession worth talking about?</label>
+          <textarea name="news" rows={3} defaultValue={brief.news}
+            placeholder={"e.g. ICAI announcement students are discussing, a new standard applicable this attempt, an accounting story in the news"} />
+          <p className="muted" style={{ fontSize: ".76rem", margin: "4px 0 0" }}>
+            Only what you write here can be referred to — nothing is invented, and news is always turned into
+            something a student learns from rather than a headline.
+          </p>
+
+          <SubmitButton className="btn" savedLabel="✓ Saved" style={{ marginTop: 12 }}>Save the situation</SubmitButton>
+        </form>
+      </div>
+
       {/* Weekly autopilot */}
       <div className="card" style={{ marginTop: 16, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ minWidth: 260, flex: 1 }}>
@@ -104,17 +163,12 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
             WhatsApp is never included.
           </p>
         </div>
-        <div style={{ display: "grid", gap: 6, justifyItems: "stretch" }}>
-          <form action={toggleAutopilot} style={{ margin: 0 }}>
-            <input type="hidden" name="next" value={autopilotOn ? "off" : "on"} />
-            <SubmitButton className={`btn small ${autopilotOn ? "secondary" : ""}`}>
-              {autopilotOn ? "Switch off" : "▶ Switch on autopilot"}
-            </SubmitButton>
-          </form>
-          <a className="btn small secondary" href="/admin/broadcasts/preview" title="Writes a sample week so you can read the tone — nothing is scheduled or posted">
-            👀 Preview next week&apos;s posts
-          </a>
-        </div>
+        <form action={toggleAutopilot} style={{ margin: 0 }}>
+          <input type="hidden" name="next" value={autopilotOn ? "off" : "on"} />
+          <SubmitButton className={`btn small ${autopilotOn ? "secondary" : ""}`}>
+            {autopilotOn ? "Switch off" : "▶ Switch on autopilot"}
+          </SubmitButton>
+        </form>
       </div>
 
       {/* The rhythm each platform speaks on */}
@@ -338,20 +392,47 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
               <DeleteButton action={deletePost} id={p.id} message="Delete this scheduled post?" />
             </div>
             <details style={{ flexBasis: "100%", marginTop: 6 }}>
-              <summary style={{ cursor: "pointer", fontSize: ".8rem", color: "var(--accent)" }}>✏️ Edit this post</summary>
+              <summary style={{ cursor: "pointer", fontSize: ".8rem", color: "var(--accent)" }}>✏️ Edit this post — text, channels, timing</summary>
               <form action={updatePost} style={{ marginTop: 8, borderTop: "1px dashed var(--border)", paddingTop: 8 }}>
                 <input type="hidden" name="id" value={p.id} />
-                <label>Message (Telegram / WhatsApp / Discord)</label>
-                <textarea name="body" rows={3} defaultValue={p.body} required />
-                {p.to_instagram && (<><label style={{ marginTop: 6 }}>📷 Instagram caption</label><textarea name="ig_text" rows={3} defaultValue={p.ig_text ?? ""} /></>)}
-                {p.to_youtube && (<><label style={{ marginTop: 6 }}>▶️ YouTube community text</label><textarea name="yt_text" rows={2} defaultValue={p.yt_text ?? ""} /></>)}
-                {!p.to_instagram && <input type="hidden" name="ig_text" value={p.ig_text ?? ""} />}
-                {!p.to_youtube && <input type="hidden" name="yt_text" value={p.yt_text ?? ""} />}
-                <div style={{ maxWidth: 260, marginTop: 6 }}>
-                  <label>Post at (IST)</label>
-                  <input type="datetime-local" name="send_at" defaultValue={istInput(p.send_at)} />
+                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+                  <div>
+                    <label>Campaign name</label>
+                    <input name="campaign" defaultValue={p.campaign ?? ""} placeholder="optional" />
+                  </div>
+                  <div>
+                    <label>Post at (IST)</label>
+                    <input type="datetime-local" name="send_at" defaultValue={istInput(p.send_at)} />
+                  </div>
                 </div>
-                <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 8 }}>Save changes</SubmitButton>
+                <label style={{ marginTop: 8 }}>Message <span className="muted" style={{ fontWeight: 400, fontSize: ".76rem" }}>— used by every channel that has no version of its own below</span></label>
+                <textarea name="body" rows={4} defaultValue={p.body} required />
+                <label style={{ marginTop: 8 }}>Link (optional — added at the end)</label>
+                <input name="link_url" defaultValue={p.link_url ?? ""} placeholder="https://caparveensharma.com/free-planner" />
+
+                <label style={{ marginTop: 10 }}>📷 Instagram caption <span className="muted" style={{ fontWeight: 400, fontSize: ".76rem" }}>— blank = use the message above</span></label>
+                <textarea name="ig_text" rows={3} defaultValue={p.ig_text ?? ""} />
+                <label style={{ marginTop: 8 }}>▶️ YouTube community text</label>
+                <textarea name="yt_text" rows={2} defaultValue={p.yt_text ?? ""} />
+                <label style={{ marginTop: 8 }}>🐦 Twitter/X post <span className="muted" style={{ fontWeight: 400, fontSize: ".76rem" }}>— keep it under 280 characters</span></label>
+                <textarea name="x_text" rows={2} defaultValue={p.x_text ?? ""} />
+
+                <label style={{ marginTop: 10 }}>Where this one post goes</label>
+                <div style={{ display: "grid", gap: 4, gridTemplateColumns: "1fr 1fr", marginTop: 4 }}>
+                  {CHANNEL_BOXES.map((c) => (
+                    <label key={c.name} className="remember" style={{ margin: 0, fontSize: ".82rem" }}>
+                      <input type="checkbox" name={c.name} defaultChecked={Boolean(p[c.name as keyof Post])} /> {c.label}
+                    </label>
+                  ))}
+                </div>
+                <div style={{ marginTop: 6, maxWidth: 320 }}>
+                  <label style={{ fontSize: ".8rem" }}>WhatsApp template name (only if WhatsApp is ticked)</label>
+                  <input name="wa_template" defaultValue={p.wa_template ?? ""} placeholder="e.g. marketing_update" />
+                </div>
+                <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 10 }}>Save changes</SubmitButton>
+                <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
+                  Everything on this post is yours to change — untick a channel and it will not go there at all.
+                </p>
               </form>
             </details>
           </div>

@@ -4,6 +4,7 @@
 
 import { getSecret } from "@/lib/secrets";
 import { createServiceClient } from "@/lib/supabase/service";
+import { BRIEF_RULES } from "@/lib/marketingBrief";
 
 export async function aiConfigured(): Promise<boolean> {
   return Boolean(await getSecret("ANTHROPIC_API_KEY"));
@@ -934,10 +935,11 @@ export async function summarizeClass(transcript: string): Promise<ClassSummary |
 // founder's no-false-claims policy (only the approved facts below).
 export type PackPost = {
   day: number;        // 0-based day offset from the start date
-  focus: string;      // what this post promotes (shown to the admin)
+  focus: string;      // what this post is about (shown to the admin)
   message: string;    // Telegram / WhatsApp / Discord text
   instagram: string;  // caption + hashtags
   youtube: string;    // community-post text
+  twitter: string;    // X post, its own 280-character voice
 };
 
 // The founder's standing rule for everything this platform publishes: no
@@ -954,17 +956,21 @@ export const SOFT_RULES =
 
 const PACK_SYSTEM =
   SOFT_RULES +
+  BRIEF_RULES +
   "Each day must take a DIFFERENT angle and stand on its own as teaching. At most one day in three may mention the platform at all, and then in ONE quiet sentence placed in the middle or at the end — never as the point of the post, never with a call to action. " +
   "Include a link only in a post that carries such a mention, at most one, plain. " +
+  "Each post carries four versions of the same thought, each written for its own place: message (Telegram/Discord), instagram (caption + up to 4 hashtags), youtube (community post), twitter (one X post under 270 characters, no hashtags, no emojis). " +
   "Respond ONLY as compact JSON, no prose, no code fences: " +
-  '{"posts":[{"day":0,"focus":"...","message":"...","instagram":"...","youtube":"..."}]}';
+  '{"posts":[{"day":0,"focus":"...","message":"...","instagram":"...","youtube":"...","twitter":"..."}]}';
 
 export async function generateCampaignPack(
   theme: string,
   days: number,
   context: string,
+  scenario: string,
 ): Promise<PackPost[] | null> {
   const user =
+    `THE SITUATION RIGHT NOW — read this before writing a word:\n${scenario}\n\n` +
     `Campaign theme: ${theme}\n` +
     `Number of daily posts: ${days}\n\n` +
     `Links available for the occasional mention (keep the ?src= tag; never more than one link in a post):\n` +
@@ -979,12 +985,13 @@ export async function generateCampaignPack(
   const arr = Array.isArray(json?.posts) ? json.posts : null;
   if (!arr?.length) return null;
   return arr
-    .map((p: { day?: unknown; focus?: unknown; message?: unknown; instagram?: unknown; youtube?: unknown }, i: number) => ({
+    .map((p: { day?: unknown; focus?: unknown; message?: unknown; instagram?: unknown; youtube?: unknown; twitter?: unknown }, i: number) => ({
       day: Number.isFinite(Number(p.day)) ? Number(p.day) : i,
       focus: String(p.focus ?? "").trim() || `Post ${i + 1}`,
       message: String(p.message ?? "").trim(),
       instagram: String(p.instagram ?? "").trim(),
       youtube: String(p.youtube ?? "").trim(),
+      twitter: String(p.twitter ?? "").trim(),
     }))
     .filter((p: PackPost) => p.message.length > 0)
     .slice(0, Math.max(1, days));
@@ -1000,15 +1007,17 @@ export type SoftDay = { focus: string; posts: Record<string, string> };
 
 const SOFT_DAY_SYSTEM =
   SOFT_RULES +
+  BRIEF_RULES +
   "You are given ONE idea for the day and a list of places it has to be said. Write each piece from scratch in that platform's own voice — never paste the same sentences into two channels. Respect each channel's character limit. " +
   "Respond ONLY as compact JSON, no prose, no code fences: " +
   '{"focus":"5-8 words naming today\'s idea","posts":{"<channel key>":"<the text for that channel>"}}';
 
 export async function generateSoftDay(input: {
-  dayLabel: string;
+  dayLabel: string;      // "Tuesday, 28 July 2026" — the day being written for
   angle: string;
   channels: { key: string; label: string; brief: string; maxChars: number }[];
   context: string;
+  scenario: string;      // where students are today (lib/marketingBrief)
   avoid: string[];
   mention: string | null; // the one thing today may quietly point at, or null
 }): Promise<SoftDay | null> {
@@ -1018,8 +1027,9 @@ export async function generateSoftDay(input: {
       `Put it in the middle or at the end, phrased as something that exists and is there if it helps — not as something being offered. No call to action, no second mention anywhere, and at most one link (https://caparveensharma.com/free-planner?src=social for the planner, otherwise https://caparveensharma.com). Every other piece today mentions nothing at all.`
     : `Today NO piece mentions the platform, the site, any course or any link. Today we only teach.`;
   const user =
-    `Day: ${input.dayLabel}\n\n` +
-    `Today's one idea (every channel carries this same idea, said its own way):\n${input.angle}\n\n` +
+    `You are writing for: ${input.dayLabel}\n\n` +
+    `THE SITUATION RIGHT NOW — read this before writing a word:\n${input.scenario}\n\n` +
+    `The day's one idea (every channel carries this same idea, said its own way), to be written for exactly the stage the students are in above:\n${input.angle}\n\n` +
     `${mentionRule}\n\n` +
     `Real things happening on the platform right now (use only if one genuinely fits; never invent more):\n${input.context}\n\n` +
     (input.avoid.length

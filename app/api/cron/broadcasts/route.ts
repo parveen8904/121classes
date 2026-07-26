@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   const svc = createServiceClient();
   const { data: due } = await svc
     .from("scheduled_posts")
-    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, to_yt_video, to_twitter, to_linkedin, to_facebook, to_substack, to_medium, to_reddit, to_quora, to_google, ig_text, yt_text, status_note")
+    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, to_yt_video, to_twitter, to_linkedin, to_facebook, to_substack, to_medium, to_reddit, to_quora, to_google, ig_text, yt_text, x_text, status_note")
     .eq("status", "pending")
     .lte("send_at", new Date().toISOString())
     .order("send_at")
@@ -151,7 +151,8 @@ export async function GET(req: NextRequest) {
             else notes.push(`linkedin: auto-post failed (${r.error}) — reminder emailed instead`);
           }
           if (p.to_twitter && (await social.twitterConfigured())) {
-            const r = await social.postToX(full);
+            // X has its own written version when the post carries one.
+            const r = await social.postToX(p.x_text ? String(p.x_text) : full);
             if (r.ok) { xPosted = true; notes.push("x/twitter: posted ✅"); }
             else notes.push(`x/twitter: auto-post failed (${r.error}) — reminder emailed instead`);
           }
@@ -204,7 +205,7 @@ export async function GET(req: NextRequest) {
               ? `<p style="margin:14px 0 4px"><strong>▶️ YouTube community post</strong></p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(p.yt_text ?? text))}</div>`
               : "";
             const twBlock = p.to_twitter && !xPosted
-              ? `<p style="margin:14px 0 4px"><strong>🐦 Twitter/X post</strong> <span style="color:#888;font-size:12px">(trim to 280 characters)</span></p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(text).slice(0, 275))}</div>`
+              ? `<p style="margin:14px 0 4px"><strong>🐦 Twitter/X post</strong></p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(p.x_text ?? String(text).slice(0, 275)))}</div>`
               : "";
             const plainBlock = (label: string, hint = "") =>
               `<p style="margin:14px 0 4px"><strong>${label}</strong>${hint ? ` <span style="color:#888;font-size:12px">${hint}</span>` : ""}</p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(text))}</div>`;

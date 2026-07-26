@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   const svc = createServiceClient();
   const { data: due } = await svc
     .from("scheduled_posts")
-    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, to_twitter, to_linkedin, to_facebook, to_substack, to_medium, ig_text, yt_text, status_note")
+    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, to_twitter, to_linkedin, to_facebook, to_substack, to_medium, to_reddit, to_quora, to_google, ig_text, yt_text, status_note")
     .eq("status", "pending")
     .lte("send_at", new Date().toISOString())
     .order("send_at")
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
   // Who receives the Instagram/YouTube/Twitter "post this now" reminders. The
   // founder can route them to a staff member (site_settings marketing_poster_
   // emails, comma-separated); falls back to the admins.
-  const needRemind = due.some((p) => (p.to_instagram || p.to_youtube || p.to_twitter || p.to_linkedin || p.to_facebook || p.to_substack || p.to_medium) && (p.wa_offset ?? 0) === 0);
+  const needRemind = due.some((p) => (p.to_instagram || p.to_youtube || p.to_twitter || p.to_linkedin || p.to_facebook || p.to_substack || p.to_medium || p.to_reddit || p.to_quora || p.to_google) && (p.wa_offset ?? 0) === 0);
   let adminEmails: string[] = [];
   if (needRemind) {
     const { data: cfg } = await svc.from("site_settings").select("value").eq("key", "marketing_poster_emails").maybeSingle();
@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
 
         // Prepare-and-remind channels — email the drafted post to the team to
         // publish manually (none of these allow reliable auto-posting).
-        if ((p.to_instagram && !igPosted) || p.to_youtube || p.to_twitter || p.to_linkedin || p.to_facebook || p.to_substack || p.to_medium) {
+        if ((p.to_instagram && !igPosted) || p.to_youtube || p.to_twitter || p.to_linkedin || p.to_facebook || p.to_substack || p.to_medium || p.to_reddit || p.to_quora || p.to_google) {
           const platforms = [
             p.to_instagram && !igPosted ? "Instagram" : null,
             p.to_youtube ? "YouTube" : null,
@@ -150,6 +150,9 @@ export async function GET(req: NextRequest) {
             p.to_facebook ? "Facebook" : null,
             p.to_substack ? "Substack" : null,
             p.to_medium ? "Medium" : null,
+            p.to_reddit ? "Reddit" : null,
+            p.to_quora ? "Quora" : null,
+            p.to_google ? "Google Business Profile" : null,
           ].filter(Boolean).join(", ");
           if (!adminEmails.length) notes.push("social reminder: no email set");
           else {
@@ -173,9 +176,12 @@ export async function GET(req: NextRequest) {
             const fbBlock = p.to_facebook ? plainBlock("📘 Facebook page post") : "";
             const ssBlock = p.to_substack ? plainBlock("📰 Substack", "(use as the opening — expand into a full newsletter)") : "";
             const mdBlock = p.to_medium ? plainBlock("✒️ Medium", "(use as the outline — expand into a full article)") : "";
+            const rdBlock = p.to_reddit ? plainBlock("👽 Reddit", "(post in r/CharteredAccountants or r/CA_India — keep it conversational, no hard selling)") : "";
+            const qrBlock = p.to_quora ? plainBlock("❓ Quora", "(find related questions and answer with this — helpful tone wins on Quora)") : "";
+            const gbBlock = p.to_google ? plainBlock("📍 Google Business Profile", "(post as an Update on the profile — shows in Google Search/Maps)") : "";
             const html = emailShell(`📣 Post this on ${platforms}`,
               `<p>Your campaign${p.campaign ? ` <strong>${esc(String(p.campaign))}</strong>` : ""} is going out now. Ready-to-paste content:</p>
-               ${igBlock}${ytBlock}${twBlock}${liBlock}${fbBlock}${ssBlock}${mdBlock}
+               ${igBlock}${ytBlock}${twBlock}${liBlock}${fbBlock}${ssBlock}${mdBlock}${rdBlock}${qrBlock}${gbBlock}
                <p style="font-size:13px;color:#666">Copy the text into each app. (These platforms don't allow reliable auto-posting, so this reminder is your cue.)</p>`);
             let ok = 0;
             for (const to of adminEmails) if (await sendEmail(to, `📣 Post to ${platforms} now — campaign is live`, html).catch(() => false)) ok++;

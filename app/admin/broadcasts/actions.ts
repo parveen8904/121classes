@@ -43,6 +43,9 @@ export async function schedulePost(formData: FormData) {
     to_facebook: formData.get("to_facebook") === "on",
     to_substack: formData.get("to_substack") === "on",
     to_medium: formData.get("to_medium") === "on",
+    to_reddit: formData.get("to_reddit") === "on",
+    to_quora: formData.get("to_quora") === "on",
+    to_google: formData.get("to_google") === "on",
   });
   revalidatePath("/admin/broadcasts");
 }
@@ -132,6 +135,9 @@ export async function generatePack(formData: FormData) {
     to_facebook: formData.get("to_facebook") === "on",
     to_substack: formData.get("to_substack") === "on",
     to_medium: formData.get("to_medium") === "on",
+    to_reddit: formData.get("to_reddit") === "on",
+    to_quora: formData.get("to_quora") === "on",
+    to_google: formData.get("to_google") === "on",
     ig_text: toIg ? p.instagram || null : null,
     yt_text: toYt ? p.youtube || null : null,
     created_by: "pack",

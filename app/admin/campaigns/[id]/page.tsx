@@ -2,7 +2,8 @@ import AdminHero from "../../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import { deleteDraftPost, saveDraftPost, scheduleCampaign, markTeamDone } from "../actions";
-import { AUTO_FIELDS, FIELD_LABEL } from "@/lib/campaignChannels";
+import { FIELD_LABEL } from "@/lib/campaignChannels";
+import { channelStatus, STATE_ICON, STATE_WORD } from "@/lib/channelStatus";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Campaign — Admin" };
@@ -28,7 +29,10 @@ export default async function CampaignPage(props: {
   const { id } = await props.params;
   const { scheduled } = await props.searchParams;
   const svc = createServiceClient();
-  const { data } = await svc.from("scheduled_posts").select("*").eq("campaign_id", id).order("send_at");
+  const [{ data }, status] = await Promise.all([
+    svc.from("scheduled_posts").select("*").eq("campaign_id", id).order("send_at"),
+    channelStatus(),
+  ]);
   const posts = (data ?? []) as Post[];
 
   if (!posts.length) {
@@ -42,7 +46,8 @@ export default async function CampaignPage(props: {
 
   const isDraft = posts.some((p) => p.status === "draft");
   const first = posts[0];
-  const teamJobs = posts.filter((p) => !AUTO_FIELDS.has(fieldOf(p)));
+  // Whoever cannot publish itself TODAY — a missing key makes it a person's job.
+  const teamJobs = posts.filter((p) => status[fieldOf(p)]?.state !== "auto");
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 900 }}>
@@ -78,7 +83,7 @@ export default async function CampaignPage(props: {
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
                 <strong>{FIELD_LABEL[field] ?? "Post"}</strong>
                 <span className="muted" style={{ fontSize: ".78rem" }}>
-                  {AUTO_FIELDS.has(field) ? "posts by itself" : "✋ a person must post this"} · {istFmt(p.send_at)} IST
+                  {STATE_ICON[status[field]?.state ?? "manual"]} {STATE_WORD[status[field]?.state ?? "manual"]} · {istFmt(p.send_at)} IST
                   {p.status === "sent" ? " · ✅ sent" : ""}
                 </span>
               </div>

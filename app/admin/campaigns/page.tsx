@@ -2,7 +2,8 @@ import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import { markTeamDone } from "./actions";
-import { AUTO_FIELDS, FIELD_LABEL } from "@/lib/campaignChannels";
+import { FIELD_LABEL } from "@/lib/campaignChannels";
+import { channelStatus, STATE_ICON } from "@/lib/channelStatus";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Marketing & campaigns — Admin" };
@@ -26,18 +27,19 @@ export default async function MarketingHome() {
   const svc = createServiceClient();
   const since = new Date(Date.now() - 30 * 86400e3).toISOString();
 
-  const [{ data: postRows }, { count: articleCount }, { count: pendingNews }, { data: settingRows }] = await Promise.all([
+  const [{ data: postRows }, { count: articleCount }, { count: pendingNews }, { data: settingRows }, status] = await Promise.all([
     svc.from("scheduled_posts").select("*").gte("send_at", since).order("send_at", { ascending: false }).limit(200),
     svc.from("articles").select("id", { count: "exact", head: true }).eq("is_published", true),
     svc.from("announcements").select("id", { count: "exact", head: true }).eq("from_feed", true),
     svc.from("site_settings").select("key, value").in("key", ["marketing_autopilot"]),
+    channelStatus(),
   ]);
   const posts = (postRows ?? []) as Post[];
   const autopilotOn = (settingRows ?? []).some((r) => r.key === "marketing_autopilot" && r.value === "on");
 
   // Things a person still has to post by hand, that are already due.
   const teamJobs = posts.filter(
-    (p) => !AUTO_FIELDS.has(fieldOf(p)) && !p.team_done_at && p.status !== "draft" && new Date(p.send_at) <= new Date(),
+    (p) => status[fieldOf(p)]?.state !== "auto" && !p.team_done_at && p.status !== "draft" && new Date(p.send_at) <= new Date(),
   );
   const drafts = posts.filter((p) => p.status === "draft");
   const upcoming = posts.filter((p) => p.status === "pending" && new Date(p.send_at) > new Date());
@@ -135,6 +137,32 @@ export default async function MarketingHome() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* What posts itself, and what is waiting on you */}
+      <h3 style={{ margin: "24px 0 8px" }}>🔌 What can post by itself</h3>
+      <div className="card">
+        <div style={{ display: "grid", gap: 4 }}>
+          {Object.keys(FIELD_LABEL).map((f) => {
+            const s = status[f];
+            return (
+              <div key={f} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: ".83rem", borderTop: "1px solid var(--border)", padding: "5px 0" }}>
+                <span style={{ fontWeight: 600 }}>{STATE_ICON[s?.state ?? "manual"]} {FIELD_LABEL[f]}</span>
+                <span className="muted" style={{ textAlign: "right" }}>
+                  {s?.note}
+                  {s?.state === "needs-keys" && s.keys ? <><br /><code style={{ fontSize: ".7rem" }}>{s.keys.join(", ")}</code></> : null}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        {Object.values(status).some((s) => s.state === "needs-keys") && (
+          <p style={{ fontSize: ".82rem", margin: "10px 0 0" }}>
+            The ⚠️ ones are built and tested — they are only waiting for their keys. Paste them on{" "}
+            <a href="/admin/integrations"><strong>Integrations</strong></a> and those platforms start publishing on
+            their own, with no other change. Until then their posts are emailed to you at the right moment.
+          </p>
+        )}
       </div>
 
       {/* The rest, one click away */}

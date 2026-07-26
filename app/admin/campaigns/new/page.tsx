@@ -6,7 +6,8 @@ import { loadFestivalDays } from "@/lib/festivals";
 import { SOFT_MENTIONS } from "@/lib/marketingRhythm";
 import { loadBrief } from "@/lib/marketingBrief";
 import { draftCampaign } from "../actions";
-import { AUTO_FIELDS, FIELD_LABEL } from "@/lib/campaignChannels";
+import { FIELD_LABEL } from "@/lib/campaignChannels";
+import { channelStatus, STATE_ICON, STATE_WORD } from "@/lib/channelStatus";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Start a campaign — Admin" };
@@ -50,11 +51,12 @@ export default async function NewCampaignPage(props: { searchParams: Promise<{ k
   const kind = KINDS.some((k) => k.key === sp.kind) ? sp.kind! : "news";
   const svc = createServiceClient();
 
-  const [{ data: news }, { data: articles }, festivals, brief] = await Promise.all([
+  const [{ data: news }, { data: articles }, festivals, brief, status] = await Promise.all([
     kind === "news" ? svc.from("announcements").select("id, title, body, link_url, kind, published_at").order("published_at", { ascending: false }).limit(60) : Promise.resolve({ data: [] }),
     kind === "article" ? svc.from("articles").select("id, title, slug, description, created_at").eq("is_published", true).order("created_at", { ascending: false }).limit(60) : Promise.resolve({ data: [] }),
     loadFestivalDays(svc, new Date().toISOString().slice(0, 10), new Date(Date.now() + 120 * 86400e3).toISOString().slice(0, 10)),
     loadBrief(svc),
+    channelStatus(),
   ]);
   const items = ((kind === "news" ? news : articles) ?? []) as Row[];
   const picked = items.find((a) => a.id === sp.pick);
@@ -182,16 +184,21 @@ export default async function NewCampaignPage(props: { searchParams: Promise<{ k
           </div>
           <input name="name" placeholder="e.g. NFRA audit-quality circular — September batch" style={{ marginTop: 4 }} />
           <div style={{ display: "grid", gap: 5, gridTemplateColumns: "1fr 1fr", marginTop: 10 }}>
-            {CHANNEL_FIELDS.map((f) => (
-              <label key={f} className="remember" style={{ margin: 0, fontSize: ".85rem" }}>
-                <input type="checkbox" name={f} defaultChecked={f === "to_tg_channel"} /> {FIELD_LABEL[f]}
-                {AUTO_FIELDS.has(f) ? "" : " ✋"}
-              </label>
-            ))}
+            {CHANNEL_FIELDS.map((f) => {
+              const s = status[f];
+              return (
+                <label key={f} className="remember" style={{ margin: 0, fontSize: ".85rem" }} title={s?.note}>
+                  <input type="checkbox" name={f} defaultChecked={f === "to_tg_channel"} /> {FIELD_LABEL[f]}{" "}
+                  <span style={{ fontSize: ".72rem", opacity: 0.8 }}>{STATE_ICON[s?.state ?? "manual"]} {STATE_WORD[s?.state ?? "manual"]}</span>
+                </label>
+              );
+            })}
           </div>
           <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0 0" }}>
-            Each place gets its own version, written for it. ✋ marks the ones no tool can post to — those become a
-            job for your team, listed for them after you schedule.
+            Each place gets its own version, written for it. ✅ publishes on its own · ⚠️ would publish on its own but
+            its keys are not saved, so it is emailed to you instead · ✋ has no posting API at all and always needs a
+            person. <strong>WhatsApp is never included by &ldquo;All channels&rdquo;</strong> — it costs per message and
+            reaches every contact you have, so tick it deliberately (and give the template name below).
           </p>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
             <div>

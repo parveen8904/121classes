@@ -19,7 +19,7 @@ export default function ToggleAllChannels() {
         for (const b of targets) b.checked = !allOn;
       }}
     >
-      ☑️ All channels / none
+      ☑️ All channels / none <span style={{ fontWeight: 400, opacity: 0.75 }}>(not WhatsApp)</span>
     </button>
   );
 }

@@ -265,12 +265,17 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
             WhatsApp is never included.
           </p>
         </div>
-        <form action={toggleAutopilot} style={{ margin: 0 }}>
-          <input type="hidden" name="next" value={autopilotOn ? "off" : "on"} />
-          <SubmitButton className={`btn small ${autopilotOn ? "secondary" : ""}`}>
-            {autopilotOn ? "Switch off" : "▶ Switch on autopilot"}
-          </SubmitButton>
-        </form>
+        <div style={{ display: "grid", gap: 6 }}>
+          <form action={toggleAutopilot} style={{ margin: 0 }}>
+            <input type="hidden" name="next" value={autopilotOn ? "off" : "on"} />
+            <SubmitButton className={`btn small ${autopilotOn ? "secondary" : ""}`}>
+              {autopilotOn ? "Switch off" : "▶ Switch on autopilot"}
+            </SubmitButton>
+          </form>
+          <a className="btn small secondary" href="/admin/broadcasts/preview" title="Writes a sample week so you can read it — nothing is scheduled, emailed or posted">
+            👀 Read a sample week
+          </a>
+        </div>
       </div>
 
       {/* The rhythm each platform speaks on */}

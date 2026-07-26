@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import { tryServiceClient } from "@/lib/supabase/service";
 import { mdToHtml } from "@/lib/markdown";
@@ -7,22 +7,31 @@ import { mdToHtml } from "@/lib/markdown";
 export const revalidate = 3600;
 
 async function getArticle(slug: string) {
-  if (!/^[a-z0-9-]{3,80}$/.test(slug)) return null;
+  if (!/^[a-z0-9-]{3,120}$/.test(slug)) return null;
   const svc = tryServiceClient();
   if (!svc) return null;
   const { data } = await svc
     .from("articles")
-    .select("slug, title, description, body_md, category, created_at, updated_at")
+    .select("slug, title, description, body_md, category, created_at, updated_at, is_published, redirect_to")
     .eq("slug", slug)
-    .eq("is_published", true)
     .maybeSingle();
+  if (!data) return null;
   return data;
+}
+
+// A retired duplicate keeps its URL working and hands its ranking to the copy
+// we kept — a permanent redirect is what tells Google to merge the two rather
+// than treat one as missing.
+function redirectTarget(a: { is_published?: boolean; redirect_to?: string | null } | null): string | null {
+  if (!a) return null;
+  if (!a.is_published && a.redirect_to) return `/articles/${a.redirect_to}`;
+  return null;
 }
 
 export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const params = await props.params;
   const a = await getArticle(params.slug);
-  if (!a) return { title: "Article — CA Parveen Sharma" };
+  if (!a || !a.is_published) return { title: "Article — CA Parveen Sharma" };
   return {
     title: `${a.title} — CA Parveen Sharma`,
     description: (a.description as string) || undefined,
@@ -53,7 +62,9 @@ function extractFaqs(md: string): { q: string; a: string }[] {
 export default async function ArticlePage(props: { params: Promise<{ slug: string }> }) {
   const params = await props.params;
   const a = await getArticle(params.slug);
-  if (!a) notFound();
+  const moved = redirectTarget(a);
+  if (moved) permanentRedirect(moved);
+  if (!a || !a.is_published) notFound();
 
   const faqs = extractFaqs(a.body_md as string);
   const extraLd: object[] = [

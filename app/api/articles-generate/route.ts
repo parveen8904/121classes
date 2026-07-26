@@ -87,9 +87,23 @@ export async function GET(req: NextRequest) {
       // hourly pass rather than marking failed (transient outages self-heal).
       continue;
     }
-    let slug = slugify(art.title) || slugify(t.topic as string) || `article-${Date.now()}`;
-    const { data: clash } = await svc.from("articles").select("id").eq("slug", slug).maybeSingle();
-    if (clash) slug = `${slug}-${String(Date.now()).slice(-5)}`;
+    const slug = slugify(art.title) || slugify(t.topic as string) || `article-${Date.now()}`;
+
+    // A title we already have is a DUPLICATE, not a naming collision. Sticking
+    // a random number on the end and publishing anyway is how 34 articles on
+    // Ind AS 116, 34 on Ind AS 109 and 34 on Ind AS 115 came to exist — half
+    // the library, all competing with each other in Google for the same search.
+    // Now the topic is closed and the queue moves on.
+    const { data: clash } = await svc
+      .from("articles").select("id, slug")
+      .or(`slug.eq.${slug},title.ilike.${art.title.replace(/[,%]/g, " ")}`)
+      .maybeSingle();
+    if (clash) {
+      await svc.from("article_topics")
+        .update({ status: "duplicate", article_id: clash.id })
+        .eq("id", t.id);
+      continue;
+    }
     const { data: ins } = await svc.from("articles").insert({
       slug,
       title: art.title,

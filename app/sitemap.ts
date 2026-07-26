@@ -16,6 +16,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ["/pricing", 0.9],          // was missing
     ["/free-planner", 0.9],
     ["/articles", 0.8],
+    ["/notes", 0.85],           // free PDF downloads — a page each, on our domain
     ["/test-series", 0.8],
     ["/books", 0.7],
     ["/combos", 0.7],           // was missing
@@ -66,6 +67,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const { data: subjects } = await svc.from("subjects").select("id").limit(200);
   for (const s of subjects ?? []) {
     out.push({ url: `${base}/courses/${s.id}`, changeFrequency: "weekly", priority: 0.8 });
+  }
+
+  // Every free PDF that has been given a page of its own. These exist so the
+  // ranking lands on caparveensharma.com rather than on the storage domain.
+  const { data: notes } = await svc
+    .from("repository_items")
+    .select("share_slug")
+    .eq("public_sample", true)
+    .eq("is_active", true)
+    .not("share_slug", "is", null)
+    .limit(1000);
+  for (const n of notes ?? []) {
+    out.push({ url: `${base}/notes/${n.share_slug}`, changeFrequency: "monthly", priority: 0.7 });
   }
 
   const { data: books } = await svc.from("books").select("id").limit(200);

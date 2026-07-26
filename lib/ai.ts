@@ -938,20 +938,7 @@ export async function summarizeClass(transcript: string): Promise<ClassSummary |
   }
 }
 
-// ---- Marketing campaign packs ------------------------------------------------
-// One AI call → a multi-day, multi-channel campaign. Every post carries three
-// variants: a Telegram/WhatsApp/Discord message, an Instagram caption with
-// hashtags, and a YouTube community-post text. The copy rules enforce the
-// founder's no-false-claims policy (only the approved facts below).
-export type PackPost = {
-  day: number;        // 0-based day offset from the start date
-  focus: string;      // what this post is about (shown to the admin)
-  message: string;    // Telegram / WhatsApp / Discord text
-  instagram: string;  // caption + hashtags
-  youtube: string;    // community-post text
-  twitter: string;    // X post, its own 280-character voice
-};
-
+// ---- Shared copy rules -------------------------------------------------------
 // The founder's standing rule for everything this platform publishes: no
 // advertising voice, anywhere. A post has to be worth reading on its own — a
 // concept cleared, a habit, an honest question — and the site is named only
@@ -964,15 +951,6 @@ export const SOFT_RULES =
   "NEVER invent facts, numbers, pass percentages, dates, deadlines, fees, discounts, student stories or testimonials. General observations from years of teaching are fine; specific anecdotes are not. If an exam rule may have changed, say it should be checked in the latest ICAI material instead of stating it. " +
   "The only claims you may make about the platform: CA Parveen Sharma has 36 years of teaching experience; the site has a free day-by-day study planner, free chapter MCQ tests with a concept-wise report, case-scenario practice for the new exam pattern, recorded classes, live classes, free articles, and doubt-solving help. ";
 
-const PACK_SYSTEM =
-  SOFT_RULES +
-  BRIEF_RULES +
-  "Each day must take a DIFFERENT angle and stand on its own as teaching. At most one day in three may mention the platform at all, and then in ONE quiet sentence placed in the middle or at the end — never as the point of the post, never with a call to action. " +
-  "Include a link only in a post that carries such a mention, at most one, plain. " +
-  "Each post carries four versions of the same thought, each written for its own place: message (Telegram/Discord), instagram (caption + up to 4 hashtags), youtube (community post), twitter (one X post under 270 characters, no hashtags, no emojis). " +
-  "Your entire reply is one JSON object and nothing else — no preamble, no explanation, no apology, no code fences, no text after the closing brace. " +
-  "Respond ONLY as compact JSON: " +
-  '{"posts":[{"day":0,"focus":"...","message":"...","instagram":"...","youtube":"...","twitter":"..."}]}';
 
 // "Couldn't generate the pack — check the Anthropic key" was shown for every
 // possible cause, including the ones that had nothing to do with the key. The
@@ -993,49 +971,6 @@ async function notePackOk(): Promise<void> {
     await createServiceClient().from("site_settings").upsert(
       { key: "pack_last_error", value: "" }, { onConflict: "key" });
   } catch { /* ignore */ }
-}
-
-export async function generateCampaignPack(
-  theme: string,
-  days: number,
-  context: string,
-  scenario: string,
-): Promise<PackPost[] | null> {
-  const user =
-    `THE SITUATION RIGHT NOW — read this before writing a word:\n${scenario}\n\n` +
-    `Campaign theme: ${theme}\n` +
-    `Number of daily posts: ${days}\n\n` +
-    `Links available for the occasional mention (keep the ?src= tag; never more than one link in a post):\n` +
-    `- Free study planner: https://caparveensharma.com/free-planner?src=ig (use ?src=yt in the youtube text, ?src=tg in the message)\n` +
-    `- Courses: https://caparveensharma.com/courses\n` +
-    `- Live classes: https://caparveensharma.com/live\n\n` +
-    `What's happening on the platform right now (mention only where it fits naturally, never invent more):\n${context}\n\n` +
-    `Per-post limits: message ≤ 450 characters; instagram = caption ≤ 500 characters + up to 4 relevant hashtags on a new line; youtube ≤ 350 characters.`;
-  // Four variants a day now (X got its own), so the old 550-a-day budget cut
-  // the reply off mid-object and the whole pack came back as "couldn't
-  // generate".
-  const text = await callClaude(PACK_SYSTEM, user, Math.min(400 + days * 950, 8000), { feature: "marketing" });
-  if (!text) return await notePackFailure("the AI call itself failed — no key, a disabled toggle, or the API refused", "");
-  const json = parseLooseJson(text);
-  const arr = Array.isArray(json?.posts) ? json.posts : null;
-  if (!arr?.length) {
-    return await notePackFailure(
-      json ? "the AI replied but with no posts in it" : "the AI reply was not readable as JSON",
-      text,
-    );
-  }
-  await notePackOk();
-  return arr
-    .map((p: { day?: unknown; focus?: unknown; message?: unknown; instagram?: unknown; youtube?: unknown; twitter?: unknown }, i: number) => ({
-      day: Number.isFinite(Number(p.day)) ? Number(p.day) : i,
-      focus: String(p.focus ?? "").trim() || `Post ${i + 1}`,
-      message: String(p.message ?? "").trim(),
-      instagram: String(p.instagram ?? "").trim(),
-      youtube: String(p.youtube ?? "").trim(),
-      twitter: String(p.twitter ?? "").trim(),
-    }))
-    .filter((p: PackPost) => p.message.length > 0)
-    .slice(0, Math.max(1, days));
 }
 
 // ---- One day of the passive rhythm ------------------------------------------
@@ -1108,9 +1043,11 @@ export async function generateSoftDay(input: {
 // event — and the copy is written about that and nothing else. Before this,
 // the whole news feed was fed to the writer as background and it dipped into
 // seventy headlines at random, which is exactly what he could not stand.
-export type SourceKind = "greeting" | "news" | "event" | "idea" | "article";
+// "own" never reaches the writer at all — his words go out exactly as typed.
+export type SourceKind = "greeting" | "news" | "event" | "idea" | "article" | "own";
 
 const KIND_RULES: Record<SourceKind, string> = {
+  own: "", // never used — his own words are not written by anyone
   article:
     "This is an ARTICLE already published on the site. Do not summarise it end to end. Take the single most useful idea in it, teach that much properly so the post stands on its own, and let the article be there for anyone who wants the rest — mentioned once, plainly, at the end.",
   greeting:

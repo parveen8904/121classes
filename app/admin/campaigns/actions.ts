@@ -62,13 +62,17 @@ export async function draftCampaign(formData: FormData) {
     return { key: c.key, label: c.label, brief: c.brief, maxChars: c.maxChars };
   });
 
-  const written = await generateSourcedCampaign({
-    kind, title, detail, url,
-    audience: str(formData.get("audience")).trim() || null,
-    channels,
-    scenario: briefText(await loadBrief(svc), await autoBriefParts(svc)),
-    mention: kind === "greeting" ? null : (str(formData.get("mention")).trim() || null),
-  });
+  // His own words are never handed to the writer: every channel gets exactly
+  // what he typed, and step 2 is where he tailors any of them by hand.
+  const written = kind === "own"
+    ? { focus: title.slice(0, 60), posts: Object.fromEntries(channels.map((c) => [c.key, title])) }
+    : await generateSourcedCampaign({
+        kind, title, detail, url,
+        audience: str(formData.get("audience")).trim() || null,
+        channels,
+        scenario: briefText(await loadBrief(svc), await autoBriefParts(svc)),
+        mention: kind === "greeting" ? null : (str(formData.get("mention")).trim() || null),
+      });
   if (!written) redirect(back("ai"));
 
   const when = str(formData.get("send_at"));
@@ -84,7 +88,7 @@ export async function draftCampaign(formData: FormData) {
       ...ALL_CHANNEL_FLAGS,
       [field]: true,
       body,
-      campaign: name || written!.focus.slice(0, 120),
+      campaign: name || (kind === "own" ? "My own post" : written!.focus.slice(0, 120)),
       campaign_id: campaignId,
       status: "draft",
       send_at: at.toISOString(),
@@ -93,7 +97,7 @@ export async function draftCampaign(formData: FormData) {
       x_text: voice === "twitter" ? body : null,
       wa_template: str(formData.get("wa_template")) || null,
       source_kind: kind,
-      source_label: title.slice(0, 200),
+      source_label: kind === "own" ? (name || "written by you") : title.slice(0, 200),
       source_url: url,
       created_by: "campaign",
     };

@@ -29,6 +29,8 @@ export default async function AllPostsPage() {
           is_published: a.is_published as boolean,
           broadcast_at: (a.broadcast_at as string) ?? null,
           from_feed: (a.from_feed as boolean) ?? false,
+          published_at: (a.published_at as string) ?? null,
+          created_at: (a.created_at as string) ?? null,
         }))}
         actions={{ updateAnnouncement, deleteAnnouncement, broadcast: broadcastAnnouncement, bulkPublish, bulkUnpublish, bulkDelete }}
       />

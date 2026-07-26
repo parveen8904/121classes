@@ -14,7 +14,14 @@ type Post = {
   is_published: boolean;
   broadcast_at: string | null;
   from_feed: boolean;
+  published_at: string | null;   // when the STORY was published
+  created_at: string | null;     // when our feed picked it up
 };
+
+// Two dates, never conflated: a headline from three days ago that we only
+// collected this morning is a different thing from one we have been sitting on.
+const day = (s: string | null) =>
+  s ? new Date(s).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "2-digit" }) : "";
 
 type Action = (fd: FormData) => void | Promise<void>;
 type Actions = {
@@ -109,6 +116,8 @@ export default function PostsManager({ posts, actions }: { posts: Post[]; action
                     <span className="muted" style={{ fontSize: ".82rem" }}>
                       {KIND_LABEL[a.kind] ?? a.kind} · {a.is_published ? "🟢 published" : "⚪ draft"}
                       {a.from_feed ? " · 📰 feed" : ""}{a.broadcast_at ? " · 📢" : ""}
+                      {a.published_at ? ` · published ${day(a.published_at)}` : ""}
+                      {a.from_feed && a.created_at ? ` · fetched ${day(a.created_at)}` : ""}
                     </span>
                   </summary>
 

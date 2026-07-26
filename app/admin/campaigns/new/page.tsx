@@ -18,12 +18,17 @@ export const metadata = { title: "Start a campaign — Admin" };
 
 type Row = { id: string; title: string; body?: string | null; link_url?: string | null; kind?: string; published_at?: string; slug?: string; description?: string | null; created_at?: string };
 
+// Two different dates, and the difference matters: when the story was
+// published, and when our feed picked it up.
+const dayFmt = (s?: string | null) => (s ? new Date(s).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" }) : "");
+
 const KINDS = [
   { key: "news", icon: "📰", label: "Something in the news", hint: "Pick one item your feed brought in — ICAI, NFRA, MCA, RBI, SEBI, NCLT." },
   { key: "article", icon: "📝", label: "An article we published", hint: "Turn one of your own articles into posts, and send readers to it." },
   { key: "event", icon: "📅", label: "An event of ours", hint: "A live class, a new batch, a result — anything happening here." },
   { key: "greeting", icon: "🎉", label: "A greeting", hint: "A festival or a day worth wishing students on." },
-  { key: "idea", icon: "💡", label: "A thought worth sharing", hint: "A concept, a common mistake, something you want said." },
+  { key: "idea", icon: "💡", label: "A thought worth sharing", hint: "A concept, a common mistake, something you want said — the writer puts it into each platform's voice." },
+  { key: "own", icon: "✍️", label: "My own words, untouched", hint: "You type it, it goes out exactly as typed. Nothing is rewritten by anyone." },
 ];
 
 const AUDIENCES = [
@@ -52,7 +57,7 @@ export default async function NewCampaignPage(props: { searchParams: Promise<{ k
   const svc = createServiceClient();
 
   const [{ data: news }, { data: articles }, festivals, brief, status] = await Promise.all([
-    kind === "news" ? svc.from("announcements").select("id, title, body, link_url, kind, published_at").order("published_at", { ascending: false }).limit(60) : Promise.resolve({ data: [] }),
+    kind === "news" ? svc.from("announcements").select("id, title, body, link_url, kind, published_at, created_at").order("published_at", { ascending: false }).limit(60) : Promise.resolve({ data: [] }),
     kind === "article" ? svc.from("articles").select("id, title, slug, description, created_at").eq("is_published", true).order("created_at", { ascending: false }).limit(60) : Promise.resolve({ data: [] }),
     loadFestivalDays(svc, new Date().toISOString().slice(0, 10), new Date(Date.now() + 120 * 86400e3).toISOString().slice(0, 10)),
     loadBrief(svc),
@@ -107,8 +112,12 @@ export default async function NewCampaignPage(props: { searchParams: Promise<{ k
                       background: sp.pick === a.id ? "var(--accent)" : "transparent",
                       color: sp.pick === a.id ? "#fff" : "inherit",
                     }}>
-                    {sp.pick === a.id ? "✓ " : ""}<strong>{a.title}</strong>{" "}
-                    <span style={{ fontSize: ".76rem", opacity: 0.75 }}>· {istDate(a.published_at ?? a.created_at)}</span>
+                    {sp.pick === a.id ? "✓ " : ""}<strong>{a.title}</strong>
+                    <span style={{ fontSize: ".74rem", opacity: 0.75, display: "block", marginTop: 2 }}>
+                      {kind === "news"
+                        ? <>published {dayFmt(a.published_at) || "date unknown"} · picked up by us {dayFmt(a.created_at)}</>
+                        : <>published {dayFmt(a.created_at)}</>}
+                    </span>
                   </a>
                 ))}
               </div>
@@ -132,6 +141,17 @@ export default async function NewCampaignPage(props: { searchParams: Promise<{ k
               ))}
               {festivals.length === 0 && <p className="muted" style={{ fontSize: ".85rem" }}>Your festival list is empty.</p>}
             </div>
+          )}
+
+          {kind === "own" && (
+            <>
+              <label>Your message — exactly as it should go out</label>
+              <textarea name="title" rows={5} required
+                placeholder={"Wishing every student and every teacher a very happy Guru Purnima.\n\nWhatever you know today, someone sat down and explained it to you first."} />
+              <p className="muted" style={{ fontSize: ".78rem", margin: "6px 0 0" }}>
+                Every channel starts with this text. On the next screen you can change it for any one of them.
+              </p>
+            </>
           )}
 
           {(kind === "event" || kind === "idea") && (

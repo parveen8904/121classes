@@ -1,7 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { generateSoftDay } from "@/lib/ai";
 import { autoBriefParts, briefText, loadBrief } from "@/lib/marketingBrief";
-import { festivalCalendar, festivalsOn } from "@/lib/festivals";
+import { festivalCalendar, festivalsOn, manualFestivalsOn } from "@/lib/festivals";
 import {
   angleFor, channelFlags, mentionFor, mentionsProduct, slotsForDay, weekSlots, type ChannelKey,
 } from "@/lib/marketingRhythm";
@@ -90,11 +90,7 @@ export async function planWeek(): Promise<PlannedWeek> {
       const dayLabel = noon.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "long", day: "numeric", month: "long", year: "numeric" });
       // Festivals on this exact date: the public Indian holiday calendar plus
       // anything the founder typed for that date himself.
-      const dayIst = noon.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "long" });
-      const festivals = [
-        ...festivalsOn(calendar, noon),
-        ...manualFestivals.filter((l) => l.toLowerCase().startsWith(dayIst.toLowerCase())).map((l) => l.replace(/^[^—-]+[—-]\s*/, "")),
-      ];
+      const festivals = [...festivalsOn(calendar, noon), ...manualFestivalsOn(manualFestivals, noon)];
       const out = await generateSoftDay({
         dayLabel,
         angle: angleFor(week, day),

@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { schedulePost, deletePost, sendPostNow, generatePack, updatePost, toggleAutopilot, saveMarketingSettings, saveScenario } from "./actions";
 import { CHANNELS, cadenceLabel } from "@/lib/marketingRhythm";
 import { loadBrief } from "@/lib/marketingBrief";
+import { SUPPLEMENT_UNTIL, festivalCalendar, festivalsAhead, manualFestivalsOn } from "@/lib/festivals";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Campaigns — Admin" };
@@ -79,6 +80,20 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
   const brief = await loadBrief(svc);
+  // What will actually be greeted, shown plainly — Guru Purnima was missing
+  // from Google's calendar and only a person looking at the list would catch
+  // that. His own extra dates are merged in so he sees the real picture.
+  const calendar = await festivalCalendar();
+  const manualLines = brief.festivals.split("\n").map((l) => l.trim()).filter(Boolean);
+  const upcoming = festivalsAhead(calendar, new Date(), 120).slice(0, 8);
+  for (let i = 0; i < 120; i++) {
+    const d = new Date(Date.now() + i * 86400e3);
+    for (const name of manualFestivalsOn(manualLines, d)) {
+      upcoming.push(`${d.toLocaleDateString("en-IN", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric", weekday: "long" })} — ${name} (yours)`);
+    }
+  }
+  upcoming.sort((a, b) => new Date(a.split(" — ")[0]).getTime() - new Date(b.split(" — ")[0]).getTime());
+  const supplementLapsed = SUPPLEMENT_UNTIL < new Date().toISOString().slice(0, 10);
   const { data } = await svc
     .from("scheduled_posts")
     .select("*")
@@ -131,19 +146,32 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
             placeholder={"e.g. Two months to go. Most students are in their first exhaustive study of the syllabus — reading chapters properly for the first time, not revising.\nA smaller group who took the classes earlier are on their first revision.\nNobody is in exam mode yet, so no last-minute or exam-eve talk."} />
 
           <div className="notice ok" style={{ marginTop: 12, fontSize: ".82rem" }}>
-            🎉 <strong>Every Indian festival is already handled.</strong> Dates come from the public Indian holiday
-            calendar — Raksha Bandhan, Janmashtami, Ganesh Chaturthi, Diwali and the rest, always on the correct day,
-            with nothing for you to type or update each year. On a festival day the Telegram and Instagram posts
-            become a plain warm wish with nothing about us in them.
+            🎉 <strong>Festival greetings are automatic</strong> — dates come from the public Indian holiday calendar,
+            so Raksha Bandhan, Janmashtami, Ganesh Chaturthi, Diwali and the rest always land on the correct day with
+            nothing for you to update each year. On a festival day the Telegram and Instagram posts become a plain
+            warm wish with nothing about us in them. <strong>Check the list below</strong> — if a day that matters is
+            missing, add it in the box and it will be greeted.
+            <div style={{ marginTop: 8, display: "grid", gap: 2 }}>
+              {upcoming.map((f) => <div key={f} style={{ fontSize: ".8rem" }}>• {f}</div>)}
+              {upcoming.length === 0 && <div style={{ fontSize: ".8rem" }}>Nothing in the next four months.</div>}
+            </div>
           </div>
-          <label style={{ marginTop: 10 }}>Any extra dates of our own? <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>— optional, one per line</span></label>
+          {supplementLapsed && (
+            <div className="notice err" style={{ marginTop: 8, fontSize: ".82rem" }}>
+              ⚠️ Guru Purnima is not in any public calendar, so its dates are kept in our own list — and that list
+              now ends. Add the next date in the box below, or ask the developer to extend it.
+            </div>
+          )}
+          <label style={{ marginTop: 10 }}>Any date the list above is missing? <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>— one per line, e.g. &ldquo;29 July — Guru Purnima&rdquo;</span></label>
           <textarea name="festivals" rows={2} defaultValue={brief.festivals}
-            placeholder={"14 October — our foundation day"} />
+            placeholder={"14 October — our foundation day\n29/07/2026 — a date only we celebrate"} />
 
           <div className="notice ok" style={{ marginTop: 12, fontSize: ".82rem" }}>
             📰 <strong>Profession news is pulled in on its own.</strong> ICAI, NFRA, MCA, RBI, SEBI, NCLT, SFIO and
-            IFRS headlines arrive hourly in <a href="/admin/announcements">Announcements</a>; every one you publish
-            there is fed to the writer for the next month. Headlines only — nothing beyond them is ever stated.
+            IFRS headlines arrive hourly in <a href="/admin/announcements">Announcements</a>, and the last month of
+            them is handed to the writer — <strong>no approval needed</strong>. That feed is raw material for both
+            things; ticking &ldquo;Published&rdquo; there decides only what <em>students</em> see on the site.
+            Headlines only: nothing beyond what a headline says is ever stated.
           </div>
           <label style={{ marginTop: 10 }}>Anything else going on that posts should build on? <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>— optional</span></label>
           <textarea name="news" rows={2} defaultValue={brief.news}

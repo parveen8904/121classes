@@ -78,8 +78,10 @@ export default async function AnnouncementsPage(
           </p>
         )}
         <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 10px" }}>
-          Whatever you publish here also feeds the marketing posts for a month — see
-          <a href="/admin/broadcasts"> Campaigns</a>. Headlines only: nothing beyond them is ever stated.
+          Everything collected here — published or not — is also the raw material the
+          <a href="/admin/broadcasts"> marketing posts</a> read for a month. Publishing decides only what
+          <strong> students</strong> see on the site. Headlines only: nothing beyond what a headline says is ever
+          stated in a post.
         </p>
         <form action={saveFeedKeywords}>
           <label htmlFor="kw">Keywords to watch (comma or new line)</label>

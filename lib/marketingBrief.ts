@@ -35,24 +35,29 @@ export async function loadBrief(svc = createServiceClient()): Promise<MarketingB
 }
 
 // The two things the founder should never have to type: festival dates and
-// what the regulators did this month. Both are already coming into the
-// platform automatically — the public Indian holiday calendar, and the news
-// feed he approves on Admin → Announcements — so the brief reads them itself.
+// what the regulators did this month. Both already arrive on their own — the
+// public Indian holiday calendar, and the hourly news feed.
+//
+// The news feed is RAW MATERIAL for both modules, not a queue to approve.
+// Publishing an item decides whether STUDENTS see it on the site; it has
+// nothing to do with whether the copywriter may know about it. So every
+// recent headline counts, approved or not — which is also why the rules let
+// the writer draw a lesson from a headline and forbid it from asserting
+// anything the headline does not itself say.
 export async function autoBriefParts(svc = createServiceClient()): Promise<{ festivals: string[]; news: string[] }> {
   const { festivalCalendar, festivalsAhead } = await import("@/lib/festivals");
-  const [cal, published] = await Promise.all([
+  const [cal, recent] = await Promise.all([
     festivalCalendar(),
     svc
       .from("announcements")
       .select("title, kind, published_at")
-      .eq("is_published", true)
       .gte("published_at", new Date(Date.now() - 30 * 86400e3).toISOString())
       .order("published_at", { ascending: false })
-      .limit(12),
+      .limit(20),
   ]);
   return {
     festivals: festivalsAhead(cal, new Date(), 21),
-    news: (published.data ?? []).map((a) => `- ${String(a.title)}`),
+    news: (recent.data ?? []).map((a) => `- ${String(a.title)}`),
   };
 }
 
@@ -67,7 +72,7 @@ export function briefText(b: MarketingBrief, auto?: { festivals: string[]; news:
     `THE EXAM THEY ARE PREPARING FOR: ${b.attempt || "(not stated — do not name any attempt, month or deadline)"}\n\n` +
     `WHERE THE STUDENTS ACTUALLY ARE TODAY (this decides everything you write):\n${b.stage || "(not stated — write about studying in general and do not assume any stage)"}\n\n` +
     `FESTIVALS IN THE NEXT THREE WEEKS (greet ONLY on the exact date given, never a day early or late):\n${festivals.length ? festivals.join("\n") : "(none in this window — do not greet anyone)"}\n\n` +
-    `WHAT IS GOING ON IN THE PROFESSION RIGHT NOW (approved news from the last month):\n${news.length ? news.join("\n") : "(nothing on record — do not refer to any news)"}`
+    `WHAT IS GOING ON IN THE PROFESSION RIGHT NOW (headlines picked up over the last month):\n${news.length ? news.join("\n") : "(nothing on record — do not refer to any news)"}`
   );
 }
 

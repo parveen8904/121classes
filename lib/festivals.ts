@@ -27,9 +27,27 @@ const GREETED =
 // lists regional variants of the same festival on the same date.
 const isGreetable = (name: string) => !SOLEMN.test(name) && GREETED.test(name);
 
+// Festivals the public calendars do not carry at all.
+//
+// Guru Purnima is the teacher's day of the Indian year — for a teaching
+// brand it is the most important date on this list — and Google's "Holidays
+// in India" AND "Hindu Holidays" calendars both omit it completely. It moves
+// with the lunar calendar, so there is nothing to compute; the dates are
+// listed here one at a time, each one verified, and when the list runs out
+// the Campaigns page says so rather than skipping the day in silence.
+const SUPPLEMENT: Record<string, string> = {
+  "2026-07-29": "Guru Purnima", // Ashadha Purnima / Vyasa Purnima
+  "2027-07-18": "Guru Purnima",
+};
+
+// The last date the supplement covers — shown to the founder so the list is
+// topped up before it lapses, never discovered empty.
+export const SUPPLEMENT_UNTIL = Object.keys(SUPPLEMENT).sort().slice(-1)[0];
+
 // date ("2026-08-28") → the festivals falling on it.
 export async function festivalCalendar(): Promise<Map<string, string[]>> {
   const byDate = new Map<string, string[]>();
+  for (const [date, name] of Object.entries(SUPPLEMENT)) byDate.set(date, [name]);
   try {
     const res = await fetch(ICS_URL, { next: { revalidate: 43200 } });
     if (!res.ok) return byDate;
@@ -69,3 +87,27 @@ export function festivalsAhead(cal: Map<string, string[]>, from: Date, days: num
 
 // The festivals on one specific day, if any.
 export const festivalsOn = (cal: Map<string, string[]>, day: Date): string[] => cal.get(ymd(day)) ?? [];
+
+// The founder's own dates, typed as "29 July — Guru Purnima", "29 Jul: X",
+// "29/07/2026 X". Anything the calendars miss, he can add in one line — so
+// this parser forgives however he writes the date.
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+export function manualFestivalsOn(lines: string[], day: Date): string[] {
+  const d = day.getUTCDate();
+  const m = day.getUTCMonth();
+  const y = day.getUTCFullYear();
+  const out: string[] = [];
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const match = line.match(/^(\d{1,2})\s*[-/. ]\s*([A-Za-z]{3,}|\d{1,2})(?:\s*[-/. ]\s*(\d{4}))?\s*[—–:-]?\s*(.*)$/);
+    if (!match) continue;
+    const [, dayStr, monthStr, yearStr, name] = match;
+    const month = /^\d+$/.test(monthStr) ? Number(monthStr) - 1 : MONTHS.indexOf(monthStr.slice(0, 3).toLowerCase());
+    if (month < 0 || Number(dayStr) !== d || month !== m) continue;
+    if (yearStr && Number(yearStr) !== y) continue;
+    if (name.trim()) out.push(name.trim());
+  }
+  return out;
+}

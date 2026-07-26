@@ -45,6 +45,22 @@ export default async function StoragePage(props: {
   ]);
   const movedSoFar = (secureList.data ?? []).length;
 
+  // The state of the whole job, read from the small m_* columns — so the card
+  // shows where things stand regardless of what any single run reported.
+  const { data: refRows } = await svc
+    .from("sections")
+    .select("m_notes_hand_url, m_notes_typed_url, m_pdf_url, m_paper_question_pdf, m_paper_solution_pdf")
+    .limit(2000);
+  let stillPublic = 0, alreadyPrivate = 0;
+  for (const r of (refRows ?? []) as Record<string, string | null>[]) {
+    for (const v of Object.values(r)) {
+      if (!v) continue;
+      if (v.startsWith("secure:")) alreadyPrivate++;
+      else if (v.includes("/public/media/") || /r2\.dev/.test(v)) stillPublic++;
+    }
+  }
+  const totalRefs = stillPublic + alreadyPrivate;
+
   // Per top-level folder + loose files
   const folders: { name: string; size: number; count: number }[] = [];
   let looseSize = 0, looseCount = 0;
@@ -101,9 +117,23 @@ export default async function StoragePage(props: {
           copy — students see no difference, because their downloads already go through a login check. Safe to press
           repeatedly: it works in batches and skips whatever is already done.
         </p>
-        <p style={{ fontSize: ".85rem", margin: "0 0 10px" }}>
-          <strong>{movedSoFar}</strong> file(s) already moved to the private area.
-        </p>
+        <div style={{ margin: "0 0 12px" }}>
+          <div style={{ height: 10, borderRadius: 6, background: "var(--bg-soft)", overflow: "hidden" }}>
+            <div style={{
+              width: `${totalRefs ? Math.round((alreadyPrivate / totalRefs) * 100) : 0}%`,
+              height: "100%", background: "var(--accent)",
+            }} />
+          </div>
+          <p style={{ fontSize: ".85rem", margin: "6px 0 0" }}>
+            <strong>{alreadyPrivate} of {totalRefs}</strong> file references are private
+            {stillPublic > 0
+              ? <> — <strong>{stillPublic}</strong> still public. Keep pressing.</>
+              : <> — <strong>all done.</strong> Now delete the public copies below.</>}
+          </p>
+          <p className="muted" style={{ fontSize: ".78rem", margin: "2px 0 0" }}>
+            {movedSoFar} file(s) copied into the private area so far.
+          </p>
+        </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <form action={moveMaterials}>
             <SubmitButton className="btn">Move the next batch →</SubmitButton>

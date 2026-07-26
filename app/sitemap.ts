@@ -38,7 +38,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   const out: MetadataRoute.Sitemap = pages.map(([p, priority]) => ({
-    url: `${base}${p}`,
+    // The homepage as "https://…/" rather than a bare host — some validators
+    // treat a URL with no path at all as suspect.
+    url: p === "" ? `${base}/` : `${base}${p}`,
     changeFrequency: "weekly",
     priority,
   }));
@@ -56,7 +58,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   for (const a of articles ?? []) {
     out.push({
       url: `${base}/articles/${a.slug}`,
-      lastModified: a.updated_at ? new Date(a.updated_at as string) : undefined,
+      // Plain YYYY-MM-DD. The default carries milliseconds
+      // ("2026-07-16T05:31:54.926Z"), which is legal but is the kind of thing
+      // strict validators complain about — and it says nothing useful.
+      lastModified: a.updated_at ? String(a.updated_at).slice(0, 10) : undefined,
       changeFrequency: "monthly",
       priority: 0.6,
     });

@@ -402,13 +402,23 @@ export type ParsedCase = {
 // Parse model JSON that may be wrapped in code fences OR truncated at the token
 // limit. On a clean parse failure, salvage by trimming to the last complete
 // object/array close — so a cut-off response still yields the cases it did emit.
-function parseLooseJson(text: string): any | null {
+export function parseLooseJson(text: string): any | null {
   let s = text.replace(/```json|```/g, "").trim();
   const start = s.indexOf("{");
   if (start > 0) s = s.slice(start);
   try { return JSON.parse(s); } catch { /* try salvage */ }
-  // Salvage a truncated "cases" array: keep whole case objects only.
-  const m = s.match(/"cases"\s*:\s*\[/);
+  // Salvage a truncated array — the response ran out of tokens mid-object, so
+  // keep the whole objects it did emit and drop the half-written one. Applies
+  // to case sets and to campaign packs alike.
+  for (const key of ["cases", "posts"]) {
+    const salvaged = salvageArray(s, key);
+    if (salvaged) return salvaged;
+  }
+  return null;
+}
+
+function salvageArray(s: string, key: string): Record<string, unknown> | null {
+  const m = s.match(new RegExp(`"${key}"\\s*:\\s*\\[`));
   if (!m) return null;
   const arrStart = (m.index ?? 0) + m[0].length;
   const objs: string[] = [];
@@ -425,7 +435,7 @@ function parseLooseJson(text: string): any | null {
     else if (ch === "]" && depth === 0) break;
   }
   if (!objs.length) return null;
-  try { return { cases: JSON.parse(`[${objs.join(",")}]`), consumed_chars: 0 }; } catch { return null; }
+  try { return { [key]: JSON.parse(`[${objs.join(",")}]`), consumed_chars: 0 }; } catch { return null; }
 }
 
 // "AI_DOWN" = the model call itself failed (no key / API error / rate limit) —
@@ -960,8 +970,30 @@ const PACK_SYSTEM =
   "Each day must take a DIFFERENT angle and stand on its own as teaching. At most one day in three may mention the platform at all, and then in ONE quiet sentence placed in the middle or at the end — never as the point of the post, never with a call to action. " +
   "Include a link only in a post that carries such a mention, at most one, plain. " +
   "Each post carries four versions of the same thought, each written for its own place: message (Telegram/Discord), instagram (caption + up to 4 hashtags), youtube (community post), twitter (one X post under 270 characters, no hashtags, no emojis). " +
-  "Respond ONLY as compact JSON, no prose, no code fences: " +
+  "Your entire reply is one JSON object and nothing else — no preamble, no explanation, no apology, no code fences, no text after the closing brace. " +
+  "Respond ONLY as compact JSON: " +
   '{"posts":[{"day":0,"focus":"...","message":"...","instagram":"...","youtube":"...","twitter":"..."}]}';
+
+// "Couldn't generate the pack — check the Anthropic key" was shown for every
+// possible cause, including the ones that had nothing to do with the key. The
+// real reason is now recorded with a piece of what the model actually said,
+// and the Campaigns page shows it.
+async function notePackFailure(reason: string, raw: string): Promise<null> {
+  try {
+    await createServiceClient().from("site_settings").upsert({
+      key: "pack_last_error",
+      value: JSON.stringify({ at: new Date().toISOString(), reason, sample: raw.slice(0, 400) }),
+    }, { onConflict: "key" });
+  } catch { /* a diagnostic must never be the thing that breaks */ }
+  return null;
+}
+
+async function notePackOk(): Promise<void> {
+  try {
+    await createServiceClient().from("site_settings").upsert(
+      { key: "pack_last_error", value: "" }, { onConflict: "key" });
+  } catch { /* ignore */ }
+}
 
 export async function generateCampaignPack(
   theme: string,
@@ -979,11 +1011,20 @@ export async function generateCampaignPack(
     `- Live classes: https://caparveensharma.com/live\n\n` +
     `What's happening on the platform right now (mention only where it fits naturally, never invent more):\n${context}\n\n` +
     `Per-post limits: message ≤ 450 characters; instagram = caption ≤ 500 characters + up to 4 relevant hashtags on a new line; youtube ≤ 350 characters.`;
-  const text = await callClaude(PACK_SYSTEM, user, Math.min(300 + days * 550, 8000), { feature: "marketing" });
-  if (!text) return null;
+  // Four variants a day now (X got its own), so the old 550-a-day budget cut
+  // the reply off mid-object and the whole pack came back as "couldn't
+  // generate".
+  const text = await callClaude(PACK_SYSTEM, user, Math.min(400 + days * 950, 8000), { feature: "marketing" });
+  if (!text) return await notePackFailure("the AI call itself failed — no key, a disabled toggle, or the API refused", "");
   const json = parseLooseJson(text);
   const arr = Array.isArray(json?.posts) ? json.posts : null;
-  if (!arr?.length) return null;
+  if (!arr?.length) {
+    return await notePackFailure(
+      json ? "the AI replied but with no posts in it" : "the AI reply was not readable as JSON",
+      text,
+    );
+  }
+  await notePackOk();
   return arr
     .map((p: { day?: unknown; focus?: unknown; message?: unknown; instagram?: unknown; youtube?: unknown; twitter?: unknown }, i: number) => ({
       day: Number.isFinite(Number(p.day)) ? Number(p.day) : i,

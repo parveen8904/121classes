@@ -81,6 +81,10 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
   const brief = await loadBrief(svc);
+  // Why the last pack attempt failed, in words rather than a guess at the key.
+  const { data: packErrRow } = await svc.from("site_settings").select("value").eq("key", "pack_last_error").maybeSingle();
+  let packError: { reason?: string; sample?: string } | null = null;
+  try { packError = packErrRow?.value ? JSON.parse(String(packErrRow.value)) : null; } catch { packError = null; }
   // What will actually be greeted, shown plainly — Guru Purnima was missing
   // from Google's calendar and only a person looking at the list would catch
   // that. His own extra dates are merged in so he sees the real picture.
@@ -126,7 +130,14 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
       )}
       {searchParams.pack === "fail" && (
         <div className="notice err" style={{ marginTop: 16 }}>
-          Couldn&apos;t generate the pack — check the Anthropic key on Integrations and that &ldquo;Marketing pack generator&rdquo; is on in Admin → AI usage.
+          <strong>Couldn&apos;t generate the pack.</strong>{" "}
+          {packError?.reason
+            ? <>What actually went wrong: <em>{packError.reason}</em>.{" "}
+                {packError.reason.includes("call itself")
+                  ? <>So check the Anthropic key on Integrations and that &ldquo;Marketing pack generator&rdquo; is on in Admin → AI usage.</>
+                  : <>The key is fine — the AI answered, but not in the form we can use. Try once more; if it keeps happening, tell the developer this: <code style={{ fontSize: ".72rem" }}>{packError.sample?.slice(0, 160)}</code></>}
+              </>
+            : <>Check the Anthropic key on Integrations and that &ldquo;Marketing pack generator&rdquo; is on in Admin → AI usage.</>}
         </div>
       )}
 

@@ -262,7 +262,7 @@ export async function maybeSendDailyFeedDigest(opts?: { force?: boolean }): Prom
 
   let query = svc
     .from("announcements")
-    .select("id, kind, title, body, link_url")
+    .select("id, kind, title, body, link_url, published_at")
     .eq("from_feed", true)
     .eq("is_published", false)
     .order("created_at", { ascending: false })
@@ -273,7 +273,13 @@ export async function maybeSendDailyFeedDigest(opts?: { force?: boolean }): Prom
   if (!rows || rows.length === 0) return { sent: 0 };
 
   await sendFeedDigest(
-    rows.map((r) => ({ title: r.title as string, link: (r.link_url as string) || "", body: (r.body as string) || "", kind: r.kind as string })),
+    rows.map((r) => ({
+      title: r.title as string,
+      link: (r.link_url as string) || "",
+      body: (r.body as string) || "",
+      kind: r.kind as string,
+      publishedAt: (r.published_at as string | null) ?? null,
+    })),
   );
   await svc.from("announcements").update({ digest_emailed: true }).in("id", rows.map((r) => r.id));
   await svc.from("app_secrets").upsert(

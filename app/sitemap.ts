@@ -1,49 +1,77 @@
 import type { MetadataRoute } from "next";
 import { tryServiceClient } from "@/lib/supabase/service";
 
-// The public pages we want Google to index, under the new domain.
+// Everything we want Google to index. Anything that redirects a logged-out
+// visitor to /login is deliberately left out — a search result that lands on a
+// login screen is worse than no search result at all. The list below was
+// checked against the live site: every one returns 200 to a stranger.
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = "https://caparveensharma.com";
-  const paths = [
-    "",
-    "/courses",
-    "/build-your-plan",
-    "/results",
-    "/placements",
-    "/books",
-    "/test-series",
-    "/download",
-    "/install",
-    "/faculty",
-    "/free-planner",
-    "/articles",
-    "/support",
-    "/privacy",
-    "/terms",
-    "/refund",
+
+  // Priority is a hint about which pages matter most when Google decides what
+  // to crawl and how to weigh these against each other.
+  const pages: [string, number][] = [
+    ["", 1],
+    ["/courses", 0.9],
+    ["/pricing", 0.9],          // was missing
+    ["/free-planner", 0.9],
+    ["/articles", 0.8],
+    ["/test-series", 0.8],
+    ["/books", 0.7],
+    ["/combos", 0.7],           // was missing
+    ["/results", 0.7],
+    ["/faculty", 0.7],
+    ["/build-your-plan", 0.7],
+    ["/placements", 0.6],
+    ["/guide", 0.6],            // was missing
+    ["/help", 0.6],             // was missing
+    ["/sponsor-guide", 0.5],    // was missing
+    ["/startups", 0.5],         // was missing
+    ["/calendar", 0.5],         // was missing
+    ["/download", 0.5],
+    ["/install", 0.5],
+    ["/support", 0.4],
+    ["/privacy", 0.3],
+    ["/terms", 0.3],
+    ["/refund", 0.3],
   ];
-  const fixed: MetadataRoute.Sitemap = paths.map((p) => ({
+
+  const out: MetadataRoute.Sitemap = pages.map(([p, priority]) => ({
     url: `${base}${p}`,
     changeFrequency: "weekly",
-    priority: p === "" ? 1 : 0.7,
+    priority,
   }));
 
-  // Every published article (the SEO engine's output).
   const svc = tryServiceClient();
-  if (svc) {
-    const { data } = await svc
-      .from("articles")
-      .select("slug, updated_at")
-      .eq("is_published", true)
-      .limit(1000);
-    for (const a of data ?? []) {
-      fixed.push({
-        url: `${base}/articles/${a.slug}`,
-        lastModified: a.updated_at ? new Date(a.updated_at as string) : undefined,
-        changeFrequency: "monthly",
-        priority: 0.6,
-      });
-    }
+  if (!svc) return out;
+
+  // Every published article — the SEO engine's output, and the bulk of what
+  // brings students in from Google.
+  const { data: articles } = await svc
+    .from("articles")
+    .select("slug, updated_at")
+    .eq("is_published", true)
+    .limit(2000);
+  for (const a of articles ?? []) {
+    out.push({
+      url: `${base}/articles/${a.slug}`,
+      lastModified: a.updated_at ? new Date(a.updated_at as string) : undefined,
+      changeFrequency: "monthly",
+      priority: 0.6,
+    });
   }
-  return fixed;
+
+  // One entry per subject. "CA Final Financial Reporting" is exactly what a
+  // student types into Google, and each subject already has a public page.
+  const { data: subjects } = await svc.from("subjects").select("id").limit(200);
+  for (const s of subjects ?? []) {
+    out.push({ url: `${base}/courses/${s.id}`, changeFrequency: "weekly", priority: 0.8 });
+  }
+
+  const { data: books } = await svc.from("books").select("id").limit(200);
+  for (const b of books ?? []) {
+    out.push({ url: `${base}/books/${b.id}`, changeFrequency: "monthly", priority: 0.5 });
+  }
+
+  return out;
 }

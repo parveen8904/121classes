@@ -74,13 +74,14 @@ export default async function StoragePage(props: {
           {Number(sp.left) > 0
             ? <> About <strong>{sp.left}</strong> section(s) still to go — press the button again.</>
             : <> <strong>Nothing left to move.</strong></>}
-          {Number(sp.failed) > 0 && <> {sp.failed} failed{sp.why ? `: ${sp.why}` : ""}.</>}
+          {Number(sp.failed) > 0 && <> {sp.failed} failed.</>}
+          {sp.why && <div style={{ fontSize: ".82rem", marginTop: 4 }}>{sp.why}</div>}
         </div>
       )}
       {sp.deleted !== undefined && (
         <div className="notice ok" style={{ marginTop: 16 }}>
-          Deleted <strong>{sp.deleted}</strong> public copy/copies. {sp.stillthere} file(s) remain in the public
-          materials folder.
+          Deleted <strong>{sp.deleted}</strong> public copy/copies. {sp.stillthere} file(s) remain.
+          {sp.why && <div style={{ fontSize: ".82rem", marginTop: 4 }}>{sp.why}</div>}
         </div>
       )}
 

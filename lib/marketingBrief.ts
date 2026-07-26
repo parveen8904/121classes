@@ -34,16 +34,40 @@ export async function loadBrief(svc = createServiceClient()): Promise<MarketingB
   };
 }
 
+// The two things the founder should never have to type: festival dates and
+// what the regulators did this month. Both are already coming into the
+// platform automatically — the public Indian holiday calendar, and the news
+// feed he approves on Admin → Announcements — so the brief reads them itself.
+export async function autoBriefParts(svc = createServiceClient()): Promise<{ festivals: string[]; news: string[] }> {
+  const { festivalCalendar, festivalsAhead } = await import("@/lib/festivals");
+  const [cal, published] = await Promise.all([
+    festivalCalendar(),
+    svc
+      .from("announcements")
+      .select("title, kind, published_at")
+      .eq("is_published", true)
+      .gte("published_at", new Date(Date.now() - 30 * 86400e3).toISOString())
+      .order("published_at", { ascending: false })
+      .limit(12),
+  ]);
+  return {
+    festivals: festivalsAhead(cal, new Date(), 21),
+    news: (published.data ?? []).map((a) => `- ${String(a.title)}`),
+  };
+}
+
 // The brief as the copywriter reads it. Empty sections say so explicitly —
 // silence must not be read as licence to invent a situation.
-export function briefText(b: MarketingBrief): string {
+export function briefText(b: MarketingBrief, auto?: { festivals: string[]; news: string[] }): string {
   const today = new Date().toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const festivals = [...(auto?.festivals ?? []), ...b.festivals.split("\n").map((l) => l.trim()).filter(Boolean)];
+  const news = [...(auto?.news ?? []), ...b.news.split("\n").map((l) => l.trim()).filter(Boolean)];
   return (
     `Today is ${today}.\n\n` +
     `THE EXAM THEY ARE PREPARING FOR: ${b.attempt || "(not stated — do not name any attempt, month or deadline)"}\n\n` +
     `WHERE THE STUDENTS ACTUALLY ARE TODAY (this decides everything you write):\n${b.stage || "(not stated — write about studying in general and do not assume any stage)"}\n\n` +
-    `FESTIVALS AND DATES WORTH A GREETING:\n${b.festivals || "(none given — never guess a festival date)"}\n\n` +
-    `WHAT IS GOING ON IN THE PROFESSION RIGHT NOW:\n${b.news || "(nothing given — do not refer to any news)"}`
+    `FESTIVALS IN THE NEXT THREE WEEKS (greet ONLY on the exact date given, never a day early or late):\n${festivals.length ? festivals.join("\n") : "(none in this window — do not greet anyone)"}\n\n` +
+    `WHAT IS GOING ON IN THE PROFESSION RIGHT NOW (approved news from the last month):\n${news.length ? news.join("\n") : "(nothing on record — do not refer to any news)"}`
   );
 }
 
@@ -55,4 +79,4 @@ export const BRIEF_RULES =
   "Do not tell someone still reading the syllabus for the first time to revise, and do not tell someone revising to start from chapter one. " +
   "Never write as though the exam is near, never count down days, never wish luck for an exam, and never name a month, date or deadline that is not in the brief. " +
   "If a festival in the brief falls on the day you are writing for, that day's community and Instagram pieces become a short, warm greeting for that festival — a greeting only, with nothing about the platform in it. Never greet on a date the brief does not give you, and never invent a festival date. " +
-  "News may be mentioned only if it is in the brief, and only turned into something a student learns from — never as a headline or an opinion. ";
+  "News may be mentioned only if it is in the brief. Each news line is a HEADLINE and nothing more: explain what a student should take from it, and never add a fact, figure, date, outcome or opinion that the headline itself does not contain. Never present it as breaking news, and never take a side. ";

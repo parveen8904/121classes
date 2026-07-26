@@ -114,8 +114,9 @@ export async function generatePack(formData: FormData) {
 
   const svc = createServiceClient();
   const { generateCampaignPack } = await import("@/lib/ai");
-  const { briefText, loadBrief } = await import("@/lib/marketingBrief");
-  const posts = await generateCampaignPack(theme, days, await marketingContext(svc), briefText(await loadBrief(svc)));
+  const { autoBriefParts, briefText, loadBrief } = await import("@/lib/marketingBrief");
+  const scenario = briefText(await loadBrief(svc), await autoBriefParts(svc));
+  const posts = await generateCampaignPack(theme, days, await marketingContext(svc), scenario);
   if (!posts?.length) redirect("/admin/broadcasts?pack=fail");
 
   const toIg = formData.get("to_instagram") === "on";

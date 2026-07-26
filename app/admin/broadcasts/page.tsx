@@ -130,21 +130,24 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
           <textarea name="stage" rows={4} defaultValue={brief.stage}
             placeholder={"e.g. Two months to go. Most students are in their first exhaustive study of the syllabus — reading chapters properly for the first time, not revising.\nA smaller group who took the classes earlier are on their first revision.\nNobody is in exam mode yet, so no last-minute or exam-eve talk."} />
 
-          <label style={{ marginTop: 10 }}>Festivals &amp; dates worth a greeting <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>— one per line, with the date</span></label>
-          <textarea name="festivals" rows={3} defaultValue={brief.festivals}
-            placeholder={"15 August — Independence Day\n5 September — Teachers' Day"} />
-          <p className="muted" style={{ fontSize: ".76rem", margin: "4px 0 0" }}>
-            A greeting goes out only on a date written here — the AI is forbidden from guessing festival dates.
-            On that day the Telegram and Instagram posts become a plain warm wish with nothing about us in them.
-          </p>
+          <div className="notice ok" style={{ marginTop: 12, fontSize: ".82rem" }}>
+            🎉 <strong>Every Indian festival is already handled.</strong> Dates come from the public Indian holiday
+            calendar — Raksha Bandhan, Janmashtami, Ganesh Chaturthi, Diwali and the rest, always on the correct day,
+            with nothing for you to type or update each year. On a festival day the Telegram and Instagram posts
+            become a plain warm wish with nothing about us in them.
+          </div>
+          <label style={{ marginTop: 10 }}>Any extra dates of our own? <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>— optional, one per line</span></label>
+          <textarea name="festivals" rows={2} defaultValue={brief.festivals}
+            placeholder={"14 October — our foundation day"} />
 
-          <label style={{ marginTop: 10 }}>Anything going on in the profession worth talking about?</label>
-          <textarea name="news" rows={3} defaultValue={brief.news}
-            placeholder={"e.g. ICAI announcement students are discussing, a new standard applicable this attempt, an accounting story in the news"} />
-          <p className="muted" style={{ fontSize: ".76rem", margin: "4px 0 0" }}>
-            Only what you write here can be referred to — nothing is invented, and news is always turned into
-            something a student learns from rather than a headline.
-          </p>
+          <div className="notice ok" style={{ marginTop: 12, fontSize: ".82rem" }}>
+            📰 <strong>Profession news is pulled in on its own.</strong> ICAI, NFRA, MCA, RBI, SEBI, NCLT, SFIO and
+            IFRS headlines arrive hourly in <a href="/admin/announcements">Announcements</a>; every one you publish
+            there is fed to the writer for the next month. Headlines only — nothing beyond them is ever stated.
+          </div>
+          <label style={{ marginTop: 10 }}>Anything else going on that posts should build on? <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>— optional</span></label>
+          <textarea name="news" rows={2} defaultValue={brief.news}
+            placeholder={"e.g. a standard newly applicable for this attempt that students are anxious about"} />
 
           <SubmitButton className="btn" savedLabel="✓ Saved" style={{ marginTop: 12 }}>Save the situation</SubmitButton>
         </form>

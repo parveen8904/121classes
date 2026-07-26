@@ -1018,6 +1018,7 @@ export async function generateSoftDay(input: {
   channels: { key: string; label: string; brief: string; maxChars: number }[];
   context: string;
   scenario: string;      // where students are today (lib/marketingBrief)
+  festivalToday: string | null; // a festival falling on this exact day, if any
   avoid: string[];
   mention: string | null; // the one thing today may quietly point at, or null
 }): Promise<SoftDay | null> {
@@ -1026,9 +1027,13 @@ export async function generateSoftDay(input: {
     ? `Today ONE of the pieces (pick the channel where it fits most naturally, and not the Reddit one) may carry a single quiet sentence mentioning ${input.mention}. ` +
       `Put it in the middle or at the end, phrased as something that exists and is there if it helps — not as something being offered. No call to action, no second mention anywhere, and at most one link (https://caparveensharma.com/free-planner?src=social for the planner, otherwise https://caparveensharma.com). Every other piece today mentions nothing at all.`
     : `Today NO piece mentions the platform, the site, any course or any link. Today we only teach.`;
+  const festivalRule = input.festivalToday
+    ? `THIS DAY IS ${input.festivalToday.toUpperCase()}. The "community" piece and, if it is being written today, the "instagram" piece must be a short warm greeting for ${input.festivalToday} — a greeting and nothing else: no teaching, no platform, no link, no hashtags beyond one for the festival. Every other channel today carries the normal idea below and does not mention the festival.\n\n`
+    : "";
   const user =
     `You are writing for: ${input.dayLabel}\n\n` +
     `THE SITUATION RIGHT NOW — read this before writing a word:\n${input.scenario}\n\n` +
+    festivalRule +
     `The day's one idea (every channel carries this same idea, said its own way), to be written for exactly the stage the students are in above:\n${input.angle}\n\n` +
     `${mentionRule}\n\n` +
     `Real things happening on the platform right now (use only if one genuinely fits; never invent more):\n${input.context}\n\n` +

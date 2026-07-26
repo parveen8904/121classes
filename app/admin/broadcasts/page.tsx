@@ -17,6 +17,7 @@ type Post = {
   to_tg_channel: boolean; to_tg_groups: boolean; to_discord: boolean; to_direct: boolean;
   campaign: string | null; to_whatsapp: boolean; wa_template: string | null;
   to_instagram: boolean; to_youtube: boolean; to_twitter: boolean;
+  to_linkedin: boolean; to_facebook: boolean; to_substack: boolean; to_medium: boolean;
   ig_text: string | null; yt_text: string | null; created_by: string | null;
   status: string; status_note: string | null; sent_at: string | null;
 };
@@ -38,6 +39,10 @@ function Targets({ p }: { p: Post }) {
       {p.to_instagram && <span className="badge">📷 Instagram (remind)</span>}
       {p.to_youtube && <span className="badge">▶️ YouTube (remind)</span>}
       {p.to_twitter && <span className="badge">🐦 Twitter (remind)</span>}
+      {p.to_linkedin && <span className="badge">💼 LinkedIn (remind)</span>}
+      {p.to_facebook && <span className="badge">📘 Facebook (remind)</span>}
+      {p.to_substack && <span className="badge">📰 Substack (remind)</span>}
+      {p.to_medium && <span className="badge">✒️ Medium (remind)</span>}
     </span>
   );
 }
@@ -144,6 +149,10 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_instagram" defaultChecked /> 📷 Instagram caption — emailed to you at post time</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_youtube" defaultChecked /> ▶️ YouTube community text — emailed to you at post time</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_twitter" /> 🐦 Twitter/X post — emailed to you at post time</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_linkedin" /> 💼 LinkedIn post — emailed to you at post time</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_facebook" /> 📘 Facebook page post — emailed to you at post time</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_substack" /> 📰 Substack — draft emailed to expand into a newsletter</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_medium" /> ✒️ Medium — draft emailed to expand into an article</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_whatsapp" /> 💬 WhatsApp bulk (careful — every post goes to every contact)</label>
           </div>
           <div style={{ marginLeft: 24 }}>
@@ -240,6 +249,10 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_instagram" /> 📷 Instagram — at send time you get an email with the ready-to-paste post</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_youtube" /> ▶️ YouTube (community post) — same reminder email</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_twitter" /> 🐦 Twitter/X — same reminder email</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_linkedin" /> 💼 LinkedIn — same reminder email</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_facebook" /> 📘 Facebook page — same reminder email</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_substack" /> 📰 Substack — draft to expand into a newsletter</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_medium" /> ✒️ Medium — draft to expand into an article</label>
           </div>
           <p className="muted" style={{ fontSize: ".76rem", margin: "4px 0 0" }}>
             Instagram &amp; YouTube don&apos;t allow reliable auto-posting by third-party tools, so we prepare the post and remind you — no false promises.

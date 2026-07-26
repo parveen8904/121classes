@@ -39,6 +39,10 @@ export async function schedulePost(formData: FormData) {
     to_instagram: formData.get("to_instagram") === "on",
     to_youtube: formData.get("to_youtube") === "on",
     to_twitter: formData.get("to_twitter") === "on",
+    to_linkedin: formData.get("to_linkedin") === "on",
+    to_facebook: formData.get("to_facebook") === "on",
+    to_substack: formData.get("to_substack") === "on",
+    to_medium: formData.get("to_medium") === "on",
   });
   revalidatePath("/admin/broadcasts");
 }
@@ -124,6 +128,10 @@ export async function generatePack(formData: FormData) {
     to_instagram: toIg,
     to_youtube: toYt,
     to_twitter: formData.get("to_twitter") === "on",
+    to_linkedin: formData.get("to_linkedin") === "on",
+    to_facebook: formData.get("to_facebook") === "on",
+    to_substack: formData.get("to_substack") === "on",
+    to_medium: formData.get("to_medium") === "on",
     ig_text: toIg ? p.instagram || null : null,
     yt_text: toYt ? p.youtube || null : null,
     created_by: "pack",

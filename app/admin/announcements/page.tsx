@@ -5,6 +5,7 @@ import { getSecret } from "@/lib/secrets";
 import { createAnnouncement, saveGovtFeeds, fetchGovtFeedsNow, saveFeedKeywords, sendDigestNow } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
 import { ANNOUNCEMENT_KINDS as KINDS } from "@/lib/announcements";
+import { unusableKeyword } from "@/lib/govtfeed";
 
 function KindSelect({ name, value }: { name: string; value?: string }) {
   return (
@@ -37,6 +38,7 @@ export default async function AnnouncementsPage(
   const { data: lastRunRow } = await supabase.from("site_settings").select("value").eq("key", "feed_last_run").maybeSingle();
   let lastRun: { at: string; checked: number; added: number; offTopic?: number; generalNews?: number; trouble?: string[] } | null = null;
   try { lastRun = lastRunRow?.value ? JSON.parse(String(lastRunRow.value)) : null; } catch { lastRun = null; }
+  const badKeywords = feedKeywords.split(/[\n,]/).map((k) => unusableKeyword(k)).filter(Boolean) as string[];
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -91,6 +93,13 @@ export default async function AnnouncementsPage(
           <strong> students</strong> see on the site. Headlines only: nothing beyond what a headline says is ever
           stated in a post.
         </p>
+        {badKeywords.length > 0 && (
+          <div className="notice err" style={{ fontSize: ".82rem" }}>
+            <strong>Skipped:</strong> {badKeywords.join("; ")}. A word this common appears in nearly every headline, so
+            it would fill your list with anything at all. Use the full term instead — &ldquo;Ind AS&rdquo;,
+            &ldquo;accounting standard&rdquo;.
+          </div>
+        )}
         <form action={saveFeedKeywords}>
           <label htmlFor="kw">Keywords to watch (comma or new line)</label>
           <textarea id="kw" name="feed_keywords" rows={2} defaultValue={feedKeywords}

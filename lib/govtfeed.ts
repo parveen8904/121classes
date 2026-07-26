@@ -99,8 +99,34 @@ function gnews(q: string, hl: string, gl: string): string {
 // when:7d" returned 36 items, all 36 from the last week. So that is how we ask.
 type Feed = { url: string; keyword: string | null };
 
+// Words too short or too common to search on. "AS" was added to the keyword
+// list and matched the word "as" in every headline in India — Mount Olympus
+// joining a Unesco list, RTI appeals piling up, a Kashmir board exam going
+// ahead "as per schedule". A two-letter word cannot be a search term; the
+// Announcements page says so rather than quietly ignoring it.
+const TOO_COMMON = new Set([
+  "as", "is", "in", "of", "the", "and", "or", "at", "to", "on", "for", "by",
+  "a", "an", "it", "be", "we", "us", "ca", "no", "so",
+]);
+
+export function unusableKeyword(k: string): string | null {
+  const t = k.trim().toLowerCase();
+  if (!t) return null;
+  if (TOO_COMMON.has(t)) return `"${k}" is an everyday word — it matches almost every headline`;
+  if (t.length < 3) return `"${k}" is too short to search on`;
+  return null;
+}
+
 function buildKeywordFeeds(csv: string): Feed[] {
-  const kws = csv.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+  // Trailing commas, duplicates and stray casing are normal in a box someone
+  // types into; none of them should cost a wasted search.
+  const seen = new Set<string>();
+  const kws = csv.split(/[\n,]/).map((s) => s.trim()).filter((k) => {
+    const t = k.toLowerCase();
+    if (!k || seen.has(t) || unusableKeyword(k)) return false;
+    seen.add(t);
+    return true;
+  });
   return kws.map((k) => {
     const q = k.includes(" ") ? `"${k}"` : k;
     const extra = QUALIFIER[k.toLowerCase()];
@@ -163,6 +189,9 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
   const keywords = await getSecret("FEED_KEYWORDS");
   const extra = await getSecret("GOVT_FEEDS"); // optional manual feed URLs
   const noise = (await getSecret("FEED_NOISE")).split(/[\n,]/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+  // Say out loud which words were skipped and why.
+  const skipped = keywords.split(/[\n,]/).map((k) => unusableKeyword(k)).filter(Boolean) as string[];
 
   const urls: Feed[] = [
     ...buildKeywordFeeds(keywords),
@@ -264,7 +293,7 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
       added: added.length,
       offTopic: rejected,
       generalNews: offGeneral,
-      trouble: trouble.slice(0, 5),
+      trouble: [...skipped, ...trouble].slice(0, 6),
     }),
   }, { onConflict: "key" }).then(() => undefined, () => undefined);
   return { added: added.length, checked, items: added };

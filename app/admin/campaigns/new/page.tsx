@@ -1,3 +1,4 @@
+import Link from "next/link";
 import AdminHero from "../../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import ToggleAllChannels from "../../broadcasts/_components/ToggleAllChannels";
@@ -178,7 +179,7 @@ export default async function NewCampaignPage(props: { searchParams: Promise<{ k
           <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0 0" }}>
             Where your students are right now is already known to the writer:{" "}
             <em>{(brief.stage || "not set — fill it in on the Situation card").slice(0, 160)}…</em>{" "}
-            <a href="/admin/broadcasts">change it</a>
+            <Link href="/admin/broadcasts">change it</Link>
           </p>
         </div>
 

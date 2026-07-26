@@ -73,7 +73,11 @@ export const viewport: Viewport = {
 };
 
 // Applies the saved/system theme before paint to avoid a flash of the wrong theme.
-const themeScript = `try{var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}`;
+// Two places, on purpose: localStorage is the primary, and a cookie is the
+// fallback for when storage is blocked or cleared. Without the cookie a full
+// page load fell back to the system setting, so following a plain link into a
+// page loaded it dark while the rest of the session stayed light.
+const themeScript = `(function(){var t;try{t=localStorage.getItem('theme');}catch(e){}if(!t){var m=document.cookie.match(/(?:^|; )theme=(light|dark)/);if(m)t=m[1];}if(!t){try{t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}catch(e){t='dark';}}document.documentElement.setAttribute('data-theme',t);})();`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const links = await getSupportLinks();

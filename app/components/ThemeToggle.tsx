@@ -18,6 +18,11 @@ export default function ThemeToggle() {
     try {
       localStorage.setItem("theme", next);
     } catch {}
+    // Belt and braces: a cookie survives storage being blocked, and is what a
+    // full page load reads when localStorage comes back empty.
+    try {
+      document.cookie = `theme=${next}; path=/; max-age=31536000; samesite=lax`;
+    } catch {}
     setTheme(next);
   }
 

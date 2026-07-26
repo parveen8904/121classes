@@ -1,3 +1,4 @@
+import Link from "next/link";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -147,7 +148,7 @@ export default async function MarketingHome() {
                 <span style={{ fontWeight: 600 }}>
                   {STATE_ICON[s?.state ?? "manual"]}{" "}
                   {f === "to_direct"
-                    ? <a href="/admin/campaigns/audience">{FIELD_LABEL[f]} — {reachable} reachable</a>
+                    ? <Link href="/admin/campaigns/audience">{FIELD_LABEL[f]} — {reachable} reachable</Link>
                     : FIELD_LABEL[f]}
                 </span>
                 <span className="muted" style={{ textAlign: "right" }}>
@@ -168,7 +169,7 @@ export default async function MarketingHome() {
         {Object.values(status).some((s) => s.state === "needs-keys") && (
           <p style={{ fontSize: ".82rem", margin: "10px 0 0" }}>
             The ⚠️ ones are built and tested — they are only waiting for their keys. Paste them on{" "}
-            <a href="/admin/integrations"><strong>Integrations</strong></a> and those platforms start publishing on
+            <Link href="/admin/integrations"><strong>Integrations</strong></Link> and those platforms start publishing on
             their own, with no other change. Until then their posts are emailed to you at the right moment.
           </p>
         )}
@@ -177,7 +178,7 @@ export default async function MarketingHome() {
       {/* The rest, one click away */}
       <h3 style={{ margin: "24px 0 8px" }}>Everything else</h3>
       <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-        <a href="/admin/broadcasts" style={tile}>
+        <Link href="/admin/broadcasts" style={tile}>
           <strong>⚙️ Posts &amp; settings</strong>
           <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
             {upcoming.length > 0
@@ -185,27 +186,27 @@ export default async function MarketingHome() {
               : "Nothing scheduled right now."}{" "}
             Also the situation your students are in, and who receives the pasting reminders.
           </p>
-        </a>
-        <a href="/admin/broadcasts/festivals" style={tile}>
+        </Link>
+        <Link href="/admin/broadcasts/festivals" style={tile}>
           <strong>🎉 Festival greetings</strong>
           <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>Which days we wish students on, and how big each one is.</p>
-        </a>
-        <a href="/admin/articles" style={tile}>
+        </Link>
+        <Link href="/admin/articles" style={tile}>
           <strong>📝 Articles &amp; SEO</strong>
           <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
             {articleCount ?? 0} published. Any of them can become a campaign — pick &ldquo;an article we published&rdquo;.
           </p>
-        </a>
-        <a href="/admin/announcements" style={tile}>
+        </Link>
+        <Link href="/admin/announcements" style={tile}>
           <strong>📰 News feed</strong>
           <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
             {pendingNews ?? 0} items collected. Nothing is written about unless you choose it.
           </p>
-        </a>
-        <a href="/admin/marketing" style={tile}>
+        </Link>
+        <Link href="/admin/marketing" style={tile}>
           <strong>📊 Where students come from</strong>
           <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>Leads, signups and which platform actually brings students.</p>
-        </a>
+        </Link>
       </div>
     </section>
   );

@@ -140,14 +140,6 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
         back={{ href: "/admin", label: "Admin" }}
       />
 
-      <div className="card" style={{ marginTop: 16, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ minWidth: 260, flex: 1, fontSize: ".85rem" }}>
-          <strong>Making something new?</strong> Everything — a news item, an article, an event, a greeting, or your
-          own words untouched — is created in one place now, in three steps.
-        </div>
-        <a className="btn" href="/admin/campaigns/new">✨ Start a campaign</a>
-      </div>
-
       {searchParams.made && (
         <div className="notice ok" style={{ marginTop: 16 }}>
           ✨ Written — <strong>{searchParams.made} post(s)</strong> from what you chose, waiting below. Read them, change

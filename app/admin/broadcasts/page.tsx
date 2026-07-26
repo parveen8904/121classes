@@ -24,6 +24,7 @@ type Post = {
   to_linkedin: boolean; to_facebook: boolean; to_substack: boolean; to_medium: boolean;
   to_reddit: boolean; to_quora: boolean; to_google: boolean;
   ig_text: string | null; yt_text: string | null; x_text: string | null; created_by: string | null;
+  source_kind: string | null; source_label: string | null; source_url: string | null;
   status: string; status_note: string | null; sent_at: string | null;
 };
 
@@ -77,7 +78,29 @@ const CHANNEL_BOXES: { name: string; label: string; auto: boolean }[] = [
   { name: "to_google", label: "📍 Google Business Profile", auto: false },
 ];
 
-export default async function BroadcastsPage(props: { searchParams: Promise<{ pack?: string }> }) {
+// Why this post exists — shown on every one, so nothing on the list is a
+// mystery ("on what basis was this written?" was a fair question).
+const KIND_ICON: Record<string, string> = { news: "📰 from the news", greeting: "🎉 a greeting", event: "📅 an event", idea: "💡 an idea" };
+
+function Reason({ p }: { p: Post }) {
+  if (p.source_kind) {
+    const label = KIND_ICON[p.source_kind] ?? p.source_kind;
+    return (
+      <>
+        <strong>{label}</strong>
+        {p.source_label ? <>: {p.source_url
+          ? <a href={p.source_url} target="_blank" rel="noopener noreferrer">{p.source_label}</a>
+          : p.source_label}</> : null} ·{" "}
+      </>
+    );
+  }
+  if (p.created_by === "autopilot") return <>🤖 autopilot · </>;
+  if (p.created_by === "pack") return <>✨ pack · </>;
+  if (p.created_by === "campaign") return <>✨ campaign · </>;
+  return null;
+}
+
+export default async function BroadcastsPage(props: { searchParams: Promise<{ pack?: string; made?: string }> }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
   const brief = await loadBrief(svc);
@@ -120,6 +143,12 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
         back={{ href: "/admin", label: "Admin" }}
       />
 
+      {searchParams.made && (
+        <div className="notice ok" style={{ marginTop: 16 }}>
+          ✨ Written — <strong>{searchParams.made} post(s)</strong> from what you chose, waiting below. Read them, change
+          anything, delete what you don&apos;t want.
+        </div>
+      )}
       {searchParams.pack && searchParams.pack !== "fail" && (
         <div className="notice ok" style={{ marginTop: 16 }}>
           ✨ Pack ready — <strong>{searchParams.pack} posts</strong> written and scheduled below. Read them, edit or delete any you don&apos;t like; the rest go out on time.
@@ -182,6 +211,19 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
 
           <SubmitButton className="btn" savedLabel="✓ Saved" style={{ marginTop: 12 }}>Save the situation</SubmitButton>
         </form>
+      </div>
+
+      {/* Build a campaign from something chosen — the founder's main tool. */}
+      <div className="card" style={{ marginTop: 16, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", borderLeft: "3px solid var(--accent)" }}>
+        <div style={{ minWidth: 260, flex: 1 }}>
+          <strong>✨ Build a campaign from something real</strong>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 0" }}>
+            Pick the reason first — <strong>this</strong> news item from your feed, <strong>this</strong> festival,
+            <strong> this</strong> event, <strong>this</strong> thought — add what you know about it, and every channel
+            gets its own version written about that one thing. Nothing is written about anything you did not choose.
+          </p>
+        </div>
+        <a className="btn" href="/admin/broadcasts/new">Start a campaign →</a>
       </div>
 
       {/* Your own post — anything, any day, anywhere. Kept at the top: the
@@ -427,7 +469,7 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
             <div style={{ minWidth: 0, flex: 1 }}>
               <span className="row-title" style={{ whiteSpace: "pre-wrap" }}>{p.body.length > 140 ? p.body.slice(0, 140) + "…" : p.body}</span>
               <p className="row-sub">
-                {p.created_by === "autopilot" ? "🤖 autopilot · " : p.created_by === "pack" ? "✨ pack · " : ""}
+                <Reason p={p} />
                 {p.campaign ? <>📣 {p.campaign} · </> : null}🕐 {istFmt(p.send_at)} IST · <Targets p={p} />
               </p>
             </div>

@@ -1103,6 +1103,67 @@ export async function generateSoftDay(input: {
   return { focus: String(json?.focus ?? "").trim() || input.angle.slice(0, 60), posts };
 }
 
+// ---- A campaign built from one chosen thing ----------------------------------
+// The founder picks the reason first — this festival, this news item, this
+// event — and the copy is written about that and nothing else. Before this,
+// the whole news feed was fed to the writer as background and it dipped into
+// seventy headlines at random, which is exactly what he could not stand.
+export type SourceKind = "greeting" | "news" | "event" | "idea";
+
+const KIND_RULES: Record<SourceKind, string> = {
+  greeting:
+    "This is a GREETING and only a greeting. Wish the reader warmly and stop. No teaching, no study advice, no mention of the platform, no link, no call to action of any kind. Two or three sentences at most on every channel.",
+  news:
+    "This is a NEWS ITEM the founder chose. Your job is to tell a CA student what it means for them — what changes, what to read up on, what to keep an eye on. HARD LIMIT: everything you state as fact must come from the source text below. Do not add a figure, a date, an outcome, a section number or a consequence that is not written there; where something is unclear, say it is worth reading the notification itself. Never take a side, never speculate about guilt or blame, never call it breaking news.",
+  event:
+    "This is an EVENT the founder chose. State plainly what it is, when it is, and who it is for, in his own warm voice. No hype, no urgency, no 'limited seats', no exclamation marks. Everything factual must come from the details below.",
+  idea:
+    "This is a TEACHING IDEA the founder chose. Explain it properly and simply, the way he would to a student sitting in front of him.",
+};
+
+export async function generateSourcedCampaign(input: {
+  kind: SourceKind;
+  title: string;
+  detail: string;             // stored body + whatever he added himself
+  url?: string | null;
+  channels: { key: string; label: string; brief: string; maxChars: number }[];
+  scenario: string;
+  mention: string | null;     // the one quiet product line, or null for none
+}): Promise<SoftDay | null> {
+  if (!input.channels.length) return null;
+  const system =
+    SOFT_RULES + BRIEF_RULES +
+    "You are given ONE thing to write about and the places it has to be said. Write each piece from scratch in that platform's own voice — never paste the same sentences into two channels. Respect each channel's character limit. " +
+    "Your entire reply is one JSON object and nothing else — no preamble, no explanation, no code fences. " +
+    'Respond ONLY as compact JSON: {"focus":"5-8 words naming what this is","posts":{"<channel key>":"<the text>"}}';
+  const mentionRule = input.mention
+    ? `ONE of the pieces (whichever it sits most naturally in, and never the Reddit one) may carry a single quiet sentence mentioning ${input.mention} — placed at the end, phrased as something that exists and is there if it helps, never as an offer and never with a call to action. Every other piece mentions nothing at all.`
+    : "No piece mentions the platform, any course or any link.";
+  const user =
+    `THE SITUATION RIGHT NOW — read this before writing a word:\n${input.scenario}\n\n` +
+    `WHAT THIS CAMPAIGN IS ABOUT:\n${KIND_RULES[input.kind]}\n\n` +
+    `Title: ${input.title}\n` +
+    (input.url ? `Source link (for your understanding only — include it only if it genuinely helps the reader): ${input.url}\n` : "") +
+    `Details, and everything you are allowed to treat as fact:\n${input.detail || "(nothing beyond the title — stay at that level and do not invent detail)"}\n\n` +
+    `${mentionRule}\n\n` +
+    `Write one piece for each channel below:\n\n` +
+    input.channels.map((c) => `CHANNEL "${c.key}" — ${c.label} (max ${c.maxChars} characters)\n${c.brief}`).join("\n\n");
+  const budget = input.channels.reduce((n, c) => n + c.maxChars, 0);
+  const text = await callClaude(system, user, Math.min(700 + Math.ceil(budget / 2), 5000), { feature: "marketing" });
+  if (!text) return await notePackFailure("the AI call itself failed — no key, a disabled toggle, or the API refused", "");
+  const json = parseLooseJson(text);
+  const raw = json?.posts;
+  if (!raw || typeof raw !== "object") return await notePackFailure("the AI reply was not readable as JSON", text);
+  const posts: Record<string, string> = {};
+  for (const c of input.channels) {
+    const v = String((raw as Record<string, unknown>)[c.key] ?? "").trim();
+    if (v) posts[c.key] = v;
+  }
+  if (!Object.keys(posts).length) return await notePackFailure("the AI replied but wrote nothing for the chosen channels", text);
+  await notePackOk();
+  return { focus: String(json?.focus ?? "").trim() || input.title.slice(0, 60), posts };
+}
+
 // ---- SEO articles ------------------------------------------------------------
 // Original educational articles for the public /articles section. Hard rules:
 // never copy from any source, never invent statistics/dates/thresholds — where

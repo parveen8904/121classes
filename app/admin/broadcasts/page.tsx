@@ -1,11 +1,8 @@
 import AdminHero from "../_components/AdminHero";
-import ToggleAllChannels from "./_components/ToggleAllChannels";
 import SubmitButton from "@/app/components/SubmitButton";
 import DeleteButton from "../_components/DeleteButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { deletePost, sendPostNow, updatePost, saveMarketingSettings, saveScenario } from "./actions";
-import { loadBrief } from "@/lib/marketingBrief";
-import { SUPPLEMENT_UNTIL, loadFestivalDays } from "@/lib/festivals";
+import { deletePost, sendPostNow, updatePost, saveMarketingSettings } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Campaigns — Admin" };
@@ -99,25 +96,9 @@ function Reason({ p }: { p: Post }) {
   return null;
 }
 
-export default async function BroadcastsPage(props: { searchParams: Promise<{ pack?: string; made?: string }> }) {
+export default async function BroadcastsPage(props: { searchParams: Promise<{ made?: string }> }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
-  const brief = await loadBrief(svc);
-  // Why the last pack attempt failed, in words rather than a guess at the key.
-  const { data: packErrRow } = await svc.from("site_settings").select("value").eq("key", "pack_last_error").maybeSingle();
-  let packError: { reason?: string; sample?: string } | null = null;
-  try { packError = packErrRow?.value ? JSON.parse(String(packErrRow.value)) : null; } catch { packError = null; }
-  // A one-line state of the festival list; the choosing happens on its own page.
-  const chosenFestivals = (await loadFestivalDays(
-    svc,
-    new Date().toISOString().slice(0, 10),
-    new Date(Date.now() + 400 * 86400e3).toISOString().slice(0, 10),
-  )).filter((f) => f.greet);
-  const festivalCount = chosenFestivals.length;
-  const nextFestival = chosenFestivals[0]
-    ? `${chosenFestivals[0].name}, ${new Date(`${chosenFestivals[0].on_date}T06:00:00Z`).toLocaleDateString("en-IN", { timeZone: "UTC", day: "numeric", month: "long" })}`
-    : null;
-  const supplementLapsed = SUPPLEMENT_UNTIL < new Date().toISOString().slice(0, 10);
   const { data } = await svc
     .from("scheduled_posts")
     .select("*")
@@ -135,9 +116,9 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 860 }}>
       <AdminHero
         badge="📣 Campaigns"
-        title="Posts, autopilot & settings"
-        subtitle="The situation your students are in, who gets the pasting reminders, and every post scheduled or sent. Campaigns are created in one place: Marketing → Start a campaign. ⏰"
-        back={{ href: "/admin", label: "Admin" }}
+        title="Posts & settings"
+        subtitle="Every post scheduled or sent, and who receives the reminders for the accounts a person has to post to. ⏰"
+        back={{ href: "/admin/campaigns", label: "Marketing" }}
       />
 
       {searchParams.made && (
@@ -146,70 +127,6 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
           anything, delete what you don&apos;t want.
         </div>
       )}
-      {searchParams.pack && searchParams.pack !== "fail" && (
-        <div className="notice ok" style={{ marginTop: 16 }}>
-          ✨ Pack ready — <strong>{searchParams.pack} posts</strong> written and scheduled below. Read them, edit or delete any you don&apos;t like; the rest go out on time.
-        </div>
-      )}
-      {searchParams.pack === "fail" && (
-        <div className="notice err" style={{ marginTop: 16 }}>
-          <strong>Couldn&apos;t generate the pack.</strong>{" "}
-          {packError?.reason
-            ? <>What actually went wrong: <em>{packError.reason}</em>.{" "}
-                {packError.reason.includes("call itself")
-                  ? <>So check the Anthropic key on Integrations and that &ldquo;Marketing pack generator&rdquo; is on in Admin → AI usage.</>
-                  : <>The key is fine — the AI answered, but not in the form we can use. Try once more; if it keeps happening, tell the developer this: <code style={{ fontSize: ".72rem" }}>{packError.sample?.slice(0, 160)}</code></>}
-              </>
-            : <>Check the Anthropic key on Integrations and that &ldquo;Marketing pack generator&rdquo; is on in Admin → AI usage.</>}
-        </div>
-      )}
-
-      {/* What is going on right now — read before every post is written */}
-      <div className="form-card" style={{ marginTop: 16, borderLeft: "3px solid var(--accent)" }}>
-        <h3 style={{ marginTop: 0 }}>📌 What is going on right now</h3>
-        <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 12px" }}>
-          Every post — autopilot or pack — is written against these four notes. Keep them current and the writing
-          stays true to the month: no exam-eve talk in July, no telling students to revise when they are still
-          reading the syllabus for the first time. Plain sentences are enough.
-        </p>
-        <form action={saveScenario}>
-          <label>Which attempt are they preparing for?</label>
-          <input name="attempt" defaultValue={brief.attempt} placeholder="e.g. September 2026 attempt (CA Final &amp; Inter)" />
-
-          <label style={{ marginTop: 10 }}>Where are the students right now? <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>— the most important box</span></label>
-          <textarea name="stage" rows={4} defaultValue={brief.stage}
-            placeholder={"e.g. Two months to go. Most students are in their first exhaustive study of the syllabus — reading chapters properly for the first time, not revising.\nA smaller group who took the classes earlier are on their first revision.\nNobody is in exam mode yet, so no last-minute or exam-eve talk."} />
-
-          <div className="card" style={{ marginTop: 12, fontSize: ".82rem" }}>
-            🎉 <strong>Festival greetings</strong> — {festivalCount > 0
-              ? <>{festivalCount} day(s) picked for the year ahead{nextFestival ? <>, next: <strong>{nextFestival}</strong></> : null}.</>
-              : <>not set up yet — the calendar has not been imported.</>}{" "}
-            Choose which days are worth a wish, which are big enough to take over every account, rename anything,
-            or add your own on the <a href="/admin/broadcasts/festivals"><strong>Festival greetings</strong></a> page.
-            {supplementLapsed && (
-              <div className="notice err" style={{ marginTop: 8 }}>
-                ⚠️ Guru Purnima is in no public calendar, so we keep its dates ourselves — and that list has now run
-                out. Add the next one on the Festival greetings page.
-              </div>
-            )}
-          </div>
-          <input type="hidden" name="festivals" value={brief.festivals} />
-
-          <div className="notice ok" style={{ marginTop: 12, fontSize: ".82rem" }}>
-            📰 <strong>Profession news is pulled in on its own.</strong> ICAI, NFRA, MCA, RBI, SEBI, NCLT, SFIO and
-            IFRS headlines arrive hourly in <a href="/admin/announcements">Announcements</a>, and the last month of
-            them is handed to the writer — <strong>no approval needed</strong>. That feed is raw material for both
-            things; ticking &ldquo;Published&rdquo; there decides only what <em>students</em> see on the site.
-            Headlines only: nothing beyond what a headline says is ever stated.
-          </div>
-          <label style={{ marginTop: 10 }}>Anything else going on that posts should build on? <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>— optional</span></label>
-          <textarea name="news" rows={2} defaultValue={brief.news}
-            placeholder={"e.g. a standard newly applicable for this attempt that students are anxious about"} />
-
-          <SubmitButton className="btn" savedLabel="✓ Saved" style={{ marginTop: 12 }}>Save the situation</SubmitButton>
-        </form>
-      </div>
-
       {/* Who does the Instagram/YouTube/Twitter pasting */}
       <div className="card" style={{ marginTop: 12 }}>
         <strong>📧 Who posts on Instagram / YouTube / Twitter?</strong>

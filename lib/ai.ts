@@ -983,6 +983,32 @@ async function notePackOk(): Promise<void> {
   } catch { /* ignore */ }
 }
 
+// ---- Is this news a CA student would care about? -----------------------------
+// Requiring the keyword to be present stopped municipal appointments getting
+// in, but not ordinary business news: "SEBI" appears in a company's quarterly
+// filing story, "NCLT" in any corporate dispute. Those are general news. This
+// keeps only what a CA student or a teacher of CA students would actually use —
+// what the regulators DID, what changed in the rules, what an enforcement
+// action teaches. Cheap model, one call per run; if it is unavailable nothing
+// is filtered, because a feed that silently empties is worse than a noisy one.
+const RELEVANCE_SYSTEM =
+  "You screen news headlines for a Chartered Accountancy teaching platform in India. " +
+  "KEEP a headline only if it is about the profession itself: a regulator's rule, circular, notification, standard, exposure draft, guidance or framework (ICAI, NFRA, MCA, RBI, SEBI, IASB, IFRS); an enforcement or disciplinary action, penalty, audit failure, fraud investigation or NCLT/insolvency ruling that teaches something about accounting, auditing or corporate law; a change to the CA course, exams or the profession's structure; or an accounting/auditing controversy of national significance. " +
+  "DROP anything that is ordinary business news even when a regulator is named in it: company results, earnings, share prices, fundraising, appointments, board changes, product launches, deals, routine filings, market commentary, politics, and anything about one company's fortunes rather than the rules everyone works under. " +
+  "When in doubt, DROP — his feed being short is not a problem; his feed being full of general news is. " +
+  'Respond ONLY as compact JSON: {"keep":[0,3,7]} listing the indexes of the headlines to keep, and nothing else.';
+
+export async function keepRelevantHeadlines(titles: string[]): Promise<number[] | null> {
+  if (!titles.length) return [];
+  const user = titles.map((t, i) => `${i}. ${t}`).join("\n");
+  const text = await callClaude(RELEVANCE_SYSTEM, user, 700, { model: await fastModel(), feature: "feed" });
+  if (!text) return null; // AI off or failed — caller keeps everything
+  const json = parseLooseJson(text);
+  const keep = Array.isArray(json?.keep) ? json.keep : null;
+  if (!keep) return null;
+  return keep.map((n: unknown) => Number(n)).filter((n: number) => Number.isInteger(n) && n >= 0 && n < titles.length);
+}
+
 // ---- A campaign built from one chosen thing ----------------------------------
 // The founder picks the reason first — this festival, this news item, this
 // event — and the copy is written about that and nothing else. Before this,

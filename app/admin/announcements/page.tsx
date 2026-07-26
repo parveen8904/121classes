@@ -35,7 +35,7 @@ export default async function AnnouncementsPage(
   // What the last hourly check actually did — a silent feed failure went
   // unnoticed for a month before this was shown.
   const { data: lastRunRow } = await supabase.from("site_settings").select("value").eq("key", "feed_last_run").maybeSingle();
-  let lastRun: { at: string; checked: number; added: number; trouble?: string[] } | null = null;
+  let lastRun: { at: string; checked: number; added: number; offTopic?: number; generalNews?: number; trouble?: string[] } | null = null;
   try { lastRun = lastRunRow?.value ? JSON.parse(String(lastRunRow.value)) : null; } catch { lastRun = null; }
 
   return (
@@ -79,7 +79,9 @@ export default async function AnnouncementsPage(
         {lastRun && (
           <p className={lastRun.trouble?.length || lastRun.checked === 0 ? "notice err" : "muted"} style={{ fontSize: ".8rem", padding: lastRun.trouble?.length ? 10 : 0 }}>
             Last check {new Date(lastRun.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} IST —
-            looked at {lastRun.checked} headline(s), saved {lastRun.added} new one(s).
+            looked at {lastRun.checked} headline(s), saved {lastRun.added} new one(s)
+            {lastRun.offTopic ? `, dropped ${lastRun.offTopic} that didn't mention your keywords` : ""}
+            {lastRun.generalNews ? `, dropped ${lastRun.generalNews} as general business news` : ""}.
             {lastRun.trouble?.length ? <> Problems: {lastRun.trouble.join("; ")}</> : null}
           </p>
         )}

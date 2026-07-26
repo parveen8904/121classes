@@ -1,9 +1,10 @@
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { markTeamDone } from "./actions";
+import { markTeamDone, saveSituation } from "./actions";
 import { FIELD_LABEL } from "@/lib/campaignChannels";
 import { channelStatus, STATE_ICON } from "@/lib/channelStatus";
+import { loadBrief } from "@/lib/marketingBrief";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Marketing & campaigns — Admin" };
@@ -32,6 +33,7 @@ export default async function MarketingHome() {
     svc.from("announcements").select("id", { count: "exact", head: true }).eq("from_feed", true),
     channelStatus(),
   ]);
+  const brief = await loadBrief(svc);
   const posts = (postRows ?? []) as Post[];
 
   // Things a person still has to post by hand, that are already due.
@@ -57,6 +59,28 @@ export default async function MarketingHome() {
 
       <div style={{ marginTop: 16 }}>
         <a className="btn" href="/admin/campaigns/new">✨ Start a campaign</a>
+      </div>
+
+      {/* The two facts every campaign is written against */}
+      <div className="form-card" style={{ marginTop: 16, borderLeft: "3px solid var(--accent)" }}>
+        <strong>📌 Where your students are right now</strong>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
+          Everything written is written for this. Keep it current and the posts stay true to the month — no exam-eve
+          talk in July, no telling a first-time reader to revise.
+        </p>
+        <form action={saveSituation}>
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 2fr" }}>
+            <div>
+              <label>Which attempt?</label>
+              <input name="attempt" defaultValue={brief.attempt} placeholder="e.g. September 2026 attempt" />
+            </div>
+            <div>
+              <label>What stage are they at?</label>
+              <input name="stage" defaultValue={brief.stage.split("\n")[0]} placeholder="e.g. First exhaustive study of the syllabus; a few are revising" />
+            </div>
+          </div>
+          <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 10 }}>Save</SubmitButton>
+        </form>
       </div>
 
       {/* Waiting on a person */}

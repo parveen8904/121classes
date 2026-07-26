@@ -141,6 +141,20 @@ export async function scheduleCampaign(formData: FormData) {
   redirect(`/admin/campaigns/${campaignId}?scheduled=1`);
 }
 
+// The two facts that decide how everything is written: which attempt the
+// students are sitting, and where they actually are in preparing for it. It
+// used to be four boxes on another page; it is two boxes here because these
+// are the two that change the writing.
+export async function saveSituation(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const { BRIEF_KEYS } = await import("@/lib/marketingBrief");
+  await createServiceClient().from("site_settings").upsert([
+    { key: BRIEF_KEYS.attempt, value: str(formData.get("attempt")).trim() },
+    { key: BRIEF_KEYS.stage, value: str(formData.get("stage")).trim() },
+  ], { onConflict: "key" });
+  revalidatePath("/admin/campaigns");
+}
+
 // The team ticking off a place only a person can post to.
 export async function markTeamDone(formData: FormData) {
   if (!(await requireAdmin())) return;

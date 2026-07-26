@@ -180,6 +180,7 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
   const trouble: string[] = [];
 
   let rejected = 0;
+  const candidates: FeedItem[] = [];
   for (const { url, keyword } of urls) {
     let xml = "";
     try {
@@ -212,6 +213,25 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
     if (!items.length && keyword) trouble.push(`"${keyword}": nothing fresh and on-topic`);
     for (const it of items) {
       checked++;
+      candidates.push(it);
+    }
+  }
+
+  // One screening pass over everything the keywords brought back.
+  let offGeneral = 0;
+  let toSave = candidates;
+  try {
+    const { keepRelevantHeadlines } = await import("@/lib/ai");
+    const keep = await keepRelevantHeadlines(candidates.map((c) => c.title));
+    if (keep) {
+      const set = new Set(keep);
+      toSave = candidates.filter((_, i) => set.has(i));
+      offGeneral = candidates.length - toSave.length;
+    }
+  } catch { /* screening is a bonus, never a blocker */ }
+
+  {
+    for (const it of toSave) {
       const { data: existing } = await svc
         .from("announcements")
         .select("id")
@@ -243,6 +263,7 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
       checked,
       added: added.length,
       offTopic: rejected,
+      generalNews: offGeneral,
       trouble: trouble.slice(0, 5),
     }),
   }, { onConflict: "key" }).then(() => undefined, () => undefined);

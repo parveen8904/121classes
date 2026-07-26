@@ -1019,6 +1019,7 @@ export async function generateSoftDay(input: {
   context: string;
   scenario: string;      // where students are today (lib/marketingBrief)
   festivalToday: string | null; // a festival falling on this exact day, if any
+  festivalMajor: boolean;       // a big one — it takes over every channel
   avoid: string[];
   mention: string | null; // the one thing today may quietly point at, or null
 }): Promise<SoftDay | null> {
@@ -1027,9 +1028,11 @@ export async function generateSoftDay(input: {
     ? `Today ONE of the pieces (pick the channel where it fits most naturally, and not the Reddit one) may carry a single quiet sentence mentioning ${input.mention}. ` +
       `Put it in the middle or at the end, phrased as something that exists and is there if it helps — not as something being offered. No call to action, no second mention anywhere, and at most one link (https://caparveensharma.com/free-planner?src=social for the planner, otherwise https://caparveensharma.com). Every other piece today mentions nothing at all.`
     : `Today NO piece mentions the platform, the site, any course or any link. Today we only teach.`;
-  const festivalRule = input.festivalToday
-    ? `THIS DAY IS ${input.festivalToday.toUpperCase()}. The "community" piece and, if it is being written today, the "instagram" piece must be a short warm greeting for ${input.festivalToday} — a greeting and nothing else: no teaching, no platform, no link, no hashtags beyond one for the festival. Every other channel today carries the normal idea below and does not mention the festival.\n\n`
-    : "";
+  const festivalRule = !input.festivalToday
+    ? ""
+    : input.festivalMajor
+      ? `THIS DAY IS ${input.festivalToday.toUpperCase()}, and it takes over the whole day. EVERY piece you write today is about ${input.festivalToday} and nothing else — no teaching, no study advice, no platform, no link. Write each one properly for its own place rather than repeating one greeting: the short channels (community, instagram, twitter, youtube community, google) carry a warm wish in a line or two; the ones that expect substance (linkedin, reddit, quora, substack, medium, the youtube video brief) say something real about what the day means — what a teacher owes students, or what students owe the people who taught them — still as a greeting, never as a lesson about the syllabus and never with a word about us. Ignore the day's idea below entirely.\n\n`
+      : `THIS DAY IS ${input.festivalToday.toUpperCase()}. The "community" piece and, if it is being written today, the "instagram" piece must be a short warm greeting for ${input.festivalToday} — a greeting and nothing else: no teaching, no platform, no link, no hashtags beyond one for the festival. Every other channel today carries the normal idea below and does not mention the festival.\n\n`;
   const user =
     `You are writing for: ${input.dayLabel}\n\n` +
     `THE SITUATION RIGHT NOW — read this before writing a word:\n${input.scenario}\n\n` +

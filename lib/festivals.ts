@@ -27,6 +27,15 @@ const GREETED =
 // lists regional variants of the same festival on the same date.
 const isGreetable = (name: string) => !SOLEMN.test(name) && GREETED.test(name);
 
+// The big ones. On these days every channel carries the greeting and nothing
+// else — the founder's call, and the right one: on Guru Purnima a teacher who
+// posts a revision tip instead of a word to his students looks like a machine.
+// The smaller days keep the lighter treatment (Telegram and Instagram only).
+const MAJOR =
+  /guru purnima|guru poornima|diwali|deepavali|holi|raksha bandhan|rakhi|janmashtami|ganesh chaturthi|dussehra|vijayadashami|navratri|eid|christmas|guru nanak|independence day|republic day|gandhi jayanti|pongal|makar sankranti|onam|baisakhi|vaisakhi|new year/i;
+
+export const isMajorFestival = (names: string[]) => names.some((n) => MAJOR.test(n));
+
 // Festivals the public calendars do not carry at all.
 //
 // Guru Purnima is the teacher's day of the Indian year — for a teaching

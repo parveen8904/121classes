@@ -1,7 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { generateSoftDay } from "@/lib/ai";
 import { autoBriefParts, briefText, loadBrief } from "@/lib/marketingBrief";
-import { festivalCalendar, festivalsOn, manualFestivalsOn } from "@/lib/festivals";
+import { festivalCalendar, festivalsOn, isMajorFestival, manualFestivalsOn } from "@/lib/festivals";
 import {
   angleFor, channelFlags, mentionFor, mentionsProduct, slotsForDay, weekSlots, type ChannelKey,
 } from "@/lib/marketingRhythm";
@@ -98,6 +98,7 @@ export async function planWeek(): Promise<PlannedWeek> {
         context,
         scenario,
         festivalToday: festivals.length ? festivals.join(" and ") : null,
+        festivalMajor: isMajorFestival(festivals),
         avoid,
         mention: mentionsProduct(week, day) ? mentionFor(week, day) : null,
       });

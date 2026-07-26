@@ -1,4 +1,5 @@
 import AdminHero from "../_components/AdminHero";
+import ToggleAllChannels from "./_components/ToggleAllChannels";
 import SubmitButton from "@/app/components/SubmitButton";
 import DeleteButton from "../_components/DeleteButton";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -181,6 +182,76 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
         </form>
       </div>
 
+      {/* Your own post — anything, any day, anywhere. Kept at the top: the
+          autopilot is the routine, this is the founder's own voice. */}
+      <div className="form-card" style={{ marginTop: 16 }}>
+        <h3 style={{ marginTop: 0 }}>✍️ Say something yourself — any day, on any account</h3>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 12px" }}>
+          A greeting, a piece of news, an announcement, a thought — whatever you want to go out. Write it, tick the
+          accounts, choose the moment or send it straight away. Nothing here is filtered, rewritten or approved by
+          anyone: your words go out exactly as you type them.
+        </p>
+        <form action={schedulePost}>
+          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
+            <div>
+              <label>Name it (optional — just for your own list)</label>
+              <input name="campaign" placeholder="e.g. Guru Purnima wishes" />
+            </div>
+            <div>
+              <label>When (IST)</label>
+              <input type="datetime-local" name="send_at" />
+              <label className="remember" style={{ margin: "6px 0 0" }}>
+                <input type="checkbox" name="now" /> Send it now instead (goes out within ~10 minutes)
+              </label>
+            </div>
+          </div>
+          <label style={{ marginTop: 8 }}>Your message</label>
+          <textarea name="body" rows={4} required placeholder={"Wishing every student and every teacher a very happy Guru Purnima.\n\nWhatever you know today, someone sat down and explained it to you first."} />
+          <label style={{ marginTop: 8 }}>Link (optional — added at the end)</label>
+          <input name="link_url" placeholder="https://caparveensharma.com" />
+
+          <details style={{ marginTop: 10 }}>
+            <summary className="muted" style={{ fontSize: ".82rem", cursor: "pointer" }}>
+              Want different words on some platforms? (optional)
+            </summary>
+            <div style={{ marginTop: 8 }}>
+              <label>📷 Instagram caption</label>
+              <textarea name="ig_text" rows={2} placeholder="Leave blank to use the message above" />
+              <label style={{ marginTop: 6 }}>▶️ YouTube community post</label>
+              <textarea name="yt_text" rows={2} placeholder="Leave blank to use the message above" />
+              <label style={{ marginTop: 6 }}>🐦 Twitter/X (under 280 characters)</label>
+              <textarea name="x_text" rows={2} placeholder="Leave blank to use the message above" />
+            </div>
+          </details>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <label style={{ margin: 0 }}>Where should it go?</label>
+            <ToggleAllChannels />
+          </div>
+          <div style={{ display: "grid", gap: 5, gridTemplateColumns: "1fr 1fr", marginTop: 6 }}>
+            {CHANNEL_BOXES.map((c) => (
+              <label key={c.name} className="remember" style={{ margin: 0, fontSize: ".85rem" }}>
+                <input type="checkbox" name={c.name} defaultChecked={c.name === "to_tg_channel"} /> {c.label}
+                {c.auto ? "" : " *"}
+              </label>
+            ))}
+          </div>
+          <div style={{ marginTop: 8, maxWidth: 360 }}>
+            <label style={{ fontSize: ".8rem" }}>WhatsApp template name (only if WhatsApp is ticked — an Interakt-approved template with one {"{{1}}"} variable)</label>
+            <input name="wa_template" placeholder="e.g. marketing_update" />
+          </div>
+
+          <SubmitButton className="btn" savedLabel="✓ Scheduled" style={{ marginTop: 12 }}>📣 Send this out</SubmitButton>
+          <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
+            Telegram, Discord and WhatsApp post by themselves; LinkedIn, X, Facebook and Reddit post themselves too
+            once their keys are set on Integrations. The ones marked * that can&apos;t be posted by any outside tool
+            (Instagram without a Meta token, YouTube, Substack, Medium, Quora, Google Profile) arrive in your inbox
+            ready to paste, at the exact moment the post is due. Big WhatsApp sends go out in batches of 400 every
+            ten minutes until everyone has it.
+          </p>
+        </form>
+      </div>
+
       {/* Weekly autopilot */}
       <div className="card" style={{ marginTop: 16, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ minWidth: 260, flex: 1 }}>
@@ -339,63 +410,6 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
         )}
       </details>
 
-      {/* Compose */}
-      <div className="form-card" style={{ marginTop: 16 }}>
-        <h3>✍️ Schedule a campaign post</h3>
-        <form action={schedulePost}>
-          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
-            <div>
-              <label>Campaign name (optional — groups posts together)</label>
-              <input name="campaign" placeholder="e.g. Sept 2026 batch launch" />
-            </div>
-            <div>
-              <label>Post at (IST — Indian time)</label>
-              <input type="datetime-local" name="send_at" required />
-            </div>
-          </div>
-          <label style={{ marginTop: 8 }}>Message</label>
-          <textarea name="body" rows={4} required placeholder={"🎉 New batch starting Monday!\nAdvanced Accounting — full syllabus with CA Parveen Sharma.\nSeats limited."} />
-          <label style={{ marginTop: 8 }}>Link (optional — added at the end)</label>
-          <input name="link_url" placeholder="https://caparveensharma.com/courses" />
-
-          <label style={{ marginTop: 10 }}>Channels — post automatically</label>
-          <div style={{ display: "grid", gap: 6, marginTop: 4 }}>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_tg_channel" defaultChecked /> ✈️ Telegram channel (broadcast)</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_tg_groups" /> 👥 All subject Telegram groups</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_discord" /> 🎮 All subject Discord channels</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_direct" /> 📩 Direct message to every connected student (personal Telegram chat)</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_whatsapp" /> 💬 WhatsApp to every student + imported lead with a phone number (via Interakt)</label>
-          </div>
-          <div style={{ marginLeft: 24 }}>
-            <label style={{ fontSize: ".8rem" }}>WhatsApp template name (required for WhatsApp — an Interakt-approved template with one {"{{1}}"} variable; the message above fills it)</label>
-            <input name="wa_template" placeholder="e.g. marketing_update" style={{ maxWidth: 320 }} />
-          </div>
-
-          <label style={{ marginTop: 10 }}>Channels — prepared &amp; emailed to you to post manually</label>
-          <div style={{ display: "grid", gap: 6, marginTop: 4 }}>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_instagram" /> 📷 Instagram — at send time you get an email with the ready-to-paste post</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_youtube" /> ▶️ YouTube (community post) — same reminder email</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_yt_video" /> 🎥 YouTube video brief — emailed as a &ldquo;record this&rdquo; note, not a post</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_twitter" /> 🐦 Twitter/X — auto when keys set, else reminder email</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_linkedin" /> 💼 LinkedIn — auto when keys set, else reminder email</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_facebook" /> 📘 Facebook page — auto when keys set, else reminder email</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_reddit" /> 👽 Reddit — auto to your community when keys set, else reminder</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_substack" /> 📰 Substack — draft to expand into a newsletter</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_medium" /> ✒️ Medium — draft to expand into an article</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_quora" /> ❓ Quora — answer related questions</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_google" /> 📍 Google Business Profile — post as an Update</label>
-          </div>
-          <p className="muted" style={{ fontSize: ".76rem", margin: "4px 0 0" }}>
-            Instagram &amp; YouTube don&apos;t allow reliable auto-posting by third-party tools, so we prepare the post and remind you — no false promises.
-          </p>
-
-          <SubmitButton className="btn" savedLabel="✓ Scheduled" style={{ marginTop: 12 }}>⏰ Schedule post</SubmitButton>
-          <p className="muted" style={{ fontSize: ".78rem", marginTop: 6 }}>
-            Posts go out within ~10 minutes of the chosen time. Big WhatsApp campaigns send in batches of 400
-            every 10 minutes until everyone is covered.
-          </p>
-        </form>
-      </div>
 
       {/* Upcoming */}
       <h3 style={{ margin: "22px 0 8px" }}>⏳ Upcoming ({pending.length})</h3>

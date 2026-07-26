@@ -19,14 +19,22 @@ export async function schedulePost(formData: FormData) {
   if (!(await requireAdmin())) return;
   const body = str(formData.get("body"));
   const when = str(formData.get("send_at")); // "2026-07-20T18:30" (IST, from datetime-local)
-  if (!body || !when) return;
-  // IST = UTC+5:30 — convert the wall-clock IST input to a UTC instant.
-  const utc = new Date(new Date(`${when}:00Z`).getTime() - (5 * 60 + 30) * 60 * 1000);
+  const now = formData.get("now") === "on";
+  if (!body || (!when && !now)) return;
+  // "Send it now" drops it in the past so the ten-minute cron takes it on its
+  // next pass. Otherwise: IST wall-clock in, UTC instant stored.
+  const utc = now
+    ? new Date(Date.now() - 1000)
+    : new Date(new Date(`${when}:00Z`).getTime() - (5 * 60 + 30) * 60 * 1000);
   await createServiceClient().from("scheduled_posts").insert({
     body,
     campaign: str(formData.get("campaign")) || null,
     link_url: str(formData.get("link_url")) || null,
     send_at: utc.toISOString(),
+    // His own wording for the platforms that deserve their own, when he wants it.
+    ig_text: str(formData.get("ig_text")) || null,
+    yt_text: str(formData.get("yt_text")) || null,
+    x_text: str(formData.get("x_text")) || null,
     to_tg_channel: formData.get("to_tg_channel") === "on",
     to_tg_groups: formData.get("to_tg_groups") === "on",
     to_discord: formData.get("to_discord") === "on",

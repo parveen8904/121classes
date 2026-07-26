@@ -21,7 +21,7 @@ const ymd = (d: Date) => d.toISOString().slice(0, 10);
 // become greetings. Everything else is simply ignored.
 const SOLEMN = /martyrdom|death anniversary|remembrance|shaheed|balidan|memorial|\beve\b/i;
 const GREETED =
-  /diwali|deepavali|holi|raksha bandhan|rakhi|janmashtami|ganesh chaturthi|dussehra|vijayadashami|navratri|durga puja|eid|bakrid|christmas|guru nanak|baisakhi|vaisakhi|pongal|makar sankranti|lohri|onam|ugadi|gudi padwa|bihu|independence day|republic day|gandhi jayanti|new year|mahavir jayanti|buddha purnima|good friday|easter|bhai duj|chhat|karva chauth|ram navami|shivaratri|navroz|milad|teachers.? day/i;
+  /diwali|deepavali|holi|raksha bandhan|rakhi|janmashtami|ganesh chaturthi|dussehra|vijayadashami|navratri|durga puja|eid|bakrid|christmas|guru nanak|guru purnima|baisakhi|vaisakhi|pongal|makar sankranti|lohri|onam|ugadi|gudi padwa|bihu|independence day|republic day|gandhi jayanti|new year|mahavir jayanti|buddha purnima|good friday|easter|bhai duj|chhat|karva chauth|rama? navami|shivaratri|navroz|milad|teachers.? day|vasant panchami|basant panchami|saraswati puja/i;
 
 // The one Janmashtami/Diwali entry per day is enough — the calendar sometimes
 // lists regional variants of the same festival on the same date.
@@ -53,29 +53,51 @@ const SUPPLEMENT: Record<string, string> = {
 // topped up before it lapses, never discovered empty.
 export const SUPPLEMENT_UNTIL = Object.keys(SUPPLEMENT).sort().slice(-1)[0];
 
-// date ("2026-08-28") → the festivals falling on it.
-export async function festivalCalendar(): Promise<Map<string, string[]>> {
-  const byDate = new Map<string, string[]>();
-  for (const [date, name] of Object.entries(SUPPLEMENT)) byDate.set(date, [name]);
+export type CalendarEvent = { date: string; name: string; source: "calendar" | "builtin" };
+
+// Everything the calendar carries, unfiltered — the founder's list to choose
+// from. Our own supplement (Guru Purnima and anything else Google omits) is
+// merged in and marked as such.
+export async function fetchCalendarEvents(): Promise<CalendarEvent[]> {
+  const out: CalendarEvent[] = Object.entries(SUPPLEMENT).map(([date, name]) => ({ date, name, source: "builtin" as const }));
+  const seen = new Set(out.map((e) => `${e.date}|${e.name.toLowerCase()}`));
   try {
     const res = await fetch(ICS_URL, { next: { revalidate: 43200 } });
-    if (!res.ok) return byDate;
+    if (!res.ok) return out;
     // ICS folds long lines with a leading space — unfold before parsing.
     const text = (await res.text()).replace(/\r?\n[ \t]/g, "");
     for (const block of text.split("BEGIN:VEVENT").slice(1)) {
       const date = block.match(/DTSTART;VALUE=DATE:(\d{4})(\d{2})(\d{2})/);
       const summary = block.match(/\nSUMMARY:(.*)/);
       if (!date || !summary) continue;
-      const name = summary[1].trim().replace(/\\,/g, ",").replace(/\s*\([^)]*\)\s*$/, "");
-      if (!name || /tentative/i.test(summary[1]) || !isGreetable(name)) continue;
-      const key = `${date[1]}-${date[2]}-${date[3]}`;
-      const already = byDate.get(key) ?? [];
-      // Regional variants of one festival on one date collapse into one name.
-      if (already.some((n) => n.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(n.toLowerCase()))) continue;
-      byDate.set(key, [...already, name]);
+      const name = summary[1].trim().replace(/\\,/g, ",");
+      if (!name) continue;
+      const key = `${date[1]}-${date[2]}-${date[3]}|${name.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ date: `${date[1]}-${date[2]}-${date[3]}`, name, source: "calendar" });
     }
   } catch {
     // Never let a calendar outage stop the week from being written.
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// Sensible starting points when a date is first imported — he can change both.
+export const defaultGreet = (name: string) => !/tentative/i.test(name) && isGreetable(name);
+export const defaultAllChannels = (name: string) => isMajorFestival([name]);
+
+// date ("2026-08-28") → the festivals falling on it. Used only as a fallback
+// before the founder's own list exists (lib/marketingWeek prefers the table).
+export async function festivalCalendar(): Promise<Map<string, string[]>> {
+  const byDate = new Map<string, string[]>();
+  for (const e of await fetchCalendarEvents()) {
+    const name = e.name.replace(/\s*\([^)]*\)\s*$/, "");
+    if (e.source === "calendar" && !defaultGreet(e.name)) continue;
+    const already = byDate.get(e.date) ?? [];
+    // Regional variants of one festival on one date collapse into one name.
+    if (already.some((n) => n.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(n.toLowerCase()))) continue;
+    byDate.set(e.date, [...already, name]);
   }
   return byDate;
 }
@@ -96,6 +118,66 @@ export function festivalsAhead(cal: Map<string, string[]>, from: Date, days: num
 
 // The festivals on one specific day, if any.
 export const festivalsOn = (cal: Map<string, string[]>, day: Date): string[] => cal.get(ymd(day)) ?? [];
+
+// ---- The founder's own list (festival_days) ---------------------------------
+// The calendar is the raw source; this table is what actually goes out. He
+// picks which days are worth a greeting, which are big enough to take over
+// every channel, renames anything awkward, and adds what no calendar knows.
+
+export type FestivalDay = {
+  id: string; on_date: string; name: string;
+  greet: boolean; all_channels: boolean; source: string;
+};
+
+type Db = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+export async function loadFestivalDays(svc: Db, fromDate: string, toDate: string): Promise<FestivalDay[]> {
+  const { data } = await svc
+    .from("festival_days")
+    .select("id, on_date, name, greet, all_channels, source")
+    .gte("on_date", fromDate)
+    .lte("on_date", toDate)
+    .order("on_date");
+  return (data ?? []) as FestivalDay[];
+}
+
+// Pull the calendar in without ever overriding a choice he has already made:
+// dates already in the table are left exactly as they are.
+export async function importCalendarInto(svc: Db, months = 15): Promise<{ added: number; total: number }> {
+  const today = new Date().toISOString().slice(0, 10);
+  const until = new Date(Date.now() + months * 30 * 86400e3).toISOString().slice(0, 10);
+  const events = (await fetchCalendarEvents()).filter((e) => e.date >= today && e.date <= until);
+  if (!events.length) return { added: 0, total: 0 };
+  const current = await loadFestivalDays(svc, today, until);
+  const existing = new Set(current.map((r) => `${r.on_date}|${r.name.toLowerCase()}`));
+  // One festival per date, not three spellings of it: the calendar lists
+  // regional variants ("Janmashtami", "Janmashtami (Smarta)") separately, and
+  // a list with both in it is a list nobody wants to read. Shortest name wins.
+  const bare = (s: string) => s.replace(/\s*\([^)]*\)\s*$/, "").toLowerCase().trim();
+  const kept = new Map<string, string>(); // date → bare name already taken
+  for (const r of current) kept.set(`${r.on_date}|${bare(r.name)}`, bare(r.name));
+  const rows: { on_date: string; name: string; greet: boolean; all_channels: boolean; source: string }[] = [];
+  for (const e of [...events].sort((a, b) => a.date.localeCompare(b.date) || a.name.length - b.name.length)) {
+    if (existing.has(`${e.date}|${e.name.toLowerCase()}`)) continue;
+    const b = bare(e.name);
+    const variantOfSameDay = [...kept.entries()].some(([k, v]) =>
+      k.startsWith(`${e.date}|`) && (v.includes(b) || b.includes(v)));
+    if (variantOfSameDay) continue;
+    kept.set(`${e.date}|${b}`, b);
+    const greet = e.source === "builtin" ? true : defaultGreet(e.name);
+    rows.push({
+      on_date: e.date,
+      name: e.name,
+      greet,
+      // A day we do not greet on cannot be a day that takes over every
+      // channel — that combination only ever looks like a mistake.
+      all_channels: greet && defaultAllChannels(e.name),
+      source: e.source,
+    });
+  }
+  if (rows.length) await svc.from("festival_days").upsert(rows, { onConflict: "on_date,name", ignoreDuplicates: true });
+  return { added: rows.length, total: events.length };
+}
 
 // The founder's own dates, typed as "29 July — Guru Purnima", "29 Jul: X",
 // "29/07/2026 X". Anything the calendars miss, he can add in one line — so

@@ -6,7 +6,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { schedulePost, deletePost, sendPostNow, generatePack, updatePost, toggleAutopilot, saveMarketingSettings, saveScenario } from "./actions";
 import { CHANNELS, cadenceLabel } from "@/lib/marketingRhythm";
 import { loadBrief } from "@/lib/marketingBrief";
-import { SUPPLEMENT_UNTIL, festivalCalendar, festivalsAhead, manualFestivalsOn } from "@/lib/festivals";
+import { SUPPLEMENT_UNTIL, loadFestivalDays } from "@/lib/festivals";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Campaigns — Admin" };
@@ -85,19 +85,16 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
   const { data: packErrRow } = await svc.from("site_settings").select("value").eq("key", "pack_last_error").maybeSingle();
   let packError: { reason?: string; sample?: string } | null = null;
   try { packError = packErrRow?.value ? JSON.parse(String(packErrRow.value)) : null; } catch { packError = null; }
-  // What will actually be greeted, shown plainly — Guru Purnima was missing
-  // from Google's calendar and only a person looking at the list would catch
-  // that. His own extra dates are merged in so he sees the real picture.
-  const calendar = await festivalCalendar();
-  const manualLines = brief.festivals.split("\n").map((l) => l.trim()).filter(Boolean);
-  const upcoming = festivalsAhead(calendar, new Date(), 120).slice(0, 8);
-  for (let i = 0; i < 120; i++) {
-    const d = new Date(Date.now() + i * 86400e3);
-    for (const name of manualFestivalsOn(manualLines, d)) {
-      upcoming.push(`${d.toLocaleDateString("en-IN", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric", weekday: "long" })} — ${name} (yours)`);
-    }
-  }
-  upcoming.sort((a, b) => new Date(a.split(" — ")[0]).getTime() - new Date(b.split(" — ")[0]).getTime());
+  // A one-line state of the festival list; the choosing happens on its own page.
+  const chosenFestivals = (await loadFestivalDays(
+    svc,
+    new Date().toISOString().slice(0, 10),
+    new Date(Date.now() + 400 * 86400e3).toISOString().slice(0, 10),
+  )).filter((f) => f.greet);
+  const festivalCount = chosenFestivals.length;
+  const nextFestival = chosenFestivals[0]
+    ? `${chosenFestivals[0].name}, ${new Date(`${chosenFestivals[0].on_date}T06:00:00Z`).toLocaleDateString("en-IN", { timeZone: "UTC", day: "numeric", month: "long" })}`
+    : null;
   const supplementLapsed = SUPPLEMENT_UNTIL < new Date().toISOString().slice(0, 10);
   const { data } = await svc
     .from("scheduled_posts")
@@ -157,26 +154,20 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
           <textarea name="stage" rows={4} defaultValue={brief.stage}
             placeholder={"e.g. Two months to go. Most students are in their first exhaustive study of the syllabus — reading chapters properly for the first time, not revising.\nA smaller group who took the classes earlier are on their first revision.\nNobody is in exam mode yet, so no last-minute or exam-eve talk."} />
 
-          <div className="notice ok" style={{ marginTop: 12, fontSize: ".82rem" }}>
-            🎉 <strong>Festival greetings are automatic</strong> — dates come from the public Indian holiday calendar,
-            so Raksha Bandhan, Janmashtami, Ganesh Chaturthi, Diwali and the rest always land on the correct day with
-            nothing for you to update each year. On a festival day the Telegram and Instagram posts become a plain
-            warm wish with nothing about us in them. <strong>Check the list below</strong> — if a day that matters is
-            missing, add it in the box and it will be greeted.
-            <div style={{ marginTop: 8, display: "grid", gap: 2 }}>
-              {upcoming.map((f) => <div key={f} style={{ fontSize: ".8rem" }}>• {f}</div>)}
-              {upcoming.length === 0 && <div style={{ fontSize: ".8rem" }}>Nothing in the next four months.</div>}
-            </div>
+          <div className="card" style={{ marginTop: 12, fontSize: ".82rem" }}>
+            🎉 <strong>Festival greetings</strong> — {festivalCount > 0
+              ? <>{festivalCount} day(s) picked for the year ahead{nextFestival ? <>, next: <strong>{nextFestival}</strong></> : null}.</>
+              : <>not set up yet — the calendar has not been imported.</>}{" "}
+            Choose which days are worth a wish, which are big enough to take over every account, rename anything,
+            or add your own on the <a href="/admin/broadcasts/festivals"><strong>Festival greetings</strong></a> page.
+            {supplementLapsed && (
+              <div className="notice err" style={{ marginTop: 8 }}>
+                ⚠️ Guru Purnima is in no public calendar, so we keep its dates ourselves — and that list has now run
+                out. Add the next one on the Festival greetings page.
+              </div>
+            )}
           </div>
-          {supplementLapsed && (
-            <div className="notice err" style={{ marginTop: 8, fontSize: ".82rem" }}>
-              ⚠️ Guru Purnima is not in any public calendar, so its dates are kept in our own list — and that list
-              now ends. Add the next date in the box below, or ask the developer to extend it.
-            </div>
-          )}
-          <label style={{ marginTop: 10 }}>Any date the list above is missing? <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>— one per line, e.g. &ldquo;29 July — Guru Purnima&rdquo;</span></label>
-          <textarea name="festivals" rows={2} defaultValue={brief.festivals}
-            placeholder={"14 October — our foundation day\n29/07/2026 — a date only we celebrate"} />
+          <input type="hidden" name="festivals" value={brief.festivals} />
 
           <div className="notice ok" style={{ marginTop: 12, fontSize: ".82rem" }}>
             📰 <strong>Profession news is pulled in on its own.</strong> ICAI, NFRA, MCA, RBI, SEBI, NCLT, SFIO and

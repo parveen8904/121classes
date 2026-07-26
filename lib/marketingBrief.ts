@@ -45,9 +45,13 @@ export async function loadBrief(svc = createServiceClient()): Promise<MarketingB
 // the writer draw a lesson from a headline and forbid it from asserting
 // anything the headline does not itself say.
 export async function autoBriefParts(svc = createServiceClient()): Promise<{ festivals: string[]; news: string[] }> {
-  const { festivalCalendar, festivalsAhead } = await import("@/lib/festivals");
+  const { festivalCalendar, festivalsAhead, loadFestivalDays } = await import("@/lib/festivals");
+  const today = new Date().toISOString().slice(0, 10);
+  const in21 = new Date(Date.now() + 21 * 86400e3).toISOString().slice(0, 10);
+  // His own picks first; the raw calendar only until he has made any.
+  const picked = (await loadFestivalDays(svc, today, in21)).filter((f) => f.greet);
   const [cal, recent] = await Promise.all([
-    festivalCalendar(),
+    picked.length ? Promise.resolve(null) : festivalCalendar(),
     svc
       .from("announcements")
       .select("title, kind, published_at")
@@ -56,7 +60,9 @@ export async function autoBriefParts(svc = createServiceClient()): Promise<{ fes
       .limit(20),
   ]);
   return {
-    festivals: festivalsAhead(cal, new Date(), 21),
+    festivals: picked.length
+      ? picked.map((f) => `${new Date(`${f.on_date}T06:00:00Z`).toLocaleDateString("en-IN", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric", weekday: "long" })} — ${f.name}`)
+      : festivalsAhead(cal!, new Date(), 21),
     news: (recent.data ?? []).map((a) => `- ${String(a.title)}`),
   };
 }

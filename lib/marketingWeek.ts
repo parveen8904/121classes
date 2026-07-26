@@ -1,7 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { generateSoftDay } from "@/lib/ai";
 import { autoBriefParts, briefText, loadBrief } from "@/lib/marketingBrief";
-import { festivalCalendar, festivalsOn, isMajorFestival, manualFestivalsOn } from "@/lib/festivals";
+import { festivalCalendar, festivalsOn, isMajorFestival, loadFestivalDays, manualFestivalsOn } from "@/lib/festivals";
 import {
   angleFor, channelFlags, mentionFor, mentionsProduct, slotsForDay, weekSlots, type ChannelKey,
 } from "@/lib/marketingRhythm";
@@ -64,10 +64,16 @@ export async function planWeek(): Promise<PlannedWeek> {
   // Where the students actually are this month — the founder keeps this up to
   // date on the Campaigns page, and nothing is written without reading it.
   // Festival dates and approved news are added to it automatically.
-  const [brief, auto, calendar] = await Promise.all([loadBrief(svc), autoBriefParts(svc), festivalCalendar()]);
+  const [brief, auto, chosen] = await Promise.all([
+    loadBrief(svc),
+    autoBriefParts(svc),
+    // His own festival list decides what is greeted. Only if he has never
+    // imported it do we fall back to the raw calendar, so a fresh install
+    // still greets on Diwali.
+    loadFestivalDays(svc, new Date().toISOString().slice(0, 10), new Date(Date.now() + 30 * 86400e3).toISOString().slice(0, 10)),
+  ]);
   const scenario = briefText(brief, auto);
-  // The founder's own extra dates ("28 August — our foundation day"), matched
-  // on the day being written, alongside the public holiday calendar.
+  const calendar = chosen.length ? null : await festivalCalendar();
   const manualFestivals = brief.festivals.split("\n").map((l) => l.trim()).filter(Boolean);
 
   // Midnight IST today, as a UTC instant — every slot hangs off this.
@@ -90,7 +96,12 @@ export async function planWeek(): Promise<PlannedWeek> {
       const dayLabel = noon.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "long", day: "numeric", month: "long", year: "numeric" });
       // Festivals on this exact date: the public Indian holiday calendar plus
       // anything the founder typed for that date himself.
-      const festivals = [...festivalsOn(calendar, noon), ...manualFestivalsOn(manualFestivals, noon)];
+      const dayKey = noon.toISOString().slice(0, 10);
+      const picked = chosen.filter((f) => f.on_date === dayKey && f.greet);
+      const festivals = picked.length
+        ? picked.map((f) => f.name)
+        : [...(calendar ? festivalsOn(calendar, noon) : []), ...manualFestivalsOn(manualFestivals, noon)];
+      const major = picked.length ? picked.some((f) => f.all_channels) : isMajorFestival(festivals);
       const out = await generateSoftDay({
         dayLabel,
         angle: angleFor(week, day),
@@ -98,7 +109,7 @@ export async function planWeek(): Promise<PlannedWeek> {
         context,
         scenario,
         festivalToday: festivals.length ? festivals.join(" and ") : null,
-        festivalMajor: isMajorFestival(festivals),
+        festivalMajor: major,
         avoid,
         mention: mentionsProduct(week, day) ? mentionFor(week, day) : null,
       });

@@ -5,11 +5,13 @@ import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../../_lib/util";
 import { generateSubjectiveQuestions, detectPaperMeta } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
+import { assertArea } from "@/lib/adminAccess";
 
 // PAPER MODE: upload a question PDF + solution PDF and set the scheduled time and
 // total marks. When a question PDF is present, students get the timed download →
 // solve → upload-handwritten-PDF flow (graded by AI against the solution PDF).
 export async function savePaperConfig(formData: FormData) {
+  await assertArea(null);
   const sectionId = str(formData.get("section_id"));
   if (!sectionId) return;
   const supabase = createClient();
@@ -61,6 +63,7 @@ function parseRubric(raw: string): { point: string; marks: number }[] {
 
 // Generate descriptive questions from a transcript (or the AI Repository), once.
 export async function generateSubjectiveFromTranscript(formData: FormData) {
+  await assertArea(null);
   const sectionId = str(formData.get("section_id"));
   let transcript = str(formData.get("transcript"));
   const count = num(formData.get("count")) || 5;
@@ -92,6 +95,7 @@ export async function generateSubjectiveFromTranscript(formData: FormData) {
 
 // Attach a reference PDF (question paper / answer key) to the test section.
 export async function attachSectionPdf(formData: FormData) {
+  await assertArea(null);
   const sectionId = str(formData.get("section_id"));
   if (!sectionId) return;
   const url = str(formData.get("pdf_url"));
@@ -103,6 +107,7 @@ export async function attachSectionPdf(formData: FormData) {
 }
 
 export async function addSubjective(formData: FormData) {
+  await assertArea(null);
   const sectionId = str(formData.get("section_id"));
   const prompt = str(formData.get("prompt"));
   if (!sectionId || !prompt) return;
@@ -119,6 +124,7 @@ export async function addSubjective(formData: FormData) {
 }
 
 export async function updateSubjective(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const sectionId = str(formData.get("section_id"));
   const prompt = str(formData.get("prompt"));
@@ -138,6 +144,7 @@ export async function updateSubjective(formData: FormData) {
 }
 
 export async function deleteSubjective(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const sectionId = str(formData.get("parentId"));
   const supabase = createClient();

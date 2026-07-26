@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { slugify, str, num } from "../_lib/util";
+import { assertArea } from "@/lib/adminAccess";
 
 export async function createCourse(formData: FormData) {
+  await assertArea(null);
   const title = str(formData.get("title"));
   if (!title) return;
   const supabase = createClient();
@@ -20,6 +22,7 @@ export async function createCourse(formData: FormData) {
 }
 
 export async function updateCourse(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const title = str(formData.get("title"));
   if (!id || !title) return;
@@ -39,6 +42,7 @@ export async function updateCourse(formData: FormData) {
 }
 
 export async function toggleCoursePublish(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const next = formData.get("next") === "true";
   const supabase = createClient();
@@ -47,6 +51,7 @@ export async function toggleCoursePublish(formData: FormData) {
 }
 
 export async function deleteCourse(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const supabase = createClient();
   await supabase.from("courses").delete().eq("id", id);

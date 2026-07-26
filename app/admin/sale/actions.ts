@@ -4,10 +4,12 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { str } from "../_lib/util";
 import { SALE_KEYS } from "@/lib/sale";
+import { assertArea } from "@/lib/adminAccess";
 
 // Save the sale configuration. Everything lives in site_settings so there's no
 // schema to manage; the sale turns itself on/off purely from the dates.
 export async function updateSale(formData: FormData) {
+  await assertArea(null);
   const supabase = createClient();
   const rows = SALE_KEYS.map((k) => {
     if (k === "sale_enabled") return { key: k, value: formData.get(k) ? "1" : "" };

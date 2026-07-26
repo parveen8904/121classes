@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../_lib/util";
+import { assertArea } from "@/lib/adminAccess";
 
 export async function updatePlan(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const name = str(formData.get("name"));
   if (!id || !name) return;
@@ -23,6 +25,7 @@ export async function updatePlan(formData: FormData) {
 
 // Gold validity options shown to students (comma-separated months).
 export async function setGoldValidityOptions(formData: FormData) {
+  await assertArea(null);
   const raw = str(formData.get("gold_validity_options"));
   const cleaned = raw
     .split(",")

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { str, num } from "../_lib/util";
 import { notifyByEmail, emailShell } from "@/lib/notify";
+import { assertArea } from "@/lib/adminAccess";
 
 // A granted subscription must also appear on the student's "My courses" shelf,
 // or they can't see what they were given (service client — shelf RLS is
@@ -74,6 +75,7 @@ async function planIdForTier(
 }
 
 export async function grantSubscription(formData: FormData) {
+  await assertArea(null);
   const email = str(formData.get("email")).toLowerCase();
   const courseId = str(formData.get("course_id"));
   const subjectRaw = str(formData.get("subject_id"));
@@ -128,6 +130,7 @@ export async function grantSubscription(formData: FormData) {
 }
 
 export async function bulkGrant(formData: FormData) {
+  await assertArea(null);
   const raw = str(formData.get("emails"));
   const courseId = str(formData.get("course_id"));
   const subjectRaw = str(formData.get("subject_id"));
@@ -204,6 +207,7 @@ export async function bulkGrant(formData: FormData) {
 }
 
 export async function revokeSubscription(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const supabase = createClient();
   await supabase.from("subscriptions").update({ status: "cancelled", auto_renew: false }).eq("id", id);
@@ -211,6 +215,7 @@ export async function revokeSubscription(formData: FormData) {
 }
 
 export async function extendSubscription(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const months = num(formData.get("months"), 1);
   const supabase = createClient();

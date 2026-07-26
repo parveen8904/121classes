@@ -1,6 +1,6 @@
 "use server";
 
-import { currentStaff, staffCanArea } from "@/lib/adminAccess";
+import { currentStaff, staffCanArea, assertArea } from "@/lib/adminAccess";
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -17,6 +17,7 @@ async function adminId(): Promise<string | null> {
 // Save the admin's extra blocked terms (competitor names, banned phrases) —
 // one per line. Applied instantly to Telegram, Discord and website messages.
 export async function saveBlockedTerms(formData: FormData) {
+  await assertArea("moderation");
   const me = await adminId();
   if (!me) return;
   const terms = String(formData.get("terms") ?? "")
@@ -29,6 +30,7 @@ export async function saveBlockedTerms(formData: FormData) {
 
 // Approve a hidden/flagged message → make it visible again.
 export async function restoreMessage(formData: FormData) {
+  await assertArea("moderation");
   const me = await adminId();
   if (!me) return;
   const id = str(formData.get("id"));
@@ -40,6 +42,7 @@ export async function restoreMessage(formData: FormData) {
 
 // Hide a message on the site + delete it from Telegram (if it's still there).
 export async function hideMessage(formData: FormData) {
+  await assertArea("moderation");
   const me = await adminId();
   if (!me) return;
   const id = str(formData.get("id"));
@@ -56,6 +59,7 @@ export async function hideMessage(formData: FormData) {
 
 // Ban or mute the sender of a message (in that group).
 export async function banSender(formData: FormData) {
+  await assertArea("moderation");
   const me = await adminId();
   if (!me) return;
   const id = str(formData.get("id"));
@@ -74,6 +78,7 @@ export async function banSender(formData: FormData) {
 }
 
 export async function unbanUser(formData: FormData) {
+  await assertArea("moderation");
   const me = await adminId();
   if (!me) return;
   const banId = str(formData.get("ban_id"));

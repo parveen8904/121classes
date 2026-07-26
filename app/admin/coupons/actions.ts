@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { str, num } from "../_lib/util";
+import { assertArea } from "@/lib/adminAccess";
 
 export async function createCoupon(formData: FormData) {
+  await assertArea(null);
   const code = str(formData.get("code")).toUpperCase().replace(/\s+/g, "");
   if (!code) return;
   const percent = num(formData.get("percent_off"), 0);
@@ -29,6 +31,7 @@ export async function createCoupon(formData: FormData) {
 }
 
 export async function editCoupon(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   if (!id) return;
   const code = str(formData.get("code")).toUpperCase().replace(/\s+/g, "");
@@ -55,6 +58,7 @@ export async function editCoupon(formData: FormData) {
 }
 
 export async function deleteCoupon(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const supabase = createClient();
   await supabase.from("coupons").delete().eq("id", id);
@@ -62,6 +66,7 @@ export async function deleteCoupon(formData: FormData) {
 }
 
 export async function toggleCoupon(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const next = formData.get("next") === "true";
   const supabase = createClient();
@@ -72,6 +77,7 @@ export async function toggleCoupon(formData: FormData) {
 // Email a coupon to a sponsor — just the code, a friendly note, and the Sponsor
 // Guide attached as a PDF. One click; the person gets everything they need.
 export async function emailCoupon(formData: FormData) {
+  await assertArea(null);
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const { data: me } = user ? await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle() : { data: null };

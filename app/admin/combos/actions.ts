@@ -3,10 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { str, num, nullable } from "../_lib/util";
+import { assertArea } from "@/lib/adminAccess";
 
 const TIERS = ["bronze", "silver", "gold"];
 
 export async function createCombo(formData: FormData) {
+  await assertArea(null);
   const title = str(formData.get("title"));
   if (!title) return;
   const tier = str(formData.get("tier"));
@@ -35,6 +37,7 @@ export async function createCombo(formData: FormData) {
 }
 
 export async function deleteCombo(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const supabase = createClient();
   await supabase.from("combos").delete().eq("id", id);
@@ -43,6 +46,7 @@ export async function deleteCombo(formData: FormData) {
 }
 
 export async function toggleCombo(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const next = formData.get("next") === "true";
   const supabase = createClient();

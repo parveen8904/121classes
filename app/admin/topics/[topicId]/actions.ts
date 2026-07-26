@@ -9,11 +9,13 @@ import { summarizeClass } from "@/lib/ai";
 import { extractPdfText } from "@/lib/pdf";
 import { createServiceClient } from "@/lib/supabase/service";
 import { normalizeWindow } from "@/app/learn/_lib/attempt";
+import { assertArea } from "@/lib/adminAccess";
 
 // Attach AI-training material (question bank / ICAI / RTP / past papers / book)
 // to a topic. PDF text is extracted ONCE so the AI is grounded on it for this
 // topic's doubts, MCQs and descriptive questions.
 export async function addTopicMaterial(formData: FormData) {
+  await assertArea(null);
   const topicId = str(formData.get("topicId"));
   const subjectId = str(formData.get("subjectId")) || null;
   const title = str(formData.get("title"));
@@ -44,6 +46,7 @@ export async function addTopicMaterial(formData: FormData) {
 }
 
 export async function deleteTopicMaterial(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const topicId = str(formData.get("topicId"));
   if (!id) return;
@@ -84,6 +87,7 @@ function yymmOf(taughtOn: unknown) {
 }
 
 export async function resequenceSubjectClasses(subjectId: string) {
+  await assertArea(null);
   const svc = createServiceClient();
   const { data: subject } = await svc.from("subjects").select("code").eq("id", subjectId).maybeSingle();
   const subCode = cleanCode((subject as { code?: string } | null)?.code ?? "");
@@ -184,6 +188,7 @@ function parseImportance(raw: string): Record<string, string> {
 // importance, important questions, revision/ICAI materials, "updated content
 // coming" notice, and the combined-topic flag + subject-wide materials).
 export async function updateTopicMeta(formData: FormData) {
+  await assertArea(null);
   const topicId = str(formData.get("topicId"));
   if (!topicId) return;
   const nn = (k: string) => str(formData.get(k)) || null;
@@ -220,6 +225,7 @@ export async function updateTopicMeta(formData: FormData) {
 // Per-class duration (minutes) used by the study planner. Stored in
 // site_settings under dur:<topicId>.
 export async function setClassDuration(formData: FormData) {
+  await assertArea(null);
   const topicId = str(formData.get("topicId"));
   if (!topicId) return;
   const minutes = num(formData.get("minutes"));
@@ -235,6 +241,7 @@ export async function setClassDuration(formData: FormData) {
 // Read a class section's transcript and store an AI summary (overview, number
 // of questions solved, homework, key concepts) on the section config.
 export async function summarizeClassSection(formData: FormData) {
+  await assertArea(null);
   const sectionId = str(formData.get("sectionId"));
   const topicId = str(formData.get("topicId"));
   if (!sectionId) return;
@@ -278,6 +285,7 @@ async function extractContentPdfs(cfg: Record<string, unknown>): Promise<string>
 }
 
 export async function createSection(formData: FormData) {
+  await assertArea(null);
   const topicId = str(formData.get("topicId"));
   const title = str(formData.get("title"));
   const type = str(formData.get("type"));
@@ -317,6 +325,7 @@ export async function createSection(formData: FormData) {
 }
 
 export async function updateSection(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const topicId = str(formData.get("topicId"));
   const title = str(formData.get("title"));
@@ -355,6 +364,7 @@ export async function updateSection(formData: FormData) {
 // course: creating one adds it to the template + all topics; rename/delete
 // propagate by name so the set stays uniform everywhere. -----
 export async function createTopicGroup(formData: FormData) {
+  await assertArea(null);
   const topicId = str(formData.get("topicId"));
   const name = str(formData.get("name"));
   if (!name) return;
@@ -364,6 +374,7 @@ export async function createTopicGroup(formData: FormData) {
 }
 
 export async function applyStandardSections(formData: FormData) {
+  await assertArea(null);
   const topicId = str(formData.get("topicId"));
   const { applyTemplateToAllTopics } = await import("@/lib/sectionTemplate");
   await applyTemplateToAllTopics();
@@ -371,6 +382,7 @@ export async function applyStandardSections(formData: FormData) {
 }
 
 export async function renameTopicGroup(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const topicId = str(formData.get("topicId"));
   const name = str(formData.get("name"));
@@ -387,6 +399,7 @@ export async function renameTopicGroup(formData: FormData) {
 // Deleting a section removes it from EVERY topic + the template; the content
 // items just become "unsorted" (group_id goes null via the FK), so nothing is lost.
 export async function deleteTopicGroup(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const topicId = str(formData.get("parentId")) || str(formData.get("topicId"));
   if (!id) return;
@@ -400,6 +413,7 @@ export async function deleteTopicGroup(formData: FormData) {
 }
 
 export async function moveTopicGroup(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const topicId = str(formData.get("topicId"));
   const dir = str(formData.get("dir")); // "up" | "down"
@@ -417,6 +431,7 @@ export async function moveTopicGroup(formData: FormData) {
 }
 
 export async function toggleSectionPublish(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const topicId = str(formData.get("topicId"));
   const next = formData.get("next") === "true";
@@ -426,6 +441,7 @@ export async function toggleSectionPublish(formData: FormData) {
 }
 
 export async function deleteSection(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const topicId = str(formData.get("parentId"));
   const supabase = createClient();

@@ -69,6 +69,7 @@ export async function deleteFestival(formData: FormData) {
 
 // Everything from today onwards that a greeting could land on.
 export async function upcomingFestivals() {
+  if (!(await requireAdmin())) return [];
   const today = new Date().toISOString().slice(0, 10);
   const until = new Date(Date.now() + 400 * 86400e3).toISOString().slice(0, 10);
   return loadFestivalDays(createServiceClient(), today, until);

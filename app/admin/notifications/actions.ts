@@ -11,6 +11,7 @@ import {
   emailConfigured,
 } from "@/lib/notify";
 import { str } from "../_lib/util";
+import { assertArea } from "@/lib/adminAccess";
 
 // Recipients processed per click (serverless time budget). The Telegram CHANNEL
 // post is a single call and always reaches everyone regardless of this cap.
@@ -18,6 +19,7 @@ const EMAIL_CAP = 500;
 const TG_DM_CAP = 1000;
 
 export async function broadcast(formData: FormData) {
+  await assertArea("announcements");
   const title = str(formData.get("title"));
   const body = str(formData.get("body"));
   const link = str(formData.get("link"));

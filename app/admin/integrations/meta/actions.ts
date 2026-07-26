@@ -4,10 +4,12 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { str } from "../../_lib/util";
+import { assertArea } from "@/lib/adminAccess";
 
 // One-tap wiring: save the chosen Instagram business-account id so campaigns
 // auto-post to it.
 export async function useMetaAccount(formData: FormData) {
+  await assertArea(null);
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;

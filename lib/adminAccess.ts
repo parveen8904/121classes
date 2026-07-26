@@ -59,6 +59,20 @@ export async function requireArea(area: string): Promise<boolean> {
   return staffCanArea(await currentStaff(), area);
 }
 
+// The same check, but it STOPS the action instead of returning a boolean a
+// caller can forget to read.
+//
+// Every "use server" export is a public POST endpoint — the admin layout only
+// guards the PAGE, not the actions the page uses. An action that skipped this
+// and used the service client was a way in for anyone who knew its id, so this
+// belongs at the top of every one of them. `area` null = super-admins only
+// (integrations, users, plans, and everything else not delegable to staff).
+export async function assertArea(area: string | null): Promise<void> {
+  const staff = await currentStaff();
+  const ok = area ? staffCanArea(staff, area) : staff?.role === "admin";
+  if (!ok) throw new Error("Not authorised — this action needs admin rights.");
+}
+
 // Which /admin path prefixes this staff member may open (for layout/nav gating).
 export function allowedPrefixes(staff: Staff): string[] {
   if (staff.role === "admin") return ["/admin"]; // everything

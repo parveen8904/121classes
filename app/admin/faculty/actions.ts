@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { str, nullable } from "../_lib/util";
+import { assertArea } from "@/lib/adminAccess";
 
 export async function createFaculty(formData: FormData) {
+  await assertArea(null);
   const full_name = str(formData.get("full_name"));
   if (!full_name) return;
   const supabase = createClient();
@@ -19,6 +21,7 @@ export async function createFaculty(formData: FormData) {
 }
 
 export async function updateFaculty(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const full_name = str(formData.get("full_name"));
   if (!id || !full_name) return;
@@ -37,6 +40,7 @@ export async function updateFaculty(formData: FormData) {
 }
 
 export async function deleteFaculty(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const supabase = createClient();
   await supabase.from("faculties").delete().eq("id", id);

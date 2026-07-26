@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { str, num, nullable } from "../_lib/util";
+import { assertArea } from "@/lib/adminAccess";
 
 function payload(formData: FormData) {
   return {
@@ -25,6 +26,7 @@ function payload(formData: FormData) {
 }
 
 export async function createAmendment(formData: FormData) {
+  await assertArea("announcements");
   const p = payload(formData);
   if (!p.title) return;
   await createClient().from("amendments").insert(p);
@@ -38,6 +40,7 @@ export async function createAmendment(formData: FormData) {
 }
 
 export async function updateAmendment(formData: FormData) {
+  await assertArea("announcements");
   const id = str(formData.get("id"));
   const p = payload(formData);
   if (!id || !p.title) return;
@@ -46,6 +49,7 @@ export async function updateAmendment(formData: FormData) {
 }
 
 export async function deleteAmendment(formData: FormData) {
+  await assertArea("announcements");
   const id = str(formData.get("id"));
   if (!id) return;
   await createClient().from("amendments").delete().eq("id", id);

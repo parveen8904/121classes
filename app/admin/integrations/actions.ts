@@ -325,6 +325,8 @@ async function sbApi(path: string, init: RequestInit = {}): Promise<{ ok: boolea
 // Read-only snapshot for the Integrations page: current compute size + the
 // auth server's DB pool setting. Null when no token is saved.
 export async function getSupabaseInfra(): Promise<{ compute: string; authPool: number | null } | null> {
+  // Reads the Supabase management API with a privileged token — admins only.
+  if (!(await requireAdmin())) return null;
   const token = await getSecret("SUPABASE_ACCESS_TOKEN");
   if (!token) return null;
   const [addons, auth] = await Promise.all([sbApi("/billing/addons"), sbApi("/config/auth")]);

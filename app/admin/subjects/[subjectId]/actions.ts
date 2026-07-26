@@ -6,8 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { slugify, str, num, nullable } from "../../_lib/util";
 import { normalizeWindow } from "@/app/learn/_lib/attempt";
+import { assertArea } from "@/lib/adminAccess";
 
 export async function createTopic(formData: FormData) {
+  await assertArea(null);
   const subjectId = str(formData.get("subjectId"));
   const title = str(formData.get("title"));
   if (!subjectId || !title) return;
@@ -34,6 +36,7 @@ export async function createTopic(formData: FormData) {
 // One combined topic per subject (subject-wide mocks, amendments, past papers,
 // full book). Placed after the regular topics.
 export async function addCombinedTopic(formData: FormData) {
+  await assertArea(null);
   const subjectId = str(formData.get("subjectId"));
   if (!subjectId) return;
   const supabase = createClient();
@@ -57,6 +60,7 @@ export async function addCombinedTopic(formData: FormData) {
 }
 
 export async function deleteTopic(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const subjectId = str(formData.get("parentId"));
   const supabase = createClient();
@@ -66,6 +70,7 @@ export async function deleteTopic(formData: FormData) {
 }
 
 export async function toggleTopicPublish(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const subjectId = str(formData.get("subjectId"));
   const next = formData.get("next") === "true";
@@ -78,6 +83,7 @@ export async function toggleTopicPublish(formData: FormData) {
 // this window unless the topic sets its own override. normalizeWindow() drops a
 // reversed "to" so an impossible window can never hide the subject.
 export async function updateSubjectApplicability(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   if (!id) return;
   const { from, to } = normalizeWindow(
@@ -93,6 +99,7 @@ export async function updateSubjectApplicability(formData: FormData) {
 
 // Save the admin's free-text remarks/notes for a subject.
 export async function updateSubjectRemarks(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   if (!id) return;
   await createServiceClient().from("subjects").update({ remarks: str(formData.get("remarks")) || null }).eq("id", id);
@@ -101,6 +108,7 @@ export async function updateSubjectRemarks(formData: FormData) {
 
 // Subject-level "most important questions" for first & second revision.
 export async function saveSubjectMIQ(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   if (!id) return;
   await createServiceClient().from("subjects").update({
@@ -112,6 +120,7 @@ export async function saveSubjectMIQ(formData: FormData) {
 
 // Per-chapter weightage, entered once at subject level for every topic.
 export async function saveSubjectWeightage(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   if (!id) return;
   const svc = createServiceClient();
@@ -126,6 +135,7 @@ export async function saveSubjectWeightage(formData: FormData) {
 // Upload a subject-level material (ICAI / MTP / RTP / past papers), attempt-tagged.
 // ICAI is AI-only (copyright — never shown to students); the rest are shown.
 export async function addSubjectMaterial(formData: FormData) {
+  await assertArea(null);
   const subjectId = str(formData.get("subjectId"));
   const kind = str(formData.get("kind")) || "rtp";
   // A custom item can carry a PDF OR a video link (either satisfies the form).
@@ -174,6 +184,7 @@ async function triggerCaseParse() {
 }
 
 export async function createCaseSet(formData: FormData) {
+  await assertArea(null);
   const subjectId = str(formData.get("subjectId"));
   const fileUrl = str(formData.get("file_url"));
   if (!subjectId || !fileUrl) return;
@@ -205,12 +216,14 @@ export async function createCaseSet(formData: FormData) {
 }
 
 export async function continueCaseParse(formData: FormData) {
+  await assertArea(null);
   const subjectId = str(formData.get("subjectId"));
   await triggerCaseParse();
   if (subjectId) revalidatePath(`/admin/subjects/${subjectId}`);
 }
 
 export async function toggleCaseSetPublish(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const subjectId = str(formData.get("subjectId"));
   if (!id) return;
@@ -219,6 +232,7 @@ export async function toggleCaseSetPublish(formData: FormData) {
 }
 
 export async function deleteCaseSet(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const subjectId = str(formData.get("parentId"));
   if (!id) return;
@@ -227,6 +241,7 @@ export async function deleteCaseSet(formData: FormData) {
 }
 
 export async function deleteSubjectMaterial(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const subjectId = str(formData.get("parentId"));
   if (!id) return;
@@ -238,6 +253,7 @@ export async function deleteSubjectMaterial(formData: FormData) {
 // the existing file (so you can, e.g., add a suggested-answers PDF to a past
 // paper months later without re-uploading the question paper).
 export async function editSubjectMaterial(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const subjectId = str(formData.get("subjectId"));
   if (!id) return;
@@ -308,6 +324,7 @@ function parseSlabInput(raw: string): { upto: number; rate: number }[] | null {
 }
 
 export async function updateSubjectInline(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const title = str(formData.get("title"));
   if (!id || !title) return;
@@ -352,6 +369,7 @@ export async function updateSubjectInline(formData: FormData) {
 // ICAI, question bank, papers, amendments) should carry over without
 // re-uploading. Files aren't duplicated in storage — only the catalog rows.
 export async function copyTopicResources(formData: FormData) {
+  await assertArea(null);
   const subjectId = str(formData.get("subjectId"));
   const fromTopicId = str(formData.get("from_topic_id"));
   if (!subjectId || !fromTopicId) return;
@@ -397,6 +415,7 @@ export async function copyTopicResources(formData: FormData) {
 
 // Replace the subject's faculty set with whatever is checked.
 export async function setSubjectFaculty(formData: FormData) {
+  await assertArea(null);
   const subjectId = str(formData.get("subjectId"));
   if (!subjectId) return;
   const facultyIds = formData.getAll("faculty_id").map((v) => String(v));

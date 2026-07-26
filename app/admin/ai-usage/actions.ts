@@ -3,10 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { AI_TOGGLES } from "@/lib/ai";
+import { assertArea } from "@/lib/adminAccess";
 
 // Save which AI services are switched ON. Anything not ticked is stored in the
 // disabled list, so that feature stops making AI calls (cost control).
 export async function saveAiFeatures(formData: FormData) {
+  await assertArea(null);
   const disabled = AI_TOGGLES.filter((t) => formData.get(`ai_on_${t.key}`) !== "on").map((t) => t.key);
   const supabase = createClient();
   await supabase
@@ -16,6 +18,7 @@ export async function saveAiFeatures(formData: FormData) {
 }
 
 export async function saveAiSettings(formData: FormData) {
+  await assertArea(null);
   const supabase = createClient();
   const rows = [
     { key: "ai_monthly_cap_usd", value: String(Number(formData.get("ai_monthly_cap_usd")) || 0) },

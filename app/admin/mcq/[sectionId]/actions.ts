@@ -6,9 +6,11 @@ import { str, num, nullable } from "../../_lib/util";
 import { generateMcqs, extractMcqsFromPdf } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { saveMcqExplanation } from "@/lib/answers";
+import { assertArea } from "@/lib/adminAccess";
 
 // Attach a reference PDF (question paper / answer key) to the test section.
 export async function attachSectionPdf(formData: FormData) {
+  await assertArea(null);
   const sectionId = str(formData.get("section_id"));
   if (!sectionId) return;
   const url = str(formData.get("pdf_url"));
@@ -26,6 +28,7 @@ export async function attachSectionPdf(formData: FormData) {
 // Questions whose answer the PDF does not mark are skipped (never guessed) and
 // reported back so you can add the answer and re-import.
 export async function importMcqsFromPdf(formData: FormData) {
+  await assertArea(null);
   const sectionId = str(formData.get("section_id"));
   const pdfUrl = str(formData.get("pdf_url"));
   if (!sectionId || !pdfUrl) return;
@@ -91,6 +94,7 @@ export async function importMcqsFromPdf(formData: FormData) {
 }
 
 export async function addMcq(formData: FormData) {
+  await assertArea(null);
   const sectionId = str(formData.get("section_id"));
   const question = str(formData.get("question"));
   if (!sectionId || !question) return;
@@ -132,6 +136,7 @@ export async function addMcq(formData: FormData) {
 // Generate MCQs from a pasted transcript via AI, ONCE, and store them.
 // Students then take the test from stored questions — no per-student AI tokens.
 export async function generateMcqsFromTranscript(formData: FormData) {
+  await assertArea(null);
   const sectionId = str(formData.get("section_id"));
   let transcript = str(formData.get("transcript"));
   const count = num(formData.get("count")) || 10;
@@ -190,6 +195,7 @@ export async function generateMcqsFromTranscript(formData: FormData) {
 // Edit an existing question — text, options, correct answer, concept AND the
 // per-option explanations (stored in site_settings). No AI.
 export async function updateMcq(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const sectionId = str(formData.get("section_id"));
   const question = str(formData.get("question"));
@@ -225,6 +231,7 @@ export async function updateMcq(formData: FormData) {
 //   Concept: <concept/standard/section>   → feeds "concepts to revise"
 //   Why: <one-line explanation>           → shown as the correct-answer reason
 export async function bulkAddMcq(formData: FormData) {
+  await assertArea(null);
   const sectionId = str(formData.get("section_id"));
   const raw = str(formData.get("bulk"));
   if (!sectionId || !raw) return;
@@ -293,6 +300,7 @@ export async function bulkAddMcq(formData: FormData) {
 // "2 MCQs per class for the whole topic" — the standard chapter test. Runs once
 // (AI), tagging each question with its source class + concept; stored statically.
 export async function generateChapterTest(formData: FormData) {
+  await assertArea(null);
   const sectionId = str(formData.get("section_id"));
   if (!sectionId) return;
   const replace = formData.get("replace") === "on";
@@ -385,6 +393,7 @@ export async function generateChapterTest(formData: FormData) {
 }
 
 export async function deleteMcq(formData: FormData) {
+  await assertArea(null);
   const id = str(formData.get("id"));
   const sectionId = str(formData.get("parentId"));
   const supabase = createClient();

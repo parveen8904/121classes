@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { str } from "../_lib/util";
+import { assertArea } from "@/lib/adminAccess";
 
 const KEYS = [
   "logo_url",
@@ -25,6 +26,7 @@ const KEYS = [
 ];
 
 export async function updateSiteSettings(formData: FormData) {
+  await assertArea(null);
   const supabase = createClient();
   const rows = KEYS.map((k) => ({ key: k, value: str(formData.get(k)) || null }));
   await supabase.from("site_settings").upsert(rows, { onConflict: "key" });

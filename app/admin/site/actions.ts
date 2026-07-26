@@ -23,6 +23,9 @@ const KEYS = [
   "app_url_windows",
   "app_url_ios",
   "app_url_android",
+  // Google Search Console's token — rendered as a meta tag on the homepage,
+  // which verifies the site without any DNS change.
+  "google_site_verification",
 ];
 
 export async function updateSiteSettings(formData: FormData) {

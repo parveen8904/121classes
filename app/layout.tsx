@@ -28,14 +28,27 @@ const getSupportLinks = unstable_cache(
     const { data } = await svc
       .from("site_settings")
       .select("key, value")
-      .in("key", ["support_whatsapp", "support_phone", "support_telegram", "whatsapp_faculty", "support_youtube", "support_instagram", "support_twitter", "support_facebook"]);
+      .in("key", ["support_whatsapp", "support_phone", "support_telegram", "whatsapp_faculty", "support_youtube", "support_instagram", "support_twitter", "support_facebook", "google_site_verification"]);
     return Object.fromEntries((data ?? []).map((r) => [r.key, r.value as string | null]));
   },
   ["layout-support-links"],
   { revalidate: 300 },
 );
 
-export const metadata: Metadata = {
+// Google Search Console verification without touching DNS.
+//
+// The DNS route kept failing because three different tokens are involved — the
+// one Search Console is asking for, and two older ones already in the zone at
+// GoDaddy. This meta tag is checked by Google on the homepage instead: paste
+// the token in Admin → Site and it appears within a minute, no propagation, no
+// registrar, and it cannot disturb the SPF or email records.
+export async function generateMetadata(): Promise<Metadata> {
+  const links = await getSupportLinks();
+  const token = (links as Record<string, string | null>).google_site_verification;
+  return token ? { ...baseMetadata, verification: { google: token } } : baseMetadata;
+}
+
+const baseMetadata: Metadata = {
   metadataBase: new URL("https://caparveensharma.com"),
   title: {
     default: "CA Parveen Sharma — AI-Enabled CA Coaching | caparveensharma.com",

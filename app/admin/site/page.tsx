@@ -32,6 +32,22 @@ export default async function SiteImagesPage() {
           folder="site"
           label="Founder photo (CA Parveen Sharma)"
         />
+
+        <label htmlFor="gsv" style={{ marginTop: 14 }}>
+          Google Search Console token
+        </label>
+        <input
+          id="gsv"
+          name="google_site_verification"
+          defaultValue={m.get("google_site_verification") ?? ""}
+          placeholder="paste only the content value, e.g. CaIsk_Q-Pudl5oxRxRCmeSo1Zu..."
+        />
+        <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
+          In Search Console choose <strong>HTML tag</strong> as the verification method and copy just the
+          <code> content=&quot;…&quot;</code> value into this box. Save, wait a minute, then press Verify. This
+          avoids DNS entirely — nothing at your domain registrar is touched, so your email records cannot be
+          disturbed.
+        </p>
         <div style={{ marginTop: 18 }}>
           <ImageUpload
             name="hero_banner"

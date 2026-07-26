@@ -64,8 +64,12 @@ const FRESH_DAYS = 14;
 // civil service, "MCA" is anything, "RBI" is the whole economy — so those get
 // a couple of words of context. The rest are searched as the founder wrote
 // them.
+// "IAS" was in the keyword list and brought back civil-services coaching
+// material — a Vision IAS piece on a Constitution amendment bill. Even
+// qualified with "accounting standard" it is the wrong word to search on in
+// India, and IFRS / IASB / Ind AS already cover the standards themselves, so
+// it has been dropped from the keywords rather than patched.
 const QUALIFIER: Record<string, string> = {
-  ias: "accounting standard",
   mca: "companies act",
   rbi: "banks regulation",
   sebi: "(disclosure OR audit OR accounting)",
@@ -194,7 +198,10 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
         title: it.title.slice(0, 280),
         body: it.body || null,
         link_url: it.link,
-        // The story's own date, so "newest first" means what it says.
+        // Two different facts, kept apart: story_at is when the article was
+        // published (null when the feed didn't say), published_at stays our
+        // own record timestamp.
+        story_at: it.publishedAt,
         published_at: it.publishedAt ?? new Date().toISOString(),
         is_published: false, // pending faculty approval
         from_feed: true,

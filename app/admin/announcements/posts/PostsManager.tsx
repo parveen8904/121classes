@@ -14,7 +14,7 @@ type Post = {
   is_published: boolean;
   broadcast_at: string | null;
   from_feed: boolean;
-  published_at: string | null;   // when the STORY was published
+  story_at: string | null;       // when the STORY was published (null = unknown)
   created_at: string | null;     // when our feed picked it up
 };
 
@@ -116,7 +116,7 @@ export default function PostsManager({ posts, actions }: { posts: Post[]; action
                     <span className="muted" style={{ fontSize: ".82rem" }}>
                       {KIND_LABEL[a.kind] ?? a.kind} · {a.is_published ? "🟢 published" : "⚪ draft"}
                       {a.from_feed ? " · 📰 feed" : ""}{a.broadcast_at ? " · 📢" : ""}
-                      {a.published_at ? ` · published ${day(a.published_at)}` : ""}
+                      {a.story_at ? ` · published ${day(a.story_at)}` : a.from_feed ? " · publish date unknown" : ""}
                       {a.from_feed && a.created_at ? ` · fetched ${day(a.created_at)}` : ""}
                     </span>
                   </summary>

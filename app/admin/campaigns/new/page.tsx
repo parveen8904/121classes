@@ -16,7 +16,7 @@ export const metadata = { title: "Start a campaign — Admin" };
 // mentioned, and where it goes. Nothing is scheduled here — the next screen
 // shows every post for reading and editing first.
 
-type Row = { id: string; title: string; body?: string | null; link_url?: string | null; kind?: string; published_at?: string; slug?: string; description?: string | null; created_at?: string };
+type Row = { id: string; title: string; body?: string | null; link_url?: string | null; kind?: string; published_at?: string; story_at?: string | null; slug?: string; description?: string | null; created_at?: string };
 
 // Two different dates, and the difference matters: when the story was
 // published, and when our feed picked it up.
@@ -57,7 +57,7 @@ export default async function NewCampaignPage(props: { searchParams: Promise<{ k
   const svc = createServiceClient();
 
   const [{ data: news }, { data: articles }, festivals, brief, status] = await Promise.all([
-    kind === "news" ? svc.from("announcements").select("id, title, body, link_url, kind, published_at, created_at").order("published_at", { ascending: false }).limit(60) : Promise.resolve({ data: [] }),
+    kind === "news" ? svc.from("announcements").select("id, title, body, link_url, kind, published_at, story_at, created_at").order("published_at", { ascending: false }).limit(60) : Promise.resolve({ data: [] }),
     kind === "article" ? svc.from("articles").select("id, title, slug, description, created_at").eq("is_published", true).order("created_at", { ascending: false }).limit(60) : Promise.resolve({ data: [] }),
     loadFestivalDays(svc, new Date().toISOString().slice(0, 10), new Date(Date.now() + 120 * 86400e3).toISOString().slice(0, 10)),
     loadBrief(svc),
@@ -115,7 +115,7 @@ export default async function NewCampaignPage(props: { searchParams: Promise<{ k
                     {sp.pick === a.id ? "✓ " : ""}<strong>{a.title}</strong>
                     <span style={{ fontSize: ".74rem", opacity: 0.75, display: "block", marginTop: 2 }}>
                       {kind === "news"
-                        ? <>published {dayFmt(a.published_at) || "date unknown"} · picked up by us {dayFmt(a.created_at)}</>
+                        ? <>{a.story_at ? `published ${dayFmt(a.story_at)}` : "publish date unknown"} · picked up by us {dayFmt(a.created_at)}</>
                         : <>published {dayFmt(a.created_at)}</>}
                     </span>
                   </a>

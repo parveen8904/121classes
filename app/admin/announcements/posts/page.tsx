@@ -7,7 +7,7 @@ export default async function AllPostsPage() {
   const supabase = createClient();
   const { data: items } = await supabase
     .from("announcements")
-    .select("id, kind, title, body, link_url, is_published, broadcast_at, from_feed, published_at, created_at")
+    .select("id, kind, title, body, link_url, is_published, broadcast_at, from_feed, story_at, created_at")
     .order("published_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
 
@@ -29,7 +29,7 @@ export default async function AllPostsPage() {
           is_published: a.is_published as boolean,
           broadcast_at: (a.broadcast_at as string) ?? null,
           from_feed: (a.from_feed as boolean) ?? false,
-          published_at: (a.published_at as string) ?? null,
+          story_at: (a.story_at as string) ?? null,
           created_at: (a.created_at as string) ?? null,
         }))}
         actions={{ updateAnnouncement, deleteAnnouncement, broadcast: broadcastAnnouncement, bulkPublish, bulkUnpublish, bulkDelete }}

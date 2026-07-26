@@ -152,13 +152,13 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_discord" /> 🎮 Discord (auto)</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_instagram" defaultChecked /> 📷 Instagram caption — emailed to you at post time</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_youtube" defaultChecked /> ▶️ YouTube community text — emailed to you at post time</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_twitter" /> 🐦 Twitter/X post — emailed to you at post time</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_linkedin" /> 💼 LinkedIn post — emailed to you at post time</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_facebook" /> 📘 Facebook page post — emailed to you at post time</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_substack" /> 📰 Substack — draft emailed to expand into a newsletter</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_medium" /> ✒️ Medium — draft emailed to expand into an article</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_reddit" /> 👽 Reddit — draft emailed to post in relevant subreddits</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_quora" /> ❓ Quora — draft emailed to answer related questions</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_twitter" /> 🐦 Twitter/X — auto-posts when keys are set (Integrations), else emailed</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_linkedin" /> 💼 LinkedIn — auto-posts when keys are set, else emailed</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_facebook" /> 📘 Facebook page — auto-posts when keys are set, else emailed</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_reddit" /> 👽 Reddit — auto-posts to your community when keys are set, else emailed</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_substack" /> 📰 Substack — draft emailed to expand into a newsletter (no posting API)</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_medium" /> ✒️ Medium — draft emailed to expand into an article (no posting API)</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_quora" /> ❓ Quora — draft emailed to answer related questions (no posting API)</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_google" /> 📍 Google Business Profile — draft emailed to post as an Update</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_whatsapp" /> 💬 WhatsApp bulk (careful — every post goes to every contact)</label>
           </div>
@@ -255,12 +255,12 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
           <div style={{ display: "grid", gap: 6, marginTop: 4 }}>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_instagram" /> 📷 Instagram — at send time you get an email with the ready-to-paste post</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_youtube" /> ▶️ YouTube (community post) — same reminder email</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_twitter" /> 🐦 Twitter/X — same reminder email</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_linkedin" /> 💼 LinkedIn — same reminder email</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_facebook" /> 📘 Facebook page — same reminder email</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_twitter" /> 🐦 Twitter/X — auto when keys set, else reminder email</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_linkedin" /> 💼 LinkedIn — auto when keys set, else reminder email</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_facebook" /> 📘 Facebook page — auto when keys set, else reminder email</label>
+            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_reddit" /> 👽 Reddit — auto to your community when keys set, else reminder</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_substack" /> 📰 Substack — draft to expand into a newsletter</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_medium" /> ✒️ Medium — draft to expand into an article</label>
-            <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_reddit" /> 👽 Reddit — post in relevant subreddits</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_quora" /> ❓ Quora — answer related questions</label>
             <label className="remember" style={{ margin: 0 }}><input type="checkbox" name="to_google" /> 📍 Google Business Profile — post as an Update</label>
           </div>

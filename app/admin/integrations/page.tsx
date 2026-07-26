@@ -218,6 +218,19 @@ export default async function IntegrationsPage(
             <a href="/admin/integrations/meta" style={{ color: "var(--accent)", fontWeight: 700 }}>Instagram / Facebook check</a>{" "}
             — it lists your Pages in plain words and connects the right Instagram with one tap.
           </p>
+          <KeyField name="FACEBOOK_PAGE_ID" label="Facebook Page ID (auto-posts campaigns to the Page)" placeholder="numeric Page id — the Instagram/Facebook check page shows it" />
+          <KeyField name="FACEBOOK_PAGE_TOKEN" label="Facebook Page access token (permission: pages_manage_posts)" placeholder="developers.facebook.com → your app → Page token" />
+          <KeyField name="LINKEDIN_ACCESS_TOKEN" label="LinkedIn access token (auto-posts campaigns)" placeholder="linkedin.com/developers → your app → OAuth token with w_member_social" />
+          <KeyField name="LINKEDIN_AUTHOR_URN" label="LinkedIn author URN (who the post is from)" placeholder="urn:li:person:XXXX or urn:li:organization:12345678" />
+          <KeyField name="TWITTER_API_KEY" label="X (Twitter) API key" placeholder="developer.x.com → your app → Keys and tokens" />
+          <KeyField name="TWITTER_API_SECRET" label="X API key secret" placeholder="from the same Keys and tokens page" />
+          <KeyField name="TWITTER_ACCESS_TOKEN" label="X access token (of your account)" placeholder="generate under Authentication Tokens with Read and Write" />
+          <KeyField name="TWITTER_ACCESS_SECRET" label="X access token secret" placeholder="generated together with the access token" />
+          <KeyField name="REDDIT_CLIENT_ID" label="Reddit app client id (auto-posts to your subreddit/profile)" placeholder="reddit.com/prefs/apps → create a 'script' app" />
+          <KeyField name="REDDIT_CLIENT_SECRET" label="Reddit app secret" placeholder="shown on the same apps page" />
+          <KeyField name="REDDIT_USERNAME" label="Reddit username" placeholder="the account that will post" />
+          <KeyField name="REDDIT_PASSWORD" label="Reddit password" placeholder="that account's password (stored in the secret store)" />
+          <KeyField name="REDDIT_SUBREDDIT" label="Reddit community to post in" placeholder="e.g. u_yourusername (your profile feed) or your own subreddit" />
           <KeyField name="ANTHROPIC_API_KEY" label="Anthropic (AI) key" placeholder="sk-ant-…" />
           <KeyField name="BUNNY_STREAM_API_KEY" label="Bunny Stream API key (video uploads)" placeholder="from dash.bunny.net → Stream → API" />
           <KeyField name="BUNNY_LIBRARY_ID" label="Bunny Library ID (optional)" placeholder="e.g. 682810" />

@@ -139,18 +139,47 @@ export async function GET(req: NextRequest) {
           }
         }
 
+        // LinkedIn / X / Facebook / Reddit — AUTO-POST via their official APIs
+        // when keys are set (Admin → Integrations); reminder email otherwise.
+        let liPosted = false, xPosted = false, fbPosted = false, rdPosted = false;
+        {
+          const social = await import("@/lib/socialPost");
+          const full = text + (p.link_url ? `\n\n${p.link_url}` : "");
+          if (p.to_linkedin && (await social.linkedinConfigured())) {
+            const r = await social.postToLinkedIn(full);
+            if (r.ok) { liPosted = true; notes.push("linkedin: posted ✅"); }
+            else notes.push(`linkedin: auto-post failed (${r.error}) — reminder emailed instead`);
+          }
+          if (p.to_twitter && (await social.twitterConfigured())) {
+            const r = await social.postToX(full);
+            if (r.ok) { xPosted = true; notes.push("x/twitter: posted ✅"); }
+            else notes.push(`x/twitter: auto-post failed (${r.error}) — reminder emailed instead`);
+          }
+          if (p.to_facebook && (await social.facebookConfigured())) {
+            const r = await social.postToFacebook(text, p.link_url ? String(p.link_url) : null);
+            if (r.ok) { fbPosted = true; notes.push("facebook: posted ✅"); }
+            else notes.push(`facebook: auto-post failed (${r.error}) — reminder emailed instead`);
+          }
+          if (p.to_reddit && (await social.redditConfigured())) {
+            const title = String(p.campaign || text).split("\n")[0].slice(0, 290);
+            const r = await social.postToReddit(title, full);
+            if (r.ok) { rdPosted = true; notes.push("reddit: posted ✅"); }
+            else notes.push(`reddit: auto-post failed (${r.error}) — reminder emailed instead`);
+          }
+        }
+
         // Prepare-and-remind channels — email the drafted post to the team to
         // publish manually (none of these allow reliable auto-posting).
-        if ((p.to_instagram && !igPosted) || p.to_youtube || p.to_twitter || p.to_linkedin || p.to_facebook || p.to_substack || p.to_medium || p.to_reddit || p.to_quora || p.to_google) {
+        if ((p.to_instagram && !igPosted) || p.to_youtube || (p.to_twitter && !xPosted) || (p.to_linkedin && !liPosted) || (p.to_facebook && !fbPosted) || p.to_substack || p.to_medium || (p.to_reddit && !rdPosted) || p.to_quora || p.to_google) {
           const platforms = [
             p.to_instagram && !igPosted ? "Instagram" : null,
             p.to_youtube ? "YouTube" : null,
-            p.to_twitter ? "Twitter/X" : null,
-            p.to_linkedin ? "LinkedIn" : null,
-            p.to_facebook ? "Facebook" : null,
+            p.to_twitter && !xPosted ? "Twitter/X" : null,
+            p.to_linkedin && !liPosted ? "LinkedIn" : null,
+            p.to_facebook && !fbPosted ? "Facebook" : null,
             p.to_substack ? "Substack" : null,
             p.to_medium ? "Medium" : null,
-            p.to_reddit ? "Reddit" : null,
+            p.to_reddit && !rdPosted ? "Reddit" : null,
             p.to_quora ? "Quora" : null,
             p.to_google ? "Google Business Profile" : null,
           ].filter(Boolean).join(", ");
@@ -167,16 +196,16 @@ export async function GET(req: NextRequest) {
             const ytBlock = p.to_youtube
               ? `<p style="margin:14px 0 4px"><strong>▶️ YouTube community post</strong></p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(p.yt_text ?? text))}</div>`
               : "";
-            const twBlock = p.to_twitter
+            const twBlock = p.to_twitter && !xPosted
               ? `<p style="margin:14px 0 4px"><strong>🐦 Twitter/X post</strong> <span style="color:#888;font-size:12px">(trim to 280 characters)</span></p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(text).slice(0, 275))}</div>`
               : "";
             const plainBlock = (label: string, hint = "") =>
               `<p style="margin:14px 0 4px"><strong>${label}</strong>${hint ? ` <span style="color:#888;font-size:12px">${hint}</span>` : ""}</p><div style="background:#f4f4f5;border-radius:8px;padding:14px;white-space:pre-wrap;font-size:15px">${esc(String(text))}</div>`;
-            const liBlock = p.to_linkedin ? plainBlock("💼 LinkedIn post") : "";
-            const fbBlock = p.to_facebook ? plainBlock("📘 Facebook page post") : "";
+            const liBlock = p.to_linkedin && !liPosted ? plainBlock("💼 LinkedIn post") : "";
+            const fbBlock = p.to_facebook && !fbPosted ? plainBlock("📘 Facebook page post") : "";
             const ssBlock = p.to_substack ? plainBlock("📰 Substack", "(use as the opening — expand into a full newsletter)") : "";
             const mdBlock = p.to_medium ? plainBlock("✒️ Medium", "(use as the outline — expand into a full article)") : "";
-            const rdBlock = p.to_reddit ? plainBlock("👽 Reddit", "(post in r/CharteredAccountants or r/CA_India — keep it conversational, no hard selling)") : "";
+            const rdBlock = p.to_reddit && !rdPosted ? plainBlock("👽 Reddit", "(post in r/CharteredAccountants or r/CA_India — keep it conversational, no hard selling)") : "";
             const qrBlock = p.to_quora ? plainBlock("❓ Quora", "(find related questions and answer with this — helpful tone wins on Quora)") : "";
             const gbBlock = p.to_google ? plainBlock("📍 Google Business Profile", "(post as an Update on the profile — shows in Google Search/Maps)") : "";
             const html = emailShell(`📣 Post this on ${platforms}`,

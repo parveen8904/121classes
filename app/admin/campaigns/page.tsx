@@ -191,6 +191,12 @@ export default async function MarketingHome() {
           <strong>🎉 Festival greetings</strong>
           <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>Which days we wish students on, and how big each one is.</p>
         </Link>
+        <Link href="/admin/notes" style={tile}>
+          <strong>📄 Free downloads (SEO)</strong>
+          <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
+            Which PDFs get a public page on our domain, and the title Google shows for each.
+          </p>
+        </Link>
         <Link href="/admin/articles" style={tile}>
           <strong>📝 Articles &amp; SEO</strong>
           <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>

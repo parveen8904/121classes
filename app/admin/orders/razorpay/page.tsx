@@ -4,6 +4,8 @@ import AdminHero from "../../_components/AdminHero";
 import { listRazorpayPayments, type RazorpayPayment } from "@/lib/razorpay";
 
 export const dynamic = "force-dynamic";
+// Fifty pages of a hundred payments takes time — let it finish.
+export const maxDuration = 60;
 export const metadata = { title: "Razorpay data — Admin" };
 
 const DAY_OPTIONS = [
@@ -51,7 +53,12 @@ export default async function RazorpayDataPage(props: {
 
   let payments: RazorpayPayment[] = [];
   let error = false;
-  try { payments = await listRazorpayPayments(days, 500, { from, to }); } catch { error = true; }
+  let truncated = false;
+  try {
+    const r = await listRazorpayPayments(days, 5000, { from, to });
+    payments = r.payments;
+    truncated = r.truncated;
+  } catch { error = true; }
   if (status) payments = payments.filter((p) => p.status === status || (status === "refunded" && p.status === "refunded"));
   if (method) payments = payments.filter((p) => p.method === method);
 
@@ -69,6 +76,13 @@ export default async function RazorpayDataPage(props: {
         subtitle="Everything collected on the Razorpay account — for cross-checking only. ⚠️"
         back={{ href: "/admin/orders", label: "Sales & orders" }}
       />
+
+      {truncated && (
+        <div className="notice err" style={{ marginTop: 16 }}>
+          This is a <strong>partial list</strong> — the range holds more payments than one pull can bring back.
+          Narrow the dates (a month at a time) to see all of them, or download the CSV for the same range.
+        </div>
+      )}
 
       <div className="notice" style={{ marginTop: 16 }}>
         ⚠️ This Razorpay key is used in more than one place, so the list below can include collections that are

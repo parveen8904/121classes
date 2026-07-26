@@ -63,12 +63,17 @@ export type RazorpayPayment = {
   created_at: number; notes: Record<string, string> | null; fee: number | null; order_id: string | null;
 };
 
+// Returns whether it stopped early, because a silent cap is how the founder
+// ended up believing 90 days held exactly 500 payments. 5,000 is 50 API pages;
+// beyond that, or past the time budget, he is told rather than shorted.
+export type RazorpayList = { payments: RazorpayPayment[]; truncated: boolean };
+
 export async function listRazorpayPayments(
   days = 90,
-  max = 500,
+  max = 5000,
   // Optional custom range (IST calendar dates, YYYY-MM-DD) — overrides `days`.
   range?: { from?: string | null; to?: string | null },
-): Promise<RazorpayPayment[]> {
+): Promise<RazorpayList> {
   let from = Math.floor(Date.now() / 1000) - days * 86400;
   let to: number | null = null;
   if (range?.from && /^\d{4}-\d{2}-\d{2}$/.test(range.from)) {
@@ -79,20 +84,24 @@ export async function listRazorpayPayments(
   }
   const auth = await authHeader();
   const out: RazorpayPayment[] = [];
-  // Razorpay pages at 100 per call — walk with skip until done or max reached.
-  for (let skip = 0; out.length < max; skip += 100) {
+  let truncated = false;
+  // Razorpay pages at 100 per call — walk with skip until the account runs
+  // out, the cap is reached, or we run short of time.
+  const deadline = Date.now() + 45_000;
+  for (let skip = 0; ; skip += 100) {
+    if (out.length >= max || Date.now() > deadline) { truncated = true; break; }
     const res = await fetch(`https://api.razorpay.com/v1/payments?from=${from}${to ? `&to=${to}` : ""}&count=100&skip=${skip}`, {
       headers: { Authorization: auth },
       cache: "no-store",
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) throw new Error(`Razorpay list payments failed: ${res.status}`);
     const d = await res.json();
     const items = (d?.items ?? []) as RazorpayPayment[];
     out.push(...items);
-    if (items.length < 100) break;
+    if (items.length < 100) break; // that was the last page
   }
-  return out.slice(0, max);
+  return { payments: out.slice(0, max), truncated };
 }
 
 // Verify the checkout signature (proves Razorpay produced this payment).

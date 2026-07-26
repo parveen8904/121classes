@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { listRazorpayPayments } from "@/lib/razorpay";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // Excel-ready CSV of Razorpay-account collections, honouring the same options
 // as /admin/orders/razorpay (days / status / method). This is CROSS-CHECK data:
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
   const from = okDate(sp.get("from")), to = okDate(sp.get("to"));
 
   let payments;
-  try { payments = await listRazorpayPayments(days, 500, { from, to }); }
+  try { payments = (await listRazorpayPayments(days, 5000, { from, to })).payments; }
   catch { return new NextResponse("Could not reach Razorpay — check the keys and try again.", { status: 502 }); }
   if (status) payments = payments.filter((p) => p.status === status);
   if (method) payments = payments.filter((p) => p.method === method);

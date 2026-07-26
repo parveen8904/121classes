@@ -1108,9 +1108,11 @@ export async function generateSoftDay(input: {
 // event — and the copy is written about that and nothing else. Before this,
 // the whole news feed was fed to the writer as background and it dipped into
 // seventy headlines at random, which is exactly what he could not stand.
-export type SourceKind = "greeting" | "news" | "event" | "idea";
+export type SourceKind = "greeting" | "news" | "event" | "idea" | "article";
 
 const KIND_RULES: Record<SourceKind, string> = {
+  article:
+    "This is an ARTICLE already published on the site. Do not summarise it end to end. Take the single most useful idea in it, teach that much properly so the post stands on its own, and let the article be there for anyone who wants the rest — mentioned once, plainly, at the end.",
   greeting:
     "This is a GREETING and only a greeting. Wish the reader warmly and stop. No teaching, no study advice, no mention of the platform, no link, no call to action of any kind. Two or three sentences at most on every channel.",
   news:
@@ -1126,6 +1128,7 @@ export async function generateSourcedCampaign(input: {
   title: string;
   detail: string;             // stored body + whatever he added himself
   url?: string | null;
+  audience?: string | null;   // which students this is for
   channels: { key: string; label: string; brief: string; maxChars: number }[];
   scenario: string;
   mention: string | null;     // the one quiet product line, or null for none
@@ -1142,6 +1145,7 @@ export async function generateSourcedCampaign(input: {
   const user =
     `THE SITUATION RIGHT NOW — read this before writing a word:\n${input.scenario}\n\n` +
     `WHAT THIS CAMPAIGN IS ABOUT:\n${KIND_RULES[input.kind]}\n\n` +
+    (input.audience ? `WHO IT IS FOR — write to these students and nobody else:\n${input.audience}\n\n` : "") +
     `Title: ${input.title}\n` +
     (input.url ? `Source link (for your understanding only — include it only if it genuinely helps the reader): ${input.url}\n` : "") +
     `Details, and everything you are allowed to treat as fact:\n${input.detail || "(nothing beyond the title — stay at that level and do not invent detail)"}\n\n` +

@@ -14,11 +14,9 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     title: "Marketing & communication",
     tagline: "Every way you reach students and the world — campaigns, contacts, content, announcements.",
     panels: [
-      { icon: "📊", title: "Marketing overview", desc: "One screen: leads, signups and which platform brings students — plus a step-by-step playbook for Instagram & Google ads. Check it weekly.", href: "/admin/marketing" },
-      { icon: "📣", title: "Campaigns", desc: "Schedule marketing posts once — Telegram, Discord & WhatsApp post automatically; Instagram & YouTube are emailed ready-to-paste. Weekly autopilot writes the week for you.", href: "/admin/broadcasts" },
+      { icon: "📣", title: "Marketing & campaigns", desc: "Everything that goes out: build a campaign from a news item, an article, an event or a festival; the weekly autopilot; articles & SEO; and what your team still has to post by hand.", href: "/admin/campaigns" },
       { icon: "📇", title: "Contacts & leads", desc: "Import contacts (Interakt/CSV/call lists); leads join WhatsApp campaigns and the phone system recognises them.", href: "/admin/leads" },
       { icon: "🔁", title: "Re-engagement", desc: "Bring-them-back emails for students who never started or went quiet — drafted nightly, sent ONLY after your team approves each one.", href: "/admin/reengage" },
-      { icon: "📝", title: "Articles & SEO", desc: "Original AI-written study articles that bring Google traffic — topic queue refreshes weekly from accounting-world news.", href: "/admin/articles" },
       { icon: "▶️", title: "YouTube performance", desc: "Channel stats next to what YouTube actually sends the site — visits, leads and signups from your videos.", href: "/admin/youtube" },
       { icon: "📨", title: "Notify students", desc: "One-off notice to your own students by Telegram, email & WhatsApp (service messages — not marketing).", href: "/admin/notifications" },
       { icon: "🗞️", title: "Announcements", desc: "Official notices inside the portal — what's new, student corner, industry & macro updates.", href: "/admin/announcements" },

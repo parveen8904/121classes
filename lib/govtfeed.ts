@@ -106,15 +106,32 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
   const svc = createServiceClient();
   const added: FeedItem[] = [];
   let checked = 0;
+  // Why a run found nothing is otherwise invisible: the feed quietly stopped
+  // bringing anything in for a month and only a hand-check noticed. Every run
+  // now records what happened, and Admin → Announcements shows it.
+  const trouble: string[] = [];
 
   for (const url of urls) {
     let xml = "";
     try {
-      xml = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(8000), headers: { "User-Agent": "121CAClasses-FeedBot" } }).then((r) => r.text());
-    } catch {
+      // A plain bot user-agent gets refused by some news sources; 8 seconds
+      // was also tight for Google News from Mumbai.
+      const res = await fetch(url, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(15000),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; CAParveenSharmaBot/1.0; +https://caparveensharma.com)",
+          Accept: "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+        },
+      });
+      if (!res.ok) { trouble.push(`HTTP ${res.status} from ${new URL(url).hostname}`); continue; }
+      xml = await res.text();
+    } catch (e) {
+      trouble.push(`${new URL(url).hostname}: ${e instanceof Error ? e.message : "fetch failed"}`);
       continue;
     }
     const items = parseFeed(xml, noise).slice(0, 20);
+    if (!items.length) trouble.push(`${new URL(url).hostname}: returned nothing usable (${xml.length} bytes)`);
     for (const it of items) {
       checked++;
       const { data: existing } = await svc
@@ -132,8 +149,19 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
         from_feed: true,
       });
       if (!error) added.push(it);
+      else trouble.push(`could not save "${it.title.slice(0, 40)}": ${error.message}`);
     }
   }
+  await svc.from("site_settings").upsert({
+    key: "feed_last_run",
+    value: JSON.stringify({
+      at: new Date().toISOString(),
+      feeds: urls.length,
+      checked,
+      added: added.length,
+      trouble: trouble.slice(0, 5),
+    }),
+  }, { onConflict: "key" }).then(() => undefined, () => undefined);
   return { added: added.length, checked, items: added };
 }
 

@@ -32,6 +32,11 @@ export default async function AnnouncementsPage(
   const feedKeywords = await getSecret("FEED_KEYWORDS");
   const feedNoise = await getSecret("FEED_NOISE");
   const feedDigestEmail = await getSecret("FEED_DIGEST_EMAIL");
+  // What the last hourly check actually did — a silent feed failure went
+  // unnoticed for a month before this was shown.
+  const { data: lastRunRow } = await supabase.from("site_settings").select("value").eq("key", "feed_last_run").maybeSingle();
+  let lastRun: { at: string; checked: number; added: number; trouble?: string[] } | null = null;
+  try { lastRun = lastRunRow?.value ? JSON.parse(String(lastRunRow.value)) : null; } catch { lastRun = null; }
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -64,6 +69,17 @@ export default async function AnnouncementsPage(
           <strong> drafts</strong>. Once every <strong>24 hours</strong> you get a <strong>single email</strong> listing that
           day&apos;s finds, so you can approve from your phone. Nothing reaches students until you tick &ldquo;Published&rdquo;.
           {pendingCount > 0 && <strong> {pendingCount} item(s) awaiting approval.</strong>}
+        </p>
+        {lastRun && (
+          <p className={lastRun.trouble?.length || lastRun.checked === 0 ? "notice err" : "muted"} style={{ fontSize: ".8rem", padding: lastRun.trouble?.length ? 10 : 0 }}>
+            Last check {new Date(lastRun.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} IST —
+            looked at {lastRun.checked} headline(s), saved {lastRun.added} new one(s).
+            {lastRun.trouble?.length ? <> Problems: {lastRun.trouble.join("; ")}</> : null}
+          </p>
+        )}
+        <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 10px" }}>
+          Whatever you publish here also feeds the marketing posts for a month — see
+          <a href="/admin/broadcasts"> Campaigns</a>. Headlines only: nothing beyond them is ever stated.
         </p>
         <form action={saveFeedKeywords}>
           <label htmlFor="kw">Keywords to watch (comma or new line)</label>

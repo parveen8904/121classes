@@ -18,7 +18,12 @@ export const metadata = { title: "Video storage & cost — Admin" };
 // API also returns library passwords, which are deliberately never touched.
 
 const GB = 1024 ** 3;
-const RATE = 0.01; // $/GB/month, Bunny's published storage rate — see note below
+// Bunny bills the main copy at one rate and each replicated copy at half of
+// it. Using one flat rate for both overstated the bill by 60%; these two
+// figures reproduce the real invoice almost exactly.
+const RATE_MAIN = 0.01;    // $/GB/month
+const RATE_REPLICA = 0.005; // $/GB/month, per extra region
+const copyCost = (bytes: number, regions: number) => (bytes / GB) * (RATE_MAIN + regions * RATE_REPLICA);
 
 type Library = {
   Id: number; Name: string; VideoCount: number;
@@ -85,7 +90,11 @@ export default async function BunnyPage() {
   // Every replication region holds a second full copy, and is billed like one.
   const libCopies = libs.reduce((n, l) => n + gb(l.StorageUsage) * (1 + (l.ReplicationRegions?.length ?? 0)), 0);
   const zoneCopies = zones.reduce((n, z) => n + gb(z.StorageUsed) * (1 + (z.ReplicationRegions?.length ?? 0)), 0);
-  const storageBill = (libCopies + zoneCopies) * RATE;
+  const baseBill = (libStorage + zoneStorage) * RATE_MAIN;
+  const storageBill =
+    libs.reduce((n, l) => n + copyCost(l.StorageUsage, l.ReplicationRegions?.length ?? 0), 0) +
+    zones.reduce((n, z) => n + copyCost(z.StorageUsed, z.ReplicationRegions?.length ?? 0), 0);
+  const replicationBill = storageBill - baseBill;
 
   const bigResolutions = libs.filter((l) => /1080p|1440p|2160p/.test(l.EnabledResolutions ?? ""));
   const keepingOriginals = libs.filter((l) => l.KeepOriginalFiles);
@@ -117,11 +126,16 @@ export default async function BunnyPage() {
           <div><div className="muted" style={{ fontSize: ".76rem" }}>Storage cost ≈</div><div style={{ fontSize: "1.4rem", fontWeight: 700 }}>{money(storageBill)}<span style={{ fontSize: ".8rem", fontWeight: 400 }}>/mo</span></div></div>
           <div><div className="muted" style={{ fontSize: ".76rem" }}>Watched this month</div><div style={{ fontSize: "1.4rem", fontWeight: 700 }}>{watchedHours} hrs</div></div>
         </div>
-        <p className="muted" style={{ fontSize: ".8rem", margin: "10px 0 0" }}>
+        <p style={{ fontSize: ".86rem", margin: "10px 0 0" }}>
+          Of that, <strong>{money(baseBill)}</strong> is the video itself and{" "}
+          <strong>{money(replicationBill)}</strong> is the copies in other regions.
+        </p>
+        <p className="muted" style={{ fontSize: ".8rem", margin: "6px 0 0" }}>
           Storage is charged every month whether anyone watches or not. Delivery is charged per GB sent — at
           {" "}{watchedHours} hours of watching that is a few dollars, not the bill. So the money is in what is
-          <em> kept</em>, not in what is watched. (Estimate at Bunny&apos;s {money(RATE)}/GB storage rate; check the exact
-          rate on <a href="https://bunny.net/pricing/" target="_blank" rel="noopener noreferrer">bunny.net/pricing</a>.)
+          <em> kept</em>, not in what is watched. (At Bunny&apos;s {money(RATE_MAIN)}/GB for the main copy and
+          {" "}{money(RATE_REPLICA)}/GB for each replica; check the current rates on{" "}
+          <a href="https://bunny.net/pricing/" target="_blank" rel="noopener noreferrer">bunny.net/pricing</a>.)
         </p>
       </div>
 
@@ -148,9 +162,15 @@ export default async function BunnyPage() {
               {bigResolutions.map((l) => <div key={l.Id}>• {l.Name}: {l.EnabledResolutions}</div>)}
             </div>
             <div style={{ fontSize: ".82rem", marginTop: 6 }}>
-              For a lecture — a face, a board, still slides — 720p is indistinguishable from 1080p on a phone.
-              Turning off 1080p and above in the library&apos;s encoding settings cuts storage for every new upload,
-              and Bunny can re-encode what is already there.
+              Turning them off in the library&apos;s encoding settings cuts storage for <strong>every new upload</strong>.
+              {bigResolutions.some((l) => !l.KeepOriginalFiles) && (
+                <> But videos already uploaded <strong>cannot be shrunk in place</strong>: Bunny can only re-encode a
+                video when the original file was kept, and{" "}
+                {bigResolutions.filter((l) => !l.KeepOriginalFiles).map((l) => l.Name).join(", ")}{" "}
+                {bigResolutions.filter((l) => !l.KeepOriginalFiles).length === 1 ? "does" : "do"} not keep originals.
+                The only way to shrink what is already there is to upload it again from your own master copies —
+                which is the same job as moving to a library without replication, so do both at once.</>
+              )}
             </div>
           </div>
         )}
@@ -184,7 +204,7 @@ export default async function BunnyPage() {
               </p>
             </div>
             <div className="row-actions">
-              <span className="badge">≈ {money(gb(l.StorageUsage) * (1 + (l.ReplicationRegions?.length ?? 0)) * RATE)}/mo</span>
+              <span className="badge">≈ {money(copyCost(l.StorageUsage, l.ReplicationRegions?.length ?? 0))}/mo</span>
             </div>
           </div>
         ))}
@@ -203,7 +223,7 @@ export default async function BunnyPage() {
               </p>
             </div>
             <div className="row-actions">
-              <span className="badge">≈ {money(gb(z.StorageUsed) * (1 + (z.ReplicationRegions?.length ?? 0)) * RATE)}/mo</span>
+              <span className="badge">≈ {money(copyCost(z.StorageUsed, z.ReplicationRegions?.length ?? 0))}/mo</span>
             </div>
           </div>
         ))}

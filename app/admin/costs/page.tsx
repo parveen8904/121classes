@@ -168,7 +168,10 @@ export default async function CostsPage() {
               <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>Classes on Bunny ({youtubeVideos} on free YouTube). Add your Bunny <strong>Account API key</strong> in Integrations to show live ₹ charges here.</p>
             </>
           )}
-          <a className="btn small secondary" href="https://dash.bunny.net/billing" target="_blank" rel="noopener noreferrer" style={{ marginTop: 10 }}>View Bunny bill ↗</a>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+            <a className="btn small" href="/admin/bunny">Why is it this much?</a>
+            <a className="btn small secondary" href="https://dash.bunny.net/billing" target="_blank" rel="noopener noreferrer">View Bunny bill ↗</a>
+          </div>
         </div>
 
         {/* Cloudflare R2 */}

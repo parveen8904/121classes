@@ -3,8 +3,7 @@ import ToggleAllChannels from "./_components/ToggleAllChannels";
 import SubmitButton from "@/app/components/SubmitButton";
 import DeleteButton from "../_components/DeleteButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { deletePost, sendPostNow, updatePost, toggleAutopilot, saveMarketingSettings, saveScenario } from "./actions";
-import { CHANNELS, cadenceLabel } from "@/lib/marketingRhythm";
+import { deletePost, sendPostNow, updatePost, saveMarketingSettings, saveScenario } from "./actions";
 import { loadBrief } from "@/lib/marketingBrief";
 import { SUPPLEMENT_UNTIL, loadFestivalDays } from "@/lib/festivals";
 
@@ -127,10 +126,8 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
   const posts = (data ?? []) as Post[];
   const { data: audData } = await svc.rpc("admin_dm_audience");
   const audience = (audData ?? []) as Audience[];
-  const { data: settingRows } = await svc.from("site_settings").select("key, value").in("key", ["marketing_autopilot", "marketing_poster_emails"]);
-  const settings = new Map((settingRows ?? []).map((r) => [r.key, r.value as string]));
-  const autopilotOn = settings.get("marketing_autopilot") === "on";
-  const posterEmails = settings.get("marketing_poster_emails") ?? "";
+  const { data: settingRows } = await svc.from("site_settings").select("key, value").eq("key", "marketing_poster_emails");
+  const posterEmails = (settingRows ?? [])[0]?.value as string ?? "";
   const pending = posts.filter((p) => p.status === "pending").sort((a, b) => a.send_at.localeCompare(b.send_at));
   const done = posts.filter((p) => p.status !== "pending");
 
@@ -139,7 +136,7 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
       <AdminHero
         badge="📣 Campaigns"
         title="Posts, autopilot & settings"
-        subtitle="The autopilot, the weekly rhythm, the situation your students are in — and every post that is scheduled or sent. Campaigns are created in one place: Marketing → Start a campaign. ⏰"
+        subtitle="The situation your students are in, who gets the pasting reminders, and every post scheduled or sent. Campaigns are created in one place: Marketing → Start a campaign. ⏰"
         back={{ href: "/admin", label: "Admin" }}
       />
 
@@ -220,56 +217,6 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ pa
           <SubmitButton className="btn" savedLabel="✓ Saved" style={{ marginTop: 12 }}>Save the situation</SubmitButton>
         </form>
       </div>
-
-      {/* Weekly autopilot */}
-      <div className="card" style={{ marginTop: 16, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ minWidth: 260, flex: 1 }}>
-          <strong>{autopilotOn ? "🟢" : "⚪"} Weekly autopilot — quiet marketing</strong>
-          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 0" }}>
-            Every Monday morning it plans the whole week: <strong>one idea a day</strong>, written to teach — a concept
-            students get wrong, an exam habit, an honest question — and rewritten in each platform&apos;s own voice.
-            Roughly <strong>one day in three</strong> carries a single quiet line about something on the site; the rest
-            ask for nothing. No offers, no &ldquo;join now&rdquo;, nothing that reads as an advertisement. Every post is
-            scheduled below where you can edit or delete it, and the full week reaches you by email on Monday.
-            WhatsApp is never included.
-          </p>
-        </div>
-        <div style={{ display: "grid", gap: 6 }}>
-          <form action={toggleAutopilot} style={{ margin: 0 }}>
-            <input type="hidden" name="next" value={autopilotOn ? "off" : "on"} />
-            <SubmitButton className={`btn small ${autopilotOn ? "secondary" : ""}`}>
-              {autopilotOn ? "Switch off" : "▶ Switch on autopilot"}
-            </SubmitButton>
-          </form>
-          <a className="btn small secondary" href="/admin/broadcasts/preview" title="Writes a sample week so you can read it — nothing is scheduled, emailed or posted">
-            👀 Read a sample week
-          </a>
-        </div>
-      </div>
-
-      {/* The rhythm each platform speaks on */}
-      <details className="card" style={{ marginTop: 12 }}>
-        <summary style={{ cursor: "pointer", fontWeight: 700 }}>📅 How often each place hears from us</summary>
-        <p className="muted" style={{ fontSize: ".82rem", margin: "8px 0" }}>
-          A feed that fills up every day reads like an ad account. This is the rhythm the autopilot follows —
-          daily only in our own rooms, and spaced out everywhere public.
-        </p>
-        <div style={{ display: "grid", gap: 4 }}>
-          {CHANNELS.map((c) => (
-            <div key={c.key} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: ".82rem", borderTop: "1px solid var(--border)", padding: "5px 0" }}>
-              <span style={{ fontWeight: 600 }}>{c.label}</span>
-              <span className="muted" style={{ whiteSpace: "nowrap" }}>
-                {cadenceLabel(c)} · {String(c.hour).padStart(2, "0")}:{String(c.minute).padStart(2, "0")} IST
-              </span>
-            </div>
-          ))}
-        </div>
-        <p className="muted" style={{ fontSize: ".76rem", margin: "8px 0 0" }}>
-          Subject Telegram groups are deliberately left out — those are study rooms, and a daily post there is the
-          one thing students would notice as marketing. To change a rhythm, tell the developer: it lives in
-          <code style={{ fontSize: ".72rem" }}> lib/marketingRhythm.ts</code>.
-        </p>
-      </details>
 
       {/* Who does the Instagram/YouTube/Twitter pasting */}
       <div className="card" style={{ marginTop: 12 }}>

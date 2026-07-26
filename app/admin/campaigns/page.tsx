@@ -27,15 +27,13 @@ export default async function MarketingHome() {
   const svc = createServiceClient();
   const since = new Date(Date.now() - 30 * 86400e3).toISOString();
 
-  const [{ data: postRows }, { count: articleCount }, { count: pendingNews }, { data: settingRows }, status] = await Promise.all([
+  const [{ data: postRows }, { count: articleCount }, { count: pendingNews }, status] = await Promise.all([
     svc.from("scheduled_posts").select("*").gte("send_at", since).order("send_at", { ascending: false }).limit(200),
     svc.from("articles").select("id", { count: "exact", head: true }).eq("is_published", true),
     svc.from("announcements").select("id", { count: "exact", head: true }).eq("from_feed", true),
-    svc.from("site_settings").select("key, value").in("key", ["marketing_autopilot"]),
     channelStatus(),
   ]);
   const posts = (postRows ?? []) as Post[];
-  const autopilotOn = (settingRows ?? []).some((r) => r.key === "marketing_autopilot" && r.value === "on");
 
   // Things a person still has to post by hand, that are already due.
   const teamJobs = posts.filter(
@@ -60,7 +58,7 @@ export default async function MarketingHome() {
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
         <a className="btn" href="/admin/campaigns/new">✨ Start a campaign</a>
-        <a className="btn secondary" href="/admin/broadcasts">Posts, autopilot &amp; the weekly rhythm</a>
+        <a className="btn secondary" href="/admin/broadcasts">Posts &amp; settings</a>
         <a className="btn secondary" href="/admin/articles">Articles &amp; SEO</a>
         <a className="btn secondary" href="/admin/marketing">Where students come from</a>
       </div>
@@ -118,7 +116,7 @@ export default async function MarketingHome() {
       <div style={{ display: "grid", gap: 6 }}>
         {upcoming.length === 0 && (
           <div className="card"><p className="muted" style={{ margin: 0 }}>
-            Nothing scheduled. {autopilotOn ? "The weekly autopilot writes the next week on Monday morning." : "The weekly autopilot is switched off."}
+            Nothing scheduled — every campaign is written by your team, so nothing goes out until you make one.
           </p></div>
         )}
         {upcoming.slice(0, 12).map((p) => (
@@ -169,9 +167,9 @@ export default async function MarketingHome() {
       <h3 style={{ margin: "24px 0 8px" }}>Everything else</h3>
       <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
         <a href="/admin/broadcasts" style={tile}>
-          <strong>🤖 Weekly autopilot &amp; rhythm</strong>
+          <strong>⚙️ Posts &amp; settings</strong>
           <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
-            {autopilotOn ? "On" : "Off"} — the teaching posts that go out on their own, and how often each platform speaks.
+            Every post scheduled or sent, the situation your students are in, and who receives the pasting reminders.
           </p>
         </a>
         <a href="/admin/broadcasts/festivals" style={tile}>

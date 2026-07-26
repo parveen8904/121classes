@@ -91,14 +91,3 @@ export async function saveScenario(formData: FormData) {
   await createServiceClient().from("site_settings").upsert(rows, { onConflict: "key" });
   revalidatePath("/admin/broadcasts");
 }
-
-// Weekly autopilot on/off (site_settings; read by /api/cron/marketing-autopilot).
-export async function toggleAutopilot(formData: FormData) {
-  if (!(await requireAdmin())) return;
-  const next = formData.get("next") === "on" ? "on" : "off";
-  await createServiceClient().from("site_settings").upsert(
-    { key: "marketing_autopilot", value: next },
-    { onConflict: "key" },
-  );
-  revalidatePath("/admin/broadcasts");
-}

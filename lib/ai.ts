@@ -357,7 +357,7 @@ export async function generateMcqs(
     `From the lecture transcript, write exactly ${n} exam-style multiple-choice questions for Indian CA students` +
     (topic ? ` on "${topic}"` : "") +
     `. Each question has exactly 4 options with ONE correct answer. Test conceptual understanding and application (not trivia); use Indian accounting/tax/law context and reference standards/sections where useful. ` +
-    `Tag each question with the single "concept" it tests. ` +
+    `Tag each question with the single "concept" it tests. ` + NOT_TAUGHT +
     `For EACH question also explain WHY the correct option is correct, and for EACH option a short reason WHY it is right or wrong. Keep EVERY explanation to ONE short line under 25 words (no paragraphs). ` +
     `Respond ONLY as compact JSON, no prose, no code fences, ASCII punctuation only: ` +
     `{"questions":[{"concept":"...","question":"...","options":["...","...","...","..."],"correct_index":0,"why_correct":"...","why_options":["why opt1","why opt2","why opt3","why opt4"]}]} ` +
@@ -525,7 +525,7 @@ export async function generateSubjectiveQuestions(
     `From the lecture transcript, write exactly ${n} descriptive/long-form CA exam questions for Indian CA students` +
     (topic ? ` on "${topic}"` : "") +
     `. Mix practical/numerical and conceptual questions in ICAI exam style; assign realistic marks (4-16 each). ` +
-    `For EACH question also provide a concise MODEL ANSWER a student could write to score full marks (exam conventions, cite standards/sections). ` +
+    `For EACH question also provide a concise MODEL ANSWER a student could write to score full marks (exam conventions, cite standards/sections). ` + NOT_TAUGHT +
     `Respond ONLY as compact JSON, no prose, no code fences: ` +
     `{"questions":[{"prompt":"...","max_marks":8,"model_answer":"..."}]}.`;
   const user = `Transcript:\n${transcript.slice(0, 24000)}`;
@@ -944,12 +944,22 @@ export async function summarizeClass(transcript: string): Promise<ClassSummary |
 // concept cleared, a habit, an honest question — and the site is named only
 // now and then, in one plain line, the way a teacher mentions where something
 // is kept. A reader should never feel they are being marketed to.
+// NOT TAUGHT HERE.
+//
+// Founder's instruction: partnership accounts are not part of any course on
+// this platform, so nothing — no post, no article, no question, no example —
+// should ever be built on them. Applied to every prompt that writes teaching
+// content rather than being remembered in one place and forgotten in the rest.
+export const NOT_TAUGHT =
+  " SYLLABUS LIMIT: partnership accounting is NOT taught here — never write a post, article, question, example or explanation about partnership accounts (admission, retirement or death of a partner, revaluation of a firm, dissolution of a partnership, partners' capital or current accounts). If a source is about partnership accounting, say nothing about it. ";
+
 export const SOFT_RULES =
   "You ghost-write for CA Parveen Sharma, who has taught Indian CA students (Foundation/Intermediate/Final) for 36 years. Write in his voice: first person, warm, plain English, an experienced teacher talking to students he knows. " +
   "THIS IS NOT ADVERTISING. Never write 'enroll', 'join now', 'sign up', 'register', 'don't miss', 'limited', 'hurry', 'best coaching', 'India's leading', 'check out our', 'DM us', 'link in bio', 'offer', 'discount' — or any other call to action. No urgency, no superlatives, no ALL-CAPS words, no strings of exclamation marks, no emoji walls (one emoji at most, and none where the channel brief says none). Never open with a sales hook. " +
   "Every piece must be worth reading for a student who will never buy anything: it teaches one thing, corrects one mistake, asks one honest question, or says one true thing about studying. Substance first, always. " +
   "NEVER invent facts, numbers, pass percentages, dates, deadlines, fees, discounts, student stories or testimonials. General observations from years of teaching are fine; specific anecdotes are not. If an exam rule may have changed, say it should be checked in the latest ICAI material instead of stating it. " +
-  "The only claims you may make about the platform: CA Parveen Sharma has 36 years of teaching experience; the site has a free day-by-day study planner, free chapter MCQ tests with a concept-wise report, case-scenario practice for the new exam pattern, recorded classes, live classes, free articles, and doubt-solving help. ";
+  "The only claims you may make about the platform: CA Parveen Sharma has 36 years of teaching experience; the site has a free day-by-day study planner, free chapter MCQ tests with a concept-wise report, case-scenario practice for the new exam pattern, recorded classes, live classes, free articles, and doubt-solving help. " +
+  NOT_TAUGHT;
 
 
 // "Couldn't generate the pack — check the Anthropic key" was shown for every
@@ -973,77 +983,14 @@ async function notePackOk(): Promise<void> {
   } catch { /* ignore */ }
 }
 
-// ---- One day of the passive rhythm ------------------------------------------
-// The autopilot asks for a day at a time: one idea, rewritten properly for each
-// channel that speaks that day (Instagram twice a week, LinkedIn twice a week,
-// Reddit once, and so on — see lib/marketingRhythm). Same thought, genuinely
-// different voice each place, so nobody following two of our accounts sees the
-// same paragraph twice and recognises a marketing machine behind it.
-export type SoftDay = { focus: string; posts: Record<string, string> };
-
-const SOFT_DAY_SYSTEM =
-  SOFT_RULES +
-  BRIEF_RULES +
-  "You are given ONE idea for the day and a list of places it has to be said. Write each piece from scratch in that platform's own voice — never paste the same sentences into two channels. Respect each channel's character limit. " +
-  "Respond ONLY as compact JSON, no prose, no code fences: " +
-  '{"focus":"5-8 words naming today\'s idea","posts":{"<channel key>":"<the text for that channel>"}}';
-
-export async function generateSoftDay(input: {
-  dayLabel: string;      // "Tuesday, 28 July 2026" — the day being written for
-  angle: string;
-  channels: { key: string; label: string; brief: string; maxChars: number }[];
-  context: string;
-  scenario: string;      // where students are today (lib/marketingBrief)
-  festivalToday: string | null; // a festival falling on this exact day, if any
-  festivalMajor: boolean;       // a big one — it takes over every channel
-  avoid: string[];
-  mention: string | null; // the one thing today may quietly point at, or null
-}): Promise<SoftDay | null> {
-  if (!input.channels.length) return null;
-  const mentionRule = input.mention
-    ? `Today ONE of the pieces (pick the channel where it fits most naturally, and not the Reddit one) may carry a single quiet sentence mentioning ${input.mention}. ` +
-      `Put it in the middle or at the end, phrased as something that exists and is there if it helps — not as something being offered. No call to action, no second mention anywhere, and at most one link (https://caparveensharma.com/free-planner?src=social for the planner, otherwise https://caparveensharma.com). Every other piece today mentions nothing at all.`
-    : `Today NO piece mentions the platform, the site, any course or any link. Today we only teach.`;
-  const festivalRule = !input.festivalToday
-    ? ""
-    : input.festivalMajor
-      ? `THIS DAY IS ${input.festivalToday.toUpperCase()}, and it takes over the whole day. EVERY piece you write today is about ${input.festivalToday} and nothing else — no teaching, no study advice, no platform, no link. Write each one properly for its own place rather than repeating one greeting: the short channels (community, instagram, twitter, youtube community, google) carry a warm wish in a line or two; the ones that expect substance (linkedin, reddit, quora, substack, medium, the youtube video brief) say something real about what the day means — what a teacher owes students, or what students owe the people who taught them — still as a greeting, never as a lesson about the syllabus and never with a word about us. Ignore the day's idea below entirely.\n\n`
-      : `THIS DAY IS ${input.festivalToday.toUpperCase()}. The "community" piece and, if it is being written today, the "instagram" piece must be a short warm greeting for ${input.festivalToday} — a greeting and nothing else: no teaching, no platform, no link, no hashtags beyond one for the festival. Every other channel today carries the normal idea below and does not mention the festival.\n\n`;
-  const user =
-    `You are writing for: ${input.dayLabel}\n\n` +
-    `THE SITUATION RIGHT NOW — read this before writing a word:\n${input.scenario}\n\n` +
-    festivalRule +
-    `The day's one idea (every channel carries this same idea, said its own way), to be written for exactly the stage the students are in above:\n${input.angle}\n\n` +
-    `${mentionRule}\n\n` +
-    `Real things happening on the platform right now (use only if one genuinely fits; never invent more):\n${input.context}\n\n` +
-    (input.avoid.length
-      ? `Ideas already used in recent weeks — do not repeat or rephrase any of these:\n${input.avoid.slice(0, 40).map((a) => `- ${a}`).join("\n")}\n\n`
-      : "") +
-    `Write one piece for each channel below:\n\n` +
-    input.channels
-      .map((c) => `CHANNEL "${c.key}" — ${c.label} (max ${c.maxChars} characters)\n${c.brief}`)
-      .join("\n\n");
-  const budget = input.channels.reduce((n, c) => n + c.maxChars, 0);
-  const text = await callClaude(SOFT_DAY_SYSTEM, user, Math.min(700 + Math.ceil(budget / 2), 5000), { feature: "marketing" });
-  if (!text) return null;
-  const json = parseLooseJson(text);
-  const raw = json?.posts;
-  if (!raw || typeof raw !== "object") return null;
-  const posts: Record<string, string> = {};
-  for (const c of input.channels) {
-    const v = String((raw as Record<string, unknown>)[c.key] ?? "").trim();
-    if (v) posts[c.key] = v;
-  }
-  if (!Object.keys(posts).length) return null;
-  return { focus: String(json?.focus ?? "").trim() || input.angle.slice(0, 60), posts };
-}
-
 // ---- A campaign built from one chosen thing ----------------------------------
 // The founder picks the reason first — this festival, this news item, this
 // event — and the copy is written about that and nothing else. Before this,
 // the whole news feed was fed to the writer as background and it dipped into
 // seventy headlines at random, which is exactly what he could not stand.
 // "own" never reaches the writer at all — his words go out exactly as typed.
+export type SoftDay = { focus: string; posts: Record<string, string> };
+
 export type SourceKind = "greeting" | "news" | "event" | "idea" | "article" | "own";
 
 const KIND_RULES: Record<SourceKind, string> = {
@@ -1116,6 +1063,7 @@ const ARTICLE_SYSTEM =
   "ABSOLUTE RULES: write 100% original prose — never reproduce text from ICAI materials, textbooks or websites. Never invent statistics, dates, fee amounts, section numbers or thresholds you are not certain of; where a rule/limit may have changed, write 'verify in the latest ICAI study material / announcement'. No fake testimonials or invented stories. " +
   "STYLE: a warm senior-teacher voice; simple English; short paragraphs; concrete worked LOGIC (not copied questions); markdown with ## and ### headings and bullet lists; 700–1000 words; end with a short '## FAQs' section (2–3 Q&As), then a final paragraph naturally pointing students to the free tools: the free day-by-day study planner at https://caparveensharma.com/free-planner?src=article and free case-scenario practice at https://caparveensharma.com (courses). " +
   "SEO: title ≤ 65 characters containing the main keyword; meta description ≤ 155 characters. " +
+  NOT_TAUGHT +
   'Respond ONLY as compact JSON, no prose, no code fences: {"title":"...","description":"...","body_md":"..."}';
 
 export async function writeArticle(topic: string, keywords: string): Promise<WrittenArticle | null> {
@@ -1141,6 +1089,7 @@ const TRENDS_SYSTEM =
   "Angle each topic educationally for CA students — 'what happened and what a CA student should learn from it' — not as journalism. " +
   "Do NOT duplicate or closely repeat any topic from the EXISTING list. Do not assume facts beyond the headline itself; the article writer will phrase uncertain details carefully. " +
   "Include the source headline inside keywords so the writer has context. category must be one of: fr | advanced-accounting | strategy | career | news (use 'news' for scams/NFRA/SEBI/forensic/current-affairs topics). " +
+  NOT_TAUGHT +
   'Respond ONLY as compact JSON: {"topics":[{"topic":"...","category":"news","keywords":"... | headline: ..."}]}';
 
 // Evergreen topic brainstorm — keeps the article queue from EVER running dry
@@ -1151,6 +1100,7 @@ const EVERGREEN_SYSTEM =
   "Propose up to 15 NEW evergreen article topics students actually search for: specific Ind AS / AS explainers, tricky concepts (EIR, deferred tax, consolidation steps), exam strategy, revision plans, common mistakes, answer-writing, career paths after CA, articleship. " +
   "Each topic must be concrete and searchable (not generic like 'how to study'). Do NOT duplicate or closely repeat any EXISTING topic. " +
   "category must be one of: fr | advanced-accounting | strategy | career | news. " +
+  NOT_TAUGHT +
   'Respond ONLY as compact JSON: {"topics":[{"topic":"...","category":"fr","keywords":"comma, separated, keywords"}]}';
 
 export async function proposeEvergreenTopics(existing: string[]): Promise<TrendTopic[] | null> {

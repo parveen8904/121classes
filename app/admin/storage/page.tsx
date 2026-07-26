@@ -34,7 +34,7 @@ async function folderSize(svc: ReturnType<typeof createServiceClient>, path: str
 }
 
 export default async function StoragePage(props: {
-  searchParams: Promise<{ moved?: string; already?: string; left?: string; failed?: string; why?: string; deleted?: string; stillthere?: string }>;
+  searchParams: Promise<{ moved?: string; already?: string; left?: string; failed?: string; why?: string; deleted?: string; stillthere?: string; orphans?: string }>;
 }) {
   const sp = await props.searchParams;
   const svc = createServiceClient();
@@ -96,7 +96,8 @@ export default async function StoragePage(props: {
       )}
       {sp.deleted !== undefined && (
         <div className="notice ok" style={{ marginTop: 16 }}>
-          Deleted <strong>{sp.deleted}</strong> public copy/copies. {sp.stillthere} file(s) remain.
+          Deleted <strong>{sp.deleted}</strong> public copy/copies. {sp.stillthere} file(s) remain
+          {Number(sp.orphans) > 0 ? `, of which ${sp.orphans} are old uploads nothing points at (left alone on purpose)` : ""}.
           {sp.why && <div style={{ fontSize: ".82rem", marginTop: 4 }}>{sp.why}</div>}
         </div>
       )}

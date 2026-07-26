@@ -143,7 +143,12 @@ export async function moveMaterialsBatch(limit = 25, budgetMs = 45_000): Promise
 
 // Once nothing points at the public copies any more, this removes them — the
 // step that actually closes the door on links already shared.
-export async function deletePublicCopies(limit = 200): Promise<{ deleted: number; left: number; note?: string }> {
+//
+// It deletes ONLY files that have a verified copy in the private bucket. There
+// are 63 files in the public folder that nothing points at and that were never
+// copied (old uploads, replaced versions); those are reported separately
+// rather than swept away, because "unreferenced" is not the same as "unwanted".
+export async function deletePublicCopies(limit = 200): Promise<{ deleted: number; left: number; orphans?: number; note?: string }> {
   const svc = createServiceClient();
 
   const { data: rows } = await svc.from("sections").select(M_COLS).limit(2000);
@@ -159,11 +164,23 @@ export async function deletePublicCopies(limit = 200): Promise<{ deleted: number
     return { deleted: 0, left: stillPublic.size, note: `${stillPublic.size} file(s) are still referenced publicly — finish moving first.` };
   }
 
-  const { data: objects } = await svc.storage.from("media").list("materials", { limit: 1000 });
-  const targets = (objects ?? []).map((o) => `materials/${o.name}`).slice(0, limit);
-  if (!targets.length) return { deleted: 0, left: 0, note: "The public materials folder is already empty." };
+  const [pub, priv] = await Promise.all([
+    svc.storage.from("media").list("materials", { limit: 1000 }),
+    svc.storage.from("secure").list("materials", { limit: 1000 }),
+  ]);
+  const haveCopy = new Set((priv.data ?? []).map((o) => o.name));
+  const all = (pub.data ?? []).map((o) => o.name);
+  const safe = all.filter((n) => haveCopy.has(n));
+  const orphans = all.length - safe.length;
+
+  if (!safe.length) {
+    return { deleted: 0, left: all.length, orphans, note: all.length ? "Nothing left that has a verified private copy." : "The public materials folder is already empty." };
+  }
+
+  const targets = safe.slice(0, limit).map((n) => `materials/${n}`);
   const { error } = await svc.storage.from("media").remove(targets);
-  if (error) return { deleted: 0, left: targets.length, note: error.message };
+  if (error) return { deleted: 0, left: all.length, orphans, note: error.message };
+
   const { data: after } = await svc.storage.from("media").list("materials", { limit: 1000 });
-  return { deleted: targets.length, left: (after ?? []).length };
+  return { deleted: targets.length, left: (after ?? []).length, orphans };
 }

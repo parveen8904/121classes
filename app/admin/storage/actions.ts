@@ -29,6 +29,7 @@ export async function removePublicCopies() {
   const r = await deletePublicCopies(200);
   revalidatePath("/admin/storage");
   const q = new URLSearchParams({ deleted: String(r.deleted), stillthere: String(r.left) });
+  if (r.orphans) q.set("orphans", String(r.orphans));
   if (r.note) q.set("why", r.note.slice(0, 160));
   redirect(`/admin/storage?${q.toString()}`);
 }

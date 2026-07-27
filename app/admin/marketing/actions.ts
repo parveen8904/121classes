@@ -24,8 +24,27 @@ export async function saveHomepageVideos(formData: FormData) {
     })
     .filter((v): v is { id: string; title: string } => !!v && /^[\w-]{6,}$/.test(v.id));
   const svc = createServiceClient();
-  await svc.from("site_settings").upsert(
+  await svc.from("site_settings").upsert([
     { key: "homepage_yt_videos", value: JSON.stringify(videos) },
+    // Changing the picks should also fetch their thumbnails afresh.
+    { key: "homepage_yt_v", value: String(Date.now()) },
+  ], { onConflict: "key" });
+  revalidatePath("/admin/marketing");
+  revalidatePath("/");
+}
+
+// Force new thumbnails.
+//
+// A YouTube thumbnail lives at a fixed address —
+// i.ytimg.com/vi/<id>/mqdefault.jpg — so replacing the picture on YouTube does
+// not change the URL. Browsers, and every cache between us and them, keep
+// serving the copy they already hold, which is why a new thumbnail never
+// appeared however often the page was reloaded. This stamps a new version
+// marker onto those URLs, which every cache treats as a different image.
+export async function refreshHomepageThumbnails() {
+  if (!(await requireAdmin())) return;
+  await createServiceClient().from("site_settings").upsert(
+    { key: "homepage_yt_v", value: String(Date.now()) },
     { onConflict: "key" },
   );
   revalidatePath("/admin/marketing");

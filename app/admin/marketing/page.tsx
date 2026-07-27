@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
-import { saveHomepageVideos } from "./actions";
+import { refreshHomepageThumbnails, saveHomepageVideos } from "./actions";
 import { getChannelOverview } from "@/lib/youtubeStats";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +71,8 @@ export default async function MarketingOverviewPage() {
   const { getRecentVideos } = await import("@/lib/youtubeStats");
   const allVideos = yt?.uploadsPlaylist ? await getRecentVideos(yt.uploadsPlaylist, 24).catch(() => []) : [];
   const { data: selRow } = await svc.from("site_settings").select("value").eq("key", "homepage_yt_videos").maybeSingle();
+  const { data: vRow } = await svc.from("site_settings").select("value").eq("key", "homepage_yt_v").maybeSingle();
+  const ytV = (vRow?.value as string) || "";
   let selectedIds: string[] = [];
   try { selectedIds = (JSON.parse((selRow?.value as string) || "[]") as { id: string }[]).map((v) => v.id); } catch { /* fresh */ }
 
@@ -93,13 +95,23 @@ export default async function MarketingOverviewPage() {
           Tick <strong>up to 3</strong> videos — only these appear on the homepage (no view counts shown).
           If none are ticked, the latest 8 from the channel show automatically. Ticking more than 8 keeps the first 8.
         </p>
+        <div className="card" style={{ marginBottom: 12, fontSize: ".84rem" }}>
+          <strong>Changed a thumbnail on YouTube and the site still shows the old one?</strong>
+          <p className="muted" style={{ margin: "4px 0 8px" }}>
+            That is not the page being stale — a thumbnail keeps the same web address when you replace it, so browsers
+            and the networks in between keep showing the copy they already have. This fetches them afresh everywhere.
+          </p>
+          <form action={refreshHomepageThumbnails} style={{ margin: 0 }}>
+            <SubmitButton className="btn small" savedLabel="✓ Refreshed">🔄 Fetch new thumbnails</SubmitButton>
+          </form>
+        </div>
         {allVideos.length > 0 ? (
           <form action={saveHomepageVideos}>
             <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
               {allVideos.map((v) => (
                 <label key={v.id} style={{ border: selectedIds.includes(v.id) ? "2px solid var(--accent)" : "1px solid var(--border)", borderRadius: 10, overflow: "hidden", cursor: "pointer", display: "block" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`} alt={v.title} loading="lazy" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
+                  <img src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg${ytV ? `?v=${ytV}` : ""}`} alt={v.title} loading="lazy" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
                   <div style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 10px" }}>
                     <input type="checkbox" name="vid" value={`${v.id}:::${v.title}`} defaultChecked={selectedIds.includes(v.id)} style={{ marginTop: 2 }} />
                     <span style={{ fontSize: ".8rem", fontWeight: 600, lineHeight: 1.25 }}>{v.title}</span>

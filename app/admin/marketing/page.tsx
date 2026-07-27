@@ -111,7 +111,7 @@ export default async function MarketingOverviewPage() {
               {allVideos.map((v) => (
                 <label key={v.id} style={{ border: selectedIds.includes(v.id) ? "2px solid var(--accent)" : "1px solid var(--border)", borderRadius: 10, overflow: "hidden", cursor: "pointer", display: "block" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg${ytV ? `?v=${ytV}` : ""}`} alt={v.title} loading="lazy" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
+                  <img src={`/api/yt-thumb/${v.id}${ytV ? `?v=${ytV}` : ""}`} alt={v.title} loading="lazy" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
                   <div style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 10px" }}>
                     <input type="checkbox" name="vid" value={`${v.id}:::${v.title}`} defaultChecked={selectedIds.includes(v.id)} style={{ marginTop: 2 }} />
                     <span style={{ fontSize: ".8rem", fontWeight: 600, lineHeight: 1.25 }}>{v.title}</span>

@@ -462,7 +462,7 @@ export default async function Home() {
               <a key={v.id} href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer" className="tile" style={{ padding: 0, overflow: "hidden", color: "var(--text)", textAlign: "left", border: "2px solid var(--accent)", borderRadius: 14 }}>
                 <div style={{ position: "relative" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg${ytV ? `?v=${ytV}` : ""}`} alt={v.title} loading="lazy" decoding="async" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
+                  <img src={`/api/yt-thumb/${v.id}${ytV ? `?v=${ytV}` : ""}`} alt={v.title} loading="lazy" decoding="async" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
                   {/* Brand wash + play badge */}
                   <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 45%, color-mix(in srgb, var(--accent) 78%, #000) 130%)" }} />
                   <span style={{ position: "absolute", left: 10, bottom: 10, width: 34, height: 34, borderRadius: 999, background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: ".8rem", fontWeight: 800, boxShadow: "0 2px 8px rgba(0,0,0,.35)" }}>▶</span>

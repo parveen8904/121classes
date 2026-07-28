@@ -83,26 +83,42 @@ type PayRow = {
 
 export default async function AdminOrdersPage(
   props: {
-    searchParams: Promise<{ dispatch?: string; q?: string }>;
+    searchParams: Promise<{ dispatch?: string; q?: string; from?: string; to?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
   const q = (searchParams.q ?? "").trim().toLowerCase();
+  // Date range, entered as IST calendar days. "To" covers the whole day, so
+  // picking the same date twice gives exactly that one day's sales.
+  const okDate = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+  const fromDay = okDate(searchParams.from);
+  const toDay = okDate(searchParams.to);
+  const fromIso = fromDay ? new Date(`${fromDay}T00:00:00+05:30`).toISOString() : null;
+  const toIso = toDay ? new Date(`${toDay}T23:59:59+05:30`).toISOString() : null;
+  const rangeQs = new URLSearchParams();
+  if (fromDay) rangeQs.set("from", fromDay);
+  if (toDay) rangeQs.set("to", toDay);
   const supabase = createClient();
   const svc = createServiceClient();
 
   const [{ data }, { data: payData }] = await Promise.all([
-    supabase
-      .from("book_orders")
-      .select("id, amount_inr, status, created_at, guest_contact, ship_to, items, invoice_no, invoice_url, zoho_status, order_no, tracking_code")
-      .order("created_at", { ascending: false })
-      .limit(200),
+    (() => {
+      let qy = supabase
+        .from("book_orders")
+        .select("id, amount_inr, status, created_at, guest_contact, ship_to, items, invoice_no, invoice_url, zoho_status, order_no, tracking_code");
+      if (fromIso) qy = qy.gte("created_at", fromIso);
+      if (toIso) qy = qy.lte("created_at", toIso);
+      return qy.order("created_at", { ascending: false }).limit(500);
+    })(),
     // ALL website payments (subscriptions / extensions / gifts) — OUR sales register.
-    svc
-      .from("orders")
-      .select("id, kind, amount_inr, status, created_at, razorpay_order_id, invoice_no, invoice_url, zoho_status, subject_id, order_no, subjects:subject_id(title), profiles:student_id(id, full_name, email, phone, address_line1, address_line2, city, state, pincode)")
-      .order("created_at", { ascending: false })
-      .limit(200),
+    (() => {
+      let qy = svc
+        .from("orders")
+        .select("id, kind, amount_inr, status, created_at, razorpay_order_id, invoice_no, invoice_url, zoho_status, subject_id, order_no, subjects:subject_id(title), profiles:student_id(id, full_name, email, phone, address_line1, address_line2, city, state, pincode)");
+      if (fromIso) qy = qy.gte("created_at", fromIso);
+      if (toIso) qy = qy.lte("created_at", toIso);
+      return qy.order("created_at", { ascending: false }).limit(500);
+    })(),
   ]);
 
   // Level (Final/Inter) + the exact subscription dates each payment created.
@@ -143,11 +159,28 @@ export default async function AdminOrdersPage(
         back={{ href: "/admin", label: "Admin" }}
       />
 
-      {/* Search everything on this page */}
+      {/* Search and date range — one form, so a search inside a date range works */}
       <form style={{ marginTop: 16 }}>
         <div style={{ display: "flex", gap: 8, maxWidth: 520 }}>
           <input name="q" defaultValue={searchParams.q ?? ""} placeholder="🔍 Search order no, name, email, phone, invoice no…" style={{ marginBottom: 0 }} />
           <SubmitButton className="btn small" savedLabel="✓">Search</SubmitButton>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginTop: 10 }}>
+          <div>
+            <label style={{ fontSize: ".78rem" }}>From (IST)</label>
+            <input type="date" name="from" defaultValue={fromDay} style={{ marginBottom: 0 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: ".78rem" }}>To</label>
+            <input type="date" name="to" defaultValue={toDay} style={{ marginBottom: 0 }} />
+          </div>
+          <SubmitButton className="btn small secondary" savedLabel="✓">Apply dates</SubmitButton>
+          {(fromDay || toDay) && <a className="btn small secondary" href="/admin/orders">Clear</a>}
+          <span className="muted" style={{ fontSize: ".78rem" }}>
+            {fromDay || toDay
+              ? `Showing ${fromDay || "the beginning"} → ${toDay || "today"}. The Excel below covers exactly this range.`
+              : "Same date in both boxes = that single day."}
+          </span>
         </div>
       </form>
 
@@ -177,7 +210,9 @@ export default async function AdminOrdersPage(
           Sales made through this website only — the register you verify Razorpay against.
         </p>
         <span style={{ display: "inline-flex", gap: 8 }}>
-          <a className="btn small" href="/admin/orders/export">⬇️ Download Excel (CSV)</a>
+          <a className="btn small" href={`/admin/orders/export${rangeQs.toString() ? `?${rangeQs}` : ""}`}>
+            ⬇️ Download Excel {fromDay || toDay ? "(filtered range)" : "(CSV)"}
+          </a>
           <a className="btn small secondary" href="/admin/orders/razorpay">📈 Razorpay account data</a>
         </span>
       </div>

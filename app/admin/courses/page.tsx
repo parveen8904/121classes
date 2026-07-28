@@ -71,6 +71,9 @@ export default async function CoursesPage() {
                   </p>
                 </div>
                 <div className="row-actions">
+                  <Link className="btn small secondary" href={`/admin/courses/${c.id}/users`}>
+                    👥 Registered users
+                  </Link>
                   <Link className="btn small" href={`/admin/courses/${c.id}`}>
                     Manage →
                   </Link>

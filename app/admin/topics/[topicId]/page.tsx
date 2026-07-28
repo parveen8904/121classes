@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import DeleteButton from "../../_components/DeleteButton";
 import AdminHero from "../../_components/AdminHero";
 import SectionForm from "./SectionForm";
@@ -36,7 +37,13 @@ export default async function TopicDetail(
   if (!topic) notFound();
 
   // AI-training material attached to this topic (PDFs whose text is extracted).
-  const { data: materials } = await supabase
+  //
+  // Read with the SERVICE client: repository_items has row-level security with
+  // no client policy, so the signed-in client returns nothing — even for an
+  // admin. That is why uploaded question banks and books showed to students but
+  // vanished from this page, leaving no way to edit or remove them. The page
+  // itself is already admin-gated by the layout.
+  const { data: materials } = await createServiceClient()
     .from("repository_items")
     .select("id, title, kind, file_url, content")
     .eq("topic_id", topicId)

@@ -92,8 +92,8 @@ export default async function MarketingOverviewPage() {
       <h2 className="admin-section-title" style={{ marginTop: 20 }}>🎬 Homepage YouTube videos</h2>
       <div className="card" style={{ marginTop: 10 }}>
         <p className="muted" style={{ fontSize: ".84rem", marginTop: 0 }}>
-          Tick <strong>up to 3</strong> videos — only these appear on the homepage (no view counts shown).
-          If none are ticked, the latest 8 from the channel show automatically. Ticking more than 8 keeps the first 8.
+          Tick <strong>up to 8</strong> videos — only these appear on the homepage (no view counts shown).
+          If none are ticked, the latest 8 from the channel show automatically. Ticking more than 8 keeps the first 8, so the homepage row stays tidy.
         </p>
         <div className="card" style={{ marginBottom: 12, fontSize: ".84rem" }}>
           <strong>Changed a thumbnail on YouTube and the site still shows the old one?</strong>

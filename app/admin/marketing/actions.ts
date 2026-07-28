@@ -30,7 +30,10 @@ export async function saveHomepageVideos(formData: FormData) {
     { key: "homepage_yt_v", value: String(Date.now()) },
   ], { onConflict: "key" });
   revalidatePath("/admin/marketing");
-  revalidatePath("/");
+  // "layout" purges the whole route tree for "/", not just its data — a plain
+  // revalidatePath("/") was leaving the homepage rendering an older selection,
+  // which read as "it is showing the latest videos instead of mine".
+  revalidatePath("/", "layout");
 }
 
 // Force new thumbnails.
@@ -48,5 +51,5 @@ export async function refreshHomepageThumbnails() {
     { onConflict: "key" },
   );
   revalidatePath("/admin/marketing");
-  revalidatePath("/");
+  revalidatePath("/", "layout");
 }

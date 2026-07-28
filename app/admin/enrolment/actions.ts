@@ -101,6 +101,26 @@ export async function grantSubscription(formData: FormData) {
   const planId = await planIdForTier(supabase, tier);
   if (!planId) redirect("/admin/enrolment?error=noplan");
 
+  // A double-click used to grant the same thing several times — one student
+  // ended up with four identical subscriptions eleven seconds apart. An active
+  // subscription for this exact course/subject already covers them, so say so
+  // instead of stacking another one on top.
+  const dupeQuery = supabase
+    .from("subscriptions")
+    .select("id, ends_at")
+    .eq("student_id", profile.id)
+    .eq("course_id", courseId)
+    .eq("status", "active");
+  const { data: existing } = subjectId
+    ? await dupeQuery.eq("subject_id", subjectId).maybeSingle()
+    : await dupeQuery.is("subject_id", null).maybeSingle();
+  if (existing) {
+    const until = existing.ends_at
+      ? new Date(existing.ends_at as string).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+      : "";
+    redirect(`/admin/enrolment?dupe=${encodeURIComponent(profile.email ?? email)}&until=${encodeURIComponent(until)}`);
+  }
+
   await supabase.from("subscriptions").insert({
     student_id: profile.id,
     course_id: courseId,
@@ -126,7 +146,15 @@ export async function grantSubscription(formData: FormData) {
   });
 
   revalidatePath("/admin/enrolment");
-  redirect("/admin/enrolment?granted=1");
+  // Carry the details back so the confirmation names who got what, rather than
+  // a bare tick the admin has to take on trust.
+  const q = new URLSearchParams({
+    granted: profile.email ?? email,
+    tier,
+    months: String(months),
+    course: course?.title ?? "",
+  });
+  redirect(`/admin/enrolment?${q.toString()}`);
 }
 
 export async function bulkGrant(formData: FormData) {
@@ -212,6 +240,38 @@ export async function revokeSubscription(formData: FormData) {
   const supabase = createClient();
   await supabase.from("subscriptions").update({ status: "cancelled", auto_renew: false }).eq("id", id);
   revalidatePath("/admin/enrolment");
+}
+
+// Block a subscription — refund taken back, policy breach, misconduct. Access
+// checks require status = 'active', so the student is locked out the moment
+// this saves. Reversible: the reason and time are kept so a mistake can be
+// undone and a genuine block can be explained later.
+export async function blockSubscription(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  const reason = str(formData.get("reason")).trim().slice(0, 300);
+  if (!id) return;
+  await createServiceClient().from("subscriptions").update({
+    status: "blocked",
+    auto_renew: false,
+    blocked_at: new Date().toISOString(),
+    blocked_reason: reason || null,
+  }).eq("id", id);
+  revalidatePath("/admin/enrolment");
+  redirect("/admin/enrolment?blocked=1");
+}
+
+export async function restoreSubscription(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("subscriptions").update({
+    status: "active",
+    blocked_at: null,
+    blocked_reason: null,
+  }).eq("id", id);
+  revalidatePath("/admin/enrolment");
+  redirect("/admin/enrolment?restored=1");
 }
 
 export async function extendSubscription(formData: FormData) {

@@ -252,6 +252,7 @@ export default async function IntegrationsPage(
           <KeyField name="FACULTY_TELEGRAM_CHAT_ID" label="Faculty Telegram chat id (for doubt alerts)" placeholder="your own Telegram chat id" />
           <KeyField name="FACULTY_EMAIL" label="Faculty alert email" placeholder="contact@caparveensharma.com" />
           <KeyField name="CRON_SECRET" label="Cron secret (optional — protects scheduled jobs)" placeholder="any random text" />
+          <KeyField name="ALDINE_WEBHOOK_SECRET" label="Aldine bridge secret (same text goes in the WooCommerce webhook's Secret field)" placeholder="any long random text — e.g. 40 letters and digits" />
           <KeyField name="SUPABASE_ACCESS_TOKEN" label="Supabase access token (for the one-click SMTP button below)" placeholder="supabase.com/dashboard/account/tokens → Generate new token → paste sbp_…" />
           <KeyField name="RAZORPAY_KEY_ID" label="Razorpay Key ID" placeholder="rzp_live_… or rzp_test_…" />
           <KeyField name="RAZORPAY_KEY_SECRET" label="Razorpay Key Secret" placeholder="from Razorpay dashboard" />

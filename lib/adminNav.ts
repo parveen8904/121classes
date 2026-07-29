@@ -74,6 +74,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { icon: "🎁", title: "Combos", desc: "Bundle several subjects at one discounted price.", href: "/admin/combos" },
       { icon: "📦", title: "Books", desc: "Manage the book catalogue, prices and stock for the store.", href: "/admin/books" },
       { icon: "💳", title: "Sales & orders", desc: "EVERY payment received — subscriptions, extensions & books — with full buyer details, GST invoices, Excel download, Zoho approval and book dispatch.", href: "/admin/orders" },
+      { icon: "🌉", title: "Aldine bridge", desc: "Courses sold on aldine.edu.in open here automatically — map each Aldine product to a course, watch every order arrive.", href: "/admin/aldine" },
       { icon: "🏭", title: "Warehouse & shipping", desc: "Parcels to courier — book orders + FREE Gold book sets. Print label PDFs, enter tracking IDs. Grant this area to your warehouse user.", href: "/admin/warehouse" },
       { icon: "🧾", title: "GST & invoicing", desc: "GSTIN, rate & invoice settings; transactions and downloadable invoices in Reports.", href: "/admin/billing" },
       { icon: "📊", title: "Reports", desc: "Revenue, active plans, book sales and dispatch snapshot.", href: "/admin/reports" },

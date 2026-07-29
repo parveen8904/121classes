@@ -186,6 +186,34 @@ Your login email is **{{email}}**. A short guide to everything on the platform w
     sample: { name: "Ravi", tier: "gold", course: "Financial Reporting", months: "6", email: "ravi@example.com" },
   },
 
+  {
+    key: "purchase_provisioned",
+    label: "They bought on Aldine — access is ready here",
+    when: "Automatically, when a purchase on aldine.edu.in is provisioned on this site. New buyers get a set-password button; existing students get a login button.",
+    group: "Access",
+    subject: "Your {{course}} is ready — CA Parveen Sharma",
+    body: `Dear {{name}},
+
+Thank you for your purchase on aldine.edu.in. Your course is ready on our **AI-powered classroom**, caparveensharma.com — this is where you will study.
+
+**{{course}}** is open on your account. Alongside the classes you get the AI study planner that plans day by day backwards from your attempt, chapter tests whose AI reports tell you what to revisit, case-scenario practice with reasoning, and an AI doubt assistant trained on Sir's own material — ready at any hour.
+
+{{button}}
+
+You log in with this email address: **{{email}}**. A short guide to everything on the platform will reach you after your first login.
+
+Questions? Write to us at caparveensharma.com/support or call 9810012674.
+
+CA Parveen Sharma`,
+    vars: [
+      NAME,
+      { key: "course", note: "what they bought, as it opens here" },
+      { key: "email", note: "the address they log in with" },
+      BUTTON("set-password / login"),
+    ],
+    sample: { name: "Ravi", course: "CA Final — Financial Reporting", email: "ravi@example.com" },
+  },
+
   // ── Offers ────────────────────────────────────────────────────────────────
   {
     key: "coupon_sent",

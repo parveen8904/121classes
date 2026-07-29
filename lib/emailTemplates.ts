@@ -42,15 +42,46 @@ export const EMAIL_EVENTS: EmailEventDef[] = [
     label: "We created their account",
     when: "An admin adds a student in Admin → Users. They have no password yet.",
     group: "Account & login",
-    subject: "Your CA Parveen Sharma account is ready",
+    subject: "Your account on CA Parveen Sharma's AI-powered classroom is ready",
     body: `Hi {{name}},
 
-An account has been created for you at CA Parveen Sharma. Choose a password and you are in:
+An account has been created for you at caparveensharma.com — CA Parveen Sharma's AI-powered learning platform, where his 36 years of teaching meet an AI that plans your studies, tests you after every chapter and answers your doubts at any hour.
+
+Choose a password and you are in:
 
 {{button}}
 
-Afterwards you log in with this email address and the password you chose.`,
+Afterwards you log in with this email address and the password you chose. A short guide to everything on the platform will reach you after your first login.`,
     vars: [NAME, BUTTON("set-password")],
+    sample: { name: "Ravi" },
+  },
+  {
+    key: "welcome_guide",
+    label: "The welcome guide — their first email from us",
+    when: "Automatically, once, on a student's first visit to their dashboard — however the account was made (self sign-up, admin, or gift).",
+    group: "Account & login",
+    subject: "Welcome, {{name}} — here is how your AI classroom works 🎓",
+    body: `Dear {{name}},
+
+Welcome. You have just joined something we are genuinely proud of — an **AI-powered classroom** built around CA Parveen Sharma's 36 years of teaching. The AI here is not a chatbot bolted on the side; it is trained on his own classes and material, and it works for you in five ways:
+
+🤖 **AI doubt assistant** — stuck at 11 pm? Ask from any page. It answers from Sir's own class material, and tricky doubts go to the faculty.
+📅 **AI study planner** — tell it your exam attempt and it builds your plan backwards from the exam: what to study today, with your revisions protected. It re-plans when you fall behind.
+📝 **Chapter tests with AI reports** — after every class, a timed test that tells you not just your marks but which concept was weak and exactly which class to rewatch.
+📖 **Case scenarios** — exam-pattern cases with AI reasoning for every option, so you learn why the wrong answers tempt you.
+✍️ **Descriptive copies** — write full papers, get them AI-evaluated and then verified by a human examiner, returned with remarks like a real copy.
+
+Alongside the AI: full recorded classes with handwritten and typed notes on your phone, quick revision videos for your second and third pass, amendments filtered to YOUR attempt, live classes, and subject groups where students and faculty answer each other.
+
+The planner, chapter tests and case practice work free — start there today.
+
+Everything is explained step by step in the student guide at caparveensharma.com/guide — keep it handy for the first week.
+
+Questions? Write to us at caparveensharma.com/support or call 9810012674.
+
+Happy studying,
+Team CA Parveen Sharma`,
+    vars: [NAME],
     sample: { name: "Ravi" },
   },
   {
@@ -61,11 +92,11 @@ Afterwards you log in with this email address and the password you chose.`,
     subject: "Verify your email — CA Parveen Sharma",
     body: `Hi {{name}},
 
-Welcome to CA Parveen Sharma classes. Please confirm your email to activate your account:
+Welcome to CA Parveen Sharma classes — your AI-powered CA classroom. Please confirm your email to activate your account:
 
 {{button}}
 
-After verifying you will choose your password — then you are in.
+After verifying you will choose your password — then you are in, and a short guide to everything the platform does will follow.
 
 Didn't sign up? You can safely ignore this email.`,
     vars: [NAME, BUTTON("verify")],
@@ -109,7 +140,7 @@ If you didn't ask for this, you can ignore this email — your password stays as
 
 You have studied with me before, which is exactly why I would like your eyes on this.
 
-We have rebuilt caparveensharma.com from the ground up. Alongside the recorded classes there is now a day-by-day study planner that works backwards from your attempt, chapter tests that tell you which concepts to go back over, case-scenario practice for the new exam pattern, and a doubt assistant that answers from our own class material.
+We have rebuilt caparveensharma.com from the ground up as an **AI-powered classroom**. Alongside the recorded classes there is now an AI study planner that works backwards from your attempt day by day, chapter tests whose AI reports tell you which concepts to go back over and which class to rewatch, case-scenario practice for the new exam pattern with reasoning for every option, and an AI doubt assistant that answers from my own class material — not the open internet.
 
 I have opened {{course}} for you — {{tier}} access, free, until {{expires}}. There is nothing to pay and nothing to cancel; it simply ends on that date.
 
@@ -137,13 +168,13 @@ CA Parveen Sharma`,
     subject: "🎁 You've received a gift subscription — CA Parveen Sharma",
     body: `Hi {{name}},
 
-Someone has gifted you **{{tier}}** access to **{{course}}** with CA Parveen Sharma for {{months}} months.
+Someone has gifted you **{{tier}}** access to **{{course}}** with CA Parveen Sharma for {{months}} months — full classes on his AI-powered platform, with an AI study planner, chapter tests that tell you what to fix, and a doubt assistant trained on his own material, ready at any hour.
 
 Set your password and start learning:
 
 {{button}}
 
-Your login email is **{{email}}**.`,
+Your login email is **{{email}}**. A short guide to everything on the platform will reach you after your first login.`,
     vars: [
       NAME,
       { key: "tier", note: "gold / silver / bronze" },
@@ -408,4 +439,25 @@ export async function sendTemplate(
   return attachments
     ? sendEmailWithAttachment(to, subject, html, attachments)
     : sendEmail(to, subject, html);
+}
+
+/**
+ * The welcome guide, exactly once per student — called from the dashboard on
+ * every visit, and cheap for everyone who already has the stamp. The stamp is
+ * written BEFORE sending so a failure can't cause a double-send on the next
+ * visit; a lost email is recoverable (the guide lives at /guide), a student
+ * greeted twice looks broken.
+ */
+export async function sendWelcomeGuideOnce(userId: string): Promise<void> {
+  try {
+    const svc = createServiceClient();
+    const { data: prof } = await svc
+      .from("profiles")
+      .select("email, full_name, welcome_sent_at")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!prof?.email || prof.welcome_sent_at) return;
+    await svc.from("profiles").update({ welcome_sent_at: new Date().toISOString() }).eq("id", userId);
+    await sendTemplate("welcome_guide", prof.email, { name: prof.full_name || "student" });
+  } catch { /* never let a greeting break the dashboard */ }
 }

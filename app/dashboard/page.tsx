@@ -22,9 +22,17 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role, target_attempt, telegram_chat_id, phone, account_type")
+    .select("full_name, role, target_attempt, telegram_chat_id, phone, account_type, welcome_sent_at")
     .eq("id", user.id)
     .single();
+
+  // First time on the dashboard → the welcome-guide email (exactly once; the
+  // helper re-checks and stamps before sending). Costs nothing on later visits
+  // because the flag rides along in the profile query above.
+  if (profile && !profile.welcome_sent_at) {
+    const { sendWelcomeGuideOnce } = await import("@/lib/emailTemplates");
+    await sendWelcomeGuideOnce(user.id);
+  }
 
   const { data: courses } = await supabase
     .from("courses")

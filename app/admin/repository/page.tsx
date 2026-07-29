@@ -100,17 +100,28 @@ export default async function RepositoryPage() {
           (01:30–05:30 IST)</strong>, or immediately when you press Process now. No separate upload here.
           {cov.notes_have - cov.notes_ocr > 0 ? ` Still processing: ${cov.notes_have - cov.notes_ocr} handwritten notes.` : " Everything is ingested."}
         </p>
-        {cov.digest < cov.transcript && (
-          <form action={runIngestNow} style={{ marginTop: 10 }}>
-            <SubmitButton className="btn small" savedLabel="✓ Started — processing in the background">
-              ▶ Process now ({cov.transcript - cov.digest} transcripts left)
-            </SubmitButton>
-            <p className="muted" style={{ fontSize: ".76rem", marginTop: 4 }}>
-              Click once — it now works through the whole backlog in the background (Haiku). Wait a minute and
-              <strong> refresh this page</strong> to watch the count drop; the overnight job also keeps going on its own.
-            </p>
-          </form>
-        )}
+        {/* The button must appear for ANY backlog. It used to check only
+            pending transcripts — so with all transcripts digested but 152
+            handwritten notes unread, there was nothing to click. */}
+        {(() => {
+          const parts = [
+            cov.transcript - cov.digest > 0 ? `${cov.transcript - cov.digest} transcripts` : "",
+            cov.notes_have - cov.notes_ocr > 0 ? `${cov.notes_have - cov.notes_ocr} handwritten notes` : "",
+            cov.class_pdfs - cov.class_pdfs_done > 0 ? `${cov.class_pdfs - cov.class_pdfs_done} class PDFs` : "",
+          ].filter(Boolean);
+          if (!parts.length) return null;
+          return (
+            <form action={runIngestNow} style={{ marginTop: 10 }}>
+              <SubmitButton className="btn small" savedLabel="✓ Started — processing in the background">
+                ▶ Process now ({parts.join(", ")} left)
+              </SubmitButton>
+              <p className="muted" style={{ fontSize: ".76rem", marginTop: 4 }}>
+                Click once — it works through the whole backlog in the background, batch after batch. Refresh this
+                page to watch the counts drop; the overnight job also keeps going on its own.
+              </p>
+            </form>
+          );
+        })()}
       </div>
 
       {!ai && (

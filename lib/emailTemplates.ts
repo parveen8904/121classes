@@ -347,7 +347,9 @@ function inline(text: string): string {
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     // Our own addresses become links. Trailing punctuation stays outside the
     // link — "…/support." with the full stop attached is a broken address.
-    .replace(/\b(caparveensharma\.com[^\s<]*?)([.,;:!?)]*)(?=\s|$)/g, '<a href="https://$1">$1</a>$2')
+    // The (?<!@) guard leaves email addresses alone: sir@caparveensharma.com
+    // must stay plain text, not become sir@<a…>.
+    .replace(/(?<!@)\b(caparveensharma\.com[^\s<]*?)([.,;:!?)]*)(?=\s|$)/g, '<a href="https://$1">$1</a>$2')
     .replace(/\n/g, "<br />");
 }
 

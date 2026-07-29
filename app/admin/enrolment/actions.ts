@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { str, num } from "../_lib/util";
+import { buildGrantEmail, loadGrantTemplate, GRANT_SUBJECT_KEY, GRANT_BODY_KEY } from "@/lib/grantEmail";
 import { notifyByEmail, emailShell } from "@/lib/notify";
 import { assertArea } from "@/lib/adminAccess";
 
@@ -37,19 +38,13 @@ async function addToShelf(studentIds: string[], courseId: string, subjectId: str
 
 const TIERS = ["bronze", "silver", "gold"];
 
-function enrolledEmail(name: string | null, courseTitle: string, tier: string, months: number) {
-  return {
-    subject: `🎉 You're enrolled in ${courseTitle}`,
-    html: emailShell(
-      "You're enrolled! 🎉",
-      `<p>Hi ${name || "there"},</p>
-       <p>You have been granted <strong>free ${tier}</strong> access to <strong>${courseTitle}</strong> for ${months} month${months === 1 ? "" : "s"}.</p>
-       <p>Please note: printed books are not included with granted subscriptions. If you would like the
-       hard-copy books, you can order them online at
-       <a href="https://caparveensharma.com/books">caparveensharma.com/books</a> — they are couriered to your address.</p>
-       <p>Log in to start learning. 📚 Good luck with your prep! 💪</p>`,
-    ),
-  };
+// The granted-access email is drafted in Admin → Enrolment, not here — see
+// lib/grantEmail.ts. `expires` is spelled out for the reader rather than left
+// as "6 months", because "until 31 January 2027" is what they actually need.
+function expiryLabel(months: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
 }
 
 function endsAtFromNow(months: number): string {
@@ -135,7 +130,13 @@ export async function grantSubscription(formData: FormData) {
   await addToShelf([profile.id], courseId, subjectId);
 
   const { data: course } = await supabase.from("courses").select("title").eq("id", courseId).maybeSingle();
-  const msg = enrolledEmail(profile.full_name, course?.title ?? "your course", tier, months);
+  const msg = buildGrantEmail(await loadGrantTemplate(), {
+    name: profile.full_name || "there",
+    course: course?.title ?? "your course",
+    tier,
+    months,
+    expires: expiryLabel(months),
+  });
   await notifyByEmail({
     studentId: profile.id,
     email: profile.email,
@@ -213,9 +214,11 @@ export async function bulkGrant(formData: FormData) {
 
     const { data: course } = await supabase.from("courses").select("title").eq("id", courseId).maybeSingle();
     const title = course?.title ?? "your course";
+    const template = await loadGrantTemplate();
+    const expires = expiryLabel(months);
     await Promise.all(
       found.map((p) => {
-        const msg = enrolledEmail(p.full_name, title, tier, months);
+        const msg = buildGrantEmail(template, { name: p.full_name || "there", course: title, tier, months, expires });
         return notifyByEmail({
           studentId: p.id,
           email: p.email,
@@ -292,4 +295,17 @@ export async function extendSubscription(formData: FormData) {
     .update({ ends_at: base.toISOString(), status: "active" })
     .eq("id", id);
   revalidatePath("/admin/enrolment");
+}
+
+// Save the wording of the granted-access email. Blank fields fall back to the
+// built-in draft, so clearing a box restores the default rather than sending
+// an empty email.
+export async function saveGrantEmail(formData: FormData) {
+  await assertArea(null);
+  await createServiceClient().from("site_settings").upsert([
+    { key: GRANT_SUBJECT_KEY, value: str(formData.get("subject")).trim() },
+    { key: GRANT_BODY_KEY, value: str(formData.get("body")).trim() },
+  ], { onConflict: "key" });
+  revalidatePath("/admin/enrolment");
+  redirect("/admin/enrolment?emailsaved=1");
 }

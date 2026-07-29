@@ -44,13 +44,15 @@ export async function decideScholarship(formData: FormData) {
 
   if (email) {
     try {
-      const { sendEmail, emailShell } = await import("@/lib/notify");
-      await sendEmail(email, "💚 Your scholarship discount — CA Parveen Sharma",
-        emailShell("Good news! 💚",
-          `<p>Hi ${prof?.full_name || "there"},</p>
-           <p>Your application has been approved. Use this coupon at checkout for <strong>${pct}% off</strong> the Gold subscription:</p>
-           <p style="font-size:20px"><strong>${code}</strong> <span style="color:#64748b">(valid 90 days, one-time)</span></p>
-           <p><a href="https://caparveensharma.com/courses" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Enrol now →</a></p>`));
+      const { sendTemplate } = await import("@/lib/emailTemplates");
+      await sendTemplate("scholarship_approved", email, {
+        heading: "Good news! 💚",
+        name: prof?.full_name || "there",
+        percent: pct,
+        code,
+        action_url: "https://caparveensharma.com/courses",
+        action_label: "Enrol now →",
+      });
     } catch { /* coupon still issued */ }
   }
   revalidatePath("/admin/scholarships");

@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
-import { sendEmail, emailShell } from "@/lib/notify";
+import { sendEmail } from "@/lib/notify";
+import { loadTemplate, renderTemplate } from "@/lib/emailTemplates";
 import { runStudyReminders } from "@/lib/studyReminders";
 
 export const dynamic = "force-dynamic";
@@ -54,14 +55,17 @@ export async function GET(req: NextRequest) {
     const when = s.starts_at
       ? new Date(s.starts_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
       : "soon";
-    const html = emailShell(
-      `Reminder: ${s.title} is starting soon`,
-      `<p>Your live class <strong>${s.title}</strong> is scheduled for <strong>${when}</strong>.</p>` +
-        (s.join_url ? `<p><a href="${s.join_url}">Join the class →</a></p>` : "") +
-        `<p>See you there! — CA Parveen Sharma</p>`,
-    );
+    // The wording is loaded and rendered ONCE, not once per student — this can
+    // go to a whole batch.
+    const { subject, html } = renderTemplate(await loadTemplate("class_reminder"), {
+      heading: `Reminder: ${s.title} is starting soon`,
+      title: s.title,
+      when,
+      action_url: s.join_url || undefined,
+      action_label: "Join the class →",
+    });
     for (const to of emails) {
-      if (await sendEmail(to, `⏰ ${s.title} starts soon`, html)) emailed++;
+      if (await sendEmail(to, subject, html)) emailed++;
     }
 
     // mark as reminded

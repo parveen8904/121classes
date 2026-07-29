@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { str, num } from "../_lib/util";
-import { buildGrantEmail, loadGrantTemplate, GRANT_SUBJECT_KEY, GRANT_BODY_KEY } from "@/lib/grantEmail";
+import { loadTemplate, renderTemplate } from "@/lib/emailTemplates";
 import { notifyByEmail, emailShell } from "@/lib/notify";
 import { assertArea } from "@/lib/adminAccess";
 
@@ -130,7 +130,7 @@ export async function grantSubscription(formData: FormData) {
   await addToShelf([profile.id], courseId, subjectId);
 
   const { data: course } = await supabase.from("courses").select("title").eq("id", courseId).maybeSingle();
-  const msg = buildGrantEmail(await loadGrantTemplate(), {
+  const msg = renderTemplate(await loadTemplate("access_granted"), {
     name: profile.full_name || "there",
     course: course?.title ?? "your course",
     tier,
@@ -214,11 +214,11 @@ export async function bulkGrant(formData: FormData) {
 
     const { data: course } = await supabase.from("courses").select("title").eq("id", courseId).maybeSingle();
     const title = course?.title ?? "your course";
-    const template = await loadGrantTemplate();
+    const template = await loadTemplate("access_granted");
     const expires = expiryLabel(months);
     await Promise.all(
       found.map((p) => {
-        const msg = buildGrantEmail(template, { name: p.full_name || "there", course: title, tier, months, expires });
+        const msg = renderTemplate(template, { name: p.full_name || "there", course: title, tier, months, expires });
         return notifyByEmail({
           studentId: p.id,
           email: p.email,
@@ -300,12 +300,3 @@ export async function extendSubscription(formData: FormData) {
 // Save the wording of the granted-access email. Blank fields fall back to the
 // built-in draft, so clearing a box restores the default rather than sending
 // an empty email.
-export async function saveGrantEmail(formData: FormData) {
-  await assertArea(null);
-  await createServiceClient().from("site_settings").upsert([
-    { key: GRANT_SUBJECT_KEY, value: str(formData.get("subject")).trim() },
-    { key: GRANT_BODY_KEY, value: str(formData.get("body")).trim() },
-  ], { onConflict: "key" });
-  revalidatePath("/admin/enrolment");
-  redirect("/admin/enrolment?emailsaved=1");
-}

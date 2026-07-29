@@ -4,7 +4,8 @@ import { requireArea } from "@/lib/adminAccess";
 
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
-import { sendEmail, emailShell, sendTelegramMessage } from "@/lib/notify";
+import { sendTelegramMessage } from "@/lib/notify";
+import { sendTemplate } from "@/lib/emailTemplates";
 
 export async function markQuestionDone(formData: FormData) {
   if (!(await requireArea("inbox"))) return;
@@ -54,11 +55,11 @@ export async function replyToQuestion(formData: FormData) {
     );
   }
   if (!delivered && email) {
-    const html = emailShell(
-      "A reply to your question",
-      `<p>You asked:</p><blockquote style="color:#475569">${q.question}</blockquote><p>${reply.replace(/\n/g, "<br/>")}</p>`,
-    );
-    delivered = await sendEmail(email, "Your question — CA Parveen Sharma", html);
+    delivered = await sendTemplate("question_answered", email, {
+      heading: "A reply to your question",
+      question: q.question,
+      answer: reply,
+    });
   }
 
   await svc.from("page_questions").update({ status: "replied" }).eq("id", id);

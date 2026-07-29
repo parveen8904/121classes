@@ -48,11 +48,13 @@ export async function createSupportTicket(formData: FormData) {
     await logTicketEvent(svc, t.id, { kind: "created", body: "Raised from the website" });
     // Confirmation to the student + heads-up to staff (both best-effort).
     if (email) {
-      const { sendEmail, emailShell } = await import("@/lib/notify");
-      await sendEmail(email, `We've got your request (${t.ref}) — CA Parveen Sharma`,
-        emailShell("Thanks — we're on it 💚",
-          `<p>Hi ${name || "there"}, we've logged your request as <strong>${t.ref}</strong> and our team will get back to you shortly, usually with a call.</p>
-           <p><strong>Your message:</strong><br>${title}</p>`)).catch(() => false);
+      const { sendTemplate } = await import("@/lib/emailTemplates");
+      await sendTemplate("support_received", email, {
+        heading: "Thanks — we're on it 💚",
+        name: name || "there",
+        ref: t.ref,
+        message: title,
+      }).catch(() => false);
     }
     await notifyStaffNewTicket(svc, { ref: t.ref, title, description: s(formData.get("description")), student_name: name, source: "website" }).catch(() => {});
     redirect(`/support?ok=${encodeURIComponent(t.ref)}`);

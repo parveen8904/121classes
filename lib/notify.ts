@@ -92,7 +92,7 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
 
 // Send an email with a file attachment (e.g. a generated PDF) via Mailgun
 // multipart. Returns false (no-op) if the provider isn't configured.
-type EmailAttachment = { filename: string; content: Buffer; contentType: string };
+export type EmailAttachment = { filename: string; content: Buffer; contentType: string };
 
 export async function sendEmailWithAttachment(
   to: string,

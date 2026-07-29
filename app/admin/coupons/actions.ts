@@ -89,7 +89,7 @@ export async function emailCoupon(formData: FormData) {
   const svc = createServiceClient();
   const { data: c } = await svc.from("coupons").select("code, percent_off, amount_off_inr, expires_at, scope").eq("id", id).maybeSingle();
   if (!c) redirect("/admin/coupons?mail=fail");
-  const { sendEmail, sendEmailWithAttachment, emailShell } = await import("@/lib/notify");
+  const { sendTemplate } = await import("@/lib/emailTemplates");
   const off = c!.percent_off ? `${c!.percent_off}% off` : c!.amount_off_inr ? `₹${c!.amount_off_inr} off` : "a special discount";
   const validity = c!.expires_at ? ` (valid till ${new Date(c!.expires_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})` : "";
   // A gifter always gets the Sponsor Guide. Treat the recipient as a gifter if
@@ -101,21 +101,20 @@ export async function emailCoupon(formData: FormData) {
     // Sponsor coupon → attach the Sponsor Guide.
     const { buildSponsorGuidePdf } = await import("@/lib/sponsorGuide");
     const pdf = await buildSponsorGuidePdf();
-    ok = await sendEmailWithAttachment(to, "🎁 Your sponsor coupon — CA Parveen Sharma",
-      emailShell("A gift of education 🎁",
-        `<p>Thank you for choosing to sponsor a CA student with CA Parveen Sharma.</p>
-         <p>Your coupon code — <strong style="font-size:18px">${c!.code}</strong> — gives you <strong>${off}</strong>${validity}. Enter it at the checkout step when you sponsor.</p>
-         <p>The attached <strong>Sponsor Guide</strong> explains what the student receives and the simple steps to sponsor.</p>
-         <p><a href="https://caparveensharma.com/gift">Sponsor a student now →</a></p>`),
+    ok = await sendTemplate("coupon_sponsor", to,
+      {
+        heading: "A gift of education 🎁",
+        code: c!.code, discount: off, validity,
+        action_url: "https://caparveensharma.com/gift", action_label: "Sponsor a student now →",
+      },
       { filename: "Sponsor-a-Student-Guide.pdf", content: Buffer.from(pdf), contentType: "application/pdf" });
   } else {
     // Student / general coupon → a plain discount email.
-    ok = await sendEmail(to, "🎟️ A discount coupon for you — CA Parveen Sharma",
-      emailShell("Here's a little help 💚",
-        `<p>We&apos;d love to support your CA journey. Use this coupon at checkout:</p>
-         <p>Your code — <strong style="font-size:18px">${c!.code}</strong> — gives you <strong>${off}</strong>${validity}.</p>
-         <p>Enter it on the payment step when you buy your subscription.</p>
-         <p><a href="https://caparveensharma.com/courses" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Explore courses →</a></p>`));
+    ok = await sendTemplate("coupon_sent", to, {
+      heading: "Here's a little help 💚",
+      code: c!.code, discount: off, validity,
+      action_url: "https://caparveensharma.com/courses", action_label: "Explore courses →",
+    });
   }
   redirect(`/admin/coupons?mail=${ok ? "sent" : "fail"}`);
 }

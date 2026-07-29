@@ -1,10 +1,10 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import SubmitButton from "@/app/components/SubmitButton";
 import { DURATIONS, durationLabel } from "@/lib/pricing";
 import AdminHero from "../_components/AdminHero";
 import EnrolForm from "./EnrolForm";
-import { grantSubscription, bulkGrant, revokeSubscription, extendSubscription, blockSubscription, restoreSubscription, saveGrantEmail } from "./actions";
-import { loadGrantTemplate } from "@/lib/grantEmail";
+import { grantSubscription, bulkGrant, revokeSubscription, extendSubscription, blockSubscription, restoreSubscription } from "./actions";
 
 function fmtDate(s: string | null): string {
   if (!s) return "—";
@@ -27,7 +27,7 @@ type CourseRow = { id: string; title: string; subjects: { id: string; title: str
 
 export default async function EnrolmentPage(
   props: {
-    searchParams: Promise<{ granted?: string; missing?: string; error?: string; dupe?: string; until?: string; tier?: string; months?: string; course?: string; blocked?: string; restored?: string; emailsaved?: string }>;
+    searchParams: Promise<{ granted?: string; missing?: string; error?: string; dupe?: string; until?: string; tier?: string; months?: string; course?: string; blocked?: string; restored?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -53,7 +53,6 @@ export default async function EnrolmentPage(
   const grantedEmail = grantedRaw && !/^\d+$/.test(grantedRaw) ? grantedRaw : null;
   const granted = grantedRaw ? 1 : null;
   const missing = searchParams.missing ? searchParams.missing.split(",") : [];
-  const grantEmail = await loadGrantTemplate();
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -100,31 +99,12 @@ export default async function EnrolmentPage(
           Please fill in email, course, subject and tier.
         </div>
       )}
-      {searchParams.emailsaved && (
-        <div className="notice ok" style={{ marginTop: 16 }}>✓ Email wording saved — the next grant uses it.</div>
-      )}
-
-      {/* What the student receives */}
-      <details className="form-card" style={{ marginTop: 16 }}>
-        <summary style={{ cursor: "pointer", fontWeight: 700 }}>
-          ✉️ The email they receive when you grant access — read it, change it
-        </summary>
-        <p className="muted" style={{ fontSize: ".82rem", margin: "8px 0" }}>
-          This is written here, not in Mailgun — Mailgun only posts it. Write plain sentences; a blank line starts a
-          new paragraph and any caparveensharma.com address becomes a link by itself. These stand in for the real
-          details: <code>{"{{name}}"}</code> <code>{"{{course}}"}</code> <code>{"{{tier}}"}</code>{" "}
-          <code>{"{{months}}"}</code> <code>{"{{expires}}"}</code> — the last one prints as a date
-          (&ldquo;31 January 2027&rdquo;), which is clearer to a reader than &ldquo;6 months&rdquo;.
-          Empty either box to go back to the standard wording.
-        </p>
-        <form action={saveGrantEmail}>
-          <label>Subject line</label>
-          <input name="subject" defaultValue={grantEmail.subject} />
-          <label style={{ marginTop: 8 }}>Message</label>
-          <textarea name="body" rows={18} defaultValue={grantEmail.body} style={{ fontFamily: "inherit", lineHeight: 1.5 }} />
-          <SubmitButton className="btn" savedLabel="✓ Saved" style={{ marginTop: 10 }}>Save the wording</SubmitButton>
-        </form>
-      </details>
+      
+      {/* The wording itself lives with every other email, on one page. */}
+      <p className="muted" style={{ fontSize: ".84rem", marginTop: 16 }}>
+        ✉️ The email these students receive is written on the{" "}
+        <Link href="/admin/emails#access_granted">Emails page</Link> — read it before a batch goes out.
+      </p>
 
       {searchParams.error === "noplan" && (
         <div className="notice err" style={{ marginTop: 16 }}>

@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { sendEmail, emailShell, emailConfigured } from "@/lib/notify";
+import { emailConfigured } from "@/lib/notify";
+import { sendTemplate } from "@/lib/emailTemplates";
 import { str, nullable } from "../_lib/util";
 
 const ROLES = ["student", "admin", "faculty", "operator"];
@@ -18,29 +18,27 @@ async function requireAdmin(): Promise<boolean> {
   return data?.role === "admin";
 }
 
-async function baseUrl(): Promise<string> {
-  const h = await headers();
-  return `${h.get("x-forwarded-proto") || "https"}://${h.get("host") || "caparveensharma.com"}`;
-}
-
+// The "your account is ready" email.
+//
+// This used to send Supabase's own action_link — an address on
+// xmeltwyfvzhhurtcjfiu.supabase.co — and print it underneath as text as well.
+// Both were wrong. It looked like it came from somebody else, and it did not
+// work: that address is consumed the first time it is fetched, so a mail
+// scanner or a link preview burned it before the student ever clicked, leaving
+// them with "link expired". The rest of the site already does this correctly:
+// take the token itself and confirm it on OUR domain. Button only — a one-time
+// token is never printed as text.
 async function emailSetPasswordLink(email: string, name: string): Promise<boolean> {
+  if (!(await emailConfigured())) return false;
   const svc = createServiceClient();
-  const { data } = await svc.auth.admin.generateLink({
-    type: "recovery",
-    email,
-    options: { redirectTo: `${await baseUrl()}/auth/callback?next=/auth/reset-password` },
+  const { data } = await svc.auth.admin.generateLink({ type: "recovery", email });
+  const tokenHash = data?.properties?.hashed_token;
+  if (!tokenHash) return false;
+  return sendTemplate("account_created", email, {
+    name: name || "there",
+    action_url: `https://caparveensharma.com/auth/confirm?token_hash=${tokenHash}&type=recovery&next=/auth/set-password`,
+    action_label: "Set my password",
   });
-  const url = data?.properties?.action_link;
-  if (!url || !(await emailConfigured())) return false;
-  const html = emailShell(
-    "Your CA Parveen Sharma account is ready",
-    `<p>Hi ${name || "there"},</p>
-     <p>An account has been created for you at <strong>CA Parveen Sharma</strong>. Set your password to get started:</p>
-     <p><a href="${url}" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Set my password</a></p>
-     <p style="color:#64748b;font-size:13px">Or paste this link:<br/>${url}</p>
-     <p>Afterwards, log in with your email and the password you chose.</p>`,
-  );
-  return sendEmail(email, "Set your password — CA Parveen Sharma", html);
 }
 
 // Admin adds one or many users (no verification needed — admin-trusted). Each is

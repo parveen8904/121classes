@@ -58,16 +58,13 @@ export async function startCaseTrial(formData: FormData): Promise<StartResult> {
   const phoneCode = code6();
 
   // Email code (Mailgun).
-  const { sendEmail, emailShell, sendWhatsApp } = await import("@/lib/notify");
-  const emailSent = await sendEmail(
-    email,
-    `${emailCode} is your verification code — CA Parveen Sharma`,
-    emailShell("Your verification code",
-      `<p>Hi ${name},</p>
-       <p>Your code for the free CA case-scenario test is:</p>
-       <p style="font-size:28px;font-weight:800;letter-spacing:4px">${emailCode}</p>
-       <p style="color:#94a3b8;font-size:12px">Valid for 30 minutes. If you didn't request this, ignore this email.</p>`),
-  ).catch(() => false);
+  const { sendWhatsApp } = await import("@/lib/notify");
+  const { sendTemplate } = await import("@/lib/emailTemplates");
+  const emailSent = await sendTemplate("trial_code", email, {
+    heading: "Your verification code",
+    name,
+    code: emailCode,
+  }).catch(() => false);
   if (!emailSent) return { ok: false, error: "Couldn't send the email code — please check the email address and try again." };
 
   // WhatsApp OTP via Interakt (needs an approved authentication template with

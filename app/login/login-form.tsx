@@ -14,8 +14,13 @@ export default function LoginForm() {
   const params = useSearchParams();
   const next = params.get("next") || "/dashboard";
   const reason = params.get("reason");
+  // /auth/confirm sends people here when their email link no longer works —
+  // usually because it was already used (a mail scanner can open it first) or
+  // it simply sat in the inbox too long. Say so plainly and open the form that
+  // sends a fresh one, rather than a bare "authentication error".
+  const linkFailed = params.get("error") === "auth";
 
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>(linkFailed ? "forgot" : "login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,7 +35,9 @@ export default function LoginForm() {
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(
     reason === "elsewhere"
       ? { kind: "err", text: "You were signed out because your account was used on another device of the same type." }
-      : null,
+      : linkFailed
+        ? { kind: "err", text: "That link has already been used or has expired. Enter your email below and we'll send you a fresh one." }
+        : null,
   );
   const [loading, setLoading] = useState(false);
 

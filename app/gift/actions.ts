@@ -196,13 +196,17 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
     const { data: link } = await svc.auth.admin.generateLink({ type: "recovery", email });
     const th = link?.properties?.hashed_token;
     const setUrl = th ? `${SITE}/auth/confirm?token_hash=${th}&type=recovery&next=/auth/reset-password` : `${SITE}/login`;
-    await sendEmail(email, `🎁 You've received a gift subscription — CA Parveen Sharma`,
-      emailShell("A gift for you 🎁",
-        `<p>Hi ${g.recipient_name},</p>
-         <p>Someone has gifted you <strong>${g.tier}</strong> access to <strong>${subj?.title ?? "a CA subject"}</strong> with CA Parveen Sharma for ${g.months} months. 🎉</p>
-         <p>Set your password and start learning:</p>
-         <p><a href="${setUrl}" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Set my password &amp; log in</a></p>
-         <p>Your login email is <strong>${email}</strong>.</p>`));
+    const { sendTemplate } = await import("@/lib/emailTemplates");
+    await sendTemplate("gift_received", email, {
+      heading: "A gift for you 🎁",
+      name: g.recipient_name,
+      tier: g.tier,
+      course: subj?.title ?? "a CA subject",
+      months: g.months,
+      email,
+      action_url: setUrl,
+      action_label: "Set my password & log in",
+    });
   } catch { /* best-effort */ }
 
   await svc.from("gift_orders").update({

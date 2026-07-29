@@ -2,7 +2,8 @@
 
 import { randomUUID } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/service";
-import { sendEmail, emailShell, emailConfigured } from "@/lib/notify";
+import { emailConfigured } from "@/lib/notify";
+import { sendTemplate } from "@/lib/emailTemplates";
 
 // Always build auth links on the canonical domain (not whichever alias the user
 // happened to open), so verify/reset links are consistently caparveensharma.com.
@@ -53,15 +54,12 @@ export async function registerWithVerification(formData: FormData): Promise<Resu
   // Verify via our own server-side route (token_hash flow), which sets the
   // session and sends them straight to "set your password".
   const link = `${SITE_URL}/auth/confirm?token_hash=${tokenHash}&type=signup&next=/auth/set-password`;
-  const html = emailShell(
-    "Verify your email",
-    `<p>Hi ${name || "there"},</p>
-     <p>Welcome to CA Parveen Sharma classes! Please confirm your email to activate your account:</p>
-     <p><a href="${link}" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Verify my email</a></p>
-     <p>After verifying, you'll choose your password — then you're in.</p>
-     <p style="color:#94a3b8;font-size:12px">Didn't sign up? You can safely ignore this email.</p>`,
-  );
-  const sent = await sendEmail(email, "Verify your email — CA Parveen Sharma", html);
+  const sent = await sendTemplate("email_verify", email, {
+    name: name || "there",
+    heading: "Verify your email",
+    action_url: link,
+    action_label: "Verify my email",
+  });
   if (!sent) return { ok: false, error: "Couldn't send the verification email. Please try again shortly." };
   return { ok: true };
 }
@@ -77,12 +75,11 @@ export async function resendVerification(formData: FormData): Promise<Result> {
   const tokenHash = data?.properties?.hashed_token;
   if (error || !tokenHash) return { ok: false, error: "Couldn't generate a new link." };
   const link = `${SITE_URL}/auth/confirm?token_hash=${tokenHash}&type=magiclink&next=/auth/set-password`;
-  const html = emailShell(
-    "Verify your email",
-    `<p>Click below to verify your email and sign in:</p>
-     <p><a href="${link}" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Verify &amp; sign in</a></p>`,
-  );
-  const sent = await sendEmail(email, "Verify your email — CA Parveen Sharma", html);
+  const sent = await sendTemplate("email_verify_resend", email, {
+    heading: "Verify your email",
+    action_url: link,
+    action_label: "Verify & sign in",
+  });
   return sent ? { ok: true } : { ok: false, error: "Couldn't send the email." };
 }
 
@@ -124,13 +121,11 @@ export async function sendPasswordReset(formData: FormData): Promise<Result> {
   const tokenHash = data?.properties?.hashed_token;
   const link = tokenHash ? `${SITE_URL}/auth/confirm?token_hash=${tokenHash}&type=recovery&next=/auth/reset-password` : "";
   if (link) {
-    const html = emailShell(
-      "Reset your password",
-      `<p>We received a request to reset the password for your CA Parveen Sharma account.</p>
-       <p><a href="${link}" style="display:inline-block;background:#0d9488;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700">Set a new password</a></p>
-       <p>If you didn't request this, you can ignore this email.</p>`,
-    );
-    await sendEmail(email, "Reset your password — CA Parveen Sharma", html);
+    await sendTemplate("password_reset", email, {
+      heading: "Reset your password",
+      action_url: link,
+      action_label: "Set a new password",
+    });
   }
   return { ok: true };
 }

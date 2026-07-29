@@ -610,7 +610,12 @@ export async function transcribeHandwriting(pdfUrl: string, opts: { force?: bool
   if (!opts.force && (await aiDisabledSet()).has("transcribe")) return null;
   const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
   try {
-    const pdfRes = await fetch(pdfUrl, { cache: "no-store" });
+    // "secure:<path>" refs (files behind login) must be signed before fetching;
+    // public URLs pass through unchanged.
+    const { resolveFileUrl } = await import("@/lib/storage");
+    const fetchable = await resolveFileUrl(pdfUrl);
+    if (!fetchable) return null;
+    const pdfRes = await fetch(fetchable, { cache: "no-store" });
     if (!pdfRes.ok) return null;
     const b64 = Buffer.from(await pdfRes.arrayBuffer()).toString("base64");
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -679,7 +684,10 @@ export async function extractMcqsFromPdf(pdfUrl: string): Promise<ExtractedMcq[]
     '{"questions":[{"question":"...","options":["...","...","...","..."],"correct_index":0,"concept":"","solution":""}]} ' +
     "where correct_index is the 0-based index into options of the answer the document marks.";
   try {
-    const pdfRes = await fetch(pdfUrl, { cache: "no-store" });
+    const { resolveFileUrl } = await import("@/lib/storage");
+    const fetchable = await resolveFileUrl(pdfUrl);
+    if (!fetchable) return null;
+    const pdfRes = await fetch(fetchable, { cache: "no-store" });
     if (!pdfRes.ok) return null;
     const b64 = Buffer.from(await pdfRes.arrayBuffer()).toString("base64");
     const res = await fetch("https://api.anthropic.com/v1/messages", {

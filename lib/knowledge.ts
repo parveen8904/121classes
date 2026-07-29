@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { summarizeClass, transcribeHandwriting } from "@/lib/ai";
 import { extractPdfText } from "@/lib/pdf";
+import { resolveFileUrl } from "@/lib/storage";
 
 // ---------------------------------------------------------------------------
 // UNIFIED AI KNOWLEDGE INGESTION
@@ -38,11 +39,20 @@ export async function ingestPending(limits = { digests: 4, pdfs: 6, notes: 2 }):
   const cfgOf = async (id: string): Promise<Record<string, unknown>> =>
     (((await svc.from("sections").select("config").eq("id", id).maybeSingle()).data?.config ?? {}) as Record<string, unknown>);
 
+  // NOTE on the loops below: an item that turns out to need no work (raced,
+  // or carrying a sentinel) must be skipped WITHOUT eating a batch slot. The
+  // old `slice(0, limit)` + `continue` pattern let a handful of skip-items sit
+  // at the head of the list and swallow the whole batch every night — the
+  // queue looked alive but processed nothing.
+
   // --- 1. Digest transcripts that lack a digest (cheap) ---
   const needDigest = metas.filter((m) => m.has_transcript && !m.has_digest);
-  for (const m of needDigest.slice(0, limits.digests)) {
+  let digestSlots = limits.digests;
+  for (const m of needDigest) {
+    if (digestSlots <= 0) break;
     const c = await cfgOf(m.id);
     if (String(c.transcript ?? "").length <= 200 || String(c.ai_summary ?? "").trim()) continue;
+    digestSlots--;
     const r = await summarizeClass(String(c.transcript));
     if (!r) continue;
     await svc.from("sections").update({
@@ -56,7 +66,10 @@ export async function ingestPending(limits = { digests: 4, pdfs: 6, notes: 2 }):
   const { data: repoRows } = await svc
     .from("repository_items").select("id, file_url").eq("is_active", true).is("content", null).not("file_url", "is", null);
   for (const it of (repoRows ?? []).slice(0, limits.pdfs)) {
-    const txt = await extractPdfText(it.file_url as string);
+    // resolveFileUrl: a "secure:<path>" ref becomes a signed URL; a public URL
+    // passes through unchanged. Fetching the ref itself ALWAYS fails, and the
+    // failure used to be stamped as "unreadable" — permanently.
+    const txt = await extractPdfText(await resolveFileUrl(it.file_url as string));
     if (txt && txt.length > 50) {
       await svc.from("repository_items").update({ content: txt }).eq("id", it.id);
       out.pdfsExtracted++;
@@ -74,11 +87,14 @@ export async function ingestPending(limits = { digests: 4, pdfs: 6, notes: 2 }):
   // config.ai_pdf_text. Free (no AI) — older classes were saved before this
   // extraction existed, so their PDFs never reached the AI. ---
   const needClassPdf = metas.filter((m) => (m.pdf_url || m.notes_typed_url) && !m.has_pdf_text);
-  for (const m of needClassPdf.slice(0, limits.pdfs)) {
+  let pdfSlots = limits.pdfs;
+  for (const m of needClassPdf) {
+    if (pdfSlots <= 0) break;
     const c = await cfgOf(m.id);
-    if (String(c.ai_pdf_text ?? "").trim()) continue; // raced/already done
+    if (String(c.ai_pdf_text ?? "").trim()) continue; // sentinel/raced — no slot used
+    pdfSlots--;
     const urls = [c.pdf_url, c.notes_typed_url].map((u) => String(u ?? "")).filter(Boolean);
-    const texts = await Promise.all(urls.map((u) => extractPdfText(u)));
+    const texts = await Promise.all(urls.map(async (u) => extractPdfText(await resolveFileUrl(u))));
     const txt = texts.filter(Boolean).join("\n\n").slice(0, 20000);
     // Sentinel on unreadable PDFs so we don't retry them every run.
     await svc.from("sections").update({ config: { ...c, ai_pdf_text: txt.length > 50 ? txt : "__none__" } }).eq("id", m.id);
@@ -87,10 +103,15 @@ export async function ingestPending(limits = { digests: 4, pdfs: 6, notes: 2 }):
 
   // --- 3. OCR handwritten class notes → config.notes_text (vision, rate-limited) ---
   const needNotes = metas.filter((m) => m.notes_hand_url && !m.has_notes_text);
-  for (const m of needNotes.slice(0, limits.notes)) {
+  let noteSlots = limits.notes;
+  for (const m of needNotes) {
+    if (noteSlots <= 0) break;
     const c = await cfgOf(m.id);
-    if (!c.notes_hand_url || String(c.notes_text ?? "").trim()) continue; // raced/already done
-    const txt = await transcribeHandwriting(String(c.notes_hand_url), { force: true });
+    if (!c.notes_hand_url || String(c.notes_text ?? "").trim()) continue; // sentinel/raced — no slot used
+    const url = await resolveFileUrl(String(c.notes_hand_url));
+    if (!url) continue; // couldn't sign — leave it queued, do NOT stamp it unreadable
+    noteSlots--;
+    const txt = await transcribeHandwriting(url, { force: true });
     // Store the text, or a sentinel so we don't retry a note that won't OCR.
     await svc.from("sections").update({ config: { ...c, notes_text: txt && txt.length > 30 ? txt : "__none__" } }).eq("id", m.id);
     if (txt && txt.length > 30) out.notesOcr++;

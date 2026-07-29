@@ -130,7 +130,13 @@ export function cleanPdfText(raw: string): string {
 // failure so callers can fall back to manually-pasted text.
 export async function extractPdfText(url: string): Promise<string> {
   try {
-    const buf = await fetch(url, { cache: "no-store" }).then((r) => r.arrayBuffer());
+    // Files moved behind login are stored as "secure:<path>" — resolve to a
+    // signed URL first (public URLs pass through unchanged). Without this the
+    // fetch fails and the caller concludes the PDF is unreadable.
+    const { resolveFileUrl } = await import("@/lib/storage");
+    const fetchable = await resolveFileUrl(url);
+    if (!fetchable) return "";
+    const buf = await fetch(fetchable, { cache: "no-store" }).then((r) => r.arrayBuffer());
     const pdf = await getDocumentProxy(new Uint8Array(buf));
     const { text } = await extractText(pdf, { mergePages: true });
     return cleanPdfText(typeof text === "string" ? text : (text as string[]).join("\n"));

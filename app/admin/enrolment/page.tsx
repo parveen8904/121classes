@@ -4,7 +4,8 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { DURATIONS, durationLabel } from "@/lib/pricing";
 import AdminHero from "../_components/AdminHero";
 import EnrolForm from "./EnrolForm";
-import { grantSubscription, bulkGrant, revokeSubscription, extendSubscription, blockSubscription, restoreSubscription } from "./actions";
+import { grantSubscription, bulkGrant, revokeSubscription, extendSubscription, blockSubscription, restoreSubscription, queuePastStudents } from "./actions";
+import { createServiceClient } from "@/lib/supabase/service";
 
 function fmtDate(s: string | null): string {
   if (!s) return "—";
@@ -27,7 +28,7 @@ type CourseRow = { id: string; title: string; subjects: { id: string; title: str
 
 export default async function EnrolmentPage(
   props: {
-    searchParams: Promise<{ granted?: string; missing?: string; error?: string; dupe?: string; until?: string; tier?: string; months?: string; course?: string; blocked?: string; restored?: string }>;
+    searchParams: Promise<{ granted?: string; missing?: string; error?: string; dupe?: string; until?: string; tier?: string; months?: string; course?: string; blocked?: string; restored?: string; queued?: string; requeued?: string; badlines?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -42,6 +43,15 @@ export default async function EnrolmentPage(
       )
       .order("created_at", { ascending: false })
       .limit(100),
+  ]);
+
+  // Drip-queue progress (service client — the queue table is server-only).
+  const svcQ = createServiceClient();
+  const [{ count: qPending }, { count: qSent }, { count: qSkipped }, { count: qFailed }] = await Promise.all([
+    svcQ.from("grant_queue").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    svcQ.from("grant_queue").select("id", { count: "exact", head: true }).eq("status", "sent"),
+    svcQ.from("grant_queue").select("id", { count: "exact", head: true }).eq("status", "skipped"),
+    svcQ.from("grant_queue").select("id", { count: "exact", head: true }).eq("status", "failed"),
   ]);
 
   const courseList = (courses ?? []) as unknown as CourseRow[];
@@ -111,6 +121,78 @@ export default async function EnrolmentPage(
           No active plan found for that tier. Check the Plans page.
         </div>
       )}
+
+      {searchParams.queued && (
+        <div className="notice ok" style={{ marginTop: 16 }}>
+          ✓ {searchParams.queued} student(s) queued. Emails go out ~25 every 10 minutes — nobody's inbox sees a burst.
+          {searchParams.requeued ? ` ${searchParams.requeued} were already queued or done for this course (not repeated).` : ""}
+          {searchParams.badlines ? ` ⚠️ ${searchParams.badlines} line(s) had no email address and were ignored.` : ""}
+        </div>
+      )}
+      {searchParams.error === "queueinput" && (
+        <div className="notice err" style={{ marginTop: 16 }}>Pick a course and paste at least one line with an email address.</div>
+      )}
+
+      {/* Past students at any scale: paste once, the cron drips the emails. */}
+      <div className="form-card" style={{ marginTop: 24 }}>
+        <h3>🕰️ Past students — complimentary access (any size, sent slowly)</h3>
+        <p className="muted" style={{ fontSize: ".84rem", margin: "6px 0 10px" }}>
+          Paste the whole list in one go — one student per line, <code>email, name</code> (name optional; a straight
+          paste from Excel works). Accounts that don&apos;t exist are created; new people get a set-password button in
+          the email, existing students just log in. The letter itself is the one on the{" "}
+          <Link href="/admin/emails#access_granted">Emails page</Link> — sent as <strong>CA Parveen Sharma</strong>,
+          marked important, ~25 every 10 minutes so the batch never trips spam filters. Anyone already holding active
+          access to the course is skipped without an email.
+        </p>
+        {(qPending ?? 0) + (qSent ?? 0) + (qSkipped ?? 0) + (qFailed ?? 0) > 0 && (
+          <div className="card" style={{ marginBottom: 12, display: "flex", gap: 22, flexWrap: "wrap" }}>
+            <div><div className="muted" style={{ fontSize: ".74rem" }}>Waiting to send</div><div style={{ fontSize: "1.3rem", fontWeight: 800 }}>{qPending ?? 0}</div></div>
+            <div><div className="muted" style={{ fontSize: ".74rem" }}>Sent</div><div style={{ fontSize: "1.3rem", fontWeight: 800 }}>{qSent ?? 0}</div></div>
+            <div><div className="muted" style={{ fontSize: ".74rem" }}>Skipped (already had access)</div><div style={{ fontSize: "1.3rem", fontWeight: 800 }}>{qSkipped ?? 0}</div></div>
+            {(qFailed ?? 0) > 0 && <div><div className="muted" style={{ fontSize: ".74rem" }}>Failed</div><div style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--bad)" }}>{qFailed}</div></div>}
+            {(qPending ?? 0) > 0 && (
+              <div className="muted" style={{ fontSize: ".78rem", alignSelf: "center" }}>
+                ⏳ roughly {Math.ceil((qPending ?? 0) / 150)} hour(s) to finish — refresh to watch it move.
+              </div>
+            )}
+          </div>
+        )}
+        <form action={queuePastStudents} style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
+            <div>
+              <label>Course *</label>
+              <select name="course_id" required defaultValue="">
+                <option value="" disabled>choose…</option>
+                {courseList.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+              </select>
+            </div>
+            <div>
+              <label>Subject (empty = whole course)</label>
+              <select name="subject_id" defaultValue="">
+                <option value="">Whole course</option>
+                {courseList.flatMap((c) => c.subjects.map((su) => (
+                  <option key={su.id} value={su.id}>{c.title} — {su.title}</option>
+                )))}
+              </select>
+            </div>
+            <div>
+              <label>Tier</label>
+              <select name="tier" defaultValue="gold">
+                <option value="gold">Gold</option><option value="silver">Silver</option><option value="bronze">Bronze</option>
+              </select>
+            </div>
+            <div>
+              <label>Months</label>
+              <input name="months" type="number" min={1} max={36} defaultValue={3} />
+            </div>
+          </div>
+          <div>
+            <label>The list — any number of students</label>
+            <textarea name="bulk" rows={8} placeholder={"ravi@example.com, Ravi Kumar\npriya@example.com, Priya Singh\n… paste thousands if you like"} style={{ fontFamily: "monospace", fontSize: ".82rem" }} />
+          </div>
+          <SubmitButton className="btn" savedLabel="✓ Queued — sending has begun">Queue the whole list</SubmitButton>
+        </form>
+      </div>
 
       <div style={{ display: "grid", gap: 16, gridTemplateColumns: "1fr 1fr", marginTop: 24 }}>
         <div className="form-card">

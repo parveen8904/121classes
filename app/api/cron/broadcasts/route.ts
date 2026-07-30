@@ -28,6 +28,16 @@ export async function GET(req: NextRequest) {
     if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  // The complimentary-grant drip rides this 10-minute cron: ~25 emails per
+  // pass so a big past-student upload trickles out instead of bursting.
+  // Best-effort — a queue problem must never block the campaign posts below.
+  let drip: { sent: number; remaining: number } | null = null;
+  try {
+    const { processGrantQueue } = await import("@/lib/grantQueue");
+    const r = await processGrantQueue(25, 90_000);
+    if (r.sent || r.skipped || r.failed || r.remaining) drip = { sent: r.sent, remaining: r.remaining };
+  } catch { /* next pass retries */ }
+
   const svc = createServiceClient();
   const { data: due } = await svc
     .from("scheduled_posts")
@@ -36,7 +46,7 @@ export async function GET(req: NextRequest) {
     .lte("send_at", new Date().toISOString())
     .order("send_at")
     .limit(10);
-  if (!due?.length) return NextResponse.json({ ok: true, sent: 0 });
+  if (!due?.length) return NextResponse.json({ ok: true, sent: 0, ...(drip ? { drip } : {}) });
 
   // Targets are shared across posts — fetch once.
   const [channel, { data: subjects }] = await Promise.all([

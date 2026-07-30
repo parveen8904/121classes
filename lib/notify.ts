@@ -63,17 +63,31 @@ export async function sendTelegramMessage(
   }
 }
 
-export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+export type SendEmailOpts = {
+  /** Adds the high-importance headers most clients show as a red mark. Use
+   * sparingly — flagging everything "important" is itself a spam signal. */
+  important?: boolean;
+};
+
+export async function sendEmail(to: string, subject: string, html: string, opts: SendEmailOpts = {}): Promise<boolean> {
   const apiKey = await getSecret("MAILGUN_API_KEY");
   const domain = await getSecret("MAILGUN_DOMAIN");
   if (!apiKey || !domain || !to) return false;
-  const from = (await getSecret("NOTIFY_FROM_EMAIL")) || `CA Parveen Sharma <no-reply@${domain}>`;
+  // The address may stay noreply@… but the NAME the inbox shows must be his.
+  // A bare address in NOTIFY_FROM_EMAIL used to surface as "noreply" in the
+  // recipient's inbox — wrap it in a display name unless one is already set.
+  let from = (await getSecret("NOTIFY_FROM_EMAIL")) || `CA Parveen Sharma <no-reply@${domain}>`;
+  if (!from.includes("<")) from = `CA Parveen Sharma <${from}>`;
   // EU-region Mailgun domains MUST use the EU API host, or sends silently fail.
   const region = (await getSecret("MAILGUN_REGION")).toLowerCase();
   const apiBase = region === "eu" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
   const body = new URLSearchParams({ from, to, subject, html });
   const replyTo = await getSecret("NOTIFY_REPLY_TO");
   if (replyTo) body.set("h:Reply-To", replyTo);
+  if (opts.important) {
+    body.set("h:Importance", "high");
+    body.set("h:X-Priority", "1");
+  }
   try {
     const res = await fetch(`${apiBase}/v3/${domain}/messages`, {
       method: "POST",
@@ -103,7 +117,8 @@ export async function sendEmailWithAttachment(
   const apiKey = await getSecret("MAILGUN_API_KEY");
   const domain = await getSecret("MAILGUN_DOMAIN");
   if (!apiKey || !domain || !to) return false;
-  const from = (await getSecret("NOTIFY_FROM_EMAIL")) || `CA Parveen Sharma <no-reply@${domain}>`;
+  let from = (await getSecret("NOTIFY_FROM_EMAIL")) || `CA Parveen Sharma <no-reply@${domain}>`;
+  if (!from.includes("<")) from = `CA Parveen Sharma <${from}>`;
   const region = (await getSecret("MAILGUN_REGION")).toLowerCase();
   const apiBase = region === "eu" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
   try {

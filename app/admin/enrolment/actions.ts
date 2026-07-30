@@ -300,3 +300,23 @@ export async function extendSubscription(formData: FormData) {
 // Save the wording of the granted-access email. Blank fields fall back to the
 // built-in draft, so clearing a box restores the default rather than sending
 // an empty email.
+
+// Past students in bulk, ANY size: paste the whole list once; rows queue and a
+// cron drips ~25 emails every 10 minutes so the batch never looks like spam.
+export async function queuePastStudents(formData: FormData) {
+  await assertArea(null);
+  const courseId = str(formData.get("course_id"));
+  const subjectId = str(formData.get("subject_id")) || null;
+  const tier = TIERS.includes(str(formData.get("tier"))) ? str(formData.get("tier")) : "gold";
+  const months = Math.min(36, Math.max(1, num(formData.get("months")) || 3));
+  const lines = str(formData.get("bulk")).split(/\r?\n/);
+  if (!courseId || !lines.some((l) => l.includes("@"))) redirect("/admin/enrolment?error=queueinput");
+
+  const { queueGrants } = await import("@/lib/grantQueue");
+  const r = await queueGrants(lines, courseId, subjectId, tier, months);
+  revalidatePath("/admin/enrolment");
+  const q = new URLSearchParams({ queued: String(r.added) });
+  if (r.alreadyQueued) q.set("requeued", String(r.alreadyQueued));
+  if (r.badLines) q.set("badlines", String(r.badLines));
+  redirect(`/admin/enrolment?${q.toString()}`);
+}

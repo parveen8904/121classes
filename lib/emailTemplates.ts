@@ -148,6 +148,8 @@ What I would really value in return is your honest opinion. Use it for a week th
 
 Two practical notes: printed books are not part of a complimentary subscription — you can order those at caparveensharma.com/books if you want them — and you log in with this email address.
 
+{{button}}
+
 Thank you for helping shape what we build next.
 
 CA Parveen Sharma`,
@@ -157,6 +159,7 @@ CA Parveen Sharma`,
       { key: "tier", note: "gold / silver / bronze" },
       { key: "months", note: "how many months" },
       { key: "expires", note: "the last day, as a date — 29 October 2026" },
+      { key: "button", note: "set-password button — appears only for someone who has never logged in; existing students see nothing here" },
     ],
     sample: { name: "Ravi", course: "CA Final — Financial Reporting", tier: "gold", months: "3", expires: "29 October 2026" },
   },
@@ -462,13 +465,14 @@ export async function sendTemplate(
   to: string,
   vars: TemplateVars = {},
   attachments?: EmailAttachment | EmailAttachment[],
+  opts: { important?: boolean } = {},
 ): Promise<boolean> {
   if (!to) return false;
   const { subject, html } = renderTemplate(await loadTemplate(event), vars);
   if (!subject) return false;
   return attachments
     ? sendEmailWithAttachment(to, subject, html, attachments)
-    : sendEmail(to, subject, html);
+    : sendEmail(to, subject, html, opts);
 }
 
 /**

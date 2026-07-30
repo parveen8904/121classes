@@ -25,7 +25,9 @@ type Item = {
   kind: string;
   subject_id: string | null;
   file_url: string | null;
-  content: string | null;
+  content_chars: number;
+  is_unreadable: boolean | null;
+  has_text: boolean;
   valid_from: string | null;
   valid_to: string | null;
   valid_from_attempt: string | null;
@@ -42,7 +44,9 @@ function fmtRange(from: string | null, to: string | null, attempt: string | null
 export default async function RepositoryPage() {
   const svc = createServiceClient();
   const [{ data: items }, { data: subjects }, { data: courses }, ai, { data: secs }] = await Promise.all([
-    svc.from("repository_items").select("id, title, kind, subject_id, file_url, content, valid_from, valid_to, valid_from_attempt, is_active").order("created_at", { ascending: false }),
+    // Metadata view — never the extracted text itself. Selecting `content`
+    // here pulled 18 MB per page view and made every refresh crawl.
+    svc.from("repository_items_meta").select("id, title, kind, subject_id, file_url, content_chars, is_unreadable, has_text, valid_from, valid_to, valid_from_attempt, is_active").order("created_at", { ascending: false }),
     svc.from("subjects").select("id, title").order("title"),
     svc.from("courses").select("id, title").order("title"),
     aiConfigured(),
@@ -62,7 +66,7 @@ export default async function RepositoryPage() {
     if (s.has_notes_text) cov.notes_ocr++;
     if (s.pdf_url || s.notes_typed_url) { cov.class_pdfs++; if (s.has_pdf_text) cov.class_pdfs_done++; }
   }
-  const books = list.filter((i) => i.is_active && (i.content ?? "").length > 100).length;
+  const books = list.filter((i) => i.is_active && i.has_text).length;
   const noTranscript = cov.total - cov.transcript;
 
   return (
@@ -207,14 +211,14 @@ export default async function RepositoryPage() {
                     {KIND_LABEL[it.kind] ?? it.kind}
                     {it.subject_id ? ` · ${subjMap.get(it.subject_id) ?? "Subject"}` : ""}
                     {" · "}{fmtRange(it.valid_from, it.valid_to, it.valid_from_attempt)}
-                    {it.content === "__unreadable__"
+                    {it.is_unreadable
                       ? <strong style={{ color: "#b45309" }}> · ⚠️ scanned PDF — no readable text (re-upload a text PDF, or paste the text below)</strong>
-                      : it.content ? ` · ${it.content.length.toLocaleString()} chars of text` : it.file_url ? " · file only (no text yet)" : " · empty"}
+                      : it.content_chars > 0 ? ` · ${it.content_chars.toLocaleString()} chars of text` : it.file_url ? " · file only (no text yet)" : " · empty"}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   {it.file_url && <a className="btn small secondary" href={it.file_url} target="_blank" rel="noreferrer">View</a>}
-                  {it.file_url && (!it.content || it.content === "__unreadable__") && /\.pdf($|\?)/i.test(it.file_url) && (
+                  {it.file_url && (!it.content_chars || it.is_unreadable) && /\.pdf($|\?)/i.test(it.file_url) && (
                     <form action={extractItemText} style={{ margin: 0 }}>
                       <input type="hidden" name="id" value={it.id} />
                       <button className="btn small secondary" type="submit">Extract text</button>

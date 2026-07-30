@@ -301,15 +301,39 @@ export async function extendSubscription(formData: FormData) {
 // built-in draft, so clearing a box restores the default rather than sending
 // an empty email.
 
-// Past students in bulk, ANY size: paste the whole list once; rows queue and a
-// cron drips ~25 emails every 10 minutes so the batch never looks like spam.
+// Past students in bulk, ANY size: upload the Excel template (or paste), rows
+// queue, and a cron drips the emails slowly so the batch never looks like spam.
 export async function queuePastStudents(formData: FormData) {
   await assertArea(null);
   const courseId = str(formData.get("course_id"));
   const subjectId = str(formData.get("subject_id")) || null;
   const tier = TIERS.includes(str(formData.get("tier"))) ? str(formData.get("tier")) : "gold";
   const months = Math.min(36, Math.max(1, num(formData.get("months")) || 3));
+
   const lines = str(formData.get("bulk")).split(/\r?\n/);
+
+  // The uploaded spreadsheet (.xlsx / .csv — the downloadable template, or any
+  // sheet whose first two columns are email and name). Every row becomes a
+  // "email, name" line and joins whatever was pasted.
+  const file = formData.get("file");
+  if (file instanceof File && file.size > 0) {
+    try {
+      const { read, utils } = await import("xlsx");
+      const wb = read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = utils.sheet_to_json<(string | number | null)[]>(sheet, { header: 1, raw: false });
+      for (const row of rows) {
+        const cells = (row ?? []).map((c) => String(c ?? "").trim());
+        const emailCell = cells.find((c) => /@/.test(c));
+        if (!emailCell) continue; // header / example / blank rows
+        const name = cells.filter((c) => c !== emailCell && c && !/@/.test(c)).join(" ");
+        lines.push(`${emailCell}, ${name}`);
+      }
+    } catch {
+      redirect("/admin/enrolment?error=badfile");
+    }
+  }
+
   if (!courseId || !lines.some((l) => l.includes("@"))) redirect("/admin/enrolment?error=queueinput");
 
   const { queueGrants } = await import("@/lib/grantQueue");

@@ -130,15 +130,19 @@ export default async function EnrolmentPage(
         </div>
       )}
       {searchParams.error === "queueinput" && (
-        <div className="notice err" style={{ marginTop: 16 }}>Pick a course and paste at least one line with an email address.</div>
+        <div className="notice err" style={{ marginTop: 16 }}>Pick a course, and upload the filled template or paste at least one line with an email address.</div>
+      )}
+      {searchParams.error === "badfile" && (
+        <div className="notice err" style={{ marginTop: 16 }}>That file could not be read as a spreadsheet — use the downloadable template (.xlsx) or a plain .csv.</div>
       )}
 
       {/* Past students at any scale: paste once, the cron drips the emails. */}
       <div className="form-card" style={{ marginTop: 24 }}>
         <h3>🕰️ Past students — complimentary access (any size, sent slowly)</h3>
         <p className="muted" style={{ fontSize: ".84rem", margin: "6px 0 10px" }}>
-          Paste the whole list in one go — one student per line, <code>email, name</code> (name optional; a straight
-          paste from Excel works). Accounts that don&apos;t exist are created; new people get a set-password button in
+          <a href="/admin/enrolment/template" download>⬇️ Download the Excel template</a> — fill it (Email, Name — name
+          optional), upload it below, done. Or paste lines of <code>email, name</code> straight into the box.
+          Accounts that don&apos;t exist are created; new people get a set-password button in
           the email, existing students just log in. The letter itself is the one on the{" "}
           <Link href="/admin/emails#access_granted">Emails page</Link> — sent as <strong>CA Parveen Sharma</strong>,
           marked important, and dripped at ~18 an hour (about 430 a day — a 1,500 list takes 3–4 days) so the batch never trips spam filters. Anyone already holding active
@@ -187,8 +191,12 @@ export default async function EnrolmentPage(
             </div>
           </div>
           <div>
-            <label>The list — any number of students</label>
-            <textarea name="bulk" rows={8} placeholder={"ravi@example.com, Ravi Kumar\npriya@example.com, Priya Singh\n… paste thousands if you like"} style={{ fontFamily: "monospace", fontSize: ".82rem" }} />
+            <label>The filled template (.xlsx or .csv)</label>
+            <input type="file" name="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" />
+          </div>
+          <div>
+            <label>…or paste the list here — any number of students</label>
+            <textarea name="bulk" rows={6} placeholder={"ravi@example.com, Ravi Kumar\npriya@example.com, Priya Singh\n… paste thousands if you like"} style={{ fontFamily: "monospace", fontSize: ".82rem" }} />
           </div>
           <SubmitButton className="btn" savedLabel="✓ Queued — sending has begun">Queue the whole list</SubmitButton>
         </form>

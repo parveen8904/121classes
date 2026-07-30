@@ -6,6 +6,7 @@ import { r2Configured } from "@/lib/r2";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
 import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection, sendTestEmail, registerDiscordCommand, saveSubjectGroup, setupAuthSmtp, getSupabaseInfra, raiseAuthPool, upgradeCompute } from "./actions";
+import { isSavableSecret } from "./secretKeys";
 import SubmitButton from "@/app/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +50,20 @@ function Row({ on, label, help }: { on: boolean; label: string; help: React.Reac
 
 // Masked input for a single key: shows whether it's already set, lets you paste a new one.
 async function KeyField({ name, label, placeholder }: { name: string; label: string; placeholder: string }) {
+  // A field whose name is missing from SECRET_KEYS would LOOK saveable while
+  // the save action silently drops it — 16 social keys sat in exactly that
+  // state and everything pasted was lost. Refuse to render the trap.
+  if (!isSavableSecret(name)) {
+    return (
+      <div style={{ marginBottom: 12, border: "1px solid #dc2626", borderRadius: 8, padding: "8px 12px" }}>
+        <strong style={{ color: "#dc2626" }}>⚠️ {label}</strong>
+        <div className="muted" style={{ fontSize: ".8rem" }}>
+          This field is not wired to the save list ({name} missing from secretKeys.ts) — pasting here would be lost.
+          Tell the developer.
+        </div>
+      </div>
+    );
+  }
   const set = Boolean(await getSecret(name));
   return (
     <div style={{ marginBottom: 12 }}>

@@ -1,0 +1,73 @@
+// The single list of provider keys the admin can paste on the Integrations
+// page. BOTH sides use it: the save action stores only these names, and
+// KeyField refuses to render a field that is not on it — so a field can never
+// again exist on the page while its value is silently thrown away on save
+// (16 social keys sat in exactly that state).
+export const SECRET_KEYS = [
+  "TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_BOT_USERNAME",
+  "TELEGRAM_CHANNEL_ID",
+  "DISCORD_WEBHOOK_URL",
+  "DISCORD_APP_ID",
+  "DISCORD_PUBLIC_KEY",
+  "DISCORD_BOT_TOKEN",
+  "DISCORD_ASK_CHANNELS",
+  "ANTHROPIC_API_KEY",
+  "YOUTUBE_API_KEY",
+  "YOUTUBE_CHANNEL_ID",
+  "MAILGUN_API_KEY",
+  "MAILGUN_DOMAIN",
+  "MAILGUN_REGION",
+  "NOTIFY_FROM_EMAIL",
+  "NOTIFY_REPLY_TO",
+  "INTERAKT_API_KEY",
+  "FACULTY_TELEGRAM_CHAT_ID",
+  "FACULTY_EMAIL",
+  "CRON_SECRET",
+  "RAZORPAY_KEY_ID",
+  "RAZORPAY_KEY_SECRET",
+  "R2_ACCOUNT_ID",
+  "R2_ACCESS_KEY_ID",
+  "R2_SECRET_ACCESS_KEY",
+  "R2_BUCKET",
+  "R2_PUBLIC_BASE",
+  "JOOBLE_API_KEY",
+  "SERPAPI_KEY",
+  "BUNNY_STREAM_API_KEY",
+  "BUNNY_LIBRARY_ID",
+  "BUNNY_ACCOUNT_API_KEY",
+  "SUPABASE_ACCESS_TOKEN",
+  "ZOOM_SDK_KEY",
+  "ZOOM_SDK_SECRET",
+  "ZOOM_WEBHOOK_SECRET_TOKEN",
+  "IVR_WEBHOOK_KEY",
+  "WHATSAPP_OTP_TEMPLATE",
+  "WHATSAPP_MISSEDCALL_TEMPLATE",
+  // Social auto-posting + partner bridge. These fields existed on the page for
+  // DAYS while missing from this list — everything pasted into them was
+  // silently thrown away on save. If you add a KeyField to the page, it MUST
+  // be added here, or it is a text box wired to nothing (page.tsx imports
+  // SECRET_KEYS and refuses to render an unlisted field for exactly this
+  // reason).
+  "INSTAGRAM_ACCESS_TOKEN",
+  "INSTAGRAM_USER_ID",
+  "FACEBOOK_PAGE_ID",
+  "FACEBOOK_PAGE_TOKEN",
+  "LINKEDIN_ACCESS_TOKEN",
+  "LINKEDIN_AUTHOR_URN",
+  "TWITTER_API_KEY",
+  "TWITTER_API_SECRET",
+  "TWITTER_ACCESS_TOKEN",
+  "TWITTER_ACCESS_SECRET",
+  "REDDIT_CLIENT_ID",
+  "REDDIT_CLIENT_SECRET",
+  "REDDIT_USERNAME",
+  "REDDIT_PASSWORD",
+  "REDDIT_SUBREDDIT",
+  "ALDINE_WEBHOOK_SECRET",
+] as const;
+
+export type SecretKeyName = (typeof SECRET_KEYS)[number];
+export function isSavableSecret(name: string): boolean {
+  return (SECRET_KEYS as readonly string[]).includes(name);
+}

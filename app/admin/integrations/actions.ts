@@ -8,6 +8,7 @@ import { telegramConfigured } from "@/lib/notify";
 import { getSecret, clearSecretCache } from "@/lib/secrets";
 import { testRazorpay } from "@/lib/razorpay";
 import { str } from "../_lib/util";
+import { SECRET_KEYS } from "./secretKeys";
 
 async function requireAdmin() {
   const supabase = createClient();
@@ -123,48 +124,6 @@ export async function saveLinks(formData: FormData) {
   redirect("/admin/integrations?links=saved");
 }
 
-// The provider keys the admin can paste in (stored server-only in app_secrets).
-const SECRET_KEYS = [
-  "TELEGRAM_BOT_TOKEN",
-  "TELEGRAM_BOT_USERNAME",
-  "TELEGRAM_CHANNEL_ID",
-  "DISCORD_WEBHOOK_URL",
-  "DISCORD_APP_ID",
-  "DISCORD_PUBLIC_KEY",
-  "DISCORD_BOT_TOKEN",
-  "DISCORD_ASK_CHANNELS",
-  "ANTHROPIC_API_KEY",
-  "YOUTUBE_API_KEY",
-  "YOUTUBE_CHANNEL_ID",
-  "MAILGUN_API_KEY",
-  "MAILGUN_DOMAIN",
-  "MAILGUN_REGION",
-  "NOTIFY_FROM_EMAIL",
-  "NOTIFY_REPLY_TO",
-  "INTERAKT_API_KEY",
-  "FACULTY_TELEGRAM_CHAT_ID",
-  "FACULTY_EMAIL",
-  "CRON_SECRET",
-  "RAZORPAY_KEY_ID",
-  "RAZORPAY_KEY_SECRET",
-  "R2_ACCOUNT_ID",
-  "R2_ACCESS_KEY_ID",
-  "R2_SECRET_ACCESS_KEY",
-  "R2_BUCKET",
-  "R2_PUBLIC_BASE",
-  "JOOBLE_API_KEY",
-  "SERPAPI_KEY",
-  "BUNNY_STREAM_API_KEY",
-  "BUNNY_LIBRARY_ID",
-  "BUNNY_ACCOUNT_API_KEY",
-  "SUPABASE_ACCESS_TOKEN",
-  "ZOOM_SDK_KEY",
-  "ZOOM_SDK_SECRET",
-  "ZOOM_WEBHOOK_SECRET_TOKEN",
-  "IVR_WEBHOOK_KEY",
-  "WHATSAPP_OTP_TEMPLATE",
-  "WHATSAPP_MISSEDCALL_TEMPLATE",
-] as const;
 
 // Save API keys pasted in the admin. Blank fields are IGNORED (so you can update
 // one key without wiping the others). Stored in app_secrets — never exposed to

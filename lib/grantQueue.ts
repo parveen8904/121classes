@@ -176,7 +176,7 @@ export async function processGrantQueue(limit = 25, budgetMs = 120_000): Promise
         tier: String(row.tier), months: Number(row.months) || 3,
         expires: expiryLabel(Number(row.months) || 3),
         action_url: actionUrl, action_label: "Set my password & log in",
-      }, undefined, { important: true });
+      }, undefined, { important: true, bulk: true });
 
       await finish(row.id as string, ok ? "sent" : "failed", ok ? (created ? "new account created" : "existing account") : "email did not send", studentId);
       if (ok) out.sent++; else out.failed++;

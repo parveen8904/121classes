@@ -64,9 +64,15 @@ export async function sendTelegramMessage(
 }
 
 export type SendEmailOpts = {
-  /** Adds the high-importance headers most clients show as a red mark. Use
-   * sparingly — flagging everything "important" is itself a spam signal. */
+  /** Adds the Importance: high header most clients show as a mark. Use
+   * sparingly — flagging everything "important" is itself a spam signal.
+   * Deliberately NOT X-Priority: 1: spam filters score that header harshly
+   * on lookalike bulk mail, and inbox placement beats a red flag. */
   important?: boolean;
+  /** One of many near-identical messages (the complimentary drip). Adds a
+   * List-Unsubscribe header — mailbox providers treat bulk mail without one
+   * with suspicion, and its presence measurably helps inbox placement. */
+  bulk?: boolean;
 };
 
 export async function sendEmail(to: string, subject: string, html: string, opts: SendEmailOpts = {}): Promise<boolean> {
@@ -84,9 +90,10 @@ export async function sendEmail(to: string, subject: string, html: string, opts:
   const body = new URLSearchParams({ from, to, subject, html });
   const replyTo = await getSecret("NOTIFY_REPLY_TO");
   if (replyTo) body.set("h:Reply-To", replyTo);
-  if (opts.important) {
-    body.set("h:Importance", "high");
-    body.set("h:X-Priority", "1");
+  if (opts.important) body.set("h:Importance", "high");
+  if (opts.bulk) {
+    const unsubTo = replyTo || `contact@${domain}`;
+    body.set("h:List-Unsubscribe", `<mailto:${unsubTo}?subject=unsubscribe>`);
   }
   try {
     const res = await fetch(`${apiBase}/v3/${domain}/messages`, {

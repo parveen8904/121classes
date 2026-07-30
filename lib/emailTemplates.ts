@@ -465,7 +465,7 @@ export async function sendTemplate(
   to: string,
   vars: TemplateVars = {},
   attachments?: EmailAttachment | EmailAttachment[],
-  opts: { important?: boolean } = {},
+  opts: { important?: boolean; bulk?: boolean } = {},
 ): Promise<boolean> {
   if (!to) return false;
   const { subject, html } = renderTemplate(await loadTemplate(event), vars);

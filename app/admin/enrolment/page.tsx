@@ -124,7 +124,7 @@ export default async function EnrolmentPage(
 
       {searchParams.queued && (
         <div className="notice ok" style={{ marginTop: 16 }}>
-          ✓ {searchParams.queued} student(s) queued. Emails go out ~25 every 10 minutes — nobody's inbox sees a burst.
+          ✓ {searchParams.queued} student(s) queued. Emails drip out ~18 an hour (about 430 a day) — slow on purpose, so nobody's inbox sees a burst.
           {searchParams.requeued ? ` ${searchParams.requeued} were already queued or done for this course (not repeated).` : ""}
           {searchParams.badlines ? ` ⚠️ ${searchParams.badlines} line(s) had no email address and were ignored.` : ""}
         </div>
@@ -141,7 +141,7 @@ export default async function EnrolmentPage(
           paste from Excel works). Accounts that don&apos;t exist are created; new people get a set-password button in
           the email, existing students just log in. The letter itself is the one on the{" "}
           <Link href="/admin/emails#access_granted">Emails page</Link> — sent as <strong>CA Parveen Sharma</strong>,
-          marked important, ~25 every 10 minutes so the batch never trips spam filters. Anyone already holding active
+          marked important, and dripped at ~18 an hour (about 430 a day — a 1,500 list takes 3–4 days) so the batch never trips spam filters. Anyone already holding active
           access to the course is skipped without an email.
         </p>
         {(qPending ?? 0) + (qSent ?? 0) + (qSkipped ?? 0) + (qFailed ?? 0) > 0 && (
@@ -152,7 +152,7 @@ export default async function EnrolmentPage(
             {(qFailed ?? 0) > 0 && <div><div className="muted" style={{ fontSize: ".74rem" }}>Failed</div><div style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--bad)" }}>{qFailed}</div></div>}
             {(qPending ?? 0) > 0 && (
               <div className="muted" style={{ fontSize: ".78rem", alignSelf: "center" }}>
-                ⏳ roughly {Math.ceil((qPending ?? 0) / 150)} hour(s) to finish — refresh to watch it move.
+                ⏳ roughly {(qPending ?? 0) > 400 ? `${Math.ceil((qPending ?? 0) / 432)} day(s)` : `${Math.ceil((qPending ?? 0) / 18)} hour(s)`} to finish — refresh to watch it move.
               </div>
             )}
           </div>

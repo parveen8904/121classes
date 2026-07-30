@@ -28,13 +28,15 @@ export async function GET(req: NextRequest) {
     if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  // The complimentary-grant drip rides this 10-minute cron: ~25 emails per
-  // pass so a big past-student upload trickles out instead of bursting.
+  // The complimentary-grant drip rides this 10-minute cron. THREE per pass —
+  // ~18/hour, ~430/day, a 1,500-student list in about 3½ days. Deliberately
+  // slow: this domain normally sends ~16 emails a day, and reputation is
+  // earned by volume that grows gently, not by a 200× overnight spike.
   // Best-effort — a queue problem must never block the campaign posts below.
   let drip: { sent: number; remaining: number } | null = null;
   try {
     const { processGrantQueue } = await import("@/lib/grantQueue");
-    const r = await processGrantQueue(25, 90_000);
+    const r = await processGrantQueue(3, 60_000);
     if (r.sent || r.skipped || r.failed || r.remaining) drip = { sent: r.sent, remaining: r.remaining };
   } catch { /* next pass retries */ }
 

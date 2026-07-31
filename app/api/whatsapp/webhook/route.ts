@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as {
-      entry?: { changes?: { value?: { messages?: { from?: string; type?: string; text?: { body?: string }; timestamp?: string }[] } }[] }[];
+      entry?: { changes?: { value?: { messages?: Record<string, unknown>[] } }[] }[];
     };
     const inbound = (body.entry ?? [])
       .flatMap((e) => e.changes ?? [])
@@ -29,11 +29,14 @@ export async function POST(req: NextRequest) {
       const { createServiceClient } = await import("@/lib/supabase/service");
       const svc = createServiceClient();
       for (const m of inbound) {
+        // The whole message object is kept: WhatsApp puts button payloads,
+        // interactive replies and template content in fields that vary by
+        // type, and a text-only read silently loses all of them.
         await svc.from("notifications").insert({
           student_id: null,
           channel: "whatsapp",
           template: "inbound",
-          payload: { from: m.from, type: m.type ?? "text", text: m.text?.body ?? "", ts: m.timestamp ?? "" },
+          payload: m,
           status: "received",
         });
       }

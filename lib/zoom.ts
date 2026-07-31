@@ -34,7 +34,8 @@ export async function createZoomMeeting(
   topic: string,
   startLocal: string,
   durationMins = 60,
-): Promise<{ join_url: string; id: string } | null> {
+  opts: { autoRecordCloud?: boolean } = {},
+): Promise<{ join_url: string; start_url: string; id: string; passcode: string } | null> {
   if (!zoomConfigured()) return null;
   const token = await getToken();
   if (!token) return null;
@@ -44,7 +45,14 @@ export async function createZoomMeeting(
       type: startLocal ? 2 : 1, // 2 = scheduled, 1 = instant
       duration: durationMins,
       timezone: "Asia/Kolkata",
-      settings: { join_before_host: true, waiting_room: false },
+      settings: {
+        join_before_host: true,
+        waiting_room: false,
+        // Cloud recording from the first second, nobody has to remember to
+        // press record — the recording.completed webhook then imports the
+        // file into Bunny and attaches it to the class.
+        ...(opts.autoRecordCloud ? { auto_recording: "cloud" } : {}),
+      },
     };
     if (startLocal) body.start_time = `${startLocal}:00`;
 
@@ -57,8 +65,27 @@ export async function createZoomMeeting(
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.join_url) return null;
-    return { join_url: data.join_url, id: String(data.id ?? "") };
+    return { join_url: data.join_url, start_url: String(data.start_url ?? data.join_url), id: String(data.id ?? ""), passcode: String(data.password ?? "") };
   } catch {
     return null;
+  }
+}
+
+// End a running meeting from the server — the "⏹ End Class" button calls this
+// so the founder never hunts for Zoom's own end button.
+export async function endZoomMeeting(meetingId: string): Promise<boolean> {
+  if (!zoomConfigured() || !meetingId) return false;
+  const token = await getToken();
+  if (!token) return false;
+  try {
+    const res = await fetch(`https://api.zoom.us/v2/meetings/${encodeURIComponent(meetingId)}/status`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "end" }),
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }

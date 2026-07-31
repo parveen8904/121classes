@@ -156,8 +156,45 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
     { label: "Notes & PDFs", value: String(notes) },
   ];
 
+  // Structured data: THIS page is the canonical home of the course, so it
+  // carries the full Course markup (the /courses listing has only the
+  // summary ItemList). Provider and instructor point at the site-wide
+  // @graph ids from the root layout, tying the course to the org + founder
+  // entity Google already knows. Breadcrumbs give the result its trail.
+  const pageUrl = `https://caparveensharma.com/courses/${subject.id}`;
+  const courseLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Course",
+        "@id": `${pageUrl}#course`,
+        name: `${subject.title} — ${courseTitle}`,
+        description: `${subject.title} (${courseTitle}) taught by CA Parveen Sharma: ${classes} recorded classes, chapter tests with AI reports, revision videos, notes and case-scenario practice.`,
+        url: pageUrl,
+        provider: { "@id": "https://caparveensharma.com/#org" },
+        instructor: { "@id": "https://caparveensharma.com/#person" },
+        inLanguage: "en",
+        offers: { "@type": "Offer", category: "Paid", availability: "https://schema.org/InStock", url: pageUrl },
+        hasCourseInstance: {
+          "@type": "CourseInstance",
+          courseMode: isBatch ? "Blended" : "Online",
+          courseWorkload: minutes > 0 ? `PT${Math.round(minutes / 60)}H` : undefined,
+        },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Courses", item: "https://caparveensharma.com/courses" },
+          { "@type": "ListItem", position: 2, name: courseTitle, item: "https://caparveensharma.com/courses" },
+          { "@type": "ListItem", position: 3, name: subject.title, item: pageUrl },
+        ],
+      },
+    ],
+  };
+
   return (
     <section className="section" style={{ maxWidth: 980, margin: "0 auto" }}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(courseLd) }} />
       <p className="crumb"><Link href="/courses">← All courses</Link></p>
 
       <div style={{ marginBottom: 14 }}>

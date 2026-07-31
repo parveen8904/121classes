@@ -76,6 +76,7 @@ export const SECRET_KEYS = [
   "WHATSAPP_CLOUD_TOKEN",
   "WHATSAPP_PHONE_NUMBER_ID",
   "WHATSAPP_WABA_ID",
+  "WHATSAPP_WEBHOOK_VERIFY_TOKEN",
 ] as const;
 
 export type SecretKeyName = (typeof SECRET_KEYS)[number];

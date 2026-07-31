@@ -71,6 +71,11 @@ export const SECRET_KEYS = [
   // X posting through the founder's Buffer account (free plan, personal key).
   "BUFFER_API_KEY",
   "BUFFER_X_CHANNEL_ID",
+  // WhatsApp Cloud API (direct Meta, replaced Interakt). Token is the
+  // never-expiring "Portal Bot" system-user token from the Aldine portfolio.
+  "WHATSAPP_CLOUD_TOKEN",
+  "WHATSAPP_PHONE_NUMBER_ID",
+  "WHATSAPP_WABA_ID",
 ] as const;
 
 export type SecretKeyName = (typeof SECRET_KEYS)[number];

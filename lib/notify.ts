@@ -9,7 +9,7 @@ export async function emailConfigured(): Promise<boolean> {
   return Boolean((await getSecret("MAILGUN_API_KEY")) && (await getSecret("MAILGUN_DOMAIN")));
 }
 export async function whatsappConfigured(): Promise<boolean> {
-  return Boolean(await getSecret("INTERAKT_API_KEY"));
+  return Boolean(await getSecret("WHATSAPP_CLOUD_TOKEN"));
 }
 export async function telegramConfigured(): Promise<boolean> {
   return Boolean(await getSecret("TELEGRAM_BOT_TOKEN"));
@@ -152,35 +152,58 @@ export async function sendEmailWithAttachment(
   }
 }
 
-// Interakt WhatsApp (best-effort — needs a pre-approved template on their side).
-export async function sendWhatsApp(
-  phone: string,
-  templateName: string,
-  bodyValues: string[],
-): Promise<boolean> {
-  const apiKey = await getSecret("INTERAKT_API_KEY");
-  if (!apiKey || !phone) return false;
-  const digits = phone.replace(/\D/g, "").slice(-10);
-  if (digits.length !== 10) return false;
+// WhatsApp Cloud API (direct Meta — replaced Interakt so there is no
+// middleman subscription). Templates must be approved on the WABA first;
+// sendWhatsAppText works only inside a 24h customer-service window.
+async function waSend(payload: Record<string, unknown>): Promise<boolean> {
+  const token = await getSecret("WHATSAPP_CLOUD_TOKEN");
+  const phoneId = await getSecret("WHATSAPP_PHONE_NUMBER_ID");
+  if (!token || !phoneId) return false;
   try {
-    const res = await fetch("https://api.interakt.ai/v1/public/message/", {
+    const res = await fetch(`https://graph.facebook.com/v23.0/${phoneId}/messages`, {
       method: "POST",
-      headers: {
-        Authorization: `Basic ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        countryCode: "+91",
-        phoneNumber: digits,
-        type: "Template",
-        template: { name: templateName, languageCode: "en", bodyValues },
-      }),
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", ...payload }),
       cache: "no-store",
     });
     return res.ok;
   } catch {
     return false;
   }
+}
+
+function waNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  // 10-digit Indian numbers get the country code; anything longer is
+  // assumed to already carry one.
+  return digits.length === 10 ? `91${digits}` : digits;
+}
+
+export async function sendWhatsApp(
+  phone: string,
+  templateName: string,
+  bodyValues: string[],
+): Promise<boolean> {
+  const to = waNumber(phone);
+  if (to.length < 11 || !templateName) return false;
+  return waSend({
+    to,
+    type: "template",
+    template: {
+      name: templateName,
+      language: { code: "en" },
+      components: bodyValues.length
+        ? [{ type: "body", parameters: bodyValues.map((t) => ({ type: "text", text: t })) }]
+        : [],
+    },
+  });
+}
+
+/** Free-form text — delivered only inside an open 24h session window. */
+export async function sendWhatsAppText(phone: string, text: string): Promise<boolean> {
+  const to = waNumber(phone);
+  if (to.length < 11 || !text.trim()) return false;
+  return waSend({ to, type: "text", text: { body: text.slice(0, 4096) } });
 }
 
 async function record(

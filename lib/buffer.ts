@@ -31,12 +31,20 @@ async function gql(query: string, variables?: Record<string, unknown>): Promise<
   }
 }
 
-/** The X/Twitter channel to post to: explicit secret wins, else the first
- * Twitter/X channel on the Buffer account. */
+/** The X/Twitter channel to post to: explicit secret wins, else discovered
+ * live (channels are organization-scoped — shape verified against the real
+ * API, not the docs). */
 export async function bufferXChannelId(): Promise<string> {
   const explicit = (await getSecret("BUFFER_X_CHANNEL_ID")).trim();
   if (explicit) return explicit;
-  const r = await gql(`query { channels { id name service } }`);
+  const acct = await gql(`query { account { organizations { id } } }`);
+  if (!acct.ok) return "";
+  const orgId = (acct.data as { account?: { organizations?: { id: string }[] } })?.account?.organizations?.[0]?.id ?? "";
+  if (!orgId) return "";
+  const r = await gql(
+    `query Channels($orgId: OrganizationId!) { channels(input: { organizationId: $orgId }) { id name service } }`,
+    { orgId },
+  );
   if (!r.ok) return "";
   const channels = ((r.data as { channels?: { id: string; service?: string }[] })?.channels) ?? [];
   const x = channels.find((c) => /twitter|^x$/i.test(String(c.service ?? "")));

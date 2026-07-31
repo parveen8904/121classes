@@ -174,8 +174,8 @@ export default function LoginForm() {
               <label htmlFor="semail">Email address</label>
               <input id="semail" name="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
               <p className="muted" style={{ fontSize: ".78rem", margin: "-6px 0 10px" }}>Use a real email — it's verified and can't be changed later. We&apos;ll email you a link; you&apos;ll set your password after verifying.</p>
-              <label htmlFor="sphone">WhatsApp number (optional)</label>
-              <input id="sphone" name="phone" type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 98100 12345 — so we can help you if anything goes wrong" />
+              <label htmlFor="sphone">WhatsApp number</label>
+              <input id="sphone" name="phone" type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 98100 12345 — class alerts and test reports come here" />
               <button className="btn block" disabled={loading} type="submit">{loading ? "Sending…" : "Send verification link"}</button>
               <p className="muted" style={{ textAlign: "center", marginTop: 16, fontSize: ".88rem" }}>
                 Already have an account? <button type="button" style={linkBtn} onClick={() => { setMode("login"); setMsg(null); }}>Log in</button>

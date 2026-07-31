@@ -10,6 +10,8 @@ import TodayPlan from "@/app/components/TodayPlan";
 import { addMyCourse } from "@/app/learn/mycourses";
 import OnboardingWizard from "./OnboardingWizard";
 import SponsoredStudents from "./SponsoredStudents";
+import VerifyPhone from "./VerifyPhone";
+import { phoneVerifyLive } from "@/lib/phoneVerify";
 
 export default async function Dashboard(props: { searchParams: Promise<{ saved?: string }> }) {
   const searchParams = await props.searchParams;
@@ -22,7 +24,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role, target_attempt, telegram_chat_id, phone, account_type, welcome_sent_at")
+    .select("full_name, role, target_attempt, telegram_chat_id, phone, account_type, welcome_sent_at, phone_verified_at")
     .eq("id", user.id)
     .single();
 
@@ -61,6 +63,10 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
   // thing shown and the learn area is blocked (see app/learn/layout.tsx).
   const isSponsor = profile?.account_type === "sponsor";
   const needsSetup = !isAdminUser && (isSponsor ? !phoneOk : (myIds.size === 0 || !profile?.target_attempt || !phoneOk));
+  // Soft prompt: ask everyone who has not yet proved their number. Hidden
+  // while OTP delivery is unavailable, and while the setup wizard is showing
+  // (it collects the number in the first place).
+  const showVerifyPhone = !isAdminUser && !needsSetup && !profile?.phone_verified_at && (await phoneVerifyLive());
   let subjectsByCourse: Record<string, { id: string; title: string }[]> = {};
   if (needsSetup) {
     const { data: allSubs } = await supabase
@@ -344,6 +350,8 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
             </div>
           </>
         )}
+
+        {showVerifyPhone && <VerifyPhone phone={(profile?.phone as string | null) ?? ""} />}
 
         {needsSetup && (
           <OnboardingWizard

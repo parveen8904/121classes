@@ -109,6 +109,19 @@ export async function verifyPhoneOtp(userId: string | null, phoneRaw: string, co
   return { ok: true };
 }
 
+/** The prompt stays hidden until OTP sending actually works — Meta gates the
+ * AUTHENTICATION template category behind business verification, and a
+ * verify box that cannot deliver a code is worse than no box at all.
+ * Flip site_settings.phone_verify_live to "1" once the template is approved. */
+export async function phoneVerifyLive(): Promise<boolean> {
+  const { data } = await createServiceClient()
+    .from("site_settings")
+    .select("value")
+    .eq("key", "phone_verify_live")
+    .maybeSingle();
+  return String(data?.value ?? "") === "1";
+}
+
 export async function isPhoneVerified(userId: string): Promise<boolean> {
   const { data } = await createServiceClient()
     .from("profiles")

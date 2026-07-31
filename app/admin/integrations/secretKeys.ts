@@ -65,6 +65,9 @@ export const SECRET_KEYS = [
   "REDDIT_PASSWORD",
   "REDDIT_SUBREDDIT",
   "ALDINE_WEBHOOK_SECRET",
+  // One-click live classes (OBS → Cloudflare Stream → portal).
+  "CLOUDFLARE_STREAM_TOKEN",
+  "LIVE_CONTROL_KEY",
 ] as const;
 
 export type SecretKeyName = (typeof SECRET_KEYS)[number];

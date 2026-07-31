@@ -34,6 +34,12 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
     await sendWelcomeGuideOnce(user.id);
   }
 
+  // Is a live class running right now? One tiny read; the banner links /live/now.
+  const { getLiveState } = await import("@/lib/liveStream");
+  const liveState = await getLiveState().catch(() => ({ on: false as const }));
+  const liveNow = liveState.on;
+  const liveTitle = ("title" in liveState && liveState.title) || "Live class";
+
   const { data: courses } = await supabase
     .from("courses")
     .select("id, title")
@@ -190,6 +196,14 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
 
         {searchParams?.saved === "profile" && (
           <div className="notice ok" style={{ marginTop: 14 }}>✅ Profile saved.</div>
+        )}
+
+        {liveNow && (
+          <Link href="/live/now" style={{ textDecoration: "none" }}>
+            <div style={{ marginTop: 14, background: "#dc2626", color: "#fff", borderRadius: 12, padding: "12px 16px", fontWeight: 700, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: "1.1rem" }}>🔴</span> LIVE now: {liveTitle} — tap to join
+            </div>
+          </Link>
         )}
 
         {activeSubsList.length > 0 && (

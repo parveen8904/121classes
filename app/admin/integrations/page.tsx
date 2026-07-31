@@ -268,6 +268,8 @@ export default async function IntegrationsPage(
           <KeyField name="FACULTY_EMAIL" label="Faculty alert email" placeholder="contact@caparveensharma.com" />
           <KeyField name="CRON_SECRET" label="Cron secret (optional — protects scheduled jobs)" placeholder="any random text" />
           <KeyField name="ALDINE_WEBHOOK_SECRET" label="Aldine bridge secret (same text goes in the WooCommerce webhook's Secret field)" placeholder="any long random text — e.g. 40 letters and digits" />
+          <KeyField name="CLOUDFLARE_STREAM_TOKEN" label="Cloudflare Stream token (one-click live classes — OBS streams through Cloudflare)" placeholder="dash.cloudflare.com → My Profile → API Tokens → Create Token → Stream:Edit permission" />
+          <KeyField name="LIVE_CONTROL_KEY" label="Live-class control key (already set — the Desktop Start/End Class buttons use it; type CLEAR + re-run setup to rotate)" placeholder="set automatically" />
           <KeyField name="SUPABASE_ACCESS_TOKEN" label="Supabase access token (for the one-click SMTP button below)" placeholder="supabase.com/dashboard/account/tokens → Generate new token → paste sbp_…" />
           <KeyField name="RAZORPAY_KEY_ID" label="Razorpay Key ID" placeholder="rzp_live_… or rzp_test_…" />
           <KeyField name="RAZORPAY_KEY_SECRET" label="Razorpay Key Secret" placeholder="from Razorpay dashboard" />

@@ -268,6 +268,8 @@ export default async function IntegrationsPage(
           <KeyField name="FACULTY_EMAIL" label="Faculty alert email" placeholder="contact@caparveensharma.com" />
           <KeyField name="CRON_SECRET" label="Cron secret (optional — protects scheduled jobs)" placeholder="any random text" />
           <KeyField name="ALDINE_WEBHOOK_SECRET" label="Aldine bridge secret (same text goes in the WooCommerce webhook's Secret field)" placeholder="any long random text — e.g. 40 letters and digits" />
+          <KeyField name="BUFFER_API_KEY" label="Buffer API key (auto-posts campaign X/Twitter drafts through your Buffer account)" placeholder="publish.buffer.com → Settings → API → create access token (org owner only)" />
+          <KeyField name="BUFFER_X_CHANNEL_ID" label="Buffer X channel id (optional — auto-detected when blank)" placeholder="leave blank to use the first X/Twitter channel on the account" />
           <KeyField name="CLOUDFLARE_STREAM_TOKEN" label="Cloudflare Stream token (one-click live classes — OBS streams through Cloudflare)" placeholder="dash.cloudflare.com → My Profile → API Tokens → Create Token → Stream:Edit permission" />
           <KeyField name="LIVE_CONTROL_KEY" label="Live-class control key (already set — the Desktop Start/End Class buttons use it; type CLEAR + re-run setup to rotate)" placeholder="set automatically" />
           <KeyField name="SUPABASE_ACCESS_TOKEN" label="Supabase access token (for the one-click SMTP button below)" placeholder="supabase.com/dashboard/account/tokens → Generate new token → paste sbp_…" />

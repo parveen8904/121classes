@@ -68,6 +68,9 @@ export const SECRET_KEYS = [
   // One-click live classes (OBS → Cloudflare Stream → portal).
   "CLOUDFLARE_STREAM_TOKEN",
   "LIVE_CONTROL_KEY",
+  // X posting through the founder's Buffer account (free plan, personal key).
+  "BUFFER_API_KEY",
+  "BUFFER_X_CHANNEL_ID",
 ] as const;
 
 export type SecretKeyName = (typeof SECRET_KEYS)[number];

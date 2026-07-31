@@ -168,6 +168,16 @@ export async function GET(req: NextRequest) {
             if (r.ok) { xPosted = true; notes.push("x/twitter: posted ✅"); }
             else notes.push(`x/twitter: auto-post failed (${r.error}) — reminder emailed instead`);
           }
+          if (p.to_twitter && !xPosted) {
+            // No X developer keys? Buffer's queue does the posting — the
+            // founder's free Buffer account, one API key, no X app at all.
+            const { bufferConfigured, bufferPostToX } = await import("@/lib/buffer");
+            if (await bufferConfigured()) {
+              const r = await bufferPostToX(p.x_text ? String(p.x_text) : full, "shareNow");
+              if (r.ok) { xPosted = true; notes.push("x via buffer: posted ✅"); }
+              else notes.push(`x via buffer: failed (${r.error}) — reminder emailed instead`);
+            }
+          }
           if (p.to_facebook && (await social.facebookConfigured())) {
             const r = await social.postToFacebook(text, p.link_url ? String(p.link_url) : null);
             if (r.ok) { fbPosted = true; notes.push("facebook: posted ✅"); }

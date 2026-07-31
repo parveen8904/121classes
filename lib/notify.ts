@@ -183,19 +183,28 @@ export async function sendWhatsApp(
   phone: string,
   templateName: string,
   bodyValues: string[],
+  opts?: { lang?: string; buttonSubType?: "url" | "quick_reply" | "copy_code"; buttonIndex?: string; buttonParam?: string },
 ): Promise<boolean> {
   const to = waNumber(phone);
   if (to.length < 11 || !templateName) return false;
+  const components: Record<string, unknown>[] = [];
+  if (bodyValues.length) {
+    components.push({ type: "body", parameters: bodyValues.map((t) => ({ type: "text", text: t })) });
+  }
+  // Authentication templates repeat the code in the button payload; without
+  // this component Meta rejects the send.
+  if (opts?.buttonParam) {
+    components.push({
+      type: "button",
+      sub_type: opts.buttonSubType ?? "url",
+      index: opts.buttonIndex ?? "0",
+      parameters: [{ type: "text", text: opts.buttonParam }],
+    });
+  }
   return waSend({
     to,
     type: "template",
-    template: {
-      name: templateName,
-      language: { code: "en" },
-      components: bodyValues.length
-        ? [{ type: "body", parameters: bodyValues.map((t) => ({ type: "text", text: t })) }]
-        : [],
-    },
+    template: { name: templateName, language: { code: opts?.lang ?? "en_US" }, components },
   });
 }
 

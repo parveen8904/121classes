@@ -1,0 +1,117 @@
+import SubmitButton from "@/app/components/SubmitButton";
+import { createServiceClient } from "@/lib/supabase/service";
+import { getSecret } from "@/lib/secrets";
+import AdminHero from "../_components/AdminHero";
+import { replyOnWhatsApp } from "./actions";
+
+// The WhatsApp inbox. A Cloud API number cannot use the WhatsApp app and does
+// NOT appear in Meta's Business Suite inbox (verified: that page 404s for this
+// number), so conversations live here — fed by the webhook at
+// /api/whatsapp/webhook, which records every inbound message.
+
+export const dynamic = "force-dynamic";
+
+type Row = { id: string; template: string; payload: Record<string, unknown> | null; sent_at: string | null; status: string | null };
+
+function pretty(phone: string): string {
+  const d = phone.replace(/\D/g, "");
+  return d.startsWith("91") && d.length === 12 ? `+91 ${d.slice(2, 7)} ${d.slice(7)}` : `+${d}`;
+}
+
+function textOf(p: Record<string, unknown> | null): string {
+  if (!p) return "";
+  const direct = typeof p.text === "string" ? p.text : "";
+  if (direct) return direct;
+  const t = p.text as { body?: string } | undefined;
+  if (t?.body) return t.body;
+  const b = p.button as { text?: string } | undefined;
+  if (b?.text) return b.text;
+  const type = typeof p.type === "string" ? p.type : "";
+  return type ? `(${type} message — WhatsApp does not pass its content to businesses)` : "";
+}
+
+export default async function AdminWhatsAppPage(props: { searchParams: Promise<{ sent?: string }> }) {
+  const searchParams = await props.searchParams;
+  const svc = createServiceClient();
+
+  const { data } = await svc
+    .from("notifications")
+    .select("id, template, payload, sent_at, status")
+    .eq("channel", "whatsapp")
+    .in("template", ["inbound", "outbound"])
+    .order("id", { ascending: false })
+    .limit(200);
+
+  const rows = (data ?? []) as Row[];
+  const number = await getSecret("WHATSAPP_PHONE_NUMBER_ID");
+
+  // Group by the other party's number, newest conversation first.
+  const threads = new Map<string, Row[]>();
+  for (const r of rows) {
+    const p = r.payload ?? {};
+    const who = String((r.template === "inbound" ? p.from : p.to) ?? "");
+    if (!who) continue;
+    if (!threads.has(who)) threads.set(who, []);
+    threads.get(who)!.push(r);
+  }
+
+  return (
+    <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
+      <AdminHero
+        badge="💬 WhatsApp"
+        title="WhatsApp inbox"
+        subtitle="Messages sent to +91 98100 79162. This number runs on Meta's Cloud API, so it cannot be opened in the WhatsApp app — this page is the inbox."
+        back={{ href: "/admin", label: "Admin" }}
+      />
+
+      {searchParams.sent === "1" && <div className="notice ok">Reply sent.</div>}
+      {searchParams.sent === "0" && (
+        <div className="notice err">
+          Not delivered. Free replies only work within 24 hours of the student&apos;s last message; after that only an approved
+          template can be sent.
+        </div>
+      )}
+
+      {!number && (
+        <div className="notice err">WhatsApp is not configured — add the Cloud API keys on the Integrations page.</div>
+      )}
+
+      {threads.size === 0 ? (
+        <div className="card">
+          <p className="muted">
+            No messages yet. Anything a student sends to +91 98100 79162 will appear here within seconds.
+          </p>
+        </div>
+      ) : (
+        [...threads.entries()].map(([who, msgs]) => (
+          <div className="card" key={who} style={{ marginBottom: 16 }}>
+            <h2 className="admin-section-title">{pretty(who)}</h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+              {msgs
+                .slice()
+                .reverse()
+                .map((m) => (
+                  <div key={m.id} className="list-row">
+                    <div>
+                      <div className="row-title">
+                        {m.template === "inbound" ? "⬅️ Student" : "➡️ You"}
+                        {m.status === "failed" && " — not delivered"}
+                      </div>
+                      <div className="row-sub">{textOf(m.payload) || <span className="muted">(no text)</span>}</div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+            <form action={replyOnWhatsApp}>
+              <input type="hidden" name="to" value={who} />
+              <input name="text" placeholder="Type a reply…" maxLength={4000} style={{ width: "100%", marginBottom: 8 }} />
+              <SubmitButton className="btn small" savedLabel="Sending…">
+                Reply
+              </SubmitButton>
+            </form>
+          </div>
+        ))
+      )}
+    </section>
+  );
+}

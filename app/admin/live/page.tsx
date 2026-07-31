@@ -11,7 +11,10 @@ import {
   createLiveSession,
   updateLiveSession,
   deleteLiveSession,
+  startClassNow,
+  endClassNow,
 } from "./actions";
+import { getRunningClass } from "@/lib/liveClass";
 
 type LiveRow = {
   id: string;
@@ -24,7 +27,7 @@ type LiveRow = {
 
 export default async function AdminLivePage(
   props: {
-    searchParams: Promise<{ zoom?: string }>;
+    searchParams: Promise<{ zoom?: string; started?: string; ended?: string; startfail?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -43,6 +46,7 @@ export default async function AdminLivePage(
     .select("id, title, audience, starts_at, join_url, recording_url, is_published, faculty_id")
     .order("starts_at", { ascending: false });
   const { data: faculties } = await svc.from("faculties").select("id, full_name").order("full_name");
+  const running = await getRunningClass();
   const facList = (faculties ?? []) as { id: string; full_name: string }[];
 
   const rows = ((data ?? []) as unknown as LiveRow[]).map((r) => {
@@ -71,6 +75,45 @@ export default async function AdminLivePage(
         subtitle="Schedule every live session in one place — paste the Zoom/Meet link & time, then add the recording after. 🎥"
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {/* ▶️ One click, any device: webinar created (cloud recording ON),
+          students notified, and the host link opens Zoom wherever he is.
+          The recording lands in Bunny by itself afterwards. */}
+      <div className="form-card" style={{ marginTop: 16, border: running ? "2px solid #dc2626" : "2px solid var(--accent)" }}>
+        {running ? (
+          <>
+            <h3 style={{ marginTop: 0 }}>🔴 Class running: {running.title}</h3>
+            <p className="muted" style={{ fontSize: ".85rem" }}>
+              Started {new Date(running.started_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} ·
+              students were notified on Telegram · recording is ON and will reach Bunny automatically.
+            </p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <a className="btn" href={running.start_url} target="_blank" rel="noreferrer">🎥 Open Zoom as host</a>
+              <form action={endClassNow} style={{ margin: 0 }}>
+                <SubmitButton className="btn secondary" savedLabel="Ending…">⏹ End class for everyone</SubmitButton>
+              </form>
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 style={{ marginTop: 0 }}>▶️ Start a class now</h3>
+            <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 10px" }}>
+              One click from any device: creates the Zoom webinar with recording ON, tells students on Telegram, and
+              gives you the host link. The recording reaches Bunny on its own after class.
+            </p>
+            <form action={startClassNow} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <input name="title" placeholder="Class title students will see — e.g. FR: Ind AS 115 revision" style={{ flex: 1, minWidth: 240 }} />
+              <SubmitButton className="btn" savedLabel="Starting…">▶️ Start class</SubmitButton>
+            </form>
+          </>
+        )}
+      </div>
+
+      {searchParams.started && (
+        <div className="notice ok" style={{ marginTop: 12 }}>✅ Class created and announced — press “Open Zoom as host” above to walk in.</div>
+      )}
+      {searchParams.ended && <div className="notice ok" style={{ marginTop: 12 }}>✅ Class ended for everyone.</div>}
+      {searchParams.startfail && <div className="notice err" style={{ marginTop: 12 }}>Could not start: {searchParams.startfail}</div>}
 
       {searchParams.zoom && (
         <div

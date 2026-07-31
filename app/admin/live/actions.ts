@@ -102,3 +102,24 @@ export async function createZoomForLive(formData: FormData) {
   revalidatePath("/admin/live");
   redirect("/admin/live?zoom=created");
 }
+
+// ▶️ The portal one-click: start an interactive class from ANY device —
+// meeting created, recording on, students notified — and hand back the host
+// link to open Zoom right where the founder is standing.
+export async function startClassNow(formData: FormData) {
+  if (!(await requireArea("live"))) return;
+  const { startZoomClass } = await import("@/lib/liveClass");
+  const r = await startZoomClass(str(formData.get("title")));
+  revalidatePath("/admin/live");
+  revalidatePath("/live");
+  redirect(r.ok ? "/admin/live?started=1" : `/admin/live?startfail=${encodeURIComponent(r.error)}`);
+}
+
+export async function endClassNow() {
+  if (!(await requireArea("live"))) return;
+  const { stopZoomClass } = await import("@/lib/liveClass");
+  await stopZoomClass();
+  revalidatePath("/admin/live");
+  revalidatePath("/live");
+  redirect("/admin/live?ended=1");
+}

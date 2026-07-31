@@ -89,3 +89,55 @@ export async function endZoomMeeting(meetingId: string): Promise<boolean> {
     return false;
   }
 }
+
+// Webinar variant — he teaches via Zoom Webinar (attendees can't unmute
+// themselves, chat/Q&A stays orderly at class sizes). Requires the Webinar
+// licence on the account; callers fall back to a meeting when this fails.
+export async function createZoomWebinar(
+  topic: string,
+  opts: { autoRecordCloud?: boolean } = {},
+): Promise<{ join_url: string; start_url: string; id: string; passcode: string } | null> {
+  if (!zoomConfigured()) return null;
+  const token = await getToken();
+  if (!token) return null;
+  try {
+    const res = await fetch("https://api.zoom.us/v2/users/me/webinars", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topic: topic.slice(0, 200),
+        type: 5,
+        timezone: "Asia/Kolkata",
+        settings: {
+          host_video: true,
+          practice_session: false,
+          ...(opts.autoRecordCloud ? { auto_recording: "cloud" } : {}),
+        },
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.join_url) return null;
+    return { join_url: data.join_url, start_url: String(data.start_url ?? data.join_url), id: String(data.id ?? ""), passcode: String(data.password ?? "") };
+  } catch {
+    return null;
+  }
+}
+
+export async function endZoomWebinar(webinarId: string): Promise<boolean> {
+  if (!zoomConfigured() || !webinarId) return false;
+  const token = await getToken();
+  if (!token) return false;
+  try {
+    const res = await fetch(`https://api.zoom.us/v2/webinars/${encodeURIComponent(webinarId)}/status`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "end" }),
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

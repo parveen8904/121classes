@@ -22,14 +22,21 @@ const NO_API = "No public posting API exists — it always needs a person.";
 export async function channelStatus(): Promise<Record<string, ChannelStatus>> {
   const [tgBot, tgChannel, discord, interakt] = await Promise.all([
     getSecret("TELEGRAM_BOT_TOKEN"), getSecret("TELEGRAM_CHANNEL_ID"),
-    getSecret("DISCORD_BOT_TOKEN"), getSecret("INTERAKT_API_KEY"),
+    getSecret("DISCORD_BOT_TOKEN"), getSecret("WHATSAPP_CLOUD_TOKEN"),
   ]);
   const social = await import("@/lib/socialPost");
   const { igConfigured } = await import("@/lib/instagram");
-  const [li, x, fb, rd, ig] = await Promise.all([
+  const { bufferConfigured } = await import("@/lib/buffer");
+  const { threadsConfigured } = await import("@/lib/threads");
+  const [li, xNative, fb, rd, ig, buf, th] = await Promise.all([
     social.linkedinConfigured(), social.twitterConfigured(),
     social.facebookConfigured(), social.redditConfigured(), igConfigured(),
+    bufferConfigured(), threadsConfigured(),
   ]);
+  // X posts either through its own developer keys OR through the founder's
+  // Buffer account — the cron falls through to Buffer, so Buffer alone is a
+  // fully connected channel and must not be reported as "needs keys".
+  const x = xNative || buf;
 
   const conn = (ok: boolean, note: string, keys: string[]): ChannelStatus =>
     ok ? { state: "auto", note } : { state: "needs-keys", note: "Keys not saved yet — the post will be emailed to you instead.", keys };
@@ -39,10 +46,15 @@ export async function channelStatus(): Promise<Record<string, ChannelStatus>> {
     to_tg_groups: conn(Boolean(tgBot), "Posts itself.", ["TELEGRAM_BOT_TOKEN"]),
     to_direct: conn(Boolean(tgBot), "Posts itself, to every student who pressed Start on the bot.", ["TELEGRAM_BOT_TOKEN"]),
     to_discord: conn(Boolean(discord), "Posts itself.", ["DISCORD_BOT_TOKEN"]),
-    to_whatsapp: conn(Boolean(interakt), "Sends itself — but costs per message and needs an approved template name.", ["INTERAKT_API_KEY"]),
+    to_whatsapp: conn(Boolean(interakt), "Sends itself from your own number — costs a few paise per message and needs an approved template name.", ["WHATSAPP_CLOUD_TOKEN"]),
     to_instagram: conn(ig, "Posts itself, with the auto-generated card as the image.", ["INSTAGRAM_ACCESS_TOKEN", "INSTAGRAM_USER_ID"]),
     to_linkedin: conn(li, "Posts itself.", ["LINKEDIN_ACCESS_TOKEN", "LINKEDIN_AUTHOR_URN"]),
-    to_twitter: conn(x, "Posts itself.", ["TWITTER_API_KEY", "TWITTER_API_SECRET", "TWITTER_ACCESS_TOKEN", "TWITTER_ACCESS_SECRET"]),
+    to_twitter: conn(
+      x,
+      xNative ? "Posts itself." : "Posts itself through your Buffer account.",
+      ["BUFFER_API_KEY", "TWITTER_API_KEY", "TWITTER_API_SECRET", "TWITTER_ACCESS_TOKEN", "TWITTER_ACCESS_SECRET"],
+    ),
+    to_threads: conn(th, "Posts itself.", ["THREADS_ACCESS_TOKEN", "THREADS_USER_ID"]),
     to_facebook: conn(fb, "Posts itself.", ["FACEBOOK_PAGE_ID", "FACEBOOK_PAGE_TOKEN"]),
     to_reddit: conn(rd, "Posts itself.", ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USERNAME", "REDDIT_PASSWORD", "REDDIT_SUBREDDIT"]),
     to_youtube: { state: "manual", note: NO_API },

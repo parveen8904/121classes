@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
     if (inbound.length) {
       const { createServiceClient } = await import("@/lib/supabase/service");
       const svc = createServiceClient();
+      const { autoReplyTo } = await import("@/lib/whatsappAutoReply");
+      const greeted = new Set<string>();
       for (const m of inbound) {
         // The whole message object is kept: WhatsApp puts button payloads,
         // interactive replies and template content in fields that vary by
@@ -39,6 +41,15 @@ export async function POST(req: NextRequest) {
           payload: m,
           status: "received",
         });
+
+        // Nobody should message us and hear nothing back. One acknowledgement
+        // per sender — autoReplyTo also holds a 12h window of its own, so a
+        // long conversation never gets a robot between every line.
+        const from = String(m.from ?? "");
+        if (from && !greeted.has(from)) {
+          greeted.add(from);
+          await autoReplyTo(from).catch(() => false);
+        }
       }
     }
   } catch { /* always 200 — Meta retries hard on failures */ }

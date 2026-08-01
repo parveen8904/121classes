@@ -176,3 +176,19 @@ export async function markTeamDone(formData: FormData) {
     .update({ team_done_at: new Date().toISOString() }).eq("id", id);
   revalidatePath("/admin/campaigns");
 }
+
+// Remove a whole campaign — every post that belongs to it, drafted or still
+// pending. Anything already SENT is left alone: history stays honest.
+export async function deleteCampaign(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  // DeleteButton posts the value as "id"; the campaign forms use
+  // "campaign_id" — accept either so both call sites work.
+  const campaignId = str(formData.get("campaign_id")) || str(formData.get("id"));
+  if (!campaignId) return;
+  await createServiceClient()
+    .from("scheduled_posts")
+    .delete()
+    .eq("campaign_id", campaignId)
+    .in("status", ["draft", "pending"]);
+  revalidatePath("/admin/campaigns");
+}

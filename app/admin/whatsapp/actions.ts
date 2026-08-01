@@ -30,3 +30,15 @@ export async function replyOnWhatsApp(formData: FormData) {
   revalidatePath("/admin/whatsapp");
   redirect(`/admin/whatsapp?sent=${ok ? "1" : "0"}`);
 }
+
+// The instant acknowledgement every incoming message gets. Editable here so
+// the wording is never buried in code.
+export async function saveWhatsAppAutoReply(formData: FormData) {
+  await assertArea(null);
+  const text = str(formData.get("text"));
+  const on = formData.get("on") === "on";
+  const { saveAutoReply } = await import("@/lib/whatsappAutoReply");
+  await saveAutoReply(text, on);
+  revalidatePath("/admin/whatsapp");
+  redirect("/admin/whatsapp?saved=1");
+}

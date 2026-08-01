@@ -1,8 +1,9 @@
 import Link from "next/link";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
+import DeleteButton from "../_components/DeleteButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { markTeamDone, saveSituation, savePosterEmails } from "./actions";
+import { deleteCampaign, markTeamDone, saveSituation, savePosterEmails } from "./actions";
 import { FIELD_LABEL } from "@/lib/campaignChannels";
 import { channelStatus, STATE_ICON } from "@/lib/channelStatus";
 import { loadBrief } from "@/lib/marketingBrief";
@@ -122,7 +123,7 @@ export default async function MarketingHome() {
           <h3 style={{ margin: "24px 0 8px" }}>✍️ Not finished — {draftCampaigns.length} campaign(s) written but not scheduled</h3>
           <div style={{ display: "grid", gap: 8 }}>
             {draftCampaigns.map((p) => (
-              <a className="list-row" key={p.campaign_id} href={`/admin/campaigns/${p.campaign_id}`} style={{ textDecoration: "none" }}>
+              <div className="list-row" key={p.campaign_id}>
                 <div style={{ minWidth: 0 }}>
                   <span className="row-title">{p.campaign || "Untitled campaign"}</span>
                   <p className="row-sub">
@@ -130,8 +131,16 @@ export default async function MarketingHome() {
                     {drafts.filter((d) => d.campaign_id === p.campaign_id).length} posts waiting to be read
                   </p>
                 </div>
-                <div className="row-actions"><span className="btn small">Read them →</span></div>
-              </a>
+                <div className="row-actions" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <a className="btn small" href={`/admin/campaigns/${p.campaign_id}`}>Read them →</a>
+                  <DeleteButton
+                    action={deleteCampaign}
+                    id={p.campaign_id as string}
+                    label="Remove"
+                    message="Remove this whole campaign and every post in it that has not gone out yet?"
+                  />
+                </div>
+              </div>
             ))}
           </div>
         </>

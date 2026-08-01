@@ -1,5 +1,7 @@
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
+import ChannelFolders, { type Folder } from "./ChannelFolders";
+import ManageFolders from "./ManageFolders";
 import DeleteButton from "../_components/DeleteButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import { deletePost, sendPostNow, updatePost } from "./actions";
@@ -96,6 +98,8 @@ function Reason({ p }: { p: Post }) {
 export default async function BroadcastsPage(props: { searchParams: Promise<{ made?: string }> }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
+  const { data: folderRows } = await svc.from("channel_folders").select("id, name, icon, channels").order("sort").order("name");
+  const folders = (folderRows ?? []) as Folder[];
   const { data } = await svc
     .from("scheduled_posts")
     .select("*")
@@ -113,6 +117,8 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ ma
         subtitle="Every post scheduled or sent — read it, change it, move it, or delete it. ⏰"
         back={{ href: "/admin/campaigns", label: "Marketing" }}
       />
+
+      <ManageFolders folders={folders} boxes={CHANNEL_BOXES.map((c) => ({ name: c.name, label: c.label }))} />
 
       {searchParams.made && (
         <div className="notice ok" style={{ marginTop: 16 }}>
@@ -147,7 +153,7 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ ma
             </div>
             <details style={{ flexBasis: "100%", marginTop: 6 }}>
               <summary style={{ cursor: "pointer", fontSize: ".8rem", color: "var(--accent)" }}>✏️ Edit this post — text, channels, timing</summary>
-              <form action={updatePost} style={{ marginTop: 8, borderTop: "1px dashed var(--border)", paddingTop: 8 }}>
+              <form id={`edit-${p.id}`} action={updatePost} style={{ marginTop: 8, borderTop: "1px dashed var(--border)", paddingTop: 8 }}>
                 <input type="hidden" name="id" value={p.id} />
                 <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
                   <div>
@@ -172,6 +178,7 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ ma
                 <textarea name="x_text" rows={2} defaultValue={p.x_text ?? ""} />
 
                 <label style={{ marginTop: 10 }}>Where this one post goes</label>
+                <ChannelFolders folders={folders} formId={`edit-${p.id}`} />
                 <div style={{ display: "grid", gap: 4, gridTemplateColumns: "1fr 1fr", marginTop: 4 }}>
                   {CHANNEL_BOXES.map((c) => (
                     <label key={c.name} className="remember" style={{ margin: 0, fontSize: ".82rem" }}>

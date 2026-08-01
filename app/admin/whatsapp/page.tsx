@@ -2,7 +2,8 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
-import { replyOnWhatsApp } from "./actions";
+import { replyOnWhatsApp, saveWhatsAppAutoReply } from "./actions";
+import { getAutoReply } from "@/lib/whatsappAutoReply";
 
 // The WhatsApp inbox. A Cloud API number cannot use the WhatsApp app and does
 // NOT appear in Meta's Business Suite inbox (verified: that page 404s for this
@@ -30,7 +31,7 @@ function textOf(p: Record<string, unknown> | null): string {
   return type ? `(${type} message — WhatsApp does not pass its content to businesses)` : "";
 }
 
-export default async function AdminWhatsAppPage(props: { searchParams: Promise<{ sent?: string }> }) {
+export default async function AdminWhatsAppPage(props: { searchParams: Promise<{ sent?: string; saved?: string }> }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
 
@@ -44,6 +45,7 @@ export default async function AdminWhatsAppPage(props: { searchParams: Promise<{
 
   const rows = (data ?? []) as Row[];
   const number = await getSecret("WHATSAPP_PHONE_NUMBER_ID");
+  const auto = await getAutoReply();
 
   // Group by the other party's number, newest conversation first.
   const threads = new Map<string, Row[]>();
@@ -71,6 +73,26 @@ export default async function AdminWhatsAppPage(props: { searchParams: Promise<{
           template can be sent.
         </div>
       )}
+
+      {searchParams.saved === "1" && <div className="notice ok">Auto-reply saved.</div>}
+
+      {/* The instant reply every incoming message gets. */}
+      <div className="card" style={{ marginBottom: 18 }}>
+        <h2 className="admin-section-title">⚡ Instant auto-reply</h2>
+        <p className="muted" style={{ fontSize: ".85rem", marginTop: 0 }}>
+          Sent the moment anyone messages the number, so nobody is left waiting in silence. Once per sender per 12 hours —
+          a long conversation never gets a robot between every line. Your own replies below are always personal.
+        </p>
+        <form action={saveWhatsAppAutoReply}>
+          <textarea name="text" defaultValue={auto.text} rows={9} style={{ width: "100%", fontSize: ".9rem" }} />
+          <div style={{ display: "flex", gap: 14, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+            <label className="remember" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input type="checkbox" name="on" defaultChecked={auto.on} /> Send this automatically
+            </label>
+            <SubmitButton className="btn small" savedLabel="Saved ✓">💾 Save auto-reply</SubmitButton>
+          </div>
+        </form>
+      </div>
 
       {!number && (
         <div className="notice err">WhatsApp is not configured — add the Cloud API keys on the Integrations page.</div>

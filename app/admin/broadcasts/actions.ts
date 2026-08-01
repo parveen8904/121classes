@@ -37,7 +37,7 @@ export async function sendPostNow(formData: FormData) {
 const CHANNEL_FIELDS = [
   "to_tg_channel", "to_tg_groups", "to_discord", "to_direct", "to_whatsapp",
   "to_instagram", "to_youtube", "to_yt_video", "to_twitter", "to_linkedin",
-  "to_facebook", "to_substack", "to_medium", "to_reddit", "to_quora", "to_google",
+  "to_facebook", "to_substack", "to_medium", "to_reddit", "to_quora", "to_google", "to_threads",
 ] as const;
 
 export async function updatePost(formData: FormData) {

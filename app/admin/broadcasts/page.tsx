@@ -13,7 +13,7 @@ type Post = {
   campaign: string | null; to_whatsapp: boolean; wa_template: string | null;
   to_instagram: boolean; to_youtube: boolean; to_yt_video: boolean; to_twitter: boolean;
   to_linkedin: boolean; to_facebook: boolean; to_substack: boolean; to_medium: boolean;
-  to_reddit: boolean; to_quora: boolean; to_google: boolean;
+  to_reddit: boolean; to_quora: boolean; to_google: boolean; to_threads: boolean;
   ig_text: string | null; yt_text: string | null; x_text: string | null; created_by: string | null;
   source_kind: string | null; source_label: string | null; source_url: string | null;
   status: string; status_note: string | null; sent_at: string | null;
@@ -37,6 +37,7 @@ function Targets({ p }: { p: Post }) {
       {p.to_youtube && <span className="badge">▶️ YouTube (remind)</span>}
       {p.to_yt_video && <span className="badge">🎥 YouTube video brief</span>}
       {p.to_twitter && <span className="badge">🐦 Twitter (remind)</span>}
+      {p.to_threads && <span className="badge">🧵 Threads</span>}
       {p.to_linkedin && <span className="badge">💼 LinkedIn (remind)</span>}
       {p.to_facebook && <span className="badge">📘 Facebook (remind)</span>}
       {p.to_substack && <span className="badge">📰 Substack (remind)</span>}
@@ -62,6 +63,7 @@ const CHANNEL_BOXES: { name: string; label: string; auto: boolean }[] = [
   { name: "to_twitter", label: "🐦 Twitter/X", auto: false },
   { name: "to_linkedin", label: "💼 LinkedIn", auto: false },
   { name: "to_facebook", label: "📘 Facebook page", auto: false },
+  { name: "to_threads", label: "🧵 Threads", auto: false },
   { name: "to_reddit", label: "👽 Reddit", auto: false },
   { name: "to_substack", label: "📰 Substack", auto: false },
   { name: "to_medium", label: "✒️ Medium", auto: false },

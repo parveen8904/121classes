@@ -40,10 +40,17 @@ export async function GET(req: NextRequest) {
     if (r.sent || r.skipped || r.failed || r.remaining) drip = { sent: r.sent, remaining: r.remaining };
   } catch { /* next pass retries */ }
 
+  // Threads long-lived tokens die at 60 days unless refreshed; a weekly
+  // refresh from here keeps the connection alive forever.
+  try {
+    const { refreshThreadsTokenIfDue } = await import("@/lib/threads");
+    await refreshThreadsTokenIfDue();
+  } catch { /* next pass retries */ }
+
   const svc = createServiceClient();
   const { data: due } = await svc
     .from("scheduled_posts")
-    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, to_yt_video, to_twitter, to_linkedin, to_facebook, to_substack, to_medium, to_reddit, to_quora, to_google, ig_text, yt_text, x_text, status_note")
+    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, to_yt_video, to_twitter, to_linkedin, to_facebook, to_substack, to_medium, to_reddit, to_quora, to_google, to_threads, ig_text, yt_text, x_text, status_note")
     .eq("status", "pending")
     .lte("send_at", new Date().toISOString())
     .order("send_at")
@@ -182,6 +189,14 @@ export async function GET(req: NextRequest) {
             const r = await social.postToFacebook(text, p.link_url ? String(p.link_url) : null);
             if (r.ok) { fbPosted = true; notes.push("facebook: posted ✅"); }
             else notes.push(`facebook: auto-post failed (${r.error}) — reminder emailed instead`);
+          }
+          if (p.to_threads) {
+            const { threadsConfigured, postToThreads } = await import("@/lib/threads");
+            if (await threadsConfigured()) {
+              const r = await postToThreads(p.x_text ? String(p.x_text) : full);
+              if (r.ok) notes.push("threads: posted ✅");
+              else notes.push(`threads: auto-post failed (${r.error}) — reminder emailed instead`);
+            }
           }
           if (p.to_reddit && (await social.redditConfigured())) {
             // Reddit posts are title + body. The copy is written with its own

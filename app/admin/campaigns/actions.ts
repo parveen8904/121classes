@@ -192,3 +192,30 @@ export async function deleteCampaign(formData: FormData) {
     .in("status", ["draft", "pending"]);
   revalidatePath("/admin/campaigns");
 }
+
+// Multi-select on a generated campaign. Reading fifteen drafted posts and
+// acting on them one at a time is the slow part — these take whatever is
+// ticked and do it in one go.
+export async function dropSelectedDrafts(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const campaignId = str(formData.get("campaign_id"));
+  const ids = formData.getAll("pick").map((v) => String(v)).filter(Boolean);
+  if (!campaignId || !ids.length) return;
+  await createServiceClient().from("scheduled_posts").delete().in("id", ids).eq("status", "draft");
+  revalidatePath(`/admin/campaigns/${campaignId}`);
+}
+
+export async function scheduleSelectedDrafts(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const campaignId = str(formData.get("campaign_id"));
+  const ids = formData.getAll("pick").map((v) => String(v)).filter(Boolean);
+  if (!campaignId || !ids.length) return;
+  const when = str(formData.get("send_at"));
+  const patch: Record<string, unknown> = { status: "pending" };
+  patch.send_at = when
+    ? new Date(new Date(`${when}:00Z`).getTime() - (5 * 60 + 30) * 60 * 1000).toISOString()
+    : new Date(Date.now() - 1000).toISOString();
+  await createServiceClient().from("scheduled_posts").update(patch).in("id", ids).eq("status", "draft");
+  revalidatePath(`/admin/campaigns/${campaignId}`);
+  redirect(`/admin/campaigns/${campaignId}?scheduled=1`);
+}

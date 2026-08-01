@@ -1,7 +1,7 @@
 import AdminHero from "../../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { deleteDraftPost, saveDraftPost, scheduleCampaign, markTeamDone } from "../actions";
+import { deleteDraftPost, saveDraftPost, scheduleCampaign, markTeamDone, dropSelectedDrafts, scheduleSelectedDrafts } from "../actions";
 import { FIELD_LABEL } from "@/lib/campaignChannels";
 import { channelStatus, STATE_ICON, STATE_WORD } from "@/lib/channelStatus";
 
@@ -75,13 +75,30 @@ export default async function CampaignPage(props: {
 
       {/* The posts */}
       <h3 style={{ margin: "22px 0 8px" }}>{posts.length} post{posts.length === 1 ? "" : "s"}</h3>
+
+      {/* Multi-select. The checkboxes live on each post below and attach to
+          this form by id, so no form is nested inside another. */}
+      {isDraft && (
+        <form id="pickform" action={scheduleSelectedDrafts} className="card" style={{ marginBottom: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <input type="hidden" name="campaign_id" value={id} />
+          <span className="muted" style={{ fontSize: ".85rem" }}>Tick the ones you want, then:</span>
+          <input type="datetime-local" name="send_at" title="When to send the ticked posts — blank means now" />
+          <SubmitButton className="btn small" savedLabel="Scheduling…">📅 Schedule the ticked ones</SubmitButton>
+          <button type="submit" className="btn small secondary" formAction={dropSelectedDrafts}>🗑️ Drop the ticked ones</button>
+        </form>
+      )}
       <div style={{ display: "grid", gap: 10 }}>
         {posts.map((p) => {
           const field = fieldOf(p);
           return (
             <div className="form-card" key={p.id}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
-                <strong>{FIELD_LABEL[field] ?? "Post"}</strong>
+                <strong>
+                  {isDraft && (
+                    <input type="checkbox" form="pickform" name="pick" value={p.id} style={{ marginRight: 8 }} />
+                  )}
+                  {FIELD_LABEL[field] ?? "Post"}
+                </strong>
                 <span className="muted" style={{ fontSize: ".78rem" }}>
                   {STATE_ICON[status[field]?.state ?? "manual"]} {STATE_WORD[status[field]?.state ?? "manual"]} · {istFmt(p.send_at)} IST
                   {p.status === "sent" ? " · ✅ sent" : ""}

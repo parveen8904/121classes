@@ -73,10 +73,6 @@ export default async function MarketingOverviewPage() {
   const { data: selRow } = await svc.from("site_settings").select("value").eq("key", "homepage_yt_videos").maybeSingle();
   const { data: vRow } = await svc.from("site_settings").select("value").eq("key", "homepage_yt_v").maybeSingle();
   const ytV = (vRow?.value as string) || "";
-  const { data: introRow } = await svc.from("site_settings").select("value").eq("key", "intro_video_url").maybeSingle();
-  const introUrl = ((introRow?.value as string) ?? "").trim();
-  const introId = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/.exec(introUrl)?.[1] ?? "";
-
   let selectedIds: string[] = [];
   try { selectedIds = (JSON.parse((selRow?.value as string) || "[]") as { id: string }[]).map((v) => v.id); } catch { /* fresh */ }
 

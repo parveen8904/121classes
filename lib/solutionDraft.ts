@@ -27,6 +27,25 @@ const PAPER_KINDS = ["mtp", "rtp", "past_papers"];
 
 export async function queueMissingSolutions(subjectId?: string | null): Promise<QueueSummary> {
   const svc = createServiceClient();
+
+  // Drop anything queued that is not a descriptive test (or has since been
+  // given a real solution file). Approved keys are never touched. This keeps
+  // the page honest even if the scope was wider when a row was created.
+  const { data: stale } = await svc
+    .from("item_solutions")
+    .select("id, repository_items!inner(kind, student_visible, solution_url)")
+    .neq("status", "approved");
+  const staleIds = (stale ?? [])
+    .filter((r) => {
+      const it = (r as unknown as { repository_items: { kind: string; student_visible: boolean; solution_url: string | null } }).repository_items;
+      return (
+        !PAPER_KINDS.includes(it.kind) ||
+        it.student_visible !== true ||
+        Boolean(String(it.solution_url ?? "").trim())
+      );
+    })
+    .map((r) => (r as unknown as { id: string }).id);
+  if (staleIds.length) await svc.from("item_solutions").delete().in("id", staleIds);
   let q = svc
     .from("repository_items")
     .select("id, solution_url, content, kind")

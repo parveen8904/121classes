@@ -125,6 +125,11 @@ export default async function MarketingOverviewPage() {
       {/* Homepage YouTube curation — the homepage shows ONLY what's ticked here. */}
       <h2 className="admin-section-title" style={{ marginTop: 20 }}>🎬 Homepage YouTube videos</h2>
       <div className="card" style={{ marginTop: 10 }}>
+        <p style={{ fontSize: ".9rem", marginTop: 0, fontWeight: 700 }}>
+          {selectedIds.length === 0
+            ? "Nothing ticked — the homepage is showing the latest 8 videos from your channel."
+            : `${selectedIds.length} of 8 ticked — the homepage is showing exactly these ${selectedIds.length}.`}
+        </p>
         <p className="muted" style={{ fontSize: ".84rem", marginTop: 0 }}>
           Tick <strong>up to 8</strong> videos — only these appear on the homepage (no view counts shown).
           If none are ticked, the latest 8 from the channel show automatically. Ticking more than 8 keeps the first 8, so the homepage row stays tidy.

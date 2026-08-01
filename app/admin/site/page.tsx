@@ -3,11 +3,20 @@ import AdminHero from "../_components/AdminHero";
 import ImageUpload from "../_components/ImageUpload";
 import SubmitButton from "@/app/components/SubmitButton";
 import { updateSiteSettings } from "./actions";
+import { saveHomepageIntroVideo } from "../marketing/actions";
 
 export default async function SiteImagesPage() {
   const supabase = createClient();
   const { data } = await supabase.from("site_settings").select("key, value");
   const m = new Map((data ?? []).map((r) => [r.key, r.value as string | null]));
+
+  // The channel's own uploads, so the homepage video is CHOSEN from a list of
+  // thumbnails rather than by pasting a link and hoping it is the right one.
+  const { getChannelOverview, getRecentVideos } = await import("@/lib/youtubeStats");
+  const yt = await getChannelOverview().catch(() => null);
+  const channelVideos = yt?.uploadsPlaylist ? await getRecentVideos(yt.uploadsPlaylist, 24).catch(() => []) : [];
+  const introUrl = (m.get("intro_video_url") ?? "").trim();
+  const introId = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/.exec(introUrl)?.[1] ?? "";
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
@@ -94,7 +103,7 @@ export default async function SiteImagesPage() {
         </p>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr", marginTop: 4 }}>
           <div style={{ marginTop: 18 }}>
-            <label htmlFor="si-video">🎬 Homepage intro video (YouTube link or embed URL)</label>
+            <label htmlFor="si-video">🎬 Homepage intro video — paste a link, or pick one below</label>
             <input id="si-video" name="intro_video_url" defaultValue={m.get("intro_video_url") ?? ""} placeholder="e.g. https://www.youtube.com/watch?v=XXXX — shown in the 'Studio-quality teaching' section" />
           </div>
           <div>
@@ -146,6 +155,38 @@ export default async function SiteImagesPage() {
           Save
         </SubmitButton>
       </form>
+
+      {/* Pick the big homepage video from the channel — its own form, so it
+          saves independently of the settings above. */}
+      {channelVideos.length > 0 && (
+        <div className="card" style={{ marginTop: 22 }}>
+          <h3 style={{ marginTop: 0 }}>▶️ Choose the homepage video</h3>
+          <p className="muted" style={{ fontSize: ".84rem", marginTop: 0 }}>
+            This is the large video on the front page. Leave it on <strong>Latest upload</strong> and it always plays your
+            newest video — or pin one here, so a class recording going up on YouTube never replaces your introduction.
+          </p>
+          <form action={saveHomepageIntroVideo}>
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}>
+              <label className="remember" style={{ display: "block", border: "1px solid var(--border)", borderRadius: 10, padding: 10 }}>
+                <input type="radio" name="intro_vid" value="latest" defaultChecked={!introId} /> <strong>Latest upload</strong>
+                <div className="muted" style={{ fontSize: ".78rem", marginTop: 4 }}>Follows the channel automatically.</div>
+              </label>
+              {channelVideos.map((v) => (
+                <label
+                  key={v.id}
+                  className="remember"
+                  style={{ display: "block", border: `1px solid ${introId === v.id ? "var(--accent)" : "var(--border)"}`, borderRadius: 10, padding: 10 }}
+                >
+                  <input type="radio" name="intro_vid" value={v.id} defaultChecked={introId === v.id} />
+                  <img src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`} alt="" style={{ width: "100%", borderRadius: 8, marginTop: 6 }} />
+                  <div style={{ fontSize: ".8rem", marginTop: 4 }}>{v.title}</div>
+                </label>
+              ))}
+            </div>
+            <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 10 }}>Use this as the homepage video</SubmitButton>
+          </form>
+        </div>
+      )}
 
       <p className="muted" style={{ fontSize: ".85rem", marginTop: 14 }}>
         💡 Export from Canva as <strong>PNG or JPG</strong>. The founder photo looks best as a portrait;

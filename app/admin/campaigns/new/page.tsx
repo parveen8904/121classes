@@ -9,6 +9,7 @@ import { loadBrief } from "@/lib/marketingBrief";
 import { draftCampaign } from "../actions";
 import { FIELD_LABEL } from "@/lib/campaignChannels";
 import { channelStatus, STATE_ICON, STATE_WORD } from "@/lib/channelStatus";
+import ChannelFolders, { type Folder } from "../../broadcasts/ChannelFolders";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Start a campaign — Admin" };
@@ -64,6 +65,8 @@ export default async function NewCampaignPage(props: { searchParams: Promise<{ k
     loadBrief(svc),
     channelStatus(),
   ]);
+  const { data: folderRows } = await svc.from("channel_folders").select("id, name, icon, channels").order("sort").order("name");
+  const folders = (folderRows ?? []) as Folder[];
   const items = ((kind === "news" ? news : articles) ?? []) as Row[];
   const picked = items.find((a) => a.id === sp.pick);
   const step = { margin: "22px 0 8px", fontSize: "1.02rem" } as const;
@@ -90,7 +93,7 @@ export default async function NewCampaignPage(props: { searchParams: Promise<{ k
       </div>
       <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 0" }}>{KINDS.find((k) => k.key === kind)!.hint}</p>
 
-      <form action={draftCampaign}>
+      <form id="newcampaign" action={draftCampaign}>
         <input type="hidden" name="kind" value={kind} />
 
         <h3 style={step}>2. Which one exactly?</h3>
@@ -202,6 +205,10 @@ export default async function NewCampaignPage(props: { searchParams: Promise<{ k
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <label style={{ margin: 0 }}>Name this campaign</label>
             <ToggleAllChannels />
+          </div>
+          {/* Your own folders — one click ticks that whole set. */}
+          <div style={{ marginTop: 8 }}>
+            <ChannelFolders folders={folders} formId="newcampaign" />
           </div>
           <input name="name" placeholder="e.g. NFRA audit-quality circular — September batch" style={{ marginTop: 4 }} />
           <div style={{ display: "grid", gap: 5, gridTemplateColumns: "1fr 1fr", marginTop: 10 }}>

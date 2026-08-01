@@ -310,29 +310,15 @@ export async function queuePastStudents(formData: FormData) {
   const tier = TIERS.includes(str(formData.get("tier"))) ? str(formData.get("tier")) : "gold";
   const months = Math.min(36, Math.max(1, num(formData.get("months")) || 3));
 
-  const lines = str(formData.get("bulk")).split(/\r?\n/);
-
-  // The uploaded spreadsheet (.xlsx / .csv — the downloadable template, or any
-  // sheet whose first two columns are email and name). Every row becomes a
-  // "email, name" line and joins whatever was pasted.
-  const file = formData.get("file");
-  if (file instanceof File && file.size > 0) {
-    try {
-      const { read, utils } = await import("xlsx");
-      const wb = read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = utils.sheet_to_json<(string | number | null)[]>(sheet, { header: 1, raw: false });
-      for (const row of rows) {
-        const cells = (row ?? []).map((c) => String(c ?? "").trim());
-        const emailCell = cells.find((c) => /@/.test(c));
-        if (!emailCell) continue; // header / example / blank rows
-        const name = cells.filter((c) => c !== emailCell && c && !/@/.test(c)).join(" ");
-        lines.push(`${emailCell}, ${name}`);
-      }
-    } catch {
-      redirect("/admin/enrolment?error=badfile");
-    }
-  }
+  // Two sources, merged: whatever was pasted, plus the rows SpreadsheetPicker
+  // read from the uploaded template in the browser. The file itself never
+  // reaches the server — uploading it hit the platform's ~4.5 MB request cap
+  // and big spreadsheets failed outright, while the extracted lines are only
+  // a few KB however large the workbook.
+  const lines = [
+    ...str(formData.get("bulk")).split(/\r?\n/),
+    ...str(formData.get("bulk_rows")).split(/\r?\n/),
+  ];
 
   if (!courseId || !lines.some((l) => l.includes("@"))) redirect("/admin/enrolment?error=queueinput");
 

@@ -4,6 +4,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { DURATIONS, durationLabel } from "@/lib/pricing";
 import AdminHero from "../_components/AdminHero";
 import EnrolForm from "./EnrolForm";
+import SpreadsheetPicker from "./SpreadsheetPicker";
 import { grantSubscription, bulkGrant, revokeSubscription, extendSubscription, blockSubscription, restoreSubscription, queuePastStudents } from "./actions";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -132,9 +133,6 @@ export default async function EnrolmentPage(
       {searchParams.error === "queueinput" && (
         <div className="notice err" style={{ marginTop: 16 }}>Pick a course, and upload the filled template or paste at least one line with an email address.</div>
       )}
-      {searchParams.error === "badfile" && (
-        <div className="notice err" style={{ marginTop: 16 }}>That file could not be read as a spreadsheet — use the downloadable template (.xlsx) or a plain .csv.</div>
-      )}
 
       {/* Past students at any scale: paste once, the cron drips the emails. */}
       <div className="form-card" style={{ marginTop: 24 }}>
@@ -190,10 +188,7 @@ export default async function EnrolmentPage(
               <input name="months" type="number" min={1} max={36} defaultValue={3} />
             </div>
           </div>
-          <div>
-            <label>The filled template (.xlsx or .csv)</label>
-            <input type="file" name="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" />
-          </div>
+          <SpreadsheetPicker />
           <div>
             <label>…or paste the list here — any number of students</label>
             <textarea name="bulk" rows={6} placeholder={"ravi@example.com, Ravi Kumar\npriya@example.com, Priya Singh\n… paste thousands if you like"} style={{ fontFamily: "monospace", fontSize: ".82rem" }} />

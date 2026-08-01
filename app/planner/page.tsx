@@ -10,7 +10,7 @@ import RemarkBox from "./RemarkBox";
 import PrintButton from "./PrintButton";
 import TopicPicker from "./TopicPicker";
 import TemplatePicker from "./TemplatePicker";
-import { savePlanSetup, emailMyPlan, rebalanceFromToday } from "./actions";
+import { savePlanSetup, emailMyPlan, rebalanceFromToday, applyNamedTemplate } from "./actions";
 import DoneToggle from "./DoneToggle";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN",
 type Setup = PlanSetup;
 
 export default async function PlannerPage(
-  props: { searchParams: Promise<{ new?: string; emailed?: string; rebalanced?: string; subject?: string; template?: string }> }
+  props: { searchParams: Promise<{ new?: string; emailed?: string; rebalanced?: string; subject?: string; template?: string; applied?: string }> }
 ) {
   const searchParams = await props.searchParams;
   const supabase = createClient();
@@ -53,6 +53,8 @@ export default async function PlannerPage(
 
   if (showForm) {
     const subjIds = (subjOpts ?? []).map((s) => s.id as string);
+    const { listTemplates } = await import("@/lib/planner/namedTemplates");
+    const namedTemplates = await listTemplates(preSubject || null);
     const { data: allTopics } = subjIds.length
       ? await supabase.from("topics").select("id, title, subject_id").in("subject_id", subjIds).eq("is_combined", false).order("order_index")
       : { data: [] as { id: string; title: string; subject_id: string }[] };
@@ -64,6 +66,41 @@ export default async function PlannerPage(
         <span className="badge">🗓️ Study planner</span>
         <h1 style={{ margin: "12px 0 4px" }}>Build your study plan</h1>
         <p className="muted">Pick your subject and dates — we&apos;ll lay out exactly what to do each day, through to exam day.</p>
+
+        {/* CA Parveen Sharma's own named templates — the plan shape he
+            recommends, with your dates filled in. */}
+        {namedTemplates.length > 0 && (
+          <div className="card" style={{ marginTop: 18 }}>
+            <strong>⭐ Ready plans from CA Parveen Sharma</strong>
+            <p className="muted" style={{ fontSize: ".85rem", margin: "6px 0 10px" }}>
+              Pick one and it becomes your day-by-day plan — the dates are filled in for you, starting today.
+            </p>
+            <div style={{ display: "grid", gap: 8 }}>
+              {namedTemplates.map((t) => (
+                <form action={applyNamedTemplate} key={t.id} className="list-row" style={{ alignItems: "center" }}>
+                  <input type="hidden" name="template_id" value={t.id} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="row-title">{t.name}</div>
+                    <div className="row-sub muted">
+                      {t.note ? `${t.note} · ` : ""}
+                      {t.span_days ? `runs about ${t.span_days} days` : "fits your exam date"}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                    <select name="subject_id" defaultValue={t.subject_id ?? preSubject} required style={{ maxWidth: 190 }}>
+                      <option value="" disabled>Subject…</option>
+                      {(subjOpts ?? []).map((s) => (
+                        <option key={s.id as string} value={s.id as string}>{s.title as string}</option>
+                      ))}
+                    </select>
+                    <input type="date" name="exam_date" title="Your exam date (optional)" style={{ maxWidth: 160 }} />
+                    <button className="btn small" type="submit">Use this plan</button>
+                  </div>
+                </form>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* One-tap ready-made plans: pick a subject, tap a horizon, done. */}
         <div style={{ marginTop: 18 }}>
@@ -216,6 +253,7 @@ export default async function PlannerPage(
           <Link href="/planner?new=1" style={{ fontWeight: 700 }}>Change / regenerate →</Link>
         </div>
       )}
+      {searchParams.applied && <div className="notice ok no-print" style={{ marginTop: 12 }}>⭐ Plan ready — the template has been laid out on your dates.</div>}
       {searchParams.emailed && <div className="notice ok no-print" style={{ marginTop: 12 }}>📧 Your plan has been emailed to you.</div>}
       {searchParams.rebalanced && <div className="notice ok no-print" style={{ marginTop: 12 }}>🔄 Plan re-balanced from today — remaining work spread over the days left.</div>}
 

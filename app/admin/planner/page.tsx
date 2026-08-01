@@ -1,7 +1,9 @@
 import AdminHero from "../_components/AdminHero";
 import { createClient } from "@/lib/supabase/server";
 import SubmitButton from "@/app/components/SubmitButton";
-import { saveSubjectPlan, savePlannerConfig } from "./actions";
+import { saveSubjectPlan, savePlannerConfig, deletePlannerTemplate } from "./actions";
+import DeleteButton from "../_components/DeleteButton";
+import { listTemplates } from "@/lib/planner/namedTemplates";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Study planner settings — Admin" };
@@ -16,7 +18,7 @@ function NumField({ label, name, value, step = "1", hint }: { label: string; nam
   );
 }
 
-export default async function PlannerSettingsPage(props: { searchParams: Promise<{ saved?: string }> }) {
+export default async function PlannerSettingsPage(props: { searchParams: Promise<{ saved?: string; tpl?: string }> }) {
   const searchParams = await props.searchParams;
   const supabase = createClient();
   const { data: subjects } = await supabase
@@ -31,6 +33,8 @@ export default async function PlannerSettingsPage(props: { searchParams: Promise
 
   const grid3: React.CSSProperties = { display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" };
 
+  const templates = await listTemplates(null);
+
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 860 }}>
       <AdminHero
@@ -41,6 +45,40 @@ export default async function PlannerSettingsPage(props: { searchParams: Promise
       />
 
       {searchParams.saved && <div className="notice ok" style={{ marginTop: 16 }}>✅ Saved.</div>}
+
+      {searchParams.tpl === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>⭐ Template saved — students will see it on the planner page.</div>}
+
+      {/* Named templates: a plan's shape with no dates in it. */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <h2 className="admin-section-title">⭐ Plan templates</h2>
+        <p className="muted" style={{ fontSize: ".85rem", marginTop: 0 }}>
+          A template is a plan you have shaped — speed, revision rounds, how long it runs — saved under a name and holding{" "}
+          <strong>no dates</strong>. A student picks one and the dates are filled in from their own start and exam date.
+          Build a plan in the preview below, then press “Do you want to save this as a template?”.
+        </p>
+        {templates.length === 0 ? (
+          <p className="muted" style={{ margin: 0 }}>No templates yet.</p>
+        ) : (
+          <div style={{ display: "grid", gap: 8 }}>
+            {templates.map((t) => (
+              <div className="list-row" key={t.id}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="row-title">{t.name}</div>
+                  <div className="row-sub muted">
+                    {t.note ? `${t.note} · ` : ""}
+                    {t.span_days ? `runs about ${t.span_days} days` : "fits the student's exam date"}
+                    {t.setup?.speed ? ` · ${t.setup.speed}× speed` : ""}
+                    {t.setup?.revisions ? ` · ${t.setup.revisions} revision round(s)` : ""}
+                  </div>
+                </div>
+                <div className="row-actions">
+                  <DeleteButton action={deletePlannerTemplate} id={t.id} label="Remove" message="Remove this template? Plans already built from it are not affected." />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <a href="/admin/planner/preview" className="card" style={{ marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none" }}>
         <span><strong>🧪 Preview a generated plan</strong> <span className="muted">— pick a subject + dates and see the day-by-day output</span></span>

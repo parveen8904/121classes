@@ -3,6 +3,8 @@ import AdminHero from "../../_components/AdminHero";
 import { createClient } from "@/lib/supabase/server";
 import { loadPlanInput } from "@/lib/planner/load";
 import { generatePlan } from "@/lib/planner/engine";
+import SubmitButton from "@/app/components/SubmitButton";
+import { savePlannerTemplate } from "../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Plan preview — Admin" };
@@ -27,6 +29,8 @@ export default async function PlanPreviewPage(
         return generatePlan(input);
       })()
     : null;
+
+  const spanDays = ready ? Math.max(1, Math.round((Date.parse(`${sp.exam}T00:00:00Z`) - Date.parse(`${sp.start}T00:00:00Z`)) / 86400000)) : 0;
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 900 }}>
@@ -66,6 +70,27 @@ export default async function PlanPreviewPage(
 
       {plan && (
         <>
+          {/* Save this shape for reuse. A template holds NO dates — a student
+              applying it gets the same plan laid onto their own dates. */}
+          <details className="card" style={{ marginTop: 18 }}>
+            <summary className="btn as-btn small">💾 Do you want to save this as a template?</summary>
+            <p className="muted" style={{ fontSize: ".85rem", marginTop: 10 }}>
+              The template keeps the shape of this plan — speed {plan.feasibility.speed}×, {sp.rev ?? 3} revision round(s),
+              running {spanDays} days. It stores <strong>no dates</strong>: when a student picks it, their own start and exam
+              dates are filled in automatically.
+            </p>
+            <form action={savePlannerTemplate} style={{ display: "grid", gap: 8 }}>
+              <input type="hidden" name="subject_id" value={sp.subject ?? ""} />
+              <input type="hidden" name="start" value={sp.start ?? ""} />
+              <input type="hidden" name="exam" value={sp.exam ?? ""} />
+              <input type="hidden" name="speed" value={String(plan.feasibility.speed)} />
+              <input type="hidden" name="rev" value={sp.rev ?? "3"} />
+              <input name="name" placeholder="Template name — e.g. FR 90-day full course, AA fast revision" required />
+              <input name="note" placeholder="A line about when to use it (optional)" />
+              <SubmitButton className="btn small" savedLabel="✓ Template saved">Save as template</SubmitButton>
+            </form>
+          </details>
+
           <div style={{ marginTop: 18, padding: "16px 18px", borderRadius: 12, background: plan.feasibility.fits ? "var(--bg-soft,#f0fdf4)" : "#fef2f2", border: `1px solid ${plan.feasibility.fits ? "#16a34a" : "#ef4444"}` }}>
             <strong>{plan.feasibility.fits ? "✅ Fits the target" : "⚠️ Short of time"}</strong>
             <div style={{ fontSize: ".88rem", marginTop: 6 }}>

@@ -254,3 +254,47 @@ export async function clearPlan() {
   revalidatePath("/planner");
   redirect("/planner");
 }
+
+// Apply one of CA Parveen Sharma's named templates. The template carries the
+// shape of the plan and no dates at all; the student's own start date and
+// exam date are written in here, so the same template fits everybody.
+export async function applyNamedTemplate(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const templateId = String(formData.get("template_id") ?? "");
+  const subjectId = String(formData.get("subject_id") ?? "");
+  const examDate = String(formData.get("exam_date") ?? "");
+  if (!templateId || !subjectId) return;
+
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const svc = createServiceClient();
+  const { data: t } = await svc
+    .from("planner_templates")
+    .select("id, name, note, subject_id, span_days, setup")
+    .eq("id", templateId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!t) return;
+
+  const { setupFromTemplate, examDateForSpan } = await import("@/lib/planner/namedTemplates");
+  const start = todayIST();
+  // Their exam date wins; with none given the template's own span decides how
+  // long the plan runs.
+  const exam = examDate || (t.span_days ? examDateForSpan(start, Number(t.span_days)) : "");
+  if (!exam) return;
+
+  const setup = setupFromTemplate(t as never, { subjectId, startDate: start, examDate: exam });
+
+  const input = await loadPlanInput({ subjectId, startDate: start, examDate: exam, doneClasses: 0 });
+  if (!input) return;
+  const plan = generatePlan(applySetup(input, setup));
+
+  await svc.from("study_plans").upsert(
+    { user_id: user.id, setup, schedule: toSchedule(plan), updated_at: new Date().toISOString() },
+    { onConflict: "user_id" },
+  );
+  revalidatePath("/planner");
+  redirect("/planner?applied=1");
+}

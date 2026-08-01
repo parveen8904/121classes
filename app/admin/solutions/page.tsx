@@ -1,7 +1,7 @@
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
-import { queueAllMissing, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution } from "./actions";
+import { queueAllMissing, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
 
 // Answer keys for the uploaded papers, and the button that makes them real.
 // Nothing here is used by the portal or the evaluator until it is approved.
@@ -29,7 +29,7 @@ const LABEL: Record<string, string> = {
   failed: "⚠️ Draft failed",
 };
 
-export default async function AdminSolutionsPage(props: { searchParams: Promise<{ queued?: string; open?: string }> }) {
+export default async function AdminSolutionsPage(props: { searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string }> }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
 
@@ -48,6 +48,16 @@ export default async function AdminSolutionsPage(props: { searchParams: Promise<
     .eq("student_visible", true)
     .is("solution_url", null)
     .in("kind", ["mtp", "rtp", "past_papers"]);
+
+  // How many answer explanations are still missing (the "why", not the answer).
+  const { data: mcqKeys } = await svc.from("site_settings").select("key").like("key", "mcqx:%");
+  const haveMcq = new Set((mcqKeys ?? []).map((k) => String(k.key).slice(5)));
+  const { data: allMcq } = await svc.from("mcq_questions").select("id");
+  const mcqMissing = (allMcq ?? []).filter((q) => !haveMcq.has(String(q.id))).length;
+  const { count: caseMissing } = await svc
+    .from("case_questions")
+    .select("id", { count: "exact", head: true })
+    .is("explanation", null);
 
   const byStatus = (s: string) => rows.filter((r) => r.status === s);
   const drafted = byStatus("drafted");
@@ -86,6 +96,31 @@ export default async function AdminSolutionsPage(props: { searchParams: Promise<
         <p className="muted" style={{ fontSize: ".85rem", marginTop: 10, marginBottom: 0 }}>
           {papers ?? 0} descriptive tests (MTP / RTP / past papers) currently have no answer key. Everything else — ICAI material, question banks, notes — already carries its solutions inside the file.
         </p>
+      </div>
+
+      {/* MCQ + case-study explanations — the answers exist, the "why" is what
+          was never generated for some of them. */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <h2 className="admin-section-title">❓ Answer explanations</h2>
+        {searchParams.mcq && (
+          <div className="notice ok">
+            Wrote {searchParams.mcq} MCQ and {searchParams.cases ?? 0} case-study explanations. Press again to continue if any
+            remain.
+          </div>
+        )}
+        <p className="muted" style={{ fontSize: ".85rem", marginTop: 0 }}>
+          Every question already has its correct answer. These are the one-line reasons shown in a student&apos;s report —{" "}
+          <strong>{mcqMissing}</strong> chapter MCQs and <strong>{caseMissing ?? 0}</strong> case-study questions still have
+          none.
+        </p>
+        {(mcqMissing > 0 || (caseMissing ?? 0) > 0) && (
+          <form action={generateExplanations}>
+            <SubmitButton className="btn small" savedLabel="Writing…">✍️ Generate the missing explanations</SubmitButton>
+            <span className="muted" style={{ fontSize: ".8rem", marginLeft: 8 }}>
+              Runs for about a minute per press; the nightly worker finishes the rest by itself.
+            </span>
+          </form>
+        )}
       </div>
 
       {drafted.length === 0 && approved.length === 0 && waiting.length === 0 && (

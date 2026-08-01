@@ -92,3 +92,27 @@ export async function retrySolution(formData: FormData) {
     .eq("id", id);
   revalidatePath("/admin/solutions");
 }
+
+// Run the explanation backfill on demand. Every MCQ and case question already
+// has its correct answer; what some lack is the "why" shown in the report.
+// Bounded to ~45 seconds per press so the request always returns — press it
+// again to continue, or leave it to the nightly worker.
+export async function generateExplanations() {
+  await assertArea(null);
+  const { backfillMcqExplanations, backfillCaseExplanations } = await import("@/lib/explainBackfill");
+  const started = Date.now();
+  let mcq = 0;
+  let cases = 0;
+  while (Date.now() - started < 25_000) {
+    const n = await backfillMcqExplanations(20);
+    mcq += n;
+    if (!n) break;
+  }
+  while (Date.now() - started < 45_000) {
+    const n = await backfillCaseExplanations(20);
+    cases += n;
+    if (!n) break;
+  }
+  revalidatePath("/admin/solutions");
+  redirect(`/admin/solutions?mcq=${mcq}&cases=${cases}`);
+}

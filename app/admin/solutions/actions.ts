@@ -65,6 +65,22 @@ export async function saveSolution(formData: FormData) {
   revalidatePath("/admin/solutions");
 }
 
+/** The video walkthrough for a paper — students get it beside the written
+ * key once they have submitted. Saved independently of approval, so a video
+ * can be attached before or after the text is signed off. */
+export async function saveSolutionVideo(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const url = str(formData.get("video_url")).trim();
+  if (url && !/^https?:\/\//i.test(url)) return; // a link, or nothing
+  await createServiceClient()
+    .from("item_solutions")
+    .update({ video_url: url || null })
+    .eq("id", id);
+  revalidatePath("/admin/solutions");
+}
+
 /** A failed draft goes back in the queue for another pass. */
 export async function retrySolution(formData: FormData) {
   await assertArea(null);

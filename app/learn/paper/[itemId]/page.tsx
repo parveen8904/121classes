@@ -38,7 +38,18 @@ export default async function PaperPage(props: { params: Promise<{ itemId: strin
   const latest = (attempts ?? [])[0] as { id: string; status: string; awarded_marks: number | null; total_marks: number | null; report: Grade | null; submitted_at: string } | undefined;
 
   const subj = (item as { subjects?: { title?: string; course_id?: string } | null }).subjects;
-  const canEvaluate = !!item.solution_url;
+
+  // The approved answer key — the written solution CA Parveen Sharma has
+  // signed off, plus an optional video walkthrough. Shown only AFTER the
+  // student has submitted their own attempt, so the paper stays a real test.
+  const { data: keyRow } = await svc
+    .from("item_solutions")
+    .select("solution_md, video_url, status")
+    .eq("repo_item_id", item.id)
+    .maybeSingle();
+  const approvedKey = keyRow?.status === "approved" ? keyRow : null;
+  const canEvaluate = !!item.solution_url || Boolean(approvedKey?.solution_md);
+  const hasSubmitted = Boolean(latest);
 
   return (
     <main>
@@ -56,7 +67,12 @@ export default async function PaperPage(props: { params: Promise<{ itemId: strin
         <div className="card" style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
           {item.file_url && <a className="btn small secondary" href={viaProxy(item.file_url)} target="_blank" rel="noopener noreferrer">📄 Question paper</a>}
           {item.solution_url && <a className="btn small secondary" href={viaProxy(item.solution_url)} target="_blank" rel="noopener noreferrer">✅ Suggested answers</a>}
-          {!item.solution_url && <span className="muted" style={{ fontSize: ".85rem", alignSelf: "center" }}>Suggested answers coming soon.</span>}
+          {!item.solution_url && !approvedKey && <span className="muted" style={{ fontSize: ".85rem", alignSelf: "center" }}>Suggested answers coming soon.</span>}
+          {!item.solution_url && approvedKey && !hasSubmitted && (
+            <span className="muted" style={{ fontSize: ".85rem", alignSelf: "center" }}>
+              🔒 The solution opens once you upload your own answers.
+            </span>
+          )}
         </div>
 
         {/* Upload / evaluate */}
@@ -98,6 +114,37 @@ export default async function PaperPage(props: { params: Promise<{ itemId: strin
               </>
             ) : (
               <p className="muted" style={{ margin: 0 }}>✅ Your answers were submitted{canEvaluate ? " — evaluation is being prepared, refresh in a moment." : "; your faculty will review them."}</p>
+            )}
+          </div>
+        )}
+
+        {/* The official solution — written key and video walkthrough, released
+            after the student has attempted the paper. */}
+        {approvedKey && hasSubmitted && (
+          <div className="card" style={{ marginTop: 14 }}>
+            <strong>✅ Official solution</strong>
+            {approvedKey.video_url && (
+              <p style={{ margin: "8px 0 0" }}>
+                <a className="btn small" href={approvedKey.video_url} target="_blank" rel="noopener noreferrer">
+                  🎥 Watch the video solution
+                </a>
+              </p>
+            )}
+            {approvedKey.solution_md && (
+              <details style={{ marginTop: 10 }}>
+                <summary className="btn as-btn small secondary">📖 Read the written solution</summary>
+                <pre
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    fontFamily: "inherit",
+                    fontSize: ".9rem",
+                    lineHeight: 1.6,
+                    marginTop: 10,
+                  }}
+                >
+                  {approvedKey.solution_md}
+                </pre>
+              </details>
             )}
           </div>
         )}

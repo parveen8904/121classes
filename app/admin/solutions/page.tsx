@@ -1,7 +1,7 @@
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
-import { queueAllMissing, approveSolution, unapproveSolution, saveSolution, retrySolution } from "./actions";
+import { queueAllMissing, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution } from "./actions";
 
 // Answer keys for the uploaded papers, and the button that makes them real.
 // Nothing here is used by the portal or the evaluator until it is approved.
@@ -16,6 +16,7 @@ type Row = {
   error: string | null;
   parts: number;
   edited: boolean;
+  video_url: string | null;
   generated_at: string | null;
   repository_items: { title: string; kind: string; subjects: { title: string } | null } | null;
 };
@@ -34,7 +35,7 @@ export default async function AdminSolutionsPage(props: { searchParams: Promise<
 
   const { data } = await svc
     .from("item_solutions")
-    .select("id, repo_item_id, solution_md, status, error, parts, edited, generated_at, repository_items(title, kind, subjects(title))")
+    .select("id, repo_item_id, solution_md, status, error, parts, edited, video_url, generated_at, repository_items(title, kind, subjects(title))")
     .order("status")
     .limit(500);
   const rows = (data ?? []) as unknown as Row[];
@@ -44,8 +45,9 @@ export default async function AdminSolutionsPage(props: { searchParams: Promise<
     .from("repository_items")
     .select("id", { count: "exact", head: true })
     .eq("is_active", true)
+    .eq("student_visible", true)
     .is("solution_url", null)
-    .in("kind", ["icai", "question_bank", "rtp", "mtp", "past_papers", "custom"]);
+    .in("kind", ["mtp", "rtp", "past_papers"]);
 
   const byStatus = (s: string) => rows.filter((r) => r.status === s);
   const drafted = byStatus("drafted");
@@ -58,7 +60,7 @@ export default async function AdminSolutionsPage(props: { searchParams: Promise<
       <AdminHero
         badge="🗝️ Answer keys"
         title="Solutions for uploaded papers"
-        subtitle="Papers with no suggested-answers PDF get an AI-drafted key. A key does nothing until you approve it — approved keys are what students see and what the AI marks descriptive answer books against."
+        subtitle="The descriptive tests (MTP / RTP / past papers) that have no answer key get an AI-drafted one. A key does nothing until you approve it — approved keys are what students see after they submit, and what the AI marks their answer books against."
         back={{ href: "/admin", label: "Admin" }}
       />
 
@@ -77,19 +79,19 @@ export default async function AdminSolutionsPage(props: { searchParams: Promise<
           {failed.length > 0 && <div><strong style={{ fontSize: "1.5rem" }}>{failed.length}</strong><div className="muted">failed</div></div>}
           <div style={{ marginLeft: "auto" }}>
             <form action={queueAllMissing}>
-              <SubmitButton className="btn" savedLabel="Queued…">✍️ Draft keys for every paper without one</SubmitButton>
+              <SubmitButton className="btn" savedLabel="Queued…">✍️ Draft keys for the tests without one</SubmitButton>
             </form>
           </div>
         </div>
         <p className="muted" style={{ fontSize: ".85rem", marginTop: 10, marginBottom: 0 }}>
-          {papers ?? 0} active papers currently have no suggested-answers PDF.
+          {papers ?? 0} descriptive tests (MTP / RTP / past papers) currently have no answer key. Everything else — ICAI material, question banks, notes — already carries its solutions inside the file.
         </p>
       </div>
 
       {drafted.length === 0 && approved.length === 0 && waiting.length === 0 && (
         <div className="card">
           <p className="muted">
-            No keys yet. Press the button above and the AI will draft an answer key for every uploaded paper that has no
+            No keys yet. Press the button above and the AI will draft an answer key for each descriptive test that has no
             solution file.
           </p>
         </div>
@@ -131,6 +133,17 @@ export default async function AdminSolutionsPage(props: { searchParams: Promise<
                 </form>
               </details>
             )}
+
+            <form action={saveSolutionVideo} style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <input type="hidden" name="id" value={r.id} />
+              <input
+                name="video_url"
+                defaultValue={r.video_url ?? ""}
+                placeholder="🎥 Video solution link (YouTube / Bunny) — optional"
+                style={{ flex: "1 1 320px", fontSize: ".85rem" }}
+              />
+              <SubmitButton className="btn small secondary" savedLabel="Saved">Save video link</SubmitButton>
+            </form>
 
             <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
               {r.status === "drafted" && (

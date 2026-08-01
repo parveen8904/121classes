@@ -1,13 +1,14 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { draftPaperSolution } from "@/lib/ai";
 
-// AI-drafted answer keys for uploaded question papers.
+// AI-drafted answer keys for the descriptive tests that have none.
 //
-// 124 of the 137 active papers carry no solution PDF, so the descriptive
-// evaluator has nothing to mark a student's answer book against. Here the
-// paper's already-extracted text is turned into a full worked solution — but
-// a draft is inert until the founder approves it. Nothing reaches a student,
-// and nothing grades a paper, on the strength of an unapproved draft.
+// 13 of them — the MTPs and RTPs for Advanced Accounting and Financial
+// Reporting — carry no solution PDF, so the evaluator has nothing to mark a
+// student's answer book against. Here the paper's already-extracted text is
+// turned into a full worked solution — but a draft is inert until the founder
+// approves it. Nothing reaches a student, and nothing grades a paper, on the
+// strength of an unapproved draft.
 //
 // Long papers are drafted in passes: a 40-page RTP exceeds one response, so
 // the text is split and the parts are joined in order.
@@ -17,8 +18,12 @@ const MAX_PARTS = 6;
 
 export type QueueSummary = { queued: number; skipped: number };
 
-/** Papers worth an answer key: question material, not notes. */
-const PAPER_KINDS = ["icai", "question_bank", "rtp", "mtp", "past_papers", "custom"];
+// ONLY the descriptive tests students actually sit: MTPs, RTPs and past
+// papers. The founder confirmed everything else — ICAI material, question
+// banks, notes — already carries its solutions inside the file itself, so
+// drafting keys for those would be work nobody asked for and AI spend nobody
+// needs. Past papers already have solution PDFs and are filtered out below.
+const PAPER_KINDS = ["mtp", "rtp", "past_papers"];
 
 export async function queueMissingSolutions(subjectId?: string | null): Promise<QueueSummary> {
   const svc = createServiceClient();
@@ -26,6 +31,7 @@ export async function queueMissingSolutions(subjectId?: string | null): Promise<
     .from("repository_items")
     .select("id, solution_url, content, kind")
     .eq("is_active", true)
+    .eq("student_visible", true)
     .in("kind", PAPER_KINDS);
   if (subjectId) q = q.eq("subject_id", subjectId);
   const { data: items } = await q;

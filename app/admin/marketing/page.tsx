@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
-import { refreshHomepageThumbnails, saveHomepageVideos } from "./actions";
+import { refreshHomepageThumbnails, saveHomepageVideos, saveHomepageIntroVideo } from "./actions";
 import { getChannelOverview } from "@/lib/youtubeStats";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +73,10 @@ export default async function MarketingOverviewPage() {
   const { data: selRow } = await svc.from("site_settings").select("value").eq("key", "homepage_yt_videos").maybeSingle();
   const { data: vRow } = await svc.from("site_settings").select("value").eq("key", "homepage_yt_v").maybeSingle();
   const ytV = (vRow?.value as string) || "";
+  const { data: introRow } = await svc.from("site_settings").select("value").eq("key", "intro_video_url").maybeSingle();
+  const introUrl = ((introRow?.value as string) ?? "").trim();
+  const introId = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/.exec(introUrl)?.[1] ?? "";
+
   let selectedIds: string[] = [];
   try { selectedIds = (JSON.parse((selRow?.value as string) || "[]") as { id: string }[]).map((v) => v.id); } catch { /* fresh */ }
 
@@ -87,6 +91,36 @@ export default async function MarketingOverviewPage() {
         subtitle="Every number that matters in one place — leads, signups, and which platform actually brings students. Check it once a week. 📈"
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {/* The single big video at the top of the homepage. */}
+      <h2 className="admin-section-title" style={{ marginTop: 20 }}>▶️ Homepage main video</h2>
+      <div className="card" style={{ marginTop: 10 }}>
+        <p className="muted" style={{ fontSize: ".84rem", marginTop: 0 }}>
+          This is the large video on the front page. Leave it on <strong>Latest upload</strong> and it always plays your
+          newest video — or pick one here to pin it, so a class recording going up on YouTube never replaces your
+          introduction.
+        </p>
+        <form action={saveHomepageIntroVideo}>
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
+            <label className="remember" style={{ display: "block", border: "1px solid var(--border)", borderRadius: 10, padding: 10 }}>
+              <input type="radio" name="intro_vid" value="latest" defaultChecked={!introId} /> <strong>Latest upload</strong>
+              <div className="muted" style={{ fontSize: ".78rem", marginTop: 4 }}>Follows the channel automatically.</div>
+            </label>
+            {allVideos.map((v) => (
+              <label key={v.id} className="remember" style={{ display: "block", border: `1px solid ${introId === v.id ? "var(--accent)" : "var(--border)"}`, borderRadius: 10, padding: 10 }}>
+                <input type="radio" name="intro_vid" value={v.id} defaultChecked={introId === v.id} />{" "}
+                <img
+                  src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`}
+                  alt=""
+                  style={{ width: "100%", borderRadius: 8, marginTop: 6 }}
+                />
+                <div style={{ fontSize: ".8rem", marginTop: 4 }}>{v.title}</div>
+              </label>
+            ))}
+          </div>
+          <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 10 }}>Use this as the homepage video</SubmitButton>
+        </form>
+      </div>
 
       {/* Homepage YouTube curation — the homepage shows ONLY what's ticked here. */}
       <h2 className="admin-section-title" style={{ marginTop: 20 }}>🎬 Homepage YouTube videos</h2>

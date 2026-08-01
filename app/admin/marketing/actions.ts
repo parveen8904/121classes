@@ -53,3 +53,22 @@ export async function refreshHomepageThumbnails() {
   revalidatePath("/admin/marketing");
   revalidatePath("/", "layout");
 }
+
+// The big video at the top of the homepage. Left blank it plays the channel's
+// newest upload — which is right until a class recording or a stray clip
+// happens to be newest, and the front page changes on its own. Picking one
+// here pins it.
+export async function saveHomepageIntroVideo(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const picked = String(formData.get("intro_vid") ?? "").trim();
+  const url =
+    picked === "" || picked === "latest"
+      ? "" // blank = follow the channel's newest video, as before
+      : /^[\w-]{6,}$/.test(picked)
+        ? `https://www.youtube.com/watch?v=${picked}`
+        : picked; // a pasted link (YouTube or anything embeddable)
+  const svc = createServiceClient();
+  await svc.from("site_settings").upsert({ key: "intro_video_url", value: url }, { onConflict: "key" });
+  revalidatePath("/admin/marketing");
+  revalidatePath("/", "layout");
+}

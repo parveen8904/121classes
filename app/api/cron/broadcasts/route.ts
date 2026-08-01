@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
   const svc = createServiceClient();
   const { data: due } = await svc
     .from("scheduled_posts")
-    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, to_yt_video, to_twitter, to_linkedin, to_facebook, to_substack, to_medium, to_reddit, to_quora, to_google, to_threads, ig_text, yt_text, x_text, status_note")
+    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, to_yt_video, to_twitter, to_linkedin, to_facebook, to_substack, to_medium, to_reddit, to_quora, to_google, to_threads, to_ig_personal, ig_text, yt_text, x_text, status_note")
     .eq("status", "pending")
     .lte("send_at", new Date().toISOString())
     .order("send_at")
@@ -189,6 +189,20 @@ export async function GET(req: NextRequest) {
             const r = await social.postToFacebook(text, p.link_url ? String(p.link_url) : null);
             if (r.ok) { fbPosted = true; notes.push("facebook: posted ✅"); }
             else notes.push(`facebook: auto-post failed (${r.error}) — reminder emailed instead`);
+          }
+          if (p.to_ig_personal) {
+            // Personal Instagram rides Buffer: the Graph API cannot reach it,
+            // because the page already has the company account linked.
+            const { bufferIgPersonalConfigured, bufferPostToInstagram } = await import("@/lib/buffer");
+            if (await bufferIgPersonalConfigured()) {
+              const r = await bufferPostToInstagram(
+                String(p.ig_text ?? text),
+                `https://caparveensharma.com/api/campaign-card/${p.id}?fmt=jpg`,
+                "shareNow",
+              );
+              if (r.ok) notes.push("instagram (personal): posted ✅");
+              else notes.push(`instagram (personal): failed (${r.error}) — reminder emailed instead`);
+            }
           }
           if (p.to_threads) {
             const { threadsConfigured, postToThreads } = await import("@/lib/threads");

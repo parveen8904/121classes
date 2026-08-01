@@ -26,6 +26,7 @@ export const AUTO_FIELDS = new Set([
 ]);
 
 export const FIELD_LABEL: Record<string, string> = {
+  to_ig_personal: "📸 Instagram (personal)",
   to_tg_channel: "Telegram channel", to_tg_groups: "Subject Telegram groups", to_discord: "Discord",
   to_direct: "Direct to students", to_whatsapp: "WhatsApp", to_instagram: "Instagram",
   to_youtube: "YouTube community post", to_yt_video: "YouTube video", to_twitter: "Twitter/X",

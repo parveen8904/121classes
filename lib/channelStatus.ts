@@ -28,11 +28,13 @@ export async function channelStatus(): Promise<Record<string, ChannelStatus>> {
   const { igConfigured } = await import("@/lib/instagram");
   const { bufferConfigured } = await import("@/lib/buffer");
   const { threadsConfigured } = await import("@/lib/threads");
+  const { bufferIgPersonalConfigured } = await import("@/lib/buffer");
   const [li, xNative, fb, rd, ig, buf, th] = await Promise.all([
     social.linkedinConfigured(), social.twitterConfigured(),
     social.facebookConfigured(), social.redditConfigured(), igConfigured(),
     bufferConfigured(), threadsConfigured(),
   ]);
+  const igp = await bufferIgPersonalConfigured();
   // X posts either through its own developer keys OR through the founder's
   // Buffer account — the cron falls through to Buffer, so Buffer alone is a
   // fully connected channel and must not be reported as "needs keys".
@@ -55,6 +57,7 @@ export async function channelStatus(): Promise<Record<string, ChannelStatus>> {
       ["BUFFER_API_KEY", "TWITTER_API_KEY", "TWITTER_API_SECRET", "TWITTER_ACCESS_TOKEN", "TWITTER_ACCESS_SECRET"],
     ),
     to_threads: conn(th, "Posts itself.", ["THREADS_ACCESS_TOKEN", "THREADS_USER_ID"]),
+    to_ig_personal: conn(igp, "Posts itself through your Buffer account, with the campaign card as the picture.", ["BUFFER_API_KEY", "BUFFER_IG_CHANNEL_ID"]),
     to_facebook: conn(fb, "Posts itself.", ["FACEBOOK_PAGE_ID", "FACEBOOK_PAGE_TOKEN"]),
     to_reddit: conn(rd, "Posts itself.", ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USERNAME", "REDDIT_PASSWORD", "REDDIT_SUBREDDIT"]),
     to_youtube: { state: "manual", note: NO_API },

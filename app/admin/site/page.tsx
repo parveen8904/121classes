@@ -3,7 +3,7 @@ import AdminHero from "../_components/AdminHero";
 import ImageUpload from "../_components/ImageUpload";
 import SubmitButton from "@/app/components/SubmitButton";
 import { updateSiteSettings } from "./actions";
-import { saveHomepageIntroVideo } from "../marketing/actions";
+import { saveHomepageIntroVideo, saveHomepageVideos, refreshHomepageThumbnails } from "../marketing/actions";
 
 export default async function SiteImagesPage() {
   const supabase = createClient();
@@ -17,6 +17,13 @@ export default async function SiteImagesPage() {
   const channelVideos = yt?.uploadsPlaylist ? await getRecentVideos(yt.uploadsPlaylist, 24).catch(() => []) : [];
   const introUrl = (m.get("intro_video_url") ?? "").trim();
   const introId = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/.exec(introUrl)?.[1] ?? "";
+
+  // Which of those videos are pinned to the homepage row (up to 8).
+  const ytV = m.get("homepage_yt_v") ?? "";
+  let selectedIds: string[] = [];
+  try {
+    selectedIds = (JSON.parse(m.get("homepage_yt_videos") || "[]") as { id: string }[]).map((v) => v.id);
+  } catch { /* nothing picked yet */ }
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
@@ -187,6 +194,52 @@ export default async function SiteImagesPage() {
           </form>
         </div>
       )}
+
+      {/* Homepage YouTube curation — the homepage shows ONLY what's ticked here. */}
+      <h2 className="admin-section-title" style={{ marginTop: 20 }}>🎬 Homepage YouTube videos</h2>
+      <div className="card" style={{ marginTop: 10 }}>
+        <p style={{ fontSize: ".9rem", marginTop: 0, fontWeight: 700 }}>
+          {selectedIds.length === 0
+            ? "Nothing ticked — the homepage is showing the latest 8 videos from your channel."
+            : `${selectedIds.length} of 8 ticked — the homepage is showing exactly these ${selectedIds.length}.`}
+        </p>
+        <p className="muted" style={{ fontSize: ".84rem", marginTop: 0 }}>
+          Tick <strong>up to 8</strong> videos — only these appear on the homepage (no view counts shown).
+          If none are ticked, the latest 8 from the channel show automatically. Ticking more than 8 keeps the first 8, so the homepage row stays tidy.
+        </p>
+        <div className="card" style={{ marginBottom: 12, fontSize: ".84rem" }}>
+          <strong>Changed a thumbnail on YouTube and the site still shows the old one?</strong>
+          <p className="muted" style={{ margin: "4px 0 8px" }}>
+            That is not the page being stale — a thumbnail keeps the same web address when you replace it, so browsers
+            and the networks in between keep showing the copy they already have. This fetches them afresh everywhere.
+          </p>
+          <form action={refreshHomepageThumbnails} style={{ margin: 0 }}>
+            <SubmitButton className="btn small" savedLabel="✓ Refreshed">🔄 Fetch new thumbnails</SubmitButton>
+          </form>
+        </div>
+        {channelVideos.length > 0 ? (
+          <form action={saveHomepageVideos}>
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
+              {channelVideos.map((v) => (
+                <label key={v.id} style={{ border: selectedIds.includes(v.id) ? "2px solid var(--accent)" : "1px solid var(--border)", borderRadius: 10, overflow: "hidden", cursor: "pointer", display: "block" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/api/yt-thumb/${v.id}${ytV ? `?v=${ytV}` : ""}`} alt={v.title} loading="lazy" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block" }} />
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 10px" }}>
+                    <input type="checkbox" name="vid" value={`${v.id}:::${v.title}`} defaultChecked={selectedIds.includes(v.id)} style={{ marginTop: 2 }} />
+                    <span style={{ fontSize: ".8rem", fontWeight: 600, lineHeight: 1.25 }}>{v.title}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <SubmitButton className="btn" savedLabel="✓ Homepage videos updated" style={{ marginTop: 12 }}>
+              Save homepage videos
+            </SubmitButton>
+          </form>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>Couldn&apos;t load the channel&apos;s videos right now — refresh in a minute.</p>
+        )}
+      </div>
+
 
       <p className="muted" style={{ fontSize: ".85rem", marginTop: 14 }}>
         💡 Export from Canva as <strong>PNG or JPG</strong>. The founder photo looks best as a portrait;

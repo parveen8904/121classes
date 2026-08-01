@@ -29,7 +29,7 @@ export async function saveHomepageVideos(formData: FormData) {
     // Changing the picks should also fetch their thumbnails afresh.
     { key: "homepage_yt_v", value: String(Date.now()) },
   ], { onConflict: "key" });
-  revalidatePath("/admin/marketing");
+  revalidatePath("/admin/site");
   // "layout" purges the whole route tree for "/", not just its data — a plain
   // revalidatePath("/") was leaving the homepage rendering an older selection,
   // which read as "it is showing the latest videos instead of mine".
@@ -50,7 +50,7 @@ export async function refreshHomepageThumbnails() {
     { key: "homepage_yt_v", value: String(Date.now()) },
     { onConflict: "key" },
   );
-  revalidatePath("/admin/marketing");
+  revalidatePath("/admin/site");
   revalidatePath("/", "layout");
 }
 
@@ -69,6 +69,6 @@ export async function saveHomepageIntroVideo(formData: FormData) {
         : picked; // a pasted link (YouTube or anything embeddable)
   const svc = createServiceClient();
   await svc.from("site_settings").upsert({ key: "intro_video_url", value: url }, { onConflict: "key" });
-  revalidatePath("/admin/marketing");
+  revalidatePath("/admin/site");
   revalidatePath("/", "layout");
 }

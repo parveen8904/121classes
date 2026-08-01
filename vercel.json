@@ -50,6 +50,10 @@
     {
       "path": "/api/cron/reengage",
       "schedule": "30 22 * * *"
+    },
+    {
+      "path": "/api/cron/draft-solutions",
+      "schedule": "*/10 20-23 * * *"
     }
   ]
 }

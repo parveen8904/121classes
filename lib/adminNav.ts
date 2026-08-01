@@ -53,6 +53,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     tagline: "Courses, classes, the AI repository and everything students study.",
     panels: [
       { icon: "📘", title: "Courses & content", desc: "Create courses → subjects → topics → sections, including homework & discussion.", href: "/admin/courses" },
+      { icon: "🗝️", title: "Answer keys", desc: "AI-drafted solutions for uploaded papers that have no answer key — read, edit, approve. Approved keys are what students see and what the AI marks descriptive papers against.", href: "/admin/solutions" },
       { icon: "📚", title: "AI repository", desc: "Feed the AI: transcripts, notes, books, RTP/MTP/papers — coverage panel shows what's missing.", href: "/admin/repository" },
       { icon: "🗓️", title: "Study planner", desc: "Set the rules the day-by-day study plan engine follows (stages, hours, speeds).", href: "/admin/planner" },
       { icon: "📡", title: "Live classes", desc: "Schedule live sessions (white-label Zoom or link) and attach recordings after.", href: "/admin/live" },

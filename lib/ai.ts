@@ -756,6 +756,37 @@ export type DescriptiveGrade = {
   annotations: PaperAnnotation[];
   unreadable: boolean;
 };
+// Draft a full worked answer key for an uploaded question paper. The paper's
+// extracted text goes in; a solution a student could write to score full marks
+// comes out. Long papers arrive in numbered parts — each pass answers ONLY the
+// questions it can see, so the parts join into one continuous key.
+export async function draftPaperSolution(input: {
+  paperTitle: string;
+  subject: string;
+  questionText: string;
+  part: number;
+  totalParts: number;
+}): Promise<string | null> {
+  const { paperTitle, subject, questionText, part, totalParts } = input;
+  const system =
+    "You are CA Parveen Sharma's answer-key writer for Indian CA exams. " +
+    "You are given the TEXT OF A QUESTION PAPER. Write the SUGGESTED ANSWERS exactly as ICAI's suggested answers are written: " +
+    "question number, then the complete worked answer a student could reproduce to score FULL marks. " +
+    "For numericals show every working — journal entries, ledger/working notes, formats and totals — and label working notes. " +
+    "For theory answer in exam points, citing the accounting standard, Ind AS, section or rule that governs it. " +
+    "State any assumption you make explicitly, the way an examiner accepts it. " +
+    "Keep ICAI presentation conventions (Dr/Cr, ₹ in the given unit, proper statement formats). " +
+    "NEVER invent a question that is not in the text, and never skip a question that is. " +
+    "If a question's data is incomplete in the extract, answer as far as the data allows and say what is missing — do not fabricate figures. " +
+    NOT_TAUGHT +
+    (totalParts > 1
+      ? `This is PART ${part} of ${totalParts} of the paper. Answer ONLY the questions visible in this part; do not repeat earlier parts and do not write an introduction or conclusion. `
+      : "") +
+    " Output plain text with clear question headings. No markdown code fences.";
+  const user = `Subject: ${subject || "CA"}\nPaper: ${paperTitle}\n\nQuestion paper text:\n${questionText}`;
+  return callClaude(system, user, 8000, { feature: "draft_solution" });
+}
+
 export async function gradeDescriptivePaper(
   studentPdfUrl: string,
   solutionPdfUrl: string,
@@ -819,6 +850,16 @@ export async function gradeDescriptivePaper(
       .join("\n")
       .trim();
     if (!text) return null;
+    return parseDescriptiveGrade(text, totalMarks ?? null);
+  } catch {
+    return null;
+  }
+}
+
+// Both graders (solution PDF, approved solution text) return the same report,
+// so the shape is parsed in one place.
+function parseDescriptiveGrade(text: string, totalMarks: number | null): DescriptiveGrade | null {
+  try {
     const j = JSON.parse(text.replace(/```json|```/g, "").trim());
     const arr = (x: unknown) => (Array.isArray(x) ? x.map((s) => String(s).trim()).filter(Boolean) : []);
     const pq = Array.isArray(j.per_question)
@@ -1173,4 +1214,65 @@ export async function proposeTrendingTopics(headlines: string[], existing: strin
     }))
     .filter((t: TrendTopic) => t.topic.length > 15)
     .slice(0, 8);
+}
+
+// Same examiner, but the answer key is APPROVED TEXT rather than a PDF — used
+// for the papers that never had a suggested-answers file, once the founder has
+// approved the drafted key.
+export async function gradeDescriptivePaperAgainstText(
+  studentPdfUrl: string,
+  solutionText: string,
+  totalMarks?: number | null,
+): Promise<DescriptiveGrade | null> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey || !studentPdfUrl || !solutionText.trim()) return null;
+  if ((await aiDisabledSet()).has("grade_descriptive")) return null;
+  const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
+  try {
+    const stu = await fetch(studentPdfUrl, { cache: "no-store" });
+    if (!stu.ok) return null;
+    const stuB64 = Buffer.from(await stu.arrayBuffer()).toString("base64");
+    const sys =
+      "You are CA Parveen Sharma's examiner checking a CA descriptive (subjective) answer paper. " +
+      "You are given the STUDENT'S HANDWRITTEN answer book as a PDF, and the teacher's OFFICIAL APPROVED SOLUTION as text below. " +
+      "Grade ONLY against that solution and standard ICAI marking conventions. Mark question-by-question, fairly but exam-strict — partial marks for partially-correct steps. " +
+      (totalMarks
+        ? `The paper is out of ${totalMarks} total marks; distribute marks across the questions sensibly. `
+        : "Use the marks indicated for each question in the solution. ") +
+      "For EACH question: marks awarded, max marks, and a one-line comment. Then overall: improvement points and the concepts / accounting standards / sections to revise. " +
+      "If part of the handwriting is genuinely unreadable, grade what you can, set \"unreadable\":true, and say so — NEVER invent answers the student did not write. " +
+      "ALSO return \"annotations\" to place on the student's pages: 1-based page number, vertical position y (0.0 top to 1.0 bottom), kind (\"right\"/\"wrong\"/\"partial\"/\"tip\") and a note under 12 words. Aim for 1-4 per page. " +
+      "Respond ONLY as compact JSON, no prose, no code fences: " +
+      '{"awarded":<number>,"total":<number>,"summary":"<one-line overall>","per_question":[{"q":"Q1","awarded":4,"max":6,"comment":"..."}],"improvements":["..."],"concepts_to_revise":["..."],"annotations":[{"page":1,"y":0.25,"kind":"wrong","note":"AS 13 cost excludes brokerage"}],"unreadable":false}.';
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4000,
+        system: sys,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: stuB64 } },
+            { type: "text", text: `OFFICIAL APPROVED SOLUTION:\n${solutionText.slice(0, 60000)}` },
+          ],
+        }],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("grade_descriptive", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    const text = (data.content ?? [])
+      .filter((b: { type: string }) => b.type === "text")
+      .map((b: { text: string }) => b.text)
+      .join("\n")
+      .trim();
+    if (!text) return null;
+    return parseDescriptiveGrade(text, totalMarks ?? null);
+  } catch {
+    return null;
+  }
 }

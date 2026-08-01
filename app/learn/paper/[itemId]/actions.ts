@@ -30,14 +30,19 @@ export async function submitPaperAnswer(input: { itemId: string; fileUrl: string
     .select("id")
     .single();
 
-  // Evaluate against the suggested answers (if the admin uploaded them).
-  if (item.solution_url && attempt?.id) {
+  // Evaluate against the answer key: the uploaded suggested-answers PDF if the
+  // paper has one, otherwise the solution CA Parveen Sharma has approved for
+  // it. An unapproved draft is never used — the attempt simply stays
+  // "submitted" for the examiner desk.
+  const { approvedSolution } = await import("@/lib/solutionDraft");
+  const approvedText = item.solution_url ? null : await approvedSolution(itemId);
+
+  if ((item.solution_url || approvedText) && attempt?.id) {
     try {
-      const [studentUrl, solutionUrl] = await Promise.all([
-        resolveFileUrl(fileUrl),
-        resolveFileUrl(item.solution_url),
-      ]);
-      const graded = await gradeDescriptivePaper(studentUrl, solutionUrl, null);
+      const studentUrl = await resolveFileUrl(fileUrl);
+      const graded = approvedText
+        ? await (await import("@/lib/ai")).gradeDescriptivePaperAgainstText(studentUrl, approvedText, null)
+        : await gradeDescriptivePaper(studentUrl, await resolveFileUrl(item.solution_url as string), null);
       if (graded) {
         await svc.from("paper_attempts").update({
           status: "graded",

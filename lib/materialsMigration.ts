@@ -84,6 +84,62 @@ async function copyIn(svc: ReturnType<typeof createServiceClient>, url: string, 
   return error ? `${path}: upload failed (${error.message})` : null;
 }
 
+// The AI-repository papers — MTP, RTP, past papers and their ANSWER KEYS —
+// were never part of this migration, which only ever walked `sections`. That
+// left 204 files (376 MB) referenced by public URLs, answer keys included:
+// anyone with a link could take them without logging in. Both the student
+// paper page and the public /notes download already resolve "secure:" refs
+// behind a session, so moving them changes nothing a real student sees.
+export async function moveRepositoryBatch(limit = 25, budgetMs = 45_000): Promise<MigrationProgress> {
+  const svc = createServiceClient();
+  const deadline = Date.now() + budgetMs;
+  const out: MigrationProgress = { moved: 0, alreadyDone: 0, failed: [], remaining: 0 };
+
+  const { data: rows, error } = await svc
+    .from("repository_items")
+    .select("id, file_url, solution_url")
+    .limit(3000);
+  if (error) {
+    out.failed.push(`could not list repository items: ${error.message}`);
+    return out;
+  }
+
+  type Row = { id: string; file_url: string | null; solution_url: string | null };
+  const candidates = ((rows as Row[]) ?? []).filter(
+    (r) => pathOf(r.file_url ?? "") || pathOf(r.solution_url ?? ""),
+  );
+  out.remaining = candidates.length;
+  if (!candidates.length) {
+    out.note = "No repository paper still points at a public file.";
+    return out;
+  }
+
+  for (const row of candidates.slice(0, limit)) {
+    if (Date.now() > deadline) break;
+    const patch: Record<string, string> = {};
+
+    for (const key of ["file_url", "solution_url"] as const) {
+      const val = row[key];
+      if (typeof val !== "string") continue;
+      const path = pathOf(val);
+      if (!path) continue;
+
+      const existed = await alreadyInSecure(svc, path);
+      const err = await copyIn(svc, val, path);
+      if (err) { out.failed.push(err); continue; }
+      patch[key] = `secure:${path}`;
+      if (existed) out.alreadyDone++; else out.moved++;
+    }
+
+    if (Object.keys(patch).length) {
+      const { error: upErr } = await svc.from("repository_items").update(patch).eq("id", row.id);
+      if (upErr) out.failed.push(`item ${row.id}: ${upErr.message}`);
+    }
+  }
+
+  return out;
+}
+
 export async function moveMaterialsBatch(limit = 25, budgetMs = 45_000): Promise<MigrationProgress> {
   const svc = createServiceClient();
   const deadline = Date.now() + budgetMs;
@@ -151,36 +207,70 @@ export async function moveMaterialsBatch(limit = 25, budgetMs = 45_000): Promise
 export async function deletePublicCopies(limit = 200): Promise<{ deleted: number; left: number; orphans?: number; note?: string }> {
   const svc = createServiceClient();
 
-  const { data: rows } = await svc.from("sections").select(M_COLS).limit(2000);
-  type Row = Record<string, string | null>;
+  // Anything STILL pointing at a public copy — from sections AND from
+  // repository items. Checking only sections (as this did) would have deleted
+  // files the repository papers were still serving from.
+  const [{ data: secRows }, { data: repoRows }] = await Promise.all([
+    svc.from("sections").select(M_COLS).limit(2000),
+    svc.from("repository_items").select("file_url, solution_url").limit(3000),
+  ]);
+
   const stillPublic = new Set<string>();
-  for (const r of (rows as Row[]) ?? []) {
+  for (const r of ((secRows as Record<string, string | null>[]) ?? [])) {
     for (const c of ["m_notes_hand_url", "m_notes_typed_url", "m_pdf_url", "m_paper_question_pdf", "m_paper_solution_pdf"]) {
       const p = pathOf(r[c] ?? "");
       if (p) stillPublic.add(p);
     }
   }
+  for (const r of ((repoRows as { file_url: string | null; solution_url: string | null }[]) ?? [])) {
+    for (const v of [r.file_url, r.solution_url]) {
+      const p = pathOf(v ?? "");
+      if (p) stillPublic.add(p);
+    }
+  }
   if (stillPublic.size) {
-    return { deleted: 0, left: stillPublic.size, note: `${stillPublic.size} file(s) are still referenced publicly — finish moving first.` };
+    return {
+      deleted: 0,
+      left: stillPublic.size,
+      note: `${stillPublic.size} file(s) are still referenced publicly — finish moving first.`,
+    };
   }
 
-  const [pub, priv] = await Promise.all([
-    svc.storage.from("media").list("materials", { limit: 1000 }),
-    svc.storage.from("secure").list("materials", { limit: 1000 }),
-  ]);
-  const haveCopy = new Set((priv.data ?? []).map((o) => o.name));
-  const all = (pub.data ?? []).map((o) => o.name);
-  const safe = all.filter((n) => haveCopy.has(n));
-  const orphans = all.length - safe.length;
+  // Sweep every folder that holds paid content. site/, books/ and results/ are
+  // meant to be public and are never touched.
+  const FOLDERS = ["materials", "repository", "cases"];
+  let deleted = 0;
+  let left = 0;
+  let orphans = 0;
 
-  if (!safe.length) {
-    return { deleted: 0, left: all.length, orphans, note: all.length ? "Nothing left that has a verified private copy." : "The public materials folder is already empty." };
+  for (const folder of FOLDERS) {
+    const [pub, priv] = await Promise.all([
+      svc.storage.from("media").list(folder, { limit: 1000 }),
+      svc.storage.from("secure").list(folder, { limit: 1000 }),
+    ]);
+    const haveCopy = new Set((priv.data ?? []).map((o) => o.name));
+    const all = (pub.data ?? []).map((o) => o.name);
+    // Delete ONLY what is verified to exist privately. "Unreferenced" is not
+    // the same as "unwanted", so anything without a private copy is counted
+    // and reported rather than swept away.
+    const safe = all.filter((n) => haveCopy.has(n));
+    orphans += all.length - safe.length;
+
+    if (safe.length && deleted < limit) {
+      const targets = safe.slice(0, limit - deleted).map((n) => `${folder}/${n}`);
+      const { error } = await svc.storage.from("media").remove(targets);
+      if (error) return { deleted, left: all.length, orphans, note: `${folder}: ${error.message}` };
+      deleted += targets.length;
+    }
+
+    const { data: after } = await svc.storage.from("media").list(folder, { limit: 1000 });
+    left += (after ?? []).length;
   }
 
-  const targets = safe.slice(0, limit).map((n) => `materials/${n}`);
-  const { error } = await svc.storage.from("media").remove(targets);
-  if (error) return { deleted: 0, left: all.length, orphans, note: error.message };
-
-  const { data: after } = await svc.storage.from("media").list("materials", { limit: 1000 });
-  return { deleted: targets.length, left: (after ?? []).length, orphans };
+  return {
+    deleted,
+    left,
+    orphans,
+    note: deleted === 0 && left === 0 ? "The public folders are already clear." : undefined,
+  };
 }

@@ -3,13 +3,25 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { assertArea } from "@/lib/adminAccess";
-import { moveMaterialsBatch, deletePublicCopies } from "@/lib/materialsMigration";
+import { moveMaterialsBatch, moveRepositoryBatch, deletePublicCopies } from "@/lib/materialsMigration";
 
 // Runs one batch of the move and reports what happened in the URL, so the
 // admin can watch it progress by pressing the button again.
 export async function moveMaterials() {
   await assertArea(null);
-  const r = await moveMaterialsBatch(25, 45_000);
+  // Sections first, then the repository papers — one press covers both, so the
+  // repository half can't be forgotten again.
+  const a = await moveMaterialsBatch(25, 40_000);
+  const b = a.remaining > 25 ? null : await moveRepositoryBatch(25, 40_000);
+  const r = b
+    ? {
+        moved: a.moved + b.moved,
+        alreadyDone: a.alreadyDone + b.alreadyDone,
+        failed: [...a.failed, ...b.failed],
+        remaining: b.remaining,
+        note: b.note ?? a.note,
+      }
+    : a;
   const q = new URLSearchParams({
     moved: String(r.moved),
     already: String(r.alreadyDone),

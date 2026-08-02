@@ -65,6 +65,15 @@ async function fastModel(): Promise<string> {
   return (await getSecret("ANTHROPIC_MODEL_FAST")) || "claude-haiku-4-5";
 }
 
+// The model for anything a STUDENT reads. Doubt answers were running on the
+// small fast model to save pennies, and the founder noticed the difference in
+// quality — rightly. Teaching answers now get the proper model; the fast one
+// stays for bulk, mechanical work (relevance sorting, CV tips, interview
+// practice) where volume matters more than depth.
+async function teachingModel(): Promise<string> {
+  return (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
+}
+
 // Per-1M-token prices (USD) by model family, for the admin cost readout.
 const PRICES: Record<string, { in: number; out: number }> = {
   "claude-opus": { in: 5, out: 25 },
@@ -167,7 +176,7 @@ const ASSISTANT_SYSTEM =
 
 export async function answerDoubt(question: string, context?: string): Promise<string | null> {
   const user = (context ? `Topic context: ${context}\n\n` : "") + `Student's doubt: ${question}`;
-  return withBeta(await callClaude(ASSISTANT_SYSTEM, user, 260, { model: await fastModel(), feature: "doubt" }));
+  return withBeta(await callClaude(ASSISTANT_SYSTEM, user, 700, { model: await teachingModel(), feature: "doubt" }));
 }
 
 // Sentinel the model returns when the repository doesn't cover the question.
@@ -202,10 +211,13 @@ const REPO_SYSTEM =
   "(Intermediate/Final) students. Use the STUDY MATERIAL below (class transcripts/digests — each labelled " +
   "with its 'Class N' number — plus notes, question banks, ICAI study material, RTP/MTP, past papers) as " +
   "your PRIMARY source, plus standard ICAI knowledge (AS, Ind AS, company law).\n" +
-  "STYLE: Be as CONCISE as possible — well under 120 words for a normal doubt. Do NOT pad. Only write a " +
-  "longer answer when the student explicitly asks you to SOLVE a specific/numbered question or full problem " +
-  "— then give a complete step-by-step solution (working notes, journal entries, relevant AS/Ind AS/section) " +
-  "and length may exceed 120 words as needed.\n" +
+  "STYLE: simple, plain English a student under exam pressure can follow. Short sentences. Be CONCISE — " +
+  "well under 120 words for a normal doubt, and never pad. But do not be so short that the student is left " +
+  "guessing: if the answer turns on a condition, a date or an exception, say it. When asked to SOLVE a " +
+  "specific/numbered question or a full problem, give the COMPLETE step-by-step solution (working notes, " +
+  "journal entries, the relevant AS/Ind AS/section) and take whatever length that needs.\n" +
+  "Teach like CA Parveen Sharma: state the rule, then show it applied, then the one mistake students make " +
+  "here. Never invent a figure, a section number or a case that is not in the material.\n" +
   "ALWAYS end with one short line telling the student WHICH CLASS to watch for this — use the 'Class N' " +
   "labels in the material, e.g. 'Covered in Class 42.' If several, name them; if you truly can't tell, omit it.\n" +
   "For 'solve question 15 of Amalgamation / Q6 of ICAI / question 10 of RTP May 2026': find it in the material " +
@@ -225,7 +237,7 @@ export async function answerDoubtFromMaterial(
   // Enough room to actually SOLVE a numbered question (working notes, journal
   // entries), not just a one-line conceptual reply.
   const user = `STUDY MATERIAL:\n${material || "(none provided)"}\n\nSTUDENT QUESTION:\n${question}`;
-  const raw = await callClaude(REPO_SYSTEM, user, 1400, { model: await fastModel(), feature });
+  const raw = await callClaude(REPO_SYSTEM, user, 2000, { model: await teachingModel(), feature });
   // A reply CA Parveen Sharma reads and sends himself carries no machine
   // disclaimer — it is his answer by the time the student sees it.
   if (opts.betaNote === false) return raw && raw.trim() !== NEED_FACULTY ? plainText(raw) : raw;
@@ -243,7 +255,9 @@ export async function answerDoubtWithAttachment(
   const apiKey = await getSecret("ANTHROPIC_API_KEY");
   if (!apiKey) return null;
   if ((await aiDisabledSet()).has("doubt")) return null;
-  const model = await fastModel();
+  // Reading a photographed question and solving it is the hardest thing the
+  // site does for a student — it gets the teaching model, not the fast one.
+  const model = await teachingModel();
   const isPdf = attachment.mediaType === "application/pdf";
   const block = isPdf
     ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: attachment.dataB64 } }
@@ -343,7 +357,7 @@ export async function answerAssistant(
   material: string,
 ): Promise<string | null> {
   const user = `SITE INFO:\n${siteFacts}\n\nSTUDY MATERIAL:\n${material || "(none provided)"}\n\nQUESTION:\n${question}`;
-  return withBeta(await callClaude(ASSIST_SYSTEM, user, 260, { model: await fastModel(), feature: "ask_me" }));
+  return withBeta(await callClaude(ASSIST_SYSTEM, user, 700, { model: await teachingModel(), feature: "ask_me" }));
 }
 
 // Pre-generate MCQs from a class transcript (token-frugal: run ONCE at upload

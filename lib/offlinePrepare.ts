@@ -300,11 +300,20 @@ export async function prepareNextPending(timeBudgetMs = 150_000): Promise<StepRe
 
   const [{ data: existing }, { data: secs }] = await Promise.all([
     svc.from("offline_jobs").select("section_id"),
-    svc.from("sections").select("id, config").eq("type", "full_class_video").eq("is_published", true).order("order_index"),
+    // ONLY the one key this needs. Selecting whole `config` rows pulled ~19 MB
+    // of JSONB for 325 classes on every pass of a 5-minute cron — it was the
+    // single heaviest query in the database (2,638 disk reads, 64% cache hit).
+    // Same lesson as sections_meta: never read config across rows.
+    svc
+      .from("sections")
+      .select("id, bunny_video_id:config->>bunny_video_id")
+      .eq("type", "full_class_video")
+      .eq("is_published", true)
+      .order("order_index"),
   ]);
   const have = new Set((existing ?? []).map((e) => e.section_id as string));
   const targets = (secs ?? []).filter(
-    (s) => ((s.config ?? {}) as Record<string, string>).bunny_video_id && !have.has(s.id as string),
+    (s) => (s as { bunny_video_id?: string | null }).bunny_video_id && !have.has(s.id as string),
   ).slice(0, 5);
   for (const t of targets) {
     if (left() < 20_000) return last;

@@ -83,13 +83,18 @@ export default async function HealthPage(props: { searchParams: Promise<{ sort?:
   const svc = createServiceClient();
   const dayStartIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   dayStartIST.setHours(0, 0, 0, 0);
-  const [{ data, error }, { data: vData }, { data: peakToday }, { data: peak7d }] = await Promise.all([
+  const [{ data, error }, { data: vData }, { data: peakToday }, { data: peak7d }, { data: heavy }] = await Promise.all([
     svc.rpc("admin_server_health"),
     svc.rpc("admin_visitor_report"),
     // Peak connections — the DB samples itself every 5 minutes (pg_cron).
     svc.from("conn_samples").select("at, total, active").gte("at", dayStartIST.toISOString()).order("total", { ascending: false }).order("at", { ascending: false }).limit(1).maybeSingle(),
     svc.from("conn_samples").select("at, total, active").gte("at", new Date(Date.now() - 7 * 864e5).toISOString()).order("total", { ascending: false }).order("at", { ascending: false }).limit(1).maybeSingle(),
+    // What is actually costing disk reads — so a slow week names itself.
+    svc.rpc("admin_heaviest_queries", { lim: 10 }),
   ]);
+  const heavyRows = (heavy ?? []) as {
+    query: string; calls: number; total_seconds: number; mean_ms: number; disk_reads: number; cache_hit_pct: number | null;
+  }[];
   const h = data as Health | null;
   const v = vData as Visitors | null;
   const peakAt = (s: string) => new Date(s).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
@@ -142,6 +147,52 @@ export default async function HealthPage(props: { searchParams: Promise<{ sort?:
             <Stat label="Memory cache hit" value={h.cache_hit_ratio != null ? `${h.cache_hit_ratio}%` : "—"} sub={(h.cache_hit_ratio ?? 100) >= 99 ? "excellent" : "watch this"} />
             <Stat label="Database size" value={h.db_size} sub="grows slowly" />
           </div>
+          {/* What is spending the Disk IO budget. */}
+          {heavyRows.length > 0 && (
+            <>
+              <h3 style={{ margin: "22px 0 8px" }}>🐘 Heaviest queries (since the database last restarted)</h3>
+              <div className="card" style={{ overflowX: "auto" }}>
+                <p className="muted" style={{ fontSize: ".8rem", marginTop: 0 }}>
+                  Sorted by <strong>disk reads</strong> — the blocks Postgres had to fetch from disk instead of memory, which
+                  is exactly what a Disk IO budget is spent on. A low cache-hit figure on a heavy row is the thing to fix.
+                </p>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".78rem" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", borderBottom: "1px solid var(--border)" }}>
+                      <th style={{ padding: "4px 6px" }}>Query</th>
+                      <th style={{ padding: "4px 6px", textAlign: "right" }}>Calls</th>
+                      <th style={{ padding: "4px 6px", textAlign: "right" }}>Disk reads</th>
+                      <th style={{ padding: "4px 6px", textAlign: "right" }}>Cache hit</th>
+                      <th style={{ padding: "4px 6px", textAlign: "right" }}>Total time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {heavyRows.map((q, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                        <td style={{ padding: "4px 6px", fontFamily: "ui-monospace, monospace", maxWidth: 460 }}>
+                          {q.query.slice(0, 150)}
+                        </td>
+                        <td style={{ padding: "4px 6px", textAlign: "right" }}>{q.calls}</td>
+                        <td style={{ padding: "4px 6px", textAlign: "right" }}>{Number(q.disk_reads).toLocaleString("en-IN")}</td>
+                        <td
+                          style={{
+                            padding: "4px 6px",
+                            textAlign: "right",
+                            color: q.cache_hit_pct != null && q.cache_hit_pct < 90 ? "#b91c1c" : undefined,
+                            fontWeight: q.cache_hit_pct != null && q.cache_hit_pct < 90 ? 700 : 400,
+                          }}
+                        >
+                          {q.cache_hit_pct != null ? `${q.cache_hit_pct}%` : "—"}
+                        </td>
+                        <td style={{ padding: "4px 6px", textAlign: "right" }}>{q.total_seconds}s</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
           <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
             &ldquo;Students active&rdquo; is approximate (based on live sessions). Videos stream from Bunny&apos;s CDN, not this
             server, so watching classes barely loads the database — logins and page-opens are the real load.

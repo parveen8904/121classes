@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { gradeMcqAttempt, type McqResult } from "./testActions";
+import { startMcqAttempt, gradeMcqAttempt, type McqResult } from "./testActions";
 
 type Question = { id: string; question: string; options: string[] };
 
@@ -41,8 +41,10 @@ export default function McqForm({
   const [secondsLeft, setSecondsLeft] = useState(totalSeconds);
   const submittedRef = useRef(!!lockedResult);
 
-  // The clock is anchored to a WALL-CLOCK deadline kept in localStorage: leaving
-  // the app, locking the phone or reloading never pauses an exam in progress.
+  // The clock is anchored to a wall-clock deadline that comes from the SERVER,
+  // which records when the student pressed Start. localStorage is kept only as
+  // an offline fallback for the countdown display — clearing it no longer buys
+  // anyone extra time, because the server decides what counts as late.
   const deadlineKey = `mcqdl:${sectionId}`;
   const deadlineRef = useRef<number | null>(null);
   useEffect(() => {
@@ -50,6 +52,23 @@ export default function McqForm({
       try { localStorage.removeItem(deadlineKey); } catch { /* no-op */ }
       return;
     }
+    // If the server already has a start time for this test, the sitting is in
+    // progress — resume it on the server's deadline, whatever the browser says.
+    let cancelled = false;
+    (async () => {
+      try {
+        const st = await startMcqAttempt(sectionId);
+        if (cancelled || !st) return;
+        const remaining = Math.round((st.deadlineMs - Date.now()) / 1000);
+        if (remaining > 5 && !submittedRef.current) {
+          deadlineRef.current = st.deadlineMs;
+          try { localStorage.setItem(deadlineKey, String(st.deadlineMs)); } catch { /* no-op */ }
+          setStarted(true);
+          setSecondsLeft(remaining);
+        }
+      } catch { /* fall back to the local deadline below */ }
+    })();
+
     try {
       const raw = localStorage.getItem(deadlineKey);
       if (raw) {
@@ -66,11 +85,19 @@ export default function McqForm({
         }
       }
     } catch { /* no-op */ }
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const begin = () => {
-    const dl = Date.now() + totalSeconds * 1000;
+
+  const begin = async () => {
+    // Start the clock on the server FIRST, and take the deadline from it.
+    let dl = Date.now() + totalSeconds * 1000;
+    try {
+      const st = await startMcqAttempt(sectionId);
+      if (st?.deadlineMs) dl = st.deadlineMs;
+    } catch { /* offline — the local deadline still runs the countdown */ }
     deadlineRef.current = dl;
+    setSecondsLeft(Math.max(1, Math.round((dl - Date.now()) / 1000)));
     try { localStorage.setItem(deadlineKey, String(dl)); } catch { /* no-op */ }
     setStarted(true);
   };
@@ -140,10 +167,17 @@ export default function McqForm({
             {result.score} / {result.total} <span className="muted" style={{ fontSize: "1rem" }}>({pct}%)</span>
           </p>
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontWeight: 700 }}>
-            <span>🏆 Your rank: #{result.rank ?? 1}</span>
+            {/* A paper handed in after time is still marked in full — it just
+                does not take a place in the ranking. */}
+            {!result.late && <span>🏆 Your rank: #{result.rank ?? 1}</span>}
             <span style={{ color: "#16a34a" }}>✅ {right.length} correct</span>
             <span style={{ color: "#dc2626" }}>❌ {wrong.length} wrong</span>
           </div>
+          {result.late && (
+            <p className="muted" style={{ fontSize: ".85rem", margin: "10px 0 0" }}>
+              ⏱️ This was submitted after the time limit, so it is marked in full but not ranked.
+            </p>
+          )}
           {(result.weakConcepts?.length ?? 0) > 0 && (
             <div style={{ margin: "12px 0 0" }}>
               <strong>🔎 Concepts to revise:</strong>

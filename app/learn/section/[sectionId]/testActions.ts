@@ -57,6 +57,7 @@ export type McqResult = {
   total?: number;
   review?: McqReview[];
   rank?: number; // leaderboard position; we never reveal how many took the test
+  late?: boolean; // handed in after the time limit — graded, but not ranked
   weakConcepts?: string[];
   classesToRedo?: string[];
 };
@@ -147,6 +148,59 @@ export async function getMyMcqResult(sectionId: string): Promise<(McqResult & { 
   return { ...res, alreadyDone: true };
 }
 
+// How long this test is allowed, worked out from the section itself so the
+// browser cannot ask for more. Same arithmetic the form displays.
+async function allowedSecondsFor(sectionId: string): Promise<number> {
+  const svc = createServiceClient();
+  const [{ count }, { data: cfg }] = await Promise.all([
+    svc.from("mcq_questions").select("id", { count: "exact", head: true }).eq("section_id", sectionId),
+    svc.from("sections").select("minutes_per_question:config->>minutes_per_question").eq("id", sectionId).maybeSingle(),
+  ]);
+  const perQ = Number((cfg as { minutes_per_question?: string } | null)?.minutes_per_question) || 1;
+  const raw = Math.max(1, Math.ceil((count ?? 0) * perQ));
+  return Math.ceil(raw / 5) * 5 * 60;
+}
+
+// A student who loses their connection near the end must not lose the paper,
+// so a submission is only counted late once it is this far past the deadline.
+const LATE_GRACE_SECONDS = 120;
+
+/**
+ * Start the clock — on the server. Returns the wall-clock deadline so the
+ * countdown shown to the student comes from here, not from their own browser.
+ * Re-pressing Start (reload, reopened app) returns the ORIGINAL deadline.
+ */
+export async function startMcqAttempt(sectionId: string): Promise<{ deadlineMs: number; allowedSecs: number }> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const allowedSecs = await allowedSecondsFor(sectionId);
+  if (!user) return { deadlineMs: Date.now() + allowedSecs * 1000, allowedSecs };
+
+  const svc = createServiceClient();
+  const { data: existing } = await svc
+    .from("mcq_starts")
+    .select("started_at, allowed_secs")
+    .eq("student_id", user.id)
+    .eq("section_id", sectionId)
+    .maybeSingle();
+
+  if (existing) {
+    return {
+      deadlineMs: new Date(existing.started_at as string).getTime() + Number(existing.allowed_secs) * 1000,
+      allowedSecs: Number(existing.allowed_secs),
+    };
+  }
+
+  const startedAt = new Date();
+  await svc.from("mcq_starts").insert({
+    student_id: user.id,
+    section_id: sectionId,
+    started_at: startedAt.toISOString(),
+    allowed_secs: allowedSecs,
+  });
+  return { deadlineMs: startedAt.getTime() + allowedSecs * 1000, allowedSecs };
+}
+
 export async function gradeMcqAttempt(input: {
   sectionId: string;
   answers: Record<string, number>;
@@ -175,12 +229,29 @@ export async function gradeMcqAttempt(input: {
   const res = await buildMcqResult(supabase, input.sectionId, user.id, input.answers ?? {});
   if (!res.ok) return res;
 
+  // Was this handed in after time? Judged against the server's own record of
+  // when they started, so clearing browser storage changes nothing.
+  let late = false;
+  try {
+    const { data: st } = await createServiceClient()
+      .from("mcq_starts")
+      .select("started_at, allowed_secs")
+      .eq("student_id", user.id)
+      .eq("section_id", input.sectionId)
+      .maybeSingle();
+    if (st) {
+      const deadline = new Date(st.started_at as string).getTime() + Number(st.allowed_secs) * 1000;
+      late = Date.now() > deadline + LATE_GRACE_SECONDS * 1000;
+    }
+  } catch { /* if we cannot tell, treat it as on time */ }
+
   await supabase.from("mcq_attempts").insert({
     student_id: user.id,
     section_id: input.sectionId,
     score: res.score,
     total: res.total,
     answers: input.answers ?? {},
+    late,
     report: { rank: res.rank, weakConcepts: res.weakConcepts, classesToRedo: res.classesToRedo },
   });
   await supabase.from("student_activity").insert({
@@ -203,7 +274,7 @@ export async function gradeMcqAttempt(input: {
     /* email failure must not fail the submission */
   }
 
-  return res;
+  return { ...res, late };
 }
 
 export async function submitSubjective(input: {

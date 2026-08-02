@@ -38,6 +38,7 @@ export async function getRepositoryContext(
   // Topics are scoped to the subject (or focus topic) in the DB; the per-class
   // configs (transcripts, digests — the HEAVY part) are only fetched for that
   // scope, never site-wide.
+  type SectionRow = { id: string; topic_id: string; title: string } & Record<string, string | null>;
   let topicsQ = svc
     .from("topics")
     .select("id, title, subject_id, weightage_marks, important_qs_rev1, important_qs_rev2, valid_from_attempt, valid_to_attempt, subjects(title)")
@@ -48,12 +49,44 @@ export async function getRepositoryContext(
   const scoped = !!(subjectId || opts.topicId);
   const topicIds = scoped ? (topics ?? []).map((t) => t.id) : [];
   const { data: sections } = topicIds.length
-    ? await svc.from("sections").select("topic_id, title, config").in("topic_id", topicIds).eq("is_published", true)
-    : { data: [] as { topic_id: string; title: string; config: Record<string, unknown> | null }[] };
+    ? await svc
+        .from("sections")
+        // Project ONLY the eleven keys used below. Each config row is around
+        // 39 kB and the rest of it (video ids, ui state, import summaries) is
+        // shipped for nothing — on a query that runs for every AI answer.
+        // Everything the loop below reads EXCEPT the transcript. A transcript
+        // is only used when the class has no digest, but fetching it for every
+        // row shipped 30 MB of the 36 MB straight into the bin.
+        .select(
+          "id, topic_id, title, ai_summary:config->>ai_summary, ai_concepts_discussed:config->>ai_concepts_discussed, " +
+            "ai_questions_discussed:config->>ai_questions_discussed, ai_key_points:config->>ai_key_points, " +
+            "important_concepts:config->>important_concepts, important_questions:config->>important_questions, " +
+            "homework:config->>homework, notes_text:config->>notes_text, ai_pdf_text:config->>ai_pdf_text, " +
+            "class_no:config->>class_no",
+        )
+        .in("topic_id", topicIds)
+        .eq("is_published", true)
+    : { data: [] as SectionRow[] };
+  // Now fetch transcripts for ONLY the classes that have no digest — those are
+  // the sole rows where the loop below will actually use one.
+  const needTranscript = ((sections ?? []) as SectionRow[])
+    .filter((s) => !String(s.ai_summary ?? "").trim())
+    .map((s) => s.id);
+  const { data: transcripts } = needTranscript.length
+    ? await svc.from("sections").select("id, transcript:config->>transcript").in("id", needTranscript)
+    : { data: [] as { id: string; transcript: string | null }[] };
+  const transcriptById = new Map(
+    ((transcripts ?? []) as { id: string; transcript: string | null }[]).map((t) => [t.id, t.transcript]),
+  );
+
   const secByTopic = new Map<string, { title: string; config: Record<string, unknown> }[]>();
-  for (const s of sections ?? []) {
+  for (const s of (sections ?? []) as SectionRow[]) {
     if (!secByTopic.has(s.topic_id)) secByTopic.set(s.topic_id, []);
-    secByTopic.get(s.topic_id)!.push({ title: s.title, config: (s.config ?? {}) as Record<string, unknown> });
+    const { id, topic_id: _t, title, ...cfg } = s;
+    secByTopic.get(s.topic_id)!.push({
+      title,
+      config: { ...cfg, transcript: transcriptById.get(id) ?? null } as Record<string, unknown>,
+    });
   }
 
   type Chunk = { subject_id: string | null; topic_id: string | null; text: string };

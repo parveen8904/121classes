@@ -50,10 +50,14 @@ export default async function AdminSolutionsPage(props: { searchParams: Promise<
     .in("kind", ["mtp", "rtp", "past_papers"]);
 
   // How many answer explanations are still missing (the "why", not the answer).
-  const { data: mcqKeys } = await svc.from("site_settings").select("key").like("key", "mcqx:%");
-  const haveMcq = new Set((mcqKeys ?? []).map((k) => String(k.key).slice(5)));
-  const { data: allMcq } = await svc.from("mcq_questions").select("id");
-  const mcqMissing = (allMcq ?? []).filter((q) => !haveMcq.has(String(q.id))).length;
+  // Counted as two head-only counts rather than by pulling every question id
+  // and every stored key into memory — this page is opened often, and that
+  // read was two full table scans each time.
+  const [{ count: mcqTotal }, { count: mcqHave }] = await Promise.all([
+    svc.from("mcq_questions").select("id", { count: "exact", head: true }),
+    svc.from("site_settings").select("key", { count: "exact", head: true }).like("key", "mcqx:%"),
+  ]);
+  const mcqMissing = Math.max(0, (mcqTotal ?? 0) - (mcqHave ?? 0));
   const { count: caseMissing } = await svc
     .from("case_questions")
     .select("id", { count: "exact", head: true })

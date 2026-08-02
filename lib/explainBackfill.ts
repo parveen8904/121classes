@@ -11,28 +11,24 @@ import { saveMcqExplanation } from "@/lib/answers";
 
 type McqRow = { id: string; question: string; options: string[]; correct_index: number };
 
-/** MCQs with no stored explanation yet. */
+/** MCQs with no stored explanation yet — counted by the database. */
 export async function missingMcqExplanations(): Promise<number> {
   const svc = createServiceClient();
-  const { data: keys } = await svc.from("site_settings").select("key").like("key", "mcqx:%");
-  const have = new Set((keys ?? []).map((k) => String(k.key).slice(5)));
-  const { data: qs } = await svc.from("mcq_questions").select("id");
-  return (qs ?? []).filter((q) => !have.has(String(q.id))).length;
+  const [{ count: total }, { count: have }] = await Promise.all([
+    svc.from("mcq_questions").select("id", { count: "exact", head: true }),
+    svc.from("site_settings").select("key", { count: "exact", head: true }).like("key", "mcqx:%"),
+  ]);
+  return Math.max(0, (total ?? 0) - (have ?? 0));
 }
 
-/** Explain one batch of MCQs. Returns how many were written. */
+/** Explain one batch of MCQs. Returns how many were written.
+ * The batch comes from a NOT EXISTS query (0093), so only the rows that are
+ * actually missing an explanation are read — this runs in a loop, and reading
+ * every question each pass was heavy on Disk IO. */
 export async function backfillMcqExplanations(limit = 20): Promise<number> {
   const svc = createServiceClient();
-  const { data: keys } = await svc.from("site_settings").select("key").like("key", "mcqx:%");
-  const have = new Set((keys ?? []).map((k) => String(k.key).slice(5)));
-
-  const { data: qs } = await svc
-    .from("mcq_questions")
-    .select("id, question, options, correct_index, section_id")
-    .limit(2000);
-  const todo = ((qs ?? []) as unknown as (McqRow & { section_id: string })[])
-    .filter((q) => !have.has(String(q.id)))
-    .slice(0, limit);
+  const { data: qs } = await svc.rpc("admin_mcq_missing_explanations", { lim: limit });
+  const todo = ((qs ?? []) as unknown as McqRow[]);
   if (!todo.length) return 0;
 
   // Reuse the case-study explainer: it takes questions with options and a

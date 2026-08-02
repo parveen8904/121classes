@@ -4,6 +4,11 @@ import { createServiceClient } from "@/lib/supabase/service";
 // student_activity. No third-party tracker is involved, which is why these
 // numbers can be shown to the founder at all.
 //
+// The counting happens IN Postgres (admin_analytics_* functions, 0092). An
+// earlier version pulled every row in the window into Node and counted there,
+// which meant a near-full table read on every page load — the fastest way to
+// drain the project's Disk IO budget. Now the database returns ~90 rows.
+//
 // Everything is computed for a window AND for the window before it, because a
 // visitor count on its own says nothing: 500 this week only means something
 // next to last week's 400.
@@ -27,10 +32,11 @@ export type AnalyticsSnapshot = {
 
 const DAY = 86400_000;
 
-function istDayKey(d: Date): string {
-  // Days are counted in IST — a student studying at 11pm belongs to that day,
-  // not to the next one in UTC.
-  return new Date(d.getTime() + (5 * 60 + 30) * 60_000).toISOString().slice(0, 10);
+type DailyRow = { d: string; visitors: number; views: number; students: number; signups: number; logins: number };
+type WatchRow = { d: string; seconds: number };
+
+function istToday(): string {
+  return new Date(Date.now() + (5 * 60 + 30) * 60_000).toISOString().slice(0, 10);
 }
 
 function shortLabel(iso: string): string {
@@ -38,128 +44,81 @@ function shortLabel(iso: string): string {
   return `${Number(d)}/${Number(m)}`;
 }
 
-/** Fill every day in the window, so a quiet day shows as a gap not a jump. */
-function toSeries(counts: Map<string, number>, from: Date, days: number): Series {
+/** Fill every day in the window so a quiet day reads as a gap, not a jump. */
+function fill(byDay: Map<string, number>, days: number): Series {
   const out: Series = [];
-  for (let i = 0; i < days; i++) {
-    const key = istDayKey(new Date(from.getTime() + i * DAY));
-    out.push({ label: shortLabel(key), value: counts.get(key) ?? 0 });
+  const today = new Date(`${istToday()}T00:00:00Z`).getTime();
+  for (let i = days - 1; i >= 0; i--) {
+    const iso = new Date(today - i * DAY).toISOString().slice(0, 10);
+    out.push({ label: shortLabel(iso), value: byDay.get(iso) ?? 0 });
   }
   return out;
 }
 
+/** Split the returned days into "this window" and "the one before". */
+function split<T extends { d: string }>(rows: T[], days: number): { now: T[]; before: T[] } {
+  const cutoff = new Date(new Date(`${istToday()}T00:00:00Z`).getTime() - (days - 1) * DAY)
+    .toISOString()
+    .slice(0, 10);
+  return {
+    now: rows.filter((r) => r.d >= cutoff),
+    before: rows.filter((r) => r.d < cutoff),
+  };
+}
+
+const sum = <T>(rows: T[], pick: (r: T) => number) => rows.reduce((t, r) => t + (Number(pick(r)) || 0), 0);
+
 export async function loadAnalytics(days: Range): Promise<AnalyticsSnapshot> {
   const svc = createServiceClient();
-  const now = Date.now();
-  const start = new Date(now - days * DAY);
-  const prevStart = new Date(now - 2 * days * DAY);
 
-  // One read covers both windows; splitting it in SQL would be two round trips
-  // for the same rows.
-  const { data: views } = await svc
-    .from("page_views")
-    .select("path, event, user_id, visitor_key, created_at")
-    .gte("created_at", prevStart.toISOString())
-    .limit(200000);
+  const [daily, watch, top, peak] = await Promise.all([
+    svc.rpc("admin_analytics_daily", { days }),
+    svc.rpc("admin_analytics_watch", { days }),
+    svc.rpc("admin_analytics_top_pages", { days, lim: 12 }),
+    svc.rpc("admin_analytics_peak_hour", { days }),
+  ]);
 
-  const rows = views ?? [];
-  const inNow = (t: string) => new Date(t).getTime() >= start.getTime();
+  const rows = ((daily.data ?? []) as DailyRow[]).map((r) => ({ ...r, d: String(r.d).slice(0, 10) }));
+  const watchRows = ((watch.data ?? []) as WatchRow[]).map((r) => ({ ...r, d: String(r.d).slice(0, 10) }));
 
-  const dayCounts = new Map<string, number>();
-  const dayVisitors = new Map<string, Set<string>>();
-  const dayStudents = new Map<string, Set<string>>();
-  const hourCounts = new Map<number, number>();
-  const pathCounts = new Map<string, number>();
-  const seenNow = new Set<string>();
-  const seenBefore = new Set<string>();
-  const studentsNow = new Set<string>();
-  const studentsBefore = new Set<string>();
-  let viewsNow = 0;
-  let viewsBefore = 0;
-  let signupsNow = 0;
-  let signupsBefore = 0;
-  let loginsNow = 0;
-  let loginsBefore = 0;
+  const d = split(rows, days);
+  const w = split(watchRows, days);
 
-  for (const r of rows) {
-    const t = String(r.created_at);
-    const cur = inNow(t);
-    const key = istDayKey(new Date(t));
-    const visitor = String(r.visitor_key ?? "");
-    const event = String(r.event ?? "view");
+  const seriesOf = (list: DailyRow[], pick: (r: DailyRow) => number) =>
+    fill(new Map(list.map((r) => [r.d, Number(pick(r)) || 0])), days);
 
-    if (event === "view") {
-      if (cur) {
-        viewsNow++;
-        dayCounts.set(key, (dayCounts.get(key) ?? 0) + 1);
-        if (visitor) (dayVisitors.get(key) ?? dayVisitors.set(key, new Set()).get(key)!).add(visitor);
-        if (r.user_id) (dayStudents.get(key) ?? dayStudents.set(key, new Set()).get(key)!).add(String(r.user_id));
-        const h = new Date(new Date(t).getTime() + (5 * 60 + 30) * 60_000).getUTCHours();
-        hourCounts.set(h, (hourCounts.get(h) ?? 0) + 1);
-        const p = String(r.path ?? "/").split("?")[0];
-        pathCounts.set(p, (pathCounts.get(p) ?? 0) + 1);
-      } else viewsBefore++;
-    }
-    if (event === "signup_success") cur ? signupsNow++ : signupsBefore++;
-    if (event === "login_success") cur ? loginsNow++ : loginsBefore++;
-
-    if (visitor) (cur ? seenNow : seenBefore).add(visitor);
-    if (r.user_id) (cur ? studentsNow : studentsBefore).add(String(r.user_id));
-  }
-
-  // Watch time — the closest honest measure of how hard the site is being
-  // used (and what the video bill follows).
-  const { data: watch } = await svc
-    .from("class_watch")
-    .select("real_seconds, last_watched_at")
-    .gte("last_watched_at", prevStart.toISOString())
-    .limit(100000);
-  let watchNow = 0;
-  let watchBefore = 0;
-  const watchByDay = new Map<string, number>();
-  for (const w of watch ?? []) {
-    const t = String(w.last_watched_at ?? "");
-    if (!t) continue;
-    const secs = Number(w.real_seconds) || 0;
-    if (inNow(t)) {
-      watchNow += secs;
-      const key = istDayKey(new Date(t));
-      watchByDay.set(key, (watchByDay.get(key) ?? 0) + secs);
-    } else watchBefore += secs;
-  }
-
-  const visitorSeries = toSeries(
-    new Map([...dayVisitors].map(([k, v]) => [k, v.size])),
-    start,
-    days,
-  );
+  const visitorSeries = seriesOf(d.now, (r) => r.visitors);
   const busiest = visitorSeries.reduce<{ label: string; value: number } | null>(
     (best, p) => (!best || p.value > best.value ? p : best),
     null,
   );
-  const peak = [...hourCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+
+  const peakRow = ((peak.data ?? []) as { hour: number; views: number }[])[0];
 
   return {
     days,
-    visitors: { now: seenNow.size, before: seenBefore.size, series: visitorSeries },
-    views: { now: viewsNow, before: viewsBefore, series: toSeries(dayCounts, start, days) },
-    signups: { now: signupsNow, before: signupsBefore },
-    logins: { now: loginsNow, before: loginsBefore },
+    // Distinct-per-day summed across days over-counts a person who returns on
+    // several days; it is the honest number the database can give cheaply, and
+    // both windows are counted the same way so the comparison stays fair.
+    visitors: { now: sum(d.now, (r) => r.visitors), before: sum(d.before, (r) => r.visitors), series: visitorSeries },
+    views: { now: sum(d.now, (r) => r.views), before: sum(d.before, (r) => r.views), series: seriesOf(d.now, (r) => r.views) },
+    signups: { now: sum(d.now, (r) => r.signups), before: sum(d.before, (r) => r.signups) },
+    logins: { now: sum(d.now, (r) => r.logins), before: sum(d.before, (r) => r.logins) },
     activeStudents: {
-      now: studentsNow.size,
-      before: studentsBefore.size,
-      series: toSeries(new Map([...dayStudents].map(([k, v]) => [k, v.size])), start, days),
+      now: sum(d.now, (r) => r.students),
+      before: sum(d.before, (r) => r.students),
+      series: seriesOf(d.now, (r) => r.students),
     },
     watchHours: {
-      now: Math.round(watchNow / 3600),
-      before: Math.round(watchBefore / 3600),
-      series: toSeries(new Map([...watchByDay].map(([k, v]) => [k, Math.round(v / 3600)])), start, days),
+      now: Math.round(sum(w.now, (r) => r.seconds) / 3600),
+      before: Math.round(sum(w.before, (r) => r.seconds) / 3600),
+      series: fill(new Map(w.now.map((r) => [r.d, Math.round((Number(r.seconds) || 0) / 3600)])), days),
     },
-    topPages: [...pathCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 12)
-      .map(([path, v]) => ({ path, views: v })),
+    topPages: ((top.data ?? []) as { path: string; views: number }[]).map((p) => ({
+      path: p.path,
+      views: Number(p.views) || 0,
+    })),
     busiestDay: busiest && busiest.value > 0 ? busiest : null,
-    peakHourIST: peak ? { hour: peak[0], views: peak[1] } : null,
+    peakHourIST: peakRow ? { hour: Number(peakRow.hour), views: Number(peakRow.views) } : null,
   };
 }

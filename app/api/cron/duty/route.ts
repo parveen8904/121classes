@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSecret } from "@/lib/secrets";
 import { createServiceClient } from "@/lib/supabase/service";
-import { sendEmail, emailShell, notifyFaculty } from "@/lib/notify";
+import { notifyFaculty } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -15,6 +15,7 @@ export const maxDuration = 300;
 // otherwise the report becomes noise and stops being read.
 
 type Handled = { what: string; detail: string };
+type Drafted = { what: string; detail: string };
 type NeedsHuman = { what: string; detail: string; since: string };
 
 export async function GET(req: NextRequest) {
@@ -27,6 +28,7 @@ export async function GET(req: NextRequest) {
 
   const svc = createServiceClient();
   const handled: Handled[] = [];
+  const drafted: Drafted[] = [];
   const needsHuman: NeedsHuman[] = [];
 
   // ---- 1. Login-help requests ------------------------------------------
@@ -76,37 +78,48 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ---- 2. Student doubts waiting for an answer -------------------------
+  // ---- 2. Student doubts — DRAFT a reply, never send it ----------------
+  // His instruction: he reads every draft before a student sees it, and
+  // moderates where needed. So the round prepares the answer from HIS OWN
+  // repository (classes, notes, question banks) and leaves it for approval.
   const { data: openDoubts } = await svc
     .from("page_questions")
-    .select("id, question, page_path, created_at, email")
+    .select("id, question, page_path, created_at, email, user_id")
     .eq("status", "open")
     .neq("page_path", "login-help")
+    .is("drafted_at", null)
     .order("created_at")
-    .limit(25);
+    .limit(15);
 
   for (const d of openDoubts ?? []) {
-    const ageHours = (Date.now() - new Date(String(d.created_at)).getTime()) / 3600_000;
-    // A person gets first refusal for a few hours; after that the site answers
-    // rather than leaving a student waiting overnight.
-    if (ageHours < 4) continue;
     try {
-      const { answerDoubt } = await import("@/lib/ai");
-      const answer = await answerDoubt(String(d.question ?? ""));
-      if (answer && d.email) {
-        await sendEmail(
-          String(d.email),
-          "Your question — CA Parveen Sharma Classes",
-          emailShell(
-            "About your question",
-            `<p style="white-space:pre-wrap">${answer.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string))}</p>
-             <p style="color:#64748b;font-size:13px">This is an AI answer prepared from CA Parveen Sharma's own classes and notes. If it does not settle it, reply to this email and a person will look.</p>`,
-          ),
-        );
-        await svc.from("page_questions").update({ status: "answered" }).eq("id", d.id);
-        handled.push({ what: "Student doubt", detail: `Answered and emailed: "${String(d.question).slice(0, 60)}…"` });
-      } else if (!answer) {
-        needsHuman.push({ what: "Student doubt", detail: String(d.question).slice(0, 120), since: String(d.created_at) });
+      const [{ getRepositoryContext }, { answerDoubtFromMaterial, aiConfigured, NEED_FACULTY }] = await Promise.all([
+        import("@/lib/repository"),
+        import("@/lib/ai"),
+      ]);
+      if (!(await aiConfigured())) break;
+
+      // Answer ONLY from his material — the same repository the portal's own
+      // doubt answering uses, so a drafted reply cites his classes and notes
+      // rather than general knowledge.
+      const question = String(d.question ?? "");
+      const material = await getRepositoryContext(null, 24000, { query: question });
+      // No AI disclaimer on a draft: he reads it, edits it and sends it, so the
+      // student receives it as his reply. The site already says AI assists here.
+      const draft = await answerDoubtFromMaterial(question, material, "doubt", { betaNote: false });
+
+      if (draft && draft.trim() !== NEED_FACULTY) {
+        await svc
+          .from("page_questions")
+          .update({ draft_reply: draft, drafted_at: new Date().toISOString() })
+          .eq("id", d.id);
+        drafted.push({ what: "Doubt", detail: String(d.question).slice(0, 70) });
+      } else {
+        needsHuman.push({
+          what: "Doubt the AI would not answer",
+          detail: String(d.question).slice(0, 120),
+          since: String(d.created_at),
+        });
       }
     } catch {
       needsHuman.push({ what: "Student doubt", detail: String(d.question).slice(0, 120), since: String(d.created_at) });
@@ -124,16 +137,22 @@ export async function GET(req: NextRequest) {
   if ((keysWaiting ?? 0) > 0) needsHuman.push({ what: "Answer keys", detail: `${keysWaiting} drafted key(s) awaiting your approval`, since: "" });
 
   // ---- 4. Report — but only if there is something to say ---------------
-  if (needsHuman.length) {
+  if (needsHuman.length || drafted.length) {
     const fmt = (s: string) =>
       s ? new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" }) : "";
     await notifyFaculty(
-      `${needsHuman.length} thing${needsHuman.length === 1 ? "" : "s"} need${needsHuman.length === 1 ? "s" : ""} a person`,
+      drafted.length
+        ? `${drafted.length} drafted repl${drafted.length === 1 ? "y" : "ies"} ready for you to approve`
+        : `${needsHuman.length} thing${needsHuman.length === 1 ? "" : "s"} need${needsHuman.length === 1 ? "s" : ""} a person`,
       [
         handled.length
           ? `Handled automatically this round (${handled.length}):\n` + handled.map((h) => `  • ${h.what}: ${h.detail}`).join("\n") + "\n"
           : "",
-        "Needs you:",
+        drafted.length
+          ? `Replies drafted from your own repository, waiting for you to read and send (${drafted.length}) — Admin → Inbox & doubts:\n` +
+            drafted.map((d) => `  • ${d.detail}`).join("\n") + "\n"
+          : "",
+        needsHuman.length ? "Needs you:" : "",
         ...needsHuman.map((n) => `  • ${n.what}: ${n.detail}${n.since ? ` (since ${fmt(n.since)})` : ""}`),
       ]
         .filter(Boolean)
@@ -144,8 +163,9 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     handled: handled.length,
+    drafted: drafted.length,
     needsHuman: needsHuman.length,
-    quiet: needsHuman.length === 0,
-    details: { handled, needsHuman },
+    quiet: needsHuman.length === 0 && drafted.length === 0,
+    details: { handled, drafted, needsHuman },
   });
 }

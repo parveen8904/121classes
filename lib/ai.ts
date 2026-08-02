@@ -220,11 +220,16 @@ export async function answerDoubtFromMaterial(
   question: string,
   material: string,
   feature: string = "doubt", // "group_doubt" for Telegram-group answers (own toggle + cap)
+  opts: { betaNote?: boolean } = {},
 ): Promise<string | null> {
   // Enough room to actually SOLVE a numbered question (working notes, journal
   // entries), not just a one-line conceptual reply.
   const user = `STUDY MATERIAL:\n${material || "(none provided)"}\n\nSTUDENT QUESTION:\n${question}`;
-  return withBeta(await callClaude(REPO_SYSTEM, user, 1400, { model: await fastModel(), feature }));
+  const raw = await callClaude(REPO_SYSTEM, user, 1400, { model: await fastModel(), feature });
+  // A reply CA Parveen Sharma reads and sends himself carries no machine
+  // disclaimer — it is his answer by the time the student sees it.
+  if (opts.betaNote === false) return raw && raw.trim() !== NEED_FACULTY ? plainText(raw) : raw;
+  return withBeta(raw);
 }
 
 // Answer a doubt where the student ATTACHED an image or PDF (a photographed

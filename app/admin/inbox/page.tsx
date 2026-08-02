@@ -12,6 +12,8 @@ type Question = {
   page_path: string | null;
   question: string;
   status: string;
+  draft_reply: string | null;
+  drafted_at: string | null;
   created_at: string;
   user_id: string | null;
 };
@@ -29,7 +31,7 @@ function fmt(s: string): string {
 export default async function AdminInbox() {
   const svc = createServiceClient();
   const [{ data: qData }, { data: rData }, { data: sessions }] = await Promise.all([
-    svc.from("page_questions").select("id, email, page_path, question, status, created_at, user_id").order("created_at", { ascending: false }).limit(200),
+    svc.from("page_questions").select("id, email, page_path, question, status, created_at, user_id, draft_reply, drafted_at").order("created_at", { ascending: false }).limit(200),
     svc.from("class_reminders").select("id, email, session_id, created_at").order("created_at", { ascending: false }).limit(500),
     svc.from("live_sessions").select("id, title"),
   ]);
@@ -80,11 +82,22 @@ export default async function AdminInbox() {
                 </form>
               </div>
               <p style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{q.question}</p>
-              <details style={{ marginTop: 8 }}>
-                <summary className="btn small secondary as-btn">✍️ Reply</summary>
+              {/* A reply prepared from CA Parveen Sharma's own repository and
+                  waiting for him. Nothing reaches the student until he sends
+                  it — he can edit every word first. */}
+              <details style={{ marginTop: 8 }} open={Boolean(q.draft_reply) && q.status === "open"}>
+                <summary className="btn small secondary as-btn">
+                  {q.draft_reply ? "📝 Draft ready — read, edit, send" : "✍️ Reply"}
+                </summary>
                 <form action={replyToQuestion} style={{ marginTop: 8 }}>
                   <input type="hidden" name="id" value={q.id} />
-                  <textarea name="reply" rows={3} required placeholder="Type your reply — sent to the student by Telegram (if connected) or email…" />
+                  <textarea
+                    name="reply"
+                    rows={q.draft_reply ? 8 : 3}
+                    required
+                    defaultValue={q.draft_reply ?? ""}
+                    placeholder="Type your reply — sent to the student by Telegram (if connected) or email…"
+                  />
                   <SubmitButton className="btn small" style={{ marginTop: 6 }}>Send reply</SubmitButton>
                 </form>
                 {!q.email && !q.user_id && (

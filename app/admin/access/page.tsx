@@ -1,7 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
-import { ACCESS_CATEGORIES, PLANS } from "@/lib/entitlements";
+import { ACCESS_CATEGORIES, PLANS, isDaily } from "@/lib/entitlements";
 import { saveAccessLimits } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +44,12 @@ export default async function AccessLimitsPage(props: { searchParams: Promise<{ 
             <tbody>
               {ACCESS_CATEGORIES.map((cat) => (
                 <tr key={cat.key} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ padding: "6px 10px", fontWeight: 600, position: "sticky", left: 0, background: "var(--bg)" }}>{cat.label}</td>
+                  <td style={{ padding: "6px 10px", fontWeight: 600, position: "sticky", left: 0, background: "var(--bg)" }}>
+                    {cat.label}
+                    {isDaily(cat.key) && (
+                      <span className="muted" style={{ fontWeight: 400 }}> — per day</span>
+                    )}
+                  </td>
                   {PLANS.map((p) => (
                     <td key={p} style={{ padding: "4px 6px", textAlign: "center" }}>
                       <input
@@ -64,7 +69,9 @@ export default async function AccessLimitsPage(props: { searchParams: Promise<{ 
         </div>
         <p className="muted" style={{ fontSize: ".8rem", marginTop: 10 }}>
           <strong>Blank</strong> = unlimited (∞) · type a <strong>number</strong> for the cap (e.g. 5) · type <strong>0</strong> to lock it.
-          Free-plan limits are one-time (a free student gets these totals once, then must upgrade). Revision videos are free for everyone.
+          Rows marked <strong>per day</strong> refill every morning (IST) — the number is what a student may use
+          in one day, and an unused day does not carry forward. Every other row is a one-time total for the whole
+          validity. Nothing is allowed at all once a student&apos;s validity has ended. Revision videos are free for everyone.
         </p>
         <div className="card" style={{ marginTop: 18, background: "var(--bg-soft)" }}>
           <strong>⏳ Fair-use video watch limit (per plan)</strong>

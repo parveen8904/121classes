@@ -43,6 +43,28 @@ export async function getAllLimits(): Promise<Map<string, number>> {
 }
 export function clearLimitsCache() { _cache = null; }
 
+// Allowances that refill every day rather than being spent for ever.
+//
+// The founder chose a DAILY allowance over a monthly one deliberately: a
+// student who asks nothing this week simply doesn't accumulate a hoard to
+// spend in one sitting — each day starts at the same number and an unused day
+// is gone. It also paces study properly. Everything else (a class opened, a
+// test attempted) is still counted once, for ever.
+const DAILY = new Set(["ask_query"]);
+
+/** The bucket a usage row belongs to: a date for daily allowances, else 'all'. */
+export function periodFor(category: string, now: Date = new Date()): string {
+  if (!DAILY.has(category)) return "all";
+  // The day runs on IST — a question asked at 11pm belongs to that day, not to
+  // tomorrow as UTC would have it.
+  const ist = new Date(now.getTime() + (5 * 60 + 30) * 60_000);
+  return ist.toISOString().slice(0, 10);
+}
+
+export function isDaily(category: string): boolean {
+  return DAILY.has(category);
+}
+
 export function limitFor(limits: Map<string, number>, plan: string, category: string): number {
   const v = limits.get(`${plan}:${category}`);
   return v === undefined ? UNLIMITED : v; // unset = unlimited (don't lock by accident)
@@ -51,11 +73,15 @@ export function limitFor(limits: Map<string, number>, plan: string, category: st
 // A student's effective plan = highest active paid tier they hold, else "free".
 export async function studentPlan(userId: string): Promise<PlanTier> {
   const svc = createServiceClient();
+  // status alone is not enough: a row can still say "active" after its end
+  // date. Once validity expires the student drops to free — which, with a
+  // free limit of 0, means no more questions.
   const { data } = await svc
     .from("subscriptions")
-    .select("plans(tier)")
+    .select("plans(tier), ends_at")
     .eq("student_id", userId)
-    .eq("status", "active");
+    .eq("status", "active")
+    .or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`);
   let best: PlanTier = "free";
   for (const r of data ?? []) {
     const tier = ((r as { plans?: { tier?: string } | null }).plans?.tier ?? "").toLowerCase();
@@ -74,7 +100,14 @@ export async function checkQuota(userId: string, category: string, refId?: strin
   if (lim === UNLIMITED) return { allowed: true, limit: -1, used: 0, remaining: -1, unlimited: true, plan };
 
   const svc = createServiceClient();
-  const { data: u } = await svc.from("plan_usage").select("used, ref_ids").eq("user_id", userId).eq("category", category).maybeSingle();
+  const period = periodFor(category);
+  const { data: u } = await svc
+    .from("plan_usage")
+    .select("used, ref_ids")
+    .eq("user_id", userId)
+    .eq("category", category)
+    .eq("period", period)
+    .maybeSingle();
   const used = Number(u?.used ?? 0);
   const refIds = (u?.ref_ids as string[] | null) ?? [];
   if (refId && refIds.includes(refId)) return { allowed: true, limit: lim, used, remaining: Math.max(0, lim - used), unlimited: false, plan };
@@ -87,13 +120,21 @@ export async function consumeQuota(userId: string, category: string, refId?: str
   const [limits, plan] = await Promise.all([getAllLimits(), studentPlan(userId)]);
   if (limitFor(limits, plan, category) === UNLIMITED) return;
   const svc = createServiceClient();
-  const { data: u } = await svc.from("plan_usage").select("used, ref_ids").eq("user_id", userId).eq("category", category).maybeSingle();
+  const period = periodFor(category);
+  const { data: u } = await svc
+    .from("plan_usage")
+    .select("used, ref_ids")
+    .eq("user_id", userId)
+    .eq("category", category)
+    .eq("period", period)
+    .maybeSingle();
   const refIds = (u?.ref_ids as string[] | null) ?? [];
   if (refId && refIds.includes(refId)) return; // already counted
   await svc.from("plan_usage").upsert({
     user_id: userId,
     category,
+    period,
     used: Number(u?.used ?? 0) + 1,
     ref_ids: refId ? [...refIds, refId] : refIds,
-  }, { onConflict: "user_id,category" });
+  }, { onConflict: "user_id,category,period" });
 }

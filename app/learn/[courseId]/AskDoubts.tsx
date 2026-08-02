@@ -50,6 +50,10 @@ export default function AskDoubts({
   const [asked, setAsked] = useState(false);
   const [limited, setLimited] = useState(false);
   const [upgrade, setUpgrade] = useState(false);
+  // Ran out on a plan they have PAID for is a different message from "you have
+  // no plan" — one refills tomorrow, the other needs an upgrade.
+  const [quotaPaid, setQuotaPaid] = useState(false);
+  const [quotaLimit, setQuotaLimit] = useState(0);
   const [file, setFile] = useState<File | null>(null);
   const [fileErr, setFileErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -83,6 +87,8 @@ export default function AskDoubts({
       setAnswer(r.ok ? r.answer : null);
       setLimited(!!r.limited);
       setUpgrade(!!r.upgrade);
+      setQuotaPaid(!!r.paid);
+      setQuotaLimit(Number(r.limit ?? 0));
       setAsked(true);
     });
   }
@@ -156,7 +162,19 @@ export default function AskDoubts({
         <>
           {upgrade ? (
             <div className="notice" style={{ marginTop: 0, marginRight: 24, background: "var(--bg-soft)" }}>
-              🔒 You&apos;ve used all your free doubts. <a href={`/learn/${courseId}/plans`} style={{ fontWeight: 700 }}>Upgrade to Silver or Gold</a> to keep asking unlimited questions.
+              {quotaPaid ? (
+                <>
+                  ✅ You&apos;ve asked {quotaLimit > 0 ? `all ${quotaLimit} of ` : "all "}today&apos;s questions. Your
+                  questions refill tomorrow morning — meanwhile you can send this doubt to the faculty below.
+                </>
+              ) : (
+                <>
+                  🔒 AI doubt-solving comes with a plan.{" "}
+                  <a href={`/learn/${courseId}/plans`} style={{ fontWeight: 700 }}>See Silver &amp; Gold</a> — Gold
+                  includes {quotaLimit > 0 ? quotaLimit : 5} questions every day. If your plan has just expired,
+                  renew to start asking again.
+                </>
+              )}
             </div>
           ) : limited ? (
             <p className="muted" style={{ marginTop: 0, marginRight: 24 }}>🙏 You&apos;ve reached today&apos;s limit of 20 questions. Continue tomorrow, or send this doubt to the faculty below.</p>

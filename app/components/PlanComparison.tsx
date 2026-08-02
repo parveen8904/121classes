@@ -1,4 +1,4 @@
-import { ACCESS_CATEGORIES, getAllLimits, limitFor, WATCH_CATEGORY, UNLIMITED } from "@/lib/entitlements";
+import { ACCESS_CATEGORIES, getAllLimits, limitFor, isDaily, WATCH_CATEGORY, UNLIMITED } from "@/lib/entitlements";
 
 // Transparent plan-by-plan comparison — what's included, what's capped and
 // what's locked in Bronze (free) / Silver / Gold, straight from the SAME
@@ -15,9 +15,12 @@ const PLAN_COLS = [
 // (so the differences between plans jump out); muted for locked.
 const GREEN = "#16a34a";
 const AMBER = "#b45309";
-function cell(lim: number): { text: string; color?: string; bold?: boolean } {
+function cell(lim: number, category: string): { text: string; color?: string; bold?: boolean } {
   if (lim === UNLIMITED || lim < 0) return { text: "✅ Unlimited", color: GREEN, bold: true };
   if (lim === 0) return { text: "❌ Not included", color: "var(--muted)" };
+  // A daily allowance has to SAY it is daily, or "5 included" reads as five in
+  // total and a student thinks they have run out for good.
+  if (isDaily(category)) return { text: `${lim} a day`, color: AMBER, bold: true };
   return { text: `${lim} included`, color: AMBER, bold: true };
 }
 
@@ -26,7 +29,7 @@ export default async function PlanComparison() {
 
   const rows = ACCESS_CATEGORIES.map((c) => ({
     label: c.label,
-    cells: PLAN_COLS.map((p) => cell(limitFor(limits, p.key, c.key))),
+    cells: PLAN_COLS.map((p) => cell(limitFor(limits, p.key, c.key), c.key)),
   }));
 
   // Watch time is a multiplier, not a count.
@@ -82,7 +85,9 @@ export default async function PlanComparison() {
         </div>
       </div>
       <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
-        Counts are per student. &ldquo;Unlimited&rdquo; means no cap during your validity.
+        Counts are per student. &ldquo;Unlimited&rdquo; means no cap during your validity. A limit shown
+        &ldquo;a day&rdquo; refills every morning — it is not a pot to save up, and an unused day does not
+        carry forward. Everything here works while your plan is valid; once validity ends, access stops.
       </p>
     </div>
   );

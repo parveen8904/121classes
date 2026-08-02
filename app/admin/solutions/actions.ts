@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { assertArea } from "@/lib/adminAccess";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { queueMissingSolutions } from "@/lib/solutionDraft";
+import { queueMissingSolutions, queueMissingSectionSolutions, draftNextSectionSolution, draftNextSolution } from "@/lib/solutionDraft";
 import { str } from "../_lib/util";
 
 // Approving is the whole point of this page: a drafted key does nothing until
@@ -14,9 +14,41 @@ import { str } from "../_lib/util";
 
 export async function queueAllMissing() {
   await assertArea(null);
-  const r = await queueMissingSolutions(null);
+  // Both kinds: the descriptive TESTS students sit, and the repository papers.
+  const a = await queueMissingSectionSolutions();
+  const b = await queueMissingSolutions(null);
   revalidatePath("/admin/solutions");
-  redirect(`/admin/solutions?queued=${r.queued}`);
+  redirect(`/admin/solutions?queued=${a.queued + b.queued}`);
+}
+
+// Draft the waiting ones NOW rather than waiting for tonight's run. Drafting a
+// whole paper is a long AI call, so one press takes as many as fit in the time
+// available and says how many are left — press again to continue.
+export async function draftWaitingNow() {
+  await assertArea(null);
+  const started = Date.now();
+  const done: string[] = [];
+  const failed: string[] = [];
+
+  // Descriptive tests first — those are the ones with nothing to mark against.
+  while (Date.now() - started < 240_000) {
+    const r = await draftNextSectionSolution();
+    if (!r.done) break;
+    if (r.error) failed.push(r.title ?? "?"); else done.push(r.title ?? "?");
+  }
+  while (Date.now() - started < 260_000) {
+    const r = await draftNextSolution();
+    if (!r.done) break;
+    if (r.error) failed.push(r.title ?? "?"); else done.push(r.title ?? "?");
+  }
+
+  const { count: left } = await createServiceClient()
+    .from("item_solutions")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "queued");
+
+  revalidatePath("/admin/solutions");
+  redirect(`/admin/solutions?drafted=${done.length}&draftfailed=${failed.length}&stillqueued=${left ?? 0}`);
 }
 
 export async function approveSolution(formData: FormData) {

@@ -1,12 +1,14 @@
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
-import { queueAllMissing, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
+import { queueAllMissing, draftWaitingNow, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
 
 // Answer keys for the uploaded papers, and the button that makes them real.
 // Nothing here is used by the portal or the evaluator until it is approved.
 
 export const dynamic = "force-dynamic";
+// "Draft the waiting ones now" runs several full-paper AI calls in one press.
+export const maxDuration = 300;
 
 type Row = {
   id: string;
@@ -31,7 +33,9 @@ const LABEL: Record<string, string> = {
   failed: "⚠️ Draft failed",
 };
 
-export default async function AdminSolutionsPage(props: { searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string }> }) {
+export default async function AdminSolutionsPage(props: {
+  searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string }>;
+}) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
 
@@ -85,8 +89,18 @@ export default async function AdminSolutionsPage(props: { searchParams: Promise<
 
       {searchParams.queued && (
         <div className="notice ok">
-          {searchParams.queued} paper{searchParams.queued === "1" ? "" : "s"} queued. Drafting runs in the background — refresh in a
-          few minutes.
+          {searchParams.queued} paper{searchParams.queued === "1" ? "" : "s"} queued. They are drafted overnight, or press
+          &ldquo;Draft the waiting ones now&rdquo; to start straight away.
+        </div>
+      )}
+
+      {searchParams.drafted && (
+        <div className="notice ok">
+          ✍️ {searchParams.drafted} drafted and ready for you to read.
+          {Number(searchParams.draftfailed) > 0 && ` ${searchParams.draftfailed} could not be drafted — see the reason on each.`}
+          {Number(searchParams.stillqueued) > 0
+            ? ` ${searchParams.stillqueued} still waiting — a full paper takes a minute or two, so press the button again to carry on (they also finish by themselves overnight).`
+            : " Nothing left in the queue."}
         </div>
       )}
 
@@ -97,13 +111,20 @@ export default async function AdminSolutionsPage(props: { searchParams: Promise<
           <div><strong style={{ fontSize: "1.5rem" }}>{waiting.length}</strong><div className="muted">in the drafting queue</div></div>
           {failed.length > 0 && <div><strong style={{ fontSize: "1.5rem" }}>{failed.length}</strong><div className="muted">failed</div></div>}
           <div style={{ marginLeft: "auto" }}>
-            <form action={queueAllMissing}>
+            <form action={draftWaitingNow} style={{ display: "inline-block", marginRight: 8 }}>
+              <SubmitButton className="btn small">✍️ Draft the waiting ones now</SubmitButton>
+            </form>
+            <form action={queueAllMissing} style={{ display: "inline-block" }}>
               <SubmitButton className="btn" savedLabel="Queued…">✍️ Draft keys for the tests without one</SubmitButton>
             </form>
           </div>
         </div>
         <p className="muted" style={{ fontSize: ".85rem", marginTop: 10, marginBottom: 0 }}>
-          {papers ?? 0} descriptive tests (MTP / RTP / past papers) currently have no answer key. Everything else — ICAI material, question banks, notes — already carries its solutions inside the file.
+          Two kinds of paper are drafted here: the <strong>descriptive tests</strong> students sit inside a
+          topic (their question paper is read directly, since these have no solution PDF at all), and the
+          repository <strong>MTP / RTP / past papers</strong> — {papers ?? 0} of which still have no key.
+          Everything else — ICAI material, question banks, notes — already carries its solutions inside the file.
+          A draft marks nobody&apos;s paper until you approve it.
         </p>
       </div>
 

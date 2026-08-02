@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
 
 type Row = {
   id: string;
-  repo_item_id: string;
+  repo_item_id: string | null;
+  section_id: string | null;
   solution_md: string | null;
   status: string;
   error: string | null;
@@ -19,6 +20,7 @@ type Row = {
   video_url: string | null;
   generated_at: string | null;
   repository_items: { title: string; kind: string; subjects: { title: string } | null } | null;
+  sections: { title: string; topics: { subjects: { title: string } | null } | null } | null;
 };
 
 const LABEL: Record<string, string> = {
@@ -35,7 +37,10 @@ export default async function AdminSolutionsPage(props: { searchParams: Promise<
 
   const { data } = await svc
     .from("item_solutions")
-    .select("id, repo_item_id, solution_md, status, error, parts, edited, video_url, generated_at, repository_items(title, kind, subjects(title))")
+    .select(
+      "id, repo_item_id, section_id, solution_md, status, error, parts, edited, video_url, generated_at, " +
+        "repository_items(title, kind, subjects(title)), sections(title, topics(subjects(title)))",
+    )
     .order("status")
     .limit(500);
   const rows = (data ?? []) as unknown as Row[];
@@ -137,13 +142,26 @@ export default async function AdminSolutionsPage(props: { searchParams: Promise<
       )}
 
       {[...drafted, ...failed, ...waiting, ...approved].map((r) => {
-        const item = r.repository_items;
+        // A key belongs either to a repository paper or to a descriptive test.
+        const item = r.repository_items
+          ? {
+              title: r.repository_items.title,
+              kind: r.repository_items.kind,
+              subject: r.repository_items.subjects?.title ?? "—",
+            }
+          : r.sections
+            ? {
+                title: r.sections.title,
+                kind: "descriptive test",
+                subject: r.sections.topics?.subjects?.title ?? "—",
+              }
+            : null;
         const open = searchParams.open === r.id;
         return (
           <div className="card" key={r.id} style={{ marginBottom: 14, borderColor: r.status === "approved" ? "#16a34a" : undefined }}>
             <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
               <strong>{item?.title ?? "Paper"}</strong>
-              <span className="badge">{item?.subjects?.title ?? "—"}</span>
+              <span className="badge">{item?.subject ?? "—"}</span>
               <span className="badge">{item?.kind ?? ""}</span>
               <span className="muted" style={{ marginLeft: "auto" }}>{LABEL[r.status] ?? r.status}{r.edited ? " · edited by you" : ""}</span>
             </div>

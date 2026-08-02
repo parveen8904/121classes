@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSecret } from "@/lib/secrets";
 import { isOffPeakNow } from "@/lib/offpeak";
-import { draftNextSolution } from "@/lib/solutionDraft";
+import { draftNextSolution, draftNextSectionSolution, queueMissingSectionSolutions } from "@/lib/solutionDraft";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -23,6 +23,22 @@ export async function GET(req: NextRequest) {
   const started = Date.now();
   const done: string[] = [];
   const failed: string[] = [];
+
+  // Make sure the DESCRIPTIVE TESTS with no answer key are in the queue. They
+  // live in `sections` and were missed entirely by the original drafter, so
+  // 37 published tests had nothing to mark a student's answer book against.
+  let queuedTests = 0;
+  try {
+    queuedTests = (await queueMissingSectionSolutions()).queued;
+  } catch { /* queueing must never stop the drafting below */ }
+
+  // Descriptive tests first — those are the ones students actually sit.
+  while (Date.now() - started < 200_000) {
+    const r = await draftNextSectionSolution();
+    if (!r.done) break;
+    if (r.error) failed.push(`${r.title ?? "?"}: ${r.error}`);
+    else done.push(r.title ?? "?");
+  }
 
   // Stop well before the platform's limit so a long paper never truncates.
   while (Date.now() - started < 240_000) {
@@ -53,6 +69,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
+    queuedTests,
     drafted: done.length,
     failedCount: failed.length,
     mcqExplained,

@@ -253,9 +253,30 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
   // fetch a non-URL, which throws, and the paper came back ungraded every single
   // time. Nothing surfaced because the failure was swallowed.
   const solutionUrl = await resolveFileUrl(cfg.solutionPdf);
+
+  // 37 of the descriptive tests have no solution PDF at all. For those, the
+  // answer key is the one CA Parveen Sharma has APPROVED on Admin → Answer
+  // keys. An unapproved draft is never used to mark anybody's paper.
+  let approvedKey: string | null = null;
+  if (!solutionUrl) {
+    const { data: k } = await svc
+      .from("item_solutions")
+      .select("solution_md, status")
+      .eq("section_id", sectionId)
+      .maybeSingle();
+    if (k?.status === "approved" && String(k.solution_md ?? "").trim()) {
+      approvedKey = String(k.solution_md);
+    }
+  }
+
   let graded: DescriptiveGrade | null = null;
   try {
-    if (solutionUrl && studentUrl) graded = await gradeDescriptivePaper(studentUrl, solutionUrl, cfg.totalMarks || row.total_marks || null);
+    if (solutionUrl && studentUrl) {
+      graded = await gradeDescriptivePaper(studentUrl, solutionUrl, cfg.totalMarks || row.total_marks || null);
+    } else if (approvedKey && studentUrl) {
+      const { gradeDescriptivePaperAgainstText } = await import("@/lib/ai");
+      graded = await gradeDescriptivePaperAgainstText(studentUrl, approvedKey, cfg.totalMarks || row.total_marks || null);
+    }
   } catch {
     graded = null;
   }

@@ -806,6 +806,84 @@ export async function draftPaperSolution(input: {
   return callClaude(system, user, 8000, { feature: "draft_solution" });
 }
 
+// Draft an answer key straight from the QUESTION PAPER PDF.
+//
+// The descriptive tests have no extracted text — only the paper itself — so
+// the text-based drafter above could never touch them. This reads the PDF the
+// way an examiner would and writes the suggested answers from it.
+export async function draftSolutionFromPdf(input: {
+  paperTitle: string;
+  subject: string;
+  questionPdfUrl: string;
+  totalMarks?: number | null;
+}): Promise<string | null> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey || !input.questionPdfUrl) return null;
+  if ((await aiDisabledSet()).has("draft_solution")) return null;
+  const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
+  try {
+    const res0 = await fetch(input.questionPdfUrl, { cache: "no-store" });
+    if (!res0.ok) {
+      console.error("[draft_solution] cannot read question paper", res0.status);
+      return null;
+    }
+    const buf = await res0.arrayBuffer();
+    if (buf.byteLength > 20 * 1024 * 1024) {
+      console.error("[draft_solution] question paper too large", buf.byteLength);
+      return null;
+    }
+    const b64 = Buffer.from(buf).toString("base64");
+
+    const system =
+      "You are CA Parveen Sharma's answer-key writer for Indian CA exams. " +
+      "You are given a QUESTION PAPER as a PDF. Write the SUGGESTED ANSWERS exactly as ICAI's suggested answers are written: " +
+      "question number, then the complete worked answer a student could reproduce to score FULL marks. " +
+      "For numericals show every working — journal entries, ledger and working notes, formats and totals — and label the working notes. " +
+      "For theory answer in exam points, citing the Accounting Standard, Ind AS, section or rule that governs it. " +
+      "State any assumption explicitly, the way an examiner accepts it. " +
+      "Keep ICAI presentation conventions (Dr/Cr, ₹ in the given unit, proper statement formats). " +
+      "Answer EVERY question in the paper and never invent one that is not there. " +
+      "If a question's data is genuinely incomplete, answer as far as it allows and say what is missing — never fabricate figures. " +
+      (input.totalMarks ? `The paper carries ${input.totalMarks} marks; show the marks against each answer. ` : "") +
+      NOT_TAUGHT +
+      " Output plain text with clear question headings. No markdown code fences.";
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        max_tokens: 16000,
+        system,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: `Subject: ${input.subject || "CA"}\nTest: ${input.paperTitle}\n\nWrite the full suggested answers for this question paper.` },
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } },
+          ],
+        }],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      console.error("[draft_solution] Anthropic refused", res.status, (await res.text()).slice(0, 300));
+      return null;
+    }
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("draft_solution", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    const text = (data.content ?? [])
+      .filter((b: { type: string }) => b.type === "text")
+      .map((b: { text: string }) => b.text)
+      .join("\n")
+      .trim();
+    return text || null;
+  } catch (e) {
+    console.error("[draft_solution] failed", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 export async function gradeDescriptivePaper(
   studentPdfUrl: string,
   solutionPdfUrl: string,

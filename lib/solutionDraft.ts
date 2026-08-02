@@ -34,6 +34,7 @@ export async function queueMissingSolutions(subjectId?: string | null): Promise<
   const { data: stale } = await svc
     .from("item_solutions")
     .select("id, repository_items!inner(kind, student_visible, solution_url)")
+    .not("repo_item_id", "is", null)
     .neq("status", "approved");
   const staleIds = (stale ?? [])
     .filter((r) => {
@@ -71,6 +72,104 @@ export async function queueMissingSolutions(subjectId?: string | null): Promise<
 
 /** Draft ONE queued paper. Called in small batches from the cron so a long
  * queue never blocks a request or spikes the AI bill. */
+// The DESCRIPTIVE TESTS with no answer key — the ones the founder actually
+// meant. These live in `sections`, not `repository_items`, which is why they
+// were never queued: 37 published tests with a question paper and no solution
+// PDF, so a student's answer book has nothing to be marked against.
+export async function queueMissingSectionSolutions(): Promise<QueueSummary> {
+  const svc = createServiceClient();
+
+  const { data: rows } = await svc
+    .from("sections")
+    .select("id, m_paper_question_pdf, m_paper_solution_pdf")
+    .eq("is_published", true)
+    .not("m_paper_question_pdf", "is", null)
+    .limit(2000);
+
+  type Row = { id: string; m_paper_question_pdf: string | null; m_paper_solution_pdf: string | null };
+  const needing = ((rows as Row[]) ?? []).filter(
+    (r) => String(r.m_paper_question_pdf ?? "").trim() && !String(r.m_paper_solution_pdf ?? "").trim(),
+  );
+
+  const { data: existing } = await svc.from("item_solutions").select("section_id").not("section_id", "is", null);
+  const already = new Set((existing ?? []).map((r) => String(r.section_id)));
+
+  // A test that has since been given a real solution PDF drops out of the
+  // queue, unless its draft is already approved.
+  const withKey = ((rows as Row[]) ?? [])
+    .filter((r) => String(r.m_paper_solution_pdf ?? "").trim())
+    .map((r) => r.id);
+  if (withKey.length) {
+    await svc.from("item_solutions").delete().in("section_id", withKey).neq("status", "approved");
+  }
+
+  const fresh = needing.filter((r) => !already.has(r.id)).map((r) => ({ section_id: r.id, status: "queued" }));
+  if (!fresh.length) return { queued: 0, skipped: needing.length };
+  const { data: ins } = await svc.from("item_solutions").insert(fresh).select("id");
+  return { queued: ins?.length ?? 0, skipped: needing.length - fresh.length };
+}
+
+/** Draft ONE queued descriptive test, reading its question paper PDF. */
+export async function draftNextSectionSolution(): Promise<{ done: boolean; title?: string; error?: string }> {
+  const svc = createServiceClient();
+  const { data: next } = await svc
+    .from("item_solutions")
+    .select("id, section_id")
+    .eq("status", "queued")
+    .not("section_id", "is", null)
+    .order("created_at")
+    .limit(1)
+    .maybeSingle();
+  if (!next) return { done: false };
+
+  await svc
+    .from("item_solutions")
+    .update({ status: "drafting", claimed_at: new Date().toISOString() })
+    .eq("id", next.id);
+
+  const { data: sec } = await svc
+    .from("sections")
+    .select("id, title, question_pdf:config->>paper_question_pdf, marks:config->>paper_total_marks, topics(subjects(title))")
+    .eq("id", next.section_id)
+    .maybeSingle();
+
+  const title = String(sec?.title ?? "Descriptive test");
+  const subject = String(
+    ((sec as { topics?: { subjects?: { title?: string } | null } | null } | null)?.topics?.subjects?.title) ?? "",
+  );
+  const ref = String((sec as { question_pdf?: string } | null)?.question_pdf ?? "");
+  if (!ref) {
+    await svc.from("item_solutions").update({ status: "failed", error: "no question paper on this test" }).eq("id", next.id);
+    return { done: true, title, error: "no question paper" };
+  }
+
+  const { resolveFileUrl } = await import("@/lib/storage");
+  const url = await resolveFileUrl(ref, 900);
+  if (!url) {
+    await svc.from("item_solutions").update({ status: "failed", error: "could not open the question paper" }).eq("id", next.id);
+    return { done: true, title, error: "cannot open paper" };
+  }
+
+  const { draftSolutionFromPdf } = await import("@/lib/ai");
+  const text = await draftSolutionFromPdf({
+    paperTitle: title,
+    subject,
+    questionPdfUrl: url,
+    totalMarks: Number((sec as { marks?: string } | null)?.marks) || null,
+  });
+
+  if (!text) {
+    await svc.from("item_solutions").update({ status: "failed", error: "the AI returned nothing for this paper" }).eq("id", next.id);
+    return { done: true, title, error: "AI returned nothing" };
+  }
+
+  await svc
+    .from("item_solutions")
+    .update({ solution_md: text, status: "drafted", parts: 1, generated_at: new Date().toISOString() })
+    .eq("id", next.id);
+  return { done: true, title };
+}
+
 export async function draftNextSolution(): Promise<{ done: boolean; title?: string; error?: string }> {
   const svc = createServiceClient();
 
@@ -89,6 +188,7 @@ export async function draftNextSolution(): Promise<{ done: boolean; title?: stri
     .from("item_solutions")
     .select("id, repo_item_id")
     .eq("status", "queued")
+    .not("repo_item_id", "is", null)
     .order("created_at")
     .limit(1)
     .maybeSingle();

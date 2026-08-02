@@ -91,21 +91,43 @@ export async function requestLoginHelp(formData: FormData): Promise<Result> {
   const email = String(formData.get("email") || "").trim().slice(0, 120);
   if (!phone) return { ok: false, error: "Enter a WhatsApp number." };
   const svc = createServiceClient();
+
+  // Try to SOLVE it first. Most of these are a forgotten password or a second
+  // email address — facts the site already holds — so the student gets a link
+  // in seconds instead of waiting for someone to call back. A person is only
+  // troubled when the site genuinely cannot tell what is wrong.
+  let rescue: { handled: boolean; note: string } = { handled: false, note: "not attempted" };
+  try {
+    const { rescueLogin } = await import("@/lib/loginRescue");
+    rescue = await rescueLogin({ name, phone, email });
+  } catch (e) {
+    rescue = { handled: false, note: `auto-help failed: ${String(e).slice(0, 120)}` };
+  }
+
   try {
     await svc.from("page_questions").insert({
       user_id: null,
       page_path: "login-help",
-      question: `📞 LOGIN HELP REQUEST — ${name || "No name"} · WhatsApp: ${phone}${email ? ` · tried email: ${email}` : ""}`,
-      status: "open",
+      question:
+        `📞 LOGIN HELP REQUEST — ${name || "No name"} · WhatsApp: ${phone}${email ? ` · tried email: ${email}` : ""}` +
+        `\n${rescue.handled ? "✅ Handled automatically" : "⚠️ Needs a person"}: ${rescue.note}`,
+      // Solved requests do not sit in the open queue.
+      status: rescue.handled ? "answered" : "open",
     });
   } catch { /* the email below still goes out */ }
-  try {
-    const { notifyFaculty } = await import("@/lib/notify");
-    await notifyFaculty(
-      "A student needs help logging in",
-      `Name: ${name || "—"}\nWhatsApp: ${phone}\nEmail they tried: ${email || "—"}\n\nPlease call them back. (From the login page after failed attempts.)`,
-    );
-  } catch { /* inbox row above is enough */ }
+
+  // Only bother a human when the site could not settle it.
+  if (!rescue.handled) {
+    try {
+      const { notifyFaculty } = await import("@/lib/notify");
+      await notifyFaculty(
+        "A student needs help logging in",
+        `Name: ${name || "—"}\nWhatsApp: ${phone}\nEmail they tried: ${email || "—"}\n\n` +
+          `The site tried to solve this automatically and could not: ${rescue.note}\n\n` +
+          `Please call them back. (From the login page after failed attempts.)`,
+      );
+    } catch { /* inbox row above is enough */ }
+  }
   return { ok: true };
 }
 

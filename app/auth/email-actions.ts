@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/service";
 import { emailConfigured } from "@/lib/notify";
 import { sendTemplate } from "@/lib/emailTemplates";
+import { allowEmailAction } from "@/lib/throttle";
 
 // Always build auth links on the canonical domain (not whichever alias the user
 // happened to open), so verify/reset links are consistently caparveensharma.com.
@@ -21,6 +22,12 @@ export async function registerWithVerification(formData: FormData): Promise<Resu
   const phone = String(formData.get("phone") || "").trim().slice(0, 20);
   if (!email) return { ok: false, error: "Enter your email address." };
   if (!(await emailConfigured())) return { ok: false, error: "Email isn't set up yet. Please ask the admin to add the Mailgun key." };
+  // Anyone can call this and every call sends an email. Generous enough that a
+  // real person retrying never notices, tight enough that a script cannot burn
+  // the mail quota that students' password resets depend on.
+  if (!(await allowEmailAction("signup", email, { perEmail: 3, perIp: 10, seconds: 3600 }))) {
+    return { ok: false, error: "Too many sign-up attempts just now. Please wait a few minutes and try again." };
+  }
 
   const svc = createServiceClient();
   // Temporary password, replaced when the student sets their own. Must satisfy
@@ -137,6 +144,11 @@ export async function sendPasswordReset(formData: FormData): Promise<Result> {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   if (!email) return { ok: false, error: "Enter your email." };
   if (!(await emailConfigured())) return { ok: false, error: "Email isn't set up yet. Please ask the admin to add the Mailgun key." };
+  if (!(await allowEmailAction("reset", email, { perEmail: 5, perIp: 15, seconds: 3600 }))) {
+    // Same wording as success, so this never becomes a way to discover which
+    // addresses have an account here.
+    return { ok: true };
+  }
 
   const svc = createServiceClient();
   const { data } = await svc.auth.admin.generateLink({ type: "recovery", email });

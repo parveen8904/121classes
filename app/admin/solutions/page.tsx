@@ -50,14 +50,13 @@ export default async function AdminSolutionsPage(props: {
     .limit(500);
   const rows = (data ?? []) as unknown as Row[];
 
-  // How many papers still have no key at all (never queued).
-  const { count: papers } = await svc
-    .from("repository_items")
+  // How many descriptive tests still have no key of any kind.
+  const { count: testsWithoutKey } = await svc
+    .from("sections")
     .select("id", { count: "exact", head: true })
-    .eq("is_active", true)
-    .eq("student_visible", true)
-    .is("solution_url", null)
-    .in("kind", ["mtp", "rtp", "past_papers"]);
+    .eq("is_published", true)
+    .not("m_paper_question_pdf", "is", null)
+    .is("m_paper_solution_pdf", null);
 
   // How many answer explanations are still missing (the "why", not the answer).
   // Counted as two head-only counts rather than by pulling every question id
@@ -84,7 +83,7 @@ export default async function AdminSolutionsPage(props: {
       <AdminHero
         badge="🗝️ Answer keys"
         title="Solutions for uploaded papers"
-        subtitle="Any test with no answer key gets an AI-drafted one — both the descriptive tests students sit inside a topic and the repository MTP / RTP papers. A key does nothing until you approve it: approved keys are what students see after they submit, and what the AI marks their answer books against."
+        subtitle="The descriptive tests students sit inside a topic, drafted from their own question paper. A key does nothing until you approve it: approved keys are what students see after they submit, and what the AI marks their answer books against."
         back={{ href: "/admin", label: "Admin" }}
       />
 
@@ -137,11 +136,10 @@ export default async function AdminSolutionsPage(props: {
           </div>
         </div>
         <p className="muted" style={{ fontSize: ".85rem", marginTop: 10, marginBottom: 0 }}>
-          Two kinds of paper are drafted here: the <strong>descriptive tests</strong> students sit inside a
-          topic (their question paper is read directly, since these have no solution PDF at all), and the
-          repository <strong>MTP / RTP / past papers</strong> — {papers ?? 0} of which still have no key.
-          Everything else — ICAI material, question banks, notes — already carries its solutions inside the file.
-          A draft marks nobody&apos;s paper until you approve it.
+          These are the <strong>descriptive tests</strong> students sit inside a topic — {testsWithoutKey ?? 0} of
+          them have no answer key, so their question paper is read directly and the suggested answers written from
+          it. Repository MTP / RTP papers are deliberately not drafted here. A draft marks nobody&apos;s paper until
+          you approve it.
         </p>
       </div>
 

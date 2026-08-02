@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSecret } from "@/lib/secrets";
 import { isOffPeakNow } from "@/lib/offpeak";
-import { draftNextSolution, draftNextSectionSolution, queueMissingSectionSolutions } from "@/lib/solutionDraft";
+import { draftSectionSolutionsBatch, queueMissingSectionSolutions } from "@/lib/solutionDraft";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -32,21 +32,11 @@ export async function GET(req: NextRequest) {
     queuedTests = (await queueMissingSectionSolutions()).queued;
   } catch { /* queueing must never stop the drafting below */ }
 
-  // Descriptive tests first — those are the ones students actually sit.
-  while (Date.now() - started < 200_000) {
-    const r = await draftNextSectionSolution();
-    if (!r.done) break;
-    if (r.error) failed.push(`${r.title ?? "?"}: ${r.error}`);
-    else done.push(r.title ?? "?");
-  }
-
-  // Stop well before the platform's limit so a long paper never truncates.
-  while (Date.now() - started < 240_000) {
-    const r = await draftNextSolution();
-    if (!r.done) break; // queue empty
-    if (r.error) failed.push(`${r.title ?? "?"}: ${r.error}`);
-    else done.push(r.title ?? "?");
-  }
+  // DESCRIPTIVE TESTS ONLY, five at a time. The founder does not want keys
+  // for the repository MTP/RTP papers — those are drafted by nobody now.
+  const batch = await draftSectionSolutionsBatch(5, 200_000);
+  done.push(...batch.drafted);
+  failed.push(...batch.failed);
 
   // With the paper queue clear, spend what's left of the window filling in
   // missing MCQ / case-study explanations — every one of those questions
@@ -54,6 +44,7 @@ export async function GET(req: NextRequest) {
   let mcqExplained = 0;
   let caseExplained = 0;
   if (!done.length && !failed.length) {
+    // Nothing to draft — spend the window on the missing "why" lines instead.
     const { backfillMcqExplanations, backfillCaseExplanations } = await import("@/lib/explainBackfill");
     while (Date.now() - started < 240_000) {
       const n = await backfillMcqExplanations(20);

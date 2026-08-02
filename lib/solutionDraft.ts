@@ -109,28 +109,26 @@ export async function queueMissingSectionSolutions(): Promise<QueueSummary> {
   return { queued: ins?.length ?? 0, skipped: needing.length - fresh.length };
 }
 
-/** Draft ONE queued descriptive test, reading its question paper PDF. */
-export async function draftNextSectionSolution(): Promise<{ done: boolean; title?: string; error?: string }> {
-  const svc = createServiceClient();
-  const { data: next } = await svc
-    .from("item_solutions")
-    .select("id, section_id")
-    .eq("status", "queued")
-    .not("section_id", "is", null)
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
-  if (!next) return { done: false };
-
+// Reclaim descriptive tests left mid-flight. A row is flipped to "drafting"
+// before its (slow) AI call starts, so when a press runs out of time the row
+// it was working on stays claimed for ever. Every pass frees them first.
+async function reclaimStuckSections(svc: ReturnType<typeof createServiceClient>) {
   await svc
     .from("item_solutions")
-    .update({ status: "drafting", claimed_at: new Date().toISOString() })
-    .eq("id", next.id);
+    .update({ status: "queued", claimed_at: null })
+    .eq("status", "drafting")
+    .not("section_id", "is", null)
+    .lt("claimed_at", new Date(Date.now() - 10 * 60_000).toISOString());
+}
 
+async function draftOneSection(
+  svc: ReturnType<typeof createServiceClient>,
+  row: { id: string; section_id: string },
+): Promise<{ title: string; error?: string }> {
   const { data: sec } = await svc
     .from("sections")
     .select("id, title, question_pdf:config->>paper_question_pdf, marks:config->>paper_total_marks, topics(subjects(title))")
-    .eq("id", next.section_id)
+    .eq("id", row.section_id)
     .maybeSingle();
 
   const title = String(sec?.title ?? "Descriptive test");
@@ -139,15 +137,15 @@ export async function draftNextSectionSolution(): Promise<{ done: boolean; title
   );
   const ref = String((sec as { question_pdf?: string } | null)?.question_pdf ?? "");
   if (!ref) {
-    await svc.from("item_solutions").update({ status: "failed", error: "no question paper on this test" }).eq("id", next.id);
-    return { done: true, title, error: "no question paper" };
+    await svc.from("item_solutions").update({ status: "failed", error: "no question paper on this test" }).eq("id", row.id);
+    return { title, error: "no question paper" };
   }
 
   const { resolveFileUrl } = await import("@/lib/storage");
   const url = await resolveFileUrl(ref, 900);
   if (!url) {
-    await svc.from("item_solutions").update({ status: "failed", error: "could not open the question paper" }).eq("id", next.id);
-    return { done: true, title, error: "cannot open paper" };
+    await svc.from("item_solutions").update({ status: "failed", error: "could not open the question paper" }).eq("id", row.id);
+    return { title, error: "cannot open paper" };
   }
 
   const { draftSolutionFromPdf } = await import("@/lib/ai");
@@ -159,15 +157,78 @@ export async function draftNextSectionSolution(): Promise<{ done: boolean; title
   });
 
   if (!text) {
-    await svc.from("item_solutions").update({ status: "failed", error: "the AI returned nothing for this paper" }).eq("id", next.id);
-    return { done: true, title, error: "AI returned nothing" };
+    await svc.from("item_solutions").update({ status: "failed", error: "the AI returned nothing for this paper" }).eq("id", row.id);
+    return { title, error: "AI returned nothing" };
   }
 
   await svc
     .from("item_solutions")
     .update({ solution_md: text, status: "drafted", parts: 1, generated_at: new Date().toISOString() })
-    .eq("id", next.id);
-  return { done: true, title };
+    .eq("id", row.id);
+  return { title };
+}
+
+/**
+ * Draft several descriptive tests AT ONCE.
+ *
+ * One paper is a single long AI call — around a minute and a half — so drafting
+ * them one after another managed barely two per press and 37 would have taken
+ * the best part of twenty presses. The calls are independent, so they run
+ * together instead.
+ */
+export async function draftSectionSolutionsBatch(
+  concurrency = 5,
+  budgetMs = 240_000,
+): Promise<{ drafted: string[]; failed: string[]; remaining: number }> {
+  const svc = createServiceClient();
+  await reclaimStuckSections(svc);
+
+  const drafted: string[] = [];
+  const failed: string[] = [];
+  const started = Date.now();
+
+  // Never claim a paper we cannot finish — that is what left a stranded row
+  // behind on every press. One paper needs roughly 100 seconds.
+  const ONE_PAPER_MS = 110_000;
+
+  while (Date.now() - started + ONE_PAPER_MS < budgetMs) {
+    const { data: batch } = await svc
+      .from("item_solutions")
+      .select("id, section_id")
+      .eq("status", "queued")
+      .not("section_id", "is", null)
+      .order("created_at")
+      .limit(concurrency);
+
+    const rows = (batch ?? []) as { id: string; section_id: string }[];
+    if (!rows.length) break;
+
+    await svc
+      .from("item_solutions")
+      .update({ status: "drafting", claimed_at: new Date().toISOString() })
+      .in("id", rows.map((r) => r.id));
+
+    const results = await Promise.all(
+      rows.map((r) =>
+        draftOneSection(svc, r).catch((e) => ({
+          title: "Descriptive test",
+          error: e instanceof Error ? e.message : "failed",
+        })),
+      ),
+    );
+    for (const r of results) {
+      if (r.error) failed.push(`${r.title}: ${r.error}`);
+      else drafted.push(r.title);
+    }
+  }
+
+  const { count } = await svc
+    .from("item_solutions")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "queued")
+    .not("section_id", "is", null);
+
+  return { drafted, failed, remaining: count ?? 0 };
 }
 
 export async function draftNextSolution(): Promise<{ done: boolean; title?: string; error?: string }> {

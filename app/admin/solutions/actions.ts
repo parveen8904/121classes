@@ -5,20 +5,21 @@ import { redirect } from "next/navigation";
 import { assertArea } from "@/lib/adminAccess";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { queueMissingSolutions, queueMissingSectionSolutions, draftNextSectionSolution, draftNextSolution } from "@/lib/solutionDraft";
+import { queueMissingSectionSolutions, draftSectionSolutionsBatch } from "@/lib/solutionDraft";
 import { str } from "../_lib/util";
 
 // Approving is the whole point of this page: a drafted key does nothing until
 // CA Parveen Sharma says it is right. Approval is what lets a solution reach a
 // student and what lets the evaluator mark against it.
 
+// DESCRIPTIVE TESTS ONLY. The founder does not want keys drafted for the
+// repository MTP/RTP papers — he deleted those rows deliberately — so nothing
+// here queues or drafts them any more.
 export async function queueAllMissing() {
   await assertArea(null);
-  // Both kinds: the descriptive TESTS students sit, and the repository papers.
-  const a = await queueMissingSectionSolutions();
-  const b = await queueMissingSolutions(null);
+  const r = await queueMissingSectionSolutions();
   revalidatePath("/admin/solutions");
-  redirect(`/admin/solutions?queued=${a.queued + b.queued}`);
+  redirect(`/admin/solutions?queued=${r.queued}`);
 }
 
 // Draft the waiting ones NOW rather than waiting for tonight's run. Drafting a
@@ -26,29 +27,13 @@ export async function queueAllMissing() {
 // available and says how many are left — press again to continue.
 export async function draftWaitingNow() {
   await assertArea(null);
-  const started = Date.now();
-  const done: string[] = [];
-  const failed: string[] = [];
-
-  // Descriptive tests first — those are the ones with nothing to mark against.
-  while (Date.now() - started < 240_000) {
-    const r = await draftNextSectionSolution();
-    if (!r.done) break;
-    if (r.error) failed.push(r.title ?? "?"); else done.push(r.title ?? "?");
-  }
-  while (Date.now() - started < 260_000) {
-    const r = await draftNextSolution();
-    if (!r.done) break;
-    if (r.error) failed.push(r.title ?? "?"); else done.push(r.title ?? "?");
-  }
-
-  const { count: left } = await createServiceClient()
-    .from("item_solutions")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "queued");
-
+  // Five at a time: a paper is one long AI call, so drafting them one after
+  // another managed barely two per press.
+  const r = await draftSectionSolutionsBatch(5, 240_000);
   revalidatePath("/admin/solutions");
-  redirect(`/admin/solutions?drafted=${done.length}&draftfailed=${failed.length}&stillqueued=${left ?? 0}`);
+  redirect(
+    `/admin/solutions?drafted=${r.drafted.length}&draftfailed=${r.failed.length}&stillqueued=${r.remaining}`,
+  );
 }
 
 export async function approveSolution(formData: FormData) {

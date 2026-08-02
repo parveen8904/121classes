@@ -12,29 +12,29 @@ import { str } from "../_lib/util";
 // CA Parveen Sharma says it is right. Approval is what lets a solution reach a
 // student and what lets the evaluator mark against it.
 
-// DESCRIPTIVE TESTS ONLY. The founder does not want keys drafted for the
-// repository MTP/RTP papers — he deleted those rows deliberately — so nothing
-// here queues or drafts them any more.
-export async function queueAllMissing() {
+// ONE button, one job: find every descriptive test with no answer key, then
+// draft as many as fit in this press. Splitting "queue it" from "draft it"
+// across two buttons only made the founder guess which one he needed.
+//
+// DESCRIPTIVE TESTS ONLY — he deleted the repository MTP/RTP drafts
+// deliberately and asked twice for these tests alone.
+export async function draftMissingKeys() {
   await assertArea(null);
-  const r = await queueMissingSectionSolutions();
+  const q = await queueMissingSectionSolutions();
+  // Five at a time: a paper is one long AI call, so drafting them one after
+  // another managed barely two per press.
+  const r = await draftSectionSolutionsBatch(5, 235_000);
   revalidatePath("/admin/solutions");
-  redirect(`/admin/solutions?queued=${r.queued}`);
+  redirect(
+    `/admin/solutions?queued=${q.queued}&drafted=${r.drafted.length}` +
+      `&draftfailed=${r.failed.length}&stillqueued=${r.remaining}`,
+  );
 }
 
 // Draft the waiting ones NOW rather than waiting for tonight's run. Drafting a
 // whole paper is a long AI call, so one press takes as many as fit in the time
 // available and says how many are left — press again to continue.
-export async function draftWaitingNow() {
-  await assertArea(null);
-  // Five at a time: a paper is one long AI call, so drafting them one after
-  // another managed barely two per press.
-  const r = await draftSectionSolutionsBatch(5, 240_000);
-  revalidatePath("/admin/solutions");
-  redirect(
-    `/admin/solutions?drafted=${r.drafted.length}&draftfailed=${r.failed.length}&stillqueued=${r.remaining}`,
-  );
-}
+
 
 export async function approveSolution(formData: FormData) {
   await assertArea(null);

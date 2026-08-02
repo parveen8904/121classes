@@ -2,7 +2,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import SelectAllKeys from "./SelectAllKeys";
-import { queueAllMissing, draftWaitingNow, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
+import { draftMissingKeys, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
 
 // Answer keys for the uploaded papers, and the button that makes them real.
 // Nothing here is used by the portal or the evaluator until it is approved.
@@ -87,13 +87,6 @@ export default async function AdminSolutionsPage(props: {
         back={{ href: "/admin", label: "Admin" }}
       />
 
-      {searchParams.queued && (
-        <div className="notice ok">
-          {searchParams.queued} paper{searchParams.queued === "1" ? "" : "s"} queued. They are drafted overnight, or press
-          &ldquo;Draft the waiting ones now&rdquo; to start straight away.
-        </div>
-      )}
-
       {searchParams.removed && (
         <div className="notice ok">
           {searchParams.removed === "0"
@@ -112,11 +105,12 @@ export default async function AdminSolutionsPage(props: {
 
       {searchParams.drafted && (
         <div className="notice ok">
+          {Number(searchParams.queued) > 0 && `Found ${searchParams.queued} test(s) with no key. `}
           ✍️ {searchParams.drafted} drafted and ready for you to read.
-          {Number(searchParams.draftfailed) > 0 && ` ${searchParams.draftfailed} could not be drafted — see the reason on each.`}
+          {Number(searchParams.draftfailed) > 0 && ` ${searchParams.draftfailed} could not be drafted — the reason is on each.`}
           {Number(searchParams.stillqueued) > 0
-            ? ` ${searchParams.stillqueued} still waiting — a full paper takes a minute or two, so press the button again to carry on (they also finish by themselves overnight).`
-            : " Nothing left in the queue."}
+            ? ` ${searchParams.stillqueued} still to go — press the button again to carry on, or leave it and tonight's run finishes them.`
+            : " Nothing left to draft."}
         </div>
       )}
 
@@ -127,11 +121,8 @@ export default async function AdminSolutionsPage(props: {
           <div><strong style={{ fontSize: "1.5rem" }}>{waiting.length}</strong><div className="muted">in the drafting queue</div></div>
           {failed.length > 0 && <div><strong style={{ fontSize: "1.5rem" }}>{failed.length}</strong><div className="muted">failed</div></div>}
           <div style={{ marginLeft: "auto" }}>
-            <form action={draftWaitingNow} style={{ display: "inline-block", marginRight: 8 }}>
-              <SubmitButton className="btn small">✍️ Draft the waiting ones now</SubmitButton>
-            </form>
-            <form action={queueAllMissing} style={{ display: "inline-block" }}>
-              <SubmitButton className="btn" savedLabel="Queued…">✍️ Draft keys for the tests without one</SubmitButton>
+            <form action={draftMissingKeys}>
+              <SubmitButton className="btn" savedLabel="Drafting…">✍️ Draft the missing answer keys</SubmitButton>
             </form>
           </div>
         </div>

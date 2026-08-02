@@ -38,7 +38,6 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { icon: "🖊️", title: "Examiner desk", desc: "Verify AI-checked descriptive copies and release them to students — sortable by subject/test; copies lock while an examiner checks.", href: "/examiner" },
       { icon: "🎫", title: "Support tickets", desc: "Website & phone issues as tickets — assign, call, log activity, resolve; overdue tickets escalate automatically.", href: "/admin/tickets" },
       { icon: "🛡️", title: "Group moderation", desc: "Flagged messages, search all group chats, hide/ban/mute — Telegram kept in sync.", href: "/admin/discussion" },
-      { icon: "📈", title: "Visitors & usage", desc: "Charts of visitors, active students, signups and class hours watched — this week vs last, this month vs last, three months.", href: "/admin/analytics" },
       { icon: "🔍", title: "Student insights", desc: "Most-viewed topics, where doubts come from, how students found us, drop-off call-list.", href: "/admin/insights" },
       { icon: "💚", title: "Scholarships", desc: "Merit & need-based applications; approve to auto-issue an emailed discount coupon.", href: "/admin/scholarships" },
       { icon: "🏆", title: "Results", desc: "Showcase rank-holders & toppers — the #1 trust signal for CA students.", href: "/admin/results" },
@@ -89,7 +88,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     title: "System & settings",
     tagline: "Health, integrations, keys, costs and the website itself.",
     panels: [
-      { icon: "🩺", title: "Server health", desc: "Live traffic, visitors (with time-on-site & phone), slow points, and plain-English fixes for staff.", href: "/admin/health" },
+      { icon: "🩺", title: "Server health & visitors", desc: "How the site is doing in one place: live traffic and who is on it now, visitors and usage over week/month/three months, the heaviest queries, and plain-English fixes for staff.", href: "/admin/health" },
       { icon: "🔌", title: "Integrations", desc: "All API keys in one place — Telegram, WhatsApp, IVR, Zoom, Mailgun, Razorpay, AI, YouTube, storage.", href: "/admin/integrations" },
       { icon: "✈️", title: "Telegram tools", desc: "Bot setup, channel & group linking, member checks.", href: "/admin/telegram" },
       { icon: "🗄️", title: "Storage", desc: "Files in Supabase/R2 buckets — browse, clean up, see what's using space.", href: "/admin/storage" },

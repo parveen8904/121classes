@@ -1,4 +1,5 @@
 import AdminHero from "../_components/AdminHero";
+import { BarChart, Delta } from "../analytics/Chart";
 import { createServiceClient } from "@/lib/supabase/service";
 import AutoRefresh from "./AutoRefresh";
 
@@ -53,12 +54,23 @@ function verdict(h: Health): { light: string; label: string; note: string; color
   };
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Stat({
+  label,
+  value,
+  sub,
+  children,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  children?: React.ReactNode;
+}) {
   return (
     <div className="card" style={{ padding: "12px 14px" }}>
       <div style={{ fontSize: ".74rem", color: "var(--muted)" }}>{label}</div>
       <div style={{ fontSize: "1.5rem", fontWeight: 800, lineHeight: 1.1, marginTop: 2 }}>{value}</div>
       {sub && <div style={{ fontSize: ".72rem", color: "var(--muted)", marginTop: 2 }}>{sub}</div>}
+      {children}
     </div>
   );
 }
@@ -77,8 +89,9 @@ type Visitors = {
   activity: { name: string | null; email: string | null; phone?: string | null; level?: string | null; first_seen: string; last_seen: string; last_at?: string | null; minutes: number; visits?: number; pages: number }[];
 };
 
-export default async function HealthPage(props: { searchParams: Promise<{ sort?: string }> }) {
-  const { sort } = await props.searchParams;
+export default async function HealthPage(props: { searchParams: Promise<{ sort?: string; days?: string }> }) {
+  const { sort, days: daysParam } = await props.searchParams;
+  const days = ([7, 30, 90] as const).includes(Number(daysParam) as 7 | 30 | 90) ? (Number(daysParam) as 7 | 30 | 90) : 30;
   const latestFirst = sort === "latest";
   const svc = createServiceClient();
   const dayStartIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
@@ -92,6 +105,10 @@ export default async function HealthPage(props: { searchParams: Promise<{ sort?:
     // What is actually costing disk reads — so a slow week names itself.
     svc.rpc("admin_heaviest_queries", { lim: 10 }),
   ]);
+  // Visitors and usage over time live here too — the founder wants one page
+  // for "how is the site doing", not a health tile and a separate stats tile.
+  const { loadAnalytics } = await import("@/lib/analytics");
+  const a = await loadAnalytics(days);
   const heavyRows = (heavy ?? []) as {
     query: string; calls: number; total_seconds: number; mean_ms: number; disk_reads: number; cache_hit_pct: number | null;
   }[];
@@ -219,6 +236,54 @@ export default async function HealthPage(props: { searchParams: Promise<{ sort?:
                 Counting started today when this feature went live — numbers grow from now on. Tracked on our own
                 database only (no Google Analytics, nothing shared outside).
               </p>
+
+              {/* Over time — week / month / three months, each figure against
+                  the same figure for the period before it. */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "22px 0 8px" }}>
+                <h3 style={{ margin: 0 }}>📈 Visitors &amp; usage over time</h3>
+                {([7, 30, 90] as const).map((d) => (
+                  <a
+                    key={d}
+                    className={days === d ? "btn small" : "btn small secondary"}
+                    href={`/admin/health?days=${d}${latestFirst ? "&sort=latest" : ""}`}
+                  >
+                    {d === 7 ? "Week" : d === 30 ? "Month" : "3 months"}
+                  </a>
+                ))}
+              </div>
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
+                <Stat label="Visitors" value={String(a.visitors.now)}>
+                  <Delta now={a.visitors.now} before={a.visitors.before} />
+                </Stat>
+                <Stat label="Pages opened" value={String(a.views.now)}>
+                  <Delta now={a.views.now} before={a.views.before} />
+                </Stat>
+                <Stat label="Students active" value={String(a.activeStudents.now)}>
+                  <Delta now={a.activeStudents.now} before={a.activeStudents.before} />
+                </Stat>
+                <Stat label="New signups" value={String(a.signups.now)}>
+                  <Delta now={a.signups.now} before={a.signups.before} />
+                </Stat>
+                <Stat label="Logins" value={String(a.logins.now)}>
+                  <Delta now={a.logins.now} before={a.logins.before} />
+                </Stat>
+                <Stat label="Class hours watched" value={String(a.watchHours.now)} sub="the load behind the video bill">
+                  <Delta now={a.watchHours.now} before={a.watchHours.before} unit="h" />
+                </Stat>
+              </div>
+
+              <div className="card" style={{ marginTop: 12 }}>
+                <strong style={{ fontSize: ".9rem" }}>👥 Visitors, day by day</strong>
+                <BarChart points={a.visitors.series} />
+                <p className="muted" style={{ fontSize: ".8rem", margin: 0 }}>
+                  {a.busiestDay ? `Busiest: ${a.busiestDay.label} with ${a.busiestDay.value} visitors.` : "No visitors in this period."}
+                  {a.peakHourIST && ` Most traffic arrives around ${a.peakHourIST.hour}:00 IST.`}
+                </p>
+              </div>
+              <div className="card" style={{ marginTop: 10 }}>
+                <strong style={{ fontSize: ".9rem" }}>🎥 Class hours watched</strong>
+                <BarChart points={a.watchHours.series} colour="#7c3aed" suffix=" h" />
+              </div>
 
               {v.top_pages.length > 0 && (
                 <>

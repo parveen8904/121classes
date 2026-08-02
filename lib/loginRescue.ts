@@ -63,6 +63,18 @@ export async function rescueLogin(input: {
 
   const wa = e164(input.phone);
 
+  // Did they already get in by themselves between asking and now? Three of
+  // the six requests sitting open were exactly this — the student solved it
+  // in a minute and the row was never closed, so a person kept being paged
+  // about someone who was fine.
+  if (account?.id) {
+    const { data: u } = await svc.auth.admin.getUserById(account.id);
+    const lastSignIn = u?.user?.last_sign_in_at ? new Date(u.user.last_sign_in_at).getTime() : 0;
+    if (lastSignIn && Date.now() - lastSignIn < 10 * 60_000) {
+      return { handled: true, kind: "reset_sent", note: "student signed in on their own just now — nothing to do" };
+    }
+  }
+
   // Case A / B — the account exists. Send the right link to the address on
   // file, and tell them on WhatsApp that it is coming.
   if (account?.email) {

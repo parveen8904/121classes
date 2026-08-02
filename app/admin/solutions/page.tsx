@@ -1,7 +1,8 @@
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
-import { queueAllMissing, draftWaitingNow, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
+import SelectAllKeys from "./SelectAllKeys";
+import { queueAllMissing, draftWaitingNow, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
 
 // Answer keys for the uploaded papers, and the button that makes them real.
 // Nothing here is used by the portal or the evaluator until it is approved.
@@ -34,7 +35,7 @@ const LABEL: Record<string, string> = {
 };
 
 export default async function AdminSolutionsPage(props: {
-  searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string }>;
+  searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string; removed?: string; requeued?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
@@ -91,6 +92,22 @@ export default async function AdminSolutionsPage(props: {
         <div className="notice ok">
           {searchParams.queued} paper{searchParams.queued === "1" ? "" : "s"} queued. They are drafted overnight, or press
           &ldquo;Draft the waiting ones now&rdquo; to start straight away.
+        </div>
+      )}
+
+      {searchParams.removed && (
+        <div className="notice ok">
+          {searchParams.removed === "0"
+            ? "Nothing was ticked, so nothing was deleted."
+            : `🗑️ ${searchParams.removed} deleted. Press “Draft keys for the tests without one” to queue any of them again.`}
+        </div>
+      )}
+
+      {searchParams.requeued && (
+        <div className="notice ok">
+          {searchParams.requeued === "0"
+            ? "Nothing was ticked."
+            : `🔄 ${searchParams.requeued} put back in the queue — press “Draft the waiting ones now” to redraft them.`}
         </div>
       )}
 
@@ -162,6 +179,24 @@ export default async function AdminSolutionsPage(props: {
         </div>
       )}
 
+      {/* Multi-select. Each row's tick box attaches to this form by id, so no
+          form ends up nested inside another. */}
+      {rows.length > 0 && (
+        <form
+          id="keyspick"
+          action={deleteSelectedSolutions}
+          className="card"
+          style={{ marginBottom: 12, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}
+        >
+          <SelectAllKeys formId="keyspick" name="ids" />
+          <span className="muted" style={{ fontSize: ".85rem" }}>then:</span>
+          <SubmitButton className="btn small secondary" savedLabel="Deleting…">🗑️ Delete the ticked ones</SubmitButton>
+          <button type="submit" className="btn small secondary" formAction={requeueSelectedSolutions}>
+            🔄 Draft the ticked ones again
+          </button>
+        </form>
+      )}
+
       {[...drafted, ...failed, ...waiting, ...approved].map((r) => {
         // A key belongs either to a repository paper or to a descriptive test.
         const item = r.repository_items
@@ -181,6 +216,7 @@ export default async function AdminSolutionsPage(props: {
         return (
           <div className="card" key={r.id} style={{ marginBottom: 14, borderColor: r.status === "approved" ? "#16a34a" : undefined }}>
             <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
+              <input type="checkbox" form="keyspick" name="ids" value={r.id} aria-label={`Select ${item?.title ?? "paper"}`} />
               <strong>{item?.title ?? "Paper"}</strong>
               <span className="badge">{item?.subject ?? "—"}</span>
               <span className="badge">{item?.kind ?? ""}</span>
@@ -242,6 +278,15 @@ export default async function AdminSolutionsPage(props: {
                   <SubmitButton className="btn small secondary" savedLabel="Requeued">🔁 Try drafting again</SubmitButton>
                 </form>
               )}
+              {/* Delete sits last and apart — on an approved row it also takes
+                  away what the evaluator marks that test against, so the label
+                  says which one it is. */}
+              <form action={deleteSolution} style={{ marginLeft: "auto" }}>
+                <input type="hidden" name="id" value={r.id} />
+                <SubmitButton className="btn small secondary" savedLabel="Deleted">
+                  {r.status === "approved" ? "🗑️ Delete this approved key" : "🗑️ Delete this draft"}
+                </SubmitButton>
+              </form>
             </div>
           </div>
         );

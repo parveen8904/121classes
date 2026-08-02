@@ -148,3 +148,39 @@ export async function generateExplanations() {
   revalidatePath("/admin/solutions");
   redirect(`/admin/solutions?mcq=${mcq}&cases=${cases}`);
 }
+
+// Remove a draft entirely. Re-queue the paper afterwards and it is drafted
+// again from scratch — so this is the way to throw away a bad draft rather
+// than editing around it. Deleting an APPROVED key also removes what the
+// evaluator marks that test against, which is why the button says so.
+export async function deleteSolution(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("item_solutions").delete().eq("id", id);
+  revalidatePath("/admin/solutions");
+  redirect("/admin/solutions?removed=1");
+}
+
+/** Delete every ticked key in one go. */
+export async function deleteSelectedSolutions(formData: FormData) {
+  await assertArea(null);
+  const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
+  if (!ids.length) redirect("/admin/solutions?removed=0");
+  await createServiceClient().from("item_solutions").delete().in("id", ids);
+  revalidatePath("/admin/solutions");
+  redirect(`/admin/solutions?removed=${ids.length}`);
+}
+
+/** Put the ticked ones back in the queue to be drafted again. */
+export async function requeueSelectedSolutions(formData: FormData) {
+  await assertArea(null);
+  const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
+  if (!ids.length) redirect("/admin/solutions?requeued=0");
+  await createServiceClient()
+    .from("item_solutions")
+    .update({ status: "queued", solution_md: null, error: null, claimed_at: null })
+    .in("id", ids);
+  revalidatePath("/admin/solutions");
+  redirect(`/admin/solutions?requeued=${ids.length}`);
+}

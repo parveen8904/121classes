@@ -73,6 +73,18 @@ export async function queueMissingSolutions(subjectId?: string | null): Promise<
  * queue never blocks a request or spikes the AI bill. */
 export async function draftNextSolution(): Promise<{ done: boolean; title?: string; error?: string }> {
   const svc = createServiceClient();
+
+  // Reclaim stale locks first. A row is flipped to "drafting" before the AI
+  // calls start, so if that pass is cut short (platform timeout, deploy mid-run)
+  // the row stays "drafting" for ever and its paper is never drafted again —
+  // six were sitting like that. Anything still claimed after 30 minutes is
+  // certainly dead, so put it back in the queue.
+  await svc
+    .from("item_solutions")
+    .update({ status: "queued", claimed_at: null })
+    .eq("status", "drafting")
+    .lt("claimed_at", new Date(Date.now() - 30 * 60_000).toISOString());
+
   const { data: next } = await svc
     .from("item_solutions")
     .select("id, repo_item_id")
@@ -82,7 +94,10 @@ export async function draftNextSolution(): Promise<{ done: boolean; title?: stri
     .maybeSingle();
   if (!next) return { done: false };
 
-  await svc.from("item_solutions").update({ status: "drafting" }).eq("id", next.id);
+  await svc
+    .from("item_solutions")
+    .update({ status: "drafting", claimed_at: new Date().toISOString() })
+    .eq("id", next.id);
 
   const { data: item } = await svc
     .from("repository_items")

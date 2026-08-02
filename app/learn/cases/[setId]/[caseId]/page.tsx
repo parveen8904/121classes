@@ -8,6 +8,10 @@ import { caseDisplayNumbers } from "@/lib/caseOrder";
 import { submitCaseAttempt } from "../actions";
 
 export const dynamic = "force-dynamic";
+// Submitting generates the "why" for a case the first time anyone finishes it,
+// which is an AI call inside the request. Most cases still have no explanation
+// saved, so that first student must not be cut off mid-way.
+export const maxDuration = 120;
 
 type Q = { id: string; seq: number; question: string; options: string[]; correct_index: number; explanation: { why_correct?: string; why_options?: string[] } | null };
 

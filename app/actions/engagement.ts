@@ -48,23 +48,10 @@ export async function askQuestion(
   let answer: string | null = null;
   let escalated = false;
 
-  // A signed-in student's daily allowance covers "Ask me" too — it is the same
-  // AI answering. Otherwise the 5-a-day on the course page would be bypassed
-  // simply by asking from here instead. Visitors who are not signed in are not
-  // touched: this is also the shop-window assistant.
-  if (user) {
-    const { checkQuota } = await import("@/lib/entitlements");
-    const q = await checkQuota(user.id, "ask_query");
-    if (!q.allowed) {
-      return {
-        ok: true,
-        answer:
-          q.limit > 0
-            ? `You have used all ${q.limit} of today's questions. They refill tomorrow morning — or send this to the faculty from your course page.`
-            : "Asking questions is part of a study plan. Please see Plans & pricing, or renew if your validity has ended.",
-      };
-    }
-  }
+  // NOTE: "Ask me" is suspended — AskMe.tsx is not mounted on any page, so
+  // students never reach this. It therefore does NOT draw on the daily query
+  // allowance. If it is ever brought back for students, it must: otherwise the
+  // 5-a-day cap on the course page can be bypassed by asking from here.
 
   if (user && (await dailyDoubtLimitReached(user.id))) {
     escalated = true; // hit today's AI limit → log for faculty, no AI call
@@ -73,10 +60,6 @@ export async function askQuestion(
     const raw = await answerAssistant(question, facts, material);
     if (raw && raw.trim() !== NEED_FACULTY) {
       answer = raw.trim();
-      if (user) {
-        const { consumeQuota } = await import("@/lib/entitlements");
-        await consumeQuota(user.id, "ask_query");
-      }
     } else {
       escalated = true; // a subject doubt the material doesn't cover
     }

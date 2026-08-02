@@ -109,19 +109,16 @@ async function buildMcqResult(
 
   // Leaderboard rank = how many students scored strictly higher (best attempt) + 1.
   // We return only the rank number — never the total number of test-takers.
+  // Counted in Postgres: pulling every attempt row into Node here meant one
+  // read of the whole test's attempts on every submit AND every report view.
   let rank = 1;
   try {
-    const { data: all } = await createServiceClient()
-      .from("mcq_attempts")
-      .select("student_id, score")
-      .eq("section_id", sectionId);
-    const best = new Map<string, number>();
-    for (const a of all ?? []) {
-      const sid = a.student_id as string;
-      best.set(sid, Math.max(best.get(sid) ?? 0, (a.score as number) ?? 0));
-    }
-    const myBest = Math.max(best.get(userId) ?? 0, score);
-    for (const [sid, s] of best) if (sid !== userId && s > myBest) rank += 1;
+    const { data } = await createServiceClient().rpc("mcq_rank", {
+      p_section: sectionId,
+      p_student: userId,
+      p_score: score,
+    });
+    rank = Number(data) || 1;
   } catch {
     rank = 1;
   }

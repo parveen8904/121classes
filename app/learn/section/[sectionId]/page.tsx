@@ -15,7 +15,8 @@ import { checkQuota, studentPlan, getAllLimits, limitFor, WATCH_CATEGORY } from 
 
 export const dynamic = "force-dynamic";
 // Descriptive-paper grading reads two PDFs with Claude vision — allow time.
-export const maxDuration = 60;
+// 60s was not enough for descriptive grading (two PDFs through the AI).
+export const maxDuration = 300;
 
 type Downloadable = { id: string; section_id: string | null; storage_url: string; iv_b64: string | null; alg: string | null; byte_size: number | null };
 

@@ -4,8 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { viaProxy } from "@/lib/fileProxy";
 import PaperAnswerUpload from "./PaperAnswerUpload";
+import { evaluatePaperNow } from "./actions";
 
 export const dynamic = "force-dynamic";
+// Grading runs inside the submit action on this route and reads two PDFs
+// through the AI. The default function timeout cut that off long before it
+// could finish, so the attempt was left permanently "being prepared".
+export const maxDuration = 300;
 
 const KIND_LABEL: Record<string, string> = { mtp: "MTP", rtp: "RTP", past_papers: "Past exam paper" };
 
@@ -113,7 +118,16 @@ export default async function PaperPage(props: { params: Promise<{ itemId: strin
                 </p>
               </>
             ) : (
-              <p className="muted" style={{ margin: 0 }}>✅ Your answers were submitted{canEvaluate ? " — evaluation is being prepared, refresh in a moment." : "; your faculty will review them."}</p>
+              <>
+                <p className="muted" style={{ margin: 0 }}>
+                  ✅ Your answers were submitted{canEvaluate ? " — the evaluation is being prepared." : "; your faculty will review them."}
+                </p>
+                {canEvaluate && (
+                  <form action={evaluatePaperNow.bind(null, item.id)} style={{ marginTop: 10 }}>
+                    <button className="btn small secondary" type="submit">🔄 Check my paper now</button>
+                  </form>
+                )}
+              </>
             )}
           </div>
         )}

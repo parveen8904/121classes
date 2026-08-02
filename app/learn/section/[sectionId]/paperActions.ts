@@ -248,9 +248,14 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
   // URL so the AI grader and the annotator can read it.
   const { resolveFileUrl } = await import("@/lib/storage");
   const studentUrl = await resolveFileUrl(row.file_url);
+  // The SOLUTION must be resolved too. Every descriptive test stores its answer
+  // key as "secure:<path>"; handing that string straight to the grader made it
+  // fetch a non-URL, which throws, and the paper came back ungraded every single
+  // time. Nothing surfaced because the failure was swallowed.
+  const solutionUrl = await resolveFileUrl(cfg.solutionPdf);
   let graded: DescriptiveGrade | null = null;
   try {
-    if (cfg.solutionPdf && studentUrl) graded = await gradeDescriptivePaper(studentUrl, cfg.solutionPdf, cfg.totalMarks || row.total_marks || null);
+    if (solutionUrl && studentUrl) graded = await gradeDescriptivePaper(studentUrl, solutionUrl, cfg.totalMarks || row.total_marks || null);
   } catch {
     graded = null;
   }

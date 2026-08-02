@@ -129,7 +129,16 @@ export async function GET(req: NextRequest) {
   // ---- 3. Things only a person can decide ------------------------------
   const [{ count: ticketsOpen }, { count: examinerWaiting }, { count: keysWaiting }] = await Promise.all([
     svc.from("tickets").select("id", { count: "exact", head: true }).eq("status", "open"),
-    svc.from("paper_attempts").select("id", { count: "exact", head: true }).eq("status", "submitted"),
+    // The examiner desk works on descriptive_attempts — counting paper_attempts
+    // here meant the six-hourly report said "nothing waiting" while answer
+    // books actually sat unchecked.
+    svc
+      .from("descriptive_attempts")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["submitted", "graded"])
+      // NULL review_status means "not even graded yet" — a plain neq would drop
+      // those rows, which are exactly the ones needing attention.
+      .or("review_status.is.null,review_status.neq.checked"),
     svc.from("item_solutions").select("id", { count: "exact", head: true }).eq("status", "drafted"),
   ]);
   if ((ticketsOpen ?? 0) > 0) needsHuman.push({ what: "Support tickets", detail: `${ticketsOpen} open`, since: "" });

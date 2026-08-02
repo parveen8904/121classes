@@ -820,11 +820,22 @@ export async function gradeDescriptivePaper(
       fetch(studentPdfUrl, { cache: "no-store" }),
       fetch(solutionPdfUrl, { cache: "no-store" }),
     ]);
-    if (!stu.ok || !sol.ok) return null;
-    const [stuB64, solB64] = await Promise.all([
-      stu.arrayBuffer().then((b) => Buffer.from(b).toString("base64")),
-      sol.arrayBuffer().then((b) => Buffer.from(b).toString("base64")),
-    ]);
+    if (!stu.ok || !sol.ok) {
+      console.error("[grade_descriptive] cannot read PDFs", { student: stu.status, solution: sol.status });
+      return null;
+    }
+    const [stuBuf, solBuf] = await Promise.all([stu.arrayBuffer(), sol.arrayBuffer()]);
+    // Anthropic caps a request at 32 MB, and base64 inflates a file by a third.
+    // Some answer keys here are already 24 MB, so a big scan plus a big key
+    // would be refused outright — say so plainly instead of failing blank.
+    if (stuBuf.byteLength + solBuf.byteLength > 22 * 1024 * 1024) {
+      console.error("[grade_descriptive] too large to send", {
+        studentMB: +(stuBuf.byteLength / 1048576).toFixed(1),
+        solutionMB: +(solBuf.byteLength / 1048576).toFixed(1),
+      });
+      return null;
+    }
+    const [stuB64, solB64] = [Buffer.from(stuBuf).toString("base64"), Buffer.from(solBuf).toString("base64")];
     const sys =
       "You are CA Parveen Sharma's examiner checking a CA descriptive (subjective) answer paper. " +
       "You are given TWO PDFs: FIRST the STUDENT'S HANDWRITTEN answer book (read the handwriting carefully — it may be untidy or rotated), and SECOND the teacher's OFFICIAL SOLUTION / answer key. " +
@@ -859,7 +870,13 @@ export async function gradeDescriptivePaper(
       }),
       cache: "no-store",
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Silence here is what hid the real bug for so long. A refused request
+      // (payload over 32 MB, more than 100 pages, rate limit, bad key) must be
+      // readable in the Vercel logs.
+      console.error("[grade_descriptive] Anthropic refused", res.status, (await res.text()).slice(0, 300));
+      return null;
+    }
     const data = await res.json();
     const u = data.usage ?? {};
     await logUsage("grade_descriptive", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
@@ -950,7 +967,13 @@ export async function detectPaperMeta(questionPdfUrl: string): Promise<{ minutes
       }),
       cache: "no-store",
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Silence here is what hid the real bug for so long. A refused request
+      // (payload over 32 MB, more than 100 pages, rate limit, bad key) must be
+      // readable in the Vercel logs.
+      console.error("[grade_descriptive] Anthropic refused", res.status, (await res.text()).slice(0, 300));
+      return null;
+    }
     const data = await res.json();
     const u = data.usage ?? {};
     await logUsage("grade_descriptive", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
@@ -1280,7 +1303,13 @@ export async function gradeDescriptivePaperAgainstText(
       }),
       cache: "no-store",
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Silence here is what hid the real bug for so long. A refused request
+      // (payload over 32 MB, more than 100 pages, rate limit, bad key) must be
+      // readable in the Vercel logs.
+      console.error("[grade_descriptive] Anthropic refused", res.status, (await res.text()).slice(0, 300));
+      return null;
+    }
     const data = await res.json();
     const u = data.usage ?? {};
     await logUsage("grade_descriptive", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);

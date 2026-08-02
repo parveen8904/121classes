@@ -114,24 +114,16 @@ export async function retrySolution(formData: FormData) {
 // has its correct answer; what some lack is the "why" shown in the report.
 // Bounded to ~45 seconds per press so the request always returns — press it
 // again to continue, or leave it to the nightly worker.
+// The whole backlog in one press: six batches at a time instead of one after
+// another, so 500-odd questions are not twenty presses of a button.
 export async function generateExplanations() {
   await assertArea(null);
-  const { backfillMcqExplanations, backfillCaseExplanations } = await import("@/lib/explainBackfill");
-  const started = Date.now();
-  let mcq = 0;
-  let cases = 0;
-  while (Date.now() - started < 25_000) {
-    const n = await backfillMcqExplanations(20);
-    mcq += n;
-    if (!n) break;
-  }
-  while (Date.now() - started < 45_000) {
-    const n = await backfillCaseExplanations(20);
-    cases += n;
-    if (!n) break;
-  }
+  const { backfillAllExplanations } = await import("@/lib/explainBackfill");
+  const r = await backfillAllExplanations(235_000, 6);
   revalidatePath("/admin/solutions");
-  redirect(`/admin/solutions?mcq=${mcq}&cases=${cases}`);
+  redirect(
+    `/admin/solutions?mcq=${r.mcq}&cases=${r.cases}&mcqleft=${r.mcqLeft}&casesleft=${r.casesLeft}`,
+  );
 }
 
 // Remove a draft entirely. Re-queue the paper afterwards and it is drafted

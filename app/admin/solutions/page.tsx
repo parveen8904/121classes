@@ -23,7 +23,11 @@ type Row = {
   video_url: string | null;
   generated_at: string | null;
   repository_items: { title: string; kind: string; subjects: { title: string } | null } | null;
-  sections: { title: string; topics: { subjects: { title: string } | null } | null } | null;
+  sections: {
+    title: string;
+    question_pdf: string | null;
+    topics: { subjects: { title: string } | null } | null;
+  } | null;
 };
 
 const LABEL: Record<string, string> = {
@@ -35,7 +39,7 @@ const LABEL: Record<string, string> = {
 };
 
 export default async function AdminSolutionsPage(props: {
-  searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string; removed?: string; requeued?: string }>;
+  searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string; removed?: string; requeued?: string; mcqleft?: string; casesleft?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
@@ -44,7 +48,8 @@ export default async function AdminSolutionsPage(props: {
     .from("item_solutions")
     .select(
       "id, repo_item_id, section_id, solution_md, status, error, parts, edited, video_url, generated_at, " +
-        "repository_items(title, kind, subjects(title)), sections(title, topics(subjects(title)))",
+        "repository_items(title, kind, subjects(title)), " +
+        "sections(title, question_pdf:config->>paper_question_pdf, topics(subjects(title)))",
     )
     .order("status")
     .limit(500);
@@ -140,8 +145,10 @@ export default async function AdminSolutionsPage(props: {
         <h2 className="admin-section-title">❓ Answer explanations</h2>
         {searchParams.mcq && (
           <div className="notice ok">
-            Wrote {searchParams.mcq} MCQ and {searchParams.cases ?? 0} case-study explanations. Press again to continue if any
-            remain.
+            Wrote {searchParams.mcq} MCQ and {searchParams.cases ?? 0} case-study explanations.{" "}
+            {Number(searchParams.mcqleft) + Number(searchParams.casesleft) > 0
+              ? `${searchParams.mcqleft} MCQ and ${searchParams.casesleft} case questions still to go — press again to finish them.`
+              : "Nothing left — every question now has its reason."}
           </div>
         )}
         <p className="muted" style={{ fontSize: ".85rem", marginTop: 0 }}>
@@ -153,7 +160,7 @@ export default async function AdminSolutionsPage(props: {
           <form action={generateExplanations}>
             <SubmitButton className="btn small" savedLabel="Writing…">✍️ Generate the missing explanations</SubmitButton>
             <span className="muted" style={{ fontSize: ".8rem", marginLeft: 8 }}>
-              Runs for about a minute per press; the nightly worker finishes the rest by itself.
+              Six batches at a time, so one press clears most of the backlog. The nightly worker mops up anything left.
             </span>
           </form>
         )}
@@ -202,6 +209,10 @@ export default async function AdminSolutionsPage(props: {
               }
             : null;
         const open = searchParams.open === r.id;
+        // Served through our own proxy, which mints a short-lived signed URL —
+        // the paper itself stays private.
+        const paperRef = r.sections?.question_pdf ?? null;
+        const paperHref = paperRef ? `/api/file?u=${encodeURIComponent(paperRef)}` : null;
         return (
           <div className="card" key={r.id} style={{ marginBottom: 14, borderColor: r.status === "approved" ? "#16a34a" : undefined }}>
             <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
@@ -221,12 +232,51 @@ export default async function AdminSolutionsPage(props: {
                 </summary>
                 <form action={saveSolution} style={{ marginTop: 10 }}>
                   <input type="hidden" name="id" value={r.id} />
-                  <textarea
-                    name="solution_md"
-                    defaultValue={r.solution_md}
-                    rows={20}
-                    style={{ width: "100%", fontFamily: "ui-monospace, monospace", fontSize: ".8rem" }}
-                  />
+                  {/* The question paper sits BESIDE the answer. Reading a key
+                      without the questions in front of you is guesswork, and
+                      opening two files by hand to do it is worse. */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: paperHref ? "1fr 1fr" : "1fr",
+                      gap: 10,
+                      alignItems: "stretch",
+                    }}
+                    className="key-split"
+                  >
+                    {paperHref && (
+                      <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                          <strong style={{ fontSize: ".8rem" }}>📄 Question paper</strong>
+                          <a className="btn small secondary" href={paperHref} target="_blank" rel="noopener noreferrer">
+                            Open in a new tab
+                          </a>
+                          <a className="btn small secondary" href={`${paperHref}&dl=1`} download>
+                            ⬇️ Download
+                          </a>
+                        </div>
+                        <iframe
+                          src={paperHref}
+                          title={`Question paper — ${item?.title ?? ""}`}
+                          style={{ width: "100%", height: "72vh", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+                        />
+                      </div>
+                    )}
+                    <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                      <strong style={{ fontSize: ".8rem", marginBottom: 6 }}>✍️ Draft answer key — edit freely</strong>
+                      <textarea
+                        name="solution_md"
+                        defaultValue={r.solution_md}
+                        style={{
+                          width: "100%",
+                          height: paperHref ? "72vh" : "auto",
+                          minHeight: 320,
+                          fontFamily: "ui-monospace, monospace",
+                          fontSize: ".8rem",
+                        }}
+                      />
+                    </div>
+                  </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                     <SubmitButton className="btn small secondary" savedLabel="Saved">💾 Save edits</SubmitButton>
                     <SubmitButton className="btn small" savedLabel="Approved ✓" name="approve" value="1">

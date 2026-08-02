@@ -99,3 +99,125 @@ export async function backfillCaseExplanations(limit = 20): Promise<number> {
   }
   return written;
 }
+
+// ---------------------------------------------------------------------------
+// Run the whole backlog in one go.
+//
+// The per-batch functions above are called in a loop, one AI call after
+// another — 570 questions that way is a quarter of an hour of pressing the
+// button and waiting. The calls are independent, so they run together.
+
+/** Run `jobs` with at most `concurrency` in flight, stopping at the deadline. */
+async function runPooled<T>(jobs: (() => Promise<T>)[], concurrency: number, deadline: number): Promise<T[]> {
+  const out: T[] = [];
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, jobs.length) }, async () => {
+    while (next < jobs.length && Date.now() < deadline) {
+      const job = jobs[next++];
+      out.push(await job());
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+/**
+ * Explain everything still missing — MCQs and case questions together, several
+ * batches at a time. Returns what was written and what is still left.
+ */
+export async function backfillAllExplanations(
+  budgetMs = 235_000,
+  concurrency = 6,
+): Promise<{ mcq: number; cases: number; mcqLeft: number; casesLeft: number }> {
+  const deadline = Date.now() + budgetMs;
+  const svc = createServiceClient();
+
+  // MCQs: take the whole outstanding list once, then explain it in parallel
+  // chunks. Asking for each chunk separately would hand every worker the same
+  // rows, since nothing marks them as taken.
+  const { data: qs } = await svc.rpc("admin_mcq_missing_explanations", { lim: 600 });
+  const todo = ((qs ?? []) as unknown as McqRow[]);
+  const chunks: McqRow[][] = [];
+  for (let i = 0; i < todo.length; i += 20) chunks.push(todo.slice(i, i + 20));
+
+  const mcqCounts = await runPooled(
+    chunks.map((chunk) => async () => {
+      const out = await explainCaseAnswers(
+        "Standalone chapter MCQs from CA Parveen Sharma's tests.",
+        chunk.map((q) => ({
+          question: q.question,
+          options: (q.options ?? []).map((o) => String(o)),
+          correct_index: Number(q.correct_index) || 0,
+        })),
+      );
+      if (!out) return 0;
+      let n = 0;
+      for (let i = 0; i < chunk.length && i < out.length; i++) {
+        const e = out[i];
+        if (!e?.why_correct) continue;
+        await saveMcqExplanation(chunk[i].id, e.why_correct, e.why_options ?? []);
+        n++;
+      }
+      return n;
+    }),
+    concurrency,
+    deadline,
+  );
+
+  // Case questions: grouped by their case, because an explanation is only
+  // right when it is written against that case's own scenario.
+  const { data: rows } = await svc
+    .from("case_questions")
+    .select("id, case_id, question, options, correct_index")
+    .is("explanation", null)
+    .order("case_id")
+    .limit(600);
+  const list = (rows ?? []) as unknown as (McqRow & { case_id: string })[];
+  const byCase = new Map<string, (McqRow & { case_id: string })[]>();
+  for (const r of list) {
+    if (!byCase.has(r.case_id)) byCase.set(r.case_id, []);
+    byCase.get(r.case_id)!.push(r);
+  }
+
+  const caseCounts = await runPooled(
+    [...byCase.entries()].map(([caseId, qsForCase]) => async () => {
+      const { data: cs } = await svc.from("case_studies").select("scenario").eq("id", caseId).maybeSingle();
+      const scenario = String((cs as { scenario?: string } | null)?.scenario ?? "").trim();
+      if (!scenario) return 0;
+      const out = await explainCaseAnswers(
+        scenario,
+        qsForCase.map((q) => ({
+          question: q.question,
+          options: (q.options ?? []).map((o) => String(o)),
+          correct_index: Number(q.correct_index) || 0,
+        })),
+      );
+      if (!out) return 0;
+      let n = 0;
+      for (let i = 0; i < qsForCase.length && i < out.length; i++) {
+        const e = out[i];
+        if (!e?.why_correct) continue;
+        await svc
+          .from("case_questions")
+          .update({ explanation: { wc: e.why_correct, ww: e.why_options ?? [] } })
+          .eq("id", qsForCase[i].id);
+        n++;
+      }
+      return n;
+    }),
+    concurrency,
+    deadline,
+  );
+
+  const [mcqLeft, { count: casesLeft }] = await Promise.all([
+    missingMcqExplanations(),
+    svc.from("case_questions").select("id", { count: "exact", head: true }).is("explanation", null),
+  ]);
+
+  return {
+    mcq: mcqCounts.reduce((a, b) => a + b, 0),
+    cases: caseCounts.reduce((a, b) => a + b, 0),
+    mcqLeft,
+    casesLeft: casesLeft ?? 0,
+  };
+}

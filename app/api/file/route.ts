@@ -41,10 +41,16 @@ export async function GET(req: NextRequest) {
   const upstream = await fetch(target, { cache: "no-store" });
   if (!upstream.ok || !upstream.body) return new NextResponse("File unavailable", { status: 502 });
 
+  // ?dl=1 downloads instead of opening in the tab — the answer-key review
+  // screen offers both, since reading a paper beside the draft and keeping a
+  // copy are different jobs.
+  const download = req.nextUrl.searchParams.get("dl") === "1";
+  const name = (raw.split("/").pop() || "file").split("?")[0] || "file";
+
   return new NextResponse(upstream.body, {
     headers: {
       "content-type": upstream.headers.get("content-type") || "application/octet-stream",
-      "content-disposition": "inline",
+      "content-disposition": download ? `attachment; filename="${name.replace(/[^\w.\-]/g, "_")}"` : "inline",
       "cache-control": "private, max-age=300",
     },
   });

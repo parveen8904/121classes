@@ -742,3 +742,12 @@ body { padding-bottom: env(safe-area-inset-bottom); }
    expanded tile takes the FULL grid row, so its file list gets proper width
    instead of being squeezed into one narrow column while neighbours stretch. */
 .res-tile[open] { grid-column: 1 / -1; }
+
+
+/* Answer-key review: question paper beside the draft on a desktop, stacked on
+   a phone — a 50% column is useless for reading a PDF on a small screen. */
+@media (max-width: 900px) {
+  .key-split { grid-template-columns: 1fr !important; }
+  .key-split iframe { height: 55vh !important; }
+  .key-split textarea { height: 45vh !important; }
+}

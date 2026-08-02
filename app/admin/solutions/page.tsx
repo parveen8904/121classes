@@ -84,7 +84,7 @@ export default async function AdminSolutionsPage(props: {
       <AdminHero
         badge="🗝️ Answer keys"
         title="Solutions for uploaded papers"
-        subtitle="The descriptive tests (MTP / RTP / past papers) that have no answer key get an AI-drafted one. A key does nothing until you approve it — approved keys are what students see after they submit, and what the AI marks their answer books against."
+        subtitle="Any test with no answer key gets an AI-drafted one — both the descriptive tests students sit inside a topic and the repository MTP / RTP papers. A key does nothing until you approve it: approved keys are what students see after they submit, and what the AI marks their answer books against."
         back={{ href: "/admin", label: "Admin" }}
       />
 

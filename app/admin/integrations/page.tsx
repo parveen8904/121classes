@@ -260,6 +260,11 @@ export default async function IntegrationsPage(
           <KeyField name="MAILGUN_REGION" label="Mailgun region — type eu if your domain is EU (mxa.eu.mailgun.org)" placeholder="eu  (or leave blank for US)" />
           <KeyField name="NOTIFY_FROM_EMAIL" label="From address (must be on the verified Mailgun domain)" placeholder="CA Parveen Sharma <noreply@caparveensharma.com>" />
           <KeyField name="NOTIFY_REPLY_TO" label="Reply-To address (where replies go, any domain)" placeholder="contact@caparveensharma.com" />
+          <KeyField
+            name="BACKUP_EMAIL"
+            label="Backup email — the weekly database backup is zipped and sent here"
+            placeholder="use an address NOT on this domain, e.g. your Gmail"
+          />
           <KeyField name="INTERAKT_API_KEY" label="Interakt (WhatsApp) key" placeholder="Basic auth key" />
           <KeyField name="IVR_WEBHOOK_KEY" label="IVR webhook key (phone calls → tickets)" placeholder="any long random text — use the same in your IVR portal's webhook URL" />
           <KeyField name="WHATSAPP_OTP_TEMPLATE" label="WhatsApp OTP template name (verifies case-test leads)" placeholder="Interakt → Templates → an approved AUTHENTICATION template with one {{1}} variable" />

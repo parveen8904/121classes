@@ -213,3 +213,26 @@ export async function auditOfficialSolutions() {
       `&replaced=${r.replaced.length}&auditfailed=${r.failed.length}&auditleft=${r.remaining}`,
   );
 }
+
+/**
+ * Approve every drafted key at once.
+ *
+ * 44 approved keys were lost to a single press this evening. Putting them back
+ * one row at a time is punishing, so this approves everything currently
+ * drafted — read them first; approving is what makes a key real.
+ */
+export async function approveAllDrafted() {
+  await assertArea(null);
+  const svc = createServiceClient();
+  const { data: rows } = await svc.from("item_solutions").select("id").eq("status", "drafted").limit(500);
+  const ids = (rows ?? []).map((r) => String(r.id));
+  if (!ids.length) redirect("/admin/solutions?approvedall=0");
+
+  await svc
+    .from("item_solutions")
+    .update({ status: "approved", approved_at: new Date().toISOString() })
+    .in("id", ids);
+
+  revalidatePath("/admin/solutions");
+  redirect(`/admin/solutions?approvedall=${ids.length}`);
+}

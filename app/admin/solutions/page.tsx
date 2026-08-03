@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import SelectAllKeys from "./SelectAllKeys";
 import PdfUpload from "../_components/PdfUpload";
-import { draftMissingKeys, auditOfficialSolutions, saveSolutionPdf, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
+import { draftMissingKeys, auditOfficialSolutions, approveAllDrafted, saveSolutionPdf, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
 
 // Answer keys for the uploaded papers, and the button that makes them real.
 // Nothing here is used by the portal or the evaluator until it is approved.
@@ -41,7 +41,7 @@ const LABEL: Record<string, string> = {
 };
 
 export default async function AdminSolutionsPage(props: {
-  searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string; removed?: string; keptapproved?: string; requeued?: string; mcqleft?: string; casesleft?: string; keypdf?: string;
+  searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string; removed?: string; keptapproved?: string; requeued?: string; approvedall?: string; mcqleft?: string; casesleft?: string; keypdf?: string;
   checked?: string; typeset?: string; replaced?: string; auditfailed?: string; auditleft?: string }>;
 }) {
   const searchParams = await props.searchParams;
@@ -116,6 +116,13 @@ export default async function AdminSolutionsPage(props: {
         </div>
       )}
 
+      {searchParams.approvedall && (
+        <div className="notice ok">
+          ✅ {searchParams.approvedall} key(s) approved — they are now what students see and what papers are
+          marked against.
+        </div>
+      )}
+
       {searchParams.removed && (
         <div className="notice ok">
           {searchParams.removed === "0"
@@ -156,6 +163,13 @@ export default async function AdminSolutionsPage(props: {
             <form action={draftMissingKeys} style={{ display: "inline-block", marginRight: 8 }}>
               <SubmitButton className="btn" savedLabel="Drafting…">✍️ Draft the missing answer keys</SubmitButton>
             </form>
+            {drafted.length > 0 && (
+              <form action={approveAllDrafted} style={{ display: "inline-block", marginRight: 8 }}>
+                <SubmitButton className="btn small" savedLabel="Approved">
+                  ✅ Approve all {drafted.length} drafted
+                </SubmitButton>
+              </form>
+            )}
             <form action={auditOfficialSolutions} style={{ display: "inline-block" }}>
               <SubmitButton className="btn small secondary" savedLabel="Checking…">
                 🔍 Check the uploaded solutions

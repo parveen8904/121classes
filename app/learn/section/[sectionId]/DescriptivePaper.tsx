@@ -24,47 +24,7 @@ function fmtClock(s: number): string {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-// Convert any image (incl. large phone photos) to a downscaled JPEG byte array.
-async function fileToJpegBytes(file: File, maxW = 1600): Promise<Uint8Array> {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = await new Promise<HTMLImageElement>((res, rej) => {
-      const i = new Image();
-      i.onload = () => res(i);
-      i.onerror = () => rej(new Error("Could not read an image"));
-      i.src = url;
-    });
-    const scale = Math.min(1, maxW / (img.width || maxW));
-    const w = Math.max(1, Math.round((img.width || maxW) * scale));
-    const h = Math.max(1, Math.round((img.height || maxW) * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Canvas not supported");
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(img, 0, 0, w, h);
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob((b) => res(b), "image/jpeg", 0.82));
-    if (!blob) throw new Error("Could not process an image");
-    return new Uint8Array(await blob.arrayBuffer());
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
 
-async function imagesToPdfBlob(files: File[]): Promise<Blob> {
-  const { PDFDocument } = await import("pdf-lib");
-  const pdf = await PDFDocument.create();
-  for (const f of files) {
-    const jpg = await fileToJpegBytes(f);
-    const img = await pdf.embedJpg(jpg);
-    const page = pdf.addPage([img.width, img.height]);
-    page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
-  }
-  const bytes = await pdf.save();
-  return new Blob([bytes as BlobPart], { type: "application/pdf" });
-}
 
 async function uploadPdf(blob: Blob, path: string): Promise<string | null> {
   const supabase = createClient();
@@ -87,36 +47,39 @@ function UploadHelp() {
         ❓ Need help uploading? Read this
       </summary>
       <div style={{ fontSize: ".85rem", lineHeight: 1.65, marginTop: 10 }}>
+        <p style={{ margin: "0 0 10px" }}>
+          <strong>Answers are accepted as ONE PDF only.</strong> Loose photographs are not accepted — your phone
+          can scan straight to PDF, and it takes a minute.
+        </p>
         <p style={{ margin: "0 0 6px", fontWeight: 700 }}>Making a PDF on your phone</p>
         <ul style={{ margin: "0 0 10px", paddingLeft: 18 }}>
           <li>
             <strong>iPhone:</strong> open <em>Notes</em>, make a new note, tap the camera icon and choose
-            <em> Scan Documents</em>. Photograph each page, tap <em>Save</em>, then share it as a PDF.
+            <em> Scan Documents</em>. Capture every page one after another, tap <em>Save</em>, then share it as a PDF.
           </li>
           <li>
-            <strong>Android:</strong> open <em>Google Drive</em>, tap <em>+</em> then <em>Scan</em>. Photograph
+            <strong>Android:</strong> open <em>Google Drive</em>, tap <em>+</em> then <em>Scan</em>. Capture
             each page, add the next with <em>+</em>, then save — Drive stores it as one PDF.
           </li>
           <li>
-            Or skip all of that and use <strong>&ldquo;I wrote on paper&rdquo;</strong> above — photograph your
-            pages here and we build the PDF for you.
+            Both apps make ONE PDF from many pages — add every page to the same scan, in order, before you save.
           </li>
         </ul>
 
-        <p style={{ margin: "0 0 6px", fontWeight: 700 }}>Photographs that can actually be marked</p>
+        <p style={{ margin: "0 0 6px", fontWeight: 700 }}>Scans that can actually be marked</p>
         <ul style={{ margin: "0 0 10px", paddingLeft: 18 }}>
           <li>Lay the page flat in good light — daylight near a window is best.</li>
           <li>Hold the phone straight above the page, not at an angle.</li>
           <li>Get all four corners in the frame, including the question numbers.</li>
-          <li>One photo per page, and add them <strong>in order</strong> — use ↑ ↓ to fix the order.</li>
-          <li>Check each photo is sharp before you submit. Blurred handwriting cannot be marked, and you
+          <li>One page per scan, added <strong>in order</strong> — check the order before you save the PDF.</li>
+          <li>Check every page is sharp before you save the PDF. Blurred handwriting cannot be marked, and you
             get one attempt.</li>
         </ul>
 
         <p style={{ margin: "0 0 6px", fontWeight: 700 }}>If something goes wrong</p>
         <ul style={{ margin: 0, paddingLeft: 18 }}>
-          <li><strong>Your file will not select:</strong> it must be a real <code>.pdf</code>. A Word file or a
-            screenshot will not do — use the photo option instead.</li>
+          <li><strong>Your file will not select:</strong> it must be a real <code>.pdf</code>. A photo, a Word file
+            or a screenshot will not do — scan it into a PDF first.</li>
           <li><strong>&ldquo;Over 20 MB&rdquo;:</strong> scan in black and white, or at a lower quality, and try
             again.</li>
           <li><strong>Upload fails or sticks:</strong> check your internet and press submit again. Nothing is
@@ -185,12 +148,10 @@ export default function DescriptivePaper(props: Props) {
     }
   }
 
-  // ---- the uploader: a PDF the student already has, OR photos we turn into
-  // one. Photographing pages suits a student writing on paper; a student who
-  // types answers or scans them already HAS a PDF, and had no way to send it.
-  const [pics, setPics] = useState<File[]>([]);
+  // ---- the uploader: ONE PDF, nothing else. Loose photographs were accepted
+  // and stitched together, which produced crooked, half-readable books and a
+  // step students did not need — every phone can scan straight to PDF.
   const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
 
   const choosePdf = (list: FileList | null) => {
@@ -198,7 +159,7 @@ export default function DescriptivePaper(props: Props) {
     if (!f) return;
     const looksPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
     if (!looksPdf) {
-      setNote(`"${f.name}" is not a PDF. Use the photo option below, or choose a .pdf file.`);
+      setNote(`"${f.name}" is not a PDF. Photographs are not accepted — scan your pages into one PDF and choose that file.`);
       if (pdfRef.current) pdfRef.current.value = "";
       return;
     }
@@ -208,33 +169,18 @@ export default function DescriptivePaper(props: Props) {
       return;
     }
     setPdfFile(f);
-    setPics([]);
     setNote(null);
   };
-  const addFiles = (list: FileList | null) => {
-    if (!list) return;
-    setPics((p) => [...p, ...Array.from(list)]);
-    if (fileRef.current) fileRef.current.value = "";
-  };
-  const move = (i: number, dir: -1 | 1) =>
-    setPics((p) => {
-      const n = [...p];
-      const j = i + dir;
-      if (j < 0 || j >= n.length) return p;
-      [n[i], n[j]] = [n[j], n[i]];
-      return n;
-    });
-  const removeAt = (i: number) => setPics((p) => p.filter((_, k) => k !== i));
 
   async function submit() {
-    if (!pdfFile && !pics.length) {
-      setNote("Add your answer PDF, or photos of your answer pages.");
+    if (!pdfFile) {
+      setNote("Choose your answer PDF first.");
       return;
     }
     setBusy(true);
-    setNote(pdfFile ? "Uploading your PDF…" : "Building your PDF…");
+    setNote("Uploading your PDF…");
     try {
-      const blob: Blob = pdfFile ?? (await imagesToPdfBlob(pics));
+      const blob: Blob = pdfFile;
       setNote("Uploading…");
       const url = await uploadPdf(blob, `descriptive/${sectionId}/${studentId}-${Date.now()}.pdf`);
       if (!url) {
@@ -246,19 +192,14 @@ export default function DescriptivePaper(props: Props) {
       const r = await submitPaperAttempt({ sectionId, fileUrl: url });
       setAttempt(r);
       if (r.rejected) {
-        // Refused, not graded — keep their pages so they can see what happened.
+        // Refused, not graded — keep the file named so they can see what happened.
         setNote(r.rejected);
         return;
       }
-      setPics([]);
       setPdfFile(null);
       setNote(null);
     } catch {
-      setNote(
-        pdfFile
-          ? "Something went wrong while sending your PDF. Please try again."
-          : "Something went wrong while making the PDF. Try with clearer photos.",
-      );
+      setNote("Something went wrong while sending your PDF. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -266,20 +207,19 @@ export default function DescriptivePaper(props: Props) {
 
   // ---- trial upload (practice) ----
   const [trialMsg, setTrialMsg] = useState<string | null>(null);
-  const [trialPics, setTrialPics] = useState<File[]>([]);
+  const [trialPdf, setTrialPdf] = useState<File | null>(null);
   const trialRef = useRef<HTMLInputElement>(null);
   async function tryUpload() {
-    if (!trialPics.length) {
-      setTrialMsg("Pick 2–3 photos of anything to test the upload.");
+    if (!trialPdf) {
+      setTrialMsg("Choose any PDF to test the upload.");
       return;
     }
-    setTrialMsg("Building & uploading a test PDF…");
+    setTrialMsg("Uploading a test PDF…");
     try {
-      const blob = await imagesToPdfBlob(trialPics);
-      const url = await uploadPdf(blob, `descriptive/trial/${studentId}-${Date.now()}.pdf`);
-      setTrialMsg(url ? "✅ It works! Your phone/computer can take photos, make a PDF and upload. You're ready." : "Upload failed — check your connection and try again.");
+      const url = await uploadPdf(trialPdf, `descriptive/trial/${studentId}-${Date.now()}.pdf`);
+      setTrialMsg(url ? "✅ It works! Your device can send a PDF to us. You're ready for the real test." : "Upload failed — check your connection and try again.");
     } catch {
-      setTrialMsg("Couldn't process those images — try normal photos (JPG/PNG).");
+      setTrialMsg("That file could not be uploaded — make sure it is a PDF.");
     }
   }
 
@@ -433,7 +373,7 @@ export default function DescriptivePaper(props: Props) {
 
         <div className="card">
           <strong>1) Your question paper</strong>
-          <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 8px" }}>Solve it on paper, then photograph each page.</p>
+          <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 8px" }}>Solve it on paper, then scan your pages into one PDF.</p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {questionPdf && <a className="btn small" href={fileHref(questionPdf, "Question paper")} target={fileTarget} rel="noopener noreferrer">📄 Open question paper</a>}
             {props.isAdmin && (
@@ -447,20 +387,21 @@ export default function DescriptivePaper(props: Props) {
         <div className="card">
           <strong>2) Upload your handwritten answers</strong>
           <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 10px" }}>
-            Send your answers either way — whichever suits how you wrote them.
+            Upload your answers as one PDF, with the pages in order.
           </p>
 
           <div style={{ background: "var(--bg-soft)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-            <strong style={{ fontSize: ".9rem" }}>📄 I already have a PDF</strong>
+            <strong style={{ fontSize: ".9rem" }}>📄 Your answers as ONE PDF</strong>
             <p className="muted" style={{ fontSize: ".8rem", margin: "2px 0 8px" }}>
-              Scanned or typed your answers? Send that file as it is.
+              Scan your pages into a single PDF, in order, then choose it here. Help below if you have not scanned
+              on your phone before.
             </p>
             <input
               ref={pdfRef}
               type="file"
               accept="application/pdf,.pdf"
               onChange={(e) => choosePdf(e.target.files)}
-              disabled={busy || pics.length > 0}
+              disabled={busy}
             />
             {pdfFile && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
@@ -478,40 +419,8 @@ export default function DescriptivePaper(props: Props) {
             )}
           </div>
 
-          <div style={{ background: "var(--bg-soft)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-            <strong style={{ fontSize: ".9rem" }}>📷 I wrote on paper</strong>
-            <p className="muted" style={{ fontSize: ".8rem", margin: "2px 0 8px" }}>
-              Photograph <em>each</em> page <strong>in order</strong>. Use ↑ ↓ to reorder. We turn them into one PDF for you.
-            </p>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              multiple
-              onChange={(e) => addFiles(e.target.files)}
-              disabled={busy || !!pdfFile}
-            />
-          </div>
-          {pics.length > 0 && (
-            <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
-              {pics.map((f, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-soft)", borderRadius: 8, padding: "6px 10px" }}>
-                  <span style={{ fontWeight: 700, minWidth: 22 }}>{i + 1}.</span>
-                  <span style={{ flex: 1, fontSize: ".82rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name || `Page ${i + 1}`}</span>
-                  <button className="btn small secondary" type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">↑</button>
-                  <button className="btn small secondary" type="button" onClick={() => move(i, 1)} disabled={i === pics.length - 1} aria-label="Move down">↓</button>
-                  <button className="btn small secondary" type="button" onClick={() => removeAt(i)} aria-label="Remove">✕</button>
-                </div>
-              ))}
-            </div>
-          )}
           <button className="btn block" type="button" disabled={busy} onClick={submit}>
-            {busy
-              ? "Please wait…"
-              : pdfFile
-                ? "Submit my PDF"
-                : `Make PDF & submit (${pics.length} page${pics.length === 1 ? "" : "s"})`}
+            {busy ? "Please wait…" : "Submit my PDF"}
           </button>
           {note && <p className="muted" style={{ fontSize: ".85rem", marginTop: 8 }}>{note}</p>}
           <UploadHelp />
@@ -532,8 +441,8 @@ export default function DescriptivePaper(props: Props) {
         <ol style={{ margin: "0 0 0 18px", padding: 0, display: "grid", gap: 6, fontSize: ".92rem" }}>
           <li>Tap <strong>Start &amp; download question paper</strong> — your timer of <strong>{totalAllowed} minutes</strong> begins the moment you start.</li>
           <li>Solve the paper on physical paper within <strong>{durationMinutes} minutes</strong>.</li>
-          <li>Send your answers <strong>either way</strong>: upload a <strong>PDF</strong> you have scanned or typed, or photograph <strong>each answer page in order</strong> and we&apos;ll combine them into one PDF for you.</li>
-          <li>Upload before the timer ends. You get the extra 10 minutes only for photographing &amp; uploading.</li>
+          <li>Scan your answer pages into <strong>one PDF, in order</strong>, and upload it. Your phone can do this — see &ldquo;How to send your answers&rdquo; below.</li>
+          <li>Upload before the timer ends. You get the extra 10 minutes only for scanning &amp; uploading.</li>
           <li>After you submit, we check your handwriting against the official solution and show your <strong>marks + where to improve</strong>.</li>
         </ol>
         {instructions && <p style={{ marginTop: 10, whiteSpace: "pre-wrap" }}><strong>Note from CA Parveen Sharma:</strong> {instructions}</p>}
@@ -558,9 +467,9 @@ export default function DescriptivePaper(props: Props) {
       <details className="card">
         <summary style={{ cursor: "pointer", fontWeight: 700 }}>🧪 First time? Practise the upload (optional, not graded)</summary>
         <p className="muted" style={{ fontSize: ".85rem", marginTop: 8 }}>
-          Take 2–3 photos of anything, then tap the button — we&apos;ll make a PDF and upload it, just so you know it works on your device before the real test. This is <strong>not</strong> your paper and isn&apos;t graded.
+          Scan or pick any PDF and tap the button, just so you know the upload works on your device before the real test. This is <strong>not</strong> your paper and isn&apos;t graded.
         </p>
-        <input ref={trialRef} type="file" accept="image/*" capture="environment" multiple onChange={(e) => setTrialPics(Array.from(e.target.files ?? []))} style={{ marginBottom: 8 }} />
+        <input ref={trialRef} type="file" accept="application/pdf,.pdf" onChange={(e) => setTrialPdf(e.target.files?.[0] ?? null)} style={{ marginBottom: 8 }} />
         <button className="btn small" type="button" onClick={tryUpload}>Try a test upload</button>
         {trialMsg && <p className="muted" style={{ fontSize: ".85rem", marginTop: 8 }}>{trialMsg}</p>}
       </details>

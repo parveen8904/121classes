@@ -44,6 +44,17 @@ export default async function ExaminerCopy(props: { params: Promise<{ attemptId:
     resolveFileUrl(cfg.paper_solution_pdf, 3600),
   ]);
 
+  // The official answers and the marking scheme an examiner needs in order to
+  // check anything. Five tests had their "solution PDF" detached (they were
+  // scanned student copies), so a PDF link alone left the examiner with
+  // nothing to check against.
+  const [{ data: keyRow }, { data: schemeRow }] = await Promise.all([
+    svc.from("item_solutions").select("solution_md, status").eq("section_id", row.section_id).maybeSingle(),
+    svc.from("marking_schemes").select("scheme").eq("section_id", row.section_id).maybeSingle(),
+  ]);
+  const officialKey = keyRow?.status === "approved" ? String(keyRow.solution_md ?? "") : "";
+  const markingScheme = schemeRow?.scheme ? String(schemeRow.scheme) : "";
+
   const report = (row.report ?? null) as DescriptiveGrade | null;
   const beingCheckedByOther = row.review_status === "checking" && row.examiner_id && row.examiner_id !== user.id && me?.role !== "admin";
   const checked = row.review_status === "checked";
@@ -79,6 +90,31 @@ export default async function ExaminerCopy(props: { params: Promise<{ attemptId:
           {solutionUrl && <a className="btn secondary" href={solutionUrl} target="_blank" rel="noopener noreferrer">✅ Suggested answers</a>}
           {annotatedUrl && <a className="btn secondary" href={annotatedUrl} target="_blank" rel="noopener noreferrer">🤖 AI-checked copy (annotated)</a>}
         </div>
+
+        {(officialKey || markingScheme) && (
+          <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+            {officialKey && (
+              <details className="card">
+                <summary style={{ cursor: "pointer", fontWeight: 700 }}>✅ Official answers (approved key)</summary>
+                <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: ".88rem", lineHeight: 1.6, marginTop: 10 }}>
+                  {officialKey}
+                </pre>
+              </details>
+            )}
+            {markingScheme && (
+              <details className="card">
+                <summary style={{ cursor: "pointer", fontWeight: 700 }}>📏 Step marking guide — how the marks were awarded</summary>
+                <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 0" }}>
+                  Built once from the official answers and used for every student on this test, so two copies with
+                  the same working get the same marks.
+                </p>
+                <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: ".88rem", lineHeight: 1.6, marginTop: 10 }}>
+                  {markingScheme}
+                </pre>
+              </details>
+            )}
+          </div>
+        )}
 
         {/* AI report */}
         {report ? (

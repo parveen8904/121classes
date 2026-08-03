@@ -108,7 +108,7 @@ const KIND_LABEL = { right: "Correct", wrong: "Wrong", partial: "Partial", tip: 
 async function buildAnnotatedPdf(
   studentPdfUrl: string,
   grade: DescriptiveGrade,
-  official?: { pdfUrl?: string | null; text?: string | null },
+  official?: { pdfUrl?: string | null; text?: string | null; scheme?: string | null },
 ): Promise<Uint8Array | null> {
   try {
     const res = await fetch(studentPdfUrl, { cache: "no-store" });
@@ -240,6 +240,35 @@ async function buildAnnotatedPdf(
       }
     } catch (e) {
       console.error("[checked_copy] official answers could not be attached", e instanceof Error ? e.message : e);
+    }
+
+    // ---- the step marking guide ----
+    // So a student can see exactly which step earned which mark, and argue
+    // with it if they think it is wrong.
+    try {
+      if (official?.scheme && official.scheme.trim()) {
+        let gp = out.addPage([595, 842]);
+        let gy = 842 - 50;
+        gp.drawText(winAnsi("How the marks were awarded"), {
+          x: 40, y: gy, size: 20, font: fontB, color: rgb(0.05, 0.58, 0.53),
+        });
+        gy -= 22;
+        gp.drawText(winAnsi("The same step-by-step scheme is used for every student on this test."), {
+          x: 40, y: gy, size: 10, font, color: rgb(0.35, 0.35, 0.35),
+        });
+        gy -= 26;
+        for (const raw of official.scheme.split("\n")) {
+          const bold = /^\s*(QUESTION|Q\s*\d|Total|TOTAL)/i.test(raw);
+          for (const l of wrapText(raw, bold ? fontB : font, 10, 515)) {
+            if (gy < 50) { gp = out.addPage([595, 842]); gy = 842 - 50; }
+            gp.drawText(l, { x: 40, y: gy, size: 10, font: bold ? fontB : font, color: rgb(0.1, 0.1, 0.1) });
+            gy -= 14;
+          }
+          if (!raw.trim()) gy -= 5;
+        }
+      }
+    } catch (e) {
+      console.error("[checked_copy] marking guide could not be attached", e instanceof Error ? e.message : e);
     }
 
     return await out.save();
@@ -420,6 +449,7 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
         const bytes = await buildAnnotatedPdf(studentUrl, graded, {
           pdfUrl: solutionUrl || null,
           text: approvedKey,
+          scheme,
         });
         if (!bytes) {
           console.error("[checked_copy] no annotated PDF produced for attempt", row.id);
@@ -526,9 +556,16 @@ export async function rebuildCheckedCopy(sectionId: string): Promise<PaperAttemp
     if (k?.status === "approved") officialText = String(k.solution_md ?? "") || null;
   }
 
+  const { data: savedScheme } = await svc
+    .from("marking_schemes")
+    .select("scheme")
+    .eq("section_id", sectionId)
+    .maybeSingle();
+
   const bytes = await buildAnnotatedPdf(studentUrl, r.report as DescriptiveGrade, {
     pdfUrl: officialPdf || null,
     text: officialText,
+    scheme: savedScheme?.scheme ? String(savedScheme.scheme) : null,
   });
   if (!bytes) return toAttempt(r);
 

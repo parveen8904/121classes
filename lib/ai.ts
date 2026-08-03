@@ -1034,7 +1034,7 @@ export async function gradeDescriptivePaper(
     const sys =
       "You are CA Parveen Sharma's examiner checking a CA descriptive (subjective) answer paper. " +
       "You are given TWO PDFs: FIRST the STUDENT'S HANDWRITTEN answer book (read the handwriting carefully — it may be untidy or rotated), and SECOND the teacher's OFFICIAL SOLUTION / answer key. " +
-      "Grade the student's answers ONLY against the official solution and standard ICAI marking conventions. Mark question-by-question, fairly but exam-strict — give partial marks for partially-correct steps. " +
+      "Grade the student's answers ONLY against the official solution and standard ICAI marking conventions. Mark MECHANICALLY, not by overall impression: for each question take the marks printed for it, break them into the individual steps the official solution shows (each working note, each entry, each format, each conclusion), award the marks for every step the student has actually produced, and add them up. Partial marks for a partially-correct step. Do not round, do not adjust a total to feel right, and never let presentation change a mark the working has earned. Marking the same answer book twice MUST give the same result. " +
       (totalMarks
         ? `The paper is out of ${totalMarks} total marks; distribute marks across the questions sensibly. `
         : "Use the marks indicated for each question in the paper/solution. ") +
@@ -1049,6 +1049,9 @@ export async function gradeDescriptivePaper(
       body: JSON.stringify({
         model,
         max_tokens: 4000,
+        // An examiner must give the SAME paper the same marks. Left at the API
+        // default, the model re-marked one answer book 9, then 13, then 12.
+        temperature: 0,
         system: sys,
         messages: [
           {
@@ -1472,7 +1475,7 @@ export async function gradeDescriptivePaperAgainstText(
     const sys =
       "You are CA Parveen Sharma's examiner checking a CA descriptive (subjective) answer paper. " +
       "You are given the STUDENT'S HANDWRITTEN answer book as a PDF, and the teacher's OFFICIAL APPROVED SOLUTION as text below. " +
-      "Grade ONLY against that solution and standard ICAI marking conventions. Mark question-by-question, fairly but exam-strict — partial marks for partially-correct steps. " +
+      "Grade ONLY against that solution and standard ICAI marking conventions. Mark MECHANICALLY, not by overall impression: for each question take the marks printed for it, break them into the individual steps the official solution shows (each working note, each entry, each format, each conclusion), award the marks for every step the student has actually produced, and add them up. Partial marks for a partially-correct step. Do not round, do not adjust a total to feel right, and never let presentation change a mark the working has earned. Marking the same answer book twice MUST give the same result. " +
       (totalMarks
         ? `The paper is out of ${totalMarks} total marks; distribute marks across the questions sensibly. `
         : "Use the marks indicated for each question in the solution. ") +
@@ -1487,6 +1490,9 @@ export async function gradeDescriptivePaperAgainstText(
       body: JSON.stringify({
         model,
         max_tokens: 4000,
+        // An examiner must give the SAME paper the same marks. Left at the API
+        // default, the model re-marked one answer book 9, then 13, then 12.
+        temperature: 0,
         system: sys,
         messages: [{
           role: "user",

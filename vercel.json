@@ -66,6 +66,10 @@
     {
       "path": "/api/cron/grade-papers",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/backup-keys",
+      "schedule": "45 */6 * * *"
     }
   ]
 }

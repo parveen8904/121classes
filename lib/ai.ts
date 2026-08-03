@@ -1093,7 +1093,9 @@ export async function buildMarkingScheme(input: {
     "conclusion — with the marks against each step. The step marks must add up exactly to the question's " +
     "marks, and the questions must add up to the paper's total.\n" +
     (input.totalMarks ? `The paper carries ${input.totalMarks} marks in total. ` : "") +
-    "Also state, in one line per question, what earns partial credit and what earns nothing.\n" +
+    "Also state, in one line per question, what earns partial credit and what earns nothing, AND name any "
+    "alternative method that a student could validly use to reach the same answer, so that a student who takes "
+    "the other route is given the same marks.\n" +
     "Write it compactly as plain text — this is a working document an examiner reads, not prose. " +
     "No preamble, no markdown fences.";
 
@@ -1179,7 +1181,7 @@ export async function gradeDescriptivePaper(
     const sys =
       "You are CA Parveen Sharma's examiner checking a CA descriptive (subjective) answer paper. " +
       "You are given TWO PDFs: FIRST the STUDENT'S HANDWRITTEN answer book (read the handwriting carefully — it may be untidy or rotated), and SECOND the teacher's OFFICIAL SOLUTION / answer key. " +
-      "Grade the student's answers ONLY against the official solution and standard ICAI marking conventions. Mark MECHANICALLY, not by overall impression: for each question take the marks printed for it, break them into the individual steps the official solution shows (each working note, each entry, each format, each conclusion), award the marks for every step the student has actually produced, and add them up. Partial marks for a partially-correct step. Do not round, do not adjust a total to feel right, and never let presentation change a mark the working has earned. Marking the same answer book twice MUST give the same result. " +
+      "Grade the student's answers against the official solution and standard ICAI marking conventions. The official solution shows ONE correct route. A student who reaches a correct result by a DIFFERENT but valid method under the applicable standard must be given the marks for it — apply your judgement and do not penalise a sound alternative treatment merely because the solution takes another route. Marks are for correct accounting, not for reproducing the solution's presentation. What you must not do is award marks for working that is actually wrong. Mark MECHANICALLY, not by overall impression: for each question take the marks printed for it, break them into the individual steps the official solution shows (each working note, each entry, each format, each conclusion), award the marks for every step the student has actually produced, and add them up. Partial marks for a partially-correct step. Do not round, do not adjust a total to feel right, and never let presentation change a mark the working has earned. Marking the same answer book twice MUST give the same result. " +
       (totalMarks
         ? `The paper is out of ${totalMarks} total marks; distribute marks across the questions sensibly. `
         : "Use the marks indicated for each question in the paper/solution. ") +
@@ -1620,7 +1622,7 @@ export async function gradeDescriptivePaperAgainstText(
     const sys =
       "You are CA Parveen Sharma's examiner checking a CA descriptive (subjective) answer paper. " +
       "You are given the STUDENT'S HANDWRITTEN answer book as a PDF, and the teacher's OFFICIAL APPROVED SOLUTION as text below. " +
-      "Grade ONLY against that solution and standard ICAI marking conventions. Mark MECHANICALLY, not by overall impression: for each question take the marks printed for it, break them into the individual steps the official solution shows (each working note, each entry, each format, each conclusion), award the marks for every step the student has actually produced, and add them up. Partial marks for a partially-correct step. Do not round, do not adjust a total to feel right, and never let presentation change a mark the working has earned. Marking the same answer book twice MUST give the same result. " +
+      "Grade against that solution and standard ICAI marking conventions. The official solution shows ONE correct route. A student who reaches a correct result by a DIFFERENT but valid method under the applicable standard must be given the marks for it — apply your judgement and do not penalise a sound alternative treatment merely because the solution takes another route. Marks are for correct accounting, not for reproducing the solution's presentation. What you must not do is award marks for working that is actually wrong. Mark MECHANICALLY, not by overall impression: for each question take the marks printed for it, break them into the individual steps the official solution shows (each working note, each entry, each format, each conclusion), award the marks for every step the student has actually produced, and add them up. Partial marks for a partially-correct step. Do not round, do not adjust a total to feel right, and never let presentation change a mark the working has earned. Marking the same answer book twice MUST give the same result. " +
       (totalMarks
         ? `The paper is out of ${totalMarks} total marks; distribute marks across the questions sensibly. `
         : "Use the marks indicated for each question in the solution. ") +

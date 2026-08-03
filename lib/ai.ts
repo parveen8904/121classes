@@ -928,6 +928,79 @@ export const ABUSE_WARNING =
   "Please keep to your studies. If it happens again, your access to this group will be withdrawn.\n\n" +
   "— CA Parveen Sharma Classes";
 
+// Is this "official solution" actually a typeset document, or somebody's
+// scanned handwritten copy?
+//
+// A student's answer book had been uploaded as the official answer on at least
+// one test — so students opening the solution saw another student's
+// handwriting instead of a proper key. Only the FIRST PAGE is sent: enough to
+// tell, and it keeps a 13 MB scan from costing 13 MB of tokens.
+export async function classifySolutionPdf(pdfUrl: string): Promise<"typeset" | "handwritten" | "unreadable"> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey || !pdfUrl) return "unreadable";
+  try {
+    const res0 = await fetch(pdfUrl, { cache: "no-store" });
+    if (!res0.ok) return "unreadable";
+    const full = new Uint8Array(await res0.arrayBuffer());
+
+    // Take page one only.
+    let firstPage: Uint8Array = full;
+    try {
+      const { PDFDocument } = await import("pdf-lib");
+      const src = await PDFDocument.load(full, { ignoreEncryption: true });
+      if (src.getPageCount() === 0) return "unreadable";
+      const out = await PDFDocument.create();
+      const [p] = await out.copyPages(src, [0]);
+      out.addPage(p);
+      firstPage = await out.save();
+    } catch {
+      return "unreadable";
+    }
+    if (firstPage.byteLength > 12 * 1024 * 1024) return "unreadable";
+
+    const system =
+      "You are shown the first page of a document that is meant to be the OFFICIAL model answer for a CA exam paper. " +
+      "Reply with ONE word and nothing else:\n" +
+      "typeset - a properly typed and formatted document: printed text, tables, headings. A publisher's or " +
+      "institute's suggested answers.\n" +
+      "handwritten - a scan or photograph of handwriting: a student's answer book, a copy written by hand, " +
+      "ruled answer-sheet paper, marks or ticks written on it.\n" +
+      "unreadable - blank, corrupt, or impossible to tell.";
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model: await fastModel(),
+        max_tokens: 8,
+        system,
+        messages: [{
+          role: "user",
+          content: [{
+            type: "document",
+            source: { type: "base64", media_type: "application/pdf", data: Buffer.from(firstPage).toString("base64") },
+          }],
+        }],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      console.error("[solution_audit] Anthropic refused", res.status, (await res.text()).slice(0, 200));
+      return "unreadable";
+    }
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("solution_audit", await fastModel(), Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    const word = String(data.content?.[0]?.text ?? "").toLowerCase();
+    if (word.includes("handwritten")) return "handwritten";
+    if (word.includes("typeset")) return "typeset";
+    return "unreadable";
+  } catch (e) {
+    console.error("[solution_audit] failed", e instanceof Error ? e.message : e);
+    return "unreadable";
+  }
+}
+
 export async function gradeDescriptivePaper(
   studentPdfUrl: string,
   solutionPdfUrl: string,

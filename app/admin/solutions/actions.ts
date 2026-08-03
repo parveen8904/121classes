@@ -184,3 +184,17 @@ export async function saveSolutionPdf(formData: FormData) {
   revalidatePath("/admin/solutions");
   redirect(`/admin/solutions?keypdf=${url ? "1" : "0"}`);
 }
+
+// Check every uploaded "official solution" and replace any that is really a
+// scanned student copy with a proper typeset key. Runs in passes; press again
+// until nothing is left to check.
+export async function auditOfficialSolutions() {
+  await assertArea(null);
+  const { auditSolutionPdfs } = await import("@/lib/solutionAudit");
+  const r = await auditSolutionPdfs(6, 230_000);
+  revalidatePath("/admin/solutions");
+  redirect(
+    `/admin/solutions?checked=${r.checked}&typeset=${r.typeset.length}` +
+      `&replaced=${r.replaced.length}&auditfailed=${r.failed.length}&auditleft=${r.remaining}`,
+  );
+}

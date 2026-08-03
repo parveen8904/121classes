@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import SelectAllKeys from "./SelectAllKeys";
 import PdfUpload from "../_components/PdfUpload";
-import { draftMissingKeys, saveSolutionPdf, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
+import { draftMissingKeys, auditOfficialSolutions, saveSolutionPdf, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
 
 // Answer keys for the uploaded papers, and the button that makes them real.
 // Nothing here is used by the portal or the evaluator until it is approved.
@@ -41,7 +41,8 @@ const LABEL: Record<string, string> = {
 };
 
 export default async function AdminSolutionsPage(props: {
-  searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string; removed?: string; requeued?: string; mcqleft?: string; casesleft?: string; keypdf?: string }>;
+  searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string; removed?: string; requeued?: string; mcqleft?: string; casesleft?: string; keypdf?: string;
+  checked?: string; typeset?: string; replaced?: string; auditfailed?: string; auditleft?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
@@ -95,6 +96,18 @@ export default async function AdminSolutionsPage(props: {
         back={{ href: "/admin", label: "Admin" }}
       />
 
+      {searchParams.checked && (
+        <div className="notice ok">
+          🔍 Checked {searchParams.checked} uploaded solution(s): {searchParams.typeset} properly typeset,{" "}
+          <strong>{searchParams.replaced} were scanned student copies</strong> and have been replaced with a typeset
+          key.
+          {Number(searchParams.auditfailed) > 0 && ` ${searchParams.auditfailed} could not be settled.`}
+          {Number(searchParams.auditleft) > 0
+            ? ` ${searchParams.auditleft} still to check — press again.`
+            : " Nothing left to check."}
+        </div>
+      )}
+
       {searchParams.keypdf && (
         <div className="notice ok">
           {searchParams.keypdf === "1"
@@ -137,8 +150,13 @@ export default async function AdminSolutionsPage(props: {
           <div><strong style={{ fontSize: "1.5rem" }}>{waiting.length}</strong><div className="muted">in the drafting queue</div></div>
           {failed.length > 0 && <div><strong style={{ fontSize: "1.5rem" }}>{failed.length}</strong><div className="muted">failed</div></div>}
           <div style={{ marginLeft: "auto" }}>
-            <form action={draftMissingKeys}>
+            <form action={draftMissingKeys} style={{ display: "inline-block", marginRight: 8 }}>
               <SubmitButton className="btn" savedLabel="Drafting…">✍️ Draft the missing answer keys</SubmitButton>
+            </form>
+            <form action={auditOfficialSolutions} style={{ display: "inline-block" }}>
+              <SubmitButton className="btn small secondary" savedLabel="Checking…">
+                🔍 Check the uploaded solutions
+              </SubmitButton>
             </form>
           </div>
         </div>

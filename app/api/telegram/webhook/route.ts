@@ -8,6 +8,8 @@ import { moderateMessageDyn } from "@/lib/moderation";
 import { tgDeleteMessage, tgSendGroupReply, tgApproveJoin, tgDeclineJoin } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
 import { groupAiAnswer } from "@/lib/groupDoubt";
+import { judgeStudentMessage } from "@/lib/ai";
+import { handleAbuse } from "@/lib/abuseEscalation";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +137,21 @@ export async function POST(req: NextRequest) {
         try {
           // Remove the tag itself so the AI sees a clean question.
           const question = mentioned ? text.replace(new RegExp(`@${botUser}`, "ig"), " ").replace(/\s+/g, " ").trim() : text;
+
+          // Abuse is dealt with before anything else: warned once, removed the
+          // second time. Tagging the bot with abuse is still abuse.
+          const judged = await judgeStudentMessage(question);
+          if (judged.kind === "abusive") {
+            const r = await handleAbuse({
+              chatId,
+              tgUserId: msg?.from?.id ? String(msg.from.id) : null,
+              text: question,
+              senderName: fromName,
+            });
+            await tgSendGroupReply(chatId, r.reply, msg.message_id);
+            return NextResponse.json({ ok: true });
+          }
+
           const body = await groupAiAnswer(subj.id, question); // toggle+cap inside
           if (body) {
             const sentId = await tgSendGroupReply(chatId, body, msg.message_id);

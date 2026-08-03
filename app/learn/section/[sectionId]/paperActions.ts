@@ -83,13 +83,24 @@ const KIND_LABEL = { right: "Correct", wrong: "Wrong", partial: "Partial", tip: 
 async function buildAnnotatedPdf(studentPdfUrl: string, grade: DescriptiveGrade): Promise<Uint8Array | null> {
   try {
     const res = await fetch(studentPdfUrl, { cache: "no-store" });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error("[checked_copy] cannot read the student's paper", res.status);
+      return null;
+    }
     const srcBytes = new Uint8Array(await res.arrayBuffer());
     const out = await PDFDocument.create();
     const font = await out.embedFont(StandardFonts.Helvetica);
     const fontB = await out.embedFont(StandardFonts.HelveticaBold);
-    const src = await PDFDocument.load(srcBytes);
+    // ignoreEncryption: phone scanner apps routinely stamp a PDF as encrypted
+    // with an empty owner password. Without this, load() throws and the whole
+    // checked copy is lost — which is exactly what happened: the marks and
+    // eight annotations existed, and the student was shown only text.
+    const src = await PDFDocument.load(srcBytes, { ignoreEncryption: true });
     const pageCount = src.getPageCount();
+    if (pageCount === 0) {
+      console.error("[checked_copy] the student's PDF has no pages");
+      return null;
+    }
     const embedded = await out.embedPdf(srcBytes, Array.from({ length: pageCount }, (_, i) => i));
 
     const byPage = new Map<number, DescriptiveGrade["annotations"]>();
@@ -152,7 +163,9 @@ async function buildAnnotatedPdf(studentPdfUrl: string, grade: DescriptiveGrade)
       for (const it of grade.concepts_to_revise) line(`• ${it}`, 10, font, rgb(0.1, 0.1, 0.1), 48);
     }
     return await out.save();
-  } catch {
+  } catch (e) {
+    // Silence here cost the founder a checked copy on his own test paper.
+    console.error("[checked_copy] could not build", e instanceof Error ? e.message : e);
     return null;
   }
 }
@@ -286,6 +299,7 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
     try {
       if (studentUrl && (graded.annotations?.length ?? 0) > 0) {
         const bytes = await buildAnnotatedPdf(studentUrl, graded);
+        if (!bytes) console.error("[checked_copy] no annotated PDF produced for attempt", row.id);
         if (bytes) {
           // The checked copy is personal too → private bucket.
           const path = `descriptive/${sectionId}/${row.id}-checked.pdf`;
@@ -293,7 +307,8 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
           if (!up.error) annotatedUrl = `secure:${path}`;
         }
       }
-    } catch {
+    } catch (e) {
+      console.error("[checked_copy] upload failed", e instanceof Error ? e.message : e);
       annotatedUrl = null;
     }
     await svc.from("descriptive_attempts").update({ status: "graded", awarded_marks: graded.awarded, total_marks: graded.total, report: graded, annotated_url: annotatedUrl, review_status: "pending" }).eq("id", row.id);

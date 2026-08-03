@@ -306,8 +306,14 @@ export default function DescriptivePaper(props: Props) {
           </p>
           {r.summary && <p style={{ margin: "4px 0 0" }}>{r.summary}</p>}
           {r.unreadable && <p className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>⚠️ Part of the handwriting was hard to read — if marks look off, ask the faculty to review.</p>}
+          {attempt.annotatedUrl && (
+            <p className="muted" style={{ fontSize: ".85rem", margin: "10px 0 0" }}>
+              Your checked copy has the marking written on your own pages — ✓ where you earned marks, ✗ where you
+              lost them, and a note beside each — with a summary sheet at the end. Read that first.
+            </p>
+          )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-            {attempt.annotatedUrl && <a className="btn small" href={fileHref(attempt.annotatedUrl, "My checked copy")} target={fileTarget} rel="noopener noreferrer">📝 My checked copy (marks &amp; notes)</a>}
+            {attempt.annotatedUrl && <a className="btn" href={fileHref(attempt.annotatedUrl, "My checked copy")} target={fileTarget} rel="noopener noreferrer">📝 Open my checked copy</a>}
             {attempt.fileUrl && <a className="btn small secondary" href={fileHref(attempt.fileUrl, "My uploaded answers")} target={fileTarget} rel="noopener noreferrer">📄 My uploaded answers</a>}
             {questionPdf && <a className="btn small secondary" href={fileHref(questionPdf, "Question paper")} target={fileTarget} rel="noopener noreferrer">📄 Question paper</a>}
             {solutionPdf && <a className="btn small secondary" href={fileHref(solutionPdf, "Official solution")} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
@@ -333,7 +339,7 @@ export default function DescriptivePaper(props: Props) {
           </div>
         )}
 
-        {r.improvements.length > 0 && (
+        {r.improvements.length > 0 && !attempt.annotatedUrl && (
           <div className="card">
             <strong>🎯 Where to improve</strong>
             <ul style={{ margin: "6px 0 0", paddingLeft: 20 }}>{r.improvements.map((x, i) => <li key={i}>{x}</li>)}</ul>

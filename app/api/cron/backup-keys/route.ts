@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSecret } from "@/lib/secrets";
+import { gzipSync } from "node:zlib";
 import { createServiceClient } from "@/lib/supabase/service";
+import { dropboxConfigured, dropboxUpload } from "@/lib/dropbox";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -86,6 +88,21 @@ export async function GET(req: NextRequest) {
   });
   if (up.error) return NextResponse.json({ ok: false, error: up.error.message }, { status: 500 });
 
+  // A second copy, outside this project entirely. A backup that lives only in
+  // the account it protects survives a delete but not a lost account.
+  let dropbox: string | null = null;
+  try {
+    if (await dropboxConfigured()) {
+      const gz = gzipSync(Buffer.from(JSON.stringify(payload)), { level: 9 });
+      const r = await dropboxUpload(`/backups/${latestName(path)}.gz`, gz);
+      dropbox = r.ok ? `sent (${(gz.length / 1048576).toFixed(1)} MB)` : `failed: ${r.error ?? "unknown"}`;
+    } else {
+      dropbox = "not connected";
+    }
+  } catch (e) {
+    dropbox = `failed: ${e instanceof Error ? e.message : "error"}`;
+  }
+
   // Keep a week of them; drop the rest.
   let removed = 0;
   try {
@@ -101,5 +118,9 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* pruning is housekeeping, never the point */ }
 
-  return NextResponse.json({ ok: true, file: path, counts, problems, prunedOldFiles: removed });
+  return NextResponse.json({ ok: true, file: path, dropbox, counts, problems, prunedOldFiles: removed });
+}
+
+function latestName(path: string): string {
+  return path.split("/").pop() ?? "backup.json";
 }

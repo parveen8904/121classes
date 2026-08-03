@@ -265,6 +265,10 @@ export default async function IntegrationsPage(
             label="Backup email — the weekly database backup is zipped and sent here"
             placeholder="use an address NOT on this domain, e.g. your Gmail"
           />
+          <KeyField name="DROPBOX_APP_KEY" label="Dropbox app key — a copy of every backup goes to your Dropbox" placeholder="dropbox.com/developers/apps → your app → App key" />
+          <KeyField name="DROPBOX_APP_SECRET" label="Dropbox app secret" placeholder="same page as the app key" />
+          <KeyField name="DROPBOX_REFRESH_TOKEN" label="Dropbox refresh token (does not expire — use this one)" placeholder="from the one-time OAuth step; ask your developer" />
+          <KeyField name="DROPBOX_ACCESS_TOKEN" label="Dropbox access token (quick start only — Dropbox expires these in hours)" placeholder="your app → Generate access token" />
           <KeyField name="INTERAKT_API_KEY" label="Interakt (WhatsApp) key" placeholder="Basic auth key" />
           <KeyField name="IVR_WEBHOOK_KEY" label="IVR webhook key (phone calls → tickets)" placeholder="any long random text — use the same in your IVR portal's webhook URL" />
           <KeyField name="WHATSAPP_OTP_TEMPLATE" label="WhatsApp OTP template name (verifies case-test leads)" placeholder="Interakt → Templates → an approved AUTHENTICATION template with one {{1}} variable" />

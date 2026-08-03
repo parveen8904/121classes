@@ -313,14 +313,26 @@ export default function DescriptivePaper(props: Props) {
         {attempt.underReview ? (
           <p className="muted">
             🧑‍🏫 Our AI has evaluated your copy and it has now gone to the faculty for a second round of
-            checking. <strong>Your marks are not shown until the faculty has reviewed them.</strong> You will see
-            your checked copy here as soon as they release it, and we will email you.
+            checking. <strong>Your marks are not shown until the faculty has reviewed them.</strong> Papers are
+            generally returned within about two hours. You will see your checked copy here as soon as it is
+            released, and we will email you.
           </p>
         ) : (
-          <p className="muted">We&apos;re checking it against the solution. This usually takes under a minute.</p>
+          <p className="muted">
+            🧑‍🏫 <strong>Your copy is under review.</strong> Our AI checks it against the official solution — that
+            takes a few minutes — and it then goes to the faculty for a second round of checking. Papers are
+            generally returned within about two hours, and we will email you when yours is ready.
+          </p>
         )}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-          {!attempt.underReview && <button className="btn small" type="button" disabled={busy} onClick={regrade}>{busy ? "Checking…" : "🔄 Show my result"}</button>}
+          {/* No "show my result" for the student: the result is not theirs to
+              pull until the faculty has released it. Kept for admins only, as
+              a way to force a re-check while testing. */}
+          {props.isAdmin && !attempt.underReview && (
+            <button className="btn small secondary" type="button" disabled={busy} onClick={regrade}>
+              {busy ? "Checking…" : "🔄 Re-check now (admin)"}
+            </button>
+          )}
           {questionPdf && <a className="btn small secondary" href={fileHref(questionPdf, "Question paper")} target={fileTarget} rel="noopener noreferrer">📄 Question paper</a>}
           {attempt.fileUrl && <a className="btn small secondary" href={fileHref(attempt.fileUrl, "My uploaded answers")} target={fileTarget} rel="noopener noreferrer">📄 My submission (unchecked)</a>}
           {solutionPdf && <a className="btn small secondary" href={fileHref(solutionPdf, "Official solution")} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}

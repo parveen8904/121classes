@@ -78,10 +78,11 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ---- 2. Student doubts — DRAFT a reply, never send it ----------------
-  // His instruction: he reads every draft before a student sees it, and
-  // moderates where needed. So the round prepares the answer from HIS OWN
-  // repository (classes, notes, question banks) and leaves it for approval.
+  // ---- 2. Student doubts — ANSWER them, and send ------------------------
+  // The founder's instruction changed: doubts are to be solved without waiting
+  // for his approval. So a genuine question is answered from HIS OWN material
+  // and delivered to the student. Chatter is left alone rather than answered
+  // earnestly, and anything abusive gets one plain warning.
   const { data: openDoubts } = await svc
     .from("page_questions")
     .select("id, question, page_path, created_at, email, user_id")
@@ -91,29 +92,57 @@ export async function GET(req: NextRequest) {
     .order("created_at")
     .limit(15);
 
+  let ignored = 0;
+  let warned = 0;
+
   for (const d of openDoubts ?? []) {
     try {
-      const [{ getRepositoryContext }, { answerDoubtFromMaterial, aiConfigured, NEED_FACULTY }] = await Promise.all([
+      const [{ getRepositoryContext }, ai, { deliverQuestionAnswer }] = await Promise.all([
         import("@/lib/repository"),
         import("@/lib/ai"),
+        import("@/lib/answerDelivery"),
       ]);
+      const { answerDoubtFromMaterial, aiConfigured, judgeStudentMessage, ABUSE_WARNING, NEED_FACULTY } = ai;
       if (!(await aiConfigured())) break;
 
-      // Answer ONLY from his material — the same repository the portal's own
-      // doubt answering uses, so a drafted reply cites his classes and notes
-      // rather than general knowledge.
       const question = String(d.question ?? "");
-      const material = await getRepositoryContext(null, 24000, { query: question });
-      // No AI disclaimer on a draft: he reads it, edits it and sends it, so the
-      // student receives it as his reply. The site already says AI assists here.
-      const draft = await answerDoubtFromMaterial(question, material, "doubt", { betaNote: false });
+      const judged = await judgeStudentMessage(question);
 
-      if (draft && draft.trim() !== NEED_FACULTY) {
-        await svc
-          .from("page_questions")
-          .update({ draft_reply: draft, drafted_at: new Date().toISOString() })
-          .eq("id", d.id);
-        drafted.push({ what: "Doubt", detail: String(d.question).slice(0, 70) });
+      if (judged.kind === "abusive") {
+        await deliverQuestionAnswer(String(d.id), ABUSE_WARNING, { markStatus: "replied" });
+        warned++;
+        continue;
+      }
+      if (judged.kind === "chatter") {
+        // Nothing to answer. Stamp it so the round does not keep picking it up,
+        // and leave it in the inbox in case a person wants to look.
+        await svc.from("page_questions").update({ drafted_at: new Date().toISOString() }).eq("id", d.id);
+        ignored++;
+        continue;
+      }
+
+      // Answer ONLY from his material — the same repository path the portal's
+      // own doubt answering uses, so a reply cites his classes and notes.
+      const material = await getRepositoryContext(null, 24000, { query: question });
+      const answer = await answerDoubtFromMaterial(question, material, "doubt", { betaNote: false });
+
+      if (answer && answer.trim() !== NEED_FACULTY) {
+        const sent = await deliverQuestionAnswer(String(d.id), answer, { markStatus: "replied" });
+        if (sent.delivered) {
+          drafted.push({ what: "Doubt answered", detail: String(d.question).slice(0, 70) });
+        } else {
+          // Written but undeliverable (no Telegram, no email) — keep it for him
+          // rather than losing the answer.
+          await svc
+            .from("page_questions")
+            .update({ draft_reply: answer, drafted_at: new Date().toISOString(), status: "open" })
+            .eq("id", d.id);
+          needsHuman.push({
+            what: "Answered but could not be delivered",
+            detail: String(d.question).slice(0, 110),
+            since: String(d.created_at),
+          });
+        }
       } else {
         needsHuman.push({
           what: "Doubt the AI would not answer",
@@ -151,15 +180,19 @@ export async function GET(req: NextRequest) {
       s ? new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" }) : "";
     await notifyFaculty(
       drafted.length
-        ? `${drafted.length} drafted repl${drafted.length === 1 ? "y" : "ies"} ready for you to approve`
+        ? `${drafted.length} doubt${drafted.length === 1 ? "" : "s"} answered and sent`
         : `${needsHuman.length} thing${needsHuman.length === 1 ? "" : "s"} need${needsHuman.length === 1 ? "s" : ""} a person`,
       [
         handled.length
           ? `Handled automatically this round (${handled.length}):\n` + handled.map((h) => `  • ${h.what}: ${h.detail}`).join("\n") + "\n"
           : "",
         drafted.length
-          ? `Replies drafted from your own repository, waiting for you to read and send (${drafted.length}) — Admin → Inbox & doubts:\n` +
+          ? `Answered from your own repository and sent to the student (${drafted.length}) — Admin → Inbox & doubts to read them:\n` +
             drafted.map((d) => `  • ${d.detail}`).join("\n") + "\n"
+          : "",
+        ignored || warned
+          ? `Left alone: ${ignored} message(s) with no real question` +
+            (warned ? `; ${warned} warned for unacceptable language` : "") + "\n"
           : "",
         needsHuman.length ? "Needs you:" : "",
         ...needsHuman.map((n) => `  • ${n.what}: ${n.detail}${n.since ? ` (since ${fmt(n.since)})` : ""}`),
@@ -172,7 +205,9 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     handled: handled.length,
-    drafted: drafted.length,
+    answered: drafted.length,
+    ignored,
+    warned,
     needsHuman: needsHuman.length,
     quiet: needsHuman.length === 0 && drafted.length === 0,
     details: { handled, drafted, needsHuman },

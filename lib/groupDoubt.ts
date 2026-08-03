@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { answerDoubtFromMaterial, aiFeatureEnabled, NEED_FACULTY } from "@/lib/ai";
+import { answerDoubtFromMaterial, aiFeatureEnabled, judgeStudentMessage, ABUSE_WARNING, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 
 // Shared brain for AI answers in the STUDY GROUPS (Telegram webhook + the
@@ -39,6 +39,13 @@ export async function groupAiAnswer(subjectId: string, question: string): Promis
   if (question.trim().length < 5) return null;
   if (!(await aiFeatureEnabled("group_doubt"))) return null;
   if (!(await budgetLeft())) return null;
+
+  // Answer real questions; say nothing to chit-chat; warn once on abuse.
+  // Replying earnestly to "Hi" and "classes" made the bot look silly and cost
+  // money on every shrug.
+  const judged = await judgeStudentMessage(question);
+  if (judged.kind === "abusive") return ABUSE_WARNING;
+  if (judged.kind === "chatter") return null;
   const material = await getRepositoryContext(subjectId, 12000, { query: question });
   const raw = await answerDoubtFromMaterial(question, material, "group_doubt");
   const answer = raw && raw.trim() !== NEED_FACULTY ? raw.trim() : null;

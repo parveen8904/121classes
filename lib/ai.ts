@@ -884,6 +884,50 @@ export async function draftSolutionFromPdf(input: {
   }
 }
 
+// Is this message worth answering at all?
+//
+// The bot was replying to "Hi", "classes", "Ka batao" and half-typed lines as
+// earnestly as to a real doubt, which trains students to treat it as a toy and
+// costs money on every shrug. It now answers a QUESTION, stays silent on
+// chatter, and warns once on anything abusive.
+export type MessageJudgement = { kind: "question" | "chatter" | "abusive"; why: string };
+
+export async function judgeStudentMessage(text: string): Promise<MessageJudgement> {
+  const t = (text ?? "").trim();
+  // Cheap certainties first — no reason to pay for a model call on "hi".
+  if (t.length < 12) return { kind: "chatter", why: "too short to be a question" };
+
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey) return { kind: "question", why: "no key — err on the side of answering" };
+
+  const system =
+    "You sort messages sent to a CA (Indian chartered accountancy) coaching study group. " +
+    "Reply with ONE word and nothing else:\n" +
+    "question - a genuine study or course question that can be answered: a topic, a standard, a sum, " +
+    "a doubt about the classes, tests, notes, schedule, fees or access. A short or badly typed question " +
+    "still counts, including Hinglish. So does a follow-up that makes sense on its own.\n" +
+    "chatter - a greeting, thanks, a single word, an unfinished sentence, small talk, or a message with " +
+    "no answerable question in it.\n" +
+    "abusive - abuse, obscenity, insults, threats, harassment, or deliberate spam.\n" +
+    "If it could reasonably be a question, say question.";
+
+  const raw = await callClaude(system, t.slice(0, 1500), 8, {
+    model: await fastModel(),
+    feature: "judge_message",
+  });
+  const word = String(raw ?? "").toLowerCase();
+  if (word.includes("abusive")) return { kind: "abusive", why: "flagged as abusive" };
+  if (word.includes("chatter")) return { kind: "chatter", why: "no answerable question" };
+  return { kind: "question", why: "answerable" };
+}
+
+// Said once, plainly, and only to the student who earned it.
+export const ABUSE_WARNING =
+  "This is a study group for CA Intermediate and CA Final students. " +
+  "Messages like that are not acceptable here.\n\n" +
+  "Please keep to your studies. If it happens again, your access to this group will be withdrawn.\n\n" +
+  "— CA Parveen Sharma Classes";
+
 export async function gradeDescriptivePaper(
   studentPdfUrl: string,
   solutionPdfUrl: string,

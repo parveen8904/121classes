@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { startPaperAttempt, submitPaperAttempt, gradePaperNow, resetMyPaperAttempt, type PaperAttempt } from "./paperActions";
+import { startPaperAttempt, submitPaperAttempt, gradePaperNow, resetMyPaperAttempt, rebuildCheckedCopy, type PaperAttempt } from "./paperActions";
 import { viaProxy } from "@/lib/fileProxy";
 
 type Props = {
@@ -318,9 +318,17 @@ export default function DescriptivePaper(props: Props) {
             {questionPdf && <a className="btn small secondary" href={fileHref(questionPdf, "Question paper")} target={fileTarget} rel="noopener noreferrer">📄 Question paper</a>}
             {solutionPdf && <a className="btn small secondary" href={fileHref(solutionPdf, "Official solution")} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
             {props.isAdmin && (
-              <button className="btn small secondary" type="button" disabled={busy} onClick={async () => { setBusy(true); try { setAttempt(await resetMyPaperAttempt(sectionId)); } finally { setBusy(false); } }}>
-                🔄 Reset (admin preview)
-              </button>
+              <>
+                {!attempt.annotatedUrl && (
+                  <button className="btn small secondary" type="button" disabled={busy}
+                    onClick={async () => { setBusy(true); try { setAttempt(await rebuildCheckedCopy(sectionId)); } finally { setBusy(false); } }}>
+                    🖍️ Rebuild my checked copy
+                  </button>
+                )}
+                <button className="btn small secondary" type="button" disabled={busy} onClick={async () => { setBusy(true); try { setAttempt(await resetMyPaperAttempt(sectionId)); } finally { setBusy(false); } }}>
+                  🔄 Reset (admin preview)
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -369,6 +377,20 @@ export default function DescriptivePaper(props: Props) {
           {!attempt.underReview && <button className="btn small" type="button" disabled={busy} onClick={regrade}>{busy ? "Checking…" : "🔄 Show my result"}</button>}
           {attempt.fileUrl && <a className="btn small secondary" href={fileHref(attempt.fileUrl, "My uploaded answers")} target={fileTarget} rel="noopener noreferrer">📄 My uploaded answers</a>}
           {solutionPdf && <a className="btn small secondary" href={fileHref(solutionPdf, "Official solution")} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
+          {/* An admin previewing a paper was stranded here: once it went to the
+              examiner desk there was no way back to take it again. */}
+          {props.isAdmin && (
+            <>
+              <button className="btn small secondary" type="button" disabled={busy}
+                onClick={async () => { setBusy(true); try { setAttempt(await rebuildCheckedCopy(sectionId)); } finally { setBusy(false); } }}>
+                🖍️ Rebuild my checked copy
+              </button>
+              <button className="btn small secondary" type="button" disabled={busy}
+                onClick={async () => { setBusy(true); try { setAttempt(await resetMyPaperAttempt(sectionId)); } finally { setBusy(false); } }}>
+                🔄 Reset (admin preview)
+              </button>
+            </>
+          )}
         </div>
       </div>
     );

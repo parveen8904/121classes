@@ -358,3 +358,47 @@ export async function gradePaperNow(sectionId: string): Promise<PaperAttempt> {
   if (r.status === "graded") return toAttempt(r);
   return gradeAndStore(r, sectionId);
 }
+
+// Rebuild the checked copy for an attempt that was graded before the annotated
+// PDF could be produced. The marking is already stored — the eight annotations
+// on the founder's own Branch paper existed all along — so nothing is re-marked
+// and no AI call is made; the copy is simply drawn from what is on record.
+export async function rebuildCheckedCopy(sectionId: string): Promise<PaperAttempt> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { status: "none" };
+  const { data: prof } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (prof?.role !== "admin") return getMyPaperAttempt(sectionId);
+
+  const svc = createServiceClient();
+  const { data: row } = await svc
+    .from("descriptive_attempts")
+    .select("*")
+    .eq("student_id", user.id)
+    .eq("section_id", sectionId)
+    .maybeSingle();
+  const r = row as Row | null;
+  if (!r?.file_url || !r.report) return toAttempt(r);
+
+  const { resolveFileUrl } = await import("@/lib/storage");
+  const studentUrl = await resolveFileUrl(r.file_url);
+  if (!studentUrl) return toAttempt(r);
+
+  const bytes = await buildAnnotatedPdf(studentUrl, r.report as DescriptiveGrade);
+  if (!bytes) return toAttempt(r);
+
+  const path = `descriptive/${sectionId}/${r.id}-checked.pdf`;
+  const up = await svc.storage.from("secure").upload(path, Buffer.from(bytes), {
+    contentType: "application/pdf",
+    upsert: true,
+  });
+  if (up.error) return toAttempt(r);
+
+  await svc
+    .from("descriptive_attempts")
+    .update({ annotated_url: `secure:${path}` })
+    .eq("id", r.id);
+
+  const { data: after } = await svc.from("descriptive_attempts").select("*").eq("id", r.id).maybeSingle();
+  return toAttempt(after as Row | null);
+}

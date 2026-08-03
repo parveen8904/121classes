@@ -76,6 +76,61 @@ async function uploadPdf(blob: Blob, path: string): Promise<string | null> {
   return `secure:${path}`;
 }
 
+// Help for a student stuck at the upload — written for someone on a phone,
+// under exam time pressure, who has never scanned anything before. It sits
+// beside the upload rather than on a help page, because that is where the
+// question is actually asked.
+function UploadHelp() {
+  return (
+    <details style={{ marginTop: 10 }}>
+      <summary className="btn as-btn small secondary" style={{ cursor: "pointer" }}>
+        ❓ Need help uploading? Read this
+      </summary>
+      <div style={{ fontSize: ".85rem", lineHeight: 1.65, marginTop: 10 }}>
+        <p style={{ margin: "0 0 6px", fontWeight: 700 }}>Making a PDF on your phone</p>
+        <ul style={{ margin: "0 0 10px", paddingLeft: 18 }}>
+          <li>
+            <strong>iPhone:</strong> open <em>Notes</em>, make a new note, tap the camera icon and choose
+            <em> Scan Documents</em>. Photograph each page, tap <em>Save</em>, then share it as a PDF.
+          </li>
+          <li>
+            <strong>Android:</strong> open <em>Google Drive</em>, tap <em>+</em> then <em>Scan</em>. Photograph
+            each page, add the next with <em>+</em>, then save — Drive stores it as one PDF.
+          </li>
+          <li>
+            Or skip all of that and use <strong>&ldquo;I wrote on paper&rdquo;</strong> above — photograph your
+            pages here and we build the PDF for you.
+          </li>
+        </ul>
+
+        <p style={{ margin: "0 0 6px", fontWeight: 700 }}>Photographs that can actually be marked</p>
+        <ul style={{ margin: "0 0 10px", paddingLeft: 18 }}>
+          <li>Lay the page flat in good light — daylight near a window is best.</li>
+          <li>Hold the phone straight above the page, not at an angle.</li>
+          <li>Get all four corners in the frame, including the question numbers.</li>
+          <li>One photo per page, and add them <strong>in order</strong> — use ↑ ↓ to fix the order.</li>
+          <li>Check each photo is sharp before you submit. Blurred handwriting cannot be marked, and you
+            get one attempt.</li>
+        </ul>
+
+        <p style={{ margin: "0 0 6px", fontWeight: 700 }}>If something goes wrong</p>
+        <ul style={{ margin: 0, paddingLeft: 18 }}>
+          <li><strong>Your file will not select:</strong> it must be a real <code>.pdf</code>. A Word file or a
+            screenshot will not do — use the photo option instead.</li>
+          <li><strong>&ldquo;Over 20 MB&rdquo;:</strong> scan in black and white, or at a lower quality, and try
+            again.</li>
+          <li><strong>Upload fails or sticks:</strong> check your internet and press submit again. Nothing is
+            lost, and your pages stay listed here.</li>
+          <li><strong>Time runs out while you are uploading:</strong> you have 10 extra minutes after the
+            solving time for exactly this. Start uploading before the clock turns red.</li>
+          <li>Still stuck? Send your pages to the faculty on WhatsApp from your subject page and say which
+            test it is — your attempt will not be lost.</li>
+        </ul>
+      </div>
+    </details>
+  );
+}
+
 export default function DescriptivePaper(props: Props) {
   const { sectionId, studentId, title, solutionPdf, durationMinutes, totalMarks, instructions } = props;
   const [attempt, setAttempt] = useState<PaperAttempt>(props.initial);
@@ -426,6 +481,7 @@ export default function DescriptivePaper(props: Props) {
                 : `Make PDF & submit (${pics.length} page${pics.length === 1 ? "" : "s"})`}
           </button>
           {note && <p className="muted" style={{ fontSize: ".85rem", marginTop: 8 }}>{note}</p>}
+          <UploadHelp />
         </div>
       </div>
     );
@@ -443,7 +499,7 @@ export default function DescriptivePaper(props: Props) {
         <ol style={{ margin: "0 0 0 18px", padding: 0, display: "grid", gap: 6, fontSize: ".92rem" }}>
           <li>Tap <strong>Start &amp; download question paper</strong> — your timer of <strong>{totalAllowed} minutes</strong> begins the moment you start.</li>
           <li>Solve the paper on physical paper within <strong>{durationMinutes} minutes</strong>.</li>
-          <li>Photograph <strong>each answer page in order</strong>, add them here (you can reorder), and we&apos;ll combine them into one PDF.</li>
+          <li>Send your answers <strong>either way</strong>: upload a <strong>PDF</strong> you have scanned or typed, or photograph <strong>each answer page in order</strong> and we&apos;ll combine them into one PDF for you.</li>
           <li>Upload before the timer ends. You get the extra 10 minutes only for photographing &amp; uploading.</li>
           <li>After you submit, we check your handwriting against the official solution and show your <strong>marks + where to improve</strong>.</li>
         </ol>
@@ -453,6 +509,16 @@ export default function DescriptivePaper(props: Props) {
           {busy ? "Starting…" : "▶️ Start & download question paper"}
         </button>
         {!questionPdf && <p className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>The question paper isn&apos;t uploaded yet — please check back soon.</p>}
+      </div>
+
+      {/* The same help as on the upload step. Better read now, in the student's
+          own time, than discovered with the clock running. */}
+      <div className="card">
+        <strong>📤 How to send your answers</strong>
+        <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0" }}>
+          Worth two minutes now — scanning for the first time with the timer running is nobody&apos;s idea of fun.
+        </p>
+        <UploadHelp />
       </div>
 
       {/* Trial — practise the upload with no timer, no marks */}

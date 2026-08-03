@@ -515,6 +515,10 @@ export async function submitPaperAttempt(input: { sectionId: string; fileUrl: st
       file_url: input.fileUrl,
       submitted_at: submittedAt,
       status: "submitted",
+      // Waiting for a person from the moment it arrives. It used to inherit
+      // the column default of "checked", so a copy the AI could not grade was
+      // born looking already-verified and never reached the examiner desk.
+      review_status: "pending",
       review_flag: alreadyMarked ? "may_already_be_marked" : null,
     })
     .eq("id", r.id);

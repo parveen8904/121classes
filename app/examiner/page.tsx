@@ -62,7 +62,9 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
       submittedAt: (r.submitted_at as string) ?? null,
       ai: r.awarded_marks as number | null,
       total: r.total_marks as number | null,
-      review: (r.review_status as string) ?? "checked",
+      // Missing means waiting, never "already done" — a copy with no review
+      // status is one nobody has looked at yet.
+      review: (r.review_status as string) ?? "pending",
       examiner: (r.examiner_name as string) ?? null,
       mine: r.examiner_id === user.id,
       checkedAt: (r.examiner_checked_at as string) ?? null,

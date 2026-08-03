@@ -106,7 +106,12 @@ async function buildAnnotatedPdf(studentPdfUrl: string, grade: DescriptiveGrade)
       console.error("[checked_copy] the student's PDF has no pages");
       return null;
     }
-    const embedded = await out.embedPdf(srcBytes, Array.from({ length: pageCount }, (_, i) => i));
+    // embedPdf(bytes) parses the file a SECOND time, internally, with pdf-lib's
+    // default options — so it threw on an encrypted PDF even though the load
+    // above was told to ignore encryption. That is why the checked copy still
+    // came back empty after the first fix. Embed the pages of the document
+    // already parsed instead of handing pdf-lib the raw bytes again.
+    const embedded = await out.embedPages(src.getPages());
 
     const byPage = new Map<number, DescriptiveGrade["annotations"]>();
     for (const a of grade.annotations ?? []) {
@@ -304,7 +309,13 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
     try {
       if (studentUrl && (graded.annotations?.length ?? 0) > 0) {
         const bytes = await buildAnnotatedPdf(studentUrl, graded);
-        if (!bytes) console.error("[checked_copy] no annotated PDF produced for attempt", row.id);
+        if (!bytes) {
+          console.error("[checked_copy] no annotated PDF produced for attempt", row.id);
+          // Say so on the record too — a silent failure here cost two rounds of
+          // "the checked copy is missing again".
+          (graded as unknown as Record<string, unknown>).checked_copy_error =
+            "the answer PDF could not be re-drawn (unreadable or protected file)";
+        }
         if (bytes) {
           // The checked copy is personal too → private bucket.
           const path = `descriptive/${sectionId}/${row.id}-checked.pdf`;

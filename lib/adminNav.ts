@@ -34,6 +34,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { icon: "🎟️", title: "Enrolment", desc: "Grant course access (single or bulk) for any tier/duration; revoke & extend.", href: "/admin/enrolment" },
       { icon: "✉️", title: "Emails", desc: "The words in every email the site sends — welcome, verify, reset, granted access, coupons, tickets. Edit any of them; see it as the student gets it.", href: "/admin/emails" },
       { icon: "📥", title: "Inbox & doubts", desc: "Student doubts and page questions — answer, assign to faculty, or let the AI draft.", href: "/admin/inbox" },
+      { icon: "🗒️", title: "Doubt log", desc: "Every question a student asked and the answer that went back, in order. Doubts are answered automatically now — this is where you read them afterwards and judge whether they are good enough.", href: "/admin/doubt-log" },
       { icon: "💬", title: "WhatsApp inbox", desc: "Messages students send to 9810079162. That number runs on Meta's Cloud API, so it cannot be opened in the WhatsApp app — read and reply here.", href: "/admin/whatsapp" },
       { icon: "🖊️", title: "Examiner desk", desc: "Verify AI-checked descriptive copies and release them to students — sortable by subject/test; copies lock while an examiner checks.", href: "/examiner" },
       { icon: "🎫", title: "Support tickets", desc: "Website & phone issues as tickets — assign, call, log activity, resolve; overdue tickets escalate automatically.", href: "/admin/tickets" },

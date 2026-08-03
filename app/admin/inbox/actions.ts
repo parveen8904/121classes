@@ -3,9 +3,11 @@
 import { requireArea } from "@/lib/adminAccess";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendTelegramMessage } from "@/lib/notify";
 import { sendTemplate } from "@/lib/emailTemplates";
+import { deliverQuestionAnswer } from "@/lib/answerDelivery";
 
 export async function markQuestionDone(formData: FormData) {
   if (!(await requireArea("inbox"))) return;
@@ -85,4 +87,36 @@ export async function replyToQuestion(formData: FormData) {
     /* best-effort log */
   }
   revalidatePath("/admin/inbox");
+}
+
+// Send every reply that is still sitting as a draft.
+//
+// Six were written under the old approve-first rule and were waiting on the
+// founder; the automatic round only picks up questions it has never touched,
+// so they would have waited for ever. This releases them in one press.
+export async function sendAllDrafts() {
+  if (!(await requireArea("inbox"))) return;
+  const svc = createServiceClient();
+  const { data: rows } = await svc
+    .from("page_questions")
+    .select("id, draft_reply")
+    .not("draft_reply", "is", null)
+    .eq("status", "open")
+    .limit(200);
+
+  let sent = 0;
+  let failed = 0;
+  for (const r of rows ?? []) {
+    const text = String(r.draft_reply ?? "").trim();
+    if (!text) continue;
+    const res = await deliverQuestionAnswer(String(r.id), text, { markStatus: "replied" });
+    if (res.delivered) {
+      await svc.from("page_questions").update({ draft_reply: null }).eq("id", r.id);
+      sent++;
+    } else {
+      failed++;
+    }
+  }
+  revalidatePath("/admin/inbox");
+  redirect(`/admin/inbox?sent=${sent}&failed=${failed}`);
 }

@@ -38,8 +38,27 @@ type Row = {
 };
 
 // ---- annotated "checked copy" builder (pdf-lib, server-side) ----
+
+// Helvetica is a WinAnsi font and pdf-lib THROWS on any character outside it
+// rather than dropping it. The marking notes are about money, so they are full
+// of "₹" — and one rupee sign killed the entire checked copy, silently. Every
+// piece of text drawn on the page goes through here first.
+function winAnsi(text: string): string {
+  return String(text ?? "")
+    .replace(/₹/g, "Rs.")
+    .replace(/[≈∼]/g, "~")
+    .replace(/[–—]/g, "-")
+    .replace(/[’‘]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[…]/g, "...")
+    .replace(/[×✕]/g, "x")
+    .replace(/[✓✔]/g, "(correct)")
+    .replace(/\u00a0/g, " ")
+    .replace(/[^\x20-\xFF]/g, "");
+}
+
 function wrapText(text: string, font: PDFFont, size: number, maxW: number): string[] {
-  const words = (text || "").split(/\s+/).filter(Boolean);
+  const words = winAnsi(text).split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let cur = "";
   for (const w of words) {
@@ -127,14 +146,14 @@ async function buildAnnotatedPdf(studentPdfUrl: string, grade: DescriptiveGrade)
       const page = out.addPage([ow + MARGIN, oh]);
       page.drawPage(ep, { x: 0, y: 0, width: ow, height: oh });
       page.drawLine({ start: { x: ow, y: 0 }, end: { x: ow, y: oh }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
-      page.drawText("Checked by CA Parveen Sharma", { x: ow + 14 * S, y: oh - 22 * S, size: 9 * S, font: fontB, color: rgb(0.05, 0.58, 0.53) });
+      page.drawText(winAnsi("Checked by CA Parveen Sharma"), { x: ow + 14 * S, y: oh - 22 * S, size: 9 * S, font: fontB, color: rgb(0.05, 0.58, 0.53) });
       const list = (byPage.get(i + 1) ?? []).slice().sort((a, b) => a.y - b.y);
       for (const a of list) {
         const yTop = oh - Math.min(0.97, Math.max(0.03, a.y)) * oh;
         drawSign(page, a.kind, ow - 26 * S, yTop);
         const cx = ow + 16 * S;
         let yy = yTop + 2 * S;
-        page.drawText(KIND_LABEL[a.kind], { x: cx, y: yy, size: 8 * S, font: fontB, color: KIND_COLOR[a.kind] });
+        page.drawText(winAnsi(KIND_LABEL[a.kind]), { x: cx, y: yy, size: 8 * S, font: fontB, color: KIND_COLOR[a.kind] });
         yy -= 11 * S;
         for (const line of wrapText(a.note, font, 8.5 * S, MARGIN - 28 * S)) {
           page.drawText(line, { x: cx, y: yy, size: 8.5 * S, font, color: rgb(0.15, 0.15, 0.15) });
@@ -149,7 +168,7 @@ async function buildAnnotatedPdf(studentPdfUrl: string, grade: DescriptiveGrade)
     let y = sh - 50;
     const line = (t: string, size: number, f: PDFFont, color = rgb(0.1, 0.1, 0.1), x = 40) => {
       for (const l of wrapText(t, f, size, sw - 80 - (x - 40))) {
-        sp.drawText(l, { x, y, size, font: f, color });
+        sp.drawText(winAnsi(l), { x, y, size, font: f, color });
         y -= size + 4;
       }
     };

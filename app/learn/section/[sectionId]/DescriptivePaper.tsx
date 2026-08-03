@@ -193,11 +193,6 @@ export default function DescriptivePaper(props: Props) {
       setNote("Submitted! Checking your paper… (this can take up to a minute)");
       const r = await submitPaperAttempt({ sectionId, fileUrl: url });
       setAttempt(r);
-      if (r.rejected) {
-        // Refused, not graded — keep the file named so they can see what happened.
-        setNote(r.rejected);
-        return;
-      }
       setPdfFile(null);
       setNote(null);
     } catch {

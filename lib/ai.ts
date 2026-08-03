@@ -1035,14 +1035,14 @@ export async function looksAlreadyChecked(pdfUrl: string): Promise<boolean> {
 
     const system =
       "You are shown the first pages of a student's handwritten CA answer book. " +
-      "Decide whether it has ALREADY BEEN MARKED by a checker. Marking means: ticks, crosses or " +
-      "underlining added in a different colour (usually red or green), marks written against answers such as " +
-      "2/5, totals or a grand total added by someone else, examiner remarks, a stamp or signature, or " +
-      "corrections written in a second hand.\n" +
-      "The student's own working, their own underlining, their own question numbers and their own neat " +
-      "presentation are NOT marking.\n" +
-      "Reply with ONE word: checked - if it carries someone else's marking. clean - if it does not. " +
-      "If you are unsure, reply clean.";
+      "Decide whether it has ALREADY BEEN MARKED by an examiner. Say checked ONLY if you can see UNMISTAKABLE " +
+      "evidence of it: marks awarded against an answer (2/5, 6 marks), a total or grand total added by someone " +
+      "else, an examiner's written remark, or a signature or stamp.\n" +
+      "Ticks, crosses, underlining, circled question numbers, corrections and neat presentation are NOT enough " +
+      "on their own — students tick and correct their own work constantly, and a page full of red pen may be " +
+      "entirely the student's. A previous evaluation ALWAYS leaves marks or a total somewhere; if you cannot " +
+      "see marks or a total, it has not been checked.\n" +
+      "Reply with ONE word: checked or clean. If there is any doubt at all, reply clean.";
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

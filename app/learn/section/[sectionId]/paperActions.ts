@@ -17,8 +17,6 @@ export type PaperAttempt = {
   total?: number | null;
   report?: DescriptiveGrade | null;
   underReview?: boolean;
-  /** Set when the uploaded book already carries somebody else's marking. */
-  rejected?: string;
   examinerRemarks?: string | null;
   examinerName?: string | null;
 };
@@ -495,26 +493,31 @@ export async function submitPaperAttempt(input: { sectionId: string; fileUrl: st
     return { ...toAttempt(r), status: "expired" };
   }
 
-  // A copy that has ALREADY been checked is refused. Students hold papers
-  // marked under the old system, and marking on top of another examiner's
-  // ticks and totals would produce nonsense. The attempt is NOT consumed —
-  // they may upload a clean copy while their time remains.
-  const { resolveFileUrl: resolveForCheck } = await import("@/lib/storage");
-  const checkUrl = await resolveForCheck(input.fileUrl, 600);
-  if (checkUrl) {
-    const { looksAlreadyChecked } = await import("@/lib/ai");
-    if (await looksAlreadyChecked(checkUrl)) {
-      return {
-        ...toAttempt(r),
-        rejected:
-          "This answer book has already been checked — it carries marks and corrections from a previous " +
-          "evaluation. We do not check a copy twice. Please upload the clean, unmarked copy of your answers.",
-      };
+  // Whether the book looks ALREADY MARKED is noted for the examiner — it never
+  // blocks the submission. The first version refused outright and turned away a
+  // clean paper on its very first use. Stopping a student from handing in their
+  // exam is far worse than an examiner seeing one copy that was checked before,
+  // so the judgement moved to the person who can actually look at it.
+  let alreadyMarked = false;
+  try {
+    const { resolveFileUrl: resolveForCheck } = await import("@/lib/storage");
+    const checkUrl = await resolveForCheck(input.fileUrl, 600);
+    if (checkUrl) {
+      const { looksAlreadyChecked } = await import("@/lib/ai");
+      alreadyMarked = await looksAlreadyChecked(checkUrl);
     }
-  }
+  } catch { /* never let this stand between a student and their submission */ }
 
   const submittedAt = new Date().toISOString();
-  await createServiceClient().from("descriptive_attempts").update({ file_url: input.fileUrl, submitted_at: submittedAt, status: "submitted" }).eq("id", r.id);
+  await createServiceClient()
+    .from("descriptive_attempts")
+    .update({
+      file_url: input.fileUrl,
+      submitted_at: submittedAt,
+      status: "submitted",
+      review_flag: alreadyMarked ? "may_already_be_marked" : null,
+    })
+    .eq("id", r.id);
   try {
     if (user.email) {
       // The answer is private — give faculty a proxied link (needs their login)

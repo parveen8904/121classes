@@ -38,6 +38,8 @@ export default async function ExaminerCopy(props: { params: Promise<{ attemptId:
     ? await svc.from("topics").select("title, subjects(title)").eq("id", section.topic_id).maybeSingle()
     : { data: null };
 
+  const alreadyMarkedFlag = (row as { review_flag?: string | null }).review_flag === "may_already_be_marked";
+
   const [answerUrl, annotatedUrl, questionUrl, solutionUrl] = await Promise.all([
     resolveFileUrl(row.file_url, 3600),
     resolveFileUrl(row.annotated_url, 3600),
@@ -85,6 +87,14 @@ export default async function ExaminerCopy(props: { params: Promise<{ attemptId:
         )}
 
         {/* The documents */}
+        {alreadyMarkedFlag && (
+          <div className="notice" style={{ background: "rgba(234,179,8,.12)", marginTop: 12 }}>
+            ⚠️ This answer book looked as though it may ALREADY carry marking from an earlier evaluation — marks,
+            a total, a remark or a signature. It has been marked anyway; please glance at it before releasing, and
+            ignore this if the copy is clean. The check is advisory and it does get this wrong.
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "14px 0" }}>
           {answerUrl && <a className="btn" href={answerUrl} target="_blank" rel="noopener noreferrer">📓 Student&apos;s answer book</a>}
           {questionUrl && <a className="btn secondary" href={questionUrl} target="_blank" rel="noopener noreferrer">❓ Question paper</a>}

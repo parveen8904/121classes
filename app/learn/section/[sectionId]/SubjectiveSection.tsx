@@ -34,6 +34,17 @@ export default async function SubjectiveSection({
   const { data: prof } = user ? await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle() : { data: null };
   const isAdmin = prof?.role === "admin";
 
+  // The official solution CA Parveen Sharma has approved. Most tests no longer
+  // have a solution PDF at all — five had theirs detached because they were
+  // scanned student copies — so a PDF link alone left the student with nothing
+  // to compare their answers against while waiting for the examiner.
+  const { data: keyRow } = await supabase
+    .from("item_solutions")
+    .select("solution_md, status")
+    .eq("section_id", section.id)
+    .maybeSingle();
+  const officialKey = keyRow?.status === "approved" ? String(keyRow.solution_md ?? "") : "";
+
   return (
     <main>
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
@@ -60,6 +71,7 @@ export default async function SubjectiveSection({
               title={section.title}
               questionPdf={paperQuestion}
               solutionPdf={(cfg.paper_solution_pdf as string) || ""}
+              officialKey={officialKey}
               durationMinutes={Number(cfg.paper_duration_minutes) || 30}
               totalMarks={Number(cfg.paper_total_marks) || 0}
               instructions={(cfg.paper_instructions as string) || ""}

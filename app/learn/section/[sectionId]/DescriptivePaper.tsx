@@ -11,6 +11,8 @@ type Props = {
   title: string;
   questionPdf: string;
   solutionPdf: string;
+  /** The approved typeset answer key, shown once a paper has been submitted. */
+  officialKey?: string;
   durationMinutes: number;
   totalMarks: number;
   instructions: string;
@@ -95,7 +97,7 @@ function UploadHelp() {
 }
 
 export default function DescriptivePaper(props: Props) {
-  const { sectionId, studentId, title, solutionPdf, durationMinutes, totalMarks, instructions } = props;
+  const { sectionId, studentId, title, solutionPdf, officialKey, durationMinutes, totalMarks, instructions } = props;
   const [attempt, setAttempt] = useState<PaperAttempt>(props.initial);
   const [questionPdf, setQuestionPdf] = useState(props.questionPdf);
   const [busy, setBusy] = useState(false);
@@ -314,13 +316,18 @@ export default function DescriptivePaper(props: Props) {
       <div className="card" style={{ border: "2px solid var(--accent)" }}>
         <h3 style={{ marginTop: 0 }}>✅ Your paper is submitted</h3>
         {attempt.underReview ? (
-          <p className="muted">🧑‍🏫 Your copy is being evaluated by the examiner. Your checked copy, marks and feedback will appear here as soon as the examiner releases them — we&apos;ll also email you.</p>
+          <p className="muted">
+            🧑‍🏫 Our AI has evaluated your copy and it has now gone to the faculty for a second round of
+            checking. <strong>Your marks are not shown until the faculty has reviewed them.</strong> You will see
+            your checked copy here as soon as they release it, and we will email you.
+          </p>
         ) : (
           <p className="muted">We&apos;re checking it against the solution. This usually takes under a minute.</p>
         )}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
           {!attempt.underReview && <button className="btn small" type="button" disabled={busy} onClick={regrade}>{busy ? "Checking…" : "🔄 Show my result"}</button>}
-          {attempt.fileUrl && <a className="btn small secondary" href={fileHref(attempt.fileUrl, "My uploaded answers")} target={fileTarget} rel="noopener noreferrer">📄 My uploaded answers</a>}
+          {questionPdf && <a className="btn small secondary" href={fileHref(questionPdf, "Question paper")} target={fileTarget} rel="noopener noreferrer">📄 Question paper</a>}
+          {attempt.fileUrl && <a className="btn small secondary" href={fileHref(attempt.fileUrl, "My uploaded answers")} target={fileTarget} rel="noopener noreferrer">📄 My submission (unchecked)</a>}
           {solutionPdf && <a className="btn small secondary" href={fileHref(solutionPdf, "Official solution")} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}
           {/* An admin previewing a paper was stranded here: once it went to the
               examiner desk there was no way back to take it again. */}
@@ -337,6 +344,15 @@ export default function DescriptivePaper(props: Props) {
             </>
           )}
         </div>
+
+        {officialKey && (
+          <details className="card" style={{ marginTop: 12 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 700 }}>✅ Official solution — read it while you wait</summary>
+            <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: ".9rem", lineHeight: 1.6, marginTop: 10 }}>
+              {officialKey}
+            </pre>
+          </details>
+        )}
       </div>
     );
   }

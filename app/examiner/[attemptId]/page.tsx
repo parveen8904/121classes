@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { resolveFileUrl } from "@/lib/storage";
-import { submitCheck, unclaimCopy } from "../actions";
+import PdfUpload from "@/app/admin/_components/PdfUpload";
+import { submitCheck, unclaimCopy, saveExaminerCopy } from "../actions";
 import SubmitButton from "@/app/components/SubmitButton";
 import type { DescriptiveGrade } from "@/lib/ai";
 
@@ -152,7 +153,22 @@ export default async function ExaminerCopy(props: { params: Promise<{ attemptId:
         )}
 
         {/* Verification form */}
+        {/* Two ways forward, said plainly: accept the AI's marking, or mark it
+            yourself and send that instead. */}
         {!checked && !beingCheckedByOther && (
+          <>
+          <form action={saveExaminerCopy} className="form-card" style={{ marginTop: 16 }}>
+            <input type="hidden" name="id" value={row.id} />
+            <strong>🖍️ Prefer to check it yourself?</strong>
+            <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 10px" }}>
+              Download the student&apos;s answer book above, annotate it the way you normally would, and upload it
+              here. Your copy replaces the AI&apos;s as the one the student receives. Releasing it is still the
+              separate step below.
+            </p>
+            <PdfUpload name="annotated_url" folder="descriptive" label="Your annotated copy (PDF)" />
+            <SubmitButton className="btn small secondary" savedLabel="Saved">💾 Save my annotated copy</SubmitButton>
+          </form>
+
           <form action={submitCheck} className="form-card" style={{ marginTop: 16 }}>
             <input type="hidden" name="id" value={row.id} />
             <strong>🖊️ Your verification</strong>
@@ -167,12 +183,15 @@ export default async function ExaminerCopy(props: { params: Promise<{ attemptId:
               </div>
             </div>
             <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 12px" }}>
-              Submitting releases the copy: the student immediately sees the marks, the AI report, the checked copy and your remarks — and gets an email.
+              Submitting releases the copy: the student immediately sees the marks, the checked copy (yours if you
+              uploaded one, otherwise the AI&apos;s) and your remarks — and gets an email. The step marking guide is
+              never sent to the student.
             </p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <SubmitButton className="btn">✅ Submit &amp; release to student</SubmitButton>
+              <SubmitButton className="btn">✅ Good to go — release to the student</SubmitButton>
             </div>
           </form>
+          </>
         )}
         {row.review_status === "checking" && row.examiner_id === user.id && (
           <form action={unclaimCopy} style={{ marginTop: 10 }}>

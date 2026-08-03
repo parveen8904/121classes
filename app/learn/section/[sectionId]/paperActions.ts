@@ -448,10 +448,12 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
     let annotatedUrl: string | null = null;
     try {
       if (studentUrl && (graded.annotations?.length ?? 0) > 0) {
+        // The student's copy carries their marked pages, the summary and the
+        // OFFICIAL ANSWERS — never the step marking guide. That is an
+        // examiner's working document and it stays on the examiner's screen.
         const bytes = await buildAnnotatedPdf(studentUrl, graded, {
           pdfUrl: solutionUrl || null,
           text: approvedKey,
-          scheme,
         });
         if (!bytes) {
           console.error("[checked_copy] no annotated PDF produced for attempt", row.id);
@@ -576,16 +578,9 @@ export async function rebuildCheckedCopy(sectionId: string): Promise<PaperAttemp
     if (k?.status === "approved") officialText = String(k.solution_md ?? "") || null;
   }
 
-  const { data: savedScheme } = await svc
-    .from("marking_schemes")
-    .select("scheme")
-    .eq("section_id", sectionId)
-    .maybeSingle();
-
   const bytes = await buildAnnotatedPdf(studentUrl, r.report as DescriptiveGrade, {
     pdfUrl: officialPdf || null,
     text: officialText,
-    scheme: savedScheme?.scheme ? String(savedScheme.scheme) : null,
   });
   if (!bytes) return toAttempt(r);
 

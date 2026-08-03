@@ -113,3 +113,41 @@ export async function submitCheck(formData: FormData) {
   revalidatePath("/examiner");
   redirect("/examiner?done=1");
 }
+
+/**
+ * The examiner checks it themselves.
+ *
+ * Until now the only choice was to accept the AI's marking and release it. An
+ * examiner who disagreed had no way to put their OWN marked copy in front of
+ * the student. They download the copy, annotate it however they normally do,
+ * and upload it here — it replaces the AI's version as the checked copy the
+ * student receives. Releasing is still a separate, deliberate press.
+ */
+export async function saveExaminerCopy(formData: FormData) {
+  const ex = await requireExaminer();
+  if (!ex) return;
+  const id = str(formData.get("id"));
+  const url = str(formData.get("annotated_url"));
+  if (!id || !url) return;
+
+  const svc = createServiceClient();
+  const { data: row } = await svc
+    .from("descriptive_attempts")
+    .select("id, examiner_id, review_status")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row || row.review_status === "checked") return;
+  if (row.examiner_id && row.examiner_id !== ex.id) {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: me } = await supabase.from("profiles").select("role").eq("id", user!.id).maybeSingle();
+    if (me?.role !== "admin") return;
+  }
+
+  await svc
+    .from("descriptive_attempts")
+    .update({ annotated_url: url, examiner_id: ex.id, examiner_name: ex.name })
+    .eq("id", id);
+
+  revalidatePath(`/examiner/${id}`);
+}

@@ -130,9 +130,32 @@ export default function DescriptivePaper(props: Props) {
     }
   }
 
-  // ---- the photo → PDF uploader ----
+  // ---- the uploader: a PDF the student already has, OR photos we turn into
+  // one. Photographing pages suits a student writing on paper; a student who
+  // types answers or scans them already HAS a PDF, and had no way to send it.
   const [pics, setPics] = useState<File[]>([]);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
+
+  const choosePdf = (list: FileList | null) => {
+    const f = list?.[0];
+    if (!f) return;
+    const looksPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+    if (!looksPdf) {
+      setNote(`"${f.name}" is not a PDF. Use the photo option below, or choose a .pdf file.`);
+      if (pdfRef.current) pdfRef.current.value = "";
+      return;
+    }
+    if (f.size > 20 * 1024 * 1024) {
+      setNote("That PDF is over 20 MB. Please send a smaller scan so it can be checked.");
+      if (pdfRef.current) pdfRef.current.value = "";
+      return;
+    }
+    setPdfFile(f);
+    setPics([]);
+    setNote(null);
+  };
   const addFiles = (list: FileList | null) => {
     if (!list) return;
     setPics((p) => [...p, ...Array.from(list)]);
@@ -149,14 +172,14 @@ export default function DescriptivePaper(props: Props) {
   const removeAt = (i: number) => setPics((p) => p.filter((_, k) => k !== i));
 
   async function submit() {
-    if (!pics.length) {
-      setNote("Add at least one photo of your answer pages first.");
+    if (!pdfFile && !pics.length) {
+      setNote("Add your answer PDF, or photos of your answer pages.");
       return;
     }
     setBusy(true);
-    setNote("Building your PDF…");
+    setNote(pdfFile ? "Uploading your PDF…" : "Building your PDF…");
     try {
-      const blob = await imagesToPdfBlob(pics);
+      const blob: Blob = pdfFile ?? (await imagesToPdfBlob(pics));
       setNote("Uploading…");
       const url = await uploadPdf(blob, `descriptive/${sectionId}/${studentId}-${Date.now()}.pdf`);
       if (!url) {
@@ -168,9 +191,14 @@ export default function DescriptivePaper(props: Props) {
       const r = await submitPaperAttempt({ sectionId, fileUrl: url });
       setAttempt(r);
       setPics([]);
+      setPdfFile(null);
       setNote(null);
     } catch {
-      setNote("Something went wrong while making the PDF. Try with clearer photos.");
+      setNote(
+        pdfFile
+          ? "Something went wrong while sending your PDF. Please try again."
+          : "Something went wrong while making the PDF. Try with clearer photos.",
+      );
     } finally {
       setBusy(false);
     }
@@ -331,9 +359,52 @@ export default function DescriptivePaper(props: Props) {
         <div className="card">
           <strong>2) Upload your handwritten answers</strong>
           <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 10px" }}>
-            Add a photo of <em>each</em> page <strong>in order</strong>. Use ↑ ↓ to reorder. We turn them into one PDF and submit it.
+            Send your answers either way — whichever suits how you wrote them.
           </p>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple onChange={(e) => addFiles(e.target.files)} style={{ marginBottom: 10 }} />
+
+          <div style={{ background: "var(--bg-soft)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+            <strong style={{ fontSize: ".9rem" }}>📄 I already have a PDF</strong>
+            <p className="muted" style={{ fontSize: ".8rem", margin: "2px 0 8px" }}>
+              Scanned or typed your answers? Send that file as it is.
+            </p>
+            <input
+              ref={pdfRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={(e) => choosePdf(e.target.files)}
+              disabled={busy || pics.length > 0}
+            />
+            {pdfFile && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                <span style={{ flex: 1, fontSize: ".82rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  📄 {pdfFile.name} ({(pdfFile.size / 1048576).toFixed(1)} MB)
+                </span>
+                <button
+                  className="btn small secondary"
+                  type="button"
+                  onClick={() => { setPdfFile(null); if (pdfRef.current) pdfRef.current.value = ""; }}
+                >
+                  ✕ Remove
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div style={{ background: "var(--bg-soft)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+            <strong style={{ fontSize: ".9rem" }}>📷 I wrote on paper</strong>
+            <p className="muted" style={{ fontSize: ".8rem", margin: "2px 0 8px" }}>
+              Photograph <em>each</em> page <strong>in order</strong>. Use ↑ ↓ to reorder. We turn them into one PDF for you.
+            </p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              multiple
+              onChange={(e) => addFiles(e.target.files)}
+              disabled={busy || !!pdfFile}
+            />
+          </div>
           {pics.length > 0 && (
             <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
               {pics.map((f, i) => (
@@ -348,7 +419,11 @@ export default function DescriptivePaper(props: Props) {
             </div>
           )}
           <button className="btn block" type="button" disabled={busy} onClick={submit}>
-            {busy ? "Please wait…" : `Make PDF & submit (${pics.length} page${pics.length === 1 ? "" : "s"})`}
+            {busy
+              ? "Please wait…"
+              : pdfFile
+                ? "Submit my PDF"
+                : `Make PDF & submit (${pics.length} page${pics.length === 1 ? "" : "s"})`}
           </button>
           {note && <p className="muted" style={{ fontSize: ".85rem", marginTop: 8 }}>{note}</p>}
         </div>

@@ -1,7 +1,8 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
 import AdminHero from "../_components/AdminHero";
-import { markQuestionDone, replyToQuestion, sendAllDrafts } from "./actions";
+import SelectAllKeys from "../solutions/SelectAllKeys";
+import { markQuestionDone, replyToQuestion, sendAllDrafts, deleteSelectedQuestions, markSelectedDone } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Inbox — Admin" };
@@ -29,7 +30,7 @@ function fmt(s: string): string {
 }
 
 export default async function AdminInbox(props: {
-  searchParams?: Promise<{ sent?: string; failed?: string }>;
+  searchParams?: Promise<{ sent?: string; failed?: string; deleted?: string; done?: string }>;
 }) {
   const searchParams = (await props.searchParams) ?? {};
   const svc = createServiceClient();
@@ -86,7 +87,34 @@ export default async function AdminInbox(props: {
         </form>
       )}
 
+      {searchParams?.deleted && (
+        <div className="notice ok">
+          {searchParams.deleted === "0" ? "Nothing was ticked." : `🗑️ ${searchParams.deleted} deleted.`}
+        </div>
+      )}
+      {searchParams?.done && (
+        <div className="notice ok">
+          {searchParams.done === "0" ? "Nothing was ticked." : `✅ ${searchParams.done} marked done.`}
+        </div>
+      )}
+
       <h2 style={{ fontSize: "1.1rem" }}>💬 Questions {openCount > 0 && <span className="badge">{openCount} open</span>}</h2>
+
+      {/* Tick several and act on them at once. The boxes below attach to this
+          form by id, so no form ends up nested inside another. */}
+      {questions.length > 0 && (
+        <form
+          id="inboxpick"
+          action={deleteSelectedQuestions}
+          className="card"
+          style={{ margin: "10px 0", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}
+        >
+          <SelectAllKeys formId="inboxpick" name="ids" />
+          <span className="muted" style={{ fontSize: ".85rem" }}>then:</span>
+          <button type="submit" className="btn small secondary" formAction={markSelectedDone}>✅ Mark the ticked ones done</button>
+          <SubmitButton className="btn small secondary" savedLabel="Deleting…">🗑️ Delete the ticked ones</SubmitButton>
+        </form>
+      )}
       {questions.length === 0 ? (
         <p className="muted">No questions yet.</p>
       ) : (
@@ -95,6 +123,14 @@ export default async function AdminInbox(props: {
             <div className="card" key={q.id} style={{ borderColor: q.status === "open" ? "var(--accent)" : "var(--border)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                 <span className="muted" style={{ fontSize: ".8rem" }}>
+                  <input
+                    type="checkbox"
+                    form="inboxpick"
+                    name="ids"
+                    value={q.id}
+                    aria-label="Select this question"
+                    style={{ marginRight: 8 }}
+                  />
                   {q.email || (q.user_id ? "Registered student" : "Anonymous")} · {fmt(q.created_at)}
                   {q.page_path ? ` · ${q.page_path}` : ""}
                 </span>

@@ -58,6 +58,10 @@
     {
       "path": "/api/cron/duty",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/release-papers",
+      "schedule": "20 * * * *"
     }
   ]
 }

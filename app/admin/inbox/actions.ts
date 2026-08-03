@@ -120,3 +120,29 @@ export async function sendAllDrafts() {
   revalidatePath("/admin/inbox");
   redirect(`/admin/inbox?sent=${sent}&failed=${failed}`);
 }
+
+/** Delete the ticked questions. Rubbish in the inbox is just noise. */
+export async function deleteSelectedQuestions(formData: FormData) {
+  if (!(await requireArea("inbox"))) return;
+  const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
+  if (!ids.length) redirect("/admin/inbox?deleted=0");
+
+  const svc = createServiceClient();
+  // Take the linked reply rows with them, so a deleted question does not leave
+  // an orphaned answer behind in the log.
+  await svc.from("page_questions").delete().in("page_path", ids.map((id) => `reply:${id}`));
+  await svc.from("page_questions").delete().in("id", ids);
+
+  revalidatePath("/admin/inbox");
+  redirect(`/admin/inbox?deleted=${ids.length}`);
+}
+
+/** Mark the ticked questions done in one go. */
+export async function markSelectedDone(formData: FormData) {
+  if (!(await requireArea("inbox"))) return;
+  const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
+  if (!ids.length) redirect("/admin/inbox?done=0");
+  await createServiceClient().from("page_questions").update({ status: "done" }).in("id", ids);
+  revalidatePath("/admin/inbox");
+  redirect(`/admin/inbox?done=${ids.length}`);
+}

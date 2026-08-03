@@ -41,7 +41,7 @@ const LABEL: Record<string, string> = {
 };
 
 export default async function AdminSolutionsPage(props: {
-  searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string; removed?: string; requeued?: string; mcqleft?: string; casesleft?: string; keypdf?: string;
+  searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string; removed?: string; keptapproved?: string; requeued?: string; mcqleft?: string; casesleft?: string; keypdf?: string;
   checked?: string; typeset?: string; replaced?: string; auditfailed?: string; auditleft?: string }>;
 }) {
   const searchParams = await props.searchParams;
@@ -120,7 +120,10 @@ export default async function AdminSolutionsPage(props: {
         <div className="notice ok">
           {searchParams.removed === "0"
             ? "Nothing was ticked, so nothing was deleted."
-            : `🗑️ ${searchParams.removed} deleted. Press “Draft keys for the tests without one” to queue any of them again.`}
+            : `🗑️ ${searchParams.removed} deleted.` +
+              (Number(searchParams.keptapproved) > 0
+                ? ` ${searchParams.keptapproved} approved key(s) were KEPT — an approved key can only be removed one at a time, on its own row.`
+                : "")}
         </div>
       )}
 

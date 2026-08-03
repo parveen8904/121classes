@@ -139,17 +139,31 @@ export async function deleteSolution(formData: FormData) {
   redirect("/admin/solutions?removed=1");
 }
 
-/** Delete every ticked key in one go. */
+/**
+ * Delete every ticked key in one go — EXCEPT the approved ones.
+ *
+ * Select-all plus delete wiped 44 approved answer keys in a single press,
+ * including five typeset keys that had just replaced scanned student copies.
+ * An approved key is the thing a student sees and the thing every paper is
+ * marked against; it is not something to lose to a tick box. Removing one is
+ * still possible, one at a time, on its own row.
+ */
 export async function deleteSelectedSolutions(formData: FormData) {
   await assertArea(null);
   const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
   if (!ids.length) redirect("/admin/solutions?removed=0");
-  await createServiceClient().from("item_solutions").delete().in("id", ids);
+
+  const svc = createServiceClient();
+  const { data: rows } = await svc.from("item_solutions").select("id, status").in("id", ids);
+  const deletable = (rows ?? []).filter((r) => r.status !== "approved").map((r) => String(r.id));
+  const kept = (rows ?? []).length - deletable.length;
+
+  if (deletable.length) await svc.from("item_solutions").delete().in("id", deletable);
   revalidatePath("/admin/solutions");
-  redirect(`/admin/solutions?removed=${ids.length}`);
+  redirect(`/admin/solutions?removed=${deletable.length}&keptapproved=${kept}`);
 }
 
-/** Put the ticked ones back in the queue to be drafted again. */
+/** Put the ticked ones back in the queue — again, never an approved key. */
 export async function requeueSelectedSolutions(formData: FormData) {
   await assertArea(null);
   const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
@@ -157,7 +171,8 @@ export async function requeueSelectedSolutions(formData: FormData) {
   await createServiceClient()
     .from("item_solutions")
     .update({ status: "queued", solution_md: null, error: null, claimed_at: null })
-    .in("id", ids);
+    .in("id", ids)
+    .neq("status", "approved");
   revalidatePath("/admin/solutions");
   redirect(`/admin/solutions?requeued=${ids.length}`);
 }

@@ -154,6 +154,10 @@ export default function DescriptivePaper(props: Props) {
   // and stitched together, which produced crooked, half-readable books and a
   // step students did not need — every phone can scan straight to PDF.
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  // How far the submission has got. The steps are known even though the upload
+  // itself reports no byte-level progress, so the bar moves with real events
+  // rather than pretending to a percentage nobody measured.
+  const [progress, setProgress] = useState(0);
   const pdfRef = useRef<HTMLInputElement>(null);
 
   const choosePdf = (list: FileList | null) => {
@@ -180,18 +184,22 @@ export default function DescriptivePaper(props: Props) {
       return;
     }
     setBusy(true);
-    setNote("Uploading your PDF…");
+    setProgress(10);
+    setNote("Preparing your file…");
     try {
       const blob: Blob = pdfFile;
-      setNote("Uploading…");
+      setProgress(35);
+      setNote("Uploading your paper…");
       const url = await uploadPdf(blob, `descriptive/${sectionId}/${studentId}-${Date.now()}.pdf`);
       if (!url) {
         setNote("Upload failed — please check your connection and try again.");
         setBusy(false);
         return;
       }
-      setNote("Submitted! Checking your paper… (this can take up to a minute)");
+      setProgress(75);
+      setNote("Submitting your paper…");
       const r = await submitPaperAttempt({ sectionId, fileUrl: url });
+      setProgress(100);
       setAttempt(r);
       setPdfFile(null);
       setNote(null);
@@ -199,6 +207,7 @@ export default function DescriptivePaper(props: Props) {
       setNote("Something went wrong while sending your PDF. Please try again.");
     } finally {
       setBusy(false);
+      setProgress(0);
     }
   }
 
@@ -445,7 +454,25 @@ export default function DescriptivePaper(props: Props) {
           <button className="btn block" type="button" disabled={busy} onClick={submit}>
             {busy ? "Please wait…" : "Submit my PDF"}
           </button>
-          {note && <p className="muted" style={{ fontSize: ".85rem", marginTop: 8 }}>{note}</p>}
+          {busy && (
+            <div style={{ marginTop: 12 }} aria-live="polite">
+              <div style={{ height: 8, borderRadius: 999, background: "var(--bg-soft)", overflow: "hidden" }}>
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${Math.max(8, progress)}%`,
+                    borderRadius: 999,
+                    background: "var(--accent)",
+                    transition: "width .5s ease",
+                  }}
+                />
+              </div>
+              <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 0" }}>
+                {note ?? "Working…"} Please keep this page open until it finishes.
+              </p>
+            </div>
+          )}
+          {!busy && note && <p className="muted" style={{ fontSize: ".85rem", marginTop: 8 }}>{note}</p>}
           <UploadHelp />
         </div>
       </div>

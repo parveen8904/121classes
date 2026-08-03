@@ -251,9 +251,10 @@ async function buildAnnotatedPdf(
 }
 
 async function paperCfg(sectionId: string) {
-  const { data } = await createServiceClient().from("sections").select("config").eq("id", sectionId).maybeSingle();
+  const { data } = await createServiceClient().from("sections").select("title, config").eq("id", sectionId).maybeSingle();
   const c = (data?.config ?? {}) as Record<string, unknown>;
   return {
+    title: String((data as { title?: string } | null)?.title ?? "Descriptive test"),
     questionPdf: (c.paper_question_pdf as string) || "",
     solutionPdf: (c.paper_solution_pdf as string) || "",
     duration: Number(c.paper_duration_minutes) || 30,
@@ -362,12 +363,50 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
     }
   }
 
+  // ---- the marking scheme: worked out once, reused for every student ----
+  // Re-deriving the mark breakdown on every submission cost a full solution
+  // PDF each time AND let the same paper score differently. The scheme is
+  // built on the first copy marked and every copy after is marked against it.
+  let scheme: string | null = null;
+  try {
+    const { data: saved } = await svc
+      .from("marking_schemes")
+      .select("scheme")
+      .eq("section_id", sectionId)
+      .maybeSingle();
+    scheme = saved?.scheme ? String(saved.scheme) : null;
+
+    if (!scheme && (solutionUrl || approvedKey)) {
+      const { buildMarkingScheme } = await import("@/lib/ai");
+      const built = await buildMarkingScheme({
+        paperTitle: String(cfg.title ?? "Descriptive test"),
+        totalMarks: cfg.totalMarks || row.total_marks || null,
+        solutionPdfUrl: solutionUrl || null,
+        solutionText: approvedKey,
+      });
+      if (built) {
+        scheme = built;
+        await svc.from("marking_schemes").upsert({
+          section_id: sectionId,
+          scheme: built,
+          total_marks: cfg.totalMarks || row.total_marks || null,
+          built_from: solutionUrl ? "solution_pdf" : "approved_key",
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[marking_scheme] could not be prepared", e instanceof Error ? e.message : e);
+  }
+
   let graded: DescriptiveGrade | null = null;
   try {
-    if (solutionUrl && studentUrl) {
+    const { gradeDescriptivePaperAgainstText } = await import("@/lib/ai");
+    if (scheme && studentUrl) {
+      // Only the answer book and a compact scheme travel to the marker.
+      graded = await gradeDescriptivePaperAgainstText(studentUrl, scheme, cfg.totalMarks || row.total_marks || null);
+    } else if (solutionUrl && studentUrl) {
       graded = await gradeDescriptivePaper(studentUrl, solutionUrl, cfg.totalMarks || row.total_marks || null);
     } else if (approvedKey && studentUrl) {
-      const { gradeDescriptivePaperAgainstText } = await import("@/lib/ai");
       graded = await gradeDescriptivePaperAgainstText(studentUrl, approvedKey, cfg.totalMarks || row.total_marks || null);
     }
   } catch {

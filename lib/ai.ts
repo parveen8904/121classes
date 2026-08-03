@@ -1001,6 +1001,82 @@ export async function classifySolutionPdf(pdfUrl: string): Promise<"typeset" | "
   }
 }
 
+// Work out ONCE how a paper's marks break down, so every student's copy is
+// marked against the same ladder — and so the whole official solution does not
+// have to be sent to the model on every single submission.
+export async function buildMarkingScheme(input: {
+  paperTitle: string;
+  totalMarks?: number | null;
+  solutionPdfUrl?: string | null;
+  solutionText?: string | null;
+}): Promise<string | null> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey) return null;
+  if ((await aiDisabledSet()).has("grade_descriptive")) return null;
+  const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
+
+  const system =
+    "You are CA Parveen Sharma's head examiner writing the MARKING SCHEME for one question paper. " +
+    "You are given the official solution. Break the paper down so that any examiner marking any student's " +
+    "answer book would award identical marks.\n" +
+    "For EVERY question: the question number, the marks it carries, and then the individual steps that earn " +
+    "those marks — each working note, each journal entry, each format or heading, each figure, each " +
+    "conclusion — with the marks against each step. The step marks must add up exactly to the question's " +
+    "marks, and the questions must add up to the paper's total.\n" +
+    (input.totalMarks ? `The paper carries ${input.totalMarks} marks in total. ` : "") +
+    "Also state, in one line per question, what earns partial credit and what earns nothing.\n" +
+    "Write it compactly as plain text — this is a working document an examiner reads, not prose. " +
+    "No preamble, no markdown fences.";
+
+  try {
+    if (input.solutionPdfUrl) {
+      const res0 = await fetch(input.solutionPdfUrl, { cache: "no-store" });
+      if (!res0.ok) return null;
+      const buf = await res0.arrayBuffer();
+      if (buf.byteLength > 20 * 1024 * 1024) return null;
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({
+          model,
+          max_tokens: 8000,
+          temperature: 0,
+          system,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: `Paper: ${input.paperTitle}\nWrite the marking scheme for this official solution.` },
+              { type: "document", source: { type: "base64", media_type: "application/pdf", data: Buffer.from(buf).toString("base64") } },
+            ],
+          }],
+        }),
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        console.error("[marking_scheme] refused", res.status, (await res.text()).slice(0, 200));
+        return null;
+      }
+      const data = await res.json();
+      const u = data.usage ?? {};
+      await logUsage("marking_scheme", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+      return String(data.content?.[0]?.text ?? "").trim() || null;
+    }
+
+    if (input.solutionText && input.solutionText.trim()) {
+      return await callClaude(
+        system,
+        `Paper: ${input.paperTitle}\n\nOfficial solution:\n${input.solutionText.slice(0, 60000)}`,
+        8000,
+        { feature: "marking_scheme" },
+      );
+    }
+    return null;
+  } catch (e) {
+    console.error("[marking_scheme] failed", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 export async function gradeDescriptivePaper(
   studentPdfUrl: string,
   solutionPdfUrl: string,

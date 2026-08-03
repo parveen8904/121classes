@@ -61,18 +61,23 @@ const KIND_COLOR = {
 } as const;
 
 // Draw a small marking sign (tick / cross / dash / dot) at (x,y) on the page.
+// Everything on the student's page is drawn at 3x. A tick the size of the
+// handwriting is invisible on a phone, which is where these are read.
+const S = 3;
+
 function drawSign(page: PDFPage, kind: keyof typeof KIND_COLOR, x: number, y: number) {
   const c = KIND_COLOR[kind];
+  const t = 2.2 * S;
   if (kind === "wrong") {
-    page.drawLine({ start: { x, y: y + 6 }, end: { x: x + 11, y: y - 5 }, thickness: 2.2, color: c });
-    page.drawLine({ start: { x: x + 11, y: y + 6 }, end: { x, y: y - 5 }, thickness: 2.2, color: c });
+    page.drawLine({ start: { x, y: y + 6 * S }, end: { x: x + 11 * S, y: y - 5 * S }, thickness: t, color: c });
+    page.drawLine({ start: { x: x + 11 * S, y: y + 6 * S }, end: { x, y: y - 5 * S }, thickness: t, color: c });
   } else if (kind === "right") {
-    page.drawLine({ start: { x, y }, end: { x: x + 4, y: y - 5 }, thickness: 2.2, color: c });
-    page.drawLine({ start: { x: x + 4, y: y - 5 }, end: { x: x + 13, y: y + 8 }, thickness: 2.2, color: c });
+    page.drawLine({ start: { x, y }, end: { x: x + 4 * S, y: y - 5 * S }, thickness: t, color: c });
+    page.drawLine({ start: { x: x + 4 * S, y: y - 5 * S }, end: { x: x + 13 * S, y: y + 8 * S }, thickness: t, color: c });
   } else if (kind === "partial") {
-    page.drawLine({ start: { x, y: y + 1 }, end: { x: x + 12, y: y + 1 }, thickness: 2.2, color: c });
+    page.drawLine({ start: { x, y: y + S }, end: { x: x + 12 * S, y: y + S }, thickness: t, color: c });
   } else {
-    page.drawCircle({ x: x + 5, y: y + 1, size: 3.2, color: c });
+    page.drawCircle({ x: x + 5 * S, y: y + S, size: 3.2 * S, color: c });
   }
 }
 
@@ -109,7 +114,7 @@ async function buildAnnotatedPdf(studentPdfUrl: string, grade: DescriptiveGrade)
       (byPage.get(p) ?? byPage.set(p, []).get(p)!).push(a);
     }
 
-    const MARGIN = 230;
+    const MARGIN = 230 * S;
     for (let i = 0; i < pageCount; i++) {
       const ep = embedded[i];
       const ow = ep.width;
@@ -117,18 +122,18 @@ async function buildAnnotatedPdf(studentPdfUrl: string, grade: DescriptiveGrade)
       const page = out.addPage([ow + MARGIN, oh]);
       page.drawPage(ep, { x: 0, y: 0, width: ow, height: oh });
       page.drawLine({ start: { x: ow, y: 0 }, end: { x: ow, y: oh }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
-      page.drawText("Checked by CA Parveen Sharma", { x: ow + 14, y: oh - 22, size: 9, font: fontB, color: rgb(0.05, 0.58, 0.53) });
+      page.drawText("Checked by CA Parveen Sharma", { x: ow + 14 * S, y: oh - 22 * S, size: 9 * S, font: fontB, color: rgb(0.05, 0.58, 0.53) });
       const list = (byPage.get(i + 1) ?? []).slice().sort((a, b) => a.y - b.y);
       for (const a of list) {
         const yTop = oh - Math.min(0.97, Math.max(0.03, a.y)) * oh;
-        drawSign(page, a.kind, ow - 26, yTop);
-        const cx = ow + 16;
-        let yy = yTop + 2;
-        page.drawText(KIND_LABEL[a.kind], { x: cx, y: yy, size: 8, font: fontB, color: KIND_COLOR[a.kind] });
-        yy -= 11;
-        for (const line of wrapText(a.note, font, 8.5, MARGIN - 28)) {
-          page.drawText(line, { x: cx, y: yy, size: 8.5, font, color: rgb(0.15, 0.15, 0.15) });
-          yy -= 10.5;
+        drawSign(page, a.kind, ow - 26 * S, yTop);
+        const cx = ow + 16 * S;
+        let yy = yTop + 2 * S;
+        page.drawText(KIND_LABEL[a.kind], { x: cx, y: yy, size: 8 * S, font: fontB, color: KIND_COLOR[a.kind] });
+        yy -= 11 * S;
+        for (const line of wrapText(a.note, font, 8.5 * S, MARGIN - 28 * S)) {
+          page.drawText(line, { x: cx, y: yy, size: 8.5 * S, font, color: rgb(0.15, 0.15, 0.15) });
+          yy -= 10.5 * S;
         }
       }
     }

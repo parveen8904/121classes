@@ -83,12 +83,37 @@ export async function GET(req: NextRequest) {
   // for his approval. So a genuine question is answered from HIS OWN material
   // and delivered to the student. Chatter is left alone rather than answered
   // earnestly, and anything abusive gets one plain warning.
+  // ONLY today's questions. A student who asked in July has moved on — an
+  // answer arriving weeks later is worse than no answer, and it reads as if
+  // nobody was paying attention. Anything older is stamped so it is not picked
+  // up again, and left in the inbox for a person to close.
+  const FRESH_HOURS = 24;
+  const freshSince = new Date(Date.now() - FRESH_HOURS * 3600_000).toISOString();
+
+  const { data: staleOpen } = await svc
+    .from("page_questions")
+    .select("id")
+    .eq("status", "open")
+    .neq("page_path", "login-help")
+    .is("drafted_at", null)
+    .lt("created_at", freshSince)
+    .limit(200);
+  let tooOld = 0;
+  if (staleOpen?.length) {
+    await svc
+      .from("page_questions")
+      .update({ drafted_at: new Date().toISOString() })
+      .in("id", staleOpen.map((r) => r.id));
+    tooOld = staleOpen.length;
+  }
+
   const { data: openDoubts } = await svc
     .from("page_questions")
     .select("id, question, page_path, created_at, email, user_id")
     .eq("status", "open")
     .neq("page_path", "login-help")
     .is("drafted_at", null)
+    .gte("created_at", freshSince)
     .order("created_at")
     .limit(15);
 
@@ -190,8 +215,9 @@ export async function GET(req: NextRequest) {
           ? `Answered from your own repository and sent to the student (${drafted.length}) — Admin → Inbox & doubts to read them:\n` +
             drafted.map((d) => `  • ${d.detail}`).join("\n") + "\n"
           : "",
-        ignored || warned
+        ignored || warned || tooOld
           ? `Left alone: ${ignored} message(s) with no real question` +
+            (tooOld ? `; ${tooOld} older than a day, not answered` : "") +
             (warned ? `; ${warned} warned for unacceptable language` : "") + "\n"
           : "",
         needsHuman.length ? "Needs you:" : "",
@@ -208,6 +234,7 @@ export async function GET(req: NextRequest) {
     answered: drafted.length,
     ignored,
     warned,
+    tooOld,
     needsHuman: needsHuman.length,
     quiet: needsHuman.length === 0 && drafted.length === 0,
     details: { handled, drafted, needsHuman },

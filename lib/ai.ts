@@ -1004,6 +1004,75 @@ export async function classifySolutionPdf(pdfUrl: string): Promise<"typeset" | "
 // Work out ONCE how a paper's marks break down, so every student's copy is
 // marked against the same ladder — and so the whole official solution does not
 // have to be sent to the model on every single submission.
+// Has this answer book ALREADY been checked by somebody?
+//
+// Students hold copies marked under the old system, and a copy that comes back
+// round would be marked a second time — the AI would see the previous
+// examiner's ticks and totals and mark on top of them. Only the first two
+// pages are read: marking shows up immediately if it is there.
+export async function looksAlreadyChecked(pdfUrl: string): Promise<boolean> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey || !pdfUrl) return false;
+  try {
+    const res0 = await fetch(pdfUrl, { cache: "no-store" });
+    if (!res0.ok) return false;
+    const full = new Uint8Array(await res0.arrayBuffer());
+
+    let head: Uint8Array = full;
+    try {
+      const { PDFDocument } = await import("pdf-lib");
+      const src = await PDFDocument.load(full, { ignoreEncryption: true });
+      const n = Math.min(2, src.getPageCount());
+      if (n === 0) return false;
+      const out = await PDFDocument.create();
+      const pages = await out.copyPages(src, Array.from({ length: n }, (_, i) => i));
+      for (const pg of pages) out.addPage(pg);
+      head = await out.save();
+    } catch {
+      return false; // unreadable — let the normal marking path deal with it
+    }
+    if (head.byteLength > 12 * 1024 * 1024) return false;
+
+    const system =
+      "You are shown the first pages of a student's handwritten CA answer book. " +
+      "Decide whether it has ALREADY BEEN MARKED by a checker. Marking means: ticks, crosses or " +
+      "underlining added in a different colour (usually red or green), marks written against answers such as " +
+      "2/5, totals or a grand total added by someone else, examiner remarks, a stamp or signature, or " +
+      "corrections written in a second hand.\n" +
+      "The student's own working, their own underlining, their own question numbers and their own neat " +
+      "presentation are NOT marking.\n" +
+      "Reply with ONE word: checked - if it carries someone else's marking. clean - if it does not. " +
+      "If you are unsure, reply clean.";
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model: await fastModel(),
+        max_tokens: 8,
+        temperature: 0,
+        system,
+        messages: [{
+          role: "user",
+          content: [{
+            type: "document",
+            source: { type: "base64", media_type: "application/pdf", data: Buffer.from(head).toString("base64") },
+          }],
+        }],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("already_checked", await fastModel(), Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    return String(data.content?.[0]?.text ?? "").toLowerCase().includes("checked");
+  } catch (e) {
+    console.error("[already_checked] failed", e instanceof Error ? e.message : e);
+    return false; // never block a genuine submission because a check errored
+  }
+}
+
 export async function buildMarkingScheme(input: {
   paperTitle: string;
   totalMarks?: number | null;

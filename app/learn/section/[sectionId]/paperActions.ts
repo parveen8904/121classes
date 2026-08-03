@@ -17,6 +17,8 @@ export type PaperAttempt = {
   total?: number | null;
   report?: DescriptiveGrade | null;
   underReview?: boolean;
+  /** Set when the uploaded book already carries somebody else's marking. */
+  rejected?: string;
   examinerRemarks?: string | null;
   examinerName?: string | null;
 };
@@ -489,6 +491,24 @@ export async function submitPaperAttempt(input: { sectionId: string; fileUrl: st
   if (new Date(r.deadline_at).getTime() < Date.now()) {
     await createServiceClient().from("descriptive_attempts").update({ status: "expired" }).eq("id", r.id);
     return { ...toAttempt(r), status: "expired" };
+  }
+
+  // A copy that has ALREADY been checked is refused. Students hold papers
+  // marked under the old system, and marking on top of another examiner's
+  // ticks and totals would produce nonsense. The attempt is NOT consumed —
+  // they may upload a clean copy while their time remains.
+  const { resolveFileUrl: resolveForCheck } = await import("@/lib/storage");
+  const checkUrl = await resolveForCheck(input.fileUrl, 600);
+  if (checkUrl) {
+    const { looksAlreadyChecked } = await import("@/lib/ai");
+    if (await looksAlreadyChecked(checkUrl)) {
+      return {
+        ...toAttempt(r),
+        rejected:
+          "This answer book has already been checked — it carries marks and corrections from a previous " +
+          "evaluation. We do not check a copy twice. Please upload the clean, unmarked copy of your answers.",
+      };
+    }
   }
 
   const submittedAt = new Date().toISOString();

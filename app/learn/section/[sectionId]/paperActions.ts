@@ -80,9 +80,10 @@ const KIND_COLOR = {
 } as const;
 
 // Draw a small marking sign (tick / cross / dash / dot) at (x,y) on the page.
-// Everything on the student's page is drawn at 3x. A tick the size of the
-// handwriting is invisible on a phone, which is where these are read.
-const S = 3;
+// Everything on the student's page is drawn at this scale. 1x was invisible on
+// a phone; 3x swamped the handwriting underneath. 2x is the settled size —
+// change this one number to resize every mark, note and label together.
+const S = 2;
 
 function drawSign(page: PDFPage, kind: keyof typeof KIND_COLOR, x: number, y: number) {
   const c = KIND_COLOR[kind];
@@ -104,7 +105,11 @@ const KIND_LABEL = { right: "Correct", wrong: "Wrong", partial: "Partial", tip: 
 
 // Returns the student's pages with marking signs + margin notes, plus a final
 // summary page. null if it can't be built (caller falls back to the plain copy).
-async function buildAnnotatedPdf(studentPdfUrl: string, grade: DescriptiveGrade): Promise<Uint8Array | null> {
+async function buildAnnotatedPdf(
+  studentPdfUrl: string,
+  grade: DescriptiveGrade,
+  official?: { pdfUrl?: string | null; text?: string | null },
+): Promise<Uint8Array | null> {
   try {
     const res = await fetch(studentPdfUrl, { cache: "no-store" });
     if (!res.ok) {
@@ -191,6 +196,52 @@ async function buildAnnotatedPdf(studentPdfUrl: string, grade: DescriptiveGrade)
       line("Concepts to revise", 12, fontB, rgb(0.05, 0.58, 0.53));
       for (const it of grade.concepts_to_revise) line(`• ${it}`, 10, font, rgb(0.1, 0.1, 0.1), 48);
     }
+    // ---- the official answers, bound into the same file ----
+    // A student reading their marks wants the model answer beside them, not on
+    // another screen. Best-effort: a failure here must never cost the marking.
+    try {
+      if (official?.pdfUrl) {
+        const solRes = await fetch(official.pdfUrl, { cache: "no-store" });
+        if (solRes.ok) {
+          const solBytes = new Uint8Array(await solRes.arrayBuffer());
+          if (solBytes.byteLength < 20 * 1024 * 1024) {
+            const solDoc = await PDFDocument.load(solBytes, { ignoreEncryption: true });
+            const divider = out.addPage([595, 842]);
+            divider.drawText(winAnsi("Official answers"), {
+              x: 40, y: 780, size: 20, font: fontB, color: rgb(0.05, 0.58, 0.53),
+            });
+            divider.drawText(winAnsi("Compare your answers above with these."), {
+              x: 40, y: 752, size: 11, font, color: rgb(0.3, 0.3, 0.3),
+            });
+            const solPages = await out.embedPages(solDoc.getPages());
+            for (const sp2 of solPages) {
+              const pg = out.addPage([sp2.width, sp2.height]);
+              pg.drawPage(sp2, { x: 0, y: 0, width: sp2.width, height: sp2.height });
+            }
+          }
+        }
+      } else if (official?.text && official.text.trim()) {
+        // The approved typeset key — laid out as readable pages.
+        let page2 = out.addPage([595, 842]);
+        let yy = 842 - 50;
+        page2.drawText(winAnsi("Official answers"), {
+          x: 40, y: yy, size: 20, font: fontB, color: rgb(0.05, 0.58, 0.53),
+        });
+        yy -= 30;
+        for (const raw of official.text.split("\n")) {
+          const bold = /^\s*(QUESTION|Q\d|ANSWER|Working Note|WORKING)/i.test(raw);
+          for (const l of wrapText(raw, bold ? fontB : font, 10.5, 515)) {
+            if (yy < 50) { page2 = out.addPage([595, 842]); yy = 842 - 50; }
+            page2.drawText(l, { x: 40, y: yy, size: 10.5, font: bold ? fontB : font, color: rgb(0.1, 0.1, 0.1) });
+            yy -= 15;
+          }
+          if (!raw.trim()) yy -= 6;
+        }
+      }
+    } catch (e) {
+      console.error("[checked_copy] official answers could not be attached", e instanceof Error ? e.message : e);
+    }
+
     return await out.save();
   } catch (e) {
     // Silence here cost the founder a checked copy on his own test paper.
@@ -327,7 +378,10 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
     let annotatedUrl: string | null = null;
     try {
       if (studentUrl && (graded.annotations?.length ?? 0) > 0) {
-        const bytes = await buildAnnotatedPdf(studentUrl, graded);
+        const bytes = await buildAnnotatedPdf(studentUrl, graded, {
+          pdfUrl: solutionUrl || null,
+          text: approvedKey,
+        });
         if (!bytes) {
           console.error("[checked_copy] no annotated PDF produced for attempt", row.id);
           // Say so on the record too — a silent failure here cost two rounds of
@@ -419,7 +473,24 @@ export async function rebuildCheckedCopy(sectionId: string): Promise<PaperAttemp
   const studentUrl = await resolveFileUrl(r.file_url);
   if (!studentUrl) return toAttempt(r);
 
-  const bytes = await buildAnnotatedPdf(studentUrl, r.report as DescriptiveGrade);
+  // The same official answers a fresh submission would get: the solution PDF
+  // if the test has one, otherwise the key CA Parveen Sharma has approved.
+  const cfg = await paperCfg(sectionId);
+  const officialPdf = await resolveFileUrl(cfg.solutionPdf, 900);
+  let officialText: string | null = null;
+  if (!officialPdf) {
+    const { data: k } = await svc
+      .from("item_solutions")
+      .select("solution_md, status")
+      .eq("section_id", sectionId)
+      .maybeSingle();
+    if (k?.status === "approved") officialText = String(k.solution_md ?? "") || null;
+  }
+
+  const bytes = await buildAnnotatedPdf(studentUrl, r.report as DescriptiveGrade, {
+    pdfUrl: officialPdf || null,
+    text: officialText,
+  });
   if (!bytes) return toAttempt(r);
 
   const path = `descriptive/${sectionId}/${r.id}-checked.pdf`;

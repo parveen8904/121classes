@@ -3,8 +3,13 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-// Upload a PDF to the public "media" bucket and keep its URL in a named field
-// (so the surrounding server-action form posts it). Also accepts a pasted URL.
+// Upload a PDF and keep its reference in a named field (so the surrounding
+// server-action form posts it). Also accepts a pasted URL.
+//
+// Uploads go to the PRIVATE "secure" bucket and are stored as "secure:<path>".
+// They used to go to the public bucket, which meant every newly uploaded note,
+// paper or answer key was downloadable by anyone holding the link — quietly
+// undoing the migration that moved the paid material out of public view.
 export default function PdfUpload({
   name,
   defaultValue = "",
@@ -24,6 +29,16 @@ export default function PdfUpload({
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Some PDFs reach the browser with no media type at all (or an odd one),
+    // and an accept="application/pdf" filter then greys them out in the file
+    // dialog so they cannot even be chosen. Anything can be picked; the check
+    // happens here, where the reason can actually be explained.
+    const looksPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    if (!looksPdf) {
+      alert(`"${file.name}" is not a PDF. Please choose a .pdf file, or paste a link to one in the box below.`);
+      e.target.value = "";
+      return;
+    }
     setBusy(true);
     try {
       // A page left open for a while holds an EXPIRED auth token — uploads then
@@ -46,10 +61,9 @@ export default function PdfUpload({
       // reliable. Only big files (e.g. full books) use Cloudflare R2.
       if (MB <= 50) {
         const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
-        const { error } = await withTimeout(supabase.storage.from("media").upload(path, file, { upsert: false, contentType: ct }));
+        const { error } = await withTimeout(supabase.storage.from("secure").upload(path, file, { upsert: false, contentType: ct }));
         if (error) { alert("Upload failed: " + error.message); return; }
-        const { data } = supabase.storage.from("media").getPublicUrl(path);
-        setUrl(data.publicUrl);
+        setUrl(`secure:${path}`);
         setFileName(file.name);
         return;
       }
@@ -82,11 +96,16 @@ export default function PdfUpload({
         <span style={{ fontSize: "1.6rem" }}>{url ? "📄" : "➕"}</span>
         <label className="btn small secondary" style={{ cursor: "pointer", margin: 0 }}>
           {busy ? "Uploading…" : url ? "Replace PDF" : "Upload PDF"}
-          <input type="file" accept="application/pdf,.pdf" onChange={onFile} style={{ display: "none" }} disabled={busy} />
+          <input type="file" onChange={onFile} style={{ display: "none" }} disabled={busy} />
         </label>
         {url && (
           <>
-            <a className="btn small secondary" href={url} target="_blank" rel="noopener noreferrer">
+            <a
+              className="btn small secondary"
+              href={url.startsWith("secure:") ? `/api/file?u=${encodeURIComponent(url)}` : url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               View
             </a>
             <button type="button" className="btn small secondary" onClick={() => { setUrl(""); setFileName(""); }}>

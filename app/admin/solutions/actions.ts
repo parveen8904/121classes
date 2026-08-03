@@ -161,3 +161,26 @@ export async function requeueSelectedSolutions(formData: FormData) {
   revalidatePath("/admin/solutions");
   redirect(`/admin/solutions?requeued=${ids.length}`);
 }
+
+// Attach YOUR OWN answer key as a PDF, instead of using the AI draft.
+//
+// The page could only ever approve drafted text, so a key that already existed
+// as a file had nowhere to go. A test that has a solution PDF is marked against
+// that PDF, and the draft is left alone — the file wins, which is the point.
+export async function saveSolutionPdf(formData: FormData) {
+  await assertArea(null);
+  const sectionId = str(formData.get("section_id"));
+  const url = str(formData.get("paper_solution_pdf"));
+  if (!sectionId) return;
+
+  const svc = createServiceClient();
+  const { data: sec } = await svc.from("sections").select("config").eq("id", sectionId).maybeSingle();
+  if (!sec) return;
+
+  const cfg = { ...((sec.config ?? {}) as Record<string, unknown>) };
+  cfg.paper_solution_pdf = url || null;
+  await svc.from("sections").update({ config: cfg }).eq("id", sectionId);
+
+  revalidatePath("/admin/solutions");
+  redirect(`/admin/solutions?keypdf=${url ? "1" : "0"}`);
+}

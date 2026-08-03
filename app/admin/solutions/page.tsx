@@ -2,7 +2,8 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import SelectAllKeys from "./SelectAllKeys";
-import { draftMissingKeys, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
+import PdfUpload from "../_components/PdfUpload";
+import { draftMissingKeys, saveSolutionPdf, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
 
 // Answer keys for the uploaded papers, and the button that makes them real.
 // Nothing here is used by the portal or the evaluator until it is approved.
@@ -26,6 +27,7 @@ type Row = {
   sections: {
     title: string;
     question_pdf: string | null;
+    solution_pdf: string | null;
     topics: { subjects: { title: string } | null } | null;
   } | null;
 };
@@ -39,7 +41,7 @@ const LABEL: Record<string, string> = {
 };
 
 export default async function AdminSolutionsPage(props: {
-  searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string; removed?: string; requeued?: string; mcqleft?: string; casesleft?: string }>;
+  searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string; removed?: string; requeued?: string; mcqleft?: string; casesleft?: string; keypdf?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
@@ -49,7 +51,8 @@ export default async function AdminSolutionsPage(props: {
     .select(
       "id, repo_item_id, section_id, solution_md, status, error, parts, edited, video_url, generated_at, " +
         "repository_items(title, kind, subjects(title)), " +
-        "sections(title, question_pdf:config->>paper_question_pdf, topics(subjects(title)))",
+        "sections(title, question_pdf:config->>paper_question_pdf, " +
+        "solution_pdf:config->>paper_solution_pdf, topics(subjects(title)))",
     )
     .order("status")
     .limit(500);
@@ -91,6 +94,14 @@ export default async function AdminSolutionsPage(props: {
         subtitle="The descriptive tests students sit inside a topic, drafted from their own question paper. A key does nothing until you approve it: approved keys are what students see after they submit, and what the AI marks their answer books against."
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {searchParams.keypdf && (
+        <div className="notice ok">
+          {searchParams.keypdf === "1"
+            ? "📕 Your answer key PDF is attached — this paper will be marked against it."
+            : "The answer key PDF was removed; this paper falls back to the approved draft."}
+        </div>
+      )}
 
       {searchParams.removed && (
         <div className="notice ok">
@@ -285,6 +296,22 @@ export default async function AdminSolutionsPage(props: {
                   </div>
                 </form>
               </details>
+            )}
+
+            {r.section_id && (
+              <form action={saveSolutionPdf} style={{ marginTop: 10 }}>
+                <input type="hidden" name="section_id" value={r.section_id} />
+                <PdfUpload
+                  name="paper_solution_pdf"
+                  defaultValue={r.sections?.solution_pdf ?? ""}
+                  label="📕 Your own answer key (PDF) — optional"
+                />
+                <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 6px" }}>
+                  Attach a PDF and the paper is marked against it instead of the draft above. Leave it empty to use
+                  the draft you approve.
+                </p>
+                <SubmitButton className="btn small secondary" savedLabel="Saved">💾 Save this answer key</SubmitButton>
+              </form>
             )}
 
             <form action={saveSolutionVideo} style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>

@@ -23,6 +23,7 @@ export type PaperAttempt = {
 
 type Row = {
   id: string;
+  section_id: string;
   status: string;
   review_status?: string | null;
   examiner_remarks?: string | null;
@@ -493,21 +494,14 @@ export async function submitPaperAttempt(input: { sectionId: string; fileUrl: st
     return { ...toAttempt(r), status: "expired" };
   }
 
-  // Whether the book looks ALREADY MARKED is noted for the examiner — it never
-  // blocks the submission. The first version refused outright and turned away a
-  // clean paper on its very first use. Stopping a student from handing in their
-  // exam is far worse than an examiner seeing one copy that was checked before,
-  // so the judgement moved to the person who can actually look at it.
-  let alreadyMarked = false;
-  try {
-    const { resolveFileUrl: resolveForCheck } = await import("@/lib/storage");
-    const checkUrl = await resolveForCheck(input.fileUrl, 600);
-    if (checkUrl) {
-      const { looksAlreadyChecked } = await import("@/lib/ai");
-      alreadyMarked = await looksAlreadyChecked(checkUrl);
-    }
-  } catch { /* never let this stand between a student and their submission */ }
-
+  // Record the submission and RETURN. Marking does not happen here.
+  //
+  // This action used to run the whole pipeline while the student watched: the
+  // already-marked scan, building the marking scheme, the grading call, then
+  // drawing the annotated copy — minutes of AI work on a 2 MB upload. It was
+  // slow for every student and it timed out, which is how one paper reached
+  // the examiner with no marks at all. Grading now runs on its own, a few
+  // minutes later, exactly as the screen tells the student it will.
   const submittedAt = new Date().toISOString();
   await createServiceClient()
     .from("descriptive_attempts")
@@ -519,19 +513,18 @@ export async function submitPaperAttempt(input: { sectionId: string; fileUrl: st
       // the column default of "checked", so a copy the AI could not grade was
       // born looking already-verified and never reached the examiner desk.
       review_status: "pending",
-      review_flag: alreadyMarked ? "may_already_be_marked" : null,
     })
     .eq("id", r.id);
+
   try {
     if (user.email) {
-      // The answer is private — give faculty a proxied link (needs their login)
-      // instead of the useless raw "secure:" reference.
       const link = `https://caparveensharma.com/api/file?u=${encodeURIComponent(input.fileUrl)}`;
       await notifyFaculty("A descriptive paper was submitted", `Student: ${user.email}\nPaper: ${input.sectionId}\nUploaded answer (login required): ${link}`);
     }
   } catch { /* non-blocking */ }
 
-  return gradeAndStore({ ...r, file_url: input.fileUrl, submitted_at: submittedAt, status: "submitted" }, input.sectionId);
+  return { ...toAttempt(r), status: "submitted", submittedAt, fileUrl: input.fileUrl, underReview: true };
+
 }
 
 // Retry grading for a submitted-but-not-yet-graded paper (e.g. AI was busy/off).
@@ -605,4 +598,37 @@ export async function rebuildCheckedCopy(sectionId: string): Promise<PaperAttemp
 
   const { data: after } = await svc.from("descriptive_attempts").select("*").eq("id", r.id).maybeSingle();
   return toAttempt(after as Row | null);
+}
+
+/**
+ * Mark one submitted paper. Called by the grading worker, not by a student —
+ * it takes an attempt id and never touches the session, so it can run minutes
+ * after the student has closed the page.
+ */
+export async function gradeSubmittedPaper(attemptId: string): Promise<{ graded: boolean; reason?: string }> {
+  const svc = createServiceClient();
+  const { data: row } = await svc.from("descriptive_attempts").select("*").eq("id", attemptId).maybeSingle();
+  const r = row as Row | null;
+  if (!r) return { graded: false, reason: "attempt not found" };
+  if (!r.file_url) return { graded: false, reason: "no answer book" };
+  if (r.report) return { graded: false, reason: "already marked" };
+
+  // The already-marked check moved here too: it is advisory, and a student
+  // should never wait on it.
+  try {
+    const { resolveFileUrl: resolveForCheck } = await import("@/lib/storage");
+    const checkUrl = await resolveForCheck(r.file_url, 600);
+    if (checkUrl) {
+      const { looksAlreadyChecked } = await import("@/lib/ai");
+      if (await looksAlreadyChecked(checkUrl)) {
+        await svc
+          .from("descriptive_attempts")
+          .update({ review_flag: "may_already_be_marked" })
+          .eq("id", r.id);
+      }
+    }
+  } catch { /* advisory only */ }
+
+  const out = await gradeAndStore(r, r.section_id as string);
+  return { graded: out.status === "submitted" && out.underReview === true, reason: out.underReview ? undefined : "grading produced no report" };
 }

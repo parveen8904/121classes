@@ -62,6 +62,10 @@
     {
       "path": "/api/cron/release-papers",
       "schedule": "20 * * * *"
+    },
+    {
+      "path": "/api/cron/grade-papers",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

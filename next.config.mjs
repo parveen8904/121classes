@@ -14,6 +14,27 @@ const nextConfig = {
   // Allow bigger server-action payloads so students can attach an image/PDF to
   // a doubt (photographed question). Downscaled client-side; 8mb is plenty.
   experimental: { serverActions: { bodySizeLimit: "8mb" } },
+  // Public images are served from OUR domain, not the storage host.
+  //
+  // Every uploaded photo went out as
+  //   /_next/image?url=https://<project>.supabase.co/storage/v1/object/public/...
+  // so the database project was named in the page source of the home page, the
+  // faculty page and every results photo. This rewrite puts the same file on
+  // caparveensharma.com/media/..., which is what the pages now link to.
+  //
+  // ONLY the folders that are meant to be public are exposed: site, books and
+  // results. Class materials and repository papers are NOT reachable this way —
+  // they belong in the private bucket and are served through /api/file after a
+  // login check.
+  async rewrites() {
+    const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
+    if (!base) return [];
+    return ["site", "books", "results"].map((folder) => ({
+      source: `/media/${folder}/:path*`,
+      destination: `${base}/storage/v1/object/public/media/${folder}/:path*`,
+    }));
+  },
+
   // Browser-level armor on every response. NOTE: no X-Frame-Options DENY —
   // the site runs inside the iOS/Android/desktop app webviews (same-origin
   // navigation, not framing, so DENY would be safe — but SAMEORIGIN also keeps

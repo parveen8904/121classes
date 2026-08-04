@@ -74,6 +74,10 @@
     {
       "path": "/api/cron/backup-email",
       "schedule": "30 20 * * 6"
+    },
+    {
+      "path": "/api/cron/close-bucket",
+      "schedule": "*/15 20-23 * * *"
     }
   ]
 }

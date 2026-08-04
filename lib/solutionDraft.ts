@@ -325,3 +325,129 @@ export async function approvedSolution(repoItemId: string): Promise<string | nul
   const t = String(data.solution_md ?? "").trim();
   return t || null;
 }
+
+// ---- re-laying out the approved keys in ICAI's presentation ----
+//
+// The 51 approved keys were written as markdown prose: "**Working Note 5**",
+// and a ledger given as a "Dr Side:" list followed by a "Cr Side:" list rather
+// than a two-sided account. Rendering them in a fixed-width font was necessary
+// but could not invent a layout that was never written.
+//
+// So they are written again, under the ICAI layout rules — and the new text
+// goes into pending_md, NOT over solution_md. The approved key stays live and
+// stays the thing papers are marked against until CA Parveen Sharma looks at
+// the new one and adopts it. Approved material is not replaced by a machine.
+
+/** How many approved keys are waiting to be re-laid out, and how many are ready to look at. */
+export async function relayoutStatus(): Promise<{ pending: number; done: number; total: number }> {
+  const svc = createServiceClient();
+  const [{ count: total }, { count: done }] = await Promise.all([
+    svc.from("item_solutions").select("id", { count: "exact", head: true })
+      .eq("status", "approved").not("section_id", "is", null),
+    svc.from("item_solutions").select("id", { count: "exact", head: true })
+      .not("pending_md", "is", null),
+  ]);
+  return { total: total ?? 0, done: done ?? 0, pending: Math.max(0, (total ?? 0) - (done ?? 0)) };
+}
+
+async function relayoutOne(
+  svc: ReturnType<typeof createServiceClient>,
+  row: { id: string; section_id: string },
+): Promise<{ title: string; error?: string }> {
+  const { data: sec } = await svc
+    .from("sections")
+    .select("id, title, question_pdf:config->>paper_question_pdf, marks:config->>paper_total_marks, topics(subjects(title))")
+    .eq("id", row.section_id)
+    .maybeSingle();
+
+  const title = String(sec?.title ?? "Descriptive test");
+  const subject = String(
+    ((sec as { topics?: { subjects?: { title?: string } | null } | null } | null)?.topics?.subjects?.title) ?? "",
+  );
+  const ref = String((sec as { question_pdf?: string } | null)?.question_pdf ?? "");
+  if (!ref) {
+    await svc.from("item_solutions").update({ pending_error: "no question paper on this test" }).eq("id", row.id);
+    return { title, error: "no question paper" };
+  }
+
+  const { resolveFileUrl } = await import("@/lib/storage");
+  const url = await resolveFileUrl(ref, 900);
+  if (!url) {
+    await svc.from("item_solutions").update({ pending_error: "could not open the question paper" }).eq("id", row.id);
+    return { title, error: "cannot open paper" };
+  }
+
+  const { draftSolutionFromPdf } = await import("@/lib/ai");
+  const text = await draftSolutionFromPdf({
+    paperTitle: title,
+    subject,
+    questionPdfUrl: url,
+    totalMarks: Number((sec as { marks?: string } | null)?.marks) || null,
+  });
+  if (!text) {
+    await svc.from("item_solutions").update({ pending_error: "the AI returned nothing for this paper" }).eq("id", row.id);
+    return { title, error: "AI returned nothing" };
+  }
+
+  await svc
+    .from("item_solutions")
+    .update({ pending_md: text, pending_at: new Date().toISOString(), pending_error: null })
+    .eq("id", row.id);
+  return { title };
+}
+
+/**
+ * Re-lay out a few approved keys. Runs from the overnight cron in small
+ * batches so 51 papers drain by themselves without a spike in the AI bill.
+ */
+export async function relayoutApprovedKeysBatch(
+  concurrency = 4,
+  budgetMs = 200_000,
+): Promise<{ done: string[]; failed: string[]; remaining: number }> {
+  const svc = createServiceClient();
+  const done: string[] = [];
+  const failed: string[] = [];
+  const started = Date.now();
+  const ONE_PAPER_MS = 110_000;
+
+  while (Date.now() - started + ONE_PAPER_MS < budgetMs) {
+    // An approved key with no new version yet, and none that has already been
+    // tried and failed — a paper that cannot be read will not be paid for on
+    // every pass for ever.
+    const { data: batch } = await svc
+      .from("item_solutions")
+      .select("id, section_id")
+      .eq("status", "approved")
+      .not("section_id", "is", null)
+      .is("pending_md", null)
+      .is("pending_error", null)
+      .order("created_at")
+      .limit(concurrency);
+
+    const rows = (batch ?? []) as { id: string; section_id: string }[];
+    if (!rows.length) break;
+
+    const results = await Promise.all(
+      rows.map((r) =>
+        relayoutOne(svc, r).catch((e) => ({
+          title: "Descriptive test",
+          error: e instanceof Error ? e.message : "failed",
+        })),
+      ),
+    );
+    for (const r of results) {
+      if (r.error) failed.push(`${r.title}: ${r.error}`);
+      else done.push(r.title);
+    }
+  }
+
+  const { count } = await svc
+    .from("item_solutions")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "approved")
+    .not("section_id", "is", null)
+    .is("pending_md", null)
+    .is("pending_error", null);
+
+  return { done, failed, remaining: count ?? 0 };
+}

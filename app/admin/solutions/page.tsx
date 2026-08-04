@@ -3,7 +3,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import SelectAllKeys from "./SelectAllKeys";
 import PdfUpload from "../_components/PdfUpload";
-import { draftMissingKeys, auditOfficialSolutions, approveAllDrafted, saveSolutionPdf, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
+import AnswerKey from "@/app/components/AnswerKey";
+import { relayoutKeysNow, adoptPendingLayout, discardPendingLayout, adoptAllPendingLayouts, draftMissingKeys, auditOfficialSolutions, approveAllDrafted, saveSolutionPdf, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
 
 // Answer keys for the uploaded papers, and the button that makes them real.
 // Nothing here is used by the portal or the evaluator until it is approved.
@@ -17,6 +18,10 @@ type Row = {
   repo_item_id: string | null;
   section_id: string | null;
   solution_md: string | null;
+  /** An approved key rewritten in ICAI's layout, waiting to be adopted. */
+  pending_md: string | null;
+  pending_at: string | null;
+  pending_error: string | null;
   status: string;
   error: string | null;
   parts: number;
@@ -50,7 +55,7 @@ export default async function AdminSolutionsPage(props: {
   const { data } = await svc
     .from("item_solutions")
     .select(
-      "id, repo_item_id, section_id, solution_md, status, error, parts, edited, video_url, generated_at, " +
+      "id, repo_item_id, section_id, solution_md, pending_md, pending_at, pending_error, status, error, parts, edited, video_url, generated_at, " +
         "repository_items(title, kind, subjects(title)), " +
         "sections(title, question_pdf:config->>paper_question_pdf, " +
         "solution_pdf:config->>paper_solution_pdf, topics(subjects(title)))",
@@ -86,6 +91,9 @@ export default async function AdminSolutionsPage(props: {
   const approved = byStatus("approved");
   const waiting = [...byStatus("queued"), ...byStatus("drafting")];
   const failed = byStatus("failed");
+  // Approved keys rewritten in ICAI's layout, waiting to be looked at. The
+  // approved text is still the live one until each is adopted.
+  const pending = rows.filter((r) => String(r.pending_md ?? "").trim());
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -170,6 +178,11 @@ export default async function AdminSolutionsPage(props: {
                 </SubmitButton>
               </form>
             )}
+            <form action={relayoutKeysNow} style={{ display: "inline-block", marginRight: 8 }}>
+              <SubmitButton className="btn small secondary" savedLabel="Rewriting…">
+                📐 Re-lay out the approved keys
+              </SubmitButton>
+            </form>
             <form action={auditOfficialSolutions} style={{ display: "inline-block" }}>
               <SubmitButton className="btn small secondary" savedLabel="Checking…">
                 🔍 Check the uploaded solutions
@@ -184,6 +197,66 @@ export default async function AdminSolutionsPage(props: {
           you approve it.
         </p>
       </div>
+
+      {/* Re-laid-out keys awaiting a decision. Nothing here has replaced
+          anything: the approved key is still what students read and what
+          papers are marked against until it is adopted. */}
+      {pending.length > 0 && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <h2 className="admin-section-title" style={{ margin: 0 }}>
+              📐 New layout ready — {pending.length} key{pending.length === 1 ? "" : "s"}
+            </h2>
+            <form action={adoptAllPendingLayouts} style={{ marginLeft: "auto" }}>
+              <SubmitButton className="btn small" savedLabel="Adopted">
+                ✅ Adopt all {pending.length}
+              </SubmitButton>
+            </form>
+          </div>
+          <p className="muted" style={{ fontSize: ".85rem", marginTop: 6 }}>
+            These are your approved keys written again in ICAI&apos;s presentation — two-sided ledger accounts,
+            aligned columns, no markdown. <strong>Nothing has changed yet.</strong> Your approved key is still what
+            students read and what papers are marked against until you adopt the new one here. Adopting also clears
+            that test&apos;s marking guide, so it is rebuilt from the key you adopted.
+          </p>
+          <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+            {pending.map((r) => {
+              const sec = r.sections as { title?: string } | null;
+              const title = sec?.title ?? "Descriptive test";
+              return (
+                <details key={r.id} className="card" style={{ padding: 12 }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+                    {title}
+                    <span className="muted" style={{ fontWeight: 400, fontSize: ".82rem" }}>
+                      {" "}— compare the two
+                    </span>
+                  </summary>
+                  <div style={{ display: "grid", gap: 14, marginTop: 12 }}>
+                    <div>
+                      <strong style={{ fontSize: ".85rem" }}>NEW — ICAI layout</strong>
+                      <AnswerKey text={String(r.pending_md)} size=".72rem" />
+                    </div>
+                    <div>
+                      <strong style={{ fontSize: ".85rem" }} className="muted">CURRENT — approved, live now</strong>
+                      <AnswerKey text={String(r.solution_md ?? "")} size=".72rem" />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    <form action={adoptPendingLayout}>
+                      <input type="hidden" name="id" value={String(r.id)} />
+                      <SubmitButton className="btn small" savedLabel="Adopted">✅ Use the new layout</SubmitButton>
+                    </form>
+                    <form action={discardPendingLayout}>
+                      <input type="hidden" name="id" value={String(r.id)} />
+                      <SubmitButton className="btn small secondary" savedLabel="Kept">↩︎ Keep the current one</SubmitButton>
+                    </form>
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* MCQ + case-study explanations — the answers exist, the "why" is what
           was never generated for some of them. */}

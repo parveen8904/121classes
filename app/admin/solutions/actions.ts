@@ -236,3 +236,82 @@ export async function approveAllDrafted() {
   revalidatePath("/admin/solutions");
   redirect(`/admin/solutions?approvedall=${ids.length}`);
 }
+
+// ---- adopting a re-laid-out key ----
+//
+// The approved keys are being rewritten in ICAI's presentation. The new text
+// waits in pending_md; the approved key stays live and stays what papers are
+// marked against until it is adopted here. Nothing a student reads changes on
+// a machine's say-so.
+
+/** Run the re-layout NOW rather than waiting for tonight. */
+export async function relayoutKeysNow() {
+  await assertArea(null);
+  const { relayoutApprovedKeysBatch } = await import("@/lib/solutionDraft");
+  const r = await relayoutApprovedKeysBatch(4, 235_000);
+  revalidatePath("/admin/solutions");
+  redirect(`/admin/solutions?relaid=${r.done.length}&relayoutleft=${r.remaining}&relayoutfailed=${r.failed.length}`);
+}
+
+/** Replace the approved key with its new layout. */
+export async function adoptPendingLayout(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  if (!id) redirect("/admin/solutions");
+  const svc = createServiceClient();
+
+  const { data: row } = await svc.from("item_solutions").select("id, pending_md, section_id").eq("id", id).maybeSingle();
+  const text = String(row?.pending_md ?? "").trim();
+  if (!text) redirect("/admin/solutions?adopted=0");
+
+  await svc
+    .from("item_solutions")
+    .update({ solution_md: text, pending_md: null, pending_at: null, approved_at: new Date().toISOString() })
+    .eq("id", id);
+
+  // The marking guide was built from the OLD text, so it no longer describes
+  // the key it is supposed to break down. Drop it; the next submission on this
+  // test rebuilds it from the adopted key.
+  if (row?.section_id) await svc.from("marking_schemes").delete().eq("section_id", row.section_id);
+
+  revalidatePath("/admin/solutions");
+  redirect("/admin/solutions?adopted=1");
+}
+
+/** Keep the existing key and throw the new layout away. */
+export async function discardPendingLayout(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  if (!id) redirect("/admin/solutions");
+  await createServiceClient()
+    .from("item_solutions")
+    .update({ pending_md: null, pending_at: null, pending_error: null })
+    .eq("id", id);
+  revalidatePath("/admin/solutions");
+  redirect("/admin/solutions?discarded=1");
+}
+
+/** Adopt every new layout that is waiting. */
+export async function adoptAllPendingLayouts() {
+  await assertArea(null);
+  const svc = createServiceClient();
+  const { data: rows } = await svc
+    .from("item_solutions")
+    .select("id, pending_md, section_id")
+    .not("pending_md", "is", null)
+    .limit(500);
+
+  const list = (rows ?? []).filter((r) => String(r.pending_md ?? "").trim());
+  if (!list.length) redirect("/admin/solutions?adoptedall=0");
+
+  for (const r of list) {
+    await svc
+      .from("item_solutions")
+      .update({ solution_md: String(r.pending_md), pending_md: null, pending_at: null, approved_at: new Date().toISOString() })
+      .eq("id", r.id);
+    if (r.section_id) await svc.from("marking_schemes").delete().eq("section_id", String(r.section_id));
+  }
+
+  revalidatePath("/admin/solutions");
+  redirect(`/admin/solutions?adoptedall=${list.length}`);
+}

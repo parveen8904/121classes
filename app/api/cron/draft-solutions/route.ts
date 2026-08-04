@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSecret } from "@/lib/secrets";
 import { isOffPeakNow } from "@/lib/offpeak";
-import { draftSectionSolutionsBatch, queueMissingSectionSolutions } from "@/lib/solutionDraft";
+import { draftSectionSolutionsBatch, queueMissingSectionSolutions, relayoutApprovedKeysBatch } from "@/lib/solutionDraft";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -38,13 +38,25 @@ export async function GET(req: NextRequest) {
   done.push(...batch.drafted);
   failed.push(...batch.failed);
 
+  // With nothing left to draft, spend the window re-laying out the APPROVED
+  // keys in ICAI's presentation. The new text waits in pending_md beside the
+  // approved one — nothing a student reads changes until the founder adopts it.
+  let relaidOut = 0;
+  let relayoutLeft = 0;
+  if (!done.length && !failed.length && Date.now() - started < 200_000) {
+    const r = await relayoutApprovedKeysBatch(4, 200_000 - (Date.now() - started));
+    relaidOut = r.done.length;
+    relayoutLeft = r.remaining;
+    failed.push(...r.failed);
+  }
+
   // With the paper queue clear, spend what's left of the window filling in
   // missing MCQ / case-study explanations — every one of those questions
   // already has its correct answer; only the "why" was never written.
   let mcqExplained = 0;
   let caseExplained = 0;
-  if (!done.length && !failed.length) {
-    // Nothing to draft — spend the window on the missing "why" lines instead.
+  if (!done.length && !failed.length && !relaidOut && !relayoutLeft) {
+    // Nothing to draft or re-lay out — spend the window on the "why" lines.
     const { backfillMcqExplanations, backfillCaseExplanations } = await import("@/lib/explainBackfill");
     while (Date.now() - started < 240_000) {
       const n = await backfillMcqExplanations(20);
@@ -62,6 +74,8 @@ export async function GET(req: NextRequest) {
     ok: true,
     queuedTests,
     drafted: done.length,
+    relaidOut,
+    relayoutLeft,
     failedCount: failed.length,
     mcqExplained,
     caseExplained,

@@ -799,14 +799,14 @@ export async function draftPaperSolution(input: {
     "For numericals show every working — journal entries, ledger/working notes, formats and totals — and label working notes. " +
     "For theory answer in exam points, citing the accounting standard, Ind AS, section or rule that governs it. " +
     "State any assumption you make explicitly, the way an examiner accepts it. " +
-    "Keep ICAI presentation conventions (Dr/Cr, ₹ in the given unit, proper statement formats). " +
+    ICAI_LAYOUT +
     "NEVER invent a question that is not in the text, and never skip a question that is. " +
     "If a question's data is incomplete in the extract, answer as far as the data allows and say what is missing — do not fabricate figures. " +
     NOT_TAUGHT +
     (totalParts > 1
       ? `This is PART ${part} of ${totalParts} of the paper. Answer ONLY the questions visible in this part; do not repeat earlier parts and do not write an introduction or conclusion. `
       : "") +
-    " Output plain text with clear question headings. No markdown code fences.";
+    " Output plain text only — no markdown of any kind, no code fences.";
   const user = `Subject: ${subject || "CA"}\nPaper: ${paperTitle}\n\nQuestion paper text:\n${questionText}`;
   return callClaude(system, user, 8000, { feature: "draft_solution" });
 }
@@ -846,12 +846,12 @@ export async function draftSolutionFromPdf(input: {
       "For numericals show every working — journal entries, ledger and working notes, formats and totals — and label the working notes. " +
       "For theory answer in exam points, citing the Accounting Standard, Ind AS, section or rule that governs it. " +
       "State any assumption explicitly, the way an examiner accepts it. " +
-      "Keep ICAI presentation conventions (Dr/Cr, ₹ in the given unit, proper statement formats). " +
+      ICAI_LAYOUT +
       "Answer EVERY question in the paper and never invent one that is not there. " +
       "If a question's data is genuinely incomplete, answer as far as it allows and say what is missing — never fabricate figures. " +
       (input.totalMarks ? `The paper carries ${input.totalMarks} marks; show the marks against each answer. ` : "") +
       NOT_TAUGHT +
-      " Output plain text with clear question headings. No markdown code fences.";
+      " Output plain text only — no markdown of any kind, no code fences.";
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -1108,6 +1108,7 @@ export async function buildMarkingScheme(input: {
     "arrived at yourself — even if you believe the solution is wrong. If the solution's own arithmetic looks " +
     "wrong to you, still use ITS figure and add a line 'CHECK: <what looks wrong>' beneath that step so a " +
     "person can look at it. A scheme that disagrees with the approved solution is worse than no scheme.\n" +
+    LIBERAL_MARKING +
     "Also state, in one line per question, what earns partial credit and what earns nothing, AND name any " +
     "alternative method that a student could validly use to reach the same answer, so that a student who takes " +
     "the other route is given the same marks.\n" +
@@ -1304,12 +1305,125 @@ function escapeControlCharsInStrings(s: string): string {
 
 // Both graders (solution PDF, approved solution text) return the same report,
 // so the shape is parsed in one place.
+// How an answer key must be laid out on the page.
+//
+// The keys were coming back as markdown prose — "**Working Note 5**", a ledger
+// written as a "Dr Side:" list followed by a "Cr Side:" list — and a student
+// comparing that against their own answer book has nothing to compare. ICAI
+// prints a two-sided account. So does this.
+//
+// Everything is rendered in a fixed-width font (screen, and Courier in the
+// checked copy), which means columns aligned with spaces hold their shape. That
+// is the only layout instrument available, and it is enough.
+const ICAI_LAYOUT =
+  "LAYOUT — present it exactly as ICAI prints its Suggested Answers, using SPACES to align columns. The output is " +
+  "read in a fixed-width font, so spaces line up: never use markdown (no #, no **, no tables, no bullets) and never " +
+  "use tab characters. " +
+  "Every LEDGER ACCOUNT must be a two-sided account, not two lists: a centred title line 'Dr.' at the left and 'Cr.' " +
+  "at the right, a header row 'Particulars' and 'Amount (Rs.)' on each side, entries paired across the page, a rule " +
+  "of dashes above the totals, and the two totals level with each other on the same line. " +
+  "Every STATEMENT, working note and computation is a labelled column of figures with the amounts right-aligned in " +
+  "one column, a dashes rule before a total, and the total on its own line. " +
+  "Keep every line within 96 characters so nothing wraps. Use 'Rs.' not the rupee symbol, Indian digit grouping " +
+  "(1,25,000 not 125,000), and brackets for deductions. Head each answer 'ANSWER TO QUESTION n' on its own line and " +
+  "each working 'Working Note n: <title>'. " +
+  "The working must be COMPLETE and internally consistent: do not show a figure, then a contradiction, then a " +
+  "'revised check' that lands somewhere else. If the question's data genuinely does not reconcile, say so once, in " +
+  "one sentence, state the assumption you adopt, and carry that assumption through the rest of the answer. ";
+
+// The house marking policy, set by CA Parveen Sharma: mark liberally, for
+// every student, on every paper. It sits in one place so the grader and the
+// marking-guide writer cannot drift apart on it.
+//
+// It is deliberately not a licence to award marks for wrong accounting — that
+// would tell a student they are ready when they are not, which is the one
+// outcome worse than a hard mark. It is a rule about DOUBT: where a step could
+// be read either way, it is read in the student's favour.
+const LIBERAL_MARKING =
+  "MARKING POLICY — MARK LIBERALLY. This is a practice test set by the teacher, not the ICAI examination, and the " +
+  "purpose is to keep the student working. Apply these throughout: " +
+  "(a) where a step could reasonably be read either way, resolve it IN THE STUDENT'S FAVOUR and award the mark; " +
+  "(b) award the step in full where the method and the treatment are right but the arithmetic slips, and carry that " +
+  "wrong figure forward without punishing it again — a single error is charged ONCE, never at every later step that " +
+  "depends on it; " +
+  "(c) award the marks for a correct working note, entry, format or conclusion even where it is untidy, out of order, " +
+  "abbreviated, or on a different page — presentation NEVER costs a mark; " +
+  "(d) where the student's route differs from the solution but is valid under the standard, award it in full; " +
+  "(e) where a step is partly right, lean to the higher part-mark rather than the lower; " +
+  "(f) do not deduct for anything the guide does not list as earning marks. " +
+  "The one thing you must NOT do is award marks for accounting that is actually wrong, or for a step the student " +
+  "did not attempt — a mark for nothing tells a student they are ready when they are not. Say in the question's " +
+  "comment where you have given the benefit of the doubt, so the examiner can see it. ";
+
+// The shape of a marking report, as the API must return it. Declaring it as a
+// tool and forcing the call is what makes the step-by-step award compulsory:
+// asking for it in the prompt was ignored on the very first paper.
+const MARKS_TOOL = {
+  name: "submit_marks",
+  description: "Return the marks for this answer book, step by step against the marking guide.",
+  input_schema: {
+    type: "object",
+    properties: {
+      summary: { type: "string", description: "One line on the paper overall." },
+      per_question: {
+        type: "array",
+        description: "One entry per question in the marking guide, in its order.",
+        items: {
+          type: "object",
+          properties: {
+            q: { type: "string", description: "Question number as the guide writes it." },
+            max: { type: "number", description: "Marks the question carries." },
+            comment: { type: "string", description: "One line on this answer." },
+            steps: {
+              type: "array",
+              description:
+                "EVERY step the guide lists for this question, in its order — including steps the student left blank, with awarded 0.",
+              items: {
+                type: "object",
+                properties: {
+                  step: { type: "string", description: "The step label, exactly as the guide writes it." },
+                  max: { type: "number", description: "Marks the guide allots this step." },
+                  awarded: { type: "number", description: "What THIS student earned for this step alone." },
+                },
+                required: ["step", "max", "awarded"],
+              },
+            },
+          },
+          required: ["q", "max", "comment", "steps"],
+        },
+      },
+      improvements: { type: "array", items: { type: "string" } },
+      concepts_to_revise: { type: "array", items: { type: "string" } },
+      annotations: {
+        type: "array",
+        description: "Marks to place on the student's pages, 1-4 per page.",
+        items: {
+          type: "object",
+          properties: {
+            page: { type: "number", description: "1-based page number." },
+            y: { type: "number", description: "0.0 top to 1.0 bottom." },
+            kind: { type: "string", enum: ["right", "wrong", "partial", "tip"] },
+            note: { type: "string", description: "Under 12 words." },
+          },
+          required: ["page", "y", "kind", "note"],
+        },
+      },
+      unreadable: { type: "boolean", description: "True only if the handwriting genuinely cannot be read." },
+    },
+    required: ["summary", "per_question", "annotations"],
+  },
+} as const;
+
 function parseDescriptiveGrade(text: string, totalMarks: number | null): DescriptiveGrade | null {
   const parsed = readGradeJson(text);
   if (!parsed) {
     console.error("[grade_descriptive] report was not readable JSON; first 300 chars:", text.slice(0, 300));
     return null;
   }
+  return shapeDescriptiveGrade(parsed, totalMarks);
+}
+
+function shapeDescriptiveGrade(parsed: Record<string, unknown>, totalMarks: number | null): DescriptiveGrade | null {
   try {
     const j = parsed as {
       per_question?: unknown; annotations?: unknown; awarded?: unknown; total?: unknown;
@@ -1734,6 +1848,11 @@ export async function gradeDescriptivePaperAgainstText(
       // award turns marking into bookkeeping: the steps come from the guide,
       // and the totals are added up here rather than by the marker.
       "For EVERY question you MUST also return \"steps\": one entry for EACH step listed for that question in the marking guide, copied in the guide's own order, with its \"step\" label exactly as the guide writes it, its \"max\" as the guide allots, and \"awarded\" being what this student earned for that step alone (0, the full amount, or a part of it). Do not merge steps, do not omit a step the student left blank — return it with awarded 0. Do not adjust any step to make a total look right; the totals are calculated from the steps, not from you. " +
+      // CA Parveen Sharma's stated policy, for every student: mark liberally.
+      // These are learning tests, not the ICAI examination — a mark taken away
+      // for a slip the student already understands teaches nothing, and a
+      // student who is marked harshly here stops sitting the tests at all.
+      LIBERAL_MARKING +
       "Respond ONLY as compact JSON, no prose, no code fences: " +
       '{"awarded":<number>,"total":<number>,"summary":"<one-line overall>","per_question":[{"q":"Q1","awarded":4,"max":6,"comment":"...","steps":[{"step":"WN1: Invoice Price relationship stated","max":0.5,"awarded":0.5}]}],"improvements":["..."],"concepts_to_revise":["..."],"annotations":[{"page":1,"y":0.25,"kind":"wrong","note":"AS 13 cost excludes brokerage"}],"unreadable":false}.';
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1741,11 +1860,20 @@ export async function gradeDescriptivePaperAgainstText(
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model,
-        max_tokens: 4000,
+        // Room for a step-by-step award on a ten-question paper. At 4000 the
+        // model economised and returned the summary shape with no steps at all.
+        max_tokens: 8000,
         // An examiner must give the SAME paper the same marks. Left at the API
         // default, the model re-marked one answer book 9, then 13, then 12.
         temperature: 0,
         system: sys,
+        // Asking for the steps in the prompt was not enough — the first paper
+        // marked under the new instruction came back without a single one. A
+        // forced tool call makes the shape a requirement of the API rather than
+        // a request: the marks cannot be returned without their steps, and the
+        // reply arrives as an object, so there is no JSON to mis-parse either.
+        tools: [MARKS_TOOL],
+        tool_choice: { type: "tool", name: "submit_marks" },
         messages: [{
           role: "user",
           content: [
@@ -1766,13 +1894,22 @@ export async function gradeDescriptivePaperAgainstText(
     const data = await res.json();
     const u = data.usage ?? {};
     await logUsage("grade_descriptive", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    // The forced tool call returns the report as an object. Falling back to
+    // text keeps this working if the model ever answers the old way.
+    const call = (data.content ?? []).find(
+      (b: { type: string; name?: string }) => b.type === "tool_use" && b.name === "submit_marks",
+    ) as { input?: unknown } | undefined;
+    if (call?.input && typeof call.input === "object") {
+      return shapeDescriptiveGrade(call.input as Record<string, unknown>, totalMarks ?? null);
+    }
+
     const text = (data.content ?? [])
       .filter((b: { type: string }) => b.type === "text")
       .map((b: { text: string }) => b.text)
       .join("\n")
       .trim();
     if (!text) {
-      console.error("[grade_descriptive/text] the model returned no text at all");
+      console.error("[grade_descriptive/text] the model returned neither marks nor text");
       return null;
     }
     return parseDescriptiveGrade(text, totalMarks ?? null);

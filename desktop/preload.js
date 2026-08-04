@@ -10,4 +10,7 @@ contextBridge.exposeInMainWorld("native", {
   play: (id, keyB64, ivB64, alg, watermark) => ipcRenderer.invoke("play", { id, keyB64, ivB64, alg, watermark }),
   remove: (id) => ipcRenderer.invoke("remove", { id }),
   onProgress: (cb) => ipcRenderer.on("download-progress", (_e, data) => cb(data)),
+  // Downloads run one at a time; this fires for the ones still in the queue so
+  // the page can say "waiting" instead of showing 0% and looking stuck.
+  onWaiting: (cb) => ipcRenderer.on("download-waiting", (_e, data) => cb(data)),
 });

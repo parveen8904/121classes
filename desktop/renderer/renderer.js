@@ -56,9 +56,17 @@ async function loadLibrary() {
         dl.textContent = pct >= 100 ? "Downloaded ✓" : `Downloading… ${pct}%`;
       });
 
+      window.native.onWaiting?.(({ id, ahead }) => {
+        if (id !== c.id) return;
+        dl.textContent = ahead === 1 ? "Waiting for 1 class…" : `Waiting for ${ahead} classes…`;
+      });
+
       dl.onclick = async () => {
         dl.disabled = true;
-        dl.textContent = "Downloading… 0%";
+        // Downloads are taken one at a time, so this may sit as "Waiting…"
+        // until the classes ahead of it finish. That is deliberate: five at
+        // once meant all five crawled and the one he wanted first arrived last.
+        dl.textContent = "Starting…";
         try {
           await window.native.download(c.id, c.storage_url, c.byte_size);
           dl.textContent = "Downloaded ✓";

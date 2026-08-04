@@ -63,9 +63,37 @@ function wireDownloads() {
   });
 }
 
+// ONE download at a time.
+//
+// A student queued four AS 10 lectures and the first Cash Flow class — about
+// 7 GB — and reported the download server was "too slow". Each button press
+// started its own stream immediately, so five multi-gigabyte transfers were
+// competing for the same connection and the same rate-limited storage
+// endpoint: every one of them crawled, and the first class he actually wanted
+// to watch finished LAST, because it was sharing with four others.
+//
+// Serialised, the same five downloads take the same total time, but the first
+// one is ready in a fifth of it — and the rest are honestly reported as
+// waiting rather than appearing to be stuck at 2%.
+let chain = Promise.resolve();
+let waiting = 0;
+function queued(job) {
+  waiting += 1;
+  const run = chain.then(job, job); // a failure must not block the queue
+  chain = run.catch(() => {}).then(() => { waiting -= 1; });
+  return run;
+}
+
 // Download the encrypted file atomically: stream to .part, verify the size,
 // then rename. Reports progress to the page.
 ipcMain.handle("download", async (e, { id, url, expectedSize }) => {
+  // Say so straight away, so a class sitting behind three others does not look
+  // frozen at zero.
+  if (waiting > 0) e.sender.send("download-waiting", { id, ahead: waiting });
+  return queued(() => downloadNow(e, { id, url, expectedSize }));
+});
+
+async function downloadNow(e, { id, url, expectedSize }) {
   const dir = path.join(app.getPath("userData"), "classes");
   fs.mkdirSync(dir, { recursive: true });
   const dest = classPath(id);
@@ -96,7 +124,7 @@ ipcMain.handle("download", async (e, { id, url, expectedSize }) => {
   fs.renameSync(part, dest);
   e.sender.send("download-progress", { id, received: size, total: size });
   return dest;
-});
+}
 
 ipcMain.handle("is-downloaded", async (_e, { id, expectedSize }) => {
   const p = classPath(id);

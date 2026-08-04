@@ -1098,8 +1098,18 @@ export async function buildMarkingScheme(input: {
     "conclusion — with the marks against each step. The step marks must add up exactly to the question's " +
     "marks, and the questions must add up to the paper's total.\n" +
     (input.totalMarks ? `The paper carries ${input.totalMarks} marks in total. ` : "") +
-    "Also state, in one line per question, what earns partial credit and what earns nothing, AND name any "
-    "alternative method that a student could validly use to reach the same answer, so that a student who takes "
+    // The scheme once solved the question its own way and reached different
+    // figures from the approved key: the key had cash sales of Rs 1,00,600, the
+    // scheme Rs 1,04,000. Students then read one document and were marked
+    // against the other. The approved solution is the authority; this is a
+    // breakdown of it, not a second attempt at the sum.
+    "EVERY figure in the scheme MUST be taken from the official solution exactly as it appears there. " +
+    "Do NOT re-work the question, do NOT recompute a total, and do NOT substitute a figure you would have " +
+    "arrived at yourself — even if you believe the solution is wrong. If the solution's own arithmetic looks " +
+    "wrong to you, still use ITS figure and add a line 'CHECK: <what looks wrong>' beneath that step so a " +
+    "person can look at it. A scheme that disagrees with the approved solution is worse than no scheme.\n" +
+    "Also state, in one line per question, what earns partial credit and what earns nothing, AND name any " +
+    "alternative method that a student could validly use to reach the same answer, so that a student who takes " +
     "the other route is given the same marks.\n" +
     "Write it compactly as plain text — this is a working document an examiner reads, not prose. " +
     "No preamble, no markdown fences.";

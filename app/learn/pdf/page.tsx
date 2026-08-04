@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import BackButton from "@/app/components/BackButton";
+import { viaProxy } from "@/lib/fileProxy";
 import NotesCanvas from "../notes/[sectionId]/NotesCanvas";
 import NotesActions from "../notes/[sectionId]/NotesActions";
 
@@ -24,8 +25,10 @@ export default async function PdfViewerPage(
   const raw = searchParams.u ?? "";
   const title = (searchParams.t ?? "Document").slice(0, 80);
   const internal = /^\/(learn|api)\//.test(raw);
-  if (!internal && !/^https:\/\//.test(raw)) redirect("/dashboard");
-  const fileUrl = internal ? raw : `/api/file?u=${encodeURIComponent(raw)}`;
+  if (!internal && !/^https:\/\//.test(raw) && !raw.startsWith("secure:")) redirect("/dashboard");
+  // viaProxy also strips the storage address out of the link, so the app's own
+  // address bar does not name the database project either.
+  const fileUrl = internal ? raw : viaProxy(raw);
   const sep = fileUrl.includes("?") ? "&" : "?";
 
   return (

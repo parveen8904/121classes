@@ -260,12 +260,13 @@ export default function DescriptivePaper(props: Props) {
           {r.unreadable && <p className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>⚠️ Part of the handwriting was hard to read — if marks look off, ask the faculty to review.</p>}
           {attempt.annotatedUrl && (
             <p className="muted" style={{ fontSize: ".85rem", margin: "10px 0 0" }}>
-              Your checked copy has the marking written on your own pages — ✓ where you earned marks, ✗ where you
-              lost them, and a note beside each — with a summary sheet at the end. Read that first.
+              One file, three things: the marking written on your own pages — ✓ where you earned marks, ✗ where you
+              lost them, and a note beside each — then a summary sheet, and then the <strong>official answers</strong>
+              {" "}in full at the end. Read the summary first, then compare your working against the official answers.
             </p>
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-            {attempt.annotatedUrl && <a className="btn" href={fileHref(attempt.annotatedUrl, "My checked copy")} target={fileTarget} rel="noopener noreferrer">📝 Open my checked copy</a>}
+            {attempt.annotatedUrl && <a className="btn" href={fileHref(attempt.annotatedUrl, "My checked copy and the official answers")} target={fileTarget} rel="noopener noreferrer">📝 Open my checked copy + official answers</a>}
             {attempt.fileUrl && <a className="btn small secondary" href={fileHref(attempt.fileUrl, "My uploaded answers")} target={fileTarget} rel="noopener noreferrer">📄 My uploaded answers</a>}
             {questionPdf && <a className="btn small secondary" href={fileHref(questionPdf, "Question paper")} target={fileTarget} rel="noopener noreferrer">📄 Question paper</a>}
             {solutionPdf && <a className="btn small secondary" href={fileHref(solutionPdf, "Official solution")} target={fileTarget} rel="noopener noreferrer">✅ Official solution (PDF)</a>}

@@ -4,6 +4,7 @@ import AdminHero from "../_components/AdminHero";
 import SelectAllKeys from "./SelectAllKeys";
 import PdfUpload from "../_components/PdfUpload";
 import AnswerKey from "@/app/components/AnswerKey";
+import { viaProxy } from "@/lib/fileProxy";
 import { relayoutKeysNow, adoptPendingLayout, discardPendingLayout, adoptAllPendingLayouts, draftMissingKeys, auditOfficialSolutions, approveAllDrafted, saveSolutionPdf, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
 
 // Answer keys for the uploaded papers, and the button that makes them real.
@@ -331,7 +332,7 @@ export default async function AdminSolutionsPage(props: {
         // Served through our own proxy, which mints a short-lived signed URL —
         // the paper itself stays private.
         const paperRef = r.sections?.question_pdf ?? null;
-        const paperHref = paperRef ? `/api/file?u=${encodeURIComponent(paperRef)}` : null;
+        const paperHref = paperRef ? viaProxy(paperRef) : null;
         return (
           <div className="card" key={r.id} style={{ marginBottom: 14, borderColor: r.status === "approved" ? "#16a34a" : undefined }}>
             <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>

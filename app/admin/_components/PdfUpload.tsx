@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { viaProxy } from "@/lib/fileProxy";
 
 // Upload a PDF and keep its reference in a named field (so the surrounding
 // server-action form posts it). Also accepts a pasted URL.
@@ -102,7 +103,7 @@ export default function PdfUpload({
           <>
             <a
               className="btn small secondary"
-              href={url.startsWith("secure:") ? `/api/file?u=${encodeURIComponent(url)}` : url}
+              href={viaProxy(url)}
               target="_blank"
               rel="noopener noreferrer"
             >

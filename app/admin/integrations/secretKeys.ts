@@ -82,6 +82,9 @@ export const SECRET_KEYS = [
   "WHATSAPP_PHONE_NUMBER_ID",
   "WHATSAPP_WABA_ID",
   "WHATSAPP_WEBHOOK_VERIFY_TOKEN",
+  "WHATSAPP_PERSONAL_PHONE_ID",
+  "META_APP_ID",
+  "META_EMBEDDED_SIGNUP_CONFIG_ID",
   // Threads (graph.threads.net — its own app id/secret and tokens; an IG or
   // FB token will not work). Token/user id/refresh stamp are written by the
   // OAuth callback, the app keys are pasted from the Meta dev portal.

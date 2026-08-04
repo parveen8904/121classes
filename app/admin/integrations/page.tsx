@@ -271,6 +271,9 @@ export default async function IntegrationsPage(
           <KeyField name="DROPBOX_ACCESS_TOKEN" label="Dropbox access token (quick start only — Dropbox expires these in hours)" placeholder="your app → Generate access token" />
           <KeyField name="INTERAKT_API_KEY" label="Interakt (WhatsApp) key" placeholder="Basic auth key" />
           <KeyField name="IVR_WEBHOOK_KEY" label="IVR webhook key (phone calls → tickets)" placeholder="any long random text — use the same in your IVR portal's webhook URL" />
+          <KeyField name="META_APP_ID" label="Meta App ID (needed to connect your own WhatsApp number)" placeholder="developers.facebook.com → your app → App ID" />
+          <KeyField name="META_EMBEDDED_SIGNUP_CONFIG_ID" label="Meta Embedded Signup configuration ID" placeholder="your app → WhatsApp → Configuration → create one, copy its ID" />
+          <KeyField name="WHATSAPP_PERSONAL_PHONE_ID" label="Your personal number's phone ID (Coexistence — only students and leads are stored on it)" placeholder="filled in for you after you connect the number" />
           <KeyField name="WHATSAPP_OTP_TEMPLATE" label="WhatsApp OTP template name (verifies case-test leads)" placeholder="Interakt → Templates → an approved AUTHENTICATION template with one {{1}} variable" />
           <KeyField name="WHATSAPP_MISSEDCALL_TEMPLATE" label="WhatsApp missed-call reply template (sends the free-planner link to callers)" placeholder="approved MARKETING/UTILITY template with one {{1}} variable (the link)" />
           <KeyField name="FACULTY_TELEGRAM_CHAT_ID" label="Faculty Telegram chat id (for doubt alerts)" placeholder="your own Telegram chat id" />

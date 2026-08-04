@@ -109,6 +109,11 @@ export default async function AdminWhatsAppPage(props: { searchParams: Promise<{
         <div className="notice err">WhatsApp is not configured — add the Cloud API keys on the Integrations page.</div>
       )}
 
+      <p className="muted" style={{ fontSize: ".85rem", marginBottom: 14 }}>
+        <a href="/admin/whatsapp/connect">📲 Connect your own number (keeps it on your phone)</a> — students then
+        reach you on the number they already use, and replies are drafted here for you to send.
+      </p>
+
       {threads.size === 0 ? (
         <div className="card">
           <p className="muted">

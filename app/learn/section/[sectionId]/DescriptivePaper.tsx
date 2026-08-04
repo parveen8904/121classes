@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { startPaperAttempt, submitPaperAttempt, gradePaperNow, resetMyPaperAttempt, rebuildCheckedCopy, type PaperAttempt } from "./paperActions";
 import { viaProxy } from "@/lib/fileProxy";
+import AnswerKey from "@/app/components/AnswerKey";
 
 type Props = {
   sectionId: string;
@@ -364,9 +365,7 @@ export default function DescriptivePaper(props: Props) {
         {officialKey && (
           <details className="card" style={{ marginTop: 12 }}>
             <summary style={{ cursor: "pointer", fontWeight: 700 }}>✅ Official solution — read it while you wait</summary>
-            <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: ".9rem", lineHeight: 1.6, marginTop: 10 }}>
-              {officialKey}
-            </pre>
+            <AnswerKey text={officialKey} size=".82rem" />
           </details>
         )}
       </div>

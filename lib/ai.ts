@@ -769,7 +769,12 @@ export type DescriptiveGrade = {
   awarded: number;
   total: number;
   summary: string;
-  per_question: { q: string; awarded: number; max: number; comment: string }[];
+  per_question: {
+    q: string; awarded: number; max: number; comment: string;
+    /** Which steps of the marking guide earned marks. The totals are added up
+     *  from these, not taken from the marker's own arithmetic. */
+    steps?: { step: string; max: number; awarded: number }[];
+  }[];
   improvements: string[];
   concepts_to_revise: string[];
   annotations: PaperAnnotation[];
@@ -1301,14 +1306,36 @@ function parseDescriptiveGrade(text: string, totalMarks: number | null): Descrip
       summary?: unknown; improvements?: unknown; concepts_to_revise?: unknown; unreadable?: unknown;
     };
     const arr = (x: unknown) => (Array.isArray(x) ? x.map((s) => String(s).trim()).filter(Boolean) : []);
+    // Add the marks up here. The marker names which step of the guide earned
+    // what; the totals are arithmetic on those steps, never the marker's own
+    // figure. That is what stops the same answer book scoring 9 one run and 13
+    // the next — and it lets a student see exactly which step lost the mark.
     const pq = Array.isArray(j.per_question)
-      ? j.per_question.map((p: { q?: unknown; awarded?: unknown; max?: unknown; comment?: unknown }) => ({
-          q: String(p.q ?? "").trim(),
-          awarded: Number(p.awarded) || 0,
-          max: Number(p.max) || 0,
-          comment: String(p.comment ?? "").trim(),
-        }))
+      ? j.per_question.map((p: { q?: unknown; awarded?: unknown; max?: unknown; comment?: unknown; steps?: unknown }) => {
+          const steps = Array.isArray(p.steps)
+            ? (p.steps as { step?: unknown; max?: unknown; awarded?: unknown }[])
+                .map((s) => ({
+                  step: String(s.step ?? "").trim(),
+                  max: Math.max(0, Number(s.max) || 0),
+                  awarded: Math.max(0, Number(s.awarded) || 0),
+                }))
+                .filter((s) => s.step)
+                .map((s) => ({ ...s, awarded: s.max ? Math.min(s.awarded, s.max) : s.awarded }))
+            : [];
+          const max = Number(p.max) || steps.reduce((t, s) => t + s.max, 0);
+          const awarded = steps.length
+            ? Math.min(steps.reduce((t, s) => t + s.awarded, 0), max || Infinity)
+            : Number(p.awarded) || 0;
+          return {
+            q: String(p.q ?? "").trim(),
+            awarded: Math.round(awarded * 4) / 4, // CA marks move in quarters at finest
+            max,
+            comment: String(p.comment ?? "").trim(),
+            steps,
+          };
+        })
       : [];
+    const stepped = pq.some((p) => (p.steps?.length ?? 0) > 0);
     const validKinds = new Set(["right", "wrong", "partial", "tip"]);
     const annotations: PaperAnnotation[] = Array.isArray(j.annotations)
       ? j.annotations
@@ -1321,7 +1348,11 @@ function parseDescriptiveGrade(text: string, totalMarks: number | null): Descrip
           .filter((a: PaperAnnotation) => a.note)
       : [];
     return {
-      awarded: Number.isFinite(Number(j.awarded)) ? Number(j.awarded) : pq.reduce((s: number, p: { awarded: number }) => s + p.awarded, 0),
+      awarded: stepped
+        ? Math.round(pq.reduce((s: number, p: { awarded: number }) => s + p.awarded, 0) * 4) / 4
+        : Number.isFinite(Number(j.awarded))
+          ? Number(j.awarded)
+          : pq.reduce((s: number, p: { awarded: number }) => s + p.awarded, 0),
       total: Number(j.total) || totalMarks || pq.reduce((s: number, p: { max: number }) => s + p.max, 0),
       summary: String(j.summary ?? "").trim(),
       per_question: pq,
@@ -1688,8 +1719,13 @@ export async function gradeDescriptivePaperAgainstText(
       "For EACH question: marks awarded, max marks, and a one-line comment. Then overall: improvement points and the concepts / accounting standards / sections to revise. " +
       "If part of the handwriting is genuinely unreadable, grade what you can, set \"unreadable\":true, and say so — NEVER invent answers the student did not write. " +
       "ALSO return \"annotations\" to place on the student's pages: 1-based page number, vertical position y (0.0 top to 1.0 bottom), kind (\"right\"/\"wrong\"/\"partial\"/\"tip\") and a note under 12 words. Aim for 1-4 per page. " +
+      // The same paper came back 9, then 13, then 12. A single per-question
+      // number is a judgement made afresh every time. Naming the step and its
+      // award turns marking into bookkeeping: the steps come from the guide,
+      // and the totals are added up here rather than by the marker.
+      "For EVERY question you MUST also return \"steps\": one entry for EACH step listed for that question in the marking guide, copied in the guide's own order, with its \"step\" label exactly as the guide writes it, its \"max\" as the guide allots, and \"awarded\" being what this student earned for that step alone (0, the full amount, or a part of it). Do not merge steps, do not omit a step the student left blank — return it with awarded 0. Do not adjust any step to make a total look right; the totals are calculated from the steps, not from you. " +
       "Respond ONLY as compact JSON, no prose, no code fences: " +
-      '{"awarded":<number>,"total":<number>,"summary":"<one-line overall>","per_question":[{"q":"Q1","awarded":4,"max":6,"comment":"..."}],"improvements":["..."],"concepts_to_revise":["..."],"annotations":[{"page":1,"y":0.25,"kind":"wrong","note":"AS 13 cost excludes brokerage"}],"unreadable":false}.';
+      '{"awarded":<number>,"total":<number>,"summary":"<one-line overall>","per_question":[{"q":"Q1","awarded":4,"max":6,"comment":"...","steps":[{"step":"WN1: Invoice Price relationship stated","max":0.5,"awarded":0.5}]}],"improvements":["..."],"concepts_to_revise":["..."],"annotations":[{"page":1,"y":0.25,"kind":"wrong","note":"AS 13 cost excludes brokerage"}],"unreadable":false}.';
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },

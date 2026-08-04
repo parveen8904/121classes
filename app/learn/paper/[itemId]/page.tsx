@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { viaProxy } from "@/lib/fileProxy";
 import PaperAnswerUpload from "./PaperAnswerUpload";
 import { evaluatePaperNow } from "./actions";
+import AnswerKey from "@/app/components/AnswerKey";
 
 export const dynamic = "force-dynamic";
 // Grading runs inside the submit action on this route and reads two PDFs
@@ -147,17 +148,7 @@ export default async function PaperPage(props: { params: Promise<{ itemId: strin
             {approvedKey.solution_md && (
               <details style={{ marginTop: 10 }}>
                 <summary className="btn as-btn small secondary">📖 Read the written solution</summary>
-                <pre
-                  style={{
-                    whiteSpace: "pre-wrap",
-                    fontFamily: "inherit",
-                    fontSize: ".9rem",
-                    lineHeight: 1.6,
-                    marginTop: 10,
-                  }}
-                >
-                  {approvedKey.solution_md}
-                </pre>
+                <AnswerKey text={String(approvedKey.solution_md)} size=".82rem" />
               </details>
             )}
           </div>

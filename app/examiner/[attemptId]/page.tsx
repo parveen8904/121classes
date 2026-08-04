@@ -7,6 +7,7 @@ import PdfUpload from "@/app/admin/_components/PdfUpload";
 import { submitCheck, unclaimCopy, saveExaminerCopy } from "../actions";
 import SubmitButton from "@/app/components/SubmitButton";
 import type { DescriptiveGrade } from "@/lib/ai";
+import AnswerKey from "@/app/components/AnswerKey";
 
 export const dynamic = "force-dynamic";
 
@@ -107,9 +108,7 @@ export default async function ExaminerCopy(props: { params: Promise<{ attemptId:
             {officialKey && (
               <details className="card">
                 <summary style={{ cursor: "pointer", fontWeight: 700 }}>✅ Official answers (approved key)</summary>
-                <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: ".88rem", lineHeight: 1.6, marginTop: 10 }}>
-                  {officialKey}
-                </pre>
+                <AnswerKey text={officialKey} size=".8rem" />
               </details>
             )}
             {markingScheme && (
@@ -119,9 +118,7 @@ export default async function ExaminerCopy(props: { params: Promise<{ attemptId:
                   Built once from the official answers and used for every student on this test, so two copies with
                   the same working get the same marks.
                 </p>
-                <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: ".88rem", lineHeight: 1.6, marginTop: 10 }}>
-                  {markingScheme}
-                </pre>
+                <AnswerKey text={markingScheme} size=".8rem" />
               </details>
             )}
           </div>
@@ -143,7 +140,26 @@ export default async function ExaminerCopy(props: { params: Promise<{ attemptId:
                     </tr>
                     {report.per_question.map((q, i) => (
                       <tr key={i}>
-                        <td style={{ border: "1px solid var(--border)", padding: "6px 10px" }}>{q.q}</td>
+                        <td style={{ border: "1px solid var(--border)", padding: "6px 10px" }}>
+                          {q.q}
+                          {/* The step-by-step award. The question total is the
+                              sum of these, so you can check the arithmetic
+                              rather than take the mark on trust. */}
+                          {(q.steps ?? []).length > 0 && (
+                            <details style={{ marginTop: 4 }}>
+                              <summary style={{ cursor: "pointer", fontSize: ".78rem", color: "var(--muted)" }}>
+                                step marks ({q.steps!.length})
+                              </summary>
+                              <ul style={{ margin: "6px 0 0", paddingLeft: 16, fontSize: ".78rem", lineHeight: 1.6 }}>
+                                {q.steps!.map((s, k) => (
+                                  <li key={k} style={{ color: s.awarded >= s.max ? "#16a34a" : s.awarded > 0 ? "#b45309" : "#b91c1c" }}>
+                                    {s.step} — <strong>{s.awarded}</strong> / {s.max}
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          )}
+                        </td>
                         <td style={{ border: "1px solid var(--border)", padding: "6px 10px", whiteSpace: "nowrap", textAlign: "right" }}>{q.awarded} / {q.max}</td>
                         <td style={{ border: "1px solid var(--border)", padding: "6px 10px" }}>{q.comment}</td>
                       </tr>

@@ -75,6 +75,28 @@ function wrapText(text: string, font: PDFFont, size: number, maxW: number): stri
   return lines.length ? lines : [""];
 }
 
+// The answer keys arrive with markdown emphasis in them (**Working Note 5**).
+// Drawn as-is, the asterisks appear on the page around every heading.
+function stripEmphasis(text: string): string {
+  return String(text ?? "").replace(/^#{1,6}\s+/, "").replace(/\*\*/g, "");
+}
+
+// wrapText re-joins on single spaces, which is right for a sentence and fatal
+// for a ledger: it flattens the indentation and the column padding that hold an
+// ICAI format together. For the answer key and the marking guide the line is
+// kept exactly as written, and only broken — at a character, never re-spaced —
+// when it is genuinely too wide for the page.
+function wrapMono(text: string, font: PDFFont, size: number, maxW: number): string[] {
+  const line = winAnsi(stripEmphasis(text)).replace(/\t/g, "    ").replace(/\s+$/, "");
+  if (!line) return [""];
+  if (font.widthOfTextAtSize(line, size) <= maxW) return [line];
+  const perChar = font.widthOfTextAtSize("0", size) || size * 0.6;
+  const max = Math.max(20, Math.floor(maxW / perChar));
+  const out: string[] = [];
+  for (let i = 0; i < line.length; i += max) out.push(line.slice(i, i + max));
+  return out;
+}
+
 const KIND_COLOR = {
   right: rgb(0.09, 0.6, 0.3),
   wrong: rgb(0.86, 0.15, 0.15),
@@ -123,6 +145,13 @@ async function buildAnnotatedPdf(
     const out = await PDFDocument.create();
     const font = await out.embedFont(StandardFonts.Helvetica);
     const fontB = await out.embedFont(StandardFonts.HelveticaBold);
+    // The answer keys and the marking guide are written in ICAI's own layout,
+    // with the figures aligned in columns by spaces. Drawn in Helvetica, where
+    // a space is narrower than a digit, every ledger account collapsed into a
+    // paragraph of numbers. A fixed-width font is the only thing that keeps a
+    // Branch Stock Account looking like one.
+    const mono = await out.embedFont(StandardFonts.Courier);
+    const monoB = await out.embedFont(StandardFonts.CourierBold);
     // ignoreEncryption: phone scanner apps routinely stamp a PDF as encrypted
     // with an empty owner password. Without this, load() throws and the whole
     // checked copy is lost — which is exactly what happened: the marks and
@@ -231,14 +260,16 @@ async function buildAnnotatedPdf(
           x: 40, y: yy, size: 20, font: fontB, color: rgb(0.05, 0.58, 0.53),
         });
         yy -= 30;
+        // 8.5pt Courier is 5.1pt a character, so 100 characters fit across the
+        // page — wide enough that a two-sided account is not broken up.
         for (const raw of official.text.split("\n")) {
           const bold = /^\s*(QUESTION|Q\d|ANSWER|Working Note|WORKING)/i.test(raw);
-          for (const l of wrapText(raw, bold ? fontB : font, 10.5, 515)) {
+          for (const l of wrapMono(raw, bold ? monoB : mono, 8.5, 515)) {
             if (yy < 50) { page2 = out.addPage([595, 842]); yy = 842 - 50; }
-            page2.drawText(l, { x: 40, y: yy, size: 10.5, font: bold ? fontB : font, color: rgb(0.1, 0.1, 0.1) });
-            yy -= 15;
+            page2.drawText(l, { x: 40, y: yy, size: 8.5, font: bold ? monoB : mono, color: rgb(0.1, 0.1, 0.1) });
+            yy -= 12;
           }
-          if (!raw.trim()) yy -= 6;
+          if (!raw.trim()) yy -= 5;
         }
       }
     } catch (e) {
@@ -262,10 +293,10 @@ async function buildAnnotatedPdf(
         gy -= 26;
         for (const raw of official.scheme.split("\n")) {
           const bold = /^\s*(QUESTION|Q\s*\d|Total|TOTAL)/i.test(raw);
-          for (const l of wrapText(raw, bold ? fontB : font, 10, 515)) {
+          for (const l of wrapMono(raw, bold ? monoB : mono, 8.5, 515)) {
             if (gy < 50) { gp = out.addPage([595, 842]); gy = 842 - 50; }
-            gp.drawText(l, { x: 40, y: gy, size: 10, font: bold ? fontB : font, color: rgb(0.1, 0.1, 0.1) });
-            gy -= 14;
+            gp.drawText(l, { x: 40, y: gy, size: 8.5, font: bold ? monoB : mono, color: rgb(0.1, 0.1, 0.1) });
+            gy -= 12;
           }
           if (!raw.trim()) gy -= 5;
         }

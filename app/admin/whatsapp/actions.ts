@@ -42,3 +42,49 @@ export async function saveWhatsAppAutoReply(formData: FormData) {
   revalidatePath("/admin/whatsapp");
   redirect("/admin/whatsapp?saved=1");
 }
+
+/**
+ * Draft a reply to the newest student message in a thread — do not send it.
+ *
+ * The founder's number is the one students already use, and it stays on his
+ * phone. So the AI must never speak on it: it prepares the answer from HIS OWN
+ * repository, he reads it, and he presses send. This writes the draft into the
+ * reply box; nothing leaves the account until he does.
+ */
+export async function draftWhatsAppReply(formData: FormData) {
+  await assertArea(null);
+  const to = str(formData.get("to"));
+  const question = str(formData.get("question"));
+  if (!to || !question) return;
+
+  const svc = createServiceClient();
+  try {
+    const [{ getRepositoryContext }, ai] = await Promise.all([
+      import("@/lib/repository"),
+      import("@/lib/ai"),
+    ]);
+    const { answerDoubtFromMaterial, aiConfigured, judgeStudentMessage, NEED_FACULTY } = ai;
+    if (!(await aiConfigured())) return;
+
+    // Only a real question is worth drafting for. Chatter and abuse are left
+    // for him to glance at and ignore.
+    const judged = await judgeStudentMessage(question);
+    if (judged.kind !== "question") {
+      await svc.from("site_settings").upsert(
+        { key: `wadraft:${to}`, value: "" },
+        { onConflict: "key" },
+      );
+      revalidatePath("/admin/whatsapp");
+      return;
+    }
+
+    const material = await getRepositoryContext(null, 24000, { query: question });
+    const answer = await answerDoubtFromMaterial(question, material, "doubt", { betaNote: false });
+    const text = answer && answer.trim() !== NEED_FACULTY ? answer.trim() : "";
+
+    await svc.from("site_settings").upsert({ key: `wadraft:${to}`, value: text }, { onConflict: "key" });
+  } catch {
+    /* a failed draft simply leaves the box empty */
+  }
+  revalidatePath("/admin/whatsapp");
+}

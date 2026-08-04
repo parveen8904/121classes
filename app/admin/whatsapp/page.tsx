@@ -2,7 +2,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
-import { replyOnWhatsApp, saveWhatsAppAutoReply } from "./actions";
+import { replyOnWhatsApp, draftWhatsAppReply, saveWhatsAppAutoReply } from "./actions";
 import { getAutoReply } from "@/lib/whatsappAutoReply";
 
 // The WhatsApp inbox. A Cloud API number cannot use the WhatsApp app and does
@@ -48,6 +48,17 @@ export default async function AdminWhatsAppPage(props: { searchParams: Promise<{
   const auto = await getAutoReply();
 
   // Group by the other party's number, newest conversation first.
+  // The drafts written by the AI, waiting to be read and sent.
+  const { data: draftRows } = await svc
+    .from("site_settings")
+    .select("key, value")
+    .like("key", "wadraft:%");
+  const drafts = new Map(
+    (draftRows ?? [])
+      .filter((d) => String(d.value ?? "").trim())
+      .map((d) => [String(d.key).replace("wadraft:", ""), String(d.value)]),
+  );
+
   const threads = new Map<string, Row[]>();
   for (const r of rows) {
     const p = r.payload ?? {};
@@ -124,11 +135,28 @@ export default async function AdminWhatsAppPage(props: { searchParams: Promise<{
                   </div>
                 ))}
             </div>
+            {/* Draft, then send. The AI writes the answer from CA Parveen
+                Sharma's own material and stops there — nothing leaves the
+                account until he presses Reply. */}
+            <form action={draftWhatsAppReply} style={{ marginBottom: 8 }}>
+              <input type="hidden" name="to" value={who} />
+              <input type="hidden" name="question" value={lastInbound(msgs)} />
+              <SubmitButton className="btn small secondary" savedLabel="Drafting…">
+                ✍️ Draft a reply from my material
+              </SubmitButton>
+            </form>
             <form action={replyOnWhatsApp}>
               <input type="hidden" name="to" value={who} />
-              <input name="text" placeholder="Type a reply…" maxLength={4000} style={{ width: "100%", marginBottom: 8 }} />
+              <textarea
+                name="text"
+                placeholder="Type a reply…"
+                maxLength={4000}
+                rows={drafts.get(who) ? 8 : 2}
+                defaultValue={drafts.get(who) ?? ""}
+                style={{ width: "100%", marginBottom: 8 }}
+              />
               <SubmitButton className="btn small" savedLabel="Sending…">
-                Reply
+                Send
               </SubmitButton>
             </form>
           </div>
@@ -136,4 +164,15 @@ export default async function AdminWhatsAppPage(props: { searchParams: Promise<{
       )}
     </section>
   );
+}
+
+/** The newest thing the student actually said — what a draft should answer. */
+function lastInbound(msgs: Row[]): string {
+  for (const m of msgs) {
+    if (m.template === "inbound") {
+      const t = textOf(m.payload);
+      if (t) return t.slice(0, 2000);
+    }
+  }
+  return "";
 }

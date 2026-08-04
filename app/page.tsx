@@ -63,6 +63,13 @@ const APP_PLATFORMS = [
 export default async function Home() {
   const supabase = tryServiceClient();
   if (!supabase) return null; // local build without env — Vercel always has it
+  // Timing marks. Two pages have measured 67 SECONDS to render while every
+  // query in them runs in under a millisecond, so the cost is somewhere the
+  // database is not. This says where, in the Vercel log, on every rebuild.
+  const t0 = Date.now();
+  const marks: string[] = [];
+  const mark = (what: string) => { marks.push(`${what}=${Date.now() - t0}ms`); };
+
   const [{ data: announcements }, { data: dbCourses }, { data: settings }] = await Promise.all([
     supabase
       .from("announcements")
@@ -109,6 +116,7 @@ export default async function Home() {
   const topResults = rankedResults.slice(0, 45);
   // Live-batch products (a chapter taught LIVE, sold standalone) — highlighted
   // in a top banner while their schedule has upcoming sessions.
+  mark("results");
   const { data: batchRows } = await supabase
     .from("subjects")
     .select("id, title, course_id, batch_price_inr, included_with_subject_id, courses(title)")
@@ -145,6 +153,7 @@ export default async function Home() {
     });
   }
 
+  mark("batches");
   const { data: liveUpcoming } = await supabase
     .from("live_sessions")
     .select("id, title, audience, starts_at, faculties(full_name)")
@@ -153,16 +162,20 @@ export default async function Home() {
     .lte("starts_at", new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString())
     .order("starts_at")
     .limit(6);
+  mark("live");
   const [taught, { count: resultCount }, { count: openingCount }] = await Promise.all([
     studentsTaught(),
     supabase.from("results").select("id", { count: "exact", head: true }).eq("is_published", true),
     supabase.from("job_listings").select("id", { count: "exact", head: true }).eq("status", "approved"),
   ]);
   // YouTube channel (@caparveensharmaofficial) — latest uploads for the homepage.
+  mark("counts");
   const ytOverview = await getChannelOverview().catch(() => null);
   const ytVideos = ytOverview?.uploadsPlaylist
     ? await getRecentVideos(ytOverview.uploadsPlaylist, 6).catch(() => [])
     : [];
+  mark("youtube");
+  if (Date.now() - t0 > 3000) console.warn("[home] slow render:", marks.join(" "));
 
   // Three RUNNING counters (founder's choice), each self-growing:
   // 1) enrolments = LIFETIME figure (9.7 lakh+ base since 1990) + every new

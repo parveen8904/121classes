@@ -324,3 +324,40 @@ export async function upgradeCompute(formData: FormData) {
   });
   redirect(r.ok ? "/admin/integrations?infra=computeok" : `/admin/integrations?infra=fail&inframsg=${encodeURIComponent(JSON.stringify(r.body)?.slice(0, 140) ?? String(r.status))}`);
 }
+
+/**
+ * Work out the Meta App ID from the WhatsApp token we already hold.
+ *
+ * The App ID is normally copied off developers.facebook.com, which needs a
+ * Facebook login the founder cannot currently complete. Meta will simply tell
+ * us: debug_token names the app a token belongs to. One fewer thing to hunt
+ * for, and no password required.
+ */
+export async function detectMetaAppId() {
+  const { assertArea } = await import("@/lib/adminAccess");
+  const { revalidatePath } = await import("next/cache");
+  await assertArea(null);
+  const token = (await getSecret("WHATSAPP_CLOUD_TOKEN")).trim();
+  if (!token) redirect("/admin/integrations?appid=notoken");
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v23.0/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(token)}`,
+      { cache: "no-store" },
+    );
+    const j = await res.json();
+    const appId = String(j?.data?.app_id ?? "").trim();
+    if (!appId) redirect("/admin/integrations?appid=notfound");
+
+    await createServiceClient().from("app_secrets").upsert(
+      { key: "META_APP_ID", value: appId, updated_at: new Date().toISOString() },
+      { onConflict: "key" },
+    );
+    clearSecretCache();
+    revalidatePath("/admin/integrations");
+    redirect(`/admin/integrations?appid=${appId}`);
+  } catch (e) {
+    if (e instanceof Error && e.message === "NEXT_REDIRECT") throw e;
+    redirect("/admin/integrations?appid=error");
+  }
+}

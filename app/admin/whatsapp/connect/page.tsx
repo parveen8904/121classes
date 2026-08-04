@@ -2,6 +2,8 @@ import Link from "next/link";
 import { assertArea } from "@/lib/adminAccess";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../../_components/AdminHero";
+import SubmitButton from "@/app/components/SubmitButton";
+import { detectMetaAppId } from "../../integrations/actions";
 import ConnectNumber from "./ConnectNumber";
 
 export const dynamic = "force-dynamic";
@@ -58,8 +60,15 @@ export default async function ConnectWhatsAppPage() {
             </p>
             <ul style={{ margin: "8px 0 0", paddingLeft: 20, fontSize: ".9rem", lineHeight: 1.7 }}>
               <li>
-                <strong>META_APP_ID</strong> {appId ? "✅ set" : "— missing"} — developers.facebook.com → your app →
-                the App ID at the top.
+                <strong>META_APP_ID</strong> {appId ? "✅ set" : "— missing"} — no need to hunt for this: the
+                WhatsApp token already names its app.
+                {!appId && (
+                  <form action={detectMetaAppId} style={{ marginTop: 6 }}>
+                    <SubmitButton className="btn small secondary" savedLabel="Found">
+                      🔎 Find it from my WhatsApp token
+                    </SubmitButton>
+                  </form>
+                )}
               </li>
               <li>
                 <strong>META_EMBEDDED_SIGNUP_CONFIG_ID</strong> {configId ? "✅ set" : "— missing"} — same app →

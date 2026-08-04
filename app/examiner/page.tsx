@@ -22,7 +22,7 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
   const svc = createServiceClient();
   const { data: rows } = await svc
     .from("descriptive_attempts")
-    .select("id, student_id, section_id, status, review_status, examiner_name, examiner_id, submitted_at, awarded_marks, total_marks, examiner_checked_at")
+    .select("id, student_id, section_id, status, review_status, examiner_name, examiner_id, submitted_at, awarded_marks, total_marks, examiner_checked_at, grade_error, grade_tries")
     .in("status", ["submitted", "graded"])
     .order("submitted_at", { ascending: false })
     .limit(400);
@@ -46,6 +46,7 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
     id: string; student: string; test: string; topic: string; subject: string; subjectId: string; sectionId: string;
     submittedAt: string | null; ai: number | null; total: number | null;
     review: string; examiner: string | null; mine: boolean; checkedAt: string | null; aiPending: boolean;
+    aiFailed: boolean; aiError: string | null;
   };
   const items: Item[] = (rows ?? []).map((r) => {
     const sec = secById.get(r.section_id as string);
@@ -69,6 +70,10 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
       mine: r.examiner_id === user.id,
       checkedAt: (r.examiner_checked_at as string) ?? null,
       aiPending: r.status === "submitted",
+      // Three failed attempts means it is not coming — say so, so the copy is
+      // marked by hand rather than waited on for ever.
+      aiFailed: r.status === "submitted" && (Number(r.grade_tries) || 0) >= 3,
+      aiError: (r.grade_error as string) ?? null,
     };
   });
 
@@ -136,7 +141,13 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
                 <p className="row-sub">
                   📄 {i.test} · 📚 {i.subject} · 📖 {i.topic}
                   {i.submittedAt ? ` · submitted ${new Date(i.submittedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}` : ""}
-                  {i.aiPending ? " · ⏳ AI check pending" : i.ai != null ? ` · 🤖 AI: ${i.ai}${i.total ? `/${i.total}` : ""}` : ""}
+                  {i.aiFailed
+                    ? ` · ⚠️ AI could not check this copy — please mark it yourself${i.aiError ? ` (${i.aiError})` : ""}`
+                    : i.aiPending
+                      ? " · ⏳ AI check pending"
+                      : i.ai != null
+                        ? ` · 🤖 AI: ${i.ai}${i.total ? `/${i.total}` : ""}`
+                        : ""}
                 </p>
               </div>
               <div className="row-actions" style={{ alignItems: "center" }}>

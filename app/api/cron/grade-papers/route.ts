@@ -28,11 +28,16 @@ export async function GET(req: NextRequest) {
   const started = Date.now();
 
   // Oldest first, so nobody is overtaken by a later submission.
+  //
+  // A paper that has already failed three times is left alone. Retrying it for
+  // ever does not fix it — one stuck copy quietly re-ran two AI calls every
+  // five minutes — and the examiner is told to mark that one by hand instead.
   const { data: waiting } = await svc
     .from("descriptive_attempts")
     .select("id, section_id")
     .eq("status", "submitted")
     .is("report", null)
+    .lt("grade_tries", 3)
     .order("submitted_at", { ascending: true })
     .limit(20);
 

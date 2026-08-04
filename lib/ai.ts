@@ -1230,18 +1230,76 @@ export async function gradeDescriptivePaper(
       .map((b: { text: string }) => b.text)
       .join("\n")
       .trim();
-    if (!text) return null;
+    if (!text) {
+      console.error("[grade_descriptive] the model returned no text at all");
+      return null;
+    }
     return parseDescriptiveGrade(text, totalMarks ?? null);
-  } catch {
+  } catch (e) {
+    console.error("[grade_descriptive] marking failed", e instanceof Error ? e.message : e);
     return null;
   }
+}
+
+// Read the report object out of whatever the model actually sent.
+//
+// A single stray character used to cost the whole marking run: JSON.parse threw,
+// the caller returned null, nothing was written, and the cron picked the same
+// paper up five minutes later and paid for it again — for ever, in silence.
+// So we try in order: the text as-is, the text with code fences stripped, and
+// the outermost {...} in it (which survives a sentence of preamble). Control
+// characters that the model sometimes leaves inside a string are escaped rather
+// than allowed to break the parse.
+function readGradeJson(raw: string): Record<string, unknown> | null {
+  const candidates: string[] = [];
+  const stripped = raw.replace(/```json|```/g, "").trim();
+  candidates.push(stripped);
+  const first = stripped.indexOf("{");
+  const last = stripped.lastIndexOf("}");
+  if (first >= 0 && last > first) candidates.push(stripped.slice(first, last + 1));
+
+  for (const c of candidates) {
+    for (const attempt of [c, escapeControlCharsInStrings(c)]) {
+      try {
+        const j = JSON.parse(attempt);
+        if (j && typeof j === "object") return j as Record<string, unknown>;
+      } catch { /* try the next shape */ }
+    }
+  }
+  return null;
+}
+
+// A literal newline or tab inside a JSON string is invalid, and models do emit
+// them in long examiner comments. Escape them instead of losing the report.
+function escapeControlCharsInStrings(s: string): string {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (const ch of s) {
+    if (escaped) { out += ch; escaped = false; continue; }
+    if (ch === "\\") { out += ch; escaped = true; continue; }
+    if (ch === '"') { inString = !inString; out += ch; continue; }
+    if (inString && ch === "\n") { out += "\\n"; continue; }
+    if (inString && ch === "\r") { out += "\\r"; continue; }
+    if (inString && ch === "\t") { out += "\\t"; continue; }
+    out += ch;
+  }
+  return out;
 }
 
 // Both graders (solution PDF, approved solution text) return the same report,
 // so the shape is parsed in one place.
 function parseDescriptiveGrade(text: string, totalMarks: number | null): DescriptiveGrade | null {
+  const parsed = readGradeJson(text);
+  if (!parsed) {
+    console.error("[grade_descriptive] report was not readable JSON; first 300 chars:", text.slice(0, 300));
+    return null;
+  }
   try {
-    const j = JSON.parse(text.replace(/```json|```/g, "").trim());
+    const j = parsed as {
+      per_question?: unknown; annotations?: unknown; awarded?: unknown; total?: unknown;
+      summary?: unknown; improvements?: unknown; concepts_to_revise?: unknown; unreadable?: unknown;
+    };
     const arr = (x: unknown) => (Array.isArray(x) ? x.map((s) => String(s).trim()).filter(Boolean) : []);
     const pq = Array.isArray(j.per_question)
       ? j.per_question.map((p: { q?: unknown; awarded?: unknown; max?: unknown; comment?: unknown }) => ({
@@ -1272,7 +1330,8 @@ function parseDescriptiveGrade(text: string, totalMarks: number | null): Descrip
       annotations,
       unreadable: Boolean(j.unreadable),
     };
-  } catch {
+  } catch (e) {
+    console.error("[grade_descriptive] report JSON had an unexpected shape", e instanceof Error ? e.message : e);
     return null;
   }
 }
@@ -1666,9 +1725,13 @@ export async function gradeDescriptivePaperAgainstText(
       .map((b: { text: string }) => b.text)
       .join("\n")
       .trim();
-    if (!text) return null;
+    if (!text) {
+      console.error("[grade_descriptive/text] the model returned no text at all");
+      return null;
+    }
     return parseDescriptiveGrade(text, totalMarks ?? null);
-  } catch {
+  } catch (e) {
+    console.error("[grade_descriptive/text] marking failed", e instanceof Error ? e.message : e);
     return null;
   }
 }

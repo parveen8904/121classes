@@ -36,6 +36,8 @@ type Row = {
   awarded_marks: number | null;
   total_marks: number | null;
   report: DescriptiveGrade | null;
+  grade_tries?: number | null;
+  grade_error?: string | null;
 };
 
 // ---- annotated "checked copy" builder (pdf-lib, server-side) ----
@@ -439,8 +441,32 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
     } else if (approvedKey && studentUrl) {
       graded = await gradeDescriptivePaperAgainstText(studentUrl, approvedKey, cfg.totalMarks || row.total_marks || null);
     }
-  } catch {
+  } catch (e) {
+    console.error("[grade] marking threw for attempt", row.id, e instanceof Error ? e.message : e);
     graded = null;
+  }
+  if (!graded) {
+    // Why this paper produced nothing, on the record. Without it the cron just
+    // marks the same copy again every five minutes, paying each time, and the
+    // examiner sees "AI check pending" for ever with nothing to explain it.
+    console.error(
+      "[grade] no report for attempt", row.id,
+      "scheme:", scheme ? "yes" : "no",
+      "solutionPdf:", solutionUrl ? "yes" : "no",
+      "approvedKey:", approvedKey ? "yes" : "no",
+      "studentUrl:", studentUrl ? "yes" : "no",
+    );
+    await svc
+      .from("descriptive_attempts")
+      .update({
+        grade_tries: (Number(row.grade_tries) || 0) + 1,
+        grade_error: !studentUrl
+          ? "the answer book could not be opened"
+          : !(scheme || solutionUrl || approvedKey)
+            ? "this test has no approved answer key to mark against"
+            : "the marking reply could not be read",
+      })
+      .eq("id", row.id);
   }
   if (graded) {
     // Build the annotated "checked copy" (marks + margin notes) — best-effort.
@@ -472,7 +498,13 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
       console.error("[checked_copy] upload failed", e instanceof Error ? e.message : e);
       annotatedUrl = null;
     }
-    await svc.from("descriptive_attempts").update({ status: "graded", awarded_marks: graded.awarded, total_marks: graded.total, report: graded, annotated_url: annotatedUrl, review_status: "pending" }).eq("id", row.id);
+    const { error: saveErr } = await svc
+      .from("descriptive_attempts")
+      .update({ status: "graded", awarded_marks: graded.awarded, total_marks: graded.total, report: graded, annotated_url: annotatedUrl, review_status: "pending", grade_error: null })
+      .eq("id", row.id);
+    // The marking is only done when it is SAVED. An ignored error here looked
+    // exactly like a paper that was never marked at all.
+    if (saveErr) console.error("[grade] report could not be saved for attempt", row.id, saveErr.message);
     // The student does NOT get the report yet — an examiner verifies first.
     return { status: "submitted", fileUrl: row.file_url ?? undefined, submittedAt: row.submitted_at ?? undefined, deadlineAt: row.deadline_at, total: graded.total, underReview: true };
   }

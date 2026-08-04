@@ -63,9 +63,18 @@ const APP_PLATFORMS = [
 export default async function Home() {
   const supabase = tryServiceClient();
   if (!supabase) return null; // local build without env — Vercel always has it
-  // Timing marks. Two pages have measured 67 SECONDS to render while every
-  // query in them runs in under a millisecond, so the cost is somewhere the
-  // database is not. This says where, in the Vercel log, on every rebuild.
+  // Timing marks, kept as a tripwire.
+  //
+  // I reported that this page took 67 seconds to render. It does not. That
+  // number was the TCP connect from the machine I was measuring on — curl -4
+  // showed connect=19.0s on a first attempt and 0.03s on the next, and the
+  // warm-up cron, which fetches this page from inside Vercel every couple of
+  // minutes, has never once logged it as slow. The render was never the
+  // problem; my measurement was.
+  //
+  // The marks stay because they cost nothing and they log only above three
+  // seconds — so if this page ever does become slow to build, it will say so
+  // instead of being argued about.
   const t0 = Date.now();
   const marks: string[] = [];
   const mark = (what: string) => { marks.push(`${what}=${Date.now() - t0}ms`); };

@@ -548,6 +548,20 @@ export async function submitPaperAttempt(input: { sectionId: string; fileUrl: st
     })
     .eq("id", r.id);
 
+  // Start the marking NOW, in the background, instead of waiting for the next
+  // sweep of the cron. The student's page still returns immediately — waitUntil
+  // keeps the function alive after the response has gone — but the checked copy
+  // is ready in about a minute rather than up to six. The cron stays as the
+  // safety net for anything this misses.
+  try {
+    const { waitUntil } = await import("@vercel/functions");
+    waitUntil(
+      gradeSubmittedPaper(r.id).catch((e) =>
+        console.error("[grade] immediate marking failed for attempt", r.id, e instanceof Error ? e.message : e),
+      ),
+    );
+  } catch { /* not on Vercel — the cron will pick it up */ }
+
   try {
     if (user.email) {
       const link = `https://caparveensharma.com/api/file?u=${encodeURIComponent(input.fileUrl)}`;

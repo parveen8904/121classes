@@ -151,10 +151,21 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
                 </p>
               </div>
               <div className="row-actions" style={{ alignItems: "center" }}>
-                {i.review === "pending" && (
+                {/* A copy the AI has not finished with has no marks and no
+                    annotated copy to show — opening it looks broken. Offer it
+                    only when there is something to check, unless the AI has
+                    given up, in which case it must be marked by hand. */}
+                {i.review === "pending" && i.aiPending && !i.aiFailed && (
+                  <span style={{ color: "#b45309", fontWeight: 700, fontSize: ".85rem" }}>
+                    ⏳ AI is checking this — ready in a minute
+                  </span>
+                )}
+                {i.review === "pending" && (!i.aiPending || i.aiFailed) && (
                   <form action={claimCopy} style={{ display: "inline" }}>
                     <input type="hidden" name="id" value={i.id} />
-                    <SubmitButton className="btn small">🖊️ Check this copy</SubmitButton>
+                    <SubmitButton className="btn small">
+                      {i.aiFailed ? "🖊️ Mark this copy myself" : "🖊️ Check this copy"}
+                    </SubmitButton>
                   </form>
                 )}
                 {i.review === "checking" && (i.mine ? (

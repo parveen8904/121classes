@@ -2,18 +2,27 @@ import Link from "next/link";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../_components/AdminHero";
-import { addUsers } from "./actions";
+import { addUsers, rescueFirstLogins } from "./actions";
+import { createServiceClient } from "@/lib/supabase/service";
 
 const ROLE_EMOJI: Record<string, string> = { student: "🎓", admin: "🛠️", faculty: "👩‍🏫" };
 
 export default async function UsersPage(
   props: {
-    searchParams: Promise<{ q?: string; role?: string; added?: string; invited?: string; failed?: string }>;
+    searchParams: Promise<{ q?: string; role?: string; added?: string; invited?: string; failed?: string; rescued?: string; rescueleft?: string; rescueerr?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
   const supabase = createClient();
   const q = (searchParams.q ?? "").trim();
+
+  // How many students have never once signed in — the number that mattered
+  // most and that nothing on this page was showing.
+  let stuck = 0;
+  try {
+    const { data } = await createServiceClient().rpc("students_never_signed_in", { max_rows: 1000 });
+    stuck = ((data ?? []) as unknown[]).length;
+  } catch { /* never let a count break the page */ }
   const role = searchParams.role ?? "";
 
   let query = supabase
@@ -48,6 +57,30 @@ export default async function UsersPage(
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
+      {/* Students who have an account and have never once got into it. */}
+      {stuck > 0 && (
+        <div className="notice err" style={{ marginTop: 16 }}>
+          <strong>⚠️ {stuck} student{stuck === 1 ? " has" : "s have"} never been able to log in.</strong>
+          <p style={{ fontSize: ".88rem", margin: "6px 0 10px" }}>
+            They were emailed a &ldquo;Set my password&rdquo; button. That is a single-use link that expires within
+            the hour — a student who opens the email next morning gets &ldquo;link expired&rdquo; and gives up.
+            Sending them a <strong>password</strong> instead fixes it: it does not expire, it works on any device,
+            and it can be read out over the phone. They can change it later from their dashboard.
+          </p>
+          <form action={rescueFirstLogins}>
+            <SubmitButton className="btn small" savedLabel="Sending…">
+              📧 Send working passwords to the next 100
+            </SubmitButton>
+          </form>
+        </div>
+      )}
+      {searchParams.rescued && (
+        <div className="notice ok" style={{ marginTop: 16 }}>
+          ✅ Sent to {searchParams.rescued} student(s). {searchParams.rescueleft ?? 0} still to go — press again.
+          {searchParams.rescueerr ? ` First problem: ${searchParams.rescueerr}` : ""}
+        </div>
+      )}
+
       <AdminHero
         badge="👥 Users"
         title="Users"

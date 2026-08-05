@@ -215,3 +215,21 @@ export async function resetStudentTests(formData: FormData) {
   revalidatePath(`/admin/users/${id}`);
   redirect(`/admin/users/${id}?testsreset=${encodeURIComponent(done.join(", "))}`);
 }
+
+// ---- get the bulk-granted students in ----
+//
+// 1,466 accounts created since 1 August have never once been logged into. They
+// were emailed a "set my password" button, which is a single-use token that
+// expires within the hour — the wrong instrument for a student who reads email
+// the next morning. This sends a password instead: it does not expire, it works
+// from any device, and it can be read aloud over a phone.
+export async function rescueFirstLogins() {
+  if (!(await requireAdmin())) return;
+  const { sendFirstLoginPasswords } = await import("@/lib/firstLoginRescue");
+  const r = await sendFirstLoginPasswords(100);
+  revalidatePath("/admin/users");
+  redirect(
+    `/admin/users?rescued=${r.fixed}&rescueleft=${r.remaining}` +
+      (r.failed[0] ? `&rescueerr=${encodeURIComponent(r.failed[0].slice(0, 160))}` : ""),
+  );
+}

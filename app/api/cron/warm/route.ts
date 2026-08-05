@@ -26,6 +26,7 @@ export const maxDuration = 120;
 const ROUTES = [
   "/",
   "/login",
+  "/ask",
   "/courses",
   "/pricing",
   "/test-series",

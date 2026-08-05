@@ -51,19 +51,59 @@ function newestPart(body: string): string {
     .slice(0, 6000);
 }
 
+/** "CA Parveen Sharma <contact+caf_=x@d.com>" → "contact@d.com". */
+function bareAddress(s: string): string {
+  const a = s.toLowerCase().replace(/^.*</, "").replace(/>.*$/, "").trim();
+  const at = a.lastIndexOf("@");
+  if (at < 1) return a;
+  // Google rewrites a FORWARDED sender to contact+caf_=inbox=121caclasses.com@…
+  // Everything after the "+" is routing, not identity, and comparing the whole
+  // string meant our own mail was not recognised as ours — which is precisely
+  // how the site ended up answering itself thirty times in ten minutes.
+  return `${a.slice(0, at).split("+")[0]}@${a.slice(at + 1)}`;
+}
+
 /** Our own addresses. Mail from any of these is US, and must never be answered. */
 async function isOurOwnMail(from: string): Promise<boolean> {
-  const addr = from.toLowerCase().replace(/^.*</, "").replace(/>.*$/, "").trim();
-  if (!addr) return false;
+  const addr = bareAddress(from);
+  if (!addr.includes("@")) return false;
+
+  // The whole sending domain counts as us. Address-by-address matching is one
+  // rewrite away from failing again, and a member of staff who needs something
+  // done has the admin panel rather than the student inbox.
+  const ourDomain = (await getSecret("MAILGUN_DOMAIN")).toLowerCase().trim();
+  if (ourDomain && addr.endsWith(`@${ourDomain}`)) return true;
+
   const ours = await Promise.all([
     getSecret("NOTIFY_FROM_EMAIL"),
     getSecret("NOTIFY_REPLY_TO"),
     getSecret("FACULTY_EMAIL"),
   ]);
-  return ours.some((o) => {
-    const own = o.toLowerCase().replace(/^.*</, "").replace(/>.*$/, "").trim();
-    return own && own === addr;
-  });
+  return ours.some((o) => o.trim() && bareAddress(o) === addr);
+}
+
+/**
+ * Last line of defence, whatever the cause.
+ *
+ * The address checks above answer "is this us?" — but a loop can start any
+ * number of ways we have not thought of, and the cost of being wrong is a
+ * thousand emails overnight rather than thirty in ten minutes. So: if the same
+ * sender has already been recorded many times in the last hour, stop answering
+ * and let a person look. This does not need to know WHY it is looping.
+ */
+async function loopingHard(svc: ReturnType<typeof createServiceClient>, from: string): Promise<boolean> {
+  try {
+    const since = new Date(Date.now() - 3600_000).toISOString();
+    const { count } = await svc
+      .from("page_questions")
+      .select("id", { count: "exact", head: true })
+      .eq("page_path", "email")
+      .eq("email", from)
+      .gte("created_at", since);
+    return (count ?? 0) > 6;
+  } catch {
+    return false;
+  }
 }
 
 /** Mail that must never be replied to: bounces, vacation notices, other robots. */
@@ -118,6 +158,11 @@ export async function POST(req: NextRequest) {
   // this the site would answer itself, and each answer would arrive again.
   if (!from || !question || isMachineMail(form, from, subject) || (await isOurOwnMail(from))) {
     return NextResponse.json({ ok: true, result: "recorded, not answered" });
+  }
+
+  if (await loopingHard(svc, from)) {
+    console.error("[email/inbound] too many messages from", from, "— answering stopped");
+    return NextResponse.json({ ok: true, result: "recorded, loop guard tripped" });
   }
 
   // An answer book arrived by email. It is NOT a doubt and must not be answered

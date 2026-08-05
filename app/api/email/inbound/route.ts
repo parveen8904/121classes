@@ -51,6 +51,21 @@ function newestPart(body: string): string {
     .slice(0, 6000);
 }
 
+/** Our own addresses. Mail from any of these is US, and must never be answered. */
+async function isOurOwnMail(from: string): Promise<boolean> {
+  const addr = from.toLowerCase().replace(/^.*</, "").replace(/>.*$/, "").trim();
+  if (!addr) return false;
+  const ours = await Promise.all([
+    getSecret("NOTIFY_FROM_EMAIL"),
+    getSecret("NOTIFY_REPLY_TO"),
+    getSecret("FACULTY_EMAIL"),
+  ]);
+  return ours.some((o) => {
+    const own = o.toLowerCase().replace(/^.*</, "").replace(/>.*$/, "").trim();
+    return own && own === addr;
+  });
+}
+
 /** Mail that must never be replied to: bounces, vacation notices, other robots. */
 function isMachineMail(form: FormData, from: string, subject: string): boolean {
   const header = (n: string) => String(form.get(n) ?? "").toLowerCase();
@@ -97,7 +112,11 @@ export async function POST(req: NextRequest) {
     .select("id")
     .maybeSingle();
 
-  if (!from || !question || isMachineMail(form, from, subject)) {
+  // contact@ is BOTH the address students reply to and the address the site
+  // escalates to. Once it forwards in here, our own notifications arrive as
+  // inbound mail — so anything sent by us is recorded and left alone. Without
+  // this the site would answer itself, and each answer would arrive again.
+  if (!from || !question || isMachineMail(form, from, subject) || (await isOurOwnMail(from))) {
     return NextResponse.json({ ok: true, result: "recorded, not answered" });
   }
 

@@ -27,6 +27,7 @@ const ROUTES = [
   "/",
   "/login",
   "/ask",
+  "/check-my-paper",
   "/courses",
   "/pricing",
   "/test-series",

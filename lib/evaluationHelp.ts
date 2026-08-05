@@ -38,6 +38,6 @@ export function isEvaluationComplaint(text: string): boolean {
 export const EVALUATION_HELP =
   "Your copy does not have to wait. 🙂\n\n" +
   "1) The fastest way — take the test on the website: caparveensharma.com. Upload your answer book as ONE PDF and it is checked against Sir's own approved answer key, with the marks written on your own pages. Faculty release it, and papers are generally back within about two hours.\n\n" +
-  "2) Already written it on paper, or it is an older test? Email the scan to sir@caparveensharma.com from the email address on your account, saying which test it is. It goes into the same checking queue.\n\n" +
+  "2) Ran out of time, or you have no plan? Use caparveensharma.com/check-my-paper — log in, pick which test it is, upload the PDF, and the checked copy is emailed back to you. It is free, and it goes through exactly the same checking.\n\n" +
   "Scan it as a single PDF — your phone does this: iPhone Notes → Scan Documents, or Google Drive → + → Scan. Photographs cannot be marked.\n\n" +
   "If a copy you have already uploaded is more than a day old, reply here with your registered email and it will be looked into personally.";

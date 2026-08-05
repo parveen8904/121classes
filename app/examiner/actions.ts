@@ -66,7 +66,7 @@ export async function submitCheck(formData: FormData) {
   const svc = createServiceClient();
   const { data: row } = await svc
     .from("descriptive_attempts")
-    .select("id, student_id, section_id, awarded_marks, total_marks, examiner_id, review_status")
+    .select("id, student_id, section_id, awarded_marks, total_marks, examiner_id, review_status, source, annotated_url")
     .eq("id", id)
     .maybeSingle();
   if (!row || row.review_status === "checked") return;
@@ -104,7 +104,15 @@ export async function submitCheck(formData: FormData) {
       `<p>The examiner has checked your descriptive paper <strong>${section?.title ?? ""}</strong>.</p>
        <p>Marks: <strong>${finalMarks ?? "—"}${row.total_marks ? ` / ${row.total_marks}` : ""}</strong></p>
        ${remarks ? `<p>Examiner's remarks: ${remarks}</p>` : ""}
-       <p>Open the test on the portal to see your checked copy and detailed feedback. 📚</p>`,
+       ${
+         // A paper sent in through the free checking service has no course page
+         // to open — that student may have no plan at all. Send them straight
+         // to the one page that holds their copy.
+         row.source === "paper_check"
+           ? `<p><a href="https://caparveensharma.com/check-my-paper">Open your checked copy and the official answers</a> — the marks are written on your own pages, with a summary and the full solutions at the end.</p>
+              <p class="muted">Want the classes, the day-by-day plan and unlimited tests? <a href="https://caparveensharma.com/courses">See the courses</a>.</p>`
+           : `<p>Open the test on the portal to see your checked copy and detailed feedback. 📚</p>`
+       }`,
     ),
     template: "copy_checked",
     payload: { sectionId: row.section_id },

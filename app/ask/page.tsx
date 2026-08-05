@@ -60,6 +60,14 @@ export default async function AskPage() {
       sub: "sir@caparveensharma.com",
     },
     {
+      href: "/check-my-paper",
+      icon: "📝",
+      colour: "#b45309",
+      title: "Get a paper checked",
+      line: "Written a paper by hand? Send it and get it back marked.",
+      sub: "Free — no plan needed",
+    },
+    {
       href: "/dashboard",
       icon: "📘",
       colour: "#7c3aed",

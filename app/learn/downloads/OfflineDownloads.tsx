@@ -2,6 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { resolveOfflineKey, cacheOfflineKey } from "./licenseCache";
+
+// When each class finished downloading, on THIS device.
+//
+// A student who downloads ten classes then has to scroll the whole subject to
+// find out whether the first one finished. Downloads are per device, so the
+// order they arrived in is per device too — it lives in localStorage, not in
+// the database, and it is what the "Downloaded" view is sorted by.
+const DL_AT = (id: string) => `dlat:${id}`;
+function markDownloaded(id: string) {
+  try { localStorage.setItem(DL_AT(id), String(Date.now())); } catch { /* private mode */ }
+}
+function downloadedAt(id: string): number {
+  try { return Number(localStorage.getItem(DL_AT(id))) || 0; } catch { return 0; }
+}
+function forgetDownloaded(id: string) {
+  try { localStorage.removeItem(DL_AT(id)); } catch { /* no-op */ }
+}
 import OfflinePlayer from "@/app/components/OfflinePlayer";
 
 type Klass = {
@@ -58,6 +75,9 @@ export default function OfflineDownloads({
   const [ready, setReady] = useState<Record<string, boolean>>({});
   // Mobile plays inline in this overlay (desktop opens its own player window).
   const [playerSrc, setPlayerSrc] = useState<string | null>(null);
+  // Which of the three views. "Downloaded" is the one students need most and
+  // the one that was hardest to get at, so it leads.
+  const [view, setView] = useState<"downloaded" | "pending" | "all">("all");
 
   useEffect(() => {
     const w = window as unknown as { native?: Native; Capacitor?: CapGlobal };
@@ -113,6 +133,7 @@ export default function OfflineDownloads({
     try {
       await native.download(c.id, c.storage_url, c.byte_size ?? undefined);
       cacheOfflineKey(c.id); // mirror the play key now, while online — enables airplane-mode playback
+      markDownloaded(c.id);
       setLabels((l) => ({ ...l, [c.id]: "Downloaded ✓" }));
       setReady((r) => ({ ...r, [c.id]: true }));
     } catch (e) {
@@ -146,6 +167,7 @@ export default function OfflineDownloads({
     try {
       await native.remove(c.id);
       try { localStorage.removeItem(`offkey:${c.id}`); } catch { /* no-op */ }
+      forgetDownloaded(c.id);
       setReady((r) => ({ ...r, [c.id]: false }));
       setLabels((l) => ({ ...l, [c.id]: "Download" }));
     } catch (e) {
@@ -169,15 +191,35 @@ export default function OfflineDownloads({
     );
   }
 
+  const doneCount = classes.filter((c) => ready[c.id]).length;
+  const pendingCount = classes.length - doneCount;
+
+  // The DOWNLOADED view is a flat list in the order they arrived, deliberately
+  // NOT grouped by subject and NOT in class order. A student who has just
+  // downloaded four classes wants the newest at the top, not to hunt through
+  // folders for the one that finished a minute ago. The class sequence is
+  // broken here on purpose — the other two views keep it.
+  const downloaded = classes
+    .filter((c) => ready[c.id])
+    .sort((a, b) => (downloadedAt(b.id) || 0) - (downloadedAt(a.id) || 0));
+
+  const listed = view === "downloaded" ? downloaded : view === "pending" ? classes.filter((c) => !ready[c.id]) : classes;
+
   // Folder view: one section per subject (students only ever receive the
   // subjects on their plan — admins receive everything, hence the note).
   const bySubject = new Map<string, Klass[]>();
-  for (const c of classes) {
+  for (const c of listed) {
     const k = c.subject_title ?? "Other";
     if (!bySubject.has(k)) bySubject.set(k, []);
     bySubject.get(k)!.push(c);
   }
   for (const items of bySubject.values()) items.sort((a, b) => classOrder(a) - classOrder(b));
+
+  const TABS = [
+    { key: "downloaded" as const, label: `⬇️ Downloaded`, n: doneCount },
+    { key: "pending" as const, label: `☁️ Not downloaded`, n: pendingCount },
+    { key: "all" as const, label: `📚 All classes`, n: classes.length },
+  ];
 
   return (
     <>
@@ -186,9 +228,63 @@ export default function OfflineDownloads({
           👑 <strong>Admin view:</strong> you see EVERY subject. Each student sees only the subjects included in their own plan.
         </div>
       )}
+      {/* Three views. Downloaded first, because that is the one a student comes
+          back to and the one that used to mean scrolling a whole subject. */}
+      {classes.length > 0 && pendingCount > 0 && (
+        <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 10px" }}>
+          Tap Download on as many classes as you like — they come down <strong>one at a time</strong>, so the first
+          one is ready to watch while the rest arrive. Downloading four at once made all four crawl.
+        </p>
+      )}
+      {classes.length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={`btn small ${view === t.key ? "" : "secondary"}`}
+              onClick={() => setView(t.key)}
+            >
+              {t.label} ({t.n})
+            </button>
+          ))}
+        </div>
+      )}
+
       {classes.length === 0 ? (
         <div className="card">
           <p className="muted">No downloadable classes on your plan yet.</p>
+        </div>
+      ) : listed.length === 0 ? (
+        <div className="card">
+          <p className="muted">
+            {view === "downloaded"
+              ? "Nothing downloaded on this device yet. Open “All classes” and download the ones you want to watch offline."
+              : "Every class on your plan is already downloaded on this device. 🎉"}
+          </p>
+        </div>
+      ) : view === "downloaded" ? (
+        // Flat, newest first. No folders, no class numbering — the thing you
+        // just downloaded is the thing at the top.
+        <div className="sec-list">
+          {downloaded.map((c) => (
+            <div className="list-row" key={c.id}>
+              <div>
+                <span className="row-title">✅ {c.class_no ? `Class ${c.class_no} · ` : ""}{c.title}</span>
+                <p className="row-sub">
+                  {c.subject_title ? `${c.subject_title} · ` : ""}
+                  {c.byte_size ? `${(Number(c.byte_size) / 1e9).toFixed(2)} GB` : ""}
+                  {downloadedAt(c.id) ? ` · downloaded ${new Date(downloadedAt(c.id)).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}` : ""}
+                </p>
+              </div>
+              <div className="row-actions">
+                <button className="btn small" type="button" onClick={() => play(c)}>▶️ Play</button>
+                {native.remove && (
+                  <button className="btn small secondary" type="button" onClick={() => removeDownload(c)} title="Remove from this device">🗑️</button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         [...bySubject.entries()].map(([subject, items]) => (

@@ -36,6 +36,14 @@ const PAPER_SYSTEM =
   "style of wording. Do NOT reproduce a past question verbatim; change the companies, the dates and every figure. A student who " +
   "has already seen the original must still have to work.\n" +
 
+  // Paper 1 came back 45% longer than the other two for the same 100 marks —
+  // 1,095 lines against 751 and 723. A three-hour paper a student cannot finish
+  // in three hours is not a mock of anything.
+  "LENGTH — this is a THREE HOUR paper and it must be sittable in three hours. Aim for about 700 lines in total and " +
+  "do not exceed 800. Each case scenario is 12-18 lines of situation before its questions, not a page. A descriptive " +
+  "question is the data needed and nothing more: no background narrative, no restating of the standard, no explaining " +
+  "what the student is being asked to demonstrate. Give the figures and ask for the answer.\n" +
+
   "ARITHMETIC — every sum must be internally consistent and actually solvable from the data given. Balance what should balance. " +
   "State the assumptions an examiner would accept. If a figure is needed to solve it, put it in the question.\n" +
 

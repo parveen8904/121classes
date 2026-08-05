@@ -74,16 +74,20 @@ export default async function MockTestsPage(props: {
                 Time allowed {Math.round(open.duration_min / 60)} hours · Maximum marks {open.total_marks}
               </p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-                <Link className="btn" href="/check-my-paper">📤 I have written it — send it for checking</Link>
+                <a className="btn" href={`/mock-tests/${open.id}/pdf`} target="_blank" rel="noopener noreferrer">
+                  📄 Download the paper (PDF)
+                </a>
+                <Link className="btn secondary" href="/check-my-paper">📤 I have written it — send it for checking</Link>
               </div>
               <p className="muted" style={{ fontSize: ".82rem", marginTop: 10 }}>
-                Print it or copy it out, and write your answers on paper as you would in the exam. Scan the whole
-                answer book as ONE PDF when you are done.
+                Print the PDF and sit it properly — three hours, no notes, written by hand. Scan the whole answer
+                book as ONE PDF when you are done and send it in.
               </p>
             </div>
-            <div className="card" style={{ marginTop: 12 }}>
+            <details className="card" style={{ marginTop: 12 }}>
+              <summary style={{ cursor: "pointer", fontWeight: 700 }}>Read it on screen instead</summary>
               <AnswerKey text={open.questions_md ?? ""} size=".8rem" />
-            </div>
+            </details>
           </>
         ) : (
           <div style={{ display: "grid", gap: 12, marginTop: 20 }}>

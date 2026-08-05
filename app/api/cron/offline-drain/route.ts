@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { prepareNextPending } from "@/lib/offlinePrepare";
+import { prepareNextPending, queueSmallerQualities } from "@/lib/offlinePrepare";
 import { getSecret } from "@/lib/secrets";
 import { isOffPeakNow } from "@/lib/offpeak";
 
@@ -23,7 +23,14 @@ export async function GET(req: NextRequest) {
   if (!isOffPeakNow() && new URL(req.url).searchParams.get("force") !== "1") {
     return NextResponse.json({ ok: true, result: "skipped-peak" });
   }
+  // Make sure the smaller sizes are on the queue before draining it. Every
+  // class was prepared at 720p only, so the quality choice on the student's
+  // screen had exactly one option; this fills in 480p and 360p a batch at a
+  // time. It only ever adds what is missing, so it is safe on every pass.
+  let queued: unknown = null;
+  try { queued = await queueSmallerQualities(40); } catch (e) { queued = { error: e instanceof Error ? e.message : "failed" }; }
+
   let result: unknown = null;
-  try { result = await prepareNextPending(275_000); } catch (e) { result = { error: e instanceof Error ? e.message : "failed" }; }
-  return NextResponse.json({ ok: true, result });
+  try { result = await prepareNextPending(255_000); } catch (e) { result = { error: e instanceof Error ? e.message : "failed" }; }
+  return NextResponse.json({ ok: true, queued, result });
 }

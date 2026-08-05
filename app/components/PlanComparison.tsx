@@ -42,6 +42,18 @@ export default async function PlanComparison() {
   // under the table where a common rule belongs.
   const HIDE_FROM_TABLE = new Set(["ask_query"]);
 
+  // Doubts are five a day on every plan, so like watch time this is a fact
+  // about the service rather than a difference between plans. Read from the
+  // limits table so the sentence cannot drift from what is enforced, and it
+  // falls back to naming each plan if they are ever made to differ.
+  const askLimits = PLAN_COLS.map((p) => limitFor(limits, p.key, "ask_query"));
+  const askSame = askLimits.every((n) => n === askLimits[0]);
+  const askNote = askSame
+    ? askLimits[0] === UNLIMITED || askLimits[0] < 0
+      ? "as many doubts as you like"
+      : `${askLimits[0]} doubts a day`
+    : askLimits.map((n) => (n < 0 ? "unlimited" : `${n}`)).join(" / ") + " a day on Bronze / Silver / Gold";
+
   const rows = ACCESS_CATEGORIES.filter((c) => !HIDE_FROM_TABLE.has(c.key)).map((c) => ({
     label: c.label,
     cells: PLAN_COLS.map((p) => cell(limitFor(limits, p.key, c.key), c.key)),
@@ -94,7 +106,9 @@ export default async function PlanComparison() {
         </div>
       </div>
       <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0 0", lineHeight: 1.7 }}>
-        <strong>The same on every plan:</strong> ⏱️ each class can be watched up to{" "}
+        <strong>The same on every plan:</strong> 💬 you can ask <strong>{askNote}</strong> — the allowance
+        refills every morning, so it is not a pot to save up and an unused day does not carry forward.
+        {" "}⏱️ each class can be watched up to{" "}
         <strong>{watchNote}</strong> its length, which is there only to stop an account being shared —
         it is far more than anyone needs to learn from a class. 🔁 <strong>Revision videos have no watch
         limit at all</strong> and stay open until your validity ends.

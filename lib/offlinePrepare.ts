@@ -293,7 +293,7 @@ export async function prepareNextPending(timeBudgetMs = 150_000): Promise<StepRe
 
   const { data: queued } = await svc
     .from("offline_jobs")
-    .select("section_id")
+    .select("section_id, resolution")
     .in("status", ["pending", "running"])
     .order("created_at")
     .limit(20);
@@ -301,7 +301,7 @@ export async function prepareNextPending(timeBudgetMs = 150_000): Promise<StepRe
   for (const q of queued ?? []) {
     if (left() < 20_000) return last;
     const t0 = Date.now();
-    last = await prepareStep(q.section_id as string, left());
+    last = await prepareStep(q.section_id as string, left(), (q.resolution as OfflineQuality) || undefined);
     if (last.status === "pending") continue; // parked for Bunny's re-encode
     if (last.status === "running" && Date.now() - t0 < 10_000) continue; // lease-blocked — another worker owns it
     return last;
@@ -341,4 +341,81 @@ export async function prepareNextPending(timeBudgetMs = 150_000): Promise<StepRe
     if (last.status !== "pending") return last;
   }
   return last;
+}
+
+
+/**
+ * Queue the SMALLER downloads for classes that already have one.
+ *
+ * Every class was prepared at 720p and nothing else, so the quality choice on
+ * the student's screen had one option and was no choice at all. This adds the
+ * missing sizes — a 170-minute class is 1.4 GB at 720p and 374 MB at 360p, and
+ * a student on mobile data should be able to take the small one.
+ *
+ * It only ever ADDS: a class with no download at all is left to the existing
+ * auto-enqueue above, and a quality already prepared is skipped. Safe to run on
+ * every pass.
+ */
+export async function queueSmallerQualities(limit = 40): Promise<{ queued: number; remaining: number }> {
+  const svc = createServiceClient();
+  const WANT: OfflineQuality[] = ["480p", "360p"];
+
+  // Classes that already have a finished download — those are the ones worth
+  // giving a second size to.
+  const { data: done } = await svc
+    .from("offline_jobs")
+    .select("section_id, guid, resolution, status")
+    .eq("status", "done")
+    .limit(2000);
+
+  const haveByClass = new Map<string, Set<string>>();
+  const guidByClass = new Map<string, string>();
+  for (const j of done ?? []) {
+    const sid = String(j.section_id);
+    if (!haveByClass.has(sid)) haveByClass.set(sid, new Set());
+    haveByClass.get(sid)!.add(String(j.resolution));
+    if (j.guid) guidByClass.set(sid, String(j.guid));
+  }
+
+  // Anything already queued must not be queued twice.
+  const { data: openJobs } = await svc
+    .from("offline_jobs")
+    .select("section_id, resolution")
+    .neq("status", "done")
+    .limit(4000);
+  for (const j of openJobs ?? []) {
+    const sid = String(j.section_id);
+    if (!haveByClass.has(sid)) haveByClass.set(sid, new Set());
+    haveByClass.get(sid)!.add(String(j.resolution));
+  }
+
+  const rows: Record<string, unknown>[] = [];
+  let remaining = 0;
+  for (const [sid, have] of haveByClass) {
+    const guid = guidByClass.get(sid);
+    if (!guid) continue; // no Bunny video recorded — nothing to pull from
+    for (const res of WANT) {
+      if (have.has(res)) continue;
+      if (rows.length >= limit) { remaining += 1; continue; }
+      rows.push({
+        section_id: sid,
+        guid,
+        resolution: res,
+        status: "pending",
+        bytes_total: null,
+        bytes_done: 0,
+        upload_id: null,
+        parts: [],
+        key_b64: randomBytes(32).toString("base64"),
+        iv_b64: randomBytes(16).toString("base64"),
+        last_block_b64: null,
+        storage_key: `offline/${sid}-${res}.enc`,
+        queued_by: "smaller-qualities",
+      });
+    }
+  }
+
+  if (!rows.length) return { queued: 0, remaining };
+  const { data: ins } = await svc.from("offline_jobs").insert(rows).select("id");
+  return { queued: ins?.length ?? 0, remaining };
 }

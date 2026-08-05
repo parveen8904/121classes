@@ -31,9 +31,22 @@ export async function draftAllQueued() {
   const { data: waiting } = await svc
     .from("mock_papers")
     .select("id")
-    .in("status", ["questions_ready", "queued", "failed"])
+    .in("status", ["questions_ready", "queued", "failed", "halted"])
     .order("paper_no")
     .limit(10);
+
+  // Pressing the button is a person deciding to try again, so it clears the
+  // halt and the attempt count. The cron never does that by itself.
+  await svc
+    .from("mock_papers")
+    .update({ status: "questions_ready", attempts: 0, error: null })
+    .eq("status", "halted")
+    .not("questions_md", "is", null);
+  await svc
+    .from("mock_papers")
+    .update({ status: "queued", attempts: 0, error: null })
+    .eq("status", "halted")
+    .is("questions_md", null);
 
   const started = Date.now();
   let done = 0;

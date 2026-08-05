@@ -122,6 +122,19 @@ export async function draftMockPaper(id: string): Promise<{ ok: boolean; stage?:
   const { data: row } = await svc.from("mock_papers").select("*").eq("id", id).maybeSingle();
   if (!row) return { ok: false, error: "not found" };
 
+  // A call that is killed by the platform still costs money and writes no usage
+  // row, so a stage that keeps dying is invisible spend — it ran for two hours
+  // before the founder noticed the bill. Count the attempts and stop.
+  const tries = Number((row as { attempts?: number }).attempts) || 0;
+  if (tries >= 4) {
+    await svc
+      .from("mock_papers")
+      .update({ status: "halted", error: "stopped after 4 failed attempts — nothing more will be spent on it" })
+      .eq("id", id);
+    return { ok: false, error: "too many attempts" };
+  }
+  await svc.from("mock_papers").update({ attempts: tries + 1 }).eq("id", id);
+
   await svc.from("mock_papers").update({ status: "drafting", error: null, updated_at: new Date().toISOString() }).eq("id", id);
 
   // What is actually taught, so the paper stays inside the syllabus as he
@@ -151,32 +164,57 @@ export async function draftMockPaper(id: string): Promise<{ ok: boolean; stage?:
   }
 
   const questions = existing;
-  const answers = await callLong(
-    ANSWER_SYSTEM,
-    `Write the suggested answers to THIS paper. Answer every question in it, in order.\n\n${questions}`,
-    28000,
-  );
-  if (!answers) {
-    // The questions are already saved, so this only has to try the answers
-    // again — it never re-writes a paper that is already good.
-    await svc
-      .from("mock_papers")
-      .update({ status: "questions_ready", error: "the answers came back empty — will try again on the next pass" })
-      .eq("id", id);
-    return { ok: false, error: "no answers" };
+
+  // The answers go in THREE parts, appended in order.
+  //
+  // A full set of suggested answers to a 100-mark paper is more output than a
+  // 300-second request can generate. Every attempt at it in one call was killed
+  // before writing anything — and a killed call is still billed, so it cost
+  // money and produced nothing, repeatedly. Each part below is small enough to
+  // finish, and what is finished is saved.
+  const progress = Number(row.answers_progress) || 0;
+  const PARTS: { scope: string; tokens: number }[] = [
+    { scope: "PART I only — every case-scenario MCQ: the correct option and a one-line reason for each.", tokens: 6000 },
+    { scope: "PART II, QUESTIONS 1 TO 3 ONLY — the complete worked answers. Do not answer any other question.", tokens: 14000 },
+    { scope: "PART II, QUESTIONS 4 TO 6 ONLY — the complete worked answers. Do not answer any other question.", tokens: 14000 },
+  ];
+  const part = PARTS[progress];
+  if (!part) {
+    await svc.from("mock_papers").update({ status: "drafted", error: null, updated_at: new Date().toISOString() }).eq("id", id);
+    return { ok: true, stage: "complete" };
   }
 
+  const chunk = await callLong(
+    ANSWER_SYSTEM,
+    `Below is the mock paper. Write the suggested answers for ${part.scope}\n\n` +
+      `Write ONLY that part. Do not repeat the question text, do not write a preamble, and do not summarise — ` +
+      `start straight at the first answer.\n\nTHE PAPER:\n${questions}`,
+    part.tokens,
+  );
+
+  if (!chunk) {
+    await svc
+      .from("mock_papers")
+      .update({ status: "questions_ready", error: `part ${progress + 1} of the answers came back empty — will try again` })
+      .eq("id", id);
+    return { ok: false, error: `answers part ${progress + 1} empty` };
+  }
+
+  const joined = [String(row.answers_md ?? "").trimEnd(), chunk.trim()].filter(Boolean).join("\n\n");
+  const done = progress + 1 >= PARTS.length;
   await svc
     .from("mock_papers")
     .update({
-      answers_md: answers,
-      status: "drafted",
+      answers_md: joined,
+      answers_progress: progress + 1,
+      status: done ? "drafted" : "questions_ready",
       error: null,
-      generated_at: new Date().toISOString(),
+      generated_at: done ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
-  return { ok: true, stage: "answers" };
+
+  return { ok: true, stage: done ? "complete" : `answers part ${progress + 1}` };
 }
 
 /** Create the three September 2026 slots if they are not there yet. */

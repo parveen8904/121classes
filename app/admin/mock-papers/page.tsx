@@ -22,6 +22,7 @@ const LABEL: Record<string, { text: string; colour: string }> = {
   drafted: { text: "📄 Drafted — read it", colour: "#2563eb" },
   approved: { text: "✅ Live for students", colour: "#16a34a" },
   failed: { text: "❌ Failed", colour: "#b91c1c" },
+  halted: { text: "⛔ Stopped — costing money for nothing", colour: "#b91c1c" },
 };
 
 // Full mock papers, drafted then approved.
@@ -68,7 +69,7 @@ export default async function MockPapersPage(props: {
         </div>
       )}
 
-      {papers.some((p) => ["queued", "failed", "questions_ready"].includes(p.status)) && (
+      {papers.some((p) => ["queued", "failed", "questions_ready", "halted"].includes(p.status)) && (
         <form action={draftAllQueued} className="card" style={{ marginTop: 16 }}>
           <strong>✍️ Draft everything waiting</strong>
           <p className="muted" style={{ fontSize: ".86rem", margin: "4px 0 10px" }}>

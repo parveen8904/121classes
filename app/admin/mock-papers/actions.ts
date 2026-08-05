@@ -39,8 +39,11 @@ export async function draftAllQueued() {
   let done = 0;
   const failed: string[] = [];
   for (const row of waiting ?? []) {
-    // One paper needs roughly two minutes. Never start one that cannot finish.
-    if (Date.now() - started > 480_000) break;
+    // A page action is killed at 300 seconds, and one STAGE — questions, or the
+    // answers to them — takes about 170. So exactly one stage per press: the
+    // founder's two presses before this both hit 504 and stranded the paper
+    // they were working on, which is worse than doing nothing.
+    if (done >= 1 || Date.now() - started > 60_000) break;
     const r = await draftMockPaper(String(row.id));
     if (r.ok) done += 1;
     else failed.push(r.error ?? "failed");
@@ -53,6 +56,8 @@ export async function draftAllQueued() {
 
   revalidatePath("/admin/mock-papers");
   redirect(`/admin/mock-papers?drafted=${done}&left=${left ?? 0}${failed[0] ? `&err=${encodeURIComponent(failed[0])}` : ""}`);
+  // Note: the ten-minute cron does this on its own — the button is only for
+  // somebody who does not want to wait.
 }
 
 export async function createSet() {

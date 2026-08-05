@@ -2,23 +2,26 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf
 
 // Turn a mock paper into something that looks like an examination paper.
 //
-// The text was right and the presentation was not: a student was reading an
-// exam on a web page in a monospaced block. An exam paper has a centred head, a
-// rule under it, the marks pushed to the right margin, a part heading a student
-// can find by flicking, and page numbers — and it is PRINTED, because that is
-// how it will be sat.
+// The first version drew every line of the source as its own line in the PDF.
+// But the writer hard-wraps at about eighty characters, so a paragraph arrived
+// as a column of ragged stubs — left-aligned, uneven, and nothing like a
+// printed paper. The text was never the problem.
 //
-// Times is used, not Helvetica: ICAI's papers are set in a serif face and a
-// student should recognise the thing in their hands.
+// So: consecutive lines are joined back into PARAGRAPHS, re-wrapped to the
+// page measure and JUSTIFIED, the way a printed exam paper sets its prose.
+// Lines that must not be re-flowed — numbered instructions, and any line laid
+// out in columns of figures — are detected and kept exactly as written.
+//
+// Times, not Helvetica: ICAI sets in a serif face and a student should
+// recognise the thing in their hands.
 
-// Helvetica and Times are WinAnsi fonts and pdf-lib THROWS on any character
-// outside that set rather than dropping it — one rupee sign once destroyed an
-// entire checked copy. Everything drawn goes through here.
+// Times is a WinAnsi font and pdf-lib THROWS on any character outside that set
+// rather than dropping it — one rupee sign once destroyed a whole checked copy.
 function winAnsi(text: string): string {
   return String(text ?? "")
     .replace(/₹/g, "Rs.")
     .replace(/[–—]/g, "-")
-    .replace(/[’‘]/g, "'")
+    .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/…/g, "...")
     .replace(/[×✕]/g, "x")
@@ -26,164 +29,234 @@ function winAnsi(text: string): string {
     .replace(/[^\x20-\xFF]/g, "");
 }
 
-const PAGE_W = 595;   // A4
+const PAGE_W = 595;
 const PAGE_H = 842;
-const LEFT = 56;
-const RIGHT = 56;
-const TOP = 64;
-const BOTTOM = 56;
+const LEFT = 62;
+const RIGHT = 62;
+const TOP = 70;
+const BOTTOM = 62;
 const WIDTH = PAGE_W - LEFT - RIGHT;
+const BODY = 10.5;
+const LEAD = 14.5;
 
 type Ctx = {
-  pdf: PDFDocument;
-  page: PDFPage;
-  y: number;
-  pageNo: number;
-  body: PDFFont;
-  bold: PDFFont;
-  italic: PDFFont;
-  title: string;
+  pdf: PDFDocument; page: PDFPage; y: number; pageNo: number;
+  body: PDFFont; bold: PDFFont; italic: PDFFont; mono: PDFFont; title: string;
 };
 
+function foot(c: Ctx) {
+  const n = winAnsi(String(c.pageNo));
+  c.page.drawText(n, { x: (PAGE_W - c.body.widthOfTextAtSize(n, 9)) / 2, y: BOTTOM - 26, size: 9, font: c.body, color: rgb(0.4, 0.4, 0.4) });
+}
+
 function newPage(c: Ctx) {
-  // Page number at the foot of the page we are leaving.
-  c.page.drawText(winAnsi(String(c.pageNo)), {
-    x: PAGE_W / 2 - 4, y: BOTTOM - 22, size: 9, font: c.body, color: rgb(0.35, 0.35, 0.35),
-  });
+  foot(c);
   c.pageNo += 1;
   c.page = c.pdf.addPage([PAGE_W, PAGE_H]);
   c.y = PAGE_H - TOP;
-  // A running head, so a loose sheet still says which paper it belongs to.
-  c.page.drawText(winAnsi(c.title), { x: LEFT, y: PAGE_H - 40, size: 8, font: c.italic, color: rgb(0.45, 0.45, 0.45) });
-  c.page.drawLine({
-    start: { x: LEFT, y: PAGE_H - 46 }, end: { x: PAGE_W - RIGHT, y: PAGE_H - 46 },
-    thickness: 0.4, color: rgb(0.8, 0.8, 0.8),
-  });
+  const h = winAnsi(c.title);
+  c.page.drawText(h, { x: LEFT, y: PAGE_H - 44, size: 8, font: c.italic, color: rgb(0.45, 0.45, 0.45) });
+  c.page.drawLine({ start: { x: LEFT, y: PAGE_H - 50 }, end: { x: PAGE_W - RIGHT, y: PAGE_H - 50 }, thickness: 0.4, color: rgb(0.78, 0.78, 0.78) });
 }
 
 function need(c: Ctx, space: number) {
   if (c.y - space < BOTTOM) newPage(c);
 }
 
-function wrap(text: string, font: PDFFont, size: number, maxW: number): string[] {
-  const words = winAnsi(text).split(/\s+/).filter(Boolean);
-  const out: string[] = [];
-  let line = "";
-  for (const w of words) {
-    const t = line ? `${line} ${w}` : w;
-    if (font.widthOfTextAtSize(t, size) > maxW && line) { out.push(line); line = w; }
-    else line = t;
-  }
-  if (line) out.push(line);
-  return out.length ? out : [""];
+function words(s: string): string[] {
+  return winAnsi(s).split(/\s+/).filter(Boolean);
 }
 
-/** "[10 Marks]" or "(2 Marks)" at the end of a line — pushed to the right margin. */
-const MARKS_TAIL = /\s*[\[(]\s*(\d+(?:\s*(?:\+|and)\s*\d+)?)\s*marks?\s*[\])]\s*$/i;
+/** Wrap to the measure, returning lines of words so they can be justified. */
+function layout(ws: string[], font: PDFFont, size: number, maxW: number): string[][] {
+  const lines: string[][] = [];
+  let cur: string[] = [];
+  for (const w of ws) {
+    const trial = [...cur, w].join(" ");
+    if (cur.length && font.widthOfTextAtSize(trial, size) > maxW) { lines.push(cur); cur = [w]; }
+    else cur.push(w);
+  }
+  if (cur.length) lines.push(cur);
+  return lines;
+}
 
-const CENTRED = /^(MOCK EXAMINATION|INTERMEDIATE EXAMINATION|FINAL EXAMINATION|PAPER \d|Time Allowed|Maximum Marks)/i;
+/** Draw one line; justified spreads the words to both margins. */
+function drawLine(c: Ctx, ws: string[], x: number, maxW: number, font: PDFFont, size: number, justify: boolean) {
+  const text = ws.join(" ");
+  if (!justify || ws.length < 2) {
+    c.page.drawText(text, { x, y: c.y, size, font });
+    return;
+  }
+  const natural = font.widthOfTextAtSize(text, size);
+  const slack = maxW - natural;
+  // Never stretch a short line into a gappy mess — that looks worse than ragged.
+  if (slack <= 0 || slack > maxW * 0.28) {
+    c.page.drawText(text, { x, y: c.y, size, font });
+    return;
+  }
+  const gap = slack / (ws.length - 1);
+  let cx = x;
+  ws.forEach((w, i) => {
+    c.page.drawText(w, { x: cx, y: c.y, size, font });
+    cx += font.widthOfTextAtSize(w, size) + font.widthOfTextAtSize(" ", size) + (i < ws.length - 1 ? gap : 0);
+  });
+}
+
+const MARKS_TAIL = /\s*[[(]\s*(\d+(?:\s*(?:\+|and)\s*\d+)?)\s*marks?\s*[\])]\s*$/i;
+const CENTRED_HEAD = /^(MOCK EXAMINATION|INTERMEDIATE EXAMINATION|FINAL EXAMINATION|PAPER \d|Time Allowed|Maximum Marks)/i;
 const PART_HEAD = /^PART\s+(I|II|1|2)\b/i;
 const SECTION_HEAD = /^(INSTRUCTIONS TO CANDIDATES|CASE SCENARIO\s*\d*|QUESTION\s+\d+|Q\.?\s*\d+\b)/i;
+const NUMBERED = /^\s*(\d+[.)]|\([a-z]\)|\([iv]+\)|[-•])\s+/i;
+/** A line of figures in columns — must be kept exactly, never re-flowed.
+ *  The run of spaces must be INTERNAL: matching leading indentation instead
+ *  turned every wrapped continuation line into a monospaced fragment. */
+const COLUMNAR = /\S\s{2,}\S/;
 
-/** The question paper as a PDF a student can print and sit. */
-export async function buildMockPaperPdf(input: {
-  title: string;
-  text: string;
-  footer?: string;
-}): Promise<Uint8Array> {
+export async function buildMockPaperPdf(input: { title: string; text: string; footer?: string }): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const c: Ctx = {
-    pdf,
-    page: pdf.addPage([PAGE_W, PAGE_H]),
-    y: PAGE_H - TOP,
-    pageNo: 1,
+    pdf, page: pdf.addPage([PAGE_W, PAGE_H]), y: PAGE_H - TOP, pageNo: 1,
     body: await pdf.embedFont(StandardFonts.TimesRoman),
     bold: await pdf.embedFont(StandardFonts.TimesRomanBold),
     italic: await pdf.embedFont(StandardFonts.TimesRomanItalic),
+    mono: await pdf.embedFont(StandardFonts.Courier),
     title: input.title,
   };
 
-  const lines = String(input.text ?? "").split("\n");
+  // Fold an indented continuation back onto the line it belongs to, BEFORE
+  // anything is classified. The writer wraps a numbered instruction across two
+  // or three lines and indents the rest; each of those was arriving as its own
+  // paragraph, so an instruction came out in pieces down the page.
+  const src: string[] = [];
+  for (const raw of String(input.text ?? "").split("\n")) {
+    const isContinuation =
+      /^\s{2,}\S/.test(raw) &&                  // indented
+      !/\S\s{2,}\S/.test(raw.trim()) &&        // not a row of figures
+      src.length > 0 && src[src.length - 1].trim() !== "";
+    if (isContinuation) src[src.length - 1] += " " + raw.trim();
+    else src.push(raw);
+  }
   let inHeader = true;
 
-  for (const raw of lines) {
+  // Gather consecutive prose lines, then set them as one justified paragraph.
+  let para: string[] = [];
+  const flush = () => {
+    if (!para.length) return;
+    const joined = para.join(" ");
+    const m = joined.match(MARKS_TAIL);
+    const ws = words(m ? joined.replace(MARKS_TAIL, "") : joined);
+    const lines = layout(ws, c.body, BODY, WIDTH);
+    lines.forEach((ln, i) => {
+      need(c, LEAD);
+      const last = i === lines.length - 1;
+      drawLine(c, ln, LEFT, WIDTH, c.body, BODY, !last);
+      if (m && last) {
+        const tail = winAnsi(`(${m[1]} Marks)`);
+        c.page.drawText(tail, { x: PAGE_W - RIGHT - c.bold.widthOfTextAtSize(tail, 9.5), y: c.y, size: 9.5, font: c.bold });
+      }
+      c.y -= LEAD;
+    });
+    c.y -= 5;
+    para = [];
+  };
+
+  const centre = (t: string, size: number, font: PDFFont, gapAfter: number) => {
+    need(c, size + gapAfter);
+    const s = winAnsi(t);
+    c.page.drawText(s, { x: (PAGE_W - font.widthOfTextAtSize(s, size)) / 2, y: c.y, size, font });
+    c.y -= size + gapAfter;
+  };
+
+  for (const raw of src) {
     const line = raw.replace(/\s+$/, "");
+    const t = line.trim();
 
-    if (!line.trim()) { c.y -= 7; continue; }
+    if (!t) { flush(); continue; }
 
-    // The masthead: centred, until the first real section starts.
-    if (inHeader && CENTRED.test(line.trim())) {
-      const size = /^(MOCK EXAMINATION|PAPER \d)/i.test(line.trim()) ? 15 : 11;
-      const font = /^(Time Allowed|Maximum Marks)/i.test(line.trim()) ? c.bold : c.bold;
-      const t = winAnsi(line.trim());
-      need(c, size + 8);
-      c.page.drawText(t, { x: (PAGE_W - font.widthOfTextAtSize(t, size)) / 2, y: c.y, size, font });
-      c.y -= size + 7;
+    if (inHeader && CENTRED_HEAD.test(t)) {
+      flush();
+      const big = /^(MOCK EXAMINATION|PAPER \d)/i.test(t);
+      centre(t, big ? 15 : 11, c.bold, big ? 6 : 4);
       continue;
     }
 
-    if (PART_HEAD.test(line.trim())) {
-      inHeader = false;
-      need(c, 44);
-      c.y -= 10;
-      const t = winAnsi(line.trim());
-      c.page.drawText(t, { x: (PAGE_W - c.bold.widthOfTextAtSize(t, 13)) / 2, y: c.y, size: 13, font: c.bold });
+    const startsFlush = !/^\s/.test(raw);
+
+    if (startsFlush && t.length < 70 && PART_HEAD.test(t)) {
+      flush(); inHeader = false;
       c.y -= 8;
-      c.page.drawLine({
-        start: { x: LEFT + 90, y: c.y }, end: { x: PAGE_W - RIGHT - 90, y: c.y },
-        thickness: 0.8, color: rgb(0.2, 0.2, 0.2),
-      });
-      c.y -= 14;
+      centre(t, 13, c.bold, 5);
+      c.page.drawLine({ start: { x: LEFT + 110, y: c.y + 4 }, end: { x: PAGE_W - RIGHT - 110, y: c.y + 4 }, thickness: 0.8, color: rgb(0.15, 0.15, 0.15) });
+      c.y -= 8;
       continue;
     }
 
-    if (SECTION_HEAD.test(line.trim())) {
-      inHeader = false;
-      need(c, 30);
-      c.y -= 6;
-      // A question heading may still carry its marks — keep them on the right.
-      const m = line.trim().match(MARKS_TAIL);
-      const head = winAnsi(m ? line.trim().replace(MARKS_TAIL, "") : line.trim());
+    // The bracketed sub-lines under a part heading are centred too.
+    if (!inHeader && /^\(.*\)$/.test(t) && t.length < 90) {
+      flush();
+      centre(t, 9.5, c.italic, 3);
+      continue;
+    }
+
+    if (startsFlush && SECTION_HEAD.test(t)) {
+      flush(); inHeader = false;
+      c.y -= 7;
+      need(c, 24);
+      const m = t.match(MARKS_TAIL);
+      const head = winAnsi(m ? t.replace(MARKS_TAIL, "") : t);
       c.page.drawText(head, { x: LEFT, y: c.y, size: 11.5, font: c.bold });
       if (m) {
         const tail = winAnsi(`[${m[1]} Marks]`);
         c.page.drawText(tail, { x: PAGE_W - RIGHT - c.bold.widthOfTextAtSize(tail, 10), y: c.y, size: 10, font: c.bold });
       }
-      c.y -= 17;
+      c.y -= 18;
       continue;
     }
 
     inHeader = false;
 
-    // Marks at the end of an ordinary line go to the right margin, the way a
-    // printed paper sets them.
-    const m = line.match(MARKS_TAIL);
-    const text = m ? line.replace(MARKS_TAIL, "") : line;
+    // A line of figures in columns keeps its own shape, in a fixed-width face —
+    // re-flowing it would destroy the alignment it depends on. But a line whose
+    // wide gap is only there to push "(2 Marks)" to the right is prose, and was
+    // being set in Courier in the middle of a sentence.
+    if (COLUMNAR.test(line) && !MARKS_TAIL.test(line)) {
+      flush();
+      need(c, 13);
+      c.page.drawText(winAnsi(line).slice(0, 96), { x: LEFT, y: c.y, size: 9, font: c.mono });
+      c.y -= 13;
+      continue;
+    }
 
-    // Preserve the indentation the writer used for sub-parts and figures.
-    const indent = (raw.match(/^\s*/)?.[0].length ?? 0) > 2 ? 18 : 0;
-    const rows = wrap(text, c.body, 10.5, WIDTH - indent);
+    // A numbered item or an option starts its own paragraph, hanging-indented.
+    if (NUMBERED.test(line)) {
+      flush();
+      const m = line.trim().match(MARKS_TAIL);
+      const body = m ? line.trim().replace(MARKS_TAIL, "") : line.trim();
+      const label = body.match(NUMBERED)?.[0].trim() ?? "";
+      const rest = body.slice(label.length).trim();
+      const hang = Math.max(18, c.body.widthOfTextAtSize(label + " ", BODY));
+      const lines = layout(words(rest), c.body, BODY, WIDTH - hang);
+      lines.forEach((ln, i) => {
+        need(c, LEAD);
+        if (i === 0) c.page.drawText(winAnsi(label), { x: LEFT, y: c.y, size: BODY, font: c.body });
+        drawLine(c, ln, LEFT + hang, WIDTH - hang, c.body, BODY, i < lines.length - 1);
+        if (m && i === lines.length - 1) {
+          const tail = winAnsi(`(${m[1]} Marks)`);
+          c.page.drawText(tail, { x: PAGE_W - RIGHT - c.bold.widthOfTextAtSize(tail, 9.5), y: c.y, size: 9.5, font: c.bold });
+        }
+        c.y -= LEAD;
+      });
+      c.y -= 3;
+      continue;
+    }
 
-    rows.forEach((r, i) => {
-      need(c, 14);
-      c.page.drawText(r, { x: LEFT + indent, y: c.y, size: 10.5, font: c.body });
-      if (m && i === rows.length - 1) {
-        const tail = winAnsi(`(${m[1]} Marks)`);
-        c.page.drawText(tail, { x: PAGE_W - RIGHT - c.bold.widthOfTextAtSize(tail, 10), y: c.y, size: 10, font: c.bold });
-      }
-      c.y -= 14;
-    });
+    para.push(t);
   }
+  flush();
 
-  // Close the last page.
-  c.page.drawText(winAnsi(String(c.pageNo)), {
-    x: PAGE_W / 2 - 4, y: BOTTOM - 22, size: 9, font: c.body, color: rgb(0.35, 0.35, 0.35),
-  });
+  foot(c);
   if (input.footer) {
-    c.page.drawText(winAnsi(input.footer), {
-      x: LEFT, y: BOTTOM - 22, size: 8, font: c.italic, color: rgb(0.45, 0.45, 0.45),
-    });
+    c.page.drawText(winAnsi(input.footer), { x: LEFT, y: BOTTOM - 26, size: 8, font: c.italic, color: rgb(0.45, 0.45, 0.45) });
   }
-
   return pdf.save();
 }

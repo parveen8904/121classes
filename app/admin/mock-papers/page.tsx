@@ -136,6 +136,20 @@ export default async function MockPapersPage(props: {
 
               {p.questions_md && (
                 <>
+                  {/* The paper as it will actually look. Reading 1,000 lines of
+                      plain text tells you nothing about whether it works as an
+                      exam; the PDF does. */}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                    <a className="btn small" href={`/mock-tests/${p.id}/pdf`} target="_blank" rel="noopener noreferrer">
+                      📄 See it as a printed paper (PDF)
+                    </a>
+                    {p.answers_md && (
+                      <a className="btn small secondary" href={`/mock-tests/${p.id}/pdf?answers=1`} target="_blank" rel="noopener noreferrer">
+                        ✅ Suggested answers (PDF)
+                      </a>
+                    )}
+                  </div>
+
                   <details className="card" style={{ marginTop: 12, padding: 12 }}>
                     <summary style={{ cursor: "pointer", fontWeight: 700 }}>📄 The question paper</summary>
                     <AnswerKey text={p.questions_md} size=".76rem" />

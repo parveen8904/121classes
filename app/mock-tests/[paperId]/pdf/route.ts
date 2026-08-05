@@ -26,19 +26,34 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ paperId: st
   const svc = createServiceClient();
   const { data: paper } = await svc
     .from("mock_papers")
-    .select("title, questions_md, status")
+    .select("title, questions_md, answers_md, status")
     .eq("id", paperId)
     .maybeSingle();
+  if (!paper) return new NextResponse("Not available", { status: 404 });
 
-  // Only an APPROVED paper is ever served — a draft is not for students.
-  if (!paper || paper.status !== "approved" || !String(paper.questions_md ?? "").trim()) {
+  // An ADMIN may read a draft — otherwise there is no way to judge a paper
+  // before approving it, which is the whole point of approving it. A student
+  // only ever sees an approved one.
+  const { data: me } = await svc.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  const isAdmin = me?.role === "admin" || me?.role === "faculty";
+  if (paper.status !== "approved" && !isAdmin) {
     return new NextResponse("Not available", { status: 404 });
   }
 
+  // ?answers=1 renders the suggested answers instead — for him, never for a
+  // student, whatever the paper's status.
+  const wantAnswers = new URL(req.url).searchParams.get("answers") === "1";
+  if (wantAnswers && !isAdmin) return new NextResponse("Not available", { status: 404 });
+
+  const text = String((wantAnswers ? paper.answers_md : paper.questions_md) ?? "").trim();
+  if (!text) return new NextResponse("Nothing written yet", { status: 404 });
+
   const bytes = await buildMockPaperPdf({
-    title: String(paper.title),
-    text: String(paper.questions_md),
-    footer: "caparveensharma.com — write your answers by hand, then send them in to be checked",
+    title: `${paper.title}${wantAnswers ? " — Suggested Answers" : ""}`,
+    text,
+    footer: paper.status === "approved"
+      ? "caparveensharma.com — write your answers by hand, then send them in to be checked"
+      : "DRAFT — not yet approved",
   });
 
   return new NextResponse(Buffer.from(bytes), {

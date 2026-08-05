@@ -36,6 +36,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       // Three tiles for one job — read what students asked and answer it —
       // meant guessing which of them held the message you were looking for.
       // One door now; the three desks are inside it.
+      { icon: "✅", title: "Office tasks", desc: "Post a job and it lands on someone's list. They finish it, add a remark, or pass it on — and every hand-off stays on the record.", href: "/admin/tasks" },
       { icon: "📥", title: "Messages — doubts, WhatsApp & the log", desc: "Everything students send you, in one place: the doubt inbox, the WhatsApp inbox (and connecting your own number), and the log of every question answered so far.", href: "/admin/messages" },
       { icon: "🖊️", title: "Examiner desk", desc: "Verify AI-checked descriptive copies and release them to students — sortable by subject/test; copies lock while an examiner checks.", href: "/examiner" },
       { icon: "🎫", title: "Support tickets", desc: "Website & phone issues as tickets — assign, call, log activity, resolve; overdue tickets escalate automatically.", href: "/admin/tickets" },

@@ -131,7 +131,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "bad signature" }, { status: 401 });
   }
 
-  const from = String(form.get("sender") ?? form.get("from") ?? "").trim();
+  // WHO HANDED IT OVER vs WHO WROTE IT. On forwarded mail these differ: Google
+  // hands it over as contact+caf_=…@caparveensharma.com while the student sits
+  // in the From: header. Preferring the envelope meant the reply to a forwarded
+  // student went back to ourselves — the student never heard anything, and the
+  // reply became the next turn of the loop.
+  const envelope = String(form.get("sender") ?? "").trim();
+  const headerFrom = String(form.get("from") ?? "").trim();
+  const from = bareAddress(headerFrom) || bareAddress(envelope);
   const to = String(form.get("recipient") ?? "").trim();
   const subject = String(form.get("subject") ?? "").trim();
   const bodyRaw = String(form.get("stripped-text") ?? form.get("body-plain") ?? "").trim();
@@ -156,7 +163,13 @@ export async function POST(req: NextRequest) {
   // escalates to. Once it forwards in here, our own notifications arrive as
   // inbound mail — so anything sent by us is recorded and left alone. Without
   // this the site would answer itself, and each answer would arrive again.
-  if (!from || !question || isMachineMail(form, from, subject) || (await isOurOwnMail(from))) {
+  // Both sides are checked: the writer AND the machine that handed it over.
+  if (
+    !from || !question ||
+    isMachineMail(form, from, subject) ||
+    (await isOurOwnMail(from)) ||
+    (envelope && (await isOurOwnMail(envelope)) && !headerFrom)
+  ) {
     return NextResponse.json({ ok: true, result: "recorded, not answered" });
   }
 
@@ -226,9 +239,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, result: "sent to faculty" });
     }
 
-    const { getRepositoryContext } = await import("@/lib/repository");
-    const material = await getRepositoryContext(null, 12000, { query: question });
-    const answer = await answerDoubtFromMaterial(question, material);
+    // Read WHO is asking before deciding what to answer from. A question about
+    // access or money is answered from this student's own record; a question
+    // about the subject is answered from the study material. Answering the
+    // first from the second is how a student asking "must I pay?" was sent a
+    // list of portal features instead.
+    const { studentFacts, isAccountQuestion, accountAnswerRules } = await import("@/lib/studentContext");
+    const facts = await studentFacts(from);
+
+    let answer: string | null;
+    if (isAccountQuestion(question)) {
+      answer = await answerDoubtFromMaterial(question, accountAnswerRules(facts));
+    } else {
+      const { getRepositoryContext } = await import("@/lib/repository");
+      const material = await getRepositoryContext(null, 12000, { query: question });
+      // Even a study question is better for knowing who asked — it is their name
+      // on the reply and their course that decides what is relevant.
+      const who = facts.lines.length ? `ABOUT THE STUDENT WHO ASKED:\n${facts.lines.join("\n")}\n\n` : "";
+      answer = await answerDoubtFromMaterial(question, who + material);
+    }
+
     if (!answer || answer.trim() === NEED_FACULTY) {
       await escalate(from, subject, question);
       return NextResponse.json({ ok: true, result: "sent to faculty" });

@@ -74,8 +74,8 @@ export default async function CheckMyPaperPage(props: {
         <p className="muted" style={{ fontSize: "1rem", lineHeight: 1.7 }}>
           Written a paper by hand and want it marked properly? Send it here. It is checked against{" "}
           <strong>CA Parveen Sharma&apos;s own approved answer key</strong> for that test, with the marks written on
-          your own pages and a summary at the end — then a faculty member verifies it and we email it back to you,
-          usually within a couple of hours.
+          your own pages and a summary at the end — then a faculty member verifies it and we email it back to you{" "}
+          <strong>within 24 hours, guaranteed</strong>.
         </p>
         <p className="muted" style={{ fontSize: ".9rem" }}>
           <strong>Free, and no plan needed.</strong> You only need an account so the copy comes back to the right

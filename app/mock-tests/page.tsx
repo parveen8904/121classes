@@ -58,7 +58,7 @@ export default async function MockTestsPage(props: {
         </p>
         <p className="muted" style={{ fontSize: ".92rem" }}>
           Then send it in and it is checked against <strong>CA Parveen Sharma&apos;s own answer key</strong>, with the
-          marks written on your own pages. <strong>Free — no plan needed.</strong>
+          marks written on your own pages — <strong>back to you within 24 hours, guaranteed</strong>. No plan needed.
         </p>
 
         {papers.length === 0 ? (

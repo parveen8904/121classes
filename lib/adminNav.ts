@@ -7,7 +7,36 @@
 export type AdminPanel = { icon: string; title: string; desc: string; href: string };
 export type AdminGroup = { id: string; icon: string; title: string; tagline: string; panels: AdminPanel[] };
 
+// The READING pages, gathered.
+//
+// A good number of the panel's tiles were not things you do — they were things
+// you read, and they were scattered: server health under Settings, the doubt log
+// two clicks inside Messages, "Reports" meaning only the money. They are listed
+// here once and rendered on /admin/reports, so the panel itself carries fewer,
+// more purposeful tiles.
+export const REPORTS: AdminPanel[] = [
+  { icon: "💰", title: "Sales report", desc: "Revenue in total and this month, split between subscriptions and books; active plans by tier; top-selling titles; gift purchases with their GST breakup and invoices.", href: "/admin/reports/sales" },
+  { icon: "💬", title: "Doubt report", desc: "Every question a student asked and the answer that went back — on every channel, in order, with follow-ups under the question they follow.", href: "/admin/doubt-log" },
+  { icon: "✉️", title: "Email report", desc: "Did our email actually arrive? Mailgun's own delivered and failed counts, and which kinds of message the site is sending.", href: "/admin/reports/email" },
+  { icon: "🎓", title: "Subscriber report", desc: "Who holds a live plan right now — tier, subject, dates, amount and full contact details, ready to export.", href: "/admin/reports/subscribers" },
+  { icon: "🩺", title: "Server health & visitors", desc: "Whether the site is well: who is on it now, traffic over the week and month, the queries costing the most time, and plain-English fixes.", href: "/admin/health" },
+  { icon: "🔍", title: "Student insights", desc: "What students actually study: most-viewed topics, where doubts come from, how they found us, and who has gone quiet.", href: "/admin/insights" },
+  { icon: "💸", title: "Cost report", desc: "What the business is spending on AI, Bunny, Cloudflare and Supabase — one figure per provider.", href: "/admin/costs" },
+  { icon: "🤖", title: "AI usage report", desc: "Token spend by feature and model against the monthly cap — which part of the AI is costing what.", href: "/admin/ai-usage" },
+  { icon: "▶️", title: "YouTube report", desc: "Channel figures beside what YouTube actually sends the site — visits, leads and signups traced back to the videos.", href: "/admin/youtube" },
+  { icon: "🗄️", title: "Backup report", desc: "What is saved and when it last ran — read from the actual files, so \"there is a backup\" is never a guess.", href: "/admin/backups" },
+];
+
 export const ADMIN_GROUPS: AdminGroup[] = [
+  // Reading comes first. Opening the panel should start with "how is everything
+  // doing", not with a wall of things to change.
+  {
+    id: "reports",
+    icon: "📊",
+    title: "Reports",
+    tagline: "How everything is doing — the business, the students and the machinery. Read-only.",
+    panels: REPORTS,
+  },
   {
     id: "marketing",
     icon: "📣",
@@ -18,7 +47,6 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { icon: "📄", title: "Free downloads (SEO)", desc: "Which PDFs get a public page on caparveensharma.com so Google credits us — and the title it shows for each.", href: "/admin/notes" },
       { icon: "📇", title: "Contacts & leads", desc: "Import contacts (Interakt/CSV/call lists); leads join WhatsApp campaigns and the phone system recognises them.", href: "/admin/leads" },
       { icon: "🔁", title: "Re-engagement", desc: "Bring-them-back emails for students who never started or went quiet — drafted nightly, sent ONLY after your team approves each one.", href: "/admin/reengage" },
-      { icon: "▶️", title: "YouTube performance", desc: "Channel stats next to what YouTube actually sends the site — visits, leads and signups from your videos.", href: "/admin/youtube" },
       { icon: "📨", title: "Notify students", desc: "One-off notice to your own students by Telegram, email & WhatsApp (service messages — not marketing).", href: "/admin/notifications" },
       { icon: "🗞️", title: "Announcements", desc: "Official notices inside the portal — what's new, student corner, industry & macro updates.", href: "/admin/announcements" },
       { icon: "📜", title: "Amendments & updates", desc: "Post amendments by course/subject/topic with video, notes & the attempts they apply to.", href: "/admin/amendments" },
@@ -41,7 +69,6 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { icon: "🖊️", title: "Examiner desk", desc: "Verify AI-checked descriptive copies and release them to students — sortable by subject/test; copies lock while an examiner checks.", href: "/examiner" },
       { icon: "🎫", title: "Support tickets", desc: "Website & phone issues as tickets — assign, call, log activity, resolve; overdue tickets escalate automatically.", href: "/admin/tickets" },
       { icon: "🛡️", title: "Group moderation", desc: "Flagged messages, search all group chats, hide/ban/mute — Telegram kept in sync.", href: "/admin/discussion" },
-      { icon: "🔍", title: "Student insights", desc: "Most-viewed topics, where doubts come from, how students found us, drop-off call-list.", href: "/admin/insights" },
       { icon: "💚", title: "Scholarships", desc: "Merit & need-based applications; approve to auto-issue an emailed discount coupon.", href: "/admin/scholarships" },
       { icon: "🏆", title: "Results", desc: "Showcase rank-holders & toppers — the #1 trust signal for CA students.", href: "/admin/results" },
       { icon: "🎖️", title: "Result awards", desc: "Students claiming an award with marksheet + photo — verify & approve; a feed of success stories.", href: "/admin/awards" },
@@ -83,7 +110,6 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { icon: "🌉", title: "Aldine bridge", desc: "Courses sold on aldine.edu.in open here automatically — map each Aldine product to a course, watch every order arrive.", href: "/admin/aldine" },
       { icon: "🏭", title: "Warehouse & shipping", desc: "Parcels to courier — book orders + FREE Gold book sets. Print label PDFs, enter tracking IDs. Grant this area to your warehouse user.", href: "/admin/warehouse" },
       { icon: "🧾", title: "GST & invoicing", desc: "GSTIN, rate & invoice settings; transactions and downloadable invoices in Reports.", href: "/admin/billing" },
-      { icon: "📊", title: "Reports", desc: "Revenue, active plans, book sales and dispatch snapshot.", href: "/admin/reports" },
     ],
   },
   {
@@ -92,14 +118,10 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     title: "System & settings",
     tagline: "Health, integrations, keys, costs and the website itself.",
     panels: [
-      { icon: "🩺", title: "Server health & visitors", desc: "How the site is doing in one place: live traffic and who is on it now, visitors and usage over week/month/three months, the heaviest queries, and plain-English fixes for staff.", href: "/admin/health" },
       { icon: "🔌", title: "Integrations", desc: "All API keys in one place — Telegram, WhatsApp, IVR, Zoom, Mailgun, Razorpay, AI, YouTube, storage.", href: "/admin/integrations" },
-      { icon: "🗄️", title: "Backups", desc: "What is saved, when it last ran, and how to get something back. Reads the actual files, so \"there is a backup\" is never a guess.", href: "/admin/backups" },
       { icon: "✈️", title: "Telegram tools", desc: "Bot setup, channel & group linking, member checks.", href: "/admin/telegram" },
       { icon: "🗄️", title: "Storage", desc: "Files in Supabase/R2 buckets — browse, clean up, see what's using space.", href: "/admin/storage" },
       { icon: "🖼️", title: "Site images", desc: "Founder photo, homepage banner, and the site's social/contact links.", href: "/admin/site" },
-      { icon: "💰", title: "Costs & usage", desc: "AI, Bunny, Cloudflare & Supabase costs in one place.", href: "/admin/costs" },
-      { icon: "🤖", title: "AI usage detail", desc: "Token spend by feature & model; monthly cap & alert; per-feature on/off switches.", href: "/admin/ai-usage" },
       { icon: "🔐", title: "Security (2FA)", desc: "Optional two-factor authentication for your admin login.", href: "/auth/mfa/setup" },
       { icon: "📖", title: "Admin guide", desc: "How to use every function of this panel, step by step — printable for your team.", href: "/admin/guide" },
     ],

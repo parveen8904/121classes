@@ -58,7 +58,23 @@ export default async function AdminHome() {
   // Groups render only the tiles this staff member may open; empty groups hide.
   const visibleGroups = ADMIN_GROUPS
     .map((g) => ({ ...g, panels: isSuper ? g.panels : g.panels.filter((p) => canPath(p.href)) }))
-    .filter((g) => g.panels.length > 0);
+    .filter((g) => g.panels.length > 0)
+    // The reports each get their own entry in the header menu, but on the
+    // dashboard they collapse to ONE tile. Listing ten more tiles here would
+    // have made the wall of tiles worse, which is the thing being fixed.
+    .map((g) =>
+      g.id === "reports"
+        ? {
+            ...g,
+            panels: [{
+              icon: "📊",
+              title: "Reports",
+              desc: `Everything worth reading, in one place — ${g.panels.map((p) => p.title.replace(/ report$/i, "").toLowerCase()).slice(0, 5).join(", ")} and more. Nothing here changes anything.`,
+              href: "/admin/reports",
+            }],
+          }
+        : g,
+    );
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
       <AdminHero

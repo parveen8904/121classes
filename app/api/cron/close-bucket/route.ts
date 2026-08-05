@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSecret } from "@/lib/secrets";
 import { isOffPeakNow } from "@/lib/offpeak";
-import { moveMaterialsBatch, moveRepositoryBatch, deletePublicCopies } from "@/lib/materialsMigration";
+import { moveMaterialsBatch, moveRepositoryBatch, deletePublicCopies, archiveOrphans } from "@/lib/materialsMigration";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -68,8 +68,25 @@ export async function GET(req: NextRequest) {
     note = d.note;
   }
 
+  // Whatever is left over once the database points at nothing public: files
+  // referenced by no class and no paper. Moved to the private bucket rather
+  // than deleted, so the exposure ends without destroying anything.
+  let archived = 0;
+  let orphansLeft = 0;
+  let archiveNote: string | undefined;
+  if (moved === 0 && Date.now() - started < BUDGET) {
+    const a = await archiveOrphans(40, BUDGET - (Date.now() - started));
+    archived = a.moved;
+    orphansLeft = a.remaining;
+    archiveNote = a.note;
+    failed.push(...a.failed);
+  }
+
   return NextResponse.json({
     ok: true,
+    archivedOrphans: archived,
+    orphansLeft,
+    archiveNote,
     moved,
     remainingToMove: remaining,
     deletedPublicCopies: deleted,

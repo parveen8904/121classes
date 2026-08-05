@@ -33,9 +33,10 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { icon: "👥", title: "Users", desc: "View, edit & manage every account — roles, attempts, contact details, staff rights.", href: "/admin/users" },
       { icon: "🎟️", title: "Enrolment", desc: "Grant course access (single or bulk) for any tier/duration; revoke & extend.", href: "/admin/enrolment" },
       { icon: "✉️", title: "Emails", desc: "The words in every email the site sends — welcome, verify, reset, granted access, coupons, tickets. Edit any of them; see it as the student gets it.", href: "/admin/emails" },
-      { icon: "📥", title: "Inbox & doubts", desc: "Student doubts and page questions — answer, assign to faculty, or let the AI draft.", href: "/admin/inbox" },
-      { icon: "🗒️", title: "Doubt log", desc: "Every question a student asked and the answer that went back, in order. Doubts are answered automatically now — this is where you read them afterwards and judge whether they are good enough.", href: "/admin/doubt-log" },
-      { icon: "💬", title: "WhatsApp — inbox & connect your number", desc: "Messages students send to 9810079162, read and answered here. Also where you connect YOUR OWN number (9810014495) so students can keep writing to the number they already use — it stays on your phone, and replies are drafted for you to send.", href: "/admin/whatsapp" },
+      // Three tiles for one job — read what students asked and answer it —
+      // meant guessing which of them held the message you were looking for.
+      // One door now; the three desks are inside it.
+      { icon: "📥", title: "Messages — doubts, WhatsApp & the log", desc: "Everything students send you, in one place: the doubt inbox, the WhatsApp inbox (and connecting your own number), and the log of every question answered so far.", href: "/admin/messages" },
       { icon: "🖊️", title: "Examiner desk", desc: "Verify AI-checked descriptive copies and release them to students — sortable by subject/test; copies lock while an examiner checks.", href: "/examiner" },
       { icon: "🎫", title: "Support tickets", desc: "Website & phone issues as tickets — assign, call, log activity, resolve; overdue tickets escalate automatically.", href: "/admin/tickets" },
       { icon: "🛡️", title: "Group moderation", desc: "Flagged messages, search all group chats, hide/ban/mute — Telegram kept in sync.", href: "/admin/discussion" },

@@ -274,3 +274,79 @@ export async function deletePublicCopies(limit = 200): Promise<{ deleted: number
     note: deleted === 0 && left === 0 ? "The public folders are already clear." : undefined,
   };
 }
+
+// ---- the last 129: files nothing points at any more ----
+//
+// With the database fully repointed, what is left in the public bucket is
+// referenced by nothing: 73 in materials/, 56 in repository/, 149 MB, uploaded
+// between June and August. They are replaced or abandoned uploads.
+//
+// deletePublicCopies will not touch them, and it is right not to: it deletes
+// only what it can verify exists privately, and "unreferenced" is not the same
+// as "unwanted". A file nobody links today may be the only copy of something.
+//
+// So they are MOVED, not destroyed — copied to the private bucket under the
+// same path, then removed from the public one. The public exposure ends, the
+// bucket is clean, and nothing is lost. If one of them turns out to matter, it
+// is still there, one bucket over.
+export async function archiveOrphans(limit = 40, budgetMs = 120_000): Promise<{
+  moved: number; failed: string[]; remaining: number; note?: string;
+}> {
+  const svc = createServiceClient();
+  const started = Date.now();
+
+  // Refuse to run while ANYTHING still points at a public copy — that would
+  // mean the migration is unfinished and these are not orphans at all.
+  const [{ data: secRows }, { data: repoRows }] = await Promise.all([
+    svc.from("sections").select(M_COLS).limit(2000),
+    svc.from("repository_items").select("file_url, solution_url").limit(3000),
+  ]);
+  for (const r of ((secRows as Record<string, string | null>[]) ?? [])) {
+    for (const c of ["m_notes_hand_url", "m_notes_typed_url", "m_pdf_url", "m_paper_question_pdf", "m_paper_solution_pdf"]) {
+      if (pathOf(r[c] ?? "")) return { moved: 0, failed: [], remaining: -1, note: "a class still points at a public copy — finish moving first" };
+    }
+  }
+  for (const r of ((repoRows as { file_url: string | null; solution_url: string | null }[]) ?? [])) {
+    for (const v of [r.file_url, r.solution_url]) {
+      if (pathOf(v ?? "")) return { moved: 0, failed: [], remaining: -1, note: "a repository paper still points at a public copy — finish moving first" };
+    }
+  }
+
+  let moved = 0;
+  const failed: string[] = [];
+  let remaining = 0;
+
+  for (const folder of ["materials", "repository", "cases"]) {
+    const [pub, priv] = await Promise.all([
+      svc.storage.from("media").list(folder, { limit: 1000 }),
+      svc.storage.from("secure").list(folder, { limit: 1000 }),
+    ]);
+    const havePrivate = new Set((priv.data ?? []).map((o) => o.name));
+    const orphans = (pub.data ?? []).map((o) => o.name).filter((n) => !havePrivate.has(n));
+    remaining += orphans.length;
+
+    for (const name of orphans) {
+      if (moved >= limit || Date.now() - started > budgetMs) break;
+      const path = `${folder}/${name}`;
+      try {
+        const { data: blob, error: dlErr } = await svc.storage.from("media").download(path);
+        if (dlErr || !blob) { failed.push(`${path}: ${dlErr?.message ?? "download failed"}`); continue; }
+        const bytes = Buffer.from(await blob.arrayBuffer());
+        const { error: upErr } = await svc.storage.from("secure").upload(path, bytes, {
+          contentType: blob.type || "application/octet-stream",
+          upsert: true,
+        });
+        if (upErr) { failed.push(`${path}: ${upErr.message}`); continue; }
+        // Only now — the private copy is proven to exist.
+        const { error: rmErr } = await svc.storage.from("media").remove([path]);
+        if (rmErr) { failed.push(`${path}: kept public, ${rmErr.message}`); continue; }
+        moved += 1;
+        remaining -= 1;
+      } catch (e) {
+        failed.push(`${path}: ${e instanceof Error ? e.message : "failed"}`);
+      }
+    }
+  }
+
+  return { moved, failed, remaining: Math.max(0, remaining) };
+}

@@ -125,6 +125,39 @@ export async function POST(req: NextRequest) {
         await discordSendToChannel(dc, `👤 ${fromName}: ${text}`);
       }
 
+      // ---- "my paper has not been checked" — answered WITHOUT being asked ----
+      //
+      // The one thing the bot says unprompted, because this complaint is public,
+      // it is about money already paid, and forty other students read it before
+      // anybody answers. The route that works takes ten seconds to give.
+      if (!mod.flagged) {
+        try {
+          const { isEvaluationComplaint, EVALUATION_HELP } = await import("@/lib/evaluationHelp");
+          if (isEvaluationComplaint(text)) {
+            const sentId = await tgSendGroupReply(chatId, EVALUATION_HELP, msg.message_id);
+            if (sentId && subj?.id) {
+              await svc.from("group_messages").upsert(
+                {
+                  chat_id: chatId,
+                  subject_id: subj.id,
+                  tg_message_id: sentId,
+                  source: "telegram",
+                  sender_tg_id: null,
+                  sender_name: "🤖 AI assistant",
+                  body: EVALUATION_HELP,
+                  reply_to_tg_id: msg.message_id,
+                  flagged: false,
+                  flag_reasons: [],
+                  status: "visible",
+                },
+                { onConflict: "chat_id,tg_message_id" },
+              );
+            }
+            return NextResponse.json({ ok: true });
+          }
+        } catch { /* never let this stop the mirror */ }
+      }
+
       // ---- AI answers in the group: ONLY when the bot is asked directly ----
       // The bot never interrupts a student-to-student discussion. It answers
       // only when a student TAGS it (@botname …) or REPLIES to one of its
@@ -219,6 +252,16 @@ export async function POST(req: NextRequest) {
     );
     return NextResponse.json({ ok: true });
   }
+
+  // The same answer in a private chat. A student who writes "my copy is still
+  // not checked" to the bot needs the route, not a general study answer.
+  try {
+    const { isEvaluationComplaint, EVALUATION_HELP } = await import("@/lib/evaluationHelp");
+    if (isEvaluationComplaint(text)) {
+      await sendTelegramMessage(chatId, EVALUATION_HELP);
+      return NextResponse.json({ ok: true });
+    }
+  } catch { /* fall through to the normal doubt path */ }
 
   // 2) Treat as a doubt.
   const who = await svc

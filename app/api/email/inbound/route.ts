@@ -94,6 +94,57 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, result: "recorded, not answered" });
   }
 
+  // An answer book arrived by email. It is NOT a doubt and must not be answered
+  // like one: a paper is marked against CA Parveen Sharma's approved key for
+  // that specific test, and nothing in an email says which test it is. Guessing
+  // would mean marking from the model's own knowledge — the one thing he ruled
+  // out. So it goes to the faculty with the attachment named, and the student
+  // is told what happens next.
+  const attachmentCount = Number(form.get("attachment-count") ?? 0);
+  if (attachmentCount > 0) {
+    const names: string[] = [];
+    for (let i = 1; i <= attachmentCount; i++) {
+      const a = form.get(`attachment-${i}`);
+      if (a && typeof a === "object" && "name" in a) names.push(String((a as File).name));
+    }
+    try {
+      const { sendEmail, emailShell, notifyFaculty } = await import("@/lib/notify");
+      await sendEmail(
+        from,
+        subject ? `Re: ${subject}` : "Your answer book",
+        emailShell(
+          "We have your paper",
+          "<p>Thank you — your answer book has reached us and is in the checking queue.</p>" +
+            "<p>The fastest route is always the website: take the test at " +
+            "<a href='https://caparveensharma.com'>caparveensharma.com</a>, upload your answers as one PDF, and it " +
+            "is checked against Sir's own approved answer key with the marks written on your own pages — usually " +
+            "back within about two hours.</p>" +
+            "<p>If you have not already, please reply telling us <strong>which test</strong> this is, so it is " +
+            "marked against the right answer key.</p>",
+        ),
+      );
+      await notifyFaculty(
+        "An answer book arrived by email",
+        `From: ${from}\nSubject: ${subject}\nAttachments: ${names.join(", ") || attachmentCount}\n\n${question}\n\nOpen it in Mailgun and put it through Admin -> Examiner desk.`,
+      );
+    } catch (e) {
+      console.error("[email/inbound] paper handoff failed", e instanceof Error ? e.message : e);
+    }
+    if (row?.id) await svc.from("page_questions").update({ status: "open" }).eq("id", row.id);
+    return NextResponse.json({ ok: true, result: "paper sent to faculty" });
+  }
+
+  try {
+    const { isEvaluationComplaint, EVALUATION_HELP } = await import("@/lib/evaluationHelp");
+    if (isEvaluationComplaint(question)) {
+      const { sendEmail, emailShell } = await import("@/lib/notify");
+      await sendEmail(from, subject ? `Re: ${subject}` : "Getting your copy checked",
+        emailShell("Getting your copy checked", `<p>${EVALUATION_HELP.replace(/\n\n/g, "</p><p>")}</p>`));
+      if (row?.id) await svc.from("page_questions").update({ status: "answered" }).eq("id", row.id);
+      return NextResponse.json({ ok: true, result: "evaluation help sent" });
+    }
+  } catch { /* fall through to the normal answer path */ }
+
   try {
     const { judgeStudentMessage, answerDoubtFromMaterial, aiConfigured, NEED_FACULTY } = await import("@/lib/ai");
     const judged = await judgeStudentMessage(question);

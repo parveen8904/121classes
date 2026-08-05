@@ -28,6 +28,16 @@ export async function answerWhatsAppDoubt(from: string, text: string): Promise<"
 
   const svc = createServiceClient();
 
+  // "My paper has not been checked" gets the route, not a study answer — the
+  // AI cannot mark a copy it has not been given, and a general reply to this
+  // reads as though nobody understood the question.
+  const { isEvaluationComplaint, EVALUATION_HELP } = await import("@/lib/evaluationHelp");
+  if (isEvaluationComplaint(question)) {
+    await sendWhatsAppText(from, EVALUATION_HELP).catch(() => false);
+    await log(svc, from, question, EVALUATION_HELP, "answered");
+    return "answered";
+  }
+
   // Is this worth answering at all?
   const judged = await judgeStudentMessage(question);
   if (judged.kind === "abusive") {

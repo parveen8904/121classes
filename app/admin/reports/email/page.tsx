@@ -43,14 +43,19 @@ async function mailgunStats(days: number): Promise<{ stat: Stat | null; error: s
             : `Mailgun returned ${res.status}.`,
       };
     }
-    const json = (await res.json()) as { stats?: Record<string, Record<string, number>>[] };
+    // Mailgun nests one level deeper for failures than for the rest:
+    // accepted.total, but failed.permanent.total and failed.temporary.total.
+    // Reading `failed.permanent` as a number yields NaN, not a count.
+    type Bucket = { total?: number; permanent?: { total?: number }; temporary?: { total?: number } };
+    const json = (await res.json()) as { stats?: Record<string, Bucket>[] };
+    const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+
     const total: Stat = { delivered: 0, failed: 0, accepted: 0, opened: 0 };
     for (const row of json.stats ?? []) {
-      total.accepted += Number(row.accepted?.total ?? 0);
-      total.delivered += Number(row.delivered?.total ?? 0);
-      total.opened += Number(row.opened?.total ?? 0);
-      // Mailgun splits failures into permanent and temporary.
-      total.failed += Number(row.failed?.permanent ?? 0) + Number(row.failed?.temporary ?? 0);
+      total.accepted += n(row.accepted?.total);
+      total.delivered += n(row.delivered?.total);
+      total.opened += n(row.opened?.total);
+      total.failed += n(row.failed?.permanent?.total) + n(row.failed?.temporary?.total);
     }
     return { stat: total, error: null };
   } catch (e) {
@@ -90,11 +95,20 @@ export default async function EmailReportPage(props: { searchParams: Promise<{ d
 
   const deliveredPct = stat && stat.accepted > 0 ? Math.round((stat.delivered / stat.accepted) * 100) : null;
 
+  // Open tracking is switched off on the sending domain, so a zero here means
+  // "not measured", not "nobody read it" — and reporting it as 0 would be a lie
+  // about how our email is doing.
+  const opensTracked = Boolean(stat && stat.opened > 0);
+
   const kpis = [
     { icon: "📤", label: "Handed to Mailgun", value: stat ? String(stat.accepted) : "—" },
     { icon: "✅", label: "Delivered", value: stat ? String(stat.delivered) : "—" },
     { icon: "🚫", label: "Failed to arrive", value: stat ? String(stat.failed) : "—" },
-    { icon: "👀", label: "Opened", value: stat ? String(stat.opened) : "—" },
+    {
+      icon: "👀",
+      label: opensTracked ? "Opened" : "Opens not tracked",
+      value: opensTracked ? String(stat!.opened) : "—",
+    },
   ];
 
   return (

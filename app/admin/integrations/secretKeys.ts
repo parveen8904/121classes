@@ -72,6 +72,13 @@ export const SECRET_KEYS = [
   "REDDIT_PASSWORD",
   "REDDIT_SUBREDDIT",
   "ALDINE_WEBHOOK_SECRET",
+  // Zoho Books. These were read by lib/zoho.ts from the very first day but were
+  // never on this list, so the page had no field for them — the integration sat
+  // "waiting for keys" that had nowhere to be pasted.
+  "ZOHO_CLIENT_ID",
+  "ZOHO_CLIENT_SECRET",
+  "ZOHO_REFRESH_TOKEN",
+  "ZOHO_ORG_ID",
   // One-click live classes (OBS → Cloudflare Stream → portal).
   "CLOUDFLARE_STREAM_TOKEN",
   "LIVE_CONTROL_KEY",

@@ -7,6 +7,7 @@ import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
 import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection, sendTestEmail, registerDiscordCommand, saveSubjectGroup, setupAuthSmtp, getSupabaseInfra, raiseAuthPool, upgradeCompute } from "./actions";
 import { isSavableSecret } from "./secretKeys";
+import { integrationReport, type IntegrationReport } from "@/lib/integrationStatus";
 import SubmitButton from "@/app/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,28 @@ function Row({ on, label, help }: { on: boolean; label: string; help: React.Reac
         </span>
       </div>
       <p className="muted" style={{ fontSize: ".84rem", marginTop: 8 }}>{help}</p>
+    </div>
+  );
+}
+
+// One line of the "what is still pending" panel: what it unlocks, what is
+// missing, and the actual next step to get it.
+function PendingRow({ r }: { r: IntegrationReport }) {
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
+        <strong style={{ fontSize: ".92rem" }}>{r.icon} {r.name}</strong>
+        <span
+          className="badge"
+          style={r.state === "partial" ? { background: "rgba(245,158,11,.15)", color: "#b45309" } : undefined}
+        >
+          {r.state === "partial" ? "half done" : "not connected"}
+        </span>
+      </div>
+      <p style={{ margin: "5px 0 0", fontSize: ".86rem", lineHeight: 1.55 }}>{r.unlocks}</p>
+      <p className="muted" style={{ margin: "5px 0 0", fontSize: ".8rem" }}>
+        Still needed: <code>{r.missing.join(", ")}</code> — {r.howTo}
+      </p>
     </div>
   );
 }
@@ -129,6 +152,10 @@ export default async function IntegrationsPage(
   const subjects = subjectRows ?? [];
 
   const infra = await getSupabaseInfra();
+  const report = await integrationReport();
+  const pendingNeeded = report.filter((r) => r.state !== "live" && !r.optional);
+  const pendingOptional = report.filter((r) => r.state !== "live" && r.optional);
+  const liveCount = report.filter((r) => r.state === "live").length;
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 820 }}>
@@ -138,6 +165,51 @@ export default async function IntegrationsPage(
         subtitle="Paste your API keys here — no Vercel needed. A green light means it's working."
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {/* The answer to "which of these are still pending", without reading
+          eighty key fields and remembering what each one was for. */}
+      <div className="card" style={{ marginTop: 18 }}>
+        <h2 style={{ margin: 0, fontSize: "1.05rem" }}>
+          🔎 What is connected — {liveCount} of {report.length}
+        </h2>
+        {pendingNeeded.length === 0 ? (
+          <p className="muted" style={{ margin: "6px 0 0", fontSize: ".9rem" }}>
+            ✅ Everything students depend on is connected. Anything left below is optional reach.
+          </p>
+        ) : (
+          <p className="muted" style={{ margin: "6px 0 0", fontSize: ".9rem" }}>
+            <strong>{pendingNeeded.length}</strong> still to do that students or the office actually feel, and{" "}
+            {pendingOptional.length} optional.
+          </p>
+        )}
+
+        {pendingNeeded.length > 0 && (
+          <>
+            <h3 style={{ fontSize: ".92rem", margin: "14px 0 6px" }}>Worth doing</h3>
+            <div style={{ display: "grid", gap: 8 }}>
+              {pendingNeeded.map((r) => <PendingRow key={r.id} r={r} />)}
+            </div>
+          </>
+        )}
+        {pendingOptional.length > 0 && (
+          <details style={{ marginTop: 14 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: ".9rem" }}>
+              Optional — nothing breaks without these ({pendingOptional.length})
+            </summary>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              {pendingOptional.map((r) => <PendingRow key={r.id} r={r} />)}
+            </div>
+          </details>
+        )}
+        <details style={{ marginTop: 12 }}>
+          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: ".9rem" }}>
+            ✅ Already connected ({liveCount})
+          </summary>
+          <p className="muted" style={{ fontSize: ".85rem", margin: "8px 0 0" }}>
+            {report.filter((r) => r.state === "live").map((r) => `${r.icon} ${r.name}`).join(" · ")}
+          </p>
+        </details>
+      </div>
 
       {searchParams.tg === "set" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Telegram connected — bot verified, username saved, webhook registered. Students can now tap &ldquo;Connect Telegram&rdquo; on their dashboard.</div>}
       {searchParams.tg === "fail" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ Token is valid but the webhook didn&apos;t register — try again in a moment.</div>}
@@ -255,6 +327,10 @@ export default async function IntegrationsPage(
           <KeyField name="ZOOM_WEBHOOK_SECRET_TOKEN" label="Zoom webhook secret token (auto-import class recordings to Bunny)" placeholder="Zoom app → Feature → Event Subscriptions → Secret Token" />
           <KeyField name="SERPAPI_KEY" label="Google Jobs (SerpAPI) key — placement" placeholder="from serpapi.com" />
           <KeyField name="JOOBLE_API_KEY" label="Jooble key (free fallback) — placement" placeholder="from jooble.org/api/about" />
+          <KeyField name="ZOHO_CLIENT_ID" label="Zoho Books — client ID (approved sales & expenses post to your books)" placeholder="api-console.zoho.in → Self Client (free)" />
+          <KeyField name="ZOHO_CLIENT_SECRET" label="Zoho Books — client secret" placeholder="same Self Client screen" />
+          <KeyField name="ZOHO_REFRESH_TOKEN" label="Zoho Books — refresh token" placeholder="generated for scope ZohoBooks.fullaccess.all" />
+          <KeyField name="ZOHO_ORG_ID" label="Zoho Books — organisation ID (optional, defaults to ALDINECA)" placeholder="leave blank unless you have two organisations" />
           <KeyField name="MAILGUN_API_KEY" label="Mailgun API key" placeholder="key-…" />
           <KeyField name="MAILGUN_WEBHOOK_KEY" label="Mailgun HTTP webhook signing key — signs incoming student mail (NOT the sending key)" placeholder="Mailgun → Settings → API security → HTTP webhook signing key" />
           <KeyField name="MAILGUN_DOMAIN" label="Mailgun domain" placeholder="mg.caparveensharma.com" />

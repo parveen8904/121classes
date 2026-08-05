@@ -45,7 +45,18 @@ export async function GET(req: NextRequest) {
   const secret = await getSecret("CRON_SECRET");
   const params = new URL(req.url).searchParams;
   if (secret) {
-    const ok = req.headers.get("authorization") === `Bearer ${secret}` || params.get("key") === secret;
+    let ok = req.headers.get("authorization") === `Bearer ${secret}` || params.get("key") === secret;
+    // An admin may also pull the report on demand from the doubt log, so he can
+    // read today's answers without waiting for tomorrow morning's run.
+    if (!ok) {
+      const { createClient } = await import("@/lib/supabase/server");
+      const { data: { user } } = await createClient().auth.getUser();
+      if (user) {
+        const { data: me } = await createServiceClient()
+          .from("profiles").select("role").eq("id", user.id).maybeSingle();
+        ok = me?.role === "admin";
+      }
+    }
     if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

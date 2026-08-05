@@ -92,6 +92,15 @@ export default async function DoubtLogPage(props: { searchParams: Promise<{ days
               {d} days
             </Link>
           ))}
+          {/* The same report that arrives by email each morning, on demand. */}
+          <a
+            className="btn small secondary"
+            href={`/api/cron/ai-digest?hours=${windowDays * 24}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            ✉️ Email me this
+          </a>
         </div>
       </div>
 

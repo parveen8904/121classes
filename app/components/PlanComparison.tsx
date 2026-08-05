@@ -27,18 +27,35 @@ function cell(lim: number, category: string): { text: string; color?: string; bo
 export default async function PlanComparison() {
   const limits = await getAllLimits();
 
-  const rows = ACCESS_CATEGORIES.map((c) => ({
+  // A comparison table earns its place by showing DIFFERENCES. Two things were
+  // in it that are not differences, and one the founder does not want quoted at
+  // all:
+  //
+  //   • doubts — the daily allowance is explained where a student actually asks
+  //     one, and putting a number on the plan page turns a generous feature
+  //     into a quota being counted at them;
+  //   • watch time — 2x class hours on Bronze, Silver AND Gold, so a column of
+  //     three identical cells taught nobody anything;
+  //   • revision videos — unlimited on every plan, same problem.
+  //
+  // The two watch rules are true and worth saying, so they moved to the note
+  // under the table where a common rule belongs.
+  const HIDE_FROM_TABLE = new Set(["ask_query"]);
+
+  const rows = ACCESS_CATEGORIES.filter((c) => !HIDE_FROM_TABLE.has(c.key)).map((c) => ({
     label: c.label,
     cells: PLAN_COLS.map((p) => cell(limitFor(limits, p.key, c.key), c.key)),
   }));
 
-  // Watch time is a multiplier, not a count.
-  const watchCells = PLAN_COLS.map((p) => {
-    const mult = limitFor(limits, p.key, WATCH_CATEGORY);
-    return mult <= 0 || mult === UNLIMITED
-      ? { text: "✅ Unlimited", color: GREEN, bold: true }
-      : { text: `${mult}× class hours`, color: AMBER, bold: true };
-  });
+  // Watch time is a multiplier, and it is the SAME on every plan — so it is
+  // stated once, below the table, instead of as three identical columns.
+  const multipliers = PLAN_COLS.map((p) => limitFor(limits, p.key, WATCH_CATEGORY));
+  const same = multipliers.every((m) => m === multipliers[0]);
+  const watchNote = !same
+    ? `${multipliers.map((m) => (m <= 0 || m === UNLIMITED ? "unlimited" : `${m}×`)).join(" / ")} on Bronze / Silver / Gold`
+    : multipliers[0] <= 0 || multipliers[0] === UNLIMITED
+      ? "as many times as you like"
+      : `${multipliers[0]}×`;
 
   const td: React.CSSProperties = { padding: "7px 10px", whiteSpace: "nowrap", fontSize: ".85rem" };
 
@@ -66,14 +83,6 @@ export default async function PlanComparison() {
                   ))}
                 </tr>
               ))}
-              <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                <td style={{ ...td, fontWeight: 600, whiteSpace: "normal", minWidth: 170 }}>⏱️ Class watch time</td>
-                {watchCells.map((c, i) => <td key={i} style={{ ...td, color: c.color, fontWeight: c.bold ? 700 : undefined }}>{c.text}</td>)}
-              </tr>
-              <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                <td style={{ ...td, fontWeight: 600, whiteSpace: "normal", minWidth: 170 }}>🔁 Revision video watch time</td>
-                {[0, 1, 2].map((i) => <td key={i} style={{ ...td, color: GREEN, fontWeight: 700 }}>✅ Unlimited</td>)}
-              </tr>
               <tr>
                 <td style={{ ...td, fontWeight: 600, whiteSpace: "normal", minWidth: 170 }}>📦 FREE printed books, couriered (India)</td>
                 <td style={{ ...td, color: "var(--muted)" }}>❌ Not included</td>
@@ -84,10 +93,15 @@ export default async function PlanComparison() {
           </table>
         </div>
       </div>
+      <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0 0", lineHeight: 1.7 }}>
+        <strong>The same on every plan:</strong> ⏱️ each class can be watched up to{" "}
+        <strong>{watchNote}</strong> its length, which is there only to stop an account being shared —
+        it is far more than anyone needs to learn from a class. 🔁 <strong>Revision videos have no watch
+        limit at all</strong> and stay open until your validity ends.
+      </p>
       <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
-        Counts are per student. &ldquo;Unlimited&rdquo; means no cap during your validity. A limit shown
-        &ldquo;a day&rdquo; refills every morning — it is not a pot to save up, and an unused day does not
-        carry forward. Everything here works while your plan is valid; once validity ends, access stops.
+        Counts are per student. &ldquo;Unlimited&rdquo; means no cap during your validity. Everything here
+        works while your plan is valid; once validity ends, access stops.
       </p>
     </div>
   );

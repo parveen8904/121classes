@@ -113,6 +113,25 @@ export default function LoginForm() {
               : "Log in with your email and password."}
           </p>
 
+          {/* For the students who were GIVEN access rather than signing up.
+              They never chose a password, so "log in with your email and
+              password" is advice they cannot follow — and the set-password link
+              they were emailed expires. This is the one line that tells them
+              what to do, before they conclude the site is broken. */}
+          {mode === "login" && (
+            <div
+              className="notice"
+              style={{ background: "var(--bg-soft)", border: "1px solid var(--border)", fontSize: ".86rem", lineHeight: 1.6 }}
+            >
+              <strong>Given free access and never set a password?</strong> Or your link said it had expired?
+              Enter your email above, then press{" "}
+              <button type="button" style={{ ...linkBtn, fontWeight: 700 }} onClick={() => { setMode("forgot"); setMsg(null); }}>
+                Forgot password
+              </button>{" "}
+              — we send a fresh link straight away. Your account is already there and your access is already on it.
+            </div>
+          )}
+
           {msg && <div className={`notice ${msg.kind}`}>{msg.text}</div>}
 
           {mode === "login" && (

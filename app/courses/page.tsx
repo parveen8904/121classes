@@ -268,10 +268,40 @@ export default async function CoursesPage() {
           </div>
           <div className="grid grid-3">
             {(results ?? []).map((r, i) => (
-              <div className="tile" key={i} style={{ textAlign: "left" }}>
-                <h3 style={{ fontSize: "1.05rem", marginBottom: 2 }}>{r.student_name}</h3>
-                <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>{[r.headline, r.attempt, r.marks].filter(Boolean).join(" · ")}</p>
-                {r.quote && <p style={{ fontSize: ".9rem", marginTop: 8, fontStyle: "italic" }}>&ldquo;{r.quote}&rdquo;</p>}
+              <div className="tile" key={i} style={{ display: "flex", gap: 12, textAlign: "left", alignItems: "flex-start" }}>
+                {/* The face was missing here and nowhere else. photo_url was
+                    fetched and used for the small avatar row on the course
+                    cards above, then never drawn on these tiles — so the page
+                    listed ranks with no students on it, which is the opposite
+                    of what a results section is for. */}
+                <div style={{
+                  width: 64, height: 64, flex: "0 0 auto", borderRadius: "50%", overflow: "hidden",
+                  border: "2px solid var(--accent)", display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "var(--bg-soft,#eef2f1)", color: "var(--accent)", fontWeight: 800, fontSize: "1.05rem",
+                }}>
+                  {r.photo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={lightImg(r.photo_url as string, 128)}
+                      loading="lazy"
+                      decoding="async"
+                      alt={r.student_name as string}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                  ) : (
+                    String(r.student_name ?? "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase()
+                  )}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  {r.headline && (
+                    <div style={{ fontWeight: 900, fontSize: "1.15rem", lineHeight: 1.1, color: "var(--accent)" }}>{r.headline}</div>
+                  )}
+                  <h3 style={{ fontSize: "1.02rem", margin: "2px 0 2px" }}>{r.student_name}</h3>
+                  <p className="muted" style={{ fontSize: ".8rem", margin: 0 }}>
+                    {[(r.level as string)?.replace("CA ", ""), r.attempt, r.marks].filter(Boolean).join(" · ")}
+                  </p>
+                  {r.quote && <p style={{ fontSize: ".86rem", marginTop: 6, fontStyle: "italic" }}>&ldquo;{r.quote}&rdquo;</p>}
+                </div>
               </div>
             ))}
           </div>

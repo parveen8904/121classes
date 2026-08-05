@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import Help from "@/app/components/Help";
+import { viaProxy } from "@/lib/fileProxy";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My Performance — CA Parveen Sharma" };
@@ -49,8 +50,35 @@ export default async function PerformancePage() {
     ? await svc.from("subjective_submissions").select("question_id, ai_score, student_id").in("question_id", qIds)
     : { data: [] as any[] };
 
+  // --- Descriptive papers (the tests students actually sit) ---
+  //
+  // This page read `subjective_submissions` — the old in-page typed-answer
+  // feature, which has never held a single row. The paper tests, where a
+  // student downloads a question paper and uploads a handwritten answer book,
+  // live in `descriptive_attempts` and were never read here at all. So a
+  // student could sit a paper, be marked, have it released by the examiner,
+  // and still be told they had attempted nothing.
+  const { data: myPapers } = await svc
+    .from("descriptive_attempts")
+    .select("id, section_id, status, review_status, awarded_marks, total_marks, annotated_url, submitted_at, examiner_remarks, report")
+    .eq("student_id", user.id)
+    .not("submitted_at", "is", null)
+    .order("submitted_at", { ascending: false });
+
+  const paperSectionIds = [...new Set((myPapers ?? []).map((a) => a.section_id as string))];
+  // Everyone else's marks on the same papers, for the rank line. Only RELEASED
+  // copies count — a mark an examiner has not yet approved is not a mark.
+  const { data: allPapers } = paperSectionIds.length
+    ? await svc
+        .from("descriptive_attempts")
+        .select("section_id, awarded_marks, total_marks, student_id")
+        .in("section_id", paperSectionIds)
+        .eq("review_status", "checked")
+        .not("awarded_marks", "is", null)
+    : { data: [] as any[] };
+
   // section titles
-  const allSectionIds = [...new Set([...mcqSectionIds, ...(questions ?? []).map((q) => q.section_id)])];
+  const allSectionIds = [...new Set([...mcqSectionIds, ...paperSectionIds, ...(questions ?? []).map((q) => q.section_id)])];
   const { data: sections } = allSectionIds.length
     ? await svc.from("sections").select("id, title, topic_id, topics(title)").in("id", allSectionIds)
     : { data: [] as any[] };
@@ -95,7 +123,7 @@ export default async function PerformancePage() {
     return [...byStudent.values()];
   }
 
-  const hasAny = (myMcq?.length ?? 0) > 0 || (mySubj?.length ?? 0) > 0;
+  const hasAny = (myMcq?.length ?? 0) > 0 || (mySubj?.length ?? 0) > 0 || (myPapers?.length ?? 0) > 0;
 
   return (
     <main>
@@ -109,7 +137,7 @@ export default async function PerformancePage() {
 
         {!hasAny && (
           <div className="card" style={{ marginTop: 22 }}>
-            <p className="muted">You haven&apos;t attempted any tests yet. Take an MCQ or descriptive test to see your performance here. ✨</p>
+            <p className="muted">You haven&apos;t attempted any tests yet. Take an MCQ or a descriptive test and your marks, your rank and your checked copy appear here. ✨</p>
           </div>
         )}
 
@@ -140,10 +168,87 @@ export default async function PerformancePage() {
           </>
         )}
 
-        {/* Subjective */}
-        {(mySubj?.length ?? 0) > 0 && (
+        {/* Descriptive papers */}
+        {(myPapers?.length ?? 0) > 0 && (
           <>
             <h2 style={{ marginTop: 28, fontSize: "1.15rem" }}>✍️ Descriptive tests</h2>
+            <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+              {(myPapers ?? []).map((a) => {
+                const sid = a.section_id as string;
+                const released = a.review_status === "checked" && a.awarded_marks != null;
+                const awarded = Number(a.awarded_marks);
+                const total = Number(a.total_marks) || 20;
+                // Rank against everyone else's RELEASED mark on the same paper,
+                // best attempt per student.
+                const byStudent = new Map<string, number>();
+                for (const x of allPapers ?? []) {
+                  if (x.section_id !== sid) continue;
+                  const r = Number(x.awarded_marks) / Math.max(1, Number(x.total_marks) || 20);
+                  const cur = byStudent.get(x.student_id as string);
+                  if (cur === undefined || r > cur) byStudent.set(x.student_id as string, r);
+                }
+                const ratios = [...byStudent.values()];
+                const pct = released ? percentile(ratios, awarded / Math.max(1, total)) : null;
+                const report = a.report as { summary?: string; concepts_to_revise?: string[] } | null;
+
+                return (
+                  <div className="card" key={a.id as string}>
+                    <strong>{secTitle.get(sid) ?? "Descriptive test"}</strong>
+
+                    {released ? (
+                      <>
+                        <div className="muted" style={{ fontSize: ".88rem", marginTop: 4 }}>
+                          Marks: <strong>{awarded}/{total}</strong> ({Math.round((awarded / Math.max(1, total)) * 100)}%)
+                          {a.submitted_at ? ` · submitted ${new Date(a.submitted_at as string).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
+                        </div>
+                        {pct !== null && ratios.length > 1 && (
+                          <div style={{ marginTop: 6, fontWeight: 700, color: "var(--accent)" }}>
+                            🏅 Better than {pct}% of students ({ratios.length} sat it)
+                          </div>
+                        )}
+                        {report?.summary && (
+                          <p style={{ marginTop: 8, fontSize: ".9rem" }}>{report.summary}</p>
+                        )}
+                        {a.examiner_remarks && (
+                          <p style={{ marginTop: 6, fontSize: ".9rem" }}>
+                            <strong>Faculty:</strong> {a.examiner_remarks as string}
+                          </p>
+                        )}
+                        {(report?.concepts_to_revise ?? []).length > 0 && (
+                          <p className="muted" style={{ marginTop: 6, fontSize: ".85rem" }}>
+                            <strong>Revise:</strong> {(report!.concepts_to_revise ?? []).join(" · ")}
+                          </p>
+                        )}
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
+                          {a.annotated_url && (
+                            <a className="btn small" href={viaProxy(a.annotated_url as string)} target="_blank" rel="noopener noreferrer">
+                              📝 My checked copy + official answers
+                            </a>
+                          )}
+                          {rewatch(sid)}
+                        </div>
+                      </>
+                    ) : (
+                      // The mark exists but the faculty has not released it. It is
+                      // not shown, and it is not hinted at either.
+                      <div className="muted" style={{ fontSize: ".88rem", marginTop: 4 }}>
+                        ⏳ Your copy is under review by the faculty. Your marks and your checked copy appear here as
+                        soon as it is released.
+                        {a.submitted_at ? ` Submitted ${new Date(a.submitted_at as string).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}.` : ""}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* The old in-page typed-answer questions. Kept for any historic row;
+            renamed so it cannot be mistaken for the paper tests again. */}
+        {(mySubj?.length ?? 0) > 0 && (
+          <>
+            <h2 style={{ marginTop: 28, fontSize: "1.15rem" }}>✍️ Written answers</h2>
             <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
               {(mySubj ?? []).map((s, i) => {
                 const q = qById.get(s.question_id) as { prompt?: string; max_marks?: number; section_id?: string } | undefined;

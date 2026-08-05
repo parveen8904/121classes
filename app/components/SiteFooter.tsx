@@ -33,7 +33,7 @@ export default async function SiteFooter() {
             A venture by <strong>CA Parveen Sharma</strong>.
           </p>
           <p className="muted" style={{ marginTop: 8, fontSize: ".82rem" }}>
-            Office: W6 Sector 24, DLF Phase 3, Gurugram 122010
+            Office: W6/30, DLF Phase 3, Sector 24, Gurugram 122010
           </p>
           <p className="muted" style={{ marginTop: 4, fontSize: ".82rem" }}>
             📧 <a className="grad" href="mailto:contact@caparveensharma.com">contact@caparveensharma.com</a>

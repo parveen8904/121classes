@@ -121,7 +121,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 // Must match the Google Business Profile address exactly —
                 // consistent NAP (name/address/phone) across web + GBP is a
                 // local-ranking signal.
-                address: { "@type": "PostalAddress", streetAddress: "W6/30, Road No. W6, DLF Phase 3, Sector 24", addressLocality: "Gurugram", postalCode: "122010", addressCountry: "IN" },
+                address: { "@type": "PostalAddress", streetAddress: "W6/30, DLF Phase 3, Sector 24", addressLocality: "Gurugram", postalCode: "122010", addressCountry: "IN" },
                 telephone: "+91-9810012674",
               },
               {

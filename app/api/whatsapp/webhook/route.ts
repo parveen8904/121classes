@@ -66,7 +66,30 @@ export async function POST(req: NextRequest) {
         // Never on the personal line: an automatic greeting from a number he
         // answers himself would read as though he had replied.
         if (await isPersonalLine(phoneNumberId)) continue;
-        if (from && !greeted.has(from)) {
+
+        // A real question is ANSWERED, not acknowledged.
+        //
+        // The site tells students they can ask any time. On Telegram that was
+        // true — message the bot, the AI answers from his material. On WhatsApp
+        // every message got the same canned line and then waited for a human,
+        // so the promise was only half kept on the channel students actually
+        // use. The business number is live and verified, and a reply inside the
+        // 24-hour window costs nothing.
+        const text = String((m.text as { body?: string } | undefined)?.body ?? "").trim();
+        let handled = false;
+        if (text) {
+          try {
+            const { answerWhatsAppDoubt } = await import("@/lib/whatsappAnswer");
+            const outcome = await answerWhatsAppDoubt(from, text);
+            handled = outcome !== "ignored";
+          } catch (e) {
+            console.error("[whatsapp] could not answer", e instanceof Error ? e.message : e);
+          }
+        }
+
+        // Only greet when there was nothing to answer — a robot greeting on top
+        // of a real answer reads as though nobody had read the message.
+        if (!handled && from && !greeted.has(from)) {
           greeted.add(from);
           await autoReplyTo(from).catch(() => false);
         }

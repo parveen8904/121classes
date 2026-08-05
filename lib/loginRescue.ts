@@ -79,11 +79,23 @@ export async function rescueLogin(input: {
   // file, and tell them on WhatsApp that it is coming.
   if (account?.email) {
     const needsPassword = account.has_password === false;
-    const type = needsPassword ? "invite" : "recovery";
+    // ALWAYS "recovery", never "invite".
+    //
+    // generateLink with type "invite" is for creating a NEW user; on an address
+    // that already has an account Supabase refuses it. Every bulk-granted
+    // student has an account and no password — precisely the people who ask for
+    // login help — so this branch failed for exactly the students it existed to
+    // rescue, and reported "could not generate a sign-in link" with no reason.
+    // A recovery link works whether or not there is a password to recover: it
+    // signs them in and lets them set one.
+    const type = "recovery";
     const next = needsPassword ? "/auth/set-password" : "/auth/reset-password";
     const { data: linkData } = await svc.auth.admin.generateLink({ type, email: account.email } as never);
     const tokenHash = (linkData as { properties?: { hashed_token?: string } } | null)?.properties?.hashed_token;
-    if (!tokenHash) return { handled: false, note: "could not generate a sign-in link" };
+    if (!tokenHash) {
+      console.error("[login_rescue] no link for", account.email, JSON.stringify(linkData)?.slice(0, 200));
+      return { handled: false, note: "could not generate a sign-in link" };
+    }
 
     const url = `${SITE_URL}/auth/confirm?token_hash=${tokenHash}&type=${type}&next=${next}`;
     await sendTemplate(needsPassword ? "account_created" : "password_reset", account.email, {

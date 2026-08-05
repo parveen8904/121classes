@@ -285,6 +285,20 @@ export default function AdminGuidePage() {
         back={{ href: "/admin", label: "Admin" }}
       />
 
+      {/* Two different questions: "how do I use this screen" (below) and "how
+          does the whole thing fit together" (its own page). Mixing them made
+          neither answerable. */}
+      <div className="card" style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ minWidth: 240, flex: 1 }}>
+          <strong>🧭 New: how the whole thing works</strong>
+          <p className="muted" style={{ margin: "4px 0 0", fontSize: ".86rem" }}>
+            The map rather than the manual — how content is filed, where a written paper goes, which address feeds the
+            AI, and what runs at night on its own.
+          </p>
+        </div>
+        <Link className="btn" href="/admin/guide/how-it-works">Read the map →</Link>
+      </div>
+
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16, alignItems: "center" }}>
         {ADMIN_GROUPS.map((g) => (
           <a key={g.id} className="btn small secondary" href={`#guide-${g.id}`}>{g.icon} {g.title}</a>

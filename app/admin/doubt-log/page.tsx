@@ -2,6 +2,8 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
+import SubmitButton from "@/app/components/SubmitButton";
+import { addCorrection } from "../ai-training/actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Doubt log — Admin" };
@@ -141,6 +143,34 @@ export default async function DoubtLogPage(props: { searchParams: Promise<{ days
                     ? "— no answer sent (left alone as chatter, or still waiting)"
                     : `— no answer recorded (${q.status})`}
                 </p>
+              )}
+
+              {/* Correcting it HERE, beside the answer that was wrong, is the
+                  only moment the founder has both the question and the mistake
+                  in front of him. Making him retype them elsewhere is why
+                  corrections never got written down. */}
+              {answers.length > 0 && (
+                <details style={{ marginTop: 8 }}>
+                  <summary style={{ cursor: "pointer", fontSize: ".82rem", fontWeight: 700, color: "#b45309" }}>
+                    ✏️ That answer is wrong — teach it
+                  </summary>
+                  <form action={addCorrection} style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                    <input type="hidden" name="trigger" value={q.question} />
+                    <input type="hidden" name="was_answered" value={answers[0].question} />
+                    <input type="hidden" name="question_id" value={q.id} />
+                    <input type="hidden" name="scope" value="all" />
+                    <input type="hidden" name="back" value="/admin/doubt-log" />
+                    <textarea
+                      name="guidance"
+                      rows={3}
+                      required
+                      placeholder="What should it have said? Write it as an instruction — e.g. “Do not answer this. Say a colleague will confirm today.”"
+                    />
+                    <div>
+                      <SubmitButton className="btn small">🎓 Teach it this</SubmitButton>
+                    </div>
+                  </form>
+                </details>
               )}
             </div>
           );

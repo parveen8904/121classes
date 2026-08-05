@@ -153,6 +153,17 @@ const GUIDE: Record<string, Entry> = {
     ],
     tip: "For case-study sets: upload the PDF, let it parse, then press Publish. The newest published set also powers the website's free case-test popup.",
   },
+  "/admin/ai-training": {
+    steps: [
+      "Use this the moment you read an answer you don't like — not later, and not by rewriting the reply.",
+      "A RULE is something it must always do, on every question: \"Never tell a student what they paid.\" Keep rules few and absolute.",
+      "A CORRECTION is tied to one question that was answered badly. Paste the question, write what it should have said. When a student asks something similar, your answer is put in front of it.",
+      "Fastest route: open the Doubt report, find the bad answer, and use \"That answer is wrong — teach it\" underneath it. The question is filled in for you.",
+      "Then use \"Try it\" to ask the same question again and see what comes back. Nothing is sent to anybody.",
+      "Pause a lesson instead of deleting it if you are unsure — it stops applying but is not lost.",
+    ],
+    tip: "It applies to the very next answer, on every channel, with nothing to deploy. If a lesson did not fire, the Try box tells you so — word its question more like the one students actually send.",
+  },
   "/admin/repository": {
     steps: [
       "This feeds the AI that answers doubts and generates tests: transcripts, notes, books, question banks.",

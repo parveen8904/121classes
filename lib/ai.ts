@@ -239,9 +239,16 @@ export async function answerDoubtFromMaterial(
   feature: string = "doubt", // "group_doubt" for Telegram-group answers (own toggle + cap)
   opts: { betaNote?: boolean } = {},
 ): Promise<string | null> {
+  // What he has taught the AI goes ABOVE the material, because a house rule that
+  // sits below the study material reads as a footnote. One hook here rather than
+  // six at the call sites, so a lesson taught once applies on every channel —
+  // email, Telegram, WhatsApp, Discord, the groups and the website.
+  const { lessonPrefix } = await import("@/lib/aiLessons");
+  const taught = await lessonPrefix(question, feature);
+
   // Enough room to actually SOLVE a numbered question (working notes, journal
   // entries), not just a one-line conceptual reply.
-  const user = `STUDY MATERIAL:\n${material || "(none provided)"}\n\nSTUDENT QUESTION:\n${question}`;
+  const user = `${taught}STUDY MATERIAL:\n${material || "(none provided)"}\n\nSTUDENT QUESTION:\n${question}`;
   const raw = await callClaude(REPO_SYSTEM, user, 2000, { model: await teachingModel(), feature });
   // A reply CA Parveen Sharma reads and sends himself carries no machine
   // disclaimer — it is his answer by the time the student sees it.

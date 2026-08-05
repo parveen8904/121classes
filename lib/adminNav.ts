@@ -36,7 +36,6 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       // Three tiles for one job — read what students asked and answer it —
       // meant guessing which of them held the message you were looking for.
       // One door now; the three desks are inside it.
-      { icon: "📄", title: "Mock test papers", desc: "Full 100-mark papers in the ICAI pattern — 30 marks case-scenario MCQs, 70 descriptive. Drafted from past exam patterns; nothing reaches a student until you approve it.", href: "/admin/mock-papers" },
       { icon: "✅", title: "Office tasks", desc: "Post a job and it lands on someone's list. They finish it, add a remark, or pass it on — and every hand-off stays on the record.", href: "/admin/tasks" },
       { icon: "📥", title: "Messages — doubts, WhatsApp & the log", desc: "Everything students send you, in one place: the doubt inbox, the WhatsApp inbox (and connecting your own number), and the log of every question answered so far.", href: "/admin/messages" },
       { icon: "🖊️", title: "Examiner desk", desc: "Verify AI-checked descriptive copies and release them to students — sortable by subject/test; copies lock while an examiner checks.", href: "/examiner" },
@@ -57,6 +56,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     tagline: "Courses, classes, the AI repository and everything students study.",
     panels: [
       { icon: "📘", title: "Courses & content", desc: "Create courses → subjects → topics → sections, including homework & discussion.", href: "/admin/courses" },
+      { icon: "📄", title: "Mock test papers", desc: "Full 100-mark papers in the ICAI pattern — 30 marks case-scenario MCQs, 70 descriptive. Drafted from past exam patterns; nothing reaches a student until you approve it.", href: "/admin/mock-papers" },
       { icon: "🗝️", title: "Answer keys", desc: "AI-drafted solutions for uploaded papers that have no answer key — read, edit, approve. Approved keys are what students see and what the AI marks descriptive papers against.", href: "/admin/solutions" },
       { icon: "📚", title: "AI repository", desc: "Feed the AI: transcripts, notes, books, RTP/MTP/papers — coverage panel shows what's missing.", href: "/admin/repository" },
       { icon: "🗓️", title: "Study planner", desc: "Set the rules the day-by-day study plan engine follows (stages, hours, speeds).", href: "/admin/planner" },

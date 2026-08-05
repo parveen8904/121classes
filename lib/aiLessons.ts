@@ -34,13 +34,42 @@ const STOP = new Set([
   "all", "please", "sir", "maam", "madam", "hai", "hey", "hello", "kya", "mein", "koi",
 ]);
 
+// Students do not repeat a question in the same words. "I already PAID for the
+// old course" and "no PAYMENT no SUBSCRIPTION" are the same question, and plain
+// word matching sees nothing in common — which is exactly what happened the
+// first time this was tested: the lesson did not fire on a rephrasing.
+//
+// So words are folded to the thing they mean before comparing. Small and
+// domain-specific on purpose: a general stemmer would fold words that matter.
+const FAMILY: [RegExp, string][] = [
+  [/^(pay|paid|payment|paying|pays|fee|fees|price|prices|pricing|cost|costs|charge|charges|amount|money|rupee|rupees|paise)$/, "pay"],
+  [/^(free|freely|complimentary|gratis|muft)$/, "free"],
+  [/^(subscription|subscribe|subscribed|plan|plans|package|membership|validity|valid)$/, "plan"],
+  [/^(login|log|signin|sign|account|register|registration|signup)$/, "login"],
+  [/^(lecture|lectures|class|classes|video|videos|session|sessions)$/, "class"],
+  [/^(course|courses|batch|batches|programme|program)$/, "course"],
+  [/^(refund|refunds|cancel|cancelled|cancellation|money-back)$/, "refund"],
+  [/^(access|accessing|open|unlock|entitled|entitlement)$/, "access"],
+  [/^(buy|bought|purchase|purchased|buying|order|ordered)$/, "buy"],
+  [/^(old|previous|earlier|existing|before|already|prior)$/, "earlier"],
+  [/^(test|tests|paper|papers|mock|mocks|exam|exams)$/, "test"],
+  [/^(check|checked|checking|evaluate|evaluated|evaluation|marking|marked)$/, "check"],
+];
+
+function canon(word: string): string {
+  for (const [re, to] of FAMILY) if (re.test(word)) return to;
+  // A light plural fold catches the rest without a dictionary.
+  return word.length > 4 && word.endsWith("s") && !word.endsWith("ss") ? word.slice(0, -1) : word;
+}
+
 function keywords(text: string): Set<string> {
   return new Set(
     (text ?? "")
       .toLowerCase()
       .replace(/[^a-z0-9₹\s]/g, " ")
       .split(/\s+/)
-      .filter((w) => w.length > 2 && !STOP.has(w)),
+      .filter((w) => w.length > 2 && !STOP.has(w))
+      .map(canon),
   );
 }
 
@@ -74,10 +103,10 @@ export async function lessonsFor(question: string, feature: string): Promise<Les
     const corrections = all
       .filter((l) => l.kind === "correction" && l.trigger)
       .map((l) => ({ l, score: overlap(keywords(l.trigger!), qk) }))
-      // A third of the shorter question's words in common. Low enough to catch a
-      // rephrasing, high enough that an unrelated lesson does not crowd out the
-      // material.
-      .filter((x) => x.score >= 0.34)
+      // A quarter of the shorter question's meaningful words in common. Set at a
+      // third first; a genuine rephrasing of the same question scored 0.25 and
+      // was missed, which is worse than an occasional near-miss firing.
+      .filter((x) => x.score >= 0.25)
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
       .map((x) => x.l);

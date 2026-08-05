@@ -182,10 +182,15 @@ export async function answerDoubt(question: string, context?: string): Promise<s
 // Sentinel the model returns when the repository doesn't cover the question.
 export const NEED_FACULTY = "NEED_FACULTY";
 
-// Shown under every AI answer until the formal launch: sets expectations and
-// protects trust if an answer is imperfect. Remove at launch.
-export const BETA_NOTE =
-  "Note: Beta version — the portal has not been formally launched yet. AI answers can make mistakes; please verify important points with the faculty.";
+// Removed at the founder's instruction (2026-08-05). It used to read "Beta
+// version — AI answers can make mistakes", appended under every answer.
+//
+// His reasoning, and it is right: the site already says this where it belongs,
+// and repeating it under each answer undercut the answer itself. A student
+// reading a worked solution in his name does not want a footnote telling them
+// not to trust it. It is kept as an empty string rather than deleted so no
+// caller has to change.
+export const BETA_NOTE = "";
 
 // Belt-and-braces: even if the model slips, strip markdown symbols and emojis
 // so the student always sees clean plain text (founder's rule).
@@ -199,11 +204,11 @@ function plainText(t: string): string {
     .trim();
 }
 
-// Append the beta note to a successful AI answer (never to the NEED_FACULTY
-// sentinel, which callers compare verbatim).
+// Clean the answer up. There is no longer a note to append — the name at the
+// bottom of the message is the whole signature the student needs.
 function withBeta(text: string | null): string | null {
   if (!text || text.trim() === NEED_FACULTY) return text;
-  return `${plainText(text)}\n\n${BETA_NOTE}`;
+  return plainText(text);
 }
 
 const REPO_SYSTEM =

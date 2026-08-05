@@ -73,6 +73,36 @@ export async function draftAllQueued() {
   // somebody who does not want to wait.
 }
 
+// Start a paper over from nothing.
+//
+// "Draft it again" did not do this and could not: draftMockPaper looks at what
+// is already saved and carries on from there — which is right when a paper is
+// half-written, and wrong when the paper itself is the problem. Pressing it on
+// paper 1 finished the long version rather than replacing it.
+//
+// This clears the questions, the answers and the counters, so the next pass
+// writes a genuinely new paper under the current instructions.
+export async function redraftFromScratch(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient()
+    .from("mock_papers")
+    .update({
+      questions_md: null,
+      answers_md: null,
+      answers_progress: 0,
+      attempts: 0,
+      status: "queued",
+      error: null,
+      generated_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  revalidatePath("/admin/mock-papers");
+  redirect("/admin/mock-papers?restarted=1");
+}
+
 export async function createSet() {
   await assertArea(null);
   const n = await ensureSeptember2026Set();

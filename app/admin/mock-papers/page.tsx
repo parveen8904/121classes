@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
 import AnswerKey from "@/app/components/AnswerKey";
 import AdminHero from "../_components/AdminHero";
-import { draftOne, draftAllQueued, createSet, approvePaper, unapprovePaper, savePaper } from "./actions";
+import { draftOne, draftAllQueued, createSet, approvePaper, unapprovePaper, savePaper, redraftFromScratch } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mock test papers — Admin" };
@@ -32,7 +32,7 @@ const LABEL: Record<string, { text: string; colour: string }> = {
 // and a wrong figure in a mock paper is worse than no mock paper — a student
 // spends three hours on it and learns the wrong thing.
 export default async function MockPapersPage(props: {
-  searchParams: Promise<{ made?: string; drafted?: string; approved?: string; pulled?: string; saved?: string; err?: string }>;
+  searchParams: Promise<{ made?: string; restarted?: string; drafted?: string; approved?: string; pulled?: string; saved?: string; err?: string }>;
 }) {
   await assertArea(null);
   const searchParams = await props.searchParams;
@@ -50,6 +50,12 @@ export default async function MockPapersPage(props: {
       />
 
       {searchParams.made && <div className="notice ok" style={{ marginTop: 16 }}>✅ {searchParams.made} paper slot(s) created.</div>}
+      {searchParams.restarted && (
+        <div className="notice ok" style={{ marginTop: 16 }}>
+          Cleared. The next pass writes a completely new paper — about ten minutes for the questions, then the
+          answers in three parts.
+        </div>
+      )}
       {searchParams.drafted && <div className="notice ok" style={{ marginTop: 16 }}>✅ Drafted. Read it below before approving.</div>}
       {searchParams.approved && <div className="notice ok" style={{ marginTop: 16 }}>✅ Approved — it is live on the mock tests page.</div>}
       {searchParams.pulled && <div className="notice ok" style={{ marginTop: 16 }}>Taken off the site. Students can no longer open it.</div>}
@@ -99,9 +105,21 @@ export default async function MockPapersPage(props: {
                 <form action={draftOne}>
                   <input type="hidden" name="id" value={p.id} />
                   <SubmitButton className="btn small secondary" savedLabel="Drafting…">
-                    {p.questions_md ? "🔄 Draft it again" : "✍️ Draft this paper"}
+                    {p.status === "drafted"
+                      ? "↻ One more pass"
+                      : p.questions_md
+                        ? "▶ Carry on drafting"
+                        : "✍️ Draft this paper"}
                   </SubmitButton>
                 </form>
+                {p.questions_md && (
+                  <form action={redraftFromScratch}>
+                    <input type="hidden" name="id" value={p.id} />
+                    <SubmitButton className="btn small danger" savedLabel="Restarted">
+                      🗑️ Throw it away &amp; write a new paper
+                    </SubmitButton>
+                  </form>
+                )}
                 {p.status === "drafted" && (
                   <form action={approvePaper}>
                     <input type="hidden" name="id" value={p.id} />

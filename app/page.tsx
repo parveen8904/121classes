@@ -447,6 +447,50 @@ export default async function Home() {
 
 
       {/* NOVA SEED CAPITAL — startup grooming banner */}
+      {/* SEPTEMBER 2026 MOCKS + free paper checking.
+          Both are the same offer from a student's side: send us your written
+          paper and get it back marked against Sir's own answer key. It sits high
+          on the page because it is the one thing here a student can use before
+          paying anything — and the strongest argument for the course is being
+          inside the marking quality already. */}
+      <section className="section" id="mock-tests" style={{ paddingTop: 26, paddingBottom: 26 }}>
+        <div
+          style={{
+            maxWidth: 1140,
+            margin: "0 auto",
+            background: "linear-gradient(120deg, #7c2d12, #b45309 65%, #f59e0b)",
+            color: "#fff",
+            borderRadius: 20,
+            padding: "30px 28px",
+          }}
+        >
+          <div style={{ display: "flex", gap: 22, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ minWidth: 280, flex: 1 }}>
+              <div style={{ fontSize: ".82rem", fontWeight: 800, letterSpacing: ".08em", opacity: 0.9 }}>
+                📅 PREPARING FOR THE SEPTEMBER 2026 EXAM
+              </div>
+              <div style={{ fontSize: "clamp(1.25rem,2.8vw,1.8rem)", fontWeight: 800, margin: "6px 0 6px" }}>
+                CA Intermediate — Advanced Accounting mock tests
+              </div>
+              <div style={{ opacity: 0.95, fontSize: ".96rem", lineHeight: 1.65 }}>
+                Full 100-mark papers in the ICAI pattern — 30 marks of case-scenario MCQs and 70 marks descriptive,
+                built from past exam questions. Log in, download the paper, write it by hand, and send it back.
+                It is checked against <strong>CA Parveen Sharma&apos;s own answer key</strong>, with the marks
+                written on your own pages. <strong>No plan needed.</strong>
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+                <Link className="btn" href="/mock-tests" style={{ background: "#fff", color: "#b45309", fontWeight: 800 }}>
+                  Take a mock test →
+                </Link>
+                <Link className="btn secondary" href="/check-my-paper" style={{ background: "rgba(255,255,255,.16)", color: "#fff", borderColor: "rgba(255,255,255,.5)" }}>
+                  📝 Get any paper checked — free
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="section" style={{ paddingTop: 26, paddingBottom: 26 }}>
         <Link href="/startups" style={{ display: "block", maxWidth: 1140, margin: "0 auto", textDecoration: "none" }}>
           <div style={{ background: "linear-gradient(120deg, #134e4a, #0d9488 70%, #2dd4bf)", color: "#fff", borderRadius: 20, padding: "30px 28px", display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>

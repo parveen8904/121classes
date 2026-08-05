@@ -28,6 +28,7 @@ const ROUTES = [
   "/login",
   "/ask",
   "/check-my-paper",
+  "/mock-tests",
   "/courses",
   "/pricing",
   "/test-series",

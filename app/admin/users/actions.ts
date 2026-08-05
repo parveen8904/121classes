@@ -223,10 +223,14 @@ export async function resetStudentTests(formData: FormData) {
 // expires within the hour — the wrong instrument for a student who reads email
 // the next morning. This sends a password instead: it does not expire, it works
 // from any device, and it can be read aloud over a phone.
-export async function rescueFirstLogins() {
+export async function rescueFirstLogins(formData?: FormData) {
   if (!(await requireAdmin())) return;
+  // "tried" = only those who asked for a link themselves and still are not in.
+  // Anything else writes to every student who has never signed in, most of whom
+  // have never even opened the login page.
+  const onlyThoseWhoTried = str(formData?.get("scope") ?? null) === "tried";
   const { sendFirstLoginPasswords } = await import("@/lib/firstLoginRescue");
-  const r = await sendFirstLoginPasswords(100);
+  const r = await sendFirstLoginPasswords(onlyThoseWhoTried ? 200 : 100, { onlyThoseWhoTried });
   revalidatePath("/admin/users");
   redirect(
     `/admin/users?rescued=${r.fixed}&rescueleft=${r.remaining}` +

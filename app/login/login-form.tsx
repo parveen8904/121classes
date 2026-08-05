@@ -123,7 +123,7 @@ export default function LoginForm() {
               className="notice"
               style={{ background: "var(--bg-soft)", border: "1px solid var(--border)", fontSize: ".86rem", lineHeight: 1.6 }}
             >
-              <strong>Given free access and never set a password?</strong> Or your link said it had expired?
+              <strong>Have access but never set a password?</strong> Or your link said it had expired?
               Enter your email above, then press{" "}
               <button type="button" style={{ ...linkBtn, fontWeight: 700 }} onClick={() => { setMode("forgot"); setMsg(null); }}>
                 Forgot password

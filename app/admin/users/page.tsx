@@ -23,6 +23,14 @@ export default async function UsersPage(
     const { data } = await createServiceClient().rpc("students_never_signed_in", { max_rows: 1000 });
     stuck = ((data ?? []) as unknown[]).length;
   } catch { /* never let a count break the page */ }
+
+  // Of those, the ones who demonstrably tried: they asked for a link
+  // themselves, later than the one sent when the account was made.
+  let tried = 0;
+  try {
+    const { data } = await createServiceClient().rpc("students_who_tried_to_get_in", { max_rows: 1000 });
+    tried = ((data ?? []) as unknown[]).length;
+  } catch { /* same */ }
   const role = searchParams.role ?? "";
 
   let query = supabase
@@ -67,11 +75,24 @@ export default async function UsersPage(
             Sending them a <strong>password</strong> instead fixes it: it does not expire, it works on any device,
             and it can be read out over the phone. They can change it later from their dashboard.
           </p>
-          <form action={rescueFirstLogins}>
-            <SubmitButton className="btn small" savedLabel="Sending…">
-              📧 Send working passwords to the next 100
-            </SubmitButton>
-          </form>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <form action={rescueFirstLogins}>
+              <input type="hidden" name="scope" value="tried" />
+              <SubmitButton className="btn small" savedLabel="Sending…">
+                📧 Write to the {tried} who actually tried
+              </SubmitButton>
+            </form>
+            <form action={rescueFirstLogins}>
+              <SubmitButton className="btn small secondary" savedLabel="Sending…">
+                📮 Write to the next 100 of everyone
+              </SubmitButton>
+            </form>
+          </div>
+          <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0 0" }}>
+            Only {tried} of them asked for a link themselves — those are the people who went to the site and could
+            not get in. The rest have never opened the login page, so writing to all of them is a bulk mailing about
+            a problem most of them have not had.
+          </p>
         </div>
       )}
       {searchParams.rescued && (

@@ -39,14 +39,25 @@ export type RescueResult = { fixed: number; failed: string[]; remaining: number 
  * Safe to re-run: a student who has since logged in is skipped, and anybody
  * rescued already is skipped too, so nobody's password is changed twice.
  */
-export async function sendFirstLoginPasswords(limit = 100): Promise<RescueResult> {
+export async function sendFirstLoginPasswords(
+  limit = 100,
+  opts: { onlyThoseWhoTried?: boolean } = {},
+): Promise<RescueResult> {
   const svc = createServiceClient();
   const fixed: string[] = [];
   const failed: string[] = [];
 
   // Students who have an account and have NEVER got in. auth.users is not
   // reachable through PostgREST, so the never-signed-in test comes from the RPC.
-  const { data: rows, error } = await svc.rpc("students_never_signed_in", { max_rows: limit });
+  // Two audiences, and they are very different sizes.
+  //
+  // Only ~253 people have visited the login page at all since the grants began,
+  // and page views of a logged-OUT visitor carry no identity, so the ones who
+  // tried and failed cannot be named from them. What CAN be named is anyone who
+  // asked for a link themselves — their recovery is stamped later than the one
+  // sent when the account was made. That is a person who has actively tried.
+  const rpc = opts.onlyThoseWhoTried ? "students_who_tried_to_get_in" : "students_never_signed_in";
+  const { data: rows, error } = await svc.rpc(rpc, { max_rows: limit });
   if (error) return { fixed: 0, failed: [`could not list them: ${error.message}`], remaining: -1 };
 
   for (const r of (rows ?? []) as { id: string; email: string; full_name: string | null }[]) {
@@ -81,6 +92,6 @@ export async function sendFirstLoginPasswords(limit = 100): Promise<RescueResult
     }
   }
 
-  const { data: leftRows } = await svc.rpc("students_never_signed_in", { max_rows: 1000 });
+  const { data: leftRows } = await svc.rpc(rpc, { max_rows: 1000 });
   return { fixed: fixed.length, failed, remaining: ((leftRows ?? []) as unknown[]).length };
 }

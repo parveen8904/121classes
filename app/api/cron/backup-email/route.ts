@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { gzipSync } from "node:zlib";
+import { gzipSync, gunzipSync } from "node:zlib";
 import { getSecret } from "@/lib/secrets";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendEmailWithAttachment, emailShell } from "@/lib/notify";
@@ -45,9 +45,12 @@ export async function GET(req: NextRequest) {
   const { data: blob, error } = await svc.storage.from("secure").download(`${FOLDER}/${latest}`);
   if (error || !blob) return NextResponse.json({ ok: false, error: error?.message ?? "download failed" }, { status: 500 });
 
-  const raw = Buffer.from(await blob.arrayBuffer());
-  const zipped = gzipSync(raw, { level: 9 });
-  const rawMB = raw.length / 1048576;
+  // The six-hourly copy is stored gzipped now, so it is attached as it is —
+  // gzipping a gzip only makes it bigger.
+  const stored = Buffer.from(await blob.arrayBuffer());
+  const alreadyGz = latest.endsWith(".gz");
+  const zipped = alreadyGz ? stored : gzipSync(stored, { level: 9 });
+  const rawMB = (alreadyGz ? gunzipSync(stored).length : stored.length) / 1048576;
   const zipMB = zipped.length / 1048576;
 
   const to =
@@ -76,9 +79,9 @@ export async function GET(req: NextRequest) {
 
   const sent = await sendEmailWithAttachment(
     to,
-    `🗄️ Weekly backup — ${latest.replace("backup-", "").replace(".json", "")}`,
+    `🗄️ Weekly backup — ${latest.replace("backup-", "").replace(".json.gz", "").replace(".json", "")}`,
     emailShell("Weekly backup", summary),
-    { filename: `${latest}.gz`, content: zipped, contentType: "application/gzip" },
+    { filename: alreadyGz ? latest : `${latest}.gz`, content: zipped, contentType: "application/gzip" },
   );
 
   return NextResponse.json({

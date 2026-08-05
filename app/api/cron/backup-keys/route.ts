@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { dropboxConfigured, dropboxUpload } from "@/lib/dropbox";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 // A nightly copy of the work that cannot be re-typed.
 //
@@ -80,22 +80,39 @@ export async function GET(req: NextRequest) {
 
   const payload = { takenAt: new Date().toISOString(), counts, problems, tables: dump };
 
+  // GZIPPED, and not pretty-printed.
+  //
+  // Every run of this job since it was built returned 500 and not one backup
+  // was ever written — the founder asked for backups after losing 44 answer
+  // keys, and there were none. The upload was the whole dump as indented JSON:
+  // `sections.config` alone averages 39 kB a row over ~500 rows, and the
+  // two-space indent inflated it further, so the file went past what the
+  // upload would take. The error was returned to a cron nobody reads and never
+  // logged.
+  //
+  // It is text, so it compresses about tenfold. The Dropbox copy was already
+  // gzipped; this one is now too.
+  const raw = Buffer.from(JSON.stringify(payload));
+  const body = gzipSync(raw, { level: 9 });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 16);
-  const path = `${FOLDER}/backup-${stamp}.json`;
-  const up = await svc.storage.from("secure").upload(path, Buffer.from(JSON.stringify(payload, null, 2)), {
-    contentType: "application/json",
+  const path = `${FOLDER}/backup-${stamp}.json.gz`;
+  const up = await svc.storage.from("secure").upload(path, body, {
+    contentType: "application/gzip",
     upsert: true,
   });
-  if (up.error) return NextResponse.json({ ok: false, error: up.error.message }, { status: 500 });
+  if (up.error) {
+    console.error("[backup] upload refused", up.error.message, `${(body.length / 1048576).toFixed(1)} MB gzipped`);
+    return NextResponse.json({ ok: false, error: up.error.message, sizeMb: +(body.length / 1048576).toFixed(1) }, { status: 500 });
+  }
+  console.log(`[backup] wrote ${path} — ${(raw.length / 1048576).toFixed(1)} MB raw, ${(body.length / 1048576).toFixed(1)} MB gzipped`);
 
   // A second copy, outside this project entirely. A backup that lives only in
   // the account it protects survives a delete but not a lost account.
   let dropbox: string | null = null;
   try {
     if (await dropboxConfigured()) {
-      const gz = gzipSync(Buffer.from(JSON.stringify(payload)), { level: 9 });
-      const r = await dropboxUpload(`/backups/${latestName(path)}.gz`, gz);
-      dropbox = r.ok ? `sent (${(gz.length / 1048576).toFixed(1)} MB)` : `failed: ${r.error ?? "unknown"}`;
+      const r = await dropboxUpload(`/backups/${latestName(path)}`, body);
+      dropbox = r.ok ? `sent (${(body.length / 1048576).toFixed(1)} MB)` : `failed: ${r.error ?? "unknown"}`;
     } else {
       dropbox = "not connected";
     }

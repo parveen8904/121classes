@@ -22,7 +22,11 @@ export const maxDuration = 120;
 
 /** Mailgun signs each post; an unsigned one is somebody else's. */
 async function signatureOk(form: FormData): Promise<boolean> {
-  const key = await getSecret("MAILGUN_API_KEY");
+  // Mailgun signs webhooks with the account's HTTP webhook signing key, which is
+  // NOT the sending key we post mail with. Verifying against the sending key
+  // rejects every genuine message as a forgery, so the signing key comes first
+  // and the old name stays only as a fallback for setups that never split them.
+  const key = (await getSecret("MAILGUN_WEBHOOK_KEY")) || (await getSecret("MAILGUN_API_KEY"));
   if (!key) return false;
   const timestamp = String(form.get("timestamp") ?? "");
   const token = String(form.get("token") ?? "");
@@ -50,6 +54,9 @@ function newestPart(body: string): string {
 /** Mail that must never be replied to: bounces, vacation notices, other robots. */
 function isMachineMail(form: FormData, from: string, subject: string): boolean {
   const header = (n: string) => String(form.get(n) ?? "").toLowerCase();
+  // Mailgun tags spam rather than blocking it, so a genuine student is never
+  // silently dropped — but nothing is auto-answered back to a spammer either.
+  if (header("X-Mailgun-Sflag") === "yes") return true;
   if (header("X-Autoreply") || header("Auto-Submitted").includes("auto-")) return true;
   if (header("Precedence").match(/bulk|junk|list/)) return true;
   if (/^(mailer-daemon|postmaster|no-?reply|do-?not-?reply|bounce)/i.test(from)) return true;

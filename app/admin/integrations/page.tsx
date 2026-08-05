@@ -256,6 +256,7 @@ export default async function IntegrationsPage(
           <KeyField name="SERPAPI_KEY" label="Google Jobs (SerpAPI) key — placement" placeholder="from serpapi.com" />
           <KeyField name="JOOBLE_API_KEY" label="Jooble key (free fallback) — placement" placeholder="from jooble.org/api/about" />
           <KeyField name="MAILGUN_API_KEY" label="Mailgun API key" placeholder="key-…" />
+          <KeyField name="MAILGUN_WEBHOOK_KEY" label="Mailgun HTTP webhook signing key — signs incoming student mail (NOT the sending key)" placeholder="Mailgun → Settings → API security → HTTP webhook signing key" />
           <KeyField name="MAILGUN_DOMAIN" label="Mailgun domain" placeholder="mg.caparveensharma.com" />
           <KeyField name="MAILGUN_REGION" label="Mailgun region — type eu if your domain is EU (mxa.eu.mailgun.org)" placeholder="eu  (or leave blank for US)" />
           <KeyField name="NOTIFY_FROM_EMAIL" label="From address (must be on the verified Mailgun domain)" placeholder="CA Parveen Sharma <noreply@caparveensharma.com>" />

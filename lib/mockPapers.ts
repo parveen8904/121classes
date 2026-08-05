@@ -103,8 +103,21 @@ async function callLong(system: string, user: string, maxTokens: number): Promis
   }
 }
 
-/** Draft ONE mock paper: the questions, then the answers to those questions. */
-export async function draftMockPaper(id: string): Promise<{ ok: boolean; error?: string }> {
+/**
+ * Draft ONE mock paper, in TWO passes.
+ *
+ * The first version did both calls in one request and could never finish: the
+ * question paper alone took three and a half minutes and came back at exactly
+ * 12,000 output tokens — the ceiling, so it was truncated — and the answers to
+ * it would have taken as long again. A serverless request stops at five
+ * minutes, so the function was killed mid-way, every time, leaving the row
+ * stuck on "drafting" where nothing would ever pick it up again.
+ *
+ * So: one pass writes the QUESTIONS and stops. The next pass writes the ANSWERS
+ * to those questions. Each has the whole budget to itself, and a paper that
+ * fails halfway keeps the half it finished.
+ */
+export async function draftMockPaper(id: string): Promise<{ ok: boolean; stage?: string; error?: string }> {
   const svc = createServiceClient();
   const { data: row } = await svc.from("mock_papers").select("*").eq("id", id).maybeSingle();
   if (!row) return { ok: false, error: "not found" };
@@ -120,21 +133,35 @@ export async function draftMockPaper(id: string): Promise<{ ok: boolean; error?:
     `It must differ substantially from the other papers in this set: different topics leading, different companies, different figures.\n\n` +
     `TOPICS ACTUALLY TAUGHT IN THIS COURSE (set the paper from these):\n${material.slice(0, 10000)}`;
 
-  const questions = await callLong(PAPER_SYSTEM, ask, 12000);
-  if (!questions) {
-    await svc.from("mock_papers").update({ status: "failed", error: "the question paper came back empty" }).eq("id", id);
-    return { ok: false, error: "no questions" };
+  const existing = String(row.questions_md ?? "").trim();
+
+  if (!existing) {
+    // 20,000, not 12,000: the first attempt stopped at exactly its ceiling,
+    // which is what a truncated paper looks like from the outside.
+    const questions = await callLong(PAPER_SYSTEM, ask, 20000);
+    if (!questions) {
+      await svc.from("mock_papers").update({ status: "failed", error: "the question paper came back empty" }).eq("id", id);
+      return { ok: false, error: "no questions" };
+    }
+    await svc
+      .from("mock_papers")
+      .update({ questions_md: questions, status: "questions_ready", error: null, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    return { ok: true, stage: "questions" };
   }
 
+  const questions = existing;
   const answers = await callLong(
     ANSWER_SYSTEM,
     `Write the suggested answers to THIS paper. Answer every question in it, in order.\n\n${questions}`,
-    16000,
+    28000,
   );
   if (!answers) {
+    // The questions are already saved, so this only has to try the answers
+    // again — it never re-writes a paper that is already good.
     await svc
       .from("mock_papers")
-      .update({ questions_md: questions, status: "failed", error: "the answers came back empty — the paper is saved, press draft again" })
+      .update({ status: "questions_ready", error: "the answers came back empty — will try again on the next pass" })
       .eq("id", id);
     return { ok: false, error: "no answers" };
   }
@@ -142,7 +169,6 @@ export async function draftMockPaper(id: string): Promise<{ ok: boolean; error?:
   await svc
     .from("mock_papers")
     .update({
-      questions_md: questions,
       answers_md: answers,
       status: "drafted",
       error: null,
@@ -150,7 +176,7 @@ export async function draftMockPaper(id: string): Promise<{ ok: boolean; error?:
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
-  return { ok: true };
+  return { ok: true, stage: "answers" };
 }
 
 /** Create the three September 2026 slots if they are not there yet. */

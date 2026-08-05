@@ -31,7 +31,7 @@ export async function draftAllQueued() {
   const { data: waiting } = await svc
     .from("mock_papers")
     .select("id")
-    .in("status", ["queued", "failed"])
+    .in("status", ["questions_ready", "queued", "failed"])
     .order("paper_no")
     .limit(10);
 
@@ -49,7 +49,7 @@ export async function draftAllQueued() {
   const { count: left } = await svc
     .from("mock_papers")
     .select("id", { count: "exact", head: true })
-    .in("status", ["queued", "failed"]);
+    .in("status", ["questions_ready", "queued", "failed"]);
 
   revalidatePath("/admin/mock-papers");
   redirect(`/admin/mock-papers?drafted=${done}&left=${left ?? 0}${failed[0] ? `&err=${encodeURIComponent(failed[0])}` : ""}`);

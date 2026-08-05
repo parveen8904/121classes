@@ -28,10 +28,25 @@ export async function GET(req: NextRequest) {
   }
 
   const svc = createServiceClient();
+
+  // Reclaim anything stranded. A row is flipped to "drafting" before its long
+  // call starts, so a pass that runs out of time leaves it claimed for ever —
+  // which is exactly what happened to paper 1: stuck at "drafting", invisible
+  // to every later pass, and nothing said so. Anything held for more than ten
+  // minutes is certainly dead.
+  await svc
+    .from("mock_papers")
+    .update({ status: "queued" })
+    .eq("status", "drafting")
+    .lt("updated_at", new Date(Date.now() - 10 * 60_000).toISOString());
+
+  // A paper whose questions are written but whose answers are not is the most
+  // urgent thing here — it is half a paper until the second pass runs.
   const { data: next } = await svc
     .from("mock_papers")
-    .select("id, paper_no, course, subject")
-    .in("status", ["queued", "failed"])
+    .select("id, paper_no, course, subject, status")
+    .in("status", ["questions_ready", "queued", "failed"])
+    .order("status", { ascending: true })
     .order("paper_no")
     .limit(1)
     .maybeSingle();
@@ -44,10 +59,10 @@ export async function GET(req: NextRequest) {
   const { count: left } = await svc
     .from("mock_papers")
     .select("id", { count: "exact", head: true })
-    .in("status", ["queued", "failed"]);
+    .in("status", ["questions_ready", "queued", "failed", "drafting"]);
 
   console.log(
-    `[mock_papers] paper ${next.paper_no} ${r.ok ? "drafted" : `FAILED: ${r.error}`}` +
+    `[mock_papers] paper ${next.paper_no} ${r.ok ? `${r.stage} written` : `FAILED: ${r.error}`}` +
       ` in ${Math.round((Date.now() - started) / 1000)}s — ${left ?? 0} still waiting`,
   );
 

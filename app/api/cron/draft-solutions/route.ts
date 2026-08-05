@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     const { data: waiting } = await svc
       .from("mock_papers")
       .select("id")
-      .in("status", ["queued", "failed"])
+      .in("status", ["questions_ready", "queued", "failed"])
       .order("paper_no")
       .limit(3);
     for (const row of waiting ?? []) {

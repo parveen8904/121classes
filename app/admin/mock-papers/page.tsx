@@ -18,6 +18,7 @@ type Paper = {
 const LABEL: Record<string, { text: string; colour: string }> = {
   queued: { text: "⏳ Not drafted yet", colour: "var(--muted)" },
   drafting: { text: "✍️ Being drafted", colour: "#b45309" },
+  questions_ready: { text: "📝 Questions written — answers next", colour: "#b45309" },
   drafted: { text: "📄 Drafted — read it", colour: "#2563eb" },
   approved: { text: "✅ Live for students", colour: "#16a34a" },
   failed: { text: "❌ Failed", colour: "#b91c1c" },
@@ -67,7 +68,7 @@ export default async function MockPapersPage(props: {
         </div>
       )}
 
-      {papers.some((p) => p.status === "queued" || p.status === "failed") && (
+      {papers.some((p) => ["queued", "failed", "questions_ready"].includes(p.status)) && (
         <form action={draftAllQueued} className="card" style={{ marginTop: 16 }}>
           <strong>✍️ Draft everything waiting</strong>
           <p className="muted" style={{ fontSize: ".86rem", margin: "4px 0 10px" }}>

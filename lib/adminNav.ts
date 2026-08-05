@@ -92,6 +92,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     panels: [
       { icon: "🩺", title: "Server health & visitors", desc: "How the site is doing in one place: live traffic and who is on it now, visitors and usage over week/month/three months, the heaviest queries, and plain-English fixes for staff.", href: "/admin/health" },
       { icon: "🔌", title: "Integrations", desc: "All API keys in one place — Telegram, WhatsApp, IVR, Zoom, Mailgun, Razorpay, AI, YouTube, storage.", href: "/admin/integrations" },
+      { icon: "🗄️", title: "Backups", desc: "What is saved, when it last ran, and how to get something back. Reads the actual files, so \"there is a backup\" is never a guess.", href: "/admin/backups" },
       { icon: "✈️", title: "Telegram tools", desc: "Bot setup, channel & group linking, member checks.", href: "/admin/telegram" },
       { icon: "🗄️", title: "Storage", desc: "Files in Supabase/R2 buckets — browse, clean up, see what's using space.", href: "/admin/storage" },
       { icon: "🖼️", title: "Site images", desc: "Founder photo, homepage banner, and the site's social/contact links.", href: "/admin/site" },

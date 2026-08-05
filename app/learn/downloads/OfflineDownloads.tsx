@@ -30,7 +30,24 @@ type Klass = {
   alg: string | null;
   byte_size: number | null;
   class_no?: string | null;
+  resolution?: string | null;
+  section_id?: string | null;
 };
+
+// A file size a student can act on. "1.43 GB" answers "will this fit, and how
+// long will it take on my data".
+function sizeLabel(bytes: number | null | undefined): string {
+  const n = Number(bytes) || 0;
+  if (!n) return "";
+  return n >= 1e9 ? `${(n / 1e9).toFixed(2)} GB` : `${Math.round(n / 1e6)} MB`;
+}
+
+// Best first, so the default choice is the good one.
+const QUALITY_ORDER = ["1080p", "720p", "480p", "360p"];
+function qualityRank(r: string | null | undefined): number {
+  const i = QUALITY_ORDER.indexOf(String(r ?? "720p"));
+  return i < 0 ? 99 : i;
+}
 
 // Sort "1, 2, 2A, 3, 10" correctly (numeric first, then the part letter).
 const classOrder = (c: Klass) => {
@@ -191,6 +208,17 @@ export default function OfflineDownloads({
     );
   }
 
+  // One entry per CLASS, carrying every quality prepared for it. The list used
+  // to show one row per file, so a class prepared at two qualities appeared
+  // twice with no way to tell which was which.
+  const byClass = new Map<string, Klass[]>();
+  for (const c of classes) {
+    const k = (c.section_id as string | undefined) ?? c.id;
+    if (!byClass.has(k)) byClass.set(k, []);
+    byClass.get(k)!.push(c);
+  }
+  for (const v of byClass.values()) v.sort((a, b) => qualityRank(a.resolution) - qualityRank(b.resolution));
+
   const doneCount = classes.filter((c) => ready[c.id]).length;
   const pendingCount = classes.length - doneCount;
 
@@ -295,35 +323,52 @@ export default function OfflineDownloads({
               <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
             </div>
             <div className="sec-list">
-              {items.map((c) => (
+              {items.map((c) => {
+                // Every quality prepared for this class, best first.
+                const variants = byClass.get((c.section_id as string) ?? c.id) ?? [c];
+                // Show the class ONCE — on its best quality row — with the
+                // others offered as choices beside it.
+                if (variants[0].id !== c.id) return null;
+                const have = variants.find((v) => ready[v.id]);
+                return (
                 <div className="list-row" key={c.id}>
                   <div>
                     <span className="row-title">🔐 {c.class_no ? `Class ${c.class_no} · ` : ""}{c.title}</span>
                     <p className="row-sub">
-                      {c.byte_size ? `${(Number(c.byte_size) / 1e9).toFixed(2)} GB` : ""}
+                      {have
+                        ? `Downloaded at ${have.resolution ?? "720p"} · ${sizeLabel(have.byte_size)}`
+                        : variants.length > 1
+                          ? "Choose a quality — smaller files download faster and use less data"
+                          : sizeLabel(c.byte_size)}
                     </p>
                   </div>
-                  <div className="row-actions">
-                    {!ready[c.id] && (
-                      <button className="btn small secondary" type="button" onClick={() => download(c)}>
-                        {labels[c.id] ?? "Download"}
+                  <div className="row-actions" style={{ flexWrap: "wrap", gap: 6 }}>
+                    {/* One button per prepared quality, each carrying its own
+                        size. A student on mobile data can see that 360p is
+                        374 MB against 1.4 GB and decide for themselves. */}
+                    {!have && variants.map((v) => (
+                      <button
+                        key={v.id}
+                        className={`btn small ${v.id === variants[0].id ? "" : "secondary"}`}
+                        type="button"
+                        onClick={() => download(v)}
+                        title={`${v.resolution ?? "720p"} — ${sizeLabel(v.byte_size)}`}
+                      >
+                        {labels[v.id] ?? `⬇️ ${v.resolution ?? "720p"}${sizeLabel(v.byte_size) ? ` · ${sizeLabel(v.byte_size)}` : ""}`}
                       </button>
-                    )}
-                    {ready[c.id] && (
+                    ))}
+                    {have && (
                       <>
-                        <button className="btn small" type="button" onClick={() => play(c)}>
-                          ▶️ Play
-                        </button>
+                        <button className="btn small" type="button" onClick={() => play(have)}>▶️ Play</button>
                         {native.remove && (
-                          <button className="btn small secondary" type="button" onClick={() => removeDownload(c)} title="Remove from this device">
-                            🗑️
-                          </button>
+                          <button className="btn small secondary" type="button" onClick={() => removeDownload(have)} title="Remove from this device">🗑️</button>
                         )}
                       </>
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))

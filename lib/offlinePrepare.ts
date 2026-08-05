@@ -76,12 +76,29 @@ export type StepResult = { done: boolean; status: string; bytesDone: number; byt
 
 // Run ONE resumable slice for a section's offline job. Creates the job on first
 // call. Returns done=true when the class is fully prepared & registered.
-export async function prepareStep(sectionId: string, timeBudgetMs = 170_000): Promise<StepResult> {
+// Which qualities we prepare, best first. 240p is deliberately left out: at
+// 263 kbps a worked ledger on the board stops being readable, and a class a
+// student cannot read is not a smaller file, it is a wasted download.
+export const OFFLINE_QUALITIES = ["1080p", "720p", "480p", "360p"] as const;
+export type OfflineQuality = (typeof OFFLINE_QUALITIES)[number];
+
+export async function prepareStep(
+  sectionId: string,
+  timeBudgetMs = 170_000,
+  want?: OfflineQuality,
+): Promise<StepResult> {
   const svc = createServiceClient();
   const started = Date.now();
 
-  // Load or create the job.
-  let { data: job } = await svc.from("offline_jobs").select("*").eq("section_id", sectionId).maybeSingle() as { data: Job | null };
+  // Load or create the job — one per class PER QUALITY now, so a student can
+  // choose 360p on a phone and 720p on a laptop.
+  let job: Job | null = null;
+  {
+    let q = svc.from("offline_jobs").select("*").eq("section_id", sectionId);
+    q = want ? q.eq("resolution", want) : q.order("created_at", { ascending: true });
+    const { data } = await q.limit(1).maybeSingle();
+    job = (data ?? null) as Job | null;
+  }
   if (job?.status === "done") return { done: true, status: "done", bytesDone: job.bytes_done, bytesTotal: job.bytes_total };
 
   // Lease: a running job touched in the last 2.5 min is being worked by another
@@ -106,12 +123,14 @@ export async function prepareStep(sectionId: string, timeBudgetMs = 170_000): Pr
   // every newly uploaded class gets a downloadable MP4 at encode time.
   await bunnyLibraryPatch({ AllowDirectPlay: true, EnableMP4Fallback: true });
 
-  // Probe for a direct MP4 rendition (prefer 720p — right size for phones).
+  // Probe Bunny for the rendition asked for; fall back down the ladder only
+  // when nothing was asked for, so a request for 360p never quietly returns a
+  // 1.4 GB file.
   let resolution = job?.resolution || "";
   let total = Number(job?.bytes_total) || 0;
   let saw403 = false;
   if (!resolution) {
-    for (const res of ["720p", "480p", "360p"]) {
+    for (const res of want ? [want] : ["720p", "480p", "360p"]) {
       const head = await fetch(`https://${CDN_HOST}/${guid}/play_${res}.mp4`, { method: "HEAD", headers: { referer: REFERER }, cache: "no-store" });
       if (head.ok) { resolution = res; total = Number(head.headers.get("content-length")) || 0; break; }
       if (head.status === 403) saw403 = true;
@@ -239,6 +258,7 @@ export async function prepareStep(sectionId: string, timeBudgetMs = 170_000): Pr
         title: (sec.title as string) || "Class",
         subject_id: subjectId,
         section_id: sectionId,
+        resolution: job.resolution,
         min_plan: (sec.min_plan as string) ?? "gold",
         storage_url: `${r2.publicBase}/${job.storage_key}`,
         key_b64: job.key_b64,
@@ -247,7 +267,7 @@ export async function prepareStep(sectionId: string, timeBudgetMs = 170_000): Pr
         byte_size: encryptedSize,
         is_published: true,
       },
-      { onConflict: "section_id" },
+      { onConflict: "section_id,resolution" },
     );
     if (regErr) throw new Error(`register failed: ${regErr.message}`); // a silent miss here hides the class from students
     await svc.from("offline_jobs").update({ status: "done", bytes_done: total, updated_at: new Date().toISOString() }).eq("id", job.id);

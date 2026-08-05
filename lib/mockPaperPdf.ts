@@ -51,34 +51,46 @@ type Ctx = {
 // off as their own. Diagonal, pale enough to read straight through, dark enough
 // to survive a photocopy and to be obvious in a screenshot.
 function stamp(c: Ctx, attempt: string) {
-  const lines = ["CA PARVEEN SHARMA", attempt];
-  const A = Math.PI / 4;                       // 45 degrees
-  const along = { x: Math.cos(A), y: Math.sin(A) };   // direction the text runs
-  const perp = { x: Math.sin(A), y: -Math.cos(A) };   // across the lines
+  // TILED, corner to corner.
+  //
+  // One mark across the middle is removed by cropping the top third of a
+  // screenshot. Repeated the whole way down the page it cannot be: whichever
+  // part somebody takes, it carries the name. Fainter than a single mark would
+  // be, because six of them at that strength would fight with the questions.
+  const A = Math.PI / 4;
+  const along = { x: Math.cos(A), y: Math.sin(A) };
+  const perp = { x: Math.sin(A), y: -Math.cos(A) };
 
-  // The diagonal of an A4 page is about 730pt of usable run; size the text to
-  // fit it rather than trusting a number, or the longer line walks off the edge.
-  const longest = Math.max(...lines.map((t) => c.bold.widthOfTextAtSize(winAnsi(t), 100)));
-  const size = Math.min(42, Math.floor((560 / longest) * 100));  // 560 leaves a clear margin at both corners
+  const label = `CA PARVEEN SHARMA  ·  ${attempt}`;
+  const size = 20;
+  const w = c.bold.widthOfTextAtSize(winAnsi(label), size);
 
-  lines.forEach((text, i) => {
-    const t = winAnsi(text);
-    const w = c.bold.widthOfTextAtSize(t, size);
-    // Each line is centred on the page centre, stepped ACROSS the diagonal so
-    // the two stay parallel instead of sliding down the page.
-    const off = (i - (lines.length - 1) / 2) * (size * 1.5);
-    const midX = PAGE_W / 2 + perp.x * off;
-    const midY = PAGE_H / 2 + perp.y * off;
-    c.page.drawText(t, {
-      x: midX - (w / 2) * along.x,
-      y: midY - (w / 2) * along.y,
-      size,
-      font: c.bold,
-      rotate: degrees(45),
-      color: rgb(0.55, 0.6, 0.62),
-      opacity: 0.15,
-    });
-  });
+  // Rows run ACROSS the diagonal; each row is repeated ALONG it. The span is
+  // generous on both axes so the marks reach past all four corners rather than
+  // stopping short and leaving a clean edge to crop to.
+  const ROW_GAP = 92;
+  const COL_GAP = w + 80;
+  const rows = Math.ceil(1100 / ROW_GAP);
+  const cols = Math.ceil(1300 / COL_GAP);
+
+  for (let r = -Math.ceil(rows / 2); r <= Math.ceil(rows / 2); r++) {
+    for (let k = -Math.ceil(cols / 2); k <= Math.ceil(cols / 2); k++) {
+      const offAcross = r * ROW_GAP;
+      const offAlong = k * COL_GAP + (r % 2 ? COL_GAP / 2 : 0); // brick-stagger
+      const midX = PAGE_W / 2 + perp.x * offAcross + along.x * offAlong;
+      const midY = PAGE_H / 2 + perp.y * offAcross + along.y * offAlong;
+      const x = midX - (w / 2) * along.x;
+      const y = midY - (w / 2) * along.y;
+      // Skip anything that cannot put ink on the page at all.
+      if (x > PAGE_W + 40 || y > PAGE_H + 40 || x + w < -160 || y + w < -160) continue;
+      c.page.drawText(winAnsi(label), {
+        x, y, size, font: c.bold,
+        rotate: degrees(45),
+        color: rgb(0.55, 0.6, 0.62),
+        opacity: 0.09,
+      });
+    }
+  }
 }
 
 function foot(c: Ctx) {

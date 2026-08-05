@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
       if (a && typeof a === "object" && "name" in a) names.push(String((a as File).name));
     }
     try {
-      const { sendEmail, emailShell, notifyFaculty } = await import("@/lib/notify");
+      const { sendEmail, emailShell, notifyFaculty, aiReplyBcc } = await import("@/lib/notify");
       await sendEmail(
         from,
         subject ? `Re: ${subject}` : "Your answer book",
@@ -129,6 +129,7 @@ export async function POST(req: NextRequest) {
             "<p>If you have not already, please reply telling us <strong>which test</strong> this is, so it is " +
             "marked against the right answer key.</p>",
         ),
+        { bcc: await aiReplyBcc() },
       );
       await notifyFaculty(
         "An answer book arrived by email",
@@ -144,9 +145,10 @@ export async function POST(req: NextRequest) {
   try {
     const { isEvaluationComplaint, EVALUATION_HELP } = await import("@/lib/evaluationHelp");
     if (isEvaluationComplaint(question)) {
-      const { sendEmail, emailShell } = await import("@/lib/notify");
+      const { sendEmail, emailShell, aiReplyBcc } = await import("@/lib/notify");
       await sendEmail(from, subject ? `Re: ${subject}` : "Getting your copy checked",
-        emailShell("Getting your copy checked", `<p>${EVALUATION_HELP.replace(/\n\n/g, "</p><p>")}</p>`));
+        emailShell("Getting your copy checked", `<p>${EVALUATION_HELP.replace(/\n\n/g, "</p><p>")}</p>`),
+        { bcc: await aiReplyBcc() });
       if (row?.id) await svc.from("page_questions").update({ status: "answered" }).eq("id", row.id);
       return NextResponse.json({ ok: true, result: "evaluation help sent" });
     }
@@ -168,7 +170,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, result: "sent to faculty" });
     }
 
-    const { sendEmail, emailShell } = await import("@/lib/notify");
+    const { sendEmail, emailShell, aiReplyBcc } = await import("@/lib/notify");
     const html = emailShell(
       subject || "Your question",
       answer
@@ -177,7 +179,11 @@ export async function POST(req: NextRequest) {
         .join("") +
         `<p class="muted">Reply to this email if anything is still unclear — it comes straight back to us.</p>`,
     );
-    const sent = await sendEmail(from, subject ? `Re: ${subject}` : "Your question", html);
+    // He is blind-copied on every answer sent in his name, so nothing goes out
+    // in his voice that he has not seen. The student never knows he was copied.
+    const sent = await sendEmail(from, subject ? `Re: ${subject}` : "Your question", html, {
+      bcc: await aiReplyBcc(),
+    });
 
     if (row?.id) {
       await svc.from("page_questions").update({ status: sent ? "answered" : "open" }).eq("id", row.id);

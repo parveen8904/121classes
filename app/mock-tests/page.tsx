@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import AnswerKey from "@/app/components/AnswerKey";
@@ -41,7 +40,11 @@ export default async function MockTestsPage(props: {
 
   // Reading a paper needs an account — that is the only gate, and it exists so
   // the checked copy can come back to the right person.
-  if (open && !user) redirect(`/login?next=/mock-tests?paper=${open.id}`);
+  //
+  // A silent bounce to /login looks like the site is broken, so a visitor who is
+  // not signed in is SHOWN the paper's name and told plainly why the download is
+  // asking them to log in first.
+  const locked = Boolean(open) && !user;
 
   return (
     <main>
@@ -73,21 +76,48 @@ export default async function MockTestsPage(props: {
               <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0" }}>
                 Time allowed {Math.round(open.duration_min / 60)} hours · Maximum marks {open.total_marks}
               </p>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-                <a className="btn" href={`/mock-tests/${open.id}/pdf`} target="_blank" rel="noopener noreferrer">
-                  📄 Download the paper (PDF)
-                </a>
-                <Link className="btn secondary" href="/check-my-paper">📤 I have written it — send it for checking</Link>
-              </div>
-              <p className="muted" style={{ fontSize: ".82rem", marginTop: 10 }}>
-                Print the PDF and sit it properly — three hours, no notes, written by hand. Scan the whole answer
-                book as ONE PDF when you are done and send it in.
-              </p>
+              {locked ? (
+                <>
+                  <div className="notice" style={{ marginTop: 12 }}>
+                    🔒 Please log in before you download this paper. It takes a moment, and it is what lets us send
+                    your checked copy back to you afterwards.
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                    {/* The login page carries "Create account" inside it, so one
+                        button serves the student who has an account and the one
+                        who does not. */}
+                    <Link className="btn" href={`/login?next=/mock-tests?paper=${open.id}`}>
+                      🔑 Log in and download the paper
+                    </Link>
+                  </div>
+                  <p className="muted" style={{ fontSize: ".82rem", marginTop: 10 }}>
+                    No account yet? Creating one is free and takes a minute — tap the button and choose
+                    &ldquo;Create account&rdquo;.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                    <a className="btn" href={`/mock-tests/${open.id}/pdf`} target="_blank" rel="noopener noreferrer">
+                      📄 Download the paper (PDF)
+                    </a>
+                    <Link className="btn secondary" href="/check-my-paper">📤 I have written it — send it for checking</Link>
+                  </div>
+                  <p className="muted" style={{ fontSize: ".82rem", marginTop: 10 }}>
+                    Print the PDF and sit it properly — three hours, no notes, written by hand. Scan the whole answer
+                    book as ONE PDF when you are done and send it in.
+                  </p>
+                </>
+              )}
             </div>
-            <details className="card" style={{ marginTop: 12 }}>
-              <summary style={{ cursor: "pointer", fontWeight: 700 }}>Read it on screen instead</summary>
-              <AnswerKey text={open.questions_md ?? ""} size=".8rem" />
-            </details>
+            {/* The questions themselves are part of the paper — never shown to
+                somebody who has not logged in. */}
+            {!locked && (
+              <details className="card" style={{ marginTop: 12 }}>
+                <summary style={{ cursor: "pointer", fontWeight: 700 }}>Read it on screen instead</summary>
+                <AnswerKey text={open.questions_md ?? ""} size=".8rem" />
+              </details>
+            )}
           </>
         ) : (
           <div style={{ display: "grid", gap: 12, marginTop: 20 }}>

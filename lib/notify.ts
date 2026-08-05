@@ -73,7 +73,16 @@ export type SendEmailOpts = {
    * List-Unsubscribe header — mailbox providers treat bulk mail without one
    * with suspicion, and its presence measurably helps inbox placement. */
   bulk?: boolean;
+  /** Blind-copy this address. Used for AI replies so he sees every answer that
+   * went out in his name, without the student knowing he was copied. */
+  bcc?: string;
 };
+
+/** Who gets a blind copy of every answer the AI sends in his name. Held as a
+ * secret so the address can be changed or emptied without a deploy. */
+export async function aiReplyBcc(): Promise<string> {
+  return (await getSecret("AI_REPLY_BCC")).trim();
+}
 
 export async function sendEmail(to: string, subject: string, html: string, opts: SendEmailOpts = {}): Promise<boolean> {
   const apiKey = await getSecret("MAILGUN_API_KEY");
@@ -90,6 +99,7 @@ export async function sendEmail(to: string, subject: string, html: string, opts:
   const body = new URLSearchParams({ from, to, subject, html });
   const replyTo = await getSecret("NOTIFY_REPLY_TO");
   if (replyTo) body.set("h:Reply-To", replyTo);
+  if (opts.bcc) body.set("bcc", opts.bcc);
   if (opts.important) body.set("h:Importance", "high");
   if (opts.bulk) {
     const unsubTo = replyTo || `contact@${domain}`;

@@ -262,6 +262,11 @@ export default async function IntegrationsPage(
           <KeyField name="NOTIFY_FROM_EMAIL" label="From address (must be on the verified Mailgun domain)" placeholder="CA Parveen Sharma <noreply@caparveensharma.com>" />
           <KeyField name="NOTIFY_REPLY_TO" label="Reply-To address (where replies go, any domain)" placeholder="contact@caparveensharma.com" />
           <KeyField
+            name="AI_REPLY_BCC"
+            label="Blind-copy every AI reply here — you see each answer sent in your name, the student does not see you"
+            placeholder="ps.smay@gmail.com  (leave blank to stop the copies)"
+          />
+          <KeyField
             name="BACKUP_EMAIL"
             label="Backup email — the weekly database backup is zipped and sent here"
             placeholder="use an address NOT on this domain, e.g. your Gmail"

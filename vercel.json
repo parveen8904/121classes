@@ -86,6 +86,10 @@
     {
       "path": "/api/cron/mock-papers",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/ai-digest",
+      "schedule": "30 1 * * *"
     }
   ]
 }

@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (!subj?.id) return NextResponse.json({ answer: null });
 
-  const answer = await groupAiAnswer(subj.id, question);
+  const answer = await groupAiAnswer(subj.id, question, "discord");
   if (!answer) return NextResponse.json({ answer: null });
 
   // Follow the question into the Telegram group too (the worker already

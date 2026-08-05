@@ -35,7 +35,12 @@ async function budgetLeft(): Promise<boolean> {
 // NOTE: the bot answers ONLY when a student tags it (@bot …) or replies to it —
 // the callers enforce that. It never jumps into a student-to-student discussion,
 // so no question heuristic here: tagging the bot IS the request.
-export async function groupAiAnswer(subjectId: string, question: string): Promise<string | null> {
+export async function groupAiAnswer(
+  subjectId: string,
+  question: string,
+  /** Which group platform, for the record. */
+  channel: "telegram_group" | "discord" = "telegram_group",
+): Promise<string | null> {
   if (question.trim().length < 5) return null;
   if (!(await aiFeatureEnabled("group_doubt"))) return null;
   if (!(await budgetLeft())) return null;
@@ -50,5 +55,9 @@ export async function groupAiAnswer(subjectId: string, question: string): Promis
   const raw = await answerDoubtFromMaterial(question, material, "group_doubt");
   const answer = raw && raw.trim() !== NEED_FACULTY ? raw.trim() : null;
   if (!answer) return null;
+  // A group answer is read by a whole room, so it belongs in the record he
+  // reads even though nobody asked it privately.
+  const { logAiExchange } = await import("@/lib/aiAnswerLog");
+  await logAiExchange({ channel, question, answer });
   return `🤖 ${answer}\n\n— AI assistant, under CA Parveen Sharma's guidance`;
 }

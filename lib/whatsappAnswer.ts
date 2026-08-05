@@ -74,6 +74,9 @@ async function escalate(from: string, question: string): Promise<"escalated"> {
   return "escalated";
 }
 
+// The answer used to be written as a loose row that nothing pointed at, so the
+// doubt log showed the question with "no answer sent" beside it even when a full
+// answer had gone out. It is now paired to its question like every other channel.
 async function log(
   svc: ReturnType<typeof createServiceClient>,
   from: string,
@@ -81,22 +84,24 @@ async function log(
   answer: string | null,
   status: string,
 ): Promise<void> {
+  // Name the asker when the number is one we know. The phone itself is NOT put
+  // in the email column — a later reply would try to send mail to a phone number.
+  let userId: string | null = null;
   try {
-    await svc.from("page_questions").insert({
-      user_id: null,
-      page_path: "whatsapp",
-      question,
-      status,
-    });
-    if (answer) {
-      await svc.from("page_questions").insert({
-        user_id: null,
-        page_path: "whatsapp",
-        question: answer,
-        status: "answer",
-      });
+    const digits = from.replace(/\D/g, "").slice(-10);
+    if (digits.length === 10) {
+      const { data } = await svc
+        .from("profiles")
+        .select("id")
+        .ilike("phone", `%${digits}`)
+        .limit(1)
+        .maybeSingle();
+      userId = (data?.id as string) ?? null;
     }
-  } catch { /* the reply matters more than the log */ }
+  } catch { /* an unknown number is still worth logging */ }
+
+  const { logAiExchange } = await import("@/lib/aiAnswerLog");
+  await logAiExchange({ channel: "whatsapp", question, answer, status, userId });
 }
 
 async function recordWarning(

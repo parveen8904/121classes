@@ -33,6 +33,13 @@ async function answerAndFollowup(token: string, question: string) {
   } catch {
     /* fall through to the faculty message */
   }
+  // Recorded before it goes out, so a Discord answer is on the same report as
+  // every other channel. A hand-off to the faculty is logged with no answer.
+  try {
+    const { logAiExchange } = await import("@/lib/aiAnswerLog");
+    await logAiExchange({ channel: "discord", question, answer: answer || null });
+  } catch { /* the student's answer matters more than our record of it */ }
+
   if (!answer) {
     answer =
       "I couldn't answer that from the class material. Please ask it on the website (the *Ask your doubts* button on your subject page) — it can reach the faculty. 🙏";

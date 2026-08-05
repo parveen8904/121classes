@@ -32,7 +32,11 @@ export default async function CheckMyPaperPage(props: {
   if (!user) redirect("/login?next=/check-my-paper");
 
   const svc = createServiceClient();
-  const { data: profile } = await svc.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle();
+  const { data: profile } = await svc
+    .from("profiles")
+    .select("full_name, email, study_level")
+    .eq("id", user.id)
+    .maybeSingle();
 
   // Only tests that can actually be marked — one with no approved key has
   // nothing to mark against, and offering it would promise something we cannot
@@ -40,15 +44,27 @@ export default async function CheckMyPaperPage(props: {
   const { data: rows } = await svc.rpc("list_checkable_tests");
   const tests = ((rows ?? []) as { id: string; title: string; course: string; subject: string }[]);
 
+  // The approved mock papers, offered as their own short list. A student who
+  // has just sat mock paper 2 picks it from three, not from seventy-two.
+  const { data: mockRows } = await svc
+    .from("mock_papers")
+    .select("id, title, course, paper_no")
+    .eq("status", "approved")
+    .order("paper_no");
+  const mocks = (mockRows ?? []) as { id: string; title: string; course: string; paper_no: number }[];
+
   const { data: mine } = await svc
     .from("descriptive_attempts")
-    .select("id, section_id, submitted_at, review_status, awarded_marks, total_marks, annotated_url, status")
+    .select("id, section_id, mock_paper_id, submitted_at, review_status, awarded_marks, total_marks, annotated_url, status")
     .eq("student_id", user.id)
     .eq("source", "paper_check")
     .order("submitted_at", { ascending: false })
     .limit(20);
 
-  const titleById = new Map(tests.map((t) => [t.id, t.title]));
+  const titleById = new Map<string, string>([
+    ...tests.map((t) => [t.id, t.title] as [string, string]),
+    ...mocks.map((m) => [m.id, m.title] as [string, string]),
+  ]);
 
   return (
     <main>
@@ -74,12 +90,17 @@ export default async function CheckMyPaperPage(props: {
         )}
         {searchParams.err && <div className="notice err" style={{ marginTop: 16 }}>{searchParams.err}</div>}
 
-        {tests.length === 0 ? (
+        {tests.length === 0 && mocks.length === 0 ? (
           <div className="card" style={{ marginTop: 16 }}>
             <p className="muted">No tests are open for checking at the moment. Please try again shortly.</p>
           </div>
         ) : (
-          <PaperUpload tests={tests} name={(profile?.full_name as string) ?? ""} />
+          <PaperUpload
+            tests={tests}
+            mocks={mocks}
+            name={(profile?.full_name as string) ?? ""}
+            level={(profile?.study_level as string) ?? ""}
+          />
         )}
 
         {(mine ?? []).length > 0 && (
@@ -90,7 +111,9 @@ export default async function CheckMyPaperPage(props: {
                 const released = a.review_status === "checked" && a.awarded_marks != null;
                 return (
                   <div className="card" key={a.id as string}>
-                    <strong>{titleById.get(a.section_id as string) ?? "Descriptive test"}</strong>
+                    <strong>
+                      {titleById.get(String(a.mock_paper_id ?? a.section_id ?? "")) ?? "Descriptive test"}
+                    </strong>
                     <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0" }}>
                       {released
                         ? `Marks: ${a.awarded_marks}${a.total_marks ? ` / ${a.total_marks}` : ""}`

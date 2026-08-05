@@ -36,6 +36,8 @@ type Row = {
   awarded_marks: number | null;
   total_marks: number | null;
   report: DescriptiveGrade | null;
+  /** Set when the paper is a MOCK, whose key lives in mock_papers. */
+  mock_paper_id?: string | null;
   grade_tries?: number | null;
   grade_error?: string | null;
 };
@@ -399,8 +401,41 @@ export async function startPaperAttempt(sectionId: string): Promise<PaperAttempt
 }
 
 async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt> {
-  const cfg = await paperCfg(sectionId);
   const svc = createServiceClient();
+  let mockKey: string | null = null;
+  let mockTitle = "Mock test paper";
+  let mockTotal = 100;
+
+  // A MOCK paper goes through this same function, deliberately.
+  //
+  // Its key is the suggested answers in mock_papers rather than an approved key
+  // in item_solutions, and that is the only difference — same marking guide
+  // built the same way, same examiner, same annotated copy, same release. Two
+  // pipelines would have meant two standards, and the first student to submit
+  // one of each would have found it.
+  if (row.mock_paper_id) {
+    const { data: mock } = await svc
+      .from("mock_papers")
+      .select("title, answers_md, total_marks")
+      .eq("id", row.mock_paper_id)
+      .maybeSingle();
+    const key = String(mock?.answers_md ?? "").trim();
+    if (!key) {
+      console.error("[grade] mock paper has no answers yet", row.mock_paper_id);
+      await svc.from("descriptive_attempts").update({
+        grade_tries: (Number(row.grade_tries) || 0) + 1,
+        grade_error: "the suggested answers for this mock paper are not ready yet",
+      }).eq("id", row.id);
+      return { status: "submitted", fileUrl: row.file_url ?? undefined, submittedAt: row.submitted_at ?? undefined, deadlineAt: row.deadline_at, total: row.total_marks };
+    }
+    mockKey = key;
+    mockTitle = String(mock?.title ?? "Mock test paper");
+    mockTotal = Number(mock?.total_marks) || 100;
+  }
+
+  const cfg = mockKey
+    ? { title: mockTitle, totalMarks: mockTotal, solutionPdf: "", questionPdf: "" }
+    : await paperCfg(sectionId);
   // The answer sheet lives in the private bucket now — resolve it to a signed
   // URL so the AI grader and the annotator can read it.
   const { resolveFileUrl } = await import("@/lib/storage");
@@ -414,8 +449,8 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
   // 37 of the descriptive tests have no solution PDF at all. For those, the
   // answer key is the one CA Parveen Sharma has APPROVED on Admin → Answer
   // keys. An unapproved draft is never used to mark anybody's paper.
-  let approvedKey: string | null = null;
-  if (!solutionUrl) {
+  let approvedKey: string | null = mockKey;
+  if (!solutionUrl && !approvedKey) {
     const { data: k } = await svc
       .from("item_solutions")
       .select("solution_md, status")
@@ -435,7 +470,7 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
     const { data: saved } = await svc
       .from("marking_schemes")
       .select("scheme")
-      .eq("section_id", sectionId)
+      .eq("section_id", row.mock_paper_id ?? sectionId)
       .maybeSingle();
     scheme = saved?.scheme ? String(saved.scheme) : null;
 
@@ -450,7 +485,9 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
       if (built) {
         scheme = built;
         await svc.from("marking_schemes").upsert({
-          section_id: sectionId,
+          // A mock paper's guide is keyed by the mock's id — same table, and
+          // the same "build once, reuse for every student" rule.
+          section_id: row.mock_paper_id ?? sectionId,
           scheme: built,
           total_marks: cfg.totalMarks || row.total_marks || null,
           built_from: solutionUrl ? "solution_pdf" : "approved_key",

@@ -22,12 +22,18 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
   const svc = createServiceClient();
   const { data: rows } = await svc
     .from("descriptive_attempts")
-    .select("id, student_id, section_id, status, review_status, examiner_name, examiner_id, submitted_at, awarded_marks, total_marks, examiner_checked_at, grade_error, grade_tries")
+    .select("id, student_id, section_id, mock_paper_id, status, review_status, examiner_name, examiner_id, submitted_at, awarded_marks, total_marks, examiner_checked_at, grade_error, grade_tries")
     .in("status", ["submitted", "graded"])
     .order("submitted_at", { ascending: false })
     .limit(400);
 
-  const sectionIds = [...new Set((rows ?? []).map((r) => r.section_id as string))];
+  const sectionIds = [...new Set((rows ?? []).map((r) => r.section_id as string).filter(Boolean))];
+  // A mock submission has no section — its title lives with the mock paper.
+  const mockIds = [...new Set((rows ?? []).map((r) => r.mock_paper_id as string).filter(Boolean))];
+  const { data: mockRows } = mockIds.length
+    ? await svc.from("mock_papers").select("id, title, course, subject").in("id", mockIds)
+    : { data: [] as never[] };
+  const mockById = new Map((mockRows ?? []).map((m) => [m.id as string, m]));
   const studentIds = [...new Set((rows ?? []).map((r) => r.student_id as string))];
   const [{ data: sections }, { data: students }] = await Promise.all([
     sectionIds.length ? svc.from("sections").select("id, title, topic_id").in("id", sectionIds) : Promise.resolve({ data: [] as never[] }),
@@ -55,9 +61,12 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
     return {
       id: r.id as string,
       student: (stuById.get(r.student_id as string)?.full_name as string) || (stuById.get(r.student_id as string)?.email as string) || "Student",
-      test: (sec?.title as string) ?? "Descriptive test",
-      topic: (top as { title?: string } | undefined)?.title ?? "—",
-      subject: subj?.title ?? "—",
+      test: (sec?.title as string)
+        ?? (mockById.get(r.mock_paper_id as string)?.title as string)
+        ?? "Descriptive test",
+      topic: (top as { title?: string } | undefined)?.title
+        ?? (r.mock_paper_id ? "Mock test paper" : "—"),
+      subject: subj?.title ?? (mockById.get(r.mock_paper_id as string)?.subject as string) ?? "—",
       subjectId: subj?.id ?? "",
       sectionId: r.section_id as string,
       submittedAt: (r.submitted_at as string) ?? null,

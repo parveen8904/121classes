@@ -22,12 +22,20 @@ export async function submitForChecking(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/check-my-paper");
 
-  const sectionId = String(formData.get("section_id") ?? "").trim();
+  // "mock:<id>" for one of the mock papers, or a plain sections id for a
+  // chapter test. One field, because to a student it is one question: which
+  // paper is this?
+  const choice = String(formData.get("paper") ?? "").trim();
   const fileUrl = String(formData.get("file_url") ?? "").trim();
   const name = String(formData.get("full_name") ?? "").trim();
+  const level = String(formData.get("study_level") ?? "").trim();
 
-  if (!sectionId) redirect("/check-my-paper?err=Choose which test this paper is for");
+  if (!choice) redirect("/check-my-paper?err=Choose which paper this is");
   if (!fileUrl) redirect("/check-my-paper?err=Upload your answer book as one PDF");
+
+  const isMock = choice.startsWith("mock:");
+  const mockPaperId = isMock ? choice.slice(5) : null;
+  const sectionId = isMock ? null : choice;
 
   const svc = createServiceClient();
 
@@ -36,16 +44,18 @@ export async function submitForChecking(formData: FormData) {
   if (name) {
     await svc.from("profiles").update({ full_name: name }).eq("id", user.id).is("full_name", null);
   }
+  // Remember the level so they are never shown the other course's tests again.
+  if (level) await svc.from("profiles").update({ study_level: level }).eq("id", user.id);
 
   // One attempt per student per test. If the last one is finished they may send
   // another; if it is still in the queue, say so rather than silently replacing
   // a paper that is halfway through being marked.
-  const { data: existing } = await svc
+  let q = svc
     .from("descriptive_attempts")
     .select("id, review_status, status")
-    .eq("student_id", user.id)
-    .eq("section_id", sectionId)
-    .maybeSingle();
+    .eq("student_id", user.id);
+  q = isMock ? q.eq("mock_paper_id", mockPaperId!) : q.eq("section_id", sectionId!);
+  const { data: existing } = await q.maybeSingle();
 
   if (existing) {
     if (existing.review_status !== "checked") {
@@ -60,6 +70,7 @@ export async function submitForChecking(formData: FormData) {
     .insert({
       student_id: user.id,
       section_id: sectionId,
+      mock_paper_id: mockPaperId,
       started_at: now.toISOString(),
       // No exam clock on this route — the point is that the clock already ran
       // out. The deadline is set past the submission so nothing expires it.
@@ -91,7 +102,7 @@ export async function submitForChecking(formData: FormData) {
 
   await notifyFaculty(
     "A paper came in for checking",
-    `Student: ${user.email}\nTest: ${sectionId}\nIt is in the examiner desk once the AI has marked it.`,
+    `Student: ${user.email}\n${isMock ? "Mock paper" : "Test"}: ${choice}\nIt is in the examiner desk once the AI has marked it.`,
   ).catch(() => {});
 
   revalidatePath("/check-my-paper");

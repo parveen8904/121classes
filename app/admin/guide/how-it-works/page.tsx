@@ -138,6 +138,13 @@ function describe(expr: string): string {
   const [min, hour] = expr.split(" ");
   if (hour === "*") return min.startsWith("*/") ? `every ${min.slice(2)} minutes` : `hourly, at ${min} past`;
   if (min.startsWith("*/")) return `every ${min.slice(2)} minutes, in a window`;
+  // "0 */6 * * *" — a stepped hour. Printing the raw expression here left two
+  // rows reading "0 */6 UTC", which is exactly the jargon this page exists to
+  // avoid.
+  if (hour.startsWith("*/")) {
+    const every = hour.slice(2);
+    return Number(min) === 0 ? `every ${every} hours` : `every ${every} hours, at ${min} past`;
+  }
   const h = Number(hour);
   if (!Number.isFinite(h)) return `${min} ${hour} UTC`;
   // UTC → IST is +5:30.

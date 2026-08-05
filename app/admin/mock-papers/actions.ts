@@ -19,6 +19,42 @@ export async function draftOne(formData: FormData) {
   redirect(`/admin/mock-papers?${r.ok ? "drafted=1" : `err=${encodeURIComponent(r.error ?? "failed")}`}`);
 }
 
+// Draft EVERY paper still waiting, one after another.
+//
+// Three papers is six long AI calls — questions, then the answers to those
+// exact questions, per paper — so this takes a few minutes and stops when the
+// time runs out rather than dying halfway with nobody knowing which papers are
+// real. Press it again to carry on.
+export async function draftAllQueued() {
+  await assertArea(null);
+  const svc = createServiceClient();
+  const { data: waiting } = await svc
+    .from("mock_papers")
+    .select("id")
+    .in("status", ["queued", "failed"])
+    .order("paper_no")
+    .limit(10);
+
+  const started = Date.now();
+  let done = 0;
+  const failed: string[] = [];
+  for (const row of waiting ?? []) {
+    // One paper needs roughly two minutes. Never start one that cannot finish.
+    if (Date.now() - started > 480_000) break;
+    const r = await draftMockPaper(String(row.id));
+    if (r.ok) done += 1;
+    else failed.push(r.error ?? "failed");
+  }
+
+  const { count: left } = await svc
+    .from("mock_papers")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["queued", "failed"]);
+
+  revalidatePath("/admin/mock-papers");
+  redirect(`/admin/mock-papers?drafted=${done}&left=${left ?? 0}${failed[0] ? `&err=${encodeURIComponent(failed[0])}` : ""}`);
+}
+
 export async function createSet() {
   await assertArea(null);
   const n = await ensureSeptember2026Set();

@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
 import AnswerKey from "@/app/components/AnswerKey";
 import AdminHero from "../_components/AdminHero";
-import { draftOne, createSet, approvePaper, unapprovePaper, savePaper } from "./actions";
+import { draftOne, draftAllQueued, createSet, approvePaper, unapprovePaper, savePaper } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mock test papers — Admin" };
@@ -65,6 +65,18 @@ export default async function MockPapersPage(props: {
             <SubmitButton className="btn" savedLabel="Created">➕ Create the September 2026 set</SubmitButton>
           </form>
         </div>
+      )}
+
+      {papers.some((p) => p.status === "queued" || p.status === "failed") && (
+        <form action={draftAllQueued} className="card" style={{ marginTop: 16 }}>
+          <strong>✍️ Draft everything waiting</strong>
+          <p className="muted" style={{ fontSize: ".86rem", margin: "4px 0 10px" }}>
+            One press does all of them. Each paper is two long calls — the questions, then the answers to those
+            exact questions — so give it a few minutes and do not close the tab. If it runs out of time it stops
+            cleanly; press again to carry on.
+          </p>
+          <SubmitButton className="btn" savedLabel="Drafting…">✍️ Draft all waiting papers</SubmitButton>
+        </form>
       )}
 
       <div style={{ display: "grid", gap: 14, marginTop: 16 }}>

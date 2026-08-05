@@ -38,6 +38,29 @@ export async function GET(req: NextRequest) {
   done.push(...batch.drafted);
   failed.push(...batch.failed);
 
+  // Mock exam papers waiting to be drafted. They are the slowest thing here —
+  // two long calls each — so they go first in the quiet window, and only ever
+  // reach "drafted": publishing one is the founder's decision, not a cron's.
+  let mockDrafted = 0;
+  try {
+    const { draftMockPaper } = await import("@/lib/mockPapers");
+    const { createServiceClient } = await import("@/lib/supabase/service");
+    const svc = createServiceClient();
+    const { data: waiting } = await svc
+      .from("mock_papers")
+      .select("id")
+      .in("status", ["queued", "failed"])
+      .order("paper_no")
+      .limit(3);
+    for (const row of waiting ?? []) {
+      if (Date.now() - started > 150_000) break;
+      const r = await draftMockPaper(String(row.id));
+      if (r.ok) mockDrafted += 1;
+    }
+  } catch (e) {
+    failed.push(`mock papers: ${e instanceof Error ? e.message : "failed"}`);
+  }
+
   // With nothing left to draft, spend the window re-laying out the APPROVED
   // keys in ICAI's presentation. The new text waits in pending_md beside the
   // approved one — nothing a student reads changes until the founder adopts it.
@@ -73,6 +96,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     queuedTests,
+    mockDrafted,
     drafted: done.length,
     relaidOut,
     relayoutLeft,

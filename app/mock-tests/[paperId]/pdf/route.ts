@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ paperId: st
   const svc = createServiceClient();
   const { data: paper } = await svc
     .from("mock_papers")
-    .select("title, questions_md, answers_md, status")
+    .select("title, questions_md, answers_md, status, attempt_label")
     .eq("id", paperId)
     .maybeSingle();
   if (!paper) return new NextResponse("Not available", { status: 404 });
@@ -51,6 +51,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ paperId: st
   const bytes = await buildMockPaperPdf({
     title: `${paper.title}${wantAnswers ? " — Suggested Answers" : ""}`,
     text,
+    // The watermark carries the attempt, so a paper cannot be quietly reused
+    // for a later sitting by somebody else.
+    attempt: `${String(paper.attempt_label ?? "September 2026")} EXAM`,
     footer: paper.status === "approved"
       ? "caparveensharma.com — write your answers by hand, then send them in to be checked"
       : "DRAFT — not yet approved",

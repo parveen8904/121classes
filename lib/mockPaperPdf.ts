@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from "pdf-lib";
 
 // Turn a mock paper into something that looks like an examination paper.
 //
@@ -41,8 +41,45 @@ const LEAD = 14.5;
 
 type Ctx = {
   pdf: PDFDocument; page: PDFPage; y: number; pageNo: number;
-  body: PDFFont; bold: PDFFont; italic: PDFFont; mono: PDFFont; title: string;
+  body: PDFFont; bold: PDFFont; italic: PDFFont; mono: PDFFont; title: string; attempt: string;
 };
+
+// A watermark across every page, of the paper AND of the answers.
+//
+// These papers are set to be given away, which is exactly why they need a name
+// on them: a paper worth downloading is a paper worth another teacher passing
+// off as their own. Diagonal, pale enough to read straight through, dark enough
+// to survive a photocopy and to be obvious in a screenshot.
+function stamp(c: Ctx, attempt: string) {
+  const lines = ["CA PARVEEN SHARMA", attempt];
+  const A = Math.PI / 4;                       // 45 degrees
+  const along = { x: Math.cos(A), y: Math.sin(A) };   // direction the text runs
+  const perp = { x: Math.sin(A), y: -Math.cos(A) };   // across the lines
+
+  // The diagonal of an A4 page is about 730pt of usable run; size the text to
+  // fit it rather than trusting a number, or the longer line walks off the edge.
+  const longest = Math.max(...lines.map((t) => c.bold.widthOfTextAtSize(winAnsi(t), 100)));
+  const size = Math.min(42, Math.floor((560 / longest) * 100));  // 560 leaves a clear margin at both corners
+
+  lines.forEach((text, i) => {
+    const t = winAnsi(text);
+    const w = c.bold.widthOfTextAtSize(t, size);
+    // Each line is centred on the page centre, stepped ACROSS the diagonal so
+    // the two stay parallel instead of sliding down the page.
+    const off = (i - (lines.length - 1) / 2) * (size * 1.5);
+    const midX = PAGE_W / 2 + perp.x * off;
+    const midY = PAGE_H / 2 + perp.y * off;
+    c.page.drawText(t, {
+      x: midX - (w / 2) * along.x,
+      y: midY - (w / 2) * along.y,
+      size,
+      font: c.bold,
+      rotate: degrees(45),
+      color: rgb(0.55, 0.6, 0.62),
+      opacity: 0.15,
+    });
+  });
+}
 
 function foot(c: Ctx) {
   const n = winAnsi(String(c.pageNo));
@@ -54,6 +91,7 @@ function newPage(c: Ctx) {
   c.pageNo += 1;
   c.page = c.pdf.addPage([PAGE_W, PAGE_H]);
   c.y = PAGE_H - TOP;
+  stamp(c, c.attempt);
   const h = winAnsi(c.title);
   c.page.drawText(h, { x: LEFT, y: PAGE_H - 44, size: 8, font: c.italic, color: rgb(0.45, 0.45, 0.45) });
   c.page.drawLine({ start: { x: LEFT, y: PAGE_H - 50 }, end: { x: PAGE_W - RIGHT, y: PAGE_H - 50 }, thickness: 0.4, color: rgb(0.78, 0.78, 0.78) });
@@ -112,7 +150,7 @@ const NUMBERED = /^\s*(\d+[.)]|\([a-z]\)|\([iv]+\)|[-•])\s+/i;
  *  turned every wrapped continuation line into a monospaced fragment. */
 const COLUMNAR = /\S\s{2,}\S/;
 
-export async function buildMockPaperPdf(input: { title: string; text: string; footer?: string }): Promise<Uint8Array> {
+export async function buildMockPaperPdf(input: { title: string; text: string; footer?: string; attempt?: string }): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const c: Ctx = {
     pdf, page: pdf.addPage([PAGE_W, PAGE_H]), y: PAGE_H - TOP, pageNo: 1,
@@ -121,7 +159,10 @@ export async function buildMockPaperPdf(input: { title: string; text: string; fo
     italic: await pdf.embedFont(StandardFonts.TimesRomanItalic),
     mono: await pdf.embedFont(StandardFonts.Courier),
     title: input.title,
+    attempt: (input.attempt || "SEPTEMBER 2026 EXAM").toUpperCase(),
   };
+  // The first page is created before the context exists, so it is stamped here.
+  stamp(c, c.attempt);
 
   // Fold an indented continuation back onto the line it belongs to, BEFORE
   // anything is classified. The writer wraps a numbered instruction across two

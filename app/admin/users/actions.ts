@@ -79,16 +79,47 @@ export async function sendSetPasswordEmail(formData: FormData) {
 }
 
 // Per-user rescue: admin sets a password directly.
+//
+// This said it had worked and had not. Two silences: a password Supabase
+// refused came back as an error nobody read, and the profile was then stamped
+// has_password anyway — so the page showed "password set", the founder handed
+// it to the student, and the student could not log in. A short password did not
+// even redirect: the form simply appeared to do nothing.
+//
+// The account's policy requires an upper case letter, a lower case letter, a
+// digit and a symbol, so "student123" is refused however long it is. That is
+// now said on the form and repeated in the error.
 export async function adminSetPassword(formData: FormData) {
   if (!(await requireAdmin())) return;
   const id = str(formData.get("id"));
   const password = str(formData.get("password"));
-  if (!id || password.length < 6) return;
+  if (!id) return;
+
+  const problem = passwordProblem(password);
+  if (problem) redirect(`/admin/users/${id}?pwerr=${encodeURIComponent(problem)}`);
+
   const svc = createServiceClient();
-  await svc.auth.admin.updateUserById(id, { password });
+  const { error } = await svc.auth.admin.updateUserById(id, { password });
+  if (error) {
+    console.error("[admin] password not set for", id, error.message);
+    redirect(`/admin/users/${id}?pwerr=${encodeURIComponent(error.message)}`);
+  }
+
+  // Only once it is actually true.
   await svc.from("profiles").update({ has_password: true }).eq("id", id);
   revalidatePath(`/admin/users/${id}`);
-  redirect(`/admin/users/${id}?pwset=1`);
+  redirect(`/admin/users/${id}?pwset=${encodeURIComponent(password)}`);
+}
+
+/** The account's own rule, checked here so the admin is told before Supabase is. */
+function passwordProblem(p: string): string | null {
+  if (p.length < 8) return "Use at least 8 characters.";
+  if (p.length > 72) return "Use 72 characters or fewer.";
+  if (!/[a-z]/.test(p)) return "Add a lower case letter.";
+  if (!/[A-Z]/.test(p)) return "Add a CAPITAL letter.";
+  if (!/[0-9]/.test(p)) return "Add a number.";
+  if (!/[^A-Za-z0-9]/.test(p)) return "Add a symbol, for example ! or @ or #.";
+  return null;
 }
 
 export async function updateUser(formData: FormData) {
@@ -132,4 +163,55 @@ export async function resetStudyPlan(formData: FormData) {
   await svc.from("class_watch").delete().eq("student_id", id);
   revalidatePath(`/admin/users/${id}`);
   redirect(`/admin/users/${id}?planreset=1`);
+}
+
+// ---- reset a student's attempts ----
+//
+// A student who could not upload, uploaded the wrong file, or sat a paper by
+// accident had no way back: an attempt is one per student per test, so the test
+// was simply gone for them. The reset button existed only on the founder's OWN
+// preview of a paper, not on anybody else's account.
+//
+// This removes the attempt and everything built from it, so the student can sit
+// the test again from the beginning. The uploaded answer book and the checked
+// copy are left in storage — they cost nothing, and deleting a student's own
+// work on a guessed target is exactly what must not happen here.
+export async function resetStudentTests(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const id = str(formData.get("id"));
+  const what = str(formData.get("what")); // descriptive | mcq | case | all
+  if (!id || !what) return;
+
+  const svc = createServiceClient();
+  const done: string[] = [];
+
+  if (what === "descriptive" || what === "all") {
+    const { count } = await svc
+      .from("descriptive_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("student_id", id);
+    await svc.from("descriptive_attempts").delete().eq("student_id", id);
+    done.push(`${count ?? 0} descriptive`);
+  }
+  if (what === "mcq" || what === "all") {
+    const { count } = await svc
+      .from("mcq_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("student_id", id);
+    await svc.from("mcq_attempts").delete().eq("student_id", id);
+    done.push(`${count ?? 0} MCQ`);
+  }
+  if (what === "case" || what === "all") {
+    try {
+      const { count } = await svc
+        .from("case_attempts")
+        .select("id", { count: "exact", head: true })
+        .eq("student_id", id);
+      await svc.from("case_attempts").delete().eq("student_id", id);
+      done.push(`${count ?? 0} case study`);
+    } catch { /* table optional */ }
+  }
+
+  revalidatePath(`/admin/users/${id}`);
+  redirect(`/admin/users/${id}?testsreset=${encodeURIComponent(done.join(", "))}`);
 }

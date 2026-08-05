@@ -3,7 +3,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
-import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan } from "../actions";
+import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan, resetStudentTests } from "../actions";
 import { ADMIN_AREAS } from "@/lib/adminAccess";
 
 function fmt(s: string | null): string {
@@ -24,7 +24,7 @@ type SubRow = {
 export default async function UserDetail(
   props: {
     params: Promise<{ id: string }>;
-    searchParams: Promise<{ pwset?: string }>;
+    searchParams: Promise<{ pwset?: string; pwerr?: string; testsreset?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -94,7 +94,22 @@ export default async function UserDetail(
         back={{ href: "/admin/users", label: "Users" }}
       />
 
-      {searchParams.pwset === "1" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Password set for this user.</div>}
+      {searchParams.pwset && (
+        <div className="notice ok" style={{ marginTop: 16 }}>
+          ✅ Password set. Give the student exactly this: <code style={{ fontWeight: 700 }}>{searchParams.pwset}</code>
+          {" — "}they can change it later from their dashboard.
+        </div>
+      )}
+      {searchParams.testsreset && (
+        <div className="notice ok" style={{ marginTop: 16 }}>
+          ✅ Cleared: {searchParams.testsreset}. They can sit those tests again.
+        </div>
+      )}
+      {searchParams.pwerr && (
+        <div className="notice err" style={{ marginTop: 16 }}>
+          ❌ The password was <strong>not</strong> changed. {searchParams.pwerr}
+        </div>
+      )}
 
       {/* Password rescue tools */}
       <details style={{ marginTop: 18 }}>
@@ -114,10 +129,12 @@ export default async function UserDetail(
               <form action={adminSetPassword}>
                 <input type="hidden" name="id" value={u.id} />
                 <p className="muted" style={{ fontSize: ".85rem", marginBottom: 8 }}>
-                  Or set a password directly (tell them in person):
+                  Or set a password directly and tell them what it is. It must have{" "}
+                  <strong>8+ characters, a CAPITAL, a small letter, a number and a symbol</strong> — the account
+                  refuses anything less, which is why a simple one silently did nothing before.
                 </p>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <input name="password" type="text" placeholder="New password (min 6)" style={{ marginBottom: 0, maxWidth: 240 }} />
+                  <input name="password" type="text" placeholder="e.g. Ca@2026Pass" style={{ marginBottom: 0, maxWidth: 240 }} />
                   <SubmitButton className="btn small secondary">Set password</SubmitButton>
                 </div>
               </form>
@@ -143,6 +160,34 @@ export default async function UserDetail(
           label="🔄 Reset study plan"
           message="Reset this student's study plan? Their plan, remarks and done-ticks will be wiped so they start fresh. This cannot be undone."
         />
+      </div>
+
+      {/* Let a student sit a test again.
+          An attempt is one per student per test, so a wrong upload, a mis-click
+          or a failed submission used to end that test for them permanently —
+          the only reset button was on the founder's own preview of a paper. */}
+      <div className="card" style={{ marginTop: 14 }}>
+        <strong>📝 Test attempts</strong>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "2px 0 10px" }}>
+          Clears this student&apos;s attempts so they can sit those tests again from the start. Their uploaded answer
+          books and checked copies stay in storage — only the attempt is removed. Everyone else is untouched.
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[
+            ["descriptive", "✍️ Reset descriptive tests"],
+            ["mcq", "🧠 Reset MCQ tests"],
+            ["case", "📚 Reset case studies"],
+            ["all", "🔄 Reset every test"],
+          ].map(([what, label]) => (
+            <form action={resetStudentTests} key={what}>
+              <input type="hidden" name="id" value={u.id} />
+              <input type="hidden" name="what" value={what} />
+              <SubmitButton className={`btn small ${what === "all" ? "danger" : "secondary"}`} savedLabel="Reset">
+                {label}
+              </SubmitButton>
+            </form>
+          ))}
+        </div>
       </div>
 
       <form action={updateUser} style={{ marginTop: 16 }}>

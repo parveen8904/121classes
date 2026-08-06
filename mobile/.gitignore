@@ -22,7 +22,9 @@ android/app/src/*
 android/app/src/main/*
 !android/app/src/main/java/
 
-# Build outputs
+# Build outputs. Gradle's build/ sits INSIDE the plugin folder we just
+# un-ignored, so it needs saying again or 1.7 MB of .dex lands in the repo.
+plugins/**/build/
 dist/
 *.ipa
 *.apk

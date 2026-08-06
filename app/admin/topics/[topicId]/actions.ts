@@ -332,15 +332,24 @@ export async function updateSection(formData: FormData) {
   const type = str(formData.get("type"));
   if (!id || !title || !type) return;
   const supabase = createClient();
-  // Preserve AI-generated keys (class summary, auto-assigned numbers) that the
-  // form doesn't carry, so editing a class doesn't wipe them.
+  // Start from EVERYTHING the section already holds, then apply only what this
+  // form actually carries. The old merge kept just the ai_* keys and rebuilt
+  // the rest from the submitted fields — but the edit form renders fields
+  // conditionally by section type, so every field the open form did not render
+  // was silently erased on save. He watched filled fields go blank because he
+  // saved a different one.
+  //
+  // The distinction that matters: a field ABSENT from the form was not shown
+  // and must survive untouched; a field PRESENT but empty was cleared by a
+  // person and must be removed.
   const { data: prev } = await supabase.from("sections").select("config").eq("id", id).maybeSingle();
-  const prevCfg = (prev?.config ?? {}) as Record<string, unknown>;
-  const preserved: Record<string, unknown> = {};
-  for (const k of Object.keys(prevCfg)) {
-    if (k.startsWith("ai_") || k === "class_no" || k === "topic_class_no" || k === "class_number") preserved[k] = prevCfg[k];
+  const config = { ...(prev?.config ?? {}) } as Record<string, unknown>;
+  for (const f of ALL_CONFIG_FIELDS) {
+    if (!formData.has(f)) continue;
+    const v = str(formData.get(f));
+    if (v) config[f] = v;
+    else delete config[f];
   }
-  const config = { ...preserved, ...readConfig(formData) } as Record<string, unknown>;
   const pdfText = await extractContentPdfs(config);
   if (pdfText) config.ai_pdf_text = pdfText;
   else delete config.ai_pdf_text;

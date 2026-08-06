@@ -15,7 +15,7 @@ export const metadata = { title: "Messages — Admin" };
 // by side, each with its own count, so you can see where the work is before you
 // choose.
 export default async function MessagesPage() {
-  await assertArea("support");
+  await assertArea("inbox");
   const svc = createServiceClient();
 
   const [doubts, waiting, wa, log] = await Promise.all([

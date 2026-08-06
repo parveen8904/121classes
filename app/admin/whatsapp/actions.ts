@@ -11,7 +11,7 @@ import { str } from "../_lib/util";
 // window that opens when the student messages first. Outside it Meta silently
 // drops the message, so the failure is surfaced rather than swallowed.
 export async function replyOnWhatsApp(formData: FormData) {
-  await assertArea(null);
+  await assertArea("inbox");
   const to = str(formData.get("to"));
   const text = str(formData.get("text"));
   if (!to || !text) return;
@@ -34,7 +34,7 @@ export async function replyOnWhatsApp(formData: FormData) {
 // The instant acknowledgement every incoming message gets. Editable here so
 // the wording is never buried in code.
 export async function saveWhatsAppAutoReply(formData: FormData) {
-  await assertArea(null);
+  await assertArea("inbox");
   const text = str(formData.get("text"));
   const on = formData.get("on") === "on";
   const { saveAutoReply } = await import("@/lib/whatsappAutoReply");
@@ -52,7 +52,7 @@ export async function saveWhatsAppAutoReply(formData: FormData) {
  * reply box; nothing leaves the account until he does.
  */
 export async function draftWhatsAppReply(formData: FormData) {
-  await assertArea(null);
+  await assertArea("inbox");
   const to = str(formData.get("to"));
   const question = str(formData.get("question"));
   if (!to || !question) return;

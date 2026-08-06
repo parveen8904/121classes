@@ -13,7 +13,12 @@ export type AdminArea = { key: string; label: string; prefixes: string[] };
 
 export const ADMIN_AREAS: AdminArea[] = [
   { key: "announcements", label: "📣 Announcements & broadcasts", prefixes: ["/admin/announcements", "/admin/notifications", "/admin/amendments"] },
-  { key: "inbox", label: "📥 Inbox & student doubts", prefixes: ["/admin/inbox"] },
+  // The panel moved: doubts now open through the /admin/messages hub, with the
+  // WhatsApp desk and the doubt log inside it. The grant kept authorising only
+  // the OLD path, so a staff member given "Inbox & student doubts" clicked the
+  // Messages tile and was refused — rights he had been given "did not reflect".
+  { key: "inbox", label: "📥 Inbox & student doubts", prefixes: ["/admin/inbox", "/admin/messages", "/admin/whatsapp", "/admin/doubt-log"] },
+  { key: "tasks", label: "✅ Office tasks", prefixes: ["/admin/tasks"] },
   { key: "tickets", label: "🎫 Support tickets", prefixes: ["/admin/tickets"] },
   { key: "articles", label: "📝 Articles & SEO", prefixes: ["/admin/articles"] },
   { key: "reengage", label: "🔁 Re-engagement emails", prefixes: ["/admin/reengage"] },

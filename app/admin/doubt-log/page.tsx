@@ -31,7 +31,7 @@ const IST = (s: string) =>
   });
 
 export default async function DoubtLogPage(props: { searchParams: Promise<{ days?: string }> }) {
-  await assertArea(null);
+  await assertArea("inbox");
   const { days } = await props.searchParams;
   const windowDays = Math.min(180, Math.max(1, Number(days) || 30));
 

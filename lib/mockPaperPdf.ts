@@ -399,7 +399,9 @@ export async function buildMockPaperPdf(input: { title: string; text: string; fo
 
   foot(c);
   if (input.footer) {
-    c.page.drawText(winAnsi(input.footer), { x: LEFT, y: BOTTOM - 26, size: 8, font: c.italic, color: rgb(0.45, 0.45, 0.45) });
+    // A line below the page number, not through it — the two were drawn on the
+    // same baseline and the closing note ran straight over the folio.
+    c.page.drawText(winAnsi(input.footer), { x: LEFT, y: BOTTOM - 40, size: 8, font: c.italic, color: rgb(0.45, 0.45, 0.45) });
   }
   return pdf.save();
 }

@@ -307,8 +307,11 @@ export async function buildMockPaperPdf(input: { title: string; text: string; fo
       continue;
     }
 
-    // The bracketed sub-lines under a part heading are centred too.
-    if (!inHeader && /^\(.*\)$/.test(t) && t.length < 90) {
+    // The bracketed sub-lines under a part heading are centred too — but an
+    // option such as "(a) Rs. 3,00,000 (over useful life of 8 years)" also
+    // opens and closes on a bracket, and three of Q13's four answers came out
+    // centred in italics while the fourth sat flush left.
+    if (!inHeader && /^\(.*\)$/.test(t) && t.length < 90 && !NUMBERED.test(t)) {
       flush();
       centre(t, 9.5, c.italic, 3);
       continue;

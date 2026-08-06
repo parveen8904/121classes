@@ -29,3 +29,6 @@ dist/
 *.ipa
 *.apk
 *.aab
+
+# The Android upload key password. Never in git.
+android/keystore.properties

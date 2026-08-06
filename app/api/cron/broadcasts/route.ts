@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
   const svc = createServiceClient();
   const { data: due } = await svc
     .from("scheduled_posts")
-    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, to_yt_video, to_twitter, to_linkedin, to_facebook, to_substack, to_medium, to_reddit, to_quora, to_google, to_threads, to_ig_personal, ig_text, yt_text, x_text, status_note")
+    .select("id, body, link_url, to_tg_channel, to_tg_groups, to_discord, to_direct, campaign, to_whatsapp, wa_template, wa_offset, to_instagram, to_youtube, to_yt_video, to_twitter, to_linkedin, to_facebook, to_substack, to_medium, to_reddit, to_quora, to_google, to_threads, to_ig_personal, ig_text, yt_text, x_text, video_url, status_note")
     .eq("status", "pending")
     .lte("send_at", new Date().toISOString())
     .order("send_at")
@@ -145,15 +145,22 @@ export async function GET(req: NextRequest) {
         // Instagram — AUTO-POST via the Meta Graph API when keys are set
         // (professional account + long-lived token in Admin → Integrations).
         // The auto-generated 1080×1080 card is the image; ig_text the caption.
+        // A campaign carrying a video goes out as a REEL; the still card is what
+        // happens when there is no video, not the other way round. Instagram's
+        // feed is video now, and a card posted there reaches almost nobody.
+        const videoUrl = String(p.video_url ?? "").trim();
         let igPosted = false;
         if (p.to_instagram) {
-          const { igConfigured, publishInstagramImage } = await import("@/lib/instagram");
+          const { igConfigured, publishInstagramImage, publishInstagramReel } = await import("@/lib/instagram");
           if (await igConfigured()) {
-            const res = await publishInstagramImage({
-              imageUrl: `https://caparveensharma.com/api/campaign-card/${p.id}?fmt=jpg`,
-              caption: String(p.ig_text ?? text),
-            });
-            if (res.ok) { igPosted = true; notes.push("instagram: posted ✅"); }
+            const caption = String(p.ig_text ?? text);
+            const res = videoUrl
+              ? await publishInstagramReel({ videoUrl, caption })
+              : await publishInstagramImage({
+                  imageUrl: `https://caparveensharma.com/api/campaign-card/${p.id}?fmt=jpg`,
+                  caption,
+                });
+            if (res.ok) { igPosted = true; notes.push(videoUrl ? "instagram reel: posted ✅" : "instagram: posted ✅"); }
             else notes.push(`instagram: auto-post failed (${res.error}) — reminder emailed instead`);
           }
         }
@@ -186,9 +193,28 @@ export async function GET(req: NextRequest) {
             }
           }
           if (p.to_facebook && (await social.facebookConfigured())) {
-            const r = await social.postToFacebook(text, p.link_url ? String(p.link_url) : null);
-            if (r.ok) { fbPosted = true; notes.push("facebook: posted ✅"); }
+            // Same rule as Instagram: a video becomes a Facebook Reel, and only
+            // a campaign with no video goes out as text and a link.
+            const r = videoUrl
+              ? await social.postFacebookVideo(videoUrl, text)
+              : await social.postToFacebook(text, p.link_url ? String(p.link_url) : null);
+            if (r.ok) { fbPosted = true; notes.push(videoUrl ? "facebook reel: posted ✅" : "facebook: posted ✅"); }
             else notes.push(`facebook: auto-post failed (${r.error}) — reminder emailed instead`);
+          }
+
+          // YouTube Shorts. Reminder-only until the channel is connected with
+          // OAuth — an API key can read the channel but never publish to it.
+          if (p.to_yt_video && videoUrl) {
+            const { youtubeUploadConfigured, uploadYouTubeShort } = await import("@/lib/youtubeUpload");
+            if (await youtubeUploadConfigured()) {
+              const r = await uploadYouTubeShort({
+                videoUrl,
+                title: String(p.yt_text ?? text).split("\n")[0].slice(0, 90),
+                description: String(p.yt_text ?? text),
+              });
+              if (r.ok) notes.push("youtube short: posted ✅");
+              else notes.push(`youtube short: upload failed (${r.error}) — reminder emailed instead`);
+            }
           }
           if (p.to_ig_personal) {
             // Personal Instagram rides Buffer: the Graph API cannot reach it,

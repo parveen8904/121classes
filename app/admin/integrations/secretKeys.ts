@@ -15,6 +15,11 @@ export const SECRET_KEYS = [
   "ANTHROPIC_API_KEY",
   "YOUTUBE_API_KEY",
   "YOUTUBE_CHANNEL_ID",
+  // Uploading a Short is a WRITE on the channel, so the read-only API key
+  // above cannot do it — Google requires OAuth for that.
+  "YOUTUBE_CLIENT_ID",
+  "YOUTUBE_CLIENT_SECRET",
+  "YOUTUBE_REFRESH_TOKEN",
   "MAILGUN_API_KEY",
   "MAILGUN_WEBHOOK_KEY",
   "MAILGUN_DOMAIN",

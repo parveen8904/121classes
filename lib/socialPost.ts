@@ -109,6 +109,68 @@ export async function postToFacebook(text: string, linkUrl?: string | null): Pro
   } catch (e) { return { ok: false, error: String(e).slice(0, 120) }; }
 }
 
+// Post a VIDEO to the Facebook page.
+//
+// Two shapes, tried in order. /video_reels puts it in the Reels tab, which is
+// where the reach is; it is a three-step upload (start → transfer → finish) and
+// Meta rejects anything that is not portrait. /videos is the plain feed video
+// and accepts what Reels will not, so it is the fallback rather than a failure.
+export async function postFacebookVideo(
+  videoUrl: string,
+  description: string,
+  opts: { reel?: boolean } = {},
+): Promise<PostResult> {
+  if (!(await facebookConfigured())) return { ok: false, error: "not configured" };
+  if (!/^https:\/\//i.test(videoUrl)) return { ok: false, error: "the video URL must be public https" };
+
+  const pageId = await getSecret("FACEBOOK_PAGE_ID");
+  const token = await getSecret("FACEBOOK_PAGE_TOKEN");
+  const base = `https://graph.facebook.com/v21.0/${pageId}`;
+
+  if (opts.reel !== false) {
+    try {
+      const startRes = await fetch(`${base}/video_reels`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ upload_phase: "start", access_token: token }),
+        signal: AbortSignal.timeout(15000),
+      });
+      const start = (await startRes.json()) as { video_id?: string; upload_url?: string; error?: { message?: string } };
+      if (start.video_id && start.upload_url) {
+        // Meta pulls the file itself when given file_url — no bytes through us.
+        const upRes = await fetch(start.upload_url, {
+          method: "POST",
+          headers: { Authorization: `OAuth ${token}`, file_url: videoUrl },
+          signal: AbortSignal.timeout(120000),
+        });
+        if (upRes.ok) {
+          const finRes = await fetch(
+            `${base}/video_reels?upload_phase=finish&video_id=${encodeURIComponent(start.video_id)}` +
+              `&video_state=PUBLISHED&description=${encodeURIComponent(description.slice(0, 2200))}` +
+              `&access_token=${encodeURIComponent(token)}`,
+            { method: "POST", signal: AbortSignal.timeout(30000) },
+          );
+          if (finRes.ok) return { ok: true };
+        }
+      }
+    } catch { /* fall through to the plain feed video */ }
+  }
+
+  try {
+    const body = new URLSearchParams({
+      file_url: videoUrl,
+      description: description.slice(0, 2200),
+      access_token: token,
+    });
+    const res = await fetch(`${base}/videos`, {
+      method: "POST", body, cache: "no-store", signal: AbortSignal.timeout(120000),
+    });
+    if (res.ok) return { ok: true };
+    const d = await res.text().catch(() => "");
+    return { ok: false, error: `Facebook video ${res.status} ${d.slice(0, 140)}` };
+  } catch (e) { return { ok: false, error: String(e).slice(0, 140) }; }
+}
+
 // ---------- Reddit ----------
 // Keys (reddit.com/prefs/apps → "script" app): REDDIT_CLIENT_ID,
 // REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD, REDDIT_SUBREDDIT

@@ -1,4 +1,5 @@
 import AdminHero from "../_components/AdminHero";
+import VideoUpload from "../_components/VideoUpload";
 import SubmitButton from "@/app/components/SubmitButton";
 import ChannelFolders, { type Folder } from "./ChannelFolders";
 import ManageFolders from "./ManageFolders";
@@ -16,7 +17,7 @@ type Post = {
   to_instagram: boolean; to_youtube: boolean; to_yt_video: boolean; to_twitter: boolean;
   to_linkedin: boolean; to_facebook: boolean; to_substack: boolean; to_medium: boolean;
   to_reddit: boolean; to_quora: boolean; to_google: boolean; to_threads: boolean; to_ig_personal: boolean;
-  ig_text: string | null; yt_text: string | null; x_text: string | null; created_by: string | null;
+  ig_text: string | null; yt_text: string | null; x_text: string | null; video_url: string | null; created_by: string | null;
   source_kind: string | null; source_label: string | null; source_url: string | null;
   status: string; status_note: string | null; sent_at: string | null;
 };
@@ -35,17 +36,17 @@ function Targets({ p }: { p: Post }) {
       {p.to_discord && <span className="badge">🎮 Discord</span>}
       {p.to_direct && <span className="badge">📩 Direct to students</span>}
       {p.to_whatsapp && <span className="badge">💬 WhatsApp</span>}
-      {p.to_instagram && <span className="badge">📷 Instagram (remind)</span>}
+      {p.to_instagram && <span className="badge">📷 Instagram</span>}
       {p.to_youtube && <span className="badge">▶️ YouTube (remind)</span>}
       {p.to_yt_video && <span className="badge">🎥 YouTube video brief</span>}
-      {p.to_twitter && <span className="badge">🐦 Twitter (remind)</span>}
+      {p.to_twitter && <span className="badge">🐦 Twitter/X</span>}
       {p.to_threads && <span className="badge">🧵 Threads</span>}
       {p.to_ig_personal && <span className="badge">📸 IG personal</span>}
-      {p.to_linkedin && <span className="badge">💼 LinkedIn (remind)</span>}
-      {p.to_facebook && <span className="badge">📘 Facebook (remind)</span>}
+      {p.to_linkedin && <span className="badge">💼 LinkedIn</span>}
+      {p.to_facebook && <span className="badge">📘 Facebook</span>}
       {p.to_substack && <span className="badge">📰 Substack (remind)</span>}
       {p.to_medium && <span className="badge">✒️ Medium (remind)</span>}
-      {p.to_reddit && <span className="badge">👽 Reddit (remind)</span>}
+      {p.to_reddit && <span className="badge">👽 Reddit</span>}
       {p.to_quora && <span className="badge">❓ Quora (remind)</span>}
       {p.to_google && <span className="badge">📍 Google Profile (remind)</span>}
     </span>
@@ -60,15 +61,15 @@ const CHANNEL_BOXES: { name: string; label: string; auto: boolean }[] = [
   { name: "to_discord", label: "🎮 Discord", auto: true },
   { name: "to_direct", label: "📩 Direct to every connected student", auto: true },
   { name: "to_whatsapp", label: "💬 WhatsApp (every student + lead)", auto: true },
-  { name: "to_instagram", label: "📷 Instagram", auto: false },
+  { name: "to_instagram", label: "📷 Instagram — Reel when a video is attached", auto: true },
   { name: "to_youtube", label: "▶️ YouTube community post", auto: false },
-  { name: "to_yt_video", label: "🎥 YouTube video brief", auto: false },
-  { name: "to_twitter", label: "🐦 Twitter/X", auto: false },
-  { name: "to_linkedin", label: "💼 LinkedIn", auto: false },
-  { name: "to_facebook", label: "📘 Facebook page", auto: false },
+  { name: "to_yt_video", label: "🎥 YouTube — Short when a video is attached", auto: false },
+  { name: "to_twitter", label: "🐦 Twitter/X", auto: true },
+  { name: "to_linkedin", label: "💼 LinkedIn", auto: true },
+  { name: "to_facebook", label: "📘 Facebook page — Reel when a video is attached", auto: true },
   { name: "to_ig_personal", label: "📸 Instagram (personal)", auto: false },
   { name: "to_threads", label: "🧵 Threads", auto: false },
-  { name: "to_reddit", label: "👽 Reddit", auto: false },
+  { name: "to_reddit", label: "👽 Reddit", auto: true },
   { name: "to_substack", label: "📰 Substack", auto: false },
   { name: "to_medium", label: "✒️ Medium", auto: false },
   { name: "to_quora", label: "❓ Quora", auto: false },
@@ -171,6 +172,8 @@ export default async function BroadcastsPage(props: { searchParams: Promise<{ ma
                 <textarea name="body" rows={4} defaultValue={p.body} required />
                 <label style={{ marginTop: 8 }}>Link (optional — added at the end)</label>
                 <input name="link_url" defaultValue={p.link_url ?? ""} placeholder="https://caparveensharma.com/free-planner" />
+
+                <VideoUpload name="video_url" defaultValue={p.video_url ?? ""} />
 
                 <label style={{ marginTop: 10 }}>📷 Instagram caption <span className="muted" style={{ fontWeight: 400, fontSize: ".76rem" }}>— blank = use the message above</span></label>
                 <textarea name="ig_text" rows={3} defaultValue={p.ig_text ?? ""} />

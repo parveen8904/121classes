@@ -331,6 +331,9 @@ export default async function IntegrationsPage(
           <KeyField name="ZOHO_CLIENT_SECRET" label="Zoho Books — client secret" placeholder="same Self Client screen" />
           <KeyField name="ZOHO_REFRESH_TOKEN" label="Zoho Books — refresh token" placeholder="generated for scope ZohoBooks.fullaccess.all" />
           <KeyField name="ZOHO_ORG_ID" label="Zoho Books — organisation ID (optional, defaults to ALDINECA)" placeholder="leave blank unless you have two organisations" />
+          <KeyField name="YOUTUBE_CLIENT_ID" label="YouTube upload — client ID (needed to post Shorts; the API key above can only read)" placeholder="Google Cloud → Credentials → OAuth client (Desktop)" />
+          <KeyField name="YOUTUBE_CLIENT_SECRET" label="YouTube upload — client secret" placeholder="same OAuth client" />
+          <KeyField name="YOUTUBE_REFRESH_TOKEN" label="YouTube upload — refresh token (sign in once as the channel owner)" placeholder="scope youtube.upload" />
           <KeyField name="MAILGUN_API_KEY" label="Mailgun API key" placeholder="key-…" />
           <KeyField name="MAILGUN_WEBHOOK_KEY" label="Mailgun HTTP webhook signing key — signs incoming student mail (NOT the sending key)" placeholder="Mailgun → Settings → API security → HTTP webhook signing key" />
           <KeyField name="MAILGUN_DOMAIN" label="Mailgun domain" placeholder="mg.caparveensharma.com" />

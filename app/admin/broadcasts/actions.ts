@@ -54,6 +54,9 @@ export async function updatePost(formData: FormData) {
     ig_text: str(formData.get("ig_text")) || null,
     yt_text: str(formData.get("yt_text")) || null,
     x_text: str(formData.get("x_text")) || null,
+    // The video is what turns this post into a Reel and a Short rather than a
+    // still card nobody sees.
+    video_url: str(formData.get("video_url")) || null,
   };
   // The edit form always submits every channel box, so an unticked one really
   // does turn the channel off.

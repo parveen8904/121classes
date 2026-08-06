@@ -3,48 +3,103 @@ package in.caclasses.app;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.webkit.WebChromeClient;
+import android.widget.FrameLayout;
 
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebChromeClient;
 
-// Fullscreen that is actually full screen.
+// Fullscreen video that actually goes fullscreen.
 //
-// The web side sizes the player correctly, but Android still drew the status bar
-// and the navigation bar over the top and bottom of it, so "fullscreen" lost a
-// strip at each end — worst on phones with a tall screen and gesture bar.
+// Capacitor's own BridgeWebChromeClient answers onShowCustomView like this:
 //
-// When the WebView enters HTML5 fullscreen, Capacitor adds a custom view to this
-// activity. Watching that view arrive is what tells us to take the system bars
-// away, and to give them back when it leaves. Nothing else in the app changes.
+//     public void onShowCustomView(View view, CustomViewCallback callback) {
+//         callback.onCustomViewHidden();      // <- cancels it immediately
+//         super.onShowCustomView(view, callback);
+//     }
+//
+// It tells the WebView the fullscreen view has already been dismissed the
+// instant the page asks for it, and never attaches the view to anything. So on
+// Android the element entered fullscreen and left again in the same frame: no
+// :fullscreen CSS ever matched, and the video simply stayed where it was. No
+// amount of styling could have fixed that — those styles were never in play.
+// This is why fullscreen "still is not happening" on Android after the CSS was
+// corrected; the CSS was right and unreachable.
+//
+// This client does the two things the platform actually asks for: put the view
+// on screen at full size, and take it away again afterwards. The system bars go
+// with it, so the video gets the whole panel including the notch.
 public class MainActivity extends BridgeActivity {
+
+    private View fullscreenView;
+    private WebChromeClient.CustomViewCallback fullscreenCallback;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        final View root = getWindow().getDecorView();
-        root.setOnSystemUiVisibilityChangeListener(visibility -> { /* keep the flags sticky */ });
+        getBridge()
+            .getWebView()
+            .setWebChromeClient(
+                new BridgeWebChromeClient(getBridge()) {
+                    @Override
+                    public void onShowCustomView(View view, CustomViewCallback callback) {
+                        // Already showing one — refuse the second rather than
+                        // leaking the first and losing the way back out.
+                        if (fullscreenView != null) {
+                            callback.onCustomViewHidden();
+                            return;
+                        }
+                        fullscreenView = view;
+                        fullscreenCallback = callback;
 
-        // The fullscreen custom view is attached to the activity's content
-        // group, so its arrival and departure are the signal we need.
-        final android.view.ViewGroup content = findViewById(android.R.id.content);
-        content.setOnHierarchyChangeListener(new android.view.ViewGroup.OnHierarchyChangeListener() {
-            @Override
-            public void onChildViewAdded(View parent, View child) {
-                // Capacitor's own WebView is the first child; anything added on
-                // top of it while playing is the fullscreen video container.
-                if (content.getChildCount() > 1) applyImmersive(true);
-            }
+                        ViewGroup content = findViewById(android.R.id.content);
+                        content.addView(
+                            fullscreenView,
+                            new FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                        );
+                        getBridge().getWebView().setVisibility(View.GONE);
+                        applyImmersive(true);
+                    }
 
-            @Override
-            public void onChildViewRemoved(View parent, View child) {
-                if (content.getChildCount() <= 1) applyImmersive(false);
-            }
-        });
+                    @Override
+                    public void onHideCustomView() {
+                        exitFullscreen();
+                    }
+                }
+            );
+    }
+
+    /** Back should leave the video, not the class. */
+    @Override
+    public void onBackPressed() {
+        if (fullscreenView != null) {
+            exitFullscreen();
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    private void exitFullscreen() {
+        if (fullscreenView == null) return;
+        ViewGroup content = findViewById(android.R.id.content);
+        content.removeView(fullscreenView);
+        fullscreenView = null;
+        getBridge().getWebView().setVisibility(View.VISIBLE);
+        applyImmersive(false);
+        if (fullscreenCallback != null) {
+            fullscreenCallback.onCustomViewHidden();
+            fullscreenCallback = null;
+        }
     }
 
     private void applyImmersive(boolean on) {
@@ -59,6 +114,8 @@ public class MainActivity extends BridgeActivity {
                     getWindow().getAttributes().layoutInDisplayCutoutMode =
                             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
                 }
+                // Swipe brings the bars back; a plain tap passes through to the
+                // player, so the controls still answer the first touch.
                 c.setSystemBarsBehavior(
                         WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
                 c.hide(WindowInsetsCompat.Type.systemBars());

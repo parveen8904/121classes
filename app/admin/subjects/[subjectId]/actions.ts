@@ -428,3 +428,27 @@ export async function setSubjectFaculty(formData: FormData) {
   }
   revalidatePath(`/admin/subjects/${subjectId}`);
 }
+
+// Rename a case-study SET (the AI names it after the PDF's filename, which is
+// rarely what a student should see).
+export async function renameCaseSet(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  const subjectId = str(formData.get("subjectId"));
+  const title = str(formData.get("title"));
+  if (!id || !title) return;
+  await createServiceClient().from("case_sets").update({ title }).eq("id", id);
+  revalidatePath(`/admin/subjects/${subjectId}`);
+}
+
+// Rename ONE case scenario inside a set. The AI titles each case from its first
+// line, and "M/s Sharma & Associates is a firm…" is not a title.
+export async function renameCaseStudy(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  const subjectId = str(formData.get("subjectId"));
+  const title = str(formData.get("title"));
+  if (!id || !title) return;
+  await createServiceClient().from("case_studies").update({ title }).eq("id", id);
+  revalidatePath(`/admin/subjects/${subjectId}`);
+}

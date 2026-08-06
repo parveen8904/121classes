@@ -46,11 +46,10 @@ const whatsNew = [
   { tag: "Live class", title: "Weekly doubt-solving session", desc: "Join the live session with CA Parveen Sharma — recordings posted after." },
 ];
 
-const testimonials = [
-  { who: "A. Sharma", role: "CA Inter student", quote: "Parveen Sir&apos;s teaching and the personalised attention made all the difference." },
-  { who: "R. Mehta", role: "CA Foundation", quote: "Clear, no-nonsense classes and the AI checking gave me feedback fast." },
-  { who: "S. Iyer", role: "CA Inter student", quote: "Felt like true 1-to-1 mentoring — exactly what I needed to clear my paper." },
-];
+// Testimonials come from the database (Admin → Site) — quote, the student's
+// name, and the registration number that makes the quote checkable. The three
+// invented placeholders that shipped here are gone: an empty table hides the
+// section, because no testimonials beats fake ones.
 
 const APP_PLATFORMS = [
   { key: "app_url_web", icon: "🌐", label: "Web app", desc: "Opens in your browser — nothing to install. Works on any device.", cta: "Open now", fallback: "/login" },
@@ -110,6 +109,12 @@ export default async function Home() {
     // the page cannot start losing settings again as the table grows.
     supabase.from("site_settings").select("key, value").in("key", HOMEPAGE_SETTINGS),
   ]);
+  const { data: testimonials } = await supabase
+    .from("testimonials")
+    .select("id, quote, student_name, reg_no")
+    .eq("is_published", true)
+    .order("sort")
+    .limit(9);
   const { data: books } = await supabase
     .from("books")
     .select("id, title, cover_url, price_inr")
@@ -196,7 +201,7 @@ export default async function Home() {
   mark("counts");
   const ytOverview = await getChannelOverview().catch(() => null);
   const ytVideos = ytOverview?.uploadsPlaylist
-    ? await getRecentVideos(ytOverview.uploadsPlaylist, 6).catch(() => [])
+    ? await getRecentVideos(ytOverview.uploadsPlaylist, 8).catch(() => [])
     : [];
   mark("youtube");
   if (Date.now() - t0 > 3000) console.warn("[home] slow render:", marks.join(" "));
@@ -918,28 +923,30 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* TESTIMONIALS */}
-      <section className="section alt" id="testimonials">
-        <div className="section-head">
-          <div className="eyebrow">Testimonials</div>
-          <h2>What students say</h2>
-          <p>Placeholder reviews — replace with real student feedback.</p>
-        </div>
-        <div className="grid grid-3">
-          {testimonials.map((t) => (
-            <div className="tile" key={t.who}>
-              <p className="quote">&ldquo;{t.quote}&rdquo;</p>
-              <div className="who">
-                <div className="avatar">{t.who.charAt(0)}</div>
-                <div>
-                  <strong>{t.who}</strong>
-                  <div className="muted" style={{ fontSize: ".82rem" }}>{t.role}</div>
+      {/* TESTIMONIALS — real ones, entered by the office with the student's
+          registration number. Nothing renders until there is something true. */}
+      {(testimonials ?? []).length > 0 && (
+        <section className="section alt" id="testimonials">
+          <div className="section-head">
+            <div className="eyebrow">Testimonials</div>
+            <h2>What students say</h2>
+          </div>
+          <div className="grid grid-3">
+            {(testimonials ?? []).map((t) => (
+              <div className="tile" key={t.id}>
+                <p className="quote">&ldquo;{t.quote}&rdquo;</p>
+                <div className="who">
+                  <div className="avatar">{(t.student_name || "S").charAt(0)}</div>
+                  <div>
+                    <strong>{t.student_name}</strong>
+                    {t.reg_no && <div className="muted" style={{ fontSize: ".82rem" }}>Reg. no. {t.reg_no}</div>}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ABOUT */}
       <section className="section" id="about">

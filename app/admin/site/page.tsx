@@ -2,10 +2,15 @@ import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../_components/AdminHero";
 import ImageUpload from "../_components/ImageUpload";
 import SubmitButton from "@/app/components/SubmitButton";
-import { updateSiteSettings } from "./actions";
+import { updateSiteSettings, addTestimonial, deleteTestimonial } from "./actions";
 import { saveHomepageIntroVideo, saveHomepageVideos, refreshHomepageThumbnails } from "../marketing/actions";
 
 export default async function SiteImagesPage() {
+  const { createServiceClient: svcT } = await import("@/lib/supabase/service");
+  const { data: testimonialRows } = await svcT()
+    .from("testimonials")
+    .select("id, quote, student_name, reg_no, sort")
+    .order("sort");
   const supabase = createClient();
   const { data } = await supabase.from("site_settings").select("key, value");
   const m = new Map((data ?? []).map((r) => [r.key, r.value as string | null]));
@@ -190,6 +195,10 @@ export default async function SiteImagesPage() {
                 </label>
               ))}
             </div>
+            <div style={{ marginTop: 10 }}>
+              <label style={{ fontSize: ".82rem" }}>…or paste any YouTube link — including an UNLISTED video (unlisted uploads never appear in the tiles above)</label>
+              <input name="intro_url" placeholder="https://www.youtube.com/watch?v=XXXX or https://youtu.be/XXXX" defaultValue="" />
+            </div>
             <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 10 }}>Use this as the homepage video</SubmitButton>
           </form>
         </div>
@@ -245,6 +254,39 @@ export default async function SiteImagesPage() {
         💡 Export from Canva as <strong>PNG or JPG</strong>. The founder photo looks best as a portrait;
         the banner looks best wide (around 1600×500).
       </p>
+      {/* ── Testimonials ─────────────────────────────────────────────── */}
+      <div className="form-card" style={{ marginTop: 18 }}>
+        <h3 style={{ marginTop: 0 }}>💬 Testimonials on the homepage</h3>
+        <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 12px" }}>
+          Real students only — the registration number is what makes a quote checkable. The homepage shows them in
+          the order below; with none entered, the section does not appear at all.
+        </p>
+        <form action={addTestimonial} style={{ display: "grid", gap: 10 }}>
+          <textarea name="quote" rows={2} required placeholder="The quote, in the student's words" />
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr 80px" }}>
+            <input name="student_name" required placeholder="Student's name" />
+            <input name="reg_no" placeholder="Registration no." />
+            <input name="sort" type="number" defaultValue={((testimonialRows ?? []).length + 1) * 10} title="Order" />
+          </div>
+          <div><SubmitButton className="btn small">➕ Add testimonial</SubmitButton></div>
+        </form>
+        {(testimonialRows ?? []).length > 0 && (
+          <div style={{ display: "grid", gap: 8, marginTop: 14 }}>
+            {(testimonialRows ?? []).map((t) => (
+              <div className="list-row" key={t.id as string} style={{ flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <span className="row-title">&ldquo;{(t.quote as string).slice(0, 90)}&rdquo;</span>
+                  <p className="row-sub">{t.student_name as string}{t.reg_no ? ` · Reg. ${t.reg_no as string}` : ""} · order {t.sort as number}</p>
+                </div>
+                <form action={deleteTestimonial}>
+                  <input type="hidden" name="id" value={t.id as string} />
+                  <SubmitButton className="btn small secondary">Delete</SubmitButton>
+                </form>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }

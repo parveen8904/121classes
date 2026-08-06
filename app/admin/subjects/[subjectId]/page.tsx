@@ -23,6 +23,8 @@ import {
   toggleCaseSetPublish,
   deleteCaseSet,
   copyTopicResources,
+  renameCaseSet,
+  renameCaseStudy,
 } from "./actions";
 
 export default async function SubjectDetail(props: { params: Promise<{ subjectId: string }> }) {
@@ -90,9 +92,15 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
     .order("created_at", { ascending: false });
   const caseSetIds = (caseSets ?? []).map((c) => c.id as string);
   const caseCounts = new Map<string, number>();
+  const casesBySet = new Map<string, { id: string; title: string }[]>();
   if (caseSetIds.length) {
-    const { data: ccRows } = await createServiceClient().from("case_studies").select("set_id").in("set_id", caseSetIds);
+    const { data: ccRows } = await createServiceClient().from("case_studies").select("id, set_id, title, order_index").in("set_id", caseSetIds).order("order_index");
     for (const r of ccRows ?? []) caseCounts.set(r.set_id as string, (caseCounts.get(r.set_id as string) ?? 0) + 1);
+    for (const r of ccRows ?? []) {
+      const k = r.set_id as string;
+      if (!casesBySet.has(k)) casesBySet.set(k, []);
+      casesBySet.get(k)!.push({ id: r.id as string, title: (r.title as string) ?? "" });
+    }
   }
 
   const assignedIds = new Set((assigned ?? []).map((a) => a.faculty_id));
@@ -262,6 +270,29 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
             <div key={c.id} className="list-row">
               <div style={{ minWidth: 0 }}>
                 <span className="row-title">🧩 {c.title}</span>
+                {/* Renaming lives HERE because the AI names sets after PDF
+                    filenames and cases after their first sentence — neither is
+                    a title a student should see. */}
+                <details style={{ marginTop: 4 }}>
+                  <summary style={{ cursor: "pointer", fontSize: ".8rem", color: "var(--accent)", fontWeight: 600 }}>✏️ Rename set / scenarios</summary>
+                  <form action={renameCaseSet} style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                    <input type="hidden" name="id" value={c.id} />
+                    <input type="hidden" name="subjectId" value={subject.id} />
+                    <input name="title" defaultValue={c.title as string} style={{ marginBottom: 0, maxWidth: 340 }} />
+                    <SubmitButton className="btn small secondary" savedLabel="✓">Rename set</SubmitButton>
+                  </form>
+                  <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
+                    {(casesBySet.get(c.id as string) ?? []).map((cs, i) => (
+                      <form key={cs.id} action={renameCaseStudy} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                        <span className="muted" style={{ fontSize: ".78rem", minWidth: 20 }}>{i + 1}.</span>
+                        <input type="hidden" name="id" value={cs.id} />
+                        <input type="hidden" name="subjectId" value={subject.id} />
+                        <input name="title" defaultValue={cs.title} style={{ marginBottom: 0, flex: 1, minWidth: 220, fontSize: ".82rem" }} />
+                        <SubmitButton className="btn small secondary" savedLabel="✓">Save</SubmitButton>
+                      </form>
+                    ))}
+                  </div>
+                </details>
                 <p className="row-sub">
                   {c.status === "processing" && <>⏳ Processing… {c.status_note ?? ""} · {caseCounts.get(c.id) ?? 0} cases so far — refresh this page to see progress</>}
                   {c.status === "ready" && <>✅ Ready · <strong>{caseCounts.get(c.id) ?? 0} case studies</strong> · {c.is_published ? "🟢 visible to students" : "⚪ hidden (publish when checked)"}</>}

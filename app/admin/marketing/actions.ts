@@ -60,7 +60,11 @@ export async function refreshHomepageThumbnails() {
 // here pins it.
 export async function saveHomepageIntroVideo(formData: FormData) {
   if (!(await requireAdmin())) return;
-  const picked = String(formData.get("intro_vid") ?? "").trim();
+  // A pasted link wins over the radio. The radios can only offer PUBLIC
+  // uploads — an unlisted video never appears in the channel's playlist, so
+  // the intro he actually made for the homepage was unpickable.
+  const pasted = String(formData.get("intro_url") ?? "").trim();
+  const picked = pasted || String(formData.get("intro_vid") ?? "").trim();
   const url =
     picked === "" || picked === "latest"
       ? "" // blank = follow the channel's newest video, as before

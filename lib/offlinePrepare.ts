@@ -129,12 +129,20 @@ export async function prepareStep(
   let resolution = job?.resolution || "";
   let total = Number(job?.bytes_total) || 0;
   let saw403 = false;
-  if (!resolution) {
-    for (const res of want ? [want] : ["720p", "480p", "360p"]) {
+  // Probe when the rendition is unknown OR its size is — a job queued in advance
+  // carries a resolution but no size, and skipping the probe for those is what
+  // left every 360p and 480p job thinking the file was zero bytes long.
+  if (!resolution || !total) {
+    const ladder = resolution ? [resolution] : want ? [want] : ["720p", "480p", "360p"];
+    let got = false;
+    for (const res of ladder) {
       const head = await fetch(`https://${CDN_HOST}/${guid}/play_${res}.mp4`, { method: "HEAD", headers: { referer: REFERER }, cache: "no-store" });
-      if (head.ok) { resolution = res; total = Number(head.headers.get("content-length")) || 0; break; }
+      if (head.ok) { resolution = res; total = Number(head.headers.get("content-length")) || 0; got = true; break; }
       if (head.status === 403) saw403 = true;
     }
+    // A pinned rendition Bunny does not have yet: clear it so the park-and-
+    // re-encode path below takes over instead of uploading nothing.
+    if (!got) resolution = "";
   }
 
   // 403 means the MP4s exist but direct access stayed locked — the library
@@ -168,7 +176,13 @@ export async function prepareStep(
     return { done: false, status: "pending", bytesDone: 0, bytesTotal: null, error: WAIT };
   }
 
-  if (!job || !job.resolution) {
+  // Initialise when there is no job, no pinned rendition, OR no upload started.
+  // That last case is the one that mattered: jobs queued ahead of time already
+  // had a resolution, so this block was skipped, no multipart upload was ever
+  // opened, and the code went straight to "complete" with zero parts — which R2
+  // answers with HTTP 400. Thirty-eight jobs failed that way and none uploaded
+  // a single byte.
+  if (!job || !job.resolution || !job.upload_id) {
     // MP4 is available — initialise (or wake a parked job): pin the resolution
     // and start the S3 multipart upload.
     const storageKey = `offline/${sectionId}-${resolution}.enc`;

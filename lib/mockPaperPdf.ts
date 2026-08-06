@@ -226,6 +226,7 @@ export async function buildMockPaperPdf(input: { title: string; text: string; fo
     const isContinuation =
       /^\s{2,}\S/.test(raw) &&                  // indented
       !/\S\s{2,}\S/.test(raw.trim()) &&        // not a row of figures
+      !NUMBERED.test(raw.trim()) &&            // not the NEXT option or item
       src.length > 0 && src[src.length - 1].trim() !== "";
     if (isContinuation) src[src.length - 1] += " " + raw.trim();
     else src.push(raw);
@@ -300,12 +301,18 @@ export async function buildMockPaperPdf(input: { title: string; text: string; fo
       c.y -= 7;
       need(c, 24);
       const m = t.match(MARKS_TAIL);
-      const head = winAnsi(m ? t.replace(MARKS_TAIL, "") : t);
-      c.page.drawText(head, { x: LEFT, y: c.y, size: 11.5, font: c.bold });
-      if (m) {
-        const tail = winAnsi(`[${m[1]} Marks]`);
-        c.page.drawText(tail, { x: PAGE_W - RIGHT - c.bold.widthOfTextAtSize(tail, 10), y: c.y, size: 10, font: c.bold });
-      }
+      // A question stem is often a full sentence, so the heading has to wrap
+      // like any other text — drawn in one piece it simply ran off the page.
+      const headLines = layout(words(m ? t.replace(MARKS_TAIL, "") : t), c.bold, 11.5, m ? WIDTH - 62 : WIDTH);
+      headLines.forEach((ln, i) => {
+        need(c, 16);
+        c.page.drawText(ln.join(" "), { x: LEFT, y: c.y, size: 11.5, font: c.bold });
+        if (m && i === 0) {
+          const tail = winAnsi(`[${m[1]} Marks]`);
+          c.page.drawText(tail, { x: PAGE_W - RIGHT - c.bold.widthOfTextAtSize(tail, 10), y: c.y, size: 10, font: c.bold });
+        }
+        if (i < headLines.length - 1) c.y -= 15;
+      });
       c.y -= 18;
       continue;
     }

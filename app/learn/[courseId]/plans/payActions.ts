@@ -78,8 +78,13 @@ export async function createPlanOrder(input: {
   let months = baseMonths;
   let baseAmount: number | null;
   if (batchMonths > 0) {
-    // Fixed price set by the admin; NULL means not announced yet.
-    const price = Number((subject as { batch_price_inr?: number | null }).batch_price_inr) || 0;
+    // A live batch may be priced EITHER as one flat figure or on the subject's
+    // own ladder. Only the flat figure was read here, so a batch priced on the
+    // ladder — which is how the Financial Instruments fee was entered, and how
+    // the ladder was meant to be used — reported "not priced yet" and could not
+    // be bought at all. The ladder is charged for exactly batch_months.
+    const flat = Number((subject as { batch_price_inr?: number | null }).batch_price_inr) || 0;
+    const price = flat > 0 ? flat : (slabs ? slabTotal(slabs, batchMonths) : 0);
     if (price <= 0) return { ok: false, reason: "noprice" };
     months = batchMonths;
     baseAmount = price;

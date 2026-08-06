@@ -184,7 +184,11 @@ export default function PricingCards({
 
   // ---- Extend (owned Gold only) --------------------------------------------
   const batchM = Number(subject.batch_months) || 0;
-  const batchPrice = Number(subject.batch_price_inr) || 0;
+  // A live batch may be priced as one flat figure OR on the subject's ladder.
+  // Reading only the flat figure showed "price to be announced" for a batch that
+  // was in fact priced, on the ladder, exactly as intended.
+  const batchFlat = Number(subject.batch_price_inr) || 0;
+  const batchPrice = batchFlat > 0 ? batchFlat : (batchM > 0 && goldSlabs ? slabTotal(goldSlabs, batchM) : 0);
   const currentMonths = subMonthsTotal ?? 0;
   const remainingMonths = Math.max(0, maxMonths - currentMonths);
   const canExtend = currentTier === "gold" && subMonthsTotal != null && remainingMonths > 0;

@@ -237,10 +237,14 @@ export async function buildMockPaperPdf(input: { title: string; text: string; fo
   // paragraph, so an instruction came out in pieces down the page.
   const src: string[] = [];
   for (const raw of String(input.text ?? "").split("\n")) {
+    // The marks are padded out to the right margin, so they leave a wide gap of
+    // their own. Counting it made "…the hardware it runs on.        [4]" look
+    // like a row of figures, and the sentence stayed broken in two.
+    const naked = raw.replace(MARKS_TAIL, "").trim();
     const isContinuation =
       /^\s{2,}\S/.test(raw) &&                  // indented
-      !/\S\s{2,}\S/.test(raw.trim()) &&        // not a row of figures
-      !NUMBERED.test(raw.trim()) &&            // not the NEXT option or item
+      !/\S\s{2,}\S/.test(naked) &&             // not a row of figures
+      !NUMBERED.test(naked) &&                 // not the NEXT option or item
       src.length > 0 && src[src.length - 1].trim() !== "";
     if (isContinuation) src[src.length - 1] += " " + raw.trim();
     else src.push(raw);

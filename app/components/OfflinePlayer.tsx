@@ -9,6 +9,17 @@ import { useEffect, useRef, useState } from "react";
 // are OFF on purpose (their fullscreen button would strip the watermark).
 const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
 
+// Where the player is actually reading from. A downloaded class MUST be on the
+// device; anything else is the bug.
+function srcKind(src: string): string {
+  if (!src) return "no source";
+  if (src.startsWith("blob:")) return "device (blob)";
+  if (src.includes("_capacitor_file_")) return "device (app file)";
+  if (src.startsWith("file:")) return "device (file)";
+  if (/^https?:/i.test(src)) return `NETWORK (${new URL(src).host}) — not the device`;
+  return src.slice(0, 40);
+}
+
 export default function OfflinePlayer({
   src,
   watermark,
@@ -24,19 +35,41 @@ export default function OfflinePlayer({
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
   const [rate, setRate] = useState(1);
+  // WHAT ACTUALLY WENT WRONG, on screen.
+  //
+  // "It stopped when I turned on aeroplane mode" can mean the file was never
+  // local, or the player lost its source, or a decrypt that never finished.
+  // Guessing between those from a description wastes a day per attempt, so the
+  // player now says which one it was, on the device, at the moment it happens.
+  const [fault, setFault] = useState<string | null>(null);
 
   useEffect(() => {
     const v = vidRef.current;
     if (!v) return;
     const onTime = () => setCur(v.currentTime);
     const onMeta = () => setDur(v.duration || 0);
-    const onPlay = () => setPlaying(true);
+    const onPlay = () => { setPlaying(true); setFault(null); };
     const onPause = () => setPlaying(false);
+    const ERR: Record<number, string> = {
+      1: "playback was aborted",
+      2: "NETWORK ERROR — the player went to the network for this file, which means it is not being read from the device",
+      3: "the file could not be decoded (the decrypted copy may be incomplete)",
+      4: "the source was rejected or is missing",
+    };
+    const onErr = () => {
+      const code = v.error?.code ?? 0;
+      setFault(`${ERR[code] ?? "unknown error"} (code ${code}) · source: ${srcKind(src)}`);
+    };
+    const onStall = () => setFault(`stalled waiting for data · source: ${srcKind(src)}`);
+    v.addEventListener("error", onErr);
+    v.addEventListener("stalled", onStall);
     v.addEventListener("timeupdate", onTime);
     v.addEventListener("loadedmetadata", onMeta);
     v.addEventListener("play", onPlay);
     v.addEventListener("pause", onPause);
     return () => {
+      v.removeEventListener("error", onErr);
+      v.removeEventListener("stalled", onStall);
       v.removeEventListener("timeupdate", onTime);
       v.removeEventListener("loadedmetadata", onMeta);
       v.removeEventListener("play", onPlay);
@@ -76,6 +109,18 @@ export default function OfflinePlayer({
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video ref={vidRef} src={src} autoPlay playsInline style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
           {watermark && <span className="vwm">{watermark}</span>}
+
+          {/* Only ever seen when something breaks — and then it says WHAT. */}
+          {fault && (
+            <div style={{
+              position: "absolute", left: 12, right: 12, bottom: 12, zIndex: 5,
+              background: "rgba(127,29,29,.94)", color: "#fff", borderRadius: 10,
+              padding: "10px 12px", fontSize: ".82rem", lineHeight: 1.5,
+            }}>
+              ⚠️ {fault}
+              <div style={{ opacity: 0.75, marginTop: 4, fontSize: ".75rem", wordBreak: "break-all" }}>{src.slice(0, 120)}</div>
+            </div>
+          )}
         </div>
 
         {/* Custom control bar (lives INSIDE the fullscreened container). */}

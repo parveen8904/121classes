@@ -6,7 +6,7 @@ import { saveMcqExplanation } from "@/lib/answers";
 //
 // Every MCQ and case question already carries the CORRECT answer — what is
 // missing on some is the "why". Explanations are generated once and stored
-// forever (MCQ: site_settings mcqx:<id>; case: case_questions.explanation), so
+// forever (MCQ: answer_explanations mcqx:<id>; case: case_questions.explanation), so
 // this runs until the backlog is clear and then costs nothing.
 
 type McqRow = { id: string; question: string; options: string[]; correct_index: number };
@@ -16,7 +16,7 @@ export async function missingMcqExplanations(): Promise<number> {
   const svc = createServiceClient();
   const [{ count: total }, { count: have }] = await Promise.all([
     svc.from("mcq_questions").select("id", { count: "exact", head: true }),
-    svc.from("site_settings").select("key", { count: "exact", head: true }).like("key", "mcqx:%"),
+    svc.from("answer_explanations").select("key", { count: "exact", head: true }).like("key", "mcqx:%"),
   ]);
   return Math.max(0, (total ?? 0) - (have ?? 0));
 }

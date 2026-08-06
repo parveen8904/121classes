@@ -79,7 +79,7 @@ export default async function AdminSolutionsPage(props: {
   // read was two full table scans each time.
   const [{ count: mcqTotal }, { count: mcqHave }] = await Promise.all([
     svc.from("mcq_questions").select("id", { count: "exact", head: true }),
-    svc.from("site_settings").select("key", { count: "exact", head: true }).like("key", "mcqx:%"),
+    svc.from("answer_explanations").select("key", { count: "exact", head: true }).like("key", "mcqx:%"),
   ]);
   const mcqMissing = Math.max(0, (mcqTotal ?? 0) - (mcqHave ?? 0));
   const { count: caseMissing } = await svc

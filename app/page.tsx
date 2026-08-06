@@ -60,6 +60,16 @@ const APP_PLATFORMS = [
   { key: "app_url_android", icon: "🤖", label: "Android app", desc: "From Google Play — learn on the go.", cta: "Install", fallback: "/install" },
 ];
 
+// Every site setting this page reads. Kept beside APP_PLATFORMS so adding a
+// platform and forgetting the key is impossible.
+const HOMEPAGE_SETTINGS = [
+  ...APP_PLATFORMS.map((p) => p.key),
+  "founder_photo", "hero_banner", "studio_photo", "intro_video_url",
+  "splash_banner", "splash_link", "splash_seconds",
+  "career_jobs", "career_cities",
+  "homepage_yt_videos", "homepage_yt_v",
+];
+
 export default async function Home() {
   const supabase = tryServiceClient();
   if (!supabase) return null; // local build without env — Vercel always has it
@@ -93,7 +103,12 @@ export default async function Home() {
       .eq("is_test_series", false)
       .order("order_index")
       .limit(3),
-    supabase.from("site_settings").select("key, value"),
+    // Ask for the settings BY NAME. An unfiltered select is capped at 1,000
+    // rows by the API, and when the answer-explanation cache was living in this
+    // table it had 1,420 — so the homepage silently received a partial table and
+    // the Mac and Windows download links simply vanished. Naming the keys means
+    // the page cannot start losing settings again as the table grows.
+    supabase.from("site_settings").select("key, value").in("key", HOMEPAGE_SETTINGS),
   ]);
   const { data: books } = await supabase
     .from("books")

@@ -189,10 +189,18 @@ function tableLines(lines: string[]): boolean[] {
   let i = 0;
   while (i < lines.length) {
     if (blank[i] || gaps[i] < 1) { i++; continue; }
-    let j = i;
-    while (j < lines.length && !blank[j] && gaps[j] >= 1) j++;
-    if (j - i >= 3) for (let k = i; k < j; k++) out[k] = true;
-    i = j;
+    let j = i, aligned = 0, last = i;
+    while (j < lines.length && !blank[j]) {
+      if (gaps[j] >= 1) { aligned++; last = j; j++; continue; }
+      // A row's label often runs over two lines, and the overflow carries no
+      // gap of its own — "Cost of goods sold (based on estimated annual" and
+      // then "gross profit rate of 30%):        Rs. 2,52,00,000". Breaking the
+      // run there left every such table set as a paragraph of prose.
+      if (j + 1 < lines.length && !blank[j + 1] && gaps[j + 1] >= 1) { j++; continue; }
+      break;
+    }
+    if (aligned >= 3) for (let k = i; k <= last; k++) out[k] = true;
+    i = Math.max(j, i + 1);
   }
   // A table has a HEAD above its figures: the column names ("SHL      WLL"),
   // the units under them ("Rs.      Rs."), and often a bare sub-heading such as
@@ -304,6 +312,17 @@ export async function buildMockPaperPdf(input: { title: string; text: string; fo
       centre(t, 13, c.bold, 5);
       c.page.drawLine({ start: { x: LEFT + 110, y: c.y + 4 }, end: { x: PAGE_W - RIGHT - 110, y: c.y + 4 }, thickness: 0.8, color: rgb(0.15, 0.15, 0.15) });
       c.y -= 8;
+      continue;
+    }
+
+    // A sub-part marker standing alone on its line — "(a)" above EITHER — is a
+    // heading for what follows, not a note about what came before, so it sits
+    // flush left in bold instead of centred in italics.
+    if (/^\([a-d]\)$/.test(t)) {
+      flush();
+      need(c, 18);
+      c.page.drawText(t, { x: LEFT, y: c.y, size: 11, font: c.bold });
+      c.y -= 17;
       continue;
     }
 

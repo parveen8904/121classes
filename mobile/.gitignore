@@ -16,10 +16,16 @@ android/*
 # the way down has to be re-opened one at a time.
 !android/app/
 android/app/*
+# Hand-edited: the version, the signing config, and the permissions. Losing
+# these to a regenerated folder means an unsigned build with the wrong version
+# code and no notification permission — found the hard way, since both were
+# untracked while being edited.
+!android/app/build.gradle
 !android/app/src/
 android/app/src/*
 !android/app/src/main/
 android/app/src/main/*
+!android/app/src/main/AndroidManifest.xml
 !android/app/src/main/java/
 
 # Build outputs. Gradle's build/ sits INSIDE the plugin folder we just

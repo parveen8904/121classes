@@ -119,6 +119,20 @@ export default function WatchTracker({
   // moving watermark stays on top in fullscreen. (Bunny's own fullscreen button
   // is removed via the library Controls setting, which would strip the overlay.)
   const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Turning the phone sideways is how a student says "I want to watch this
+  // properly". The player is then sized to the height of the screen, but the
+  // page is still scrolled to wherever it was, so the header sat over the top
+  // of it and the control bar hung off the bottom. Bring it to the top.
+  useEffect(() => {
+    const onRotate = () => {
+      if (window.innerWidth <= window.innerHeight) return;
+      setTimeout(() => wrapRef.current?.scrollIntoView({ block: "start", behavior: "smooth" }), 250);
+    };
+    window.addEventListener("orientationchange", onRotate);
+    return () => window.removeEventListener("orientationchange", onRotate);
+  }, []);
+
   const goFullscreen = () => {
     const el = wrapRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;
     if (!el) return;

@@ -214,6 +214,7 @@ export default async function UserDetail(
               <label>Role</label>
               <select name="role" defaultValue={u.role}>
                 <option value="student">🎓 Student</option>
+                <option value="supporter">💚 Supporter (sponsors students; not a student)</option>
                 <option value="operator">🧑‍💼 Operator (staff)</option>
                 <option value="faculty">👩‍🏫 Faculty</option>
                 <option value="admin">🛠️ Admin (full access)</option>

@@ -8,7 +8,13 @@ import { emailConfigured } from "@/lib/notify";
 import { sendTemplate } from "@/lib/emailTemplates";
 import { str, nullable } from "../_lib/util";
 
-const ROLES = ["student", "admin", "faculty", "operator"];
+// "supporter" is a role of its own, not a student.
+//
+// Left as students, the 105 imported sponsors would have been counted in the
+// student figures AND swept into every student broadcast, WhatsApp campaign and
+// re-engagement mailing — the same unwanted mail the silent import existed to
+// avoid, arriving through a different door.
+const ROLES = ["student", "supporter", "admin", "faculty", "operator"];
 
 async function requireAdmin(): Promise<boolean> {
   const supabase = createClient();
@@ -268,6 +274,8 @@ export async function importSupporters(formData: FormData) {
 
     const { data: existing } = await svc.from("profiles").select("id").ilike("email", email).maybeSingle();
     if (existing?.id) {
+      // An existing STUDENT who also sponsors stays a student — only a plain
+      // account with no other purpose becomes a supporter outright.
       await svc.from("profiles").update({ is_supporter: true, full_name: name || undefined }).eq("id", existing.id);
       marked++;
       continue;
@@ -279,7 +287,7 @@ export async function importSupporters(formData: FormData) {
       user_metadata: { full_name: name },
     });
     if (error || !cu?.user) { failed++; continue; }
-    await svc.from("profiles").update({ full_name: name || null, is_supporter: true }).eq("id", cu.user.id);
+    await svc.from("profiles").update({ full_name: name || null, is_supporter: true, role: "supporter" }).eq("id", cu.user.id);
     created++;
   }
   revalidatePath("/admin/users");

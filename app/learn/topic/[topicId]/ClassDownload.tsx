@@ -49,39 +49,47 @@ export default function ClassDownload({ pv, watermark }: { pv: PV; watermark: st
       setLabel(pct >= 100 ? "Downloaded ✓" : `Downloading… ${pct}%`);
     };
 
-    // 1) Desktop app.
-    if (w.native) {
-      const n = w.native;
+    const attach = (n: Native) => {
       setNative(n);
       n.onProgress(onProgress);
       n.isDownloaded(pv.id, pv.byte_size ?? undefined).then((d) => {
         setReady(d);
         if (d) setLabel("Downloaded ✓");
-      });
-      return;
-    }
+      }).catch(() => { /* treat as not downloaded */ });
+    };
 
-    // 2) iPhone/Android app — adapt the OfflineClasses plugin to the same shape.
-    const cap = w.Capacitor;
-    const plugin = cap?.Plugins?.OfflineClasses;
-    if (cap?.isNativePlatform?.() && plugin) {
-      const adapter: Native = {
-        download: (id, url, size) => plugin.download({ id, url, expectedSize: size }).then((r) => r.path),
-        isDownloaded: (id, size) => plugin.isDownloaded({ id, expectedSize: size }).then((r) => r.value),
-        onProgress: (cb) => { plugin.addListener("downloadProgress", cb); },
-        play: async (id, keyB64, ivB64, alg) => {
-          const { path } = await plugin.decrypt({ id, keyB64, ivB64, alg });
-          setPlayerSrc(cap.convertFileSrc ? cap.convertFileSrc(path) : path);
-          return true;
-        },
-      };
-      setNative(adapter);
-      adapter.onProgress(onProgress);
-      adapter.isDownloaded(pv.id, pv.byte_size ?? undefined).then((d) => {
-        setReady(d);
-        if (d) setLabel("Downloaded ✓");
-      });
-    }
+    const find = (): boolean => {
+      // 1) Desktop app.
+      if (w.native) { attach(w.native); return true; }
+
+      // 2) iPhone/Android app — adapt the OfflineClasses plugin to the same shape.
+      const cap = w.Capacitor;
+      const plugin = cap?.Plugins?.OfflineClasses;
+      if (cap?.isNativePlatform?.() && plugin) {
+        attach({
+          download: (id, url, size) => plugin.download({ id, url, expectedSize: size }).then((r) => r.path),
+          isDownloaded: (id, size) => plugin.isDownloaded({ id, expectedSize: size }).then((r) => r.value),
+          onProgress: (cb) => { plugin.addListener("downloadProgress", cb); },
+          play: async (id, keyB64, ivB64, alg) => {
+            const { path } = await plugin.decrypt({ id, keyB64, ivB64, alg });
+            setPlayerSrc(cap.convertFileSrc ? cap.convertFileSrc(path) : path);
+            return true;
+          },
+        });
+        return true;
+      }
+      return false;
+    };
+
+    // Capacitor registers its plugins into the WebView asynchronously, so a
+    // single check on mount can miss it and leave a student inside the app
+    // being told to go and get the app. Keep looking briefly.
+    if (find()) return;
+    let timer: ReturnType<typeof setInterval> | null = setInterval(() => {
+      if (find() && timer) { clearInterval(timer); timer = null; }
+    }, 250);
+    const giveUp = setTimeout(() => { if (timer) { clearInterval(timer); timer = null; } }, 10000);
+    return () => { if (timer) clearInterval(timer); clearTimeout(giveUp); };
   }, [pv.id, pv.byte_size]);
 
   // In a normal browser, prompt to get the app.

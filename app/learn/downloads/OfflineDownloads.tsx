@@ -88,6 +88,8 @@ export default function OfflineDownloads({
   isAdmin?: boolean;
 }) {
   const [native, setNative] = useState<Native | null>(null);
+  // Until the search gives up we do not know which message is true.
+  const [searching, setSearching] = useState(true);
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [ready, setReady] = useState<Record<string, boolean>>({});
   // Mobile plays inline in this overlay (desktop opens its own player window).
@@ -97,51 +99,73 @@ export default function OfflineDownloads({
   const [view, setView] = useState<"downloaded" | "pending" | "all">("all");
 
   useEffect(() => {
-    const w = window as unknown as { native?: Native; Capacitor?: CapGlobal };
+    let stopped = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
 
-    // 1) Desktop app (Electron) — existing bridge.
-    const electron = w.native;
-    if (electron) {
-      setNative(electron);
-      electron.onProgress(({ id, received, total }) => {
+    const attach = (n: Native) => {
+      setNative(n);
+      setSearching(false);
+      n.onProgress(({ id, received, total }) => {
         const pct = total ? Math.floor((received * 100) / total) : 0;
         setLabels((l) => ({ ...l, [id]: pct >= 100 ? "Downloaded ✓" : `Downloading… ${pct}%` }));
       });
       (async () => {
         const r: Record<string, boolean> = {};
-        for (const c of classes) r[c.id] = await electron.isDownloaded(c.id, c.byte_size ?? undefined);
-        setReady(r);
+        for (const c of classes) {
+          try { r[c.id] = await n.isDownloaded(c.id, c.byte_size ?? undefined); }
+          catch { r[c.id] = false; }
+        }
+        if (!stopped) setReady(r);
       })();
-      return;
+    };
+
+    // Look for a bridge. Returns false while there is still nothing to attach to.
+    const find = (): boolean => {
+      const w = window as unknown as { native?: Native; Capacitor?: CapGlobal };
+
+      // 1) Desktop app (Electron) — existing bridge.
+      const electron = w.native;
+      if (electron) { attach(electron); return true; }
+
+      // 2) Mobile app (Capacitor) — adapt OfflineClasses to the same shape.
+      const cap = w.Capacitor;
+      const plugin = cap?.Plugins?.OfflineClasses;
+      if (cap?.isNativePlatform?.() && plugin) {
+        const adapter: Native = {
+          download: (id, url, size) => plugin.download({ id, url, expectedSize: size }).then((r) => r.path),
+          isDownloaded: (id, size) => plugin.isDownloaded({ id, expectedSize: size }).then((r) => r.value),
+          onProgress: (cb) => { plugin.addListener("downloadProgress", cb); },
+          remove: (id) => plugin.remove({ id }),
+          play: async (id, keyB64, ivB64, alg, _wm) => {
+            const { path } = await plugin.decrypt({ id, keyB64, ivB64, alg });
+            const src = cap.convertFileSrc ? cap.convertFileSrc(path) : path;
+            setPlayerSrc(src);
+            return true;
+          },
+        };
+        attach(adapter);
+        return true;
+      }
+      return false;
+    };
+
+    // KEEP LOOKING. This used to run once, and Capacitor injects its bridge into
+    // the WebView asynchronously — so on a slower Android phone the page checked
+    // before the plugin had registered, found nothing, and showed the student
+    // "offline downloads work inside the app… get the app" WHILE THEY WERE IN
+    // THE APP. Their downloaded classes were on the device the whole time.
+    if (find()) { setSearching(false); } else {
+      timer = setInterval(() => {
+        if (stopped || find()) { if (timer) clearInterval(timer); timer = null; }
+      }, 250);
+      // Give up after 10 seconds: by then it really is a browser.
+      setTimeout(() => {
+        if (timer) { clearInterval(timer); timer = null; }
+        if (!stopped) setSearching(false);
+      }, 10000);
     }
 
-    // 2) Mobile app (Capacitor) — adapt the OfflineClasses plugin to the same shape.
-    const cap = w.Capacitor;
-    const plugin = cap?.Plugins?.OfflineClasses;
-    if (cap?.isNativePlatform?.() && plugin) {
-      const adapter: Native = {
-        download: (id, url, size) => plugin.download({ id, url, expectedSize: size }).then((r) => r.path),
-        isDownloaded: (id, size) => plugin.isDownloaded({ id, expectedSize: size }).then((r) => r.value),
-        onProgress: (cb) => { plugin.addListener("downloadProgress", cb); },
-        remove: (id) => plugin.remove({ id }),
-        play: async (id, keyB64, ivB64, alg, _wm) => {
-          const { path } = await plugin.decrypt({ id, keyB64, ivB64, alg });
-          const src = cap.convertFileSrc ? cap.convertFileSrc(path) : path;
-          setPlayerSrc(src);
-          return true;
-        },
-      };
-      setNative(adapter);
-      adapter.onProgress(({ id, received, total }) => {
-        const pct = total ? Math.floor((received * 100) / total) : 0;
-        setLabels((l) => ({ ...l, [id]: pct >= 100 ? "Downloaded ✓" : `Downloading… ${pct}%` }));
-      });
-      (async () => {
-        const r: Record<string, boolean> = {};
-        for (const c of classes) r[c.id] = await adapter.isDownloaded(c.id, c.byte_size ?? undefined);
-        setReady(r);
-      })();
-    }
+    return () => { stopped = true; if (timer) clearInterval(timer); };
   }, [classes]);
 
   async function download(c: Klass) {
@@ -190,6 +214,15 @@ export default function OfflineDownloads({
     } catch (e) {
       alert("Could not remove: " + (e as Error).message);
     }
+  }
+
+  if (!native && searching) {
+    return (
+      <div className="card" style={{ maxWidth: 560, margin: "0 auto", textAlign: "center" }}>
+        <div style={{ fontSize: "2.2rem" }}>📥</div>
+        <p className="muted" style={{ margin: "8px 0 0" }}>Looking for your downloaded classes…</p>
+      </div>
+    );
   }
 
   if (!native) {

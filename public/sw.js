@@ -11,7 +11,7 @@
 // So navigations are still NETWORK-FIRST (online, you always get today's page),
 // but a small allowlist is kept in the cache and served when the network fails.
 // Anything else falls back to a plain offline card pointing at the downloads.
-const CACHE = "ca-shell-v3";
+const CACHE = "ca-shell-v4";
 const OFFLINE_URL = "/offline.html";
 
 // Pages worth keeping a copy of. Deliberately short: these are the pages that
@@ -37,6 +37,19 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // skip Supabase / Bunny / CDN
   if (url.pathname.startsWith("/api/")) return; // never cache API/auth
+
+  // The app's own device-file URLs. A downloaded class is decrypted to the
+  // phone's storage and played from
+  //   https://caparveensharma.com/_capacitor_file_/data/user/0/…/play-<id>.mp4
+  // which the native WebView answers from disk, with byte ranges, without ever
+  // touching the network. That address is same-origin, so THIS service worker
+  // was picking it up first: it turned a local file into fetch(), then tried to
+  // cache.put() a 206 partial video. The <video> element got something it could
+  // not use and reported "source not supported" (media error code 4) — and in
+  // aeroplane mode the fetch simply failed. Downloaded classes could not play.
+  //
+  // Hands off. These never go over the network and must never be cached.
+  if (url.pathname.startsWith("/_capacitor_file_") || url.pathname.startsWith("/_capacitor_content_")) return;
 
   // ── Pages ────────────────────────────────────────────────────────────────
   if (req.mode === "navigate" || req.destination === "document") {

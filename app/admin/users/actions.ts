@@ -139,6 +139,9 @@ export async function updateUser(formData: FormData) {
       target_attempt: nullable(formData.get("target_attempt")),
       permissions: perms,
       role: safeRole,
+      // A supporter pays for other students. It is not a role — they may be a
+      // student themselves — so it rides alongside rather than replacing one.
+      is_supporter: formData.get("is_supporter") === "on",
       address_line1: nullable(formData.get("address_line1")),
       address_line2: nullable(formData.get("address_line2")),
       city: nullable(formData.get("city")),

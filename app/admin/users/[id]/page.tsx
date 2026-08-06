@@ -33,7 +33,7 @@ export default async function UserDetail(
   const { data: u } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, email, phone, role, permissions, target_attempt, created_at, address_line1, address_line2, city, state, pincode, gstin, business_name",
+      "id, full_name, email, phone, role, permissions, target_attempt, created_at, address_line1, address_line2, city, state, pincode, gstin, business_name, is_supporter",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -221,6 +221,19 @@ export default async function UserDetail(
             </div>
           </div>
           <p className="muted" style={{ fontSize: ".8rem" }}>Email is the login identity and can&apos;t be changed here.</p>
+
+          {/* Not a role — a sponsor is often a student, or a parent, or an old
+              colleague. It sits beside whatever they already are. */}
+          <div style={{ marginTop: 10, border: "1px solid var(--border)", borderRadius: 10, padding: "10px 14px" }}>
+            <label className="remember" style={{ margin: 0 }}>
+              <input type="checkbox" name="is_supporter" defaultChecked={Boolean(u.is_supporter)} />{" "}
+              <strong>💚 Supporter</strong> — pays for other students
+            </label>
+            <p className="muted" style={{ fontSize: ".8rem", margin: "6px 0 0" }}>
+              Opens their own page at <code>/supporter</code>: every student they have sponsored, what it cost, all
+              their invoices, and a place to name the students they would like to sponsor next.
+            </p>
+          </div>
 
           <div style={{ marginTop: 14, border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px" }}>
             <strong>🔑 Rights (for Operator / Faculty)</strong>

@@ -16,10 +16,12 @@ export default async function PortalHeader() {
 
   let isAdmin = false;
   let isStaff = false;
+  let isSupporter = false;
   let subChip: string | null = null;
   if (user) {
-    const { data } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    const { data } = await supabase.from("profiles").select("role, is_supporter").eq("id", user.id).single();
     isAdmin = data?.role === "admin";
+    isSupporter = Boolean(data?.is_supporter);
     // Operators & faculty are staff too — without this they had NO Admin
     // button after login and thought their new role "didn't work".
     isStaff = isAdmin || data?.role === "faculty" || data?.role === "operator";
@@ -56,6 +58,8 @@ export default async function PortalHeader() {
     ...(isStaff ? [{ href: "/discuss", label: "💬 Discuss" }] : []),
     { href: "/community", label: "📣 Community" },
     { href: "/inbox", label: "📥 Inbox" },
+    // Only a sponsor sees this, and it is their own page — nobody else has one.
+    ...(isSupporter ? [{ href: "/supporter", label: "💚 Supporter" }] : []),
     { href: "/dashboard/profile", label: "👤 Profile" },
     ...(isStaff ? [{ href: "/admin", label: "🛠️ Admin" }] : []),
   ];

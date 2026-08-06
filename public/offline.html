@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>No internet — CA Parveen Sharma</title>
+    <style>
+      :root { color-scheme: light dark; }
+      html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      body { display: flex; align-items: center; justify-content: center; background: #f6f8f8; color: #0f172a; padding: 24px; }
+      @media (prefers-color-scheme: dark) { body { background: #0c1413; color: #e8f0ee; } .card { background: #111c1a !important; border-color: #1f2f2c !important; } }
+      .card { max-width: 460px; width: 100%; background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 26px; text-align: center; }
+      h1 { font-size: 1.25rem; margin: 12px 0 8px; }
+      p { line-height: 1.65; margin: 0 0 10px; opacity: .85; font-size: .95rem; }
+      a.btn { display: inline-block; margin-top: 14px; background: #0d9488; color: #fff; text-decoration: none; font-weight: 700; padding: 11px 18px; border-radius: 10px; }
+      .muted { font-size: .82rem; opacity: .65; margin-top: 14px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div style="font-size: 2.4rem">📴</div>
+      <h1>You are offline</h1>
+      <p>
+        This part of the site needs internet. Your <strong>downloaded classes</strong> do not — they are already on
+        this device and play without a connection.
+      </p>
+      <a class="btn" href="/learn/downloads">▶ Open my downloaded classes</a>
+      <p class="muted">Everything else will work again as soon as you are back online.</p>
+    </div>
+  </body>
+</html>

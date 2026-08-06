@@ -27,10 +27,29 @@ const PAPER_SYSTEM =
   "PART I — CASE SCENARIO BASED MCQs (30 MARKS). Two or three short case scenarios, each a realistic company situation with figures. " +
   "Under each scenario, MCQs of 2 marks each, four options apiece, until Part I totals exactly 30 marks (15 questions). " +
   "The options must be genuinely close — the wrong ones should be the mistakes a student actually makes, not obvious nonsense.\n" +
-  "PART II — DESCRIPTIVE (70 MARKS). Question 1 is COMPULSORY and carries 20 marks (two or three parts). " +
-  "Then Questions 2 to 6, of which the student answers ANY FOUR, each carrying up to 20 marks in parts, adding to 70 with Q1. " +
-  "Mix them as ICAI does: preparation of financial statements or a company account, an Accounting Standard application problem, " +
-  "a consolidation or amalgamation sum, a branch or departmental sum, and one theory/short-note question citing the standard.\n" +
+  // He checked the first set against the real paper: Q1 at 20 marks and 2–6 at
+  // 20 each made the "70-mark" half worth 130. The ICAI shape is six questions
+  // of FOURTEEN, answer five — these exact splits, not approximately.
+  "PART II — DESCRIPTIVE (70 MARKS). SIX questions of 14 MARKS EACH. The candidate answers Question 1 (compulsory) " +
+  "and ANY FOUR of Questions 2 to 6 — five answered × 14 = 70. The internal split of each question is fixed:\n" +
+  "  Question 1 (compulsory): three parts — (a) 5 marks, (b) 5 marks, (c) 4 marks.\n" +
+  "  Question 2: 14 marks (one sum, or parts summing to 14).\n" +
+  "  Question 3: 14 marks (one sum, or parts summing to 14).\n" +
+  "  Question 4: two parts — (a) 7 marks, (b) 7 marks.\n" +
+  "  Question 5: two parts — (a) 7 marks, (b) 7 marks.\n" +
+  "  Question 6: (a) 4 marks WITH AN INTERNAL CHOICE (write 'OR' between the two alternatives), (b) 5 marks, (c) 5 marks.\n" +
+  "No question may carry any other marks. Mix the content as ICAI does: preparation of financial statements or a company " +
+  "account, an Accounting Standard application problem, a consolidation or amalgamation sum, a branch or departmental sum, " +
+  "and one theory/short-note question citing the standard.\n" +
+
+  "NO TOPIC NAMES — never head or open a question with the name of its chapter, topic or standard " +
+  "('Question 2 — Amalgamation' gives the answer away). The real paper does not tell the student which chapter a " +
+  "question is from, and neither may this one. A standard may be cited only where the question itself requires it " +
+  "('in accordance with AS 19' inside the facts is fine; a topic title is not).\n" +
+
+  "QUESTIONS ONLY — this paper contains NO answers, NO solutions, NO workings, NO hints and NO marking guidance of any " +
+  "kind. The last line of your output is 'END OF QUESTION PAPER' and nothing follows it. The suggested answers are " +
+  "written separately and are never part of the question paper.\n" +
 
   "SOURCE — build from the PATTERN of past ICAI exam questions in this subject: the same topics, the same weighting, the same " +
   "style of wording. Do NOT reproduce a past question verbatim; change the companies, the dates and every figure. A student who " +
@@ -159,10 +178,20 @@ export async function draftMockPaper(id: string): Promise<{ ok: boolean; stage?:
   if (!existing) {
     // 20,000, not 12,000: the first attempt stopped at exactly its ceiling,
     // which is what a truncated paper looks like from the outside.
-    const questions = await callLong(PAPER_SYSTEM, ask, 20000);
+    let questions = await callLong(PAPER_SYSTEM, ask, 20000);
     if (!questions) {
       await svc.from("mock_papers").update({ status: "failed", error: "the question paper came back empty" }).eq("id", id);
       return { ok: false, error: "no questions" };
+    }
+    // The first set of papers carried worked solutions AFTER the last question —
+    // the model kept writing, and the student-facing PDF renders questions_md
+    // whole, so the suggested answers leaked into the question paper. The prompt
+    // now forbids it; this makes the prompt unnecessary: everything past the
+    // end-of-paper line is cut regardless of what the model did.
+    const endAt = questions.search(/END OF (QUESTION )?PAPER/i);
+    if (endAt >= 0) {
+      const lineEnd = questions.indexOf("\n", endAt);
+      questions = questions.slice(0, lineEnd < 0 ? undefined : lineEnd).trimEnd();
     }
     await svc
       .from("mock_papers")

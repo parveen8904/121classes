@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { resolveOfflineKey, cacheOfflineKey } from "./licenseCache";
+import { nativeFileSrc } from "@/lib/nativeFileSrc";
 
 // When each class finished downloading, on THIS device.
 //
@@ -138,7 +139,7 @@ export default function OfflineDownloads({
           remove: (id) => plugin.remove({ id }),
           play: async (id, keyB64, ivB64, alg, _wm) => {
             const { path } = await plugin.decrypt({ id, keyB64, ivB64, alg });
-            const src = cap.convertFileSrc ? cap.convertFileSrc(path) : path;
+            const src = nativeFileSrc(path, cap.convertFileSrc);
             setPlayerSrc(src);
             return true;
           },

@@ -37,17 +37,17 @@ public class MainActivity extends BridgeActivity {
             public void onChildViewAdded(View parent, View child) {
                 // Capacitor's own WebView is the first child; anything added on
                 // top of it while playing is the fullscreen video container.
-                if (content.getChildCount() > 1) setImmersive(true);
+                if (content.getChildCount() > 1) applyImmersive(true);
             }
 
             @Override
             public void onChildViewRemoved(View parent, View child) {
-                if (content.getChildCount() <= 1) setImmersive(false);
+                if (content.getChildCount() <= 1) applyImmersive(false);
             }
         });
     }
 
-    private void setImmersive(boolean on) {
+    private void applyImmersive(boolean on) {
         runOnUiThread(() -> {
             WindowInsetsControllerCompat c =
                     WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());

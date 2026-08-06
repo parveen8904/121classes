@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { resolveOfflineKey, cacheOfflineKey } from "../../downloads/licenseCache";
 import Help from "@/app/components/Help";
 import OfflinePlayer from "@/app/components/OfflinePlayer";
+import { nativeFileSrc } from "@/lib/nativeFileSrc";
 
 type PV = {
   id: string;
@@ -72,7 +73,7 @@ export default function ClassDownload({ pv, watermark }: { pv: PV; watermark: st
           onProgress: (cb) => { plugin.addListener("downloadProgress", cb); },
           play: async (id, keyB64, ivB64, alg) => {
             const { path } = await plugin.decrypt({ id, keyB64, ivB64, alg });
-            setPlayerSrc(cap.convertFileSrc ? cap.convertFileSrc(path) : path);
+            setPlayerSrc(nativeFileSrc(path, cap.convertFileSrc));
             return true;
           },
         });

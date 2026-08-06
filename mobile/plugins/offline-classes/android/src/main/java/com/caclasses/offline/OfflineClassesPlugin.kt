@@ -1,6 +1,7 @@
 package com.caclasses.offline
 
 import android.app.DownloadManager
+import android.os.Build
 import android.content.Context
 import android.net.Uri
 import com.getcapacitor.JSObject
@@ -21,8 +22,8 @@ import android.util.Base64
 //  - download: hands the file to the SYSTEM DownloadManager — it continues with
 //    the app closed/locked (it's an OS service, immune to battery optimisation),
 //    shows the standard download notification, and lands in the app-private
-//    external files dir. We finalize (verify size + move) either in the watcher
-//    thread or lazily on the next isDownloaded() call if the app was killed.
+//    external files dir, WHERE IT STAYS. If the app was killed mid-download the
+//    OS finishes it anyway and the next isDownloaded() picks it up.
 //  - decrypt:  streams AES-256-CBC (PKCS5) to cacheDir/play-<id>.mp4 for the
 //    player (the key is supplied per-play by the server and never stored).
 @CapacitorPlugin(name = "OfflineClasses")
@@ -30,28 +31,78 @@ class OfflineClassesPlugin : Plugin() {
 
     private val io = Executors.newCachedThreadPool()
 
-    private fun classesDir(): File {
+    // Where a download LANDS. DownloadManager is a separate OS process and
+    // cannot write to our internal filesDir, so it must be the app's external
+    // files dir (still app-private, still wiped on uninstall).
+    private fun downloadDir(): File? = context.getExternalFilesDir(null)
+
+    // Where downloads used to be MOVED to. A class is 400 MB – 1 GB and these
+    // two are different mount points, so renameTo() always failed and it fell
+    // back to copying the whole file: a minute of apparent hang at 100%, and a
+    // phone briefly needing THREE copies of one class (the download, the copy,
+    // and later the decrypted copy to play). On a phone that was short of space
+    // the copy simply threw and the class "failed to download".
+    //
+    // Nothing is moved any more — but classes downloaded by the older build are
+    // still sitting here, so this is still where we look first.
+    private fun legacyDir(): File {
         val dir = File(context.filesDir, "classes")
         if (!dir.exists()) dir.mkdirs()
         return dir
     }
 
-    private fun encFile(id: String) = File(classesDir(), "$id.enc")
+    private fun legacyFile(id: String) = File(legacyDir(), "$id.enc")
     private fun tmpName(id: String) = "dl-$id.enc"
-    private fun tmpFile(id: String) = File(context.getExternalFilesDir(null), tmpName(id))
+    private fun tmpFile(id: String): File? = downloadDir()?.let { File(it, tmpName(id)) }
 
-    // Move a system-download that finished (possibly while the app was dead)
-    // into its final place. Returns true when the class is ready to play.
+    /** The playable copy of this class, wherever it happens to live. */
+    private fun encFile(id: String): File? {
+        val legacy = legacyFile(id)
+        if (legacy.exists()) return legacy
+        return tmpFile(id)?.takeIf { it.exists() }
+    }
+
+    // Is the class fully here? Nothing is copied — a finished download IS the
+    // final file. Older downloads in the internal dir are still honoured.
     private fun finalizeIfReady(id: String, expected: Long): Boolean {
-        val dest = encFile(id)
-        if (dest.exists() && (expected == 0L || dest.length() == expected)) return true
-        val tmp = tmpFile(id)
-        if (tmp.exists() && (expected == 0L || tmp.length() == expected)) {
-            if (dest.exists()) dest.delete()
-            if (!tmp.renameTo(dest)) { tmp.copyTo(dest, overwrite = true); tmp.delete() }
-            return true
+        val f = encFile(id) ?: return false
+        return f.exists() && (expected == 0L || f.length() == expected)
+    }
+
+    // Asked when the FIRST download starts, never at launch: a permission box
+    // that appears the moment the app opens gets refused, and one that appears
+    // as a class begins downloading explains itself. Declaring the permission
+    // is not enough on Android 13+; unasked, the download runs with no
+    // notification at all and looks like a download that never started.
+    private var notificationsAsked = false
+
+    private fun askForNotificationsOnce() {
+        if (notificationsAsked || Build.VERSION.SDK_INT < 33) return
+        notificationsAsked = true
+        val perm = "android.permission.POST_NOTIFICATIONS"
+        if (context.checkSelfPermission(perm) == android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        // Fire and carry on — the download must not wait on the answer.
+        try { activity.requestPermissions(arrayOf(perm), 9411) } catch (_: Exception) { /* no activity */ }
+    }
+
+    // DownloadManager knows exactly why it gave up; the student deserves to be
+    // told, rather than retrying a download the phone has no room for.
+    private fun failReason(dm: DownloadManager, dlId: Long): String {
+        var reason = 0
+        try {
+            dm.query(DownloadManager.Query().setFilterById(dlId))?.use { c ->
+                if (c.moveToFirst()) reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+            }
+        } catch (_: Exception) { /* fall through to the generic message */ }
+        return when (reason) {
+            DownloadManager.ERROR_INSUFFICIENT_SPACE -> "this phone is out of space"
+            DownloadManager.ERROR_DEVICE_NOT_FOUND -> "storage not available"
+            DownloadManager.ERROR_CANNOT_RESUME -> "the connection dropped and could not resume"
+            DownloadManager.ERROR_HTTP_DATA_ERROR, DownloadManager.ERROR_TOO_MANY_REDIRECTS -> "the connection kept breaking"
+            DownloadManager.ERROR_FILE_ERROR -> "the file could not be written"
+            0 -> "check your internet"
+            else -> "error $reason"
         }
-        return false
     }
 
     private fun expectedOf(call: PluginCall): Long =
@@ -63,10 +114,13 @@ class OfflineClassesPlugin : Plugin() {
         val url = call.getString("url") ?: return call.reject("url required")
         val expected = expectedOf(call)
         if (finalizeIfReady(id, expected)) {
-            val r = JSObject(); r.put("path", encFile(id).absolutePath); return call.resolve(r)
+            val r = JSObject(); r.put("path", encFile(id)!!.absolutePath); return call.resolve(r)
         }
         val tmp = tmpFile(id)
+            ?: return call.reject("this phone's storage is not available right now — please try again")
         if (tmp.exists()) tmp.delete()
+
+        askForNotificationsOnce()
 
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val req = DownloadManager.Request(Uri.parse(url))
@@ -96,19 +150,29 @@ class OfflineClassesPlugin : Plugin() {
 
                     when (status) {
                         DownloadManager.STATUS_SUCCESSFUL -> {
-                            if (!finalizeIfReady(id, expected)) {
-                                tmpFile(id).delete()
-                                call.reject("incomplete download — please retry")
+                            val done = encFile(id)
+                            if (done == null || !finalizeIfReady(id, expected)) {
+                                // Say what is actually wrong. "Please retry" on a
+                                // download that arrived short every time is a
+                                // student retrying for ever.
+                                val got = done?.length() ?: 0L
+                                tmpFile(id)?.delete()
+                                call.reject(
+                                    if (got > 0) "download arrived incomplete ($got of $expected bytes) — please retry"
+                                    else "download did not finish — please retry",
+                                )
                             } else {
-                                val size = encFile(id).length()
-                                val done = JSObject(); done.put("id", id); done.put("received", size); done.put("total", size)
-                                notifyListeners("downloadProgress", done)
-                                val r = JSObject(); r.put("path", encFile(id).absolutePath); call.resolve(r)
+                                val size = done.length()
+                                val ev = JSObject(); ev.put("id", id); ev.put("received", size); ev.put("total", size)
+                                notifyListeners("downloadProgress", ev)
+                                val r = JSObject(); r.put("path", done.absolutePath); call.resolve(r)
                             }
                             return@execute
                         }
                         DownloadManager.STATUS_FAILED -> {
-                            call.reject("download failed — check internet and retry")
+                            // The reason code is the difference between "no
+                            // internet" and "this phone is full".
+                            call.reject("download failed (${failReason(dm, dlId)}) — please retry")
                             return@execute
                         }
                         else -> {
@@ -135,8 +199,8 @@ class OfflineClassesPlugin : Plugin() {
     @PluginMethod
     fun remove(call: PluginCall) {
         val id = call.getString("id") ?: return call.reject("id required")
-        encFile(id).delete()
-        tmpFile(id).delete()
+        legacyFile(id).delete()   // a class downloaded by the older build
+        tmpFile(id)?.delete()     // and one downloaded by this one
         File(context.cacheDir, "play-$id.mp4").delete()
         call.resolve()
     }
@@ -173,8 +237,7 @@ class OfflineClassesPlugin : Plugin() {
         val id = call.getString("id") ?: return call.reject("id required")
         val keyB64 = call.getString("keyB64") ?: return call.reject("keyB64 required")
         val ivB64 = call.getString("ivB64")
-        val enc = encFile(id)
-        if (!enc.exists()) return call.reject("not downloaded")
+        val enc = encFile(id) ?: return call.reject("not downloaded")
         call.setKeepAlive(true)
         io.execute {
             try {

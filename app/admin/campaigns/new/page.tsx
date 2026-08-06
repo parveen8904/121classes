@@ -1,4 +1,5 @@
 import Link from "next/link";
+import VideoUpload from "../../_components/VideoUpload";
 import AdminHero from "../../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import ToggleAllChannels from "../../broadcasts/_components/ToggleAllChannels";
@@ -166,41 +167,62 @@ export default async function NewCampaignPage(props: { searchParams: Promise<{ k
             </>
           )}
 
-          <label style={{ marginTop: 12 }}>
-            What the writer may treat as fact
-            <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}> — it may not state anything beyond this</span>
-          </label>
-          <textarea name="detail" rows={5} defaultValue={picked?.body ?? picked?.description ?? ""}
-            placeholder="Paste or type what is actually known." />
+          {/* There is no writer to constrain when the post is already written. */}
+          {kind !== "own" && (
+            <>
+              <label style={{ marginTop: 12 }}>
+                What the writer may treat as fact
+                <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}> — it may not state anything beyond this</span>
+              </label>
+              <textarea name="detail" rows={5} defaultValue={picked?.body ?? picked?.description ?? ""}
+                placeholder="Paste or type what is actually known." />
+            </>
+          )}
         </div>
 
-        <h3 style={step}>3. Who is it for?</h3>
+        <h3 style={step}>3. The video (optional)</h3>
         <div className="form-card">
-          <select name="audience" defaultValue={AUDIENCES[0]}>
-            {AUDIENCES.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-          <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0 0" }}>
-            Where your students are right now is already known to the writer:{" "}
-            <em>{(brief.stage || "not set — fill it in on the Situation card").slice(0, 160)}…</em>{" "}
-            <Link href="/admin/broadcasts">change it</Link>
-          </p>
+          <VideoUpload name="video_url" />
         </div>
 
-        <h3 style={step}>4. Anything you want to add, and what may be mentioned</h3>
-        <div className="form-card">
-          <label>Your own words <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>— your angle, what students should take from it</span></label>
-          <textarea name="notes" rows={3} placeholder="e.g. Point out this is examinable in September and where it sits in the syllabus." />
-          <label style={{ marginTop: 10 }}>The one quiet mention</label>
-          <select name="mention" defaultValue="">
-            <option value="">No mention — this one only informs</option>
-            {SOFT_MENTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
-          <p className="muted" style={{ fontSize: ".76rem", margin: "4px 0 0" }}>
-            One line, in one of the posts, at the end. Greetings never carry one whatever is chosen.
-          </p>
-        </div>
+        {/* Every question below this line exists ONLY to steer the writer. When
+            he has written the post himself there is nothing to steer, so they
+            are not shown at all; when there is, they are folded away with
+            sensible defaults, because a wizard that asks nine questions before
+            it will do anything gets abandoned. */}
+        {kind !== "own" ? (
+          <details className="form-card" style={{ marginTop: 14 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+              4. Fine-tune the writing <span className="muted" style={{ fontWeight: 400, fontSize: ".8rem" }}>— optional, sensible defaults already chosen</span>
+            </summary>
+            <div style={{ marginTop: 12 }}>
+              <label>Who is it for?</label>
+              <select name="audience" defaultValue={AUDIENCES[0]}>
+                {AUDIENCES.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+              <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0 0" }}>
+                Where your students are right now is already known to the writer:{" "}
+                <em>{(brief.stage || "not set — fill it in on the Situation card").slice(0, 160)}…</em>{" "}
+                <Link href="/admin/broadcasts">change it</Link>
+              </p>
 
-        <h3 style={step}>5. Where should it go, and when?</h3>
+              <label style={{ marginTop: 12 }}>Your own words <span className="muted" style={{ fontWeight: 400, fontSize: ".78rem" }}>— your angle, what students should take from it</span></label>
+              <textarea name="notes" rows={3} placeholder="e.g. Point out this is examinable in September and where it sits in the syllabus." />
+              <label style={{ marginTop: 10 }}>The one quiet mention</label>
+              <select name="mention" defaultValue="">
+                <option value="">No mention — this one only informs</option>
+                {SOFT_MENTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <p className="muted" style={{ fontSize: ".76rem", margin: "4px 0 0" }}>
+                One line, in one of the posts, at the end. Greetings never carry one whatever is chosen.
+              </p>
+            </div>
+          </details>
+        ) : (
+          <input type="hidden" name="audience" value={AUDIENCES[0]} />
+        )}
+
+        <h3 style={step}>{kind === "own" ? "4" : "5"}. Where should it go, and when?</h3>
         <div className="form-card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <label style={{ margin: 0 }}>Name this campaign</label>

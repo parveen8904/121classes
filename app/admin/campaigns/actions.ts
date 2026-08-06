@@ -99,6 +99,9 @@ export async function draftCampaign(formData: FormData) {
       source_kind: kind,
       source_label: kind === "own" ? (name || "written by you") : title.slice(0, 200),
       source_url: url,
+      // One video for the whole campaign: Instagram and Facebook post it as a
+      // Reel, YouTube as a Short, and every other channel ignores it.
+      video_url: str(formData.get("video_url")) || null,
       created_by: "campaign",
     };
   });

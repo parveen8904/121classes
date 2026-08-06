@@ -37,18 +37,43 @@ export default function VideoUpload({
     }
     setBusy(true);
     setStage("Uploading…");
+    const ext = (file.name.split(".").pop() || "mp4").toLowerCase();
+    const contentType = file.type || "video/mp4";
     try {
-      const supabase = createClient();
-      const ext = (file.name.split(".").pop() || "mp4").toLowerCase();
-      const path = `campaign-video/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("media").upload(path, file, {
-        contentType: file.type || "video/mp4",
-        upsert: false,
+      // Cloudflare R2 first, and not only because the storage is cheaper:
+      // Instagram, Facebook and YouTube each DOWNLOAD this file, repeatedly and
+      // at full size. R2 charges nothing for egress; Supabase charges for every
+      // byte those platforms pull. A video is the one file where that decides
+      // the bill. Supabase remains the fallback so an unconfigured R2 does not
+      // block the upload.
+      const res = await fetch("/api/upload-url", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ folder: "campaign-video", ext, contentType }),
       });
-      if (upErr) throw new Error(upErr.message);
-      const { data } = supabase.storage.from("media").getPublicUrl(path);
-      setUrl(data.publicUrl);
-      setStage("Uploaded ✓");
+      const plan = (await res.json()) as { provider?: string; uploadUrl?: string; publicUrl?: string };
+
+      if (plan.provider === "r2" && plan.uploadUrl && plan.publicUrl) {
+        const put = await fetch(plan.uploadUrl, {
+          method: "PUT",
+          headers: { "content-type": contentType },
+          body: file,
+        });
+        if (!put.ok) throw new Error(`R2 refused the upload (${put.status})`);
+        setUrl(plan.publicUrl);
+        setStage("Uploaded to R2 ✓");
+      } else {
+        const supabase = createClient();
+        const path = `campaign-video/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("media").upload(path, file, {
+          contentType,
+          upsert: false,
+        });
+        if (upErr) throw new Error(upErr.message);
+        const { data } = supabase.storage.from("media").getPublicUrl(path);
+        setUrl(data.publicUrl);
+        setStage("Uploaded ✓");
+      }
     } catch (e) {
       setError("Upload failed: " + (e as Error).message);
       setStage("");

@@ -628,7 +628,13 @@ textarea {
   /* Phones/app: brand takes centre stage; Back floats at the left edge. */
   .portal-header-inner { justify-content: center; }
   .portal-brand { flex: 1 1 100%; justify-content: center; position: relative; min-height: 36px; }
-  .portal-back { position: absolute; left: 0; top: 50%; transform: translateY(-50%); }
+  /* Scoped to the PORTAL header on purpose. The same Back button also appears
+     in the public nav, where there is no .portal-brand to position against —
+     so it fell back to .lp-nav, which is sticky and therefore positioned, and
+     landed inside that nav's safe-area padding: on an iPhone the button sat on
+     top of the status bar and the Dynamic Island, at the very edge of the
+     screen. On the public nav it belongs inline beside the brand. */
+  .portal-header .portal-back { position: absolute; left: 0; top: 50%; transform: translateY(-50%); }
   .portal-nav { justify-content: center; }
 }
 .portal-nav { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }

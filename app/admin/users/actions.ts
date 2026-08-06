@@ -240,3 +240,48 @@ export async function rescueFirstLogins(formData?: FormData) {
       (r.failed[0] ? `&rescueerr=${encodeURIComponent(r.failed[0].slice(0, 160))}` : ""),
   );
 }
+
+/**
+ * Import SUPPORTERS in bulk, quietly.
+ *
+ * addUsers() emails every address a set-password link. That is right for
+ * students the office is onboarding and wrong for a list of sponsors and
+ * resellers who have not asked to hear from us — 107 unexpected emails is a
+ * complaint, not an onboarding. This creates the accounts and nothing else:
+ * no email is sent, and each is marked as a supporter so /supporter opens for
+ * them the moment they do sign in.
+ *
+ * One line each, "Name <email>" or "Name, email" — an existing account is
+ * flipped to supporter rather than duplicated.
+ */
+export async function importSupporters(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const lines = str(formData.get("bulk")).split(/\n/).map((l) => l.trim()).filter(Boolean);
+  const svc = createServiceClient();
+  let created = 0, marked = 0, failed = 0;
+
+  for (const line of lines) {
+    const m = line.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+    if (!m) { failed++; continue; }
+    const email = m[0].toLowerCase();
+    const name = line.replace(m[0], "").replace(/[,<>]/g, "").trim();
+
+    const { data: existing } = await svc.from("profiles").select("id").ilike("email", email).maybeSingle();
+    if (existing?.id) {
+      await svc.from("profiles").update({ is_supporter: true, full_name: name || undefined }).eq("id", existing.id);
+      marked++;
+      continue;
+    }
+
+    const { data: cu, error } = await svc.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      user_metadata: { full_name: name },
+    });
+    if (error || !cu?.user) { failed++; continue; }
+    await svc.from("profiles").update({ full_name: name || null, is_supporter: true }).eq("id", cu.user.id);
+    created++;
+  }
+  revalidatePath("/admin/users");
+  redirect(`/admin/users?supp_created=${created}&supp_marked=${marked}&supp_failed=${failed}`);
+}

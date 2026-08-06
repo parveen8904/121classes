@@ -2,14 +2,14 @@ import Link from "next/link";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../_components/AdminHero";
-import { addUsers, rescueFirstLogins } from "./actions";
+import { addUsers, rescueFirstLogins, importSupporters } from "./actions";
 import { createServiceClient } from "@/lib/supabase/service";
 
 const ROLE_EMOJI: Record<string, string> = { student: "🎓", admin: "🛠️", faculty: "👩‍🏫" };
 
 export default async function UsersPage(
   props: {
-    searchParams: Promise<{ q?: string; role?: string; added?: string; invited?: string; failed?: string; rescued?: string; rescueleft?: string; rescueerr?: string }>;
+    searchParams: Promise<{ q?: string; role?: string; added?: string; invited?: string; failed?: string; rescued?: string; rescueleft?: string; rescueerr?: string; supp_created?: string; supp_marked?: string; supp_failed?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -138,6 +138,35 @@ export default async function UsersPage(
             <label style={{ marginTop: 10 }}>Users (one per line)</label>
             <textarea name="bulk" rows={6} placeholder={"Riya Sharma, riya@example.com\nAmit Verma, amit@example.com"} required />
             <SubmitButton className="btn" style={{ marginTop: 8 }}>Create &amp; email set-password links</SubmitButton>
+          </form>
+        </div>
+      </details>
+
+      {/* Supporters are imported QUIETLY. The form above emails every address a
+          set-password link, which is right for students being onboarded and
+          wrong for a list of sponsors who did not ask to hear from us. */}
+      {(searchParams.supp_created || searchParams.supp_marked) && (
+        <div className="notice ok" style={{ marginTop: 14 }}>
+          💚 Supporters imported — <strong>{searchParams.supp_created ?? 0}</strong> new account
+          {searchParams.supp_created === "1" ? "" : "s"}, <strong>{searchParams.supp_marked ?? 0}</strong> existing
+          account{searchParams.supp_marked === "1" ? "" : "s"} marked
+          {Number(searchParams.supp_failed ?? 0) > 0 && <> · {searchParams.supp_failed} could not be read</>}. No email was sent.
+        </div>
+      )}
+
+      <details className="card" style={{ marginTop: 12 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>💚 Import supporters (no email sent)</summary>
+        <div style={{ marginTop: 10 }}>
+          <p className="muted" style={{ fontSize: ".85rem", marginTop: 0 }}>
+            Creates an account for each and marks them a <strong>supporter</strong>, so <code>/supporter</code> opens
+            for them — their gifts, invoices and the students they want to sponsor. <strong>Nothing is emailed.</strong>{" "}
+            Someone who already has an account is marked, not duplicated. Send them their set-password link later
+            from their own user page, when you are ready to tell them.
+          </p>
+          <form action={importSupporters}>
+            <label>One per line — <code>Name, email</code> or <code>Name &lt;email&gt;</code></label>
+            <textarea name="bulk" rows={6} placeholder={"Ascent Academy, accentacademy11@gmail.com\nKapil Goyal, caindiacenters@gmail.com"} required />
+            <SubmitButton className="btn" style={{ marginTop: 8 }}>Import as supporters — no email</SubmitButton>
           </form>
         </div>
       </details>

@@ -152,15 +152,56 @@ function drawLine(c: Ctx, ws: string[], x: number, maxW: number, font: PDFFont, 
   });
 }
 
-const MARKS_TAIL = /\s*[[(]\s*(\d+(?:\s*(?:\+|and)\s*\d+)?)\s*marks?\s*[\])]\s*$/i;
+const MARKS_TAIL = /\s*[[(]\s*(\d+(?:\s*(?:\+|and)\s*\d+)?)\s*(?:marks?)?\s*[\])]\s*$/i;
 const CENTRED_HEAD = /^(MOCK EXAMINATION|INTERMEDIATE EXAMINATION|FINAL EXAMINATION|PAPER \d|Time Allowed|Maximum Marks)/i;
 const PART_HEAD = /^PART\s+(I|II|1|2)\b/i;
 const SECTION_HEAD = /^(INSTRUCTIONS TO CANDIDATES|CASE SCENARIO\s*\d*|QUESTION\s+\d+|Q\.?\s*\d+\b)/i;
 const NUMBERED = /^\s*(\d+[.)]|\([a-z]\)|\([iv]+\)|[-•])\s+/i;
-/** A line of figures in columns — must be kept exactly, never re-flowed.
- *  The run of spaces must be INTERNAL: matching leading indentation instead
- *  turned every wrapped continuation line into a monospaced fragment. */
-const COLUMNAR = /\S\s{2,}\S/;
+/** How many INTERNAL runs of 2+ spaces a line has — i.e. how many column gaps.
+ *  Leading indentation must not count: matching that turned every wrapped
+ *  continuation into a monospaced fragment. */
+function columnGaps(line: string): number {
+  return (line.replace(MARKS_TAIL, "").match(/\S {2,}(?=\S)/g) ?? []).length;
+}
+
+/**
+ * Which lines are really TABLE, decided over the whole paper rather than one
+ * line at a time.
+ *
+ * A single wide gap is not a table. "(i)  Depreciation charged in books…" has
+ * one, and so does "Time Allowed: 3 Hours        Maximum Marks: 100", and so
+ * does every MCQ option padded out to a right-hand "[2]" — all of them prose,
+ * all of them set in Courier in the middle of Times, which is why a quarter of
+ * the paper came out in the wrong face.
+ *
+ * A real table row has TWO or more gaps (three or more columns). A row with one
+ * gap counts only when it sits directly against such a row — that keeps the
+ * two-column rows inside a table aligned without dragging sentences in.
+ */
+function tableLines(lines: string[]): boolean[] {
+  const gaps = lines.map(columnGaps);
+  const blank = lines.map((l) => !l.trim());
+  const out = lines.map((_, i) => gaps[i] >= 2 && !blank[i]);
+
+  // A RUN of aligned lines is a table even at one gap each — that is what a
+  // two-column list of figures looks like ("Lease term:    5 years"). One or
+  // two such lines on their own is prose that happens to contain a wide space.
+  let i = 0;
+  while (i < lines.length) {
+    if (blank[i] || gaps[i] < 1) { i++; continue; }
+    let j = i;
+    while (j < lines.length && !blank[j] && gaps[j] >= 1) j++;
+    if (j - i >= 3) for (let k = i; k < j; k++) out[k] = true;
+    i = j;
+  }
+  // A wrapped label carrying no gaps of its own, sandwiched inside a table,
+  // belongs to that table — otherwise a row's first line came out in Times
+  // while its figures were in Courier.
+  for (let k = 1; k < lines.length - 1; k++) {
+    if (!out[k] && !blank[k] && out[k - 1] && out[k + 1]) out[k] = true;
+  }
+  return out;
+}
 
 export async function buildMockPaperPdf(input: { title: string; text: string; footer?: string; attempt?: string }): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
@@ -220,7 +261,10 @@ export async function buildMockPaperPdf(input: { title: string; text: string; fo
     c.y -= size + gapAfter;
   };
 
-  for (const raw of src) {
+  // Decided once, over the whole document — a table is a BLOCK, not a line.
+  const isTable = tableLines(src.map((r) => r.replace(/\s+$/, "")));
+
+  for (const [idx, raw] of src.entries()) {
     const line = raw.replace(/\s+$/, "");
     const t = line.trim();
 
@@ -268,11 +312,10 @@ export async function buildMockPaperPdf(input: { title: string; text: string; fo
 
     inHeader = false;
 
-    // A line of figures in columns keeps its own shape, in a fixed-width face —
-    // re-flowing it would destroy the alignment it depends on. But a line whose
-    // wide gap is only there to push "(2 Marks)" to the right is prose, and was
-    // being set in Courier in the middle of a sentence.
-    if (COLUMNAR.test(line) && !MARKS_TAIL.test(line)) {
+    // A genuine table keeps its own shape, in a fixed-width face — re-flowing it
+    // would destroy the alignment it depends on. Everything else is prose and
+    // stays in Times, however wide a gap it happens to contain.
+    if (isTable[idx]) {
       flush();
       need(c, 13);
       c.page.drawText(winAnsi(line).slice(0, 96), { x: LEFT, y: c.y, size: 9, font: c.mono });

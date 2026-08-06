@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { slugify, str, num, nullable } from "../../_lib/util";
+import { slugify, str, num, nullable, money } from "../../_lib/util";
 import { normalizeWindow } from "@/app/learn/_lib/attempt";
 import { assertArea } from "@/lib/adminAccess";
 
@@ -339,14 +339,16 @@ export async function updateSubjectInline(formData: FormData) {
       code: str(formData.get("code")).toUpperCase().replace(/[^A-Z0-9]/g, "") || null,
       telegram_group_url: str(formData.get("telegram_group_url")) || null,
       order_index: num(formData.get("order_index")),
-      gold_price_inr: goldStr ? Number(goldStr) : null,
+      gold_price_inr: money(goldStr),
       validity_months: validity > 0 ? validity : 12,
       // Slab ladders ("months:₹/mo, …"); blank clears → falls back to flat pricing.
       gold_slabs: parseSlabInput(str(formData.get("gold_slabs"))),
       silver_slabs: parseSlabInput(str(formData.get("silver_slabs"))),
       // Live batch: fixed months + one fixed GST-inclusive price; blank = normal subject.
       batch_months: num(formData.get("batch_months")) || null,
-      batch_price_inr: num(formData.get("batch_price_inr")) || null,
+      batch_price_inr: money(formData.get("batch_price_inr")),
+      sale_from: str(formData.get("sale_from")) || null,
+      sale_to: str(formData.get("sale_to")) || null,
       included_with_subject_id: str(formData.get("included_with_subject_id")) || null,
       intro_video_url: str(formData.get("intro_video_url")) || null,
     })

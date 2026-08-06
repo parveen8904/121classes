@@ -34,7 +34,7 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs, batch_months, batch_price_inr, included_with_subject_id, intro_video_url, telegram_group_url, remarks, miq_rev1, miq_rev2, valid_from_attempt, valid_to_attempt, courses(title)")
+    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs, batch_months, batch_price_inr, sale_from, sale_to, included_with_subject_id, intro_video_url, telegram_group_url, remarks, miq_rev1, miq_rev2, valid_from_attempt, valid_to_attempt, courses(title)")
     .eq("id", subjectId)
     .single();
 
@@ -475,7 +475,10 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
                 </div>
                 <div>
                   <label htmlFor="su-batchp">Fixed price ₹ (incl. GST)</label>
-                  <input id="su-batchp" name="batch_price_inr" type="number" min={0} defaultValue={(subject as { batch_price_inr?: number | null }).batch_price_inr ?? ""} placeholder="blank = not announced" />
+                  {/* Deliberately NOT type="number": a price pasted as "5,000"
+                      or "₹5000" was silently discarded, and the field simply
+                      showed blank next time with no error. It is parsed on save. */}
+                  <input id="su-batchp" name="batch_price_inr" inputMode="numeric" defaultValue={(subject as { batch_price_inr?: number | null }).batch_price_inr ?? ""} placeholder="blank = not announced" />
                 </div>
                 <div>
                   <label htmlFor="su-incw">Included free with</label>
@@ -487,6 +490,22 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
                   </select>
                 </div>
               </div>
+              {/* When the shop is OPEN. Two months of access is not the same
+                  question as two months of selling — closing the shop used to
+                  mean unpublishing the subject by hand on the right evening. */}
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr", marginTop: 10 }}>
+                <div>
+                  <label htmlFor="su-salefrom">On sale from</label>
+                  <input id="su-salefrom" name="sale_from" type="date" defaultValue={(subject as { sale_from?: string | null }).sale_from ?? ""} />
+                </div>
+                <div>
+                  <label htmlFor="su-saleto">On sale until (inclusive)</label>
+                  <input id="su-saleto" name="sale_to" type="date" defaultValue={(subject as { sale_to?: string | null }).sale_to ?? ""} />
+                </div>
+              </div>
+              <p className="muted" style={{ fontSize: ".8rem", margin: "6px 0 0" }}>
+                Leave both blank to sell indefinitely. Outside the window the batch is shown but cannot be bought.
+              </p>
               {(parentTopics ?? []).length > 0 && firstTopic && (
                 <div style={{ marginTop: 10 }}>
                   <label htmlFor="su-reteach">Re-teaches (old) chapter — shows the &ldquo;previous recordings&rdquo; notice there and shares its tests here</label>

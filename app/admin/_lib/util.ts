@@ -34,3 +34,20 @@ export function fmtMins(mins: number): string {
   const r = m % 60;
   return h ? (r ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
 }
+
+/**
+ * A price as a person types it.
+ *
+ * `num()` hands anything non-numeric back as 0, and the price fields then store
+ * `|| null` — so "5,000" or "₹5000" or "5000/-" saved as NO PRICE AT ALL, with
+ * the field simply blank on the next load and no error anywhere. He set the
+ * Financial Instruments fee and the site kept showing nothing; this is why.
+ *
+ * Returns null only when there is genuinely no number in what was typed.
+ */
+export function money(v: FormDataEntryValue | null): number | null {
+  const raw = String(v ?? "").replace(/[₹,\s]/g, "").replace(/\/-$/, "");
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+}

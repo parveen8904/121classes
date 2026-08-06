@@ -16,7 +16,7 @@ const PAID_TIERS = ["silver", "gold"];
 
 export type CreateOrderResult =
   | { ok: true; orderId: string; amount: number; keyId: string; name: string; description: string; prefill: { name?: string; email?: string; contact?: string } }
-  | { ok: false; reason: "unconfigured" | "auth" | "noplan" | "noprice" | "address" | "error" };
+  | { ok: false; reason: "unconfigured" | "auth" | "noplan" | "noprice" | "address" | "notopen" | "closed" | "error" };
 
 export async function createPlanOrder(input: {
   subjectId: string;
@@ -38,7 +38,7 @@ export async function createPlanOrder(input: {
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs, batch_months, batch_price_inr")
+    .select("id, title, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs, batch_months, batch_price_inr, sale_from, sale_to")
     .eq("id", input.subjectId)
     .single();
   if (!subject) return { ok: false, reason: "error" };
@@ -47,6 +47,17 @@ export async function createPlanOrder(input: {
   // month choice; the student always gets exactly batch_months of access.
   const batchMonths = Number((subject as { batch_months?: number | null }).batch_months) || 0;
   if (batchMonths > 0 && input.tier !== "gold") return { ok: false, reason: "error" };
+
+  // The shop window, checked HERE and not only in the interface. A closed batch
+  // that is merely hidden is still buyable by anyone who kept the page open or
+  // knows the address, and taking money for a batch that has started is worse
+  // than refusing the sale.
+  {
+    const w = subject as { sale_from?: string | null; sale_to?: string | null };
+    const today = new Date().toISOString().slice(0, 10);
+    if (w.sale_from && today < w.sale_from) return { ok: false, reason: "notopen" };
+    if (w.sale_to && today > w.sale_to) return { ok: false, reason: "closed" };
+  }
 
   const { data: plan } = await supabase
     .from("plans")

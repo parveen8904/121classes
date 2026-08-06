@@ -152,6 +152,8 @@ export default function PricingCards({
       if (!res.ok) {
         if (res.reason === "unconfigured") window.location.href = contactHref;
         else if (res.reason === "noprice") alert("This plan isn't priced yet — please contact us and we'll enrol you.");
+        else if (res.reason === "notopen") alert("This batch has not opened for enrolment yet. Please check back on the start date.");
+        else if (res.reason === "closed") alert("Enrolment for this batch has closed. Write to us and we will tell you when the next one opens.");
         else if (res.reason === "address") {
           alert("Your 9+ month Gold plan includes FREE printed books couriered to you — please add your full shipping address (address, city, state, PIN code) first. Taking you to your profile now; come back and pay after saving it.");
           window.location.href = "/dashboard/profile?need=address";

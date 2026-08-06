@@ -99,6 +99,17 @@ native shell or the offline plugin changes.
 
 1. **Info.plist** → `CFBundleDisplayName` = `CA Parveen Sharma`
    (`/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName CA Parveen Sharma" ios/App/App/Info.plist`)
+1b. **Info.plist** → `NSMicrophoneUsageDescription` **and** `NSSpeechRecognitionUsageDescription`.
+   NOT optional. The AI mock interview calls `getUserMedia({audio:true})`, and
+   iOS **terminates the process** when the microphone is requested with no usage
+   string — the page's own try/catch never runs. Apple rejected v1.0 under
+   2.1(a) for "an error when starting the AI mock interview"; this is the most
+   likely cause. Capacitor's WebView already grants the capture request, so the
+   strings are all that is missing.
+   ```bash
+   /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string 'Used only when you start an AI mock interview, so your spoken answers can be heard and assessed. Nothing is recorded or kept.'" ios/App/App/Info.plist
+   /usr/libexec/PlistBuddy -c "Add :NSSpeechRecognitionUsageDescription string 'Used only during an AI mock interview, to turn your spoken answers into text so they can be assessed.'" ios/App/App/Info.plist
+   ```
 2. **AppDelegate.swift** → add at the top: `import OfflineClassesPlugin`, and inside the class:
    ```swift
    // iOS relaunches the app when a background class-download finishes.

@@ -255,7 +255,16 @@ export default async function Home() {
   const rawVideo = (siteImg.get("intro_video_url") || "").trim();
   const yt = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/.exec(rawVideo);
   const latestYt = (ytVideos ?? [])[0]?.id ? `https://www.youtube.com/embed/${(ytVideos ?? [])[0].id}` : "";
-  const introVideo = yt ? `https://www.youtube.com/embed/${yt[1]}` : (rawVideo || latestYt || "https://app.heygen.com/embeds/c2bcd7138f2c42b6b607fe6588910b89");
+  // NO AI-AVATAR FALLBACK.
+  //
+  // This used to end in a HeyGen embed — an AI-generated avatar — left over
+  // from the first landing page and never chosen by anyone. It only appeared
+  // when the YouTube fetch failed, which is exactly when nobody is watching for
+  // it: a quota trip or an expired key and a synthetic presenter would introduce
+  // the site, three lines under "delivered by Parveen Sharma himself — not by a
+  // machine". A promise that survives only while an API key works is not a
+  // promise. If there is no real video, the player simply does not render.
+  const introVideo = yt ? `https://www.youtube.com/embed/${yt[1]}` : (rawVideo || latestYt || "");
   const splashBanner = siteImg.get("splash_banner") || "";
   const splashLink = siteImg.get("splash_link") || "";
   const splashSeconds = Number(siteImg.get("splash_seconds")) || 5;
@@ -743,15 +752,17 @@ export default async function Home() {
               Crisp, professionally recorded lectures by CA Parveen Sharma — streamed
               without ads, with an English option, and available on any device.
             </p>
-            <div className="video-frame" style={{ paddingBottom: "56.25%" }}>
-              <iframe
-                src={introVideo}
-                title="CA Parveen Sharma intro"
-                allow="encrypted-media; fullscreen"
-                allowFullScreen
-                loading="lazy"
-              />
-            </div>
+            {introVideo && (
+              <div className="video-frame" style={{ paddingBottom: "56.25%" }}>
+                <iframe
+                  src={introVideo}
+                  title="CA Parveen Sharma intro"
+                  allow="encrypted-media; fullscreen"
+                  allowFullScreen
+                  loading="lazy"
+                />
+              </div>
+            )}
 
           </div>
         </div>

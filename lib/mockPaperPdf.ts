@@ -194,6 +194,20 @@ function tableLines(lines: string[]): boolean[] {
     if (j - i >= 3) for (let k = i; k < j; k++) out[k] = true;
     i = j;
   }
+  // A table has a HEAD above its figures: the column names ("SHL      WLL"),
+  // the units under them ("Rs.      Rs."), and often a bare sub-heading such as
+  // EQUITY AND LIABILITIES. None of those has two gaps, so all three were being
+  // read as prose and joined into the sentence above — the balance sheet arrived
+  // with "SHL WLL Rs. Rs. EQUITY AND LIABILITIES" running across one line.
+  const isLabel = (l: string) => l.trim().length <= 45 && !/[.:;?]$/.test(l.trim());
+  for (let k = 0; k < lines.length; k++) {
+    if (!out[k]) continue;
+    for (let a = k - 1; a >= 0 && !blank[a] && !out[a] && (gaps[a] >= 1 || isLabel(lines[a])); a--) out[a] = true;
+    // Downward only where the line is itself aligned: a bare label BELOW a table
+    // is far more often the next heading than part of what came before.
+    for (let b = k + 1; b < lines.length && !blank[b] && !out[b] && gaps[b] >= 1; b++) out[b] = true;
+  }
+
   // A wrapped label carrying no gaps of its own, sandwiched inside a table,
   // belongs to that table — otherwise a row's first line came out in Times
   // while its figures were in Courier.

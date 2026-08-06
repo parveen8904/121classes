@@ -50,7 +50,22 @@ export default async function DownloadsPage() {
         <h1>Download &amp; watch offline <Help text="Tap Download on a class to save it to this device, then Play offline anytime — no internet needed. Downloads continue in the background — you can lock the phone or leave the app. Videos are encrypted and show your name as a watermark." /></h1>
         <p className="meta">Save your classes to this device and play them without internet — encrypted &amp; watermarked. 🔐</p>
       </div>
-      <div style={{ marginTop: 22 }}>
+      {/* Said plainly, and said HERE, because a student who discovers this in
+          aeroplane mode on the train concludes the download failed. The licence
+          check is the reason: a downloaded class is encrypted, and its key is
+          only mirrored onto the device while there is a connection. */}
+      <div className="notice" style={{ marginTop: 18, lineHeight: 1.65 }}>
+        📶 <strong>Open this page once with internet before you travel.</strong> Your classes are stored encrypted,
+        and this page has to collect the licence key for them while you are online — it takes a few seconds. After
+        that they play in aeroplane mode, on a flight, anywhere, with no connection at all.
+        <br />
+        <span style={{ fontSize: ".88rem", opacity: 0.85 }}>
+          If you downloaded a class and it will not play offline, come back online, open this page once, and it will
+          work from then on.
+        </span>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
         <OfflineDownloads classes={withNumbers as never[]} watermark={watermark} isAdmin={isAdmin} />
       </div>
     </section>

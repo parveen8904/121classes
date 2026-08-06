@@ -71,7 +71,7 @@ export default function OfflinePlayer({
       <button type="button" onClick={onClose} style={{ ...btn, position: "absolute", top: "calc(10px + env(safe-area-inset-top))", right: 12, zIndex: 4 }}>✕ Close</button>
 
       {/* This container is what goes fullscreen — so the watermark stays visible. */}
-      <div ref={wrapRef} style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", background: "#000", minHeight: 0 }}>
+      <div ref={wrapRef} className="offline-stage" style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", background: "#000", minHeight: 0 }}>
         <div style={{ position: "relative", flex: 1, minHeight: 0 }} onClick={toggle}>
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video ref={vidRef} src={src} autoPlay playsInline style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />

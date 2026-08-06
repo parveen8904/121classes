@@ -4,8 +4,23 @@ www/.DS_Store
 
 # Native projects are generated on your Mac with `npx cap add ios/android`.
 # They're large and machine-specific, so we don't commit them here.
+#
+# EXCEPT the few files we hand-edit. A bare "android/" also swallowed the
+# plugin's own Kotlin under mobile/plugins/, and any native fix we make is
+# thrown away the next time the platform folder is regenerated. Whatever we
+# have written by hand has to be tracked, or it is not really a fix.
 ios/
-android/
+android/*
+!plugins/**/android/
+# git cannot re-include a file inside an excluded DIRECTORY, so every level on
+# the way down has to be re-opened one at a time.
+!android/app/
+android/app/*
+!android/app/src/
+android/app/src/*
+!android/app/src/main/
+android/app/src/main/*
+!android/app/src/main/java/
 
 # Build outputs
 dist/

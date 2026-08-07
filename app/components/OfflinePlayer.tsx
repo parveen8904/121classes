@@ -180,8 +180,24 @@ export default function OfflinePlayer({
 
       <div
         ref={wrapRef}
-        className={`offline-stage${turnedNow ? " turned" : ""}`}
-        style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", background: "#000", minHeight: 0 }}
+        className="offline-stage"
+        /* The turn is applied INLINE, not by a class.
+           It was a class, and this element already carries an inline
+           `position: relative` — an inline style beats a class rule, so the
+           class's `position: absolute` never took, and the picture never
+           turned. Anything the class would have fought over is set here
+           instead, where there is nothing to fight. */
+        style={
+          turnedNow
+            ? {
+                position: "absolute", top: 0, left: 0,
+                width: "100vh", height: "100vw",
+                transformOrigin: "top left",
+                transform: "rotate(90deg) translateY(-100%)",
+                display: "flex", flexDirection: "column", background: "#000",
+              }
+            : { position: "relative", flex: 1, display: "flex", flexDirection: "column", background: "#000", minHeight: 0 }
+        }
       >
         <div style={{ position: "relative", flex: 1, minHeight: 0 }} onClick={tapPicture}>
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}

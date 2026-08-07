@@ -21,3 +21,8 @@ tsconfig.tsbuildinfo
 /playwright-report/
 /test-results/
 .env*
+
+# Firebase config for the Android app. It ships inside the APK and is not a
+# secret, but it names the project and is regenerated from the console, so it
+# is kept out of git rather than drifting in two places.
+mobile/android/app/google-services.json

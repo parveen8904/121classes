@@ -19,7 +19,7 @@ async function requireSupporter(): Promise<string> {
   if (!user) redirect("/login?next=/supporter");
   const { data: me } = await createServiceClient()
     .from("profiles").select("is_supporter, role").eq("id", user.id).maybeSingle();
-  if (!me?.is_supporter && me?.role !== "admin") redirect("/dashboard");
+  if (!me?.is_supporter && me?.role !== "supporter" && me?.role !== "admin") redirect("/dashboard");
   return user.id;
 }
 
@@ -67,4 +67,38 @@ export async function removeSupporterLead(formData: FormData) {
   }
   revalidatePath("/supporter");
   redirect("/supporter?removed=1");
+}
+
+/**
+ * A supporter's own details, saved once and used on every invoice afterwards.
+ *
+ * Deliberately narrow: name, phone, email, and the billing block. No attempt,
+ * no target exam, no study plan — those belong to a student, and a supporter
+ * being asked for them is being asked to pretend to be one.
+ */
+export async function saveSupporterProfile(formData: FormData) {
+  const supporterId = await requireSupporter();
+  const svc = createServiceClient();
+
+  const s = (k: string) => String(formData.get(k) ?? "").trim();
+  const state = s("state");
+  if (!state) redirect("/supporter/profile?err=Your state is needed — it decides the tax on your invoices");
+
+  await svc.from("profiles").update({
+    full_name: s("full_name") || null,
+    business_name: s("business_name") || null,
+    phone: s("phone") || null,
+    email: s("email") || null,
+    gstin: s("gstin").toUpperCase() || null,
+    address_line1: s("address_line1") || null,
+    address_line2: s("address_line2") || null,
+    city: s("city") || null,
+    pincode: s("pincode") || null,
+    state,
+  }).eq("id", supporterId);
+
+  revalidatePath("/supporter");
+  revalidatePath("/supporter/profile");
+  const next = s("next");
+  redirect(next.startsWith("/") ? next : "/supporter/profile?saved=1");
 }

@@ -128,6 +128,10 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
   const { data: g } = await svc.from("gift_orders").select("*").eq("razorpay_order_id", input.razorpay_order_id).maybeSingle();
   if (!g || g.status === "provisioned") return { ok: !!g }; // idempotent
 
+  // Carried out of the grant block so the note to the student can quote them.
+  let provisionStarts: Date | null = null;
+  let provisionEnds: Date | null = null;
+
   // 1) Find or create the recipient's account.
   const email = String(g.recipient_email).trim().toLowerCase();
   let recipientId: string | null = null;
@@ -151,11 +155,31 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
     const soldFor = g.starts_on ? new Date(String(g.starts_on)) : null;
     const starts = soldFor && soldFor.getTime() > Date.now() ? soldFor : new Date();
     const ends = new Date(starts); ends.setMonth(ends.getMonth() + (Number(g.months) || 12));
+
+    // BRONZE IN THE MEANTIME.
+    //
+    // When the paid plan begins later, the student would otherwise have an
+    // account that shows them nothing until their date — which reads as a
+    // broken login, not as a subscription waiting to start. Bronze bridges the
+    // gap: they can log in today, look round, and watch the demo classes, and
+    // the plan they were bought takes over on the day it was sold for.
+    if (starts.getTime() > Date.now()) {
+      const { data: bronze } = await svc.from("plans").select("id").eq("tier", "bronze").maybeSingle();
+      if (bronze?.id) {
+        await svc.from("subscriptions").insert({
+          student_id: recipientId, course_id: g.course_id, subject_id: g.subject_id, plan_id: bronze.id,
+          channel: "gift", starts_at: new Date().toISOString(), ends_at: starts.toISOString(),
+          status: "active", auto_renew: false,
+        });
+      }
+    }
+
     await svc.from("subscriptions").insert({
       student_id: recipientId, course_id: g.course_id, subject_id: g.subject_id, plan_id: g.plan_id,
       channel: "gift", starts_at: starts.toISOString(), ends_at: ends.toISOString(),
       status: "active", auto_renew: false,
     });
+    provisionStarts = starts; provisionEnds = ends;
     await svc.from("my_courses").upsert({ student_id: recipientId, course_id: g.course_id }, { onConflict: "student_id,course_id" });
     if (g.subject_id) await svc.from("my_subjects").upsert({ student_id: recipientId, subject_id: g.subject_id }, { onConflict: "student_id,subject_id" });
   }
@@ -209,13 +233,31 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
     const th = link?.properties?.hashed_token;
     const setUrl = th ? `${SITE}/auth/confirm?token_hash=${th}&type=recovery&next=/auth/reset-password` : `${SITE}/login`;
     const { sendTemplate } = await import("@/lib/emailTemplates");
+    // WHO supported them, and the two dates that matter. Never the amount and
+    // never the invoice — that is between the supporter and us, and a student
+    // who knows what was paid for them is put in an awkward position.
+    const { data: supporter } = await svc.from("profiles")
+      .select("full_name, business_name").eq("id", g.gifter_id).maybeSingle();
+    const supporterName =
+      (supporter?.business_name as string) || (supporter?.full_name as string) || "a supporter";
+    const d = (x: Date | null) =>
+      x ? x.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "";
+    const from = d(provisionStarts), to = d(provisionEnds);
+
     await sendTemplate("gift_received", email, {
-      heading: "A gift for you 🎁",
+      heading: "You have been supported 🎓",
       name: g.recipient_name,
       tier: g.tier,
       course: subj?.title ?? "a CA subject",
       months: g.months,
       email,
+      supporter: supporterName,
+      starts_on: from,
+      ends_on: to,
+      body_note:
+        `<p><strong>${supporterName}</strong> has arranged your ${subj?.title ?? "course"} subscription.</p>` +
+        (from ? `<p>It runs from <strong>${from}</strong> to <strong>${to}</strong>.</p>` : "") +
+        `<p>You can sign in straight away and look round — the demo classes are open to you now, and your full access opens on the date above.</p>`,
       action_url: setUrl,
       action_label: "Set my password & log in",
     });

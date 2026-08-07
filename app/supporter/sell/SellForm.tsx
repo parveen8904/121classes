@@ -1,0 +1,158 @@
+"use client";
+
+import { useState } from "react";
+import Script from "next/script";
+import { formatINR } from "@/lib/pricing";
+import { createGiftOrder, verifyGiftPayment } from "@/app/gift/actions";
+
+// The supporter's order form, in the order they actually work.
+//
+// Who the student is → where the books go → which of the two subjects → when
+// their access should start → the coupon → pay. Nothing else is asked, because
+// nothing else changes what is sold: it is always Gold, always twelve months.
+
+type Product = { id: string; title: string; course: string; priceInr: number; months: number };
+type Billing = { name: string; gstin: string; address: string; state: string };
+
+const STATES = ["Delhi", "Haryana", "Uttar Pradesh", "Punjab", "Rajasthan", "Maharashtra", "Gujarat", "Karnataka", "Tamil Nadu", "Telangana", "West Bengal", "Bihar", "Madhya Pradesh", "Kerala", "Andhra Pradesh", "Uttarakhand", "Himachal Pradesh", "Jharkhand", "Chhattisgarh", "Odisha", "Assam", "Goa", "Chandigarh", "Jammu and Kashmir", "Other"];
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+export default function SellForm({
+  products, preselect, billing, configured,
+}: { products: Product[]; preselect?: string; billing: Billing; configured: boolean }) {
+  const [subjectId, setSubjectId] = useState(preselect || products[0]?.id || "");
+  const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [startsOn, setStartsOn] = useState(today());
+  const [coupon, setCoupon] = useState("");
+  const [bState, setBState] = useState(billing.state || "Delhi");
+  const [busy, setBusy] = useState(false); const [done, setDone] = useState(false); const [err, setErr] = useState<string | null>(null);
+
+  const product = products.find((p) => p.id === subjectId);
+  const later = startsOn > today();
+
+  async function pay(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    if (!window.Razorpay) { setErr("Payment is still loading — one moment."); return; }
+    if (!product) { setErr("Choose a subject."); return; }
+    if (!name.trim() || !email.trim()) { setErr("The student's name and email are both needed — the login is created from them."); return; }
+    if (!address.trim()) { setErr("The books are posted to the student, so their full address is needed."); return; }
+    setBusy(true);
+    try {
+      const res = await createGiftOrder({
+        subjectId, tier: "gold", months: product.months, couponCode: coupon, startsOn,
+        recipient: { name: name.trim(), email: email.trim(), phone: phone.trim(), address: address.trim() },
+        billing: { name: billing.name || name, gstin: billing.gstin, address: billing.address, state: bState },
+      });
+      if (!res.ok) {
+        setErr(res.reason === "unconfigured" ? "Payment is not switched on yet — please call the office."
+          : res.reason === "address" ? "The student's full delivery address is needed before paying, because the printed books go to them."
+          : res.reason === "auth" ? "Please sign in again."
+          : "Could not start the payment. Check the details and try once more.");
+        return;
+      }
+      const Rzp = (window as unknown as { Razorpay: new (o: Record<string, unknown>) => { open: () => void } }).Razorpay;
+      new Rzp({
+        key: res.keyId, amount: res.amount, currency: "INR", name: res.name, description: res.description,
+        order_id: res.orderId, prefill: res.prefill, theme: { color: "#0d9488" },
+        handler: async (r: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          const v = await verifyGiftPayment(r);
+          if (v.ok) { setDone(true); } else { setErr("Payment taken but not confirmed — please call the office before paying again."); }
+        },
+        modal: { ondismiss: () => setBusy(false) },
+      }).open();
+    } catch {
+      setErr("Something went wrong starting the payment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="card" style={{ marginTop: 18 }}>
+        <h2 style={{ marginTop: 0 }}>✅ Order placed</h2>
+        <p>
+          <strong>{name}</strong> has been emailed a link to set their password. They can sign in today and watch the
+          demo classes; their full access opens on <strong>{new Date(startsOn).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</strong>.
+        </p>
+        <p className="muted" style={{ fontSize: ".88rem" }}>
+          Your invoice is on your desk under Your orders. The student is never told what was paid.
+        </p>
+        <a className="btn" href="/supporter">← Back to my desk</a>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
+      <form className="card" style={{ marginTop: 18 }} onSubmit={pay}>
+        {!configured && <div className="notice err">Payment is not switched on yet — please call the office.</div>}
+
+        <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>1 · Who is the student?</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10 }}>
+          <div><label htmlFor="n">Full name</label><input id="n" value={name} onChange={(e) => setName(e.target.value)} required /></div>
+          <div><label htmlFor="e">Email</label><input id="e" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
+          <div><label htmlFor="p">Phone</label><input id="p" value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
+        </div>
+        <p className="muted" style={{ fontSize: ".8rem", marginTop: -4 }}>
+          Their login is created from this email, so it must be theirs and correct.
+        </p>
+
+        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>2 · Where do the books go?</h2>
+        <label htmlFor="a">Full postal address with PIN code</label>
+        <textarea id="a" rows={3} value={address} onChange={(e) => setAddress(e.target.value)} required
+          style={{ width: "100%", background: "var(--bg-soft)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px", fontFamily: "inherit" }} />
+        <p className="muted" style={{ fontSize: ".8rem" }}>The printed books are posted to the student, not to you.</p>
+
+        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>3 · Which subject?</h2>
+        <div style={{ display: "grid", gap: 8 }}>
+          {products.map((p) => (
+            <label key={p.id} style={{
+              display: "flex", alignItems: "center", gap: 10, padding: "12px 14px",
+              border: `1.5px solid ${p.id === subjectId ? "var(--accent)" : "var(--border)"}`,
+              borderRadius: 12, cursor: "pointer", marginBottom: 0,
+            }}>
+              <input type="radio" name="subject" checked={p.id === subjectId} onChange={() => setSubjectId(p.id)} />
+              <span style={{ flex: 1 }}>
+                <strong>{p.title}</strong>
+                <span className="muted" style={{ display: "block", fontSize: ".82rem" }}>{p.course} · Gold · {p.months} months</span>
+              </span>
+              <strong>{formatINR(p.priceInr)}</strong>
+            </label>
+          ))}
+        </div>
+
+        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>4 · When should their access start?</h2>
+        <input type="date" value={startsOn} min={today()} onChange={(e) => setStartsOn(e.target.value)} />
+        <p className="muted" style={{ fontSize: ".82rem", marginTop: -6 }}>
+          {later
+            ? `Their ${product?.months ?? 12} months begin on that date — not today — so selling early costs them nothing. Until then they can sign in and watch the demo classes.`
+            : "Starting today. Pick a later date if they are joining a future batch."}
+        </p>
+
+        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>5 · Coupon</h2>
+        <input placeholder="Your discount code (optional)" value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} />
+
+        <div style={{ marginTop: 8 }}>
+          <label htmlFor="st">Your billing state (decides the tax on your invoice)</label>
+          <select id="st" value={bState} onChange={(e) => setBState(e.target.value)}>
+            {STATES.map((x) => <option key={x} value={x}>{x}</option>)}
+          </select>
+        </div>
+
+        {err && <div className="notice err" style={{ marginTop: 12 }}>⚠️ {err}</div>}
+
+        <button className="btn block" type="submit" disabled={busy || !configured} style={{ marginTop: 14 }}>
+          {busy ? "Opening payment…" : product ? `Pay ${formatINR(product.priceInr)}` : "Choose a subject"}
+        </button>
+        <p className="muted" style={{ fontSize: ".78rem", marginTop: 8, textAlign: "center" }}>
+          The final amount, after any coupon, is shown on the payment screen before you pay.
+        </p>
+      </form>
+    </>
+  );
+}

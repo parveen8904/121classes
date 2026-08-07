@@ -89,6 +89,10 @@ export default async function SupporterPage(props: {
         <p className="muted" style={{ fontSize: "1rem", lineHeight: 1.7 }}>
           What you can sell, what you have sold, and every invoice — in one place.
         </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+          <Link className="btn small" href="/supporter/sell">🛒 Place an order</Link>
+          <Link className="btn small secondary" href="/supporter/profile">👤 My details &amp; GST</Link>
+        </div>
 
         {/* WHAT YOU SELL. Two products, priced exactly as a student would pay.
             The discount a supporter passes on comes from a coupon, openly, not

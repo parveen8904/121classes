@@ -224,7 +224,19 @@ export default function WatchTracker({
       style={{ marginTop: 16 }}
       onPointerDown={() => { if (isFull) bumpChrome(); }}
     >
-      <iframe ref={iframeRef} src={finalSrc} allow="encrypted-media; fullscreen" allowFullScreen title="Class video" />
+      {/* No allowFullScreen, and no "fullscreen" in allow — on purpose.
+          Bunny ships its own fullscreen button, and on a phone that is the one
+          a student's thumb lands on. It fullscreens the IFRAME, which means: no
+          watermark (the overlay lives outside it), a picture cropped to fit an
+          upright screen with the sides of the whiteboard cut off mid-word, and
+          none of the behaviour below — the controls never retire and the phone
+          never turns. It also quietly undid the watermark this player exists to
+          apply.
+          Withdrawing the permission is what removes it: a player asks the
+          browser whether fullscreen is available and hides the button when the
+          answer is no. Our own ⛶ is unaffected — it fullscreens the container
+          around the iframe, which belongs to this page, not to Bunny. */}
+      <iframe ref={iframeRef} src={finalSrc} allow="encrypted-media" title="Class video" />
       {watermark && <span className="vwm">{watermark}</span>}
       <button
         type="button"

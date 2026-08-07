@@ -106,8 +106,14 @@ export default function OfflineDownloads({
     const attach = (n: Native) => {
       setNative(n);
       setSearching(false);
+      // Progress arrives on every chunk — far faster than the number on screen
+      // can change. Re-rendering the whole list that often makes it flicker,
+      // so only a changed whole percent gets through.
+      const lastPct: Record<string, number> = {};
       n.onProgress(({ id, received, total }) => {
         const pct = total ? Math.floor((received * 100) / total) : 0;
+        if (lastPct[id] === pct) return;
+        lastPct[id] = pct;
         setLabels((l) => ({ ...l, [id]: pct >= 100 ? "Downloaded ✓" : `Downloading… ${pct}%` }));
       });
       (async () => {

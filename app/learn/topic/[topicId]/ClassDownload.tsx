@@ -57,9 +57,16 @@ export default function ClassDownload({ variants, watermark }: { variants: PV[];
   useEffect(() => {
     const w = window as unknown as { native?: Native; Capacitor?: CapGlobal };
 
+    // The native side reports progress on every chunk it receives — many times
+    // a second on a fast connection. Setting state that often re-renders the
+    // button continuously and it visibly flickers. The number on screen only
+    // ever changes 100 times, so ignore everything that would not change it.
+    let lastPct = -1;
     const onProgress = ({ id, received, total }: { id: string; received: number; total: number }) => {
       if (id !== pv.id) return;
       const pct = total ? Math.floor((received * 100) / total) : 0;
+      if (pct === lastPct) return;
+      lastPct = pct;
       setLabel(pct >= 100 ? "Downloaded ✓" : `Downloading… ${pct}%`);
     };
 

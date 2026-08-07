@@ -105,24 +105,20 @@ export default function WatchTracker({
           player.on("ended", () => { playing.current = false; flush(true); });
         });
 
-        // The video frame announces "ready" exactly once, when it finishes
-        // loading. player.js is fetched from a CDN AFTER this page has mounted,
-        // so on a quick connection that announcement has already been made and
-        // missed — and every later request is queued behind a "ready" that will
-        // never come again, so nothing is ever subscribed and the class records
-        // no position however long it is watched.
+        // Bunny sends NOTHING until playback starts. Measured on a live class:
+        // no message of any origin on load, and then at the moment play is
+        // pressed a burst of them —
+        //   {"context":"player.js","event":"ready", ...}
+        //   {"context":"player.js","event":"timeupdate","value":{"seconds":0.29}}
+        // — pushed continuously without being asked. So "ready" is not a signal
+        // that the frame has loaded; it is a signal that the student has begun
+        // watching, and waiting for it before subscribing is correct.
         //
-        // Subscribing again does not help; it joins the same stuck queue. The
-        // frame has to introduce itself a second time, while somebody is
-        // listening. Reloading it once does that. Nothing has been played yet —
-        // a student still has to press play — so there is nothing to interrupt.
-        const reintroduce = setTimeout(() => {
-          if (!readyFired && iframeRef.current) {
-            // eslint-disable-next-line no-self-assign
-            iframeRef.current.src = iframeRef.current.src;
-          }
-        }, 1800);
-        cleanups.push(() => clearTimeout(reintroduce));
+        // An earlier version reloaded the frame when ready had not arrived
+        // within two seconds, on the theory that the announcement had been
+        // missed. It never had been — it simply had not happened yet — so that
+        // reloaded the player on every class page, every time, and would cut
+        // off anyone who pressed play quickly. Removed.
       };
       if (window.playerjs) setup();
       else {

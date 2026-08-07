@@ -443,7 +443,9 @@ input[type="radio"], input[type="checkbox"] {
    because after the turn they mean the opposite thing. */
 @media (orientation: portrait) {
   .video-frame.fs-rotate:fullscreen,
-  .video-frame.fs-rotate:-webkit-full-screen {
+  .video-frame.fs-rotate:-webkit-full-screen,
+  .offline-stage.fs-rotate:fullscreen,
+  .offline-stage.fs-rotate:-webkit-full-screen {
     width: 100vh; height: 100vw;
     max-width: none; padding-bottom: 0;
     transform-origin: top left;

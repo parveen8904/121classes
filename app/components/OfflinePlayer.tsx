@@ -90,6 +90,53 @@ export default function OfflinePlayer({
     setRate(next);
     if (vidRef.current) vidRef.current.playbackRate = next;
   };
+  // Fullscreen behaves the same here as it does for a streamed class. It did
+  // not before: a downloaded class went fullscreen upright, so a 16:9 lecture
+  // sat as a strip between two black bands, and this player's control bar never
+  // retired — which is exactly why fullscreen "works in the normal player but
+  // not through the download".
+  const [isFull, setIsFull] = useState(false);
+  const [selfRotate, setSelfRotate] = useState(false);
+  const [showChrome, setShowChrome] = useState(true);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const bumpChrome = () => {
+    setShowChrome(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setShowChrome(false), 2800);
+  };
+
+  useEffect(() => {
+    const onChange = () => {
+      const on = !!(document.fullscreenElement || (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement);
+      setIsFull(on);
+      const orientation = (screen as unknown as { orientation?: { lock?: (o: string) => Promise<void>; unlock?: () => void } }).orientation;
+      if (!on) {
+        try { orientation?.unlock?.(); } catch { /* nothing to unlock */ }
+        setSelfRotate(false); setShowChrome(true);
+        return;
+      }
+      bumpChrome();
+      // Android turns the screen; iOS has no orientation lock at all, so the
+      // picture is turned instead.
+      const portrait = window.innerHeight > window.innerWidth;
+      const lock = orientation?.lock;
+      if (!lock) { setSelfRotate(portrait); return; }
+      try {
+        Promise.resolve(lock.call(orientation, "landscape"))
+          .then(() => setSelfRotate(false))
+          .catch(() => setSelfRotate(window.innerHeight > window.innerWidth));
+      } catch { setSelfRotate(portrait); }
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    document.addEventListener("webkitfullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      document.removeEventListener("webkitfullscreenchange", onChange);
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    };
+  }, []);
+
   const fullscreen = () => {
     const el = wrapRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;
     if (!el) return;
@@ -104,7 +151,12 @@ export default function OfflinePlayer({
       <button type="button" onClick={onClose} style={{ ...btn, position: "absolute", top: "calc(10px + env(safe-area-inset-top))", right: 12, zIndex: 4 }}>✕ Close</button>
 
       {/* This container is what goes fullscreen — so the watermark stays visible. */}
-      <div ref={wrapRef} className="offline-stage" style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", background: "#000", minHeight: 0 }}>
+      <div
+        ref={wrapRef}
+        className={`offline-stage${isFull && selfRotate ? " fs-rotate" : ""}`}
+        style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", background: "#000", minHeight: 0 }}
+        onPointerDown={() => { if (isFull) bumpChrome(); }}
+      >
         <div style={{ position: "relative", flex: 1, minHeight: 0 }} onClick={toggle}>
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video ref={vidRef} src={src} autoPlay playsInline style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
@@ -124,7 +176,16 @@ export default function OfflinePlayer({
         </div>
 
         {/* Custom control bar (lives INSIDE the fullscreened container). */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px calc(10px + env(safe-area-inset-bottom))", background: "rgba(0,0,0,.85)", flexWrap: "wrap" }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "10px 12px calc(10px + env(safe-area-inset-bottom))",
+          background: "rgba(0,0,0,.85)", flexWrap: "wrap",
+          // Out of the way while watching, back on a tap — the same as the
+          // streamed player, so the two feel like one app.
+          opacity: isFull && !showChrome ? 0 : 1,
+          pointerEvents: isFull && !showChrome ? "none" : "auto",
+          transition: "opacity .25s ease",
+        }}>
           <button type="button" onClick={toggle} style={btn}>{playing ? "⏸" : "▶️"}</button>
           <button type="button" onClick={() => seek(-10)} style={btn} title="Back 10s">⏪ 10</button>
           <button type="button" onClick={() => seek(10)} style={btn} title="Forward 10s">10 ⏩</button>

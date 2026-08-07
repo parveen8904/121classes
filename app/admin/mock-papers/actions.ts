@@ -154,3 +154,141 @@ export async function savePaper(formData: FormData) {
   revalidatePath("/admin/mock-papers");
   redirect("/admin/mock-papers?saved=1");
 }
+
+// ---------------------------------------------------------------------------
+// HIS OWN PAPERS
+//
+// The AI drafting stays for when it is wanted, but it is no longer the only
+// way in. A paper he has written himself is uploaded as a PDF and served to
+// students EXACTLY as he made it — his layout, his typesetting, untouched by
+// ours. We only read the text out of it underneath, so the checker still knows
+// what the questions and the answers were.
+//
+// Solutions are a separate matter. They are stored privately and used for
+// checking; they are never served to a student. That rule does not change
+// because the file arrived from him rather than from the AI.
+// ---------------------------------------------------------------------------
+
+const BUCKET = "secure";
+
+async function storePdf(file: File, key: string): Promise<{ ref: string; text: string } | null> {
+  if (!file || file.size === 0) return null;
+  const svc = createServiceClient();
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const path = `mock-papers/${key}.pdf`;
+  const up = await svc.storage.from(BUCKET).upload(path, bytes, {
+    contentType: "application/pdf",
+    upsert: true,
+  });
+  if (up.error) return null;
+
+  // Read the text out for the checker. A signed URL because the bucket is
+  // private — the file itself must never become publicly fetchable.
+  let text = "";
+  try {
+    const { data: signed } = await svc.storage.from(BUCKET).createSignedUrl(path, 120);
+    if (signed?.signedUrl) {
+      const { extractPdfText, cleanPdfText } = await import("@/lib/pdf");
+      text = cleanPdfText(await extractPdfText(signed.signedUrl));
+    }
+  } catch { /* the file is stored either way; the text is a bonus */ }
+
+  return { ref: `secure:${path}`, text };
+}
+
+/**
+ * Attach his own question paper and/or solutions to an existing paper.
+ *
+ * Either file on its own is fine — the question paper today, the solutions
+ * when they are written. Uploading a question paper is what makes students see
+ * his file instead of ours.
+ */
+export async function uploadPaperFiles(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  if (!id) return;
+
+  const paper = formData.get("paper_pdf") as File | null;
+  const answers = formData.get("answers_pdf") as File | null;
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+  if (paper && paper.size > 0) {
+    const stored = await storePdf(paper, `${id}-paper`);
+    if (!stored) redirect("/admin/mock-papers?err=upload");
+    patch.paper_pdf_url = stored.ref;
+    patch.source = "uploaded";
+    // Keep the text in step so search, the checker and the on-screen preview
+    // are all describing the file students actually get.
+    if (stored.text) patch.questions_md = stored.text;
+  }
+
+  if (answers && answers.size > 0) {
+    const stored = await storePdf(answers, `${id}-answers`);
+    if (!stored) redirect("/admin/mock-papers?err=upload");
+    patch.answers_pdf_url = stored.ref;
+    if (stored.text) patch.answers_md = stored.text;
+    patch.answers_progress = 100;
+  }
+
+  if (Object.keys(patch).length === 1) redirect("/admin/mock-papers?err=nofile");
+
+  await createServiceClient().from("mock_papers").update(patch).eq("id", id);
+  revalidatePath("/admin/mock-papers");
+  revalidatePath("/mock-tests");
+  redirect("/admin/mock-papers?uploaded=1");
+}
+
+/** Take his file away and fall back to whatever we hold as text. */
+export async function removeUploadedPaper(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  const which = str(formData.get("which")); // "paper" | "answers"
+  if (!id || (which !== "paper" && which !== "answers")) return;
+  const svc = createServiceClient();
+  await svc.storage.from(BUCKET).remove([`mock-papers/${id}-${which}.pdf`]);
+  await svc.from("mock_papers")
+    .update({ [which === "paper" ? "paper_pdf_url" : "answers_pdf_url"]: null, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  revalidatePath("/admin/mock-papers");
+  revalidatePath("/mock-tests");
+  redirect("/admin/mock-papers?removed=1");
+}
+
+/** A paper that begins as his file — no AI anywhere in it. */
+export async function createUploadedPaper(formData: FormData) {
+  await assertArea(null);
+  const svc = createServiceClient();
+  const title = str(formData.get("title"));
+  const paper = formData.get("paper_pdf") as File | null;
+  if (!title || !paper || paper.size === 0) redirect("/admin/mock-papers?err=nofile");
+
+  const { data: row } = await svc.from("mock_papers").insert({
+    course: str(formData.get("course")) || "CA Final",
+    subject: str(formData.get("subject")) || "Financial Reporting",
+    attempt_label: str(formData.get("attempt_label")) || "September 2026",
+    paper_no: Number(formData.get("paper_no")) || 1,
+    title,
+    total_marks: Number(formData.get("total_marks")) || 100,
+    duration_min: Number(formData.get("duration_min")) || 180,
+    status: "drafted",
+    source: "uploaded",
+  }).select("id").single();
+  if (!row) redirect("/admin/mock-papers?err=upload");
+
+  const stored = await storePdf(paper, `${row.id}-paper`);
+  const answersFile = formData.get("answers_pdf") as File | null;
+  const storedAns = answersFile && answersFile.size > 0 ? await storePdf(answersFile, `${row.id}-answers`) : null;
+
+  await svc.from("mock_papers").update({
+    paper_pdf_url: stored?.ref ?? null,
+    questions_md: stored?.text || null,
+    answers_pdf_url: storedAns?.ref ?? null,
+    answers_md: storedAns?.text || null,
+    answers_progress: storedAns ? 100 : 0,
+    updated_at: new Date().toISOString(),
+  }).eq("id", row.id);
+
+  revalidatePath("/admin/mock-papers");
+  redirect("/admin/mock-papers?uploaded=1");
+}

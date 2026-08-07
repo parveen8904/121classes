@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
 import AnswerKey from "@/app/components/AnswerKey";
 import AdminHero from "../_components/AdminHero";
-import { draftOne, draftAllQueued, createSet, approvePaper, unapprovePaper, savePaper, redraftFromScratch } from "./actions";
+import { draftOne, draftAllQueued, createSet, approvePaper, unapprovePaper, savePaper, redraftFromScratch, uploadPaperFiles, removeUploadedPaper, createUploadedPaper } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mock test papers — Admin" };
@@ -13,6 +13,7 @@ type Paper = {
   title: string; total_marks: number; duration_min: number;
   questions_md: string | null; answers_md: string | null;
   status: string; error: string | null; generated_at: string | null;
+  paper_pdf_url: string | null; answers_pdf_url: string | null; source: string | null;
 };
 
 const LABEL: Record<string, { text: string; colour: string }> = {
@@ -45,9 +46,37 @@ export default async function MockPapersPage(props: {
       <AdminHero
         badge="📄 Mock test papers"
         title="Full 100-mark papers, in the ICAI pattern"
-        subtitle="30 marks of case-scenario MCQs and 70 marks descriptive, drafted from the pattern of past exam questions. Nothing reaches a student until you approve it."
+        subtitle="30 marks of case-scenario MCQs and 70 marks descriptive. Draft one here, or upload a paper you have written yourself — students get your file exactly as you made it. Nothing reaches a student until you approve it."
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {/* Add a paper that is his from the first keystroke — no AI drafting in
+          it at all. The drafting above stays for when he wants it; this is the
+          way in for a paper he has already written. */}
+      <details className="card" style={{ marginTop: 16 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+          📤 Add MY OWN paper (upload a PDF — nothing is written by AI)
+        </summary>
+        <form action={createUploadedPaper} style={{ marginTop: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10 }}>
+            <div><label>Title</label><input name="title" required placeholder="Mock Test Paper 1" /></div>
+            <div><label>Course</label><input name="course" defaultValue="CA Final" /></div>
+            <div><label>Subject</label><input name="subject" defaultValue="Financial Reporting" /></div>
+            <div><label>Attempt</label><input name="attempt_label" defaultValue="September 2026" /></div>
+            <div><label>Paper no.</label><input name="paper_no" type="number" defaultValue={1} min={1} /></div>
+            <div><label>Total marks</label><input name="total_marks" type="number" defaultValue={100} /></div>
+            <div><label>Minutes</label><input name="duration_min" type="number" defaultValue={180} /></div>
+          </div>
+          <label style={{ marginTop: 8, display: "block" }}>Question paper (PDF) — this is what students receive</label>
+          <input type="file" name="paper_pdf" accept="application/pdf" required style={{ marginBottom: 10 }} />
+          <label>Solutions (PDF) — optional, and never shown to students</label>
+          <input type="file" name="answers_pdf" accept="application/pdf" style={{ marginBottom: 10 }} />
+          <SubmitButton className="btn" savedLabel="Added">📤 Add this paper</SubmitButton>
+          <p className="muted" style={{ fontSize: ".8rem", marginTop: 8 }}>
+            It arrives as a draft. Read it, then approve it like any other — approving is still what puts it in front of a student.
+          </p>
+        </form>
+      </details>
 
       {searchParams.made && <div className="notice ok" style={{ marginTop: 16 }}>✅ {searchParams.made} paper slot(s) created.</div>}
       {searchParams.restarted && (
@@ -160,6 +189,46 @@ export default async function MockPapersPage(props: {
                       <AnswerKey text={p.answers_md} size=".76rem" />
                     </details>
                   )}
+                  {/* HIS OWN PAPER. Uploading a question paper makes students
+                      see that exact file — his layout, untouched. The solutions
+                      file is private: it feeds the checking and is never served
+                      to a student. */}
+                  <details style={{ marginTop: 8 }} open={p.source === "uploaded"}>
+                    <summary className="btn as-btn small" style={{ cursor: "pointer" }}>
+                      📤 Upload my own paper {p.paper_pdf_url ? "· ✅ in use" : ""}
+                    </summary>
+                    <form action={uploadPaperFiles} style={{ marginTop: 10 }}>
+                      <input type="hidden" name="id" value={p.id} />
+                      <p className="muted" style={{ fontSize: ".8rem", marginBottom: 8 }}>
+                        Students get your PDF exactly as you made it. We only read the text out of it
+                        so answers can still be checked against it.
+                      </p>
+                      <label style={{ fontSize: ".82rem" }}>Question paper (PDF)</label>
+                      <input type="file" name="paper_pdf" accept="application/pdf" style={{ marginBottom: 10 }} />
+                      <label style={{ fontSize: ".82rem" }}>Solutions (PDF) — never shown to students</label>
+                      <input type="file" name="answers_pdf" accept="application/pdf" style={{ marginBottom: 10 }} />
+                      <SubmitButton className="btn small" savedLabel="Uploaded">📤 Upload</SubmitButton>
+                    </form>
+                    {(p.paper_pdf_url || p.answers_pdf_url) && (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                        {p.paper_pdf_url && (
+                          <form action={removeUploadedPaper}>
+                            <input type="hidden" name="id" value={p.id} />
+                            <input type="hidden" name="which" value="paper" />
+                            <SubmitButton className="btn small secondary" savedLabel="Removed">🗑️ Remove my question paper</SubmitButton>
+                          </form>
+                        )}
+                        {p.answers_pdf_url && (
+                          <form action={removeUploadedPaper}>
+                            <input type="hidden" name="id" value={p.id} />
+                            <input type="hidden" name="which" value="answers" />
+                            <SubmitButton className="btn small secondary" savedLabel="Removed">🗑️ Remove my solutions</SubmitButton>
+                          </form>
+                        )}
+                      </div>
+                    )}
+                  </details>
+
                   <details style={{ marginTop: 8 }}>
                     <summary className="btn as-btn small secondary" style={{ cursor: "pointer" }}>✏️ Correct it by hand</summary>
                     <form action={savePaper} style={{ marginTop: 10 }}>

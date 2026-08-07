@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ paperId: st
   const svc = createServiceClient();
   const { data: paper } = await svc
     .from("mock_papers")
-    .select("title, questions_md, answers_md, status, attempt_label")
+    .select("title, questions_md, answers_md, status, attempt_label, paper_pdf_url, answers_pdf_url")
     .eq("id", paperId)
     .maybeSingle();
   if (!paper) return new NextResponse("Not available", { status: 404 });
@@ -44,6 +44,30 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ paperId: st
   // student, whatever the paper's status.
   const wantAnswers = new URL(req.url).searchParams.get("answers") === "1";
   if (wantAnswers && !isAdmin) return new NextResponse("Not available", { status: 404 });
+
+  // HIS OWN FILE WINS.
+  //
+  // When he has uploaded the paper himself, that is the paper — served byte for
+  // byte, his layout and his typesetting, not re-set through ours. Ours only
+  // renders what he has not written himself.
+  const uploaded = String((wantAnswers ? paper.answers_pdf_url : paper.paper_pdf_url) ?? "");
+  if (uploaded.startsWith("secure:")) {
+    const path = uploaded.slice("secure:".length);
+    const { data: file, error } = await svc.storage.from("secure").download(path);
+    if (!error && file) {
+      return new NextResponse(await file.arrayBuffer(), {
+        headers: {
+          "content-type": "application/pdf",
+          "content-disposition": `inline; filename="${paper.title.replace(/[^\w-]/g, "_")}.pdf"`,
+          // Never cached by a shared cache: the answers copy is admin-only and
+          // must not be left sitting in front of a student.
+          "cache-control": "private, no-store",
+        },
+      });
+    }
+    // Fall through and typeset from the text if the file has gone missing —
+    // better a plain paper than a dead link.
+  }
 
   const text = String((wantAnswers ? paper.answers_md : paper.questions_md) ?? "").trim();
   if (!text) return new NextResponse("Nothing written yet", { status: 404 });

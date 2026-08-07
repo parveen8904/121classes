@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { recordWatch, logActivity } from "./watch-actions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -133,6 +133,49 @@ export default function WatchTracker({
     return () => window.removeEventListener("orientationchange", onRotate);
   }, []);
 
+  // Fullscreen, the way a video player is expected to behave.
+  //
+  // Two things were wrong. Our own ⛶ button is pinned to the corner of the
+  // player with nothing to hide it, so it sat over the video permanently —
+  // "I can still see the controls in full screen". And we went fullscreen in
+  // whatever way up the phone happened to be: a 16:9 class inside an upright
+  // phone is a strip in the middle with a wide black band above and below it,
+  // which is not full screen by any reasonable reading of the words.
+  //
+  // So: entering fullscreen turns the picture sideways, and the button fades
+  // out on its own. One tap anywhere brings it back for a few seconds.
+  const [isFull, setIsFull] = useState(false);
+  const [showChrome, setShowChrome] = useState(true);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const bumpChrome = () => {
+    setShowChrome(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setShowChrome(false), 2800);
+  };
+
+  useEffect(() => {
+    const onChange = () => {
+      const on = !!(document.fullscreenElement || (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement);
+      setIsFull(on);
+      // Landscape is what makes it edge to edge. Android honours this while
+      // fullscreen is active; iOS has no orientation lock and simply refuses,
+      // which is why the promise is swallowed rather than awaited.
+      const orientation = (screen as unknown as { orientation?: { lock?: (o: string) => Promise<void>; unlock?: () => void } }).orientation;
+      try {
+        if (on) { orientation?.lock?.("landscape")?.catch(() => { /* iOS, or a tablet the user has locked */ }); bumpChrome(); }
+        else { orientation?.unlock?.(); setShowChrome(true); }
+      } catch { /* not supported — the video is still fullscreen, just not turned */ }
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    document.addEventListener("webkitfullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      document.removeEventListener("webkitfullscreenchange", onChange);
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    };
+  }, []);
+
   const goFullscreen = () => {
     const el = wrapRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;
     if (!el) return;
@@ -141,17 +184,30 @@ export default function WatchTracker({
   };
 
   return (
-    <div className="video-frame" ref={wrapRef} style={{ marginTop: 16 }}>
+    <div
+      className="video-frame"
+      ref={wrapRef}
+      style={{ marginTop: 16 }}
+      onPointerDown={() => { if (isFull) bumpChrome(); }}
+    >
       <iframe ref={iframeRef} src={finalSrc} allow="encrypted-media; fullscreen" allowFullScreen title="Class video" />
       {watermark && <span className="vwm">{watermark}</span>}
       <button
         type="button"
         onClick={goFullscreen}
-        aria-label="Fullscreen"
-        title="Fullscreen"
-        style={{ position: "absolute", bottom: 8, right: 8, zIndex: 4, background: "rgba(0,0,0,.55)", color: "#fff", border: 0, borderRadius: 8, padding: "6px 10px", fontSize: "1rem", cursor: "pointer" }}
+        aria-label={isFull ? "Leave fullscreen" : "Fullscreen"}
+        title={isFull ? "Leave fullscreen" : "Fullscreen"}
+        style={{
+          position: "absolute", bottom: 8, right: 8, zIndex: 4,
+          background: "rgba(0,0,0,.55)", color: "#fff", border: 0, borderRadius: 8,
+          padding: "6px 10px", fontSize: "1rem", cursor: "pointer",
+          // Out of the way while watching; one tap on the video brings it back.
+          opacity: isFull && !showChrome ? 0 : 1,
+          pointerEvents: isFull && !showChrome ? "none" : "auto",
+          transition: "opacity .25s ease",
+        }}
       >
-        ⛶
+        {isFull ? "✕" : "⛶"}
       </button>
     </div>
   );

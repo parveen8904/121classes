@@ -431,6 +431,26 @@ input[type="radio"], input[type="checkbox"] {
   .video-frame:-webkit-full-screen { padding-bottom: 0; border-radius: 0; }
 }
 
+/* Turning the picture, when the phone will not turn.
+   iPhone and iPad have no orientation lock — WebKit does not implement it — so
+   "fullscreen" on an upright iPhone left a 16:9 class as a strip across the
+   middle with a black band above and below. Android locks to landscape and
+   never needs this; iOS gets the player rotated a quarter turn instead, sized
+   to the screen's other way round, so it genuinely runs edge to edge.
+
+   rotate(90deg) about the top-left corner swings the box off to the left; the
+   translate brings it back over the screen. Width and height are swapped
+   because after the turn they mean the opposite thing. */
+@media (orientation: portrait) {
+  .video-frame.fs-rotate:fullscreen,
+  .video-frame.fs-rotate:-webkit-full-screen {
+    width: 100vh; height: 100vw;
+    max-width: none; padding-bottom: 0;
+    transform-origin: top left;
+    transform: rotate(90deg) translateY(-100%);
+  }
+}
+
 /* The offline player fullscreens a flex child. Out of its flex parent, flex:1
    means nothing and the box collapses — so it is sized explicitly. */
 .offline-stage:fullscreen { width: 100vw; width: 100dvw; height: 100vh; height: 100dvh; background: #000; }

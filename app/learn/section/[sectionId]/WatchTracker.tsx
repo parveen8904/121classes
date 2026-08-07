@@ -162,6 +162,8 @@ export default function WatchTracker({
   // out on its own. One tap anywhere brings it back for a few seconds.
   const [isFull, setIsFull] = useState(false);
   const [showChrome, setShowChrome] = useState(true);
+  // iOS refuses to turn the screen; we turn the picture instead.
+  const [selfRotate, setSelfRotate] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bumpChrome = () => {
@@ -178,10 +180,26 @@ export default function WatchTracker({
       // fullscreen is active; iOS has no orientation lock and simply refuses,
       // which is why the promise is swallowed rather than awaited.
       const orientation = (screen as unknown as { orientation?: { lock?: (o: string) => Promise<void>; unlock?: () => void } }).orientation;
+      if (!on) {
+        try { orientation?.unlock?.(); } catch { /* nothing to unlock */ }
+        setSelfRotate(false);
+        setShowChrome(true);
+        return;
+      }
+      bumpChrome();
+      // iPhone and iPad have NO orientation lock — WebKit does not implement
+      // it. Android does. So: ask, and if the answer is no (or there is nobody
+      // to ask), rotate the player ourselves so an upright phone still gets a
+      // picture that fills the screen instead of a strip between two black
+      // bands. Only worth doing while the screen is actually upright.
+      const portrait = window.innerHeight > window.innerWidth;
+      const lock = orientation?.lock;
+      if (!lock) { setSelfRotate(portrait); return; }
       try {
-        if (on) { orientation?.lock?.("landscape")?.catch(() => { /* iOS, or a tablet the user has locked */ }); bumpChrome(); }
-        else { orientation?.unlock?.(); setShowChrome(true); }
-      } catch { /* not supported — the video is still fullscreen, just not turned */ }
+        Promise.resolve(lock.call(orientation, "landscape"))
+          .then(() => setSelfRotate(false))
+          .catch(() => setSelfRotate(window.innerHeight > window.innerWidth));
+      } catch { setSelfRotate(portrait); }
     };
     document.addEventListener("fullscreenchange", onChange);
     document.addEventListener("webkitfullscreenchange", onChange);
@@ -201,7 +219,7 @@ export default function WatchTracker({
 
   return (
     <div
-      className="video-frame"
+      className={`video-frame${isFull && selfRotate ? " fs-rotate" : ""}`}
       ref={wrapRef}
       style={{ marginTop: 16 }}
       onPointerDown={() => { if (isFull) bumpChrome(); }}

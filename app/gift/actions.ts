@@ -152,23 +152,20 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
     //    the money arrived. A supporter selling in July for an October start
     //    would otherwise hand over a subscription three months shorter than
     //    the one the student paid for. A date already past just means "now".
-    const soldFor = g.starts_on ? new Date(String(g.starts_on)) : null;
-    const starts = soldFor && soldFor.getTime() > Date.now() ? soldFor : new Date();
-    const ends = new Date(starts); ends.setMonth(ends.getMonth() + (Number(g.months) || 12));
+    // The rule lives in lib/planWindow.ts so it can be run and checked without
+    // taking money — this handler sits behind a live payment gateway.
+    const { planWindow } = await import("@/lib/planWindow");
+    const win = planWindow(g.starts_on as string | null, Number(g.months) || 12);
 
-    // BRONZE IN THE MEANTIME.
-    //
-    // When the paid plan begins later, the student would otherwise have an
-    // account that shows them nothing until their date — which reads as a
-    // broken login, not as a subscription waiting to start. Bronze bridges the
-    // gap: they can log in today, look round, and watch the demo classes, and
-    // the plan they were bought takes over on the day it was sold for.
-    if (starts.getTime() > Date.now()) {
+    // Bronze covers the gap when the paid plan starts later, so the student can
+    // sign in the same day instead of meeting an account that shows them
+    // nothing until their date.
+    if (win.bridge) {
       const { data: bronze } = await svc.from("plans").select("id").eq("tier", "bronze").maybeSingle();
       if (bronze?.id) {
         await svc.from("subscriptions").insert({
           student_id: recipientId, course_id: g.course_id, subject_id: g.subject_id, plan_id: bronze.id,
-          channel: "gift", starts_at: new Date().toISOString(), ends_at: starts.toISOString(),
+          channel: "gift", starts_at: win.bridge.startsAt.toISOString(), ends_at: win.bridge.endsAt.toISOString(),
           status: "active", auto_renew: false,
         });
       }
@@ -176,10 +173,10 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
 
     await svc.from("subscriptions").insert({
       student_id: recipientId, course_id: g.course_id, subject_id: g.subject_id, plan_id: g.plan_id,
-      channel: "gift", starts_at: starts.toISOString(), ends_at: ends.toISOString(),
+      channel: "gift", starts_at: win.paid.startsAt.toISOString(), ends_at: win.paid.endsAt.toISOString(),
       status: "active", auto_renew: false,
     });
-    provisionStarts = starts; provisionEnds = ends;
+    provisionStarts = win.paid.startsAt; provisionEnds = win.paid.endsAt;
     await svc.from("my_courses").upsert({ student_id: recipientId, course_id: g.course_id }, { onConflict: "student_id,course_id" });
     if (g.subject_id) await svc.from("my_subjects").upsert({ student_id: recipientId, subject_id: g.subject_id }, { onConflict: "student_id,subject_id" });
   }

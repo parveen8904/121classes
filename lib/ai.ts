@@ -91,32 +91,61 @@ async function logUsage(feature: string, model: string, inTok: number, outTok: n
     const cost = (inTok / 1e6) * p.in + (outTok / 1e6) * p.out;
     const svc = createServiceClient();
     await svc.from("ai_usage").insert({ feature, model, input_tokens: inTok, output_tokens: outTok, cost_usd: Number(cost.toFixed(5)) });
-    await maybeSpendAlert(svc, cost);
+    await maybeSpendAlert(svc);
   } catch {
     // never let usage logging break an AI call
   }
 }
 
-// Running month-to-date spend (site_settings ai_spend:<YYYY-MM>); email the admin
-// once when it first crosses the monthly cap (ai_monthly_cap_usd).
-async function maybeSpendAlert(svc: ReturnType<typeof createServiceClient>, cost: number) {
+// Warn once when the month's AI spend passes the cap.
+//
+// This used to keep its own running total in site_settings, incremented on
+// every call: read the old value, add this cost, write it back. Two AI calls
+// running at once — and mock-paper drafting, digests and doubts overlap
+// constantly — both read the same figure and the second write erased the
+// first. A classic lost update. It had drifted $3.90 low on $48.57, about 8%,
+// and because the counter was the LOW one it was the alert that arrived late.
+//
+// There is no counter now. The figure comes from ai_spend_since(), which adds
+// the actual rows up in the database and cannot disagree with itself. A flag
+// per month remembers that the warning has already gone.
+let lastCapCheck = 0;
+
+async function maybeSpendAlert(svc: ReturnType<typeof createServiceClient>) {
   const get = async (k: string) => (await svc.from("site_settings").select("value").eq("key", k).maybeSingle()).data?.value as string | undefined;
+
+  // Aggregating on every single AI call would be wasteful, and a budget
+  // warning five minutes late is no worse than one on the instant.
+  if (Date.now() - lastCapCheck < 5 * 60_000) return;
+  lastCapCheck = Date.now();
+
   const cap = Number(await get("ai_monthly_cap_usd")) || 0;
+  if (cap <= 0) return;
+
   const month = new Date().toISOString().slice(0, 7);
-  const spendKey = `ai_spend:${month}`;
-  const prev = Number(await get(spendKey)) || 0;
-  const total = prev + cost;
-  await svc.from("site_settings").upsert({ key: spendKey, value: String(total.toFixed(5)) }, { onConflict: "key" });
-  if (cap > 0 && total >= cap && prev < cap) {
-    const to = (await get("ai_alert_email")) || "";
-    if (to) {
-      const { sendEmail } = await import("@/lib/notify");
-      await sendEmail(
-        to,
-        "⚠️ CA Parveen Sharma — AI monthly budget reached",
-        `<p>Your AI spend this month has reached <strong>$${total.toFixed(2)}</strong> (cap $${cap.toFixed(2)}).</p><p>Review the breakdown in Admin → AI usage &amp; cost.</p>`,
-      );
-    }
+  const flagKey = `ai_alerted:${month}`;
+  if (await get(flagKey)) return; // already said so this month
+
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const { data } = await svc.rpc("ai_spend_since", { period_start: monthStart });
+  const total = ((data ?? []) as { cost_usd: number | string }[])
+    .reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
+  if (total < cap) return;
+
+  // Mark it BEFORE sending. A send that fails must not leave the flag unset
+  // and mail him again on the next call, and again, and again.
+  await svc.from("site_settings").upsert({ key: flagKey, value: new Date().toISOString() }, { onConflict: "key" });
+
+  const to = (await get("ai_alert_email")) || "";
+  if (to) {
+    const { sendEmail } = await import("@/lib/notify");
+    await sendEmail(
+      to,
+      "⚠️ CA Parveen Sharma — AI monthly budget reached",
+      `<p>AI spend this month has reached <strong>$${total.toFixed(2)}</strong>, against your cap of $${cap.toFixed(2)}.</p>
+       <p>This is a warning only — nothing has been switched off. The breakdown is in Admin → AI usage &amp; cost.</p>`,
+    );
   }
 }
 

@@ -24,8 +24,12 @@ export default async function CostsPage() {
   const monthLabel = now.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 
   // --- AI (exact, from our log) ---
-  const { data: aiRows } = await svc.from("ai_usage").select("cost_usd").gte("created_at", monthStart).limit(20000);
-  const aiMonth = (aiRows ?? []).reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
+  // Aggregated in the database — see ai_spend_since. Fetching the rows to add
+  // them up here was truncated at 1,000 by PostgREST, so this figure stopped
+  // moving once the month passed a thousand AI calls.
+  const { data: aiRows } = await svc.rpc("ai_spend_since", { period_start: monthStart });
+  const aiMonth = ((aiRows ?? []) as { cost_usd: number | string }[])
+    .reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
 
   // --- Supabase storage used (reliable, via SECURITY DEFINER function) ---
   let storageBytes = -1, storageFiles = -1;

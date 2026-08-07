@@ -30,12 +30,20 @@ export default async function AiUsagePage() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
-  const { data: rows } = await svc
-    .from("ai_usage")
-    .select("feature, model, input_tokens, output_tokens, cost_usd, created_at")
-    .gte("created_at", monthStart)
-    .order("created_at", { ascending: false })
-    .limit(20000);
+  // Aggregated in the DATABASE, per feature and model.
+  //
+  // This used to pull every row of the month and add them up here. PostgREST
+  // caps a select at 1,000 rows, so once the month passed a thousand AI calls —
+  // about four days in — the total stopped moving and showed barely half of
+  // what was really being spent. It read as a page that had stopped
+  // refreshing; it was a number that had stopped counting.
+  //
+  // Per feature+model is a couple of dozen rows however busy the month, so
+  // there is nothing left for the cap to truncate.
+  const [{ data: rows }, { data: todayRows }] = await Promise.all([
+    svc.rpc("ai_spend_since", { period_start: monthStart }),
+    svc.rpc("ai_spend_since", { period_start: todayStart }),
+  ]);
 
   const { data: settingRows } = await svc
     .from("site_settings")
@@ -52,20 +60,23 @@ export default async function AiUsagePage() {
   }
   const aiOn = await aiConfigured();
 
-  const all = rows ?? [];
-  let monthCost = 0, monthCalls = 0, monthIn = 0, monthOut = 0, todayCost = 0;
+  type Spend = { feature: string; model: string; calls: number; input_tokens: number; output_tokens: number; cost_usd: number | string };
+  const all = (rows ?? []) as Spend[];
+  let monthCost = 0, monthCalls = 0, monthIn = 0, monthOut = 0;
   const byFeature = new Map<string, { cost: number; calls: number }>();
   const byModel = new Map<string, { cost: number; calls: number }>();
   for (const r of all) {
     const cost = Number(r.cost_usd) || 0;
-    monthCost += cost; monthCalls += 1;
-    monthIn += r.input_tokens || 0; monthOut += r.output_tokens || 0;
-    if (r.created_at >= todayStart) todayCost += cost;
+    const calls = Number(r.calls) || 0;
+    monthCost += cost; monthCalls += calls;
+    monthIn += Number(r.input_tokens) || 0; monthOut += Number(r.output_tokens) || 0;
     const f = byFeature.get(r.feature) ?? { cost: 0, calls: 0 };
-    f.cost += cost; f.calls += 1; byFeature.set(r.feature, f);
+    f.cost += cost; f.calls += calls; byFeature.set(r.feature, f);
     const m = byModel.get(r.model) ?? { cost: 0, calls: 0 };
-    m.cost += cost; m.calls += 1; byModel.set(r.model, m);
+    m.cost += cost; m.calls += calls; byModel.set(r.model, m);
   }
+  const todayCost = ((todayRows ?? []) as Spend[])
+    .reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
   const features = [...byFeature.entries()].sort((a, b) => b[1].cost - a[1].cost);
   const models = [...byModel.entries()].sort((a, b) => b[1].cost - a[1].cost);
   const monthLabel = now.toLocaleDateString("en-IN", { month: "long", year: "numeric" });

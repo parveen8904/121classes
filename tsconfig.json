@@ -39,6 +39,7 @@
     "node_modules",
     "mobile",
     "desktop",
-    "discord-worker"
+    "discord-worker",
+    "tests"
   ]
 }

@@ -17,11 +17,14 @@ async function loadStats() {
     svc.from("job_listings").select("id", head).eq("status", "new"),
     svc.from("doubts").select("id", head).eq("status", "open"),
     svc.from("page_questions").select("id", head).eq("status", "open"),
-    svc.from("ai_usage").select("cost_usd").gte("created_at", monthStart).limit(20000),
+    // Aggregated in the DATABASE. Summing the raw rows here was silently cut
+    // off by the 1,000-row cap, so the figure stopped moving four days into
+    // the month and read barely half of what was really being spent.
+    svc.rpc("ai_spend_since", { period_start: monthStart }),
     svc.rpc("storage_usage"),
     getBunnyBilling(),
   ]);
-  const aiMonth = (ai.data ?? []).reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
+  const aiMonth = (ai.data ?? []).reduce((s: number, r: { cost_usd: number | string }) => s + (Number(r.cost_usd) || 0), 0);
   const stRow = Array.isArray(storage.data) ? storage.data[0] : storage.data;
   return {
     students: students.count ?? 0,

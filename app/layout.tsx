@@ -13,6 +13,7 @@ import Tracker from "./components/Tracker";
 import LeadPopup from "./components/LeadPopup";
 import PageHelp from "./components/PageHelp";
 import RatePrompt from "./components/RatePrompt";
+import PushRegister from "./components/PushRegister";
 
 // IMPORTANT: no force-dynamic and no cookie reads here. This layout wraps EVERY
 // page — anything dynamic in it disables caching for the whole site (which was
@@ -157,6 +158,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <PageHelp />
         {/* Play-Store rating ask — Android app only, invested users, happy pages */}
         <RatePrompt />
+        <PushRegister />
       </body>
     </html>
   );

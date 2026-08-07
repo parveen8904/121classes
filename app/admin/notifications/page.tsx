@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
 import { emailConfigured, whatsappConfigured, telegramConfigured } from "@/lib/notify";
+import { pushConfigured } from "@/lib/push";
 import AdminHero from "../_components/AdminHero";
 import { broadcast } from "./actions";
 
@@ -8,13 +9,14 @@ export const dynamic = "force-dynamic";
 
 export default async function NotificationsPage(
   props: {
-    searchParams: Promise<{ tg?: string; em?: string; emt?: string; dm?: string; dmt?: string }>;
+    searchParams: Promise<{ tg?: string; em?: string; emt?: string; dm?: string; dmt?: string; ps?: string; pst?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
   const tgOn = await telegramConfigured();
   const emOn = await emailConfigured();
   const waOn = await whatsappConfigured();
+  const pushOn = await pushConfigured();
 
   // Audience size (students with contact info).
   const svc = createServiceClient();
@@ -23,9 +25,14 @@ export default async function NotificationsPage(
     .select("id", { count: "exact", head: true })
     .eq("role", "student");
 
+  const { count: deviceCount } = await svc
+    .from("push_devices")
+    .select("token", { count: "exact", head: true })
+    .is("disabled_at", null);
+
   const sentEmail = Number(searchParams.em ?? 0);
   const totalEmail = Number(searchParams.emt ?? 0);
-  const showResult = searchParams.tg || searchParams.em;
+  const showResult = searchParams.tg || searchParams.em || searchParams.pst;
 
   const Pill = ({ on, label }: { on: boolean; label: string }) => (
     <span className="badge" style={{ background: on ? "rgba(34,197,94,.15)" : "var(--bg-soft)", color: on ? "#22c55e" : "var(--muted)", borderColor: on ? "#22c55e" : "var(--border)" }}>
@@ -38,7 +45,7 @@ export default async function NotificationsPage(
       <AdminHero
         badge="📣 Notify students"
         title="Send a notification"
-        subtitle="Broadcast an update to your students by Telegram, email & WhatsApp. 📲"
+        subtitle="Broadcast an update to your students by Telegram, email, WhatsApp & straight to their phones. 📲"
         back={{ href: "/admin", label: "Admin" }}
       />
 
@@ -48,6 +55,7 @@ export default async function NotificationsPage(
           {searchParams.tg === "fail" && "⚠️ Telegram post failed — check the bot token. "}
           {totalEmail > 0 && `✉️ Emailed ${sentEmail}/${totalEmail} students${totalEmail >= 500 ? " (first 500 this batch — send again for the rest)" : ""}. `}
           {Number(searchParams.dmt ?? 0) > 0 && `✈️ Sent ${Number(searchParams.dm ?? 0)}/${Number(searchParams.dmt ?? 0)} personal Telegram messages.`}
+          {Number(searchParams.pst ?? 0) > 0 && `📲 Pushed to ${Number(searchParams.ps ?? 0)}/${Number(searchParams.pst ?? 0)} phones.`}
         </div>
       )}
 
@@ -55,8 +63,9 @@ export default async function NotificationsPage(
         <Pill on={tgOn} label="Telegram" />
         <Pill on={emOn} label="Email" />
         <Pill on={waOn} label="WhatsApp" />
+        <Pill on={pushOn} label="App notifications" />
         <span className="muted" style={{ fontSize: ".82rem", alignSelf: "center" }}>
-          {studentCount ?? 0} students
+          {studentCount ?? 0} students · {deviceCount ?? 0} phones with the app
         </span>
       </div>
 
@@ -83,6 +92,11 @@ export default async function NotificationsPage(
             </label>
             <label className="remember" style={{ margin: 0, opacity: emOn ? 1 : 0.5 }}>
               <input type="checkbox" name="ch_email" defaultChecked={false} disabled={!emOn} /> ✉️ Email students
+            </label>
+            {/* The only channel here that reaches a student who has not opened
+                anything — so it is the loudest, and it is off by default. */}
+            <label className="remember" style={{ margin: 0, opacity: pushOn ? 1 : 0.5 }}>
+              <input type="checkbox" name="ch_push" defaultChecked={false} disabled={!pushOn} /> 📲 App notification (iPhone &amp; Android)
             </label>
           </div>
 

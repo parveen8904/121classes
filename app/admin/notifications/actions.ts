@@ -29,12 +29,15 @@ export async function broadcast(formData: FormData) {
   const chDiscord = formData.get("ch_discord") === "on";
   const chTelegramDm = formData.get("ch_telegram_dm") === "on";
   const chEmail = formData.get("ch_email") === "on";
+  const chPush = formData.get("ch_push") === "on";
 
   let tgOk = false;
   let dmSent = 0;
   let dmTotal = 0;
   let emailSent = 0;
   let emailTotal = 0;
+  let pushSent = 0;
+  let pushTotal = 0;
 
   if (chTelegram) {
     tgOk = await sendTelegramChannel(`📢 ${title}\n\n${body}`, link || undefined);
@@ -86,7 +89,18 @@ export async function broadcast(formData: FormData) {
     }
   }
 
+  // The apps. Reaches the phone in the student's hand within seconds, and is
+  // the only channel here that arrives without them opening anything.
+  if (chPush) {
+    const { pushToEveryone, pushConfigured } = await import("@/lib/push");
+    if (await pushConfigured()) {
+      const r = await pushToEveryone({ title, body, link: link || undefined });
+      pushSent = r.sent;
+      pushTotal = r.sent + r.failed;
+    }
+  }
+
   redirect(
-    `/admin/notifications?tg=${chTelegram ? (tgOk ? "ok" : "fail") : "off"}&em=${emailSent}&emt=${emailTotal}&dm=${dmSent}&dmt=${dmTotal}`,
+    `/admin/notifications?ps=${pushSent}&pst=${pushTotal}&tg=${chTelegram ? (tgOk ? "ok" : "fail") : "off"}&em=${emailSent}&emt=${emailTotal}&dm=${dmSent}&dmt=${dmTotal}`,
   );
 }

@@ -288,6 +288,10 @@ export default async function IntegrationsPage(
           Type <code>CLEAR</code> to remove a key.
         </p>
         <form action={saveSecrets} autoComplete="off">
+          <KeyField name="FCM_SERVICE_ACCOUNT" label="Firebase service account (whole JSON file)" placeholder='{"type":"service_account","project_id":"…"}' />
+          <KeyField name="APNS_KEY_P8" label="Apple push key (.p8 file contents)" placeholder="-----BEGIN PRIVATE KEY-----…" />
+          <KeyField name="APNS_KEY_ID" label="Apple push key ID" placeholder="ABC1234DEF" />
+          <KeyField name="APNS_TEAM_ID" label="Apple team ID" placeholder="XYZ9876GHI" />
           <KeyField name="TELEGRAM_BOT_TOKEN" label="Telegram bot token" placeholder="123456:ABC-DEF…" />
           <KeyField name="TELEGRAM_BOT_USERNAME" label="Telegram bot username (no @)" placeholder="my121bot" />
           <KeyField name="TELEGRAM_CHANNEL_ID" label="Telegram channel (for broadcasts)" placeholder="@caparveen" />

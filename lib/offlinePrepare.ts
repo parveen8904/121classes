@@ -309,7 +309,20 @@ export async function prepareNextPending(timeBudgetMs = 150_000): Promise<StepRe
     .from("offline_jobs")
     .select("section_id, resolution")
     .in("status", ["pending", "running"])
-    .order("created_at")
+    // LEAST RECENTLY ATTEMPTED first — not oldest-created.
+    //
+    // Ordering by creation handed the same twenty jobs to every single pass.
+    // A job parked waiting for Bunny to encode a smaller size returns
+    // "pending" and the loop skips it — so if the twenty at the head are all
+    // parked, and they were, the loop skipped all twenty and returned having
+    // done nothing. Every five minutes, for ever. Meanwhile each pass enqueues
+    // another batch of missing qualities, so the queue grew to 583 jobs behind
+    // a head it could never get past, and 292 of 312 classes were left with
+    // only 720p to download.
+    //
+    // Sorting by last attempt rotates the whole queue instead: a job that was
+    // just tried goes to the back, and everything else gets a turn.
+    .order("updated_at", { ascending: true, nullsFirst: true })
     .limit(20);
   let last: StepResult | null = null;
   for (const q of queued ?? []) {

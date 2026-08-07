@@ -22,6 +22,7 @@ export const REPORTS: AdminPanel[] = [
   { icon: "🧾", title: "Orders report", desc: "Every payment received — subscriptions, extensions and books — with buyer details, GST invoices and dispatch state.", href: "/admin/orders" },
   { icon: "💚", title: "Supporters & their orders", desc: "Who sponsors students here, how many each has paid for, and every sponsorship order with its invoice and GST split.", href: "/admin/reports/supporters" },
   { icon: "📇", title: "Leads report", desc: "Every enquiry with name, phone, email and source — and whether it became a student.", href: "/admin/reports/leads" },
+  { icon: "🎬", title: "Offline encoding queue", desc: "What the encoder finished today and yesterday, what is waiting and what failed — put a class first, or run one now instead of waiting for tonight.", href: "/admin/reports/encoding" },
   { icon: "🩺", title: "Server health & visitors", desc: "Whether the site is well: who is on it now, traffic over the week and month, the queries costing the most time, and plain-English fixes.", href: "/admin/health" },
   { icon: "🔍", title: "Student insights", desc: "What students actually study: most-viewed topics, where doubts come from, how they found us, and who has gone quiet.", href: "/admin/insights" },
   { icon: "💸", title: "Cost report", desc: "What the business is spending on AI, Bunny, Cloudflare and Supabase — one figure per provider.", href: "/admin/costs" },

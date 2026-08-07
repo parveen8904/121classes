@@ -322,6 +322,9 @@ export async function prepareNextPending(timeBudgetMs = 150_000): Promise<StepRe
     //
     // Sorting by last attempt rotates the whole queue instead: a job that was
     // just tried goes to the back, and everything else gets a turn.
+    // Anything the founder has marked urgent goes first, then the least
+    // recently attempted. Priority is set from the encoding-queue report.
+    .order("priority", { ascending: false })
     .order("updated_at", { ascending: true, nullsFirst: true })
     .limit(20);
   let last: StepResult | null = null;

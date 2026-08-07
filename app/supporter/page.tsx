@@ -66,6 +66,9 @@ export default async function SupporterPage(props: {
       .limit(200),
   ]);
 
+  const { sellableProducts } = await import("@/lib/supporterCatalogue");
+  const products = await sellableProducts();
+
   const gifts = (giftRows ?? []) as Gift[];
   const leads = (leadRows ?? []) as Lead[];
 
@@ -81,12 +84,33 @@ export default async function SupporterPage(props: {
       <section className="container" style={{ paddingTop: 32, paddingBottom: 60, maxWidth: 900 }}>
         <span className="badge">💚 Supporter</span>
         <h1 style={{ margin: "12px 0 6px" }}>
-          Thank you{me?.full_name ? `, ${me.full_name.split(" ")[0]}` : ""}
+          {me?.full_name ? `${me.full_name.split(" ")[0]}'s` : "Your"} desk
         </h1>
         <p className="muted" style={{ fontSize: "1rem", lineHeight: 1.7 }}>
-          Everything you have given, in one place — the students, what it cost, and every invoice. You can also
-          tell us who you would like to sponsor next.
+          What you can sell, what you have sold, and every invoice — in one place.
         </p>
+
+        {/* WHAT YOU SELL. Two products, priced exactly as a student would pay.
+            The discount a supporter passes on comes from a coupon, openly, not
+            from a second price list. */}
+        <h2 className="admin-section-title" style={{ marginTop: 26 }}>🛒 What you can sell</h2>
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))" }}>
+          {products.map((p) => (
+            <div className="card" key={p.id}>
+              <strong style={{ fontSize: "1.02rem" }}>{p.title}</strong>
+              <p className="muted" style={{ margin: "4px 0 10px", fontSize: ".86rem" }}>
+                {p.course} · Gold · {p.months} months · printed books included
+              </p>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <strong style={{ fontSize: "1.15rem" }}>{inr(p.priceInr)}</strong>
+                <Link className="btn small" href={`/supporter/sell?subject=${p.id}`}>Place an order →</Link>
+              </div>
+            </div>
+          ))}
+          {products.length === 0 && (
+            <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing is available to sell right now — please call the office.</p></div>
+          )}
+        </div>
 
         {sp.err && <div className="notice err" style={{ marginTop: 14 }}>⚠️ {sp.err}</div>}
         {sp.added && <div className="notice ok" style={{ marginTop: 14 }}>✅ Noted. Our office will reach out to them and set the gift up with you.</div>}
@@ -96,17 +120,17 @@ export default async function SupporterPage(props: {
           <div className="admin-tile">
             <div className="tile-ic">🎓</div>
             <h3 style={{ fontSize: "1.6rem" }}>{paid.length}</h3>
-            <p>student{paid.length === 1 ? "" : "s"} you have sponsored</p>
+            <p>subscription{paid.length === 1 ? "" : "s"} you have sold</p>
           </div>
           <div className="admin-tile">
             <div className="tile-ic">💰</div>
             <h3 style={{ fontSize: "1.6rem" }}>{inr(totalPaid)}</h3>
-            <p>given in total</p>
+            <p>business in total</p>
           </div>
           <div className="admin-tile">
             <div className="tile-ic">📅</div>
             <h3 style={{ fontSize: "1.6rem" }}>{inr(yearPaid)}</h3>
-            <p>given this year</p>
+            <p>business this year</p>
           </div>
           <div className="admin-tile">
             <div className="tile-ic">📝</div>
@@ -116,7 +140,7 @@ export default async function SupporterPage(props: {
         </div>
 
         {/* ── The students ──────────────────────────────────────────────── */}
-        <h2 className="admin-section-title" style={{ marginTop: 32 }}>🎓 The students you have sponsored</h2>
+        <h2 className="admin-section-title" style={{ marginTop: 32 }}>🧾 Your orders</h2>
         {paid.length === 0 ? (
           <div className="card">
             <p className="muted" style={{ margin: 0 }}>

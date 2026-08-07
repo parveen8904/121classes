@@ -28,6 +28,18 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
     .eq("id", user.id)
     .single();
 
+  // A SUPPORTER IS NOT A STUDENT.
+  //
+  // They sell subscriptions; they do not study here. Sending them to the
+  // student dashboard offered them classes, a study planner and a watch-time
+  // meter, none of which mean anything to them — and buried the two things
+  // they came for, their orders and their next sale.
+  //
+  // Only role 'supporter' is moved. Somebody who is BOTH a paying student and
+  // a supporter keeps role 'student' and stays here; the is_supporter tick
+  // just adds a link to their portal.
+  if (profile?.role === "supporter") redirect("/supporter");
+
   // First time on the dashboard → the welcome-guide email (exactly once; the
   // helper re-checks and stamps before sending). Costs nothing on later visits
   // because the flag rides along in the profile query above.

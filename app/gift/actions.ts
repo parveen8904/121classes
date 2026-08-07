@@ -15,6 +15,10 @@ const PAID = ["silver", "gold"];
 
 type GiftInput = {
   subjectId: string; tier: string; months?: number; couponCode?: string;
+  // When access should BEGIN. A supporter often sells in July for a course
+  // starting in October; without this the clock started at payment and the
+  // student quietly lost those months.
+  startsOn?: string;
   recipient: { name: string; email: string; phone?: string; attempt?: string; address?: string };
   billing: { name: string; gstin?: string; address?: string; state: string };
 };
@@ -93,6 +97,8 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
       billing_address: input.billing.address || null, billing_state: input.billing.state,
       amount_inr: amount, taxable_value: gst.taxable, gst_rate: gst.rate, cgst: gst.cgst, sgst: gst.sgst, igst: gst.igst,
       razorpay_order_id: order.id, status: "created",
+      starts_on: input.startsOn || null,
+      coupon_code: input.couponCode || null,
       // Gifted Gold of 9+ months ships the FREE printed books to the recipient
       // (unlike admin grants, which never include books).
       books_due: input.tier === "gold" && months >= 9,
@@ -138,11 +144,17 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
     await svc.from("profiles").update({
       full_name: g.recipient_name, phone: g.recipient_phone, target_attempt: g.recipient_attempt, email,
     }).eq("id", recipientId);
-    // 2) Grant the gifted subscription to the recipient.
-    const ends = new Date(); ends.setMonth(ends.getMonth() + (Number(g.months) || 12));
+    // 2) Grant the subscription — from the date it was SOLD FOR, not the date
+    //    the money arrived. A supporter selling in July for an October start
+    //    would otherwise hand over a subscription three months shorter than
+    //    the one the student paid for. A date already past just means "now".
+    const soldFor = g.starts_on ? new Date(String(g.starts_on)) : null;
+    const starts = soldFor && soldFor.getTime() > Date.now() ? soldFor : new Date();
+    const ends = new Date(starts); ends.setMonth(ends.getMonth() + (Number(g.months) || 12));
     await svc.from("subscriptions").insert({
       student_id: recipientId, course_id: g.course_id, subject_id: g.subject_id, plan_id: g.plan_id,
-      channel: "gift", ends_at: ends.toISOString(), status: "active", auto_renew: false,
+      channel: "gift", starts_at: starts.toISOString(), ends_at: ends.toISOString(),
+      status: "active", auto_renew: false,
     });
     await svc.from("my_courses").upsert({ student_id: recipientId, course_id: g.course_id }, { onConflict: "student_id,course_id" });
     if (g.subject_id) await svc.from("my_subjects").upsert({ student_id: recipientId, subject_id: g.subject_id }, { onConflict: "student_id,subject_id" });

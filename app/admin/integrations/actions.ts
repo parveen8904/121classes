@@ -10,6 +10,51 @@ import { testRazorpay } from "@/lib/razorpay";
 import { str } from "../_lib/util";
 import { SECRET_KEYS } from "./secretKeys";
 
+/**
+ * Is this actually the thing it claims to be?
+ *
+ * Only for the secrets with a shape worth checking. Everything else passes —
+ * this is a guard against a paste that went wrong, not a schema.
+ *
+ * It exists because a real Apple push key was pasted twice and arrived as 196
+ * characters and then 53, neither of them a key, and both were stored with a
+ * green light beside them. iPhone notifications would have failed with nothing
+ * on screen to explain it.
+ */
+function secretLooksRight(key: string, raw: string): boolean {
+  if (key === "APNS_KEY_P8") {
+    const body = raw
+      .replace(/-----BEGIN[^-]*-----/g, "")
+      .replace(/-----END[^-]*-----/g, "")
+      .replace(/\\n/g, "")
+      .replace(/\s+/g, "");
+    // A P-256 private key is ~200 base64 characters. Anything much shorter
+    // lost something on the way in.
+    if (body.length < 150) return false;
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(body)) return false;
+    try {
+      const lines = body.match(/.{1,64}/g) ?? [];
+      const pem = `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----\n`;
+      // The final word: can it actually be used to sign?
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const crypto = require("crypto") as typeof import("crypto");
+      crypto.createPrivateKey(pem);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  if (key === "FCM_SERVICE_ACCOUNT") {
+    try {
+      const j = JSON.parse(raw);
+      return Boolean(j.project_id && j.client_email && j.private_key);
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 async function requireAdmin() {
   const supabase = createClient();
   const {
@@ -131,11 +176,16 @@ export async function saveLinks(formData: FormData) {
 export async function saveSecrets(formData: FormData) {
   if (!(await requireAdmin())) return;
   const svc = createServiceClient();
+  const rejected: string[] = [];
   for (const key of SECRET_KEYS) {
     const raw = str(formData.get(key)).trim();
     if (!raw) continue;
     if (raw === "CLEAR") {
       await svc.from("app_secrets").delete().eq("key", key);
+    } else if (!secretLooksRight(key, raw)) {
+      // Storing a mangled key is worse than storing nothing: the page shows a
+      // green light, and the thing it powers fails in silence. Refuse it.
+      rejected.push(key);
     } else {
       await svc.from("app_secrets").upsert(
         { key, value: raw, updated_at: new Date().toISOString() },
@@ -144,6 +194,9 @@ export async function saveSecrets(formData: FormData) {
     }
   }
   clearSecretCache();
+  if (rejected.length) {
+    redirect(`/admin/integrations?keys=bad&which=${encodeURIComponent(rejected.join(","))}`);
+  }
   redirect("/admin/integrations?keys=saved");
 }
 

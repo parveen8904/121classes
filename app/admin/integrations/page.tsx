@@ -72,7 +72,7 @@ function PendingRow({ r }: { r: IntegrationReport }) {
 }
 
 // Masked input for a single key: shows whether it's already set, lets you paste a new one.
-async function KeyField({ name, label, placeholder }: { name: string; label: string; placeholder: string }) {
+async function KeyField({ name, label, placeholder, multiline }: { name: string; label: string; placeholder: string; multiline?: boolean }) {
   // A field whose name is missing from SECRET_KEYS would LOOK saveable while
   // the save action silently drops it — 16 social keys sat in exactly that
   // state and everything pasted was lost. Refuse to render the trap.
@@ -94,26 +94,49 @@ async function KeyField({ name, label, placeholder }: { name: string; label: str
         {set ? "🟢 " : "⚪ "}{label} {set && <span className="muted" style={{ fontSize: ".78rem" }}>(set — leave blank to keep)</span>}
       </label>
       {/* type=text (not password) so browser password managers can't autofill/overwrite
-          the key you paste. The field is empty on load, so nothing is exposed. */}
-      <input
-        name={name}
-        type="text"
-        autoComplete="off"
-        autoCorrect="off"
-        autoCapitalize="off"
-        spellCheck={false}
-        data-1p-ignore="true"
-        data-lpignore="true"
-        data-form-type="other"
-        placeholder={set ? "•••••••• (saved — leave blank to keep)" : placeholder}
-      />
+          the key you paste. The field is empty on load, so nothing is exposed.
+
+          Some of these are not one line. A .p8 push key and a Firebase service
+          account are several lines each, and a single-line input mangles them
+          on paste — silently, and differently each time. Two good pastes of a
+          real Apple key landed as 196 characters and then 53, neither of them
+          a key, both stored without complaint. Multi-line secrets get a box
+          that can hold them. */}
+      {multiline ? (
+        <textarea
+          name={name}
+          rows={5}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          data-1p-ignore="true"
+          data-lpignore="true"
+          data-form-type="other"
+          style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: ".78rem", width: "100%" }}
+          placeholder={set ? "•••••••• (saved — leave blank to keep)" : placeholder}
+        />
+      ) : (
+        <input
+          name={name}
+          type="text"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          data-1p-ignore="true"
+          data-lpignore="true"
+          data-form-type="other"
+          placeholder={set ? "•••••••• (saved — leave blank to keep)" : placeholder}
+        />
+      )}
     </div>
   );
 }
 
 export default async function IntegrationsPage(
   props: {
-    searchParams: Promise<{ tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string; mailtest?: string; discord?: string; smtp?: string; smtpmsg?: string; infra?: string; inframsg?: string }>;
+    searchParams: Promise<{ which?: string; tg?: string; links?: string; keys?: string; rzp?: string; rzpmsg?: string; mailtest?: string; discord?: string; smtp?: string; smtpmsg?: string; infra?: string; inframsg?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -229,6 +252,15 @@ export default async function IntegrationsPage(
       {searchParams.infra === "fail" && <div className="notice err" style={{ marginTop: 16 }}>⚠️ Supabase rejected the change{searchParams.inframsg ? <>: <code>{searchParams.inframsg}</code></> : ""}.</div>}
       {searchParams.discord === "missing" && <div className="notice err" style={{ marginTop: 16 }}>Add your Discord App ID and Bot Token below first, save keys, then register.</div>}
       {searchParams.keys === "saved" && <div className="notice ok" style={{ marginTop: 16 }}>✅ Keys saved.</div>}
+        {/* A key that arrived damaged is NOT saved, and says so. Stored quietly,
+            it would show a green light beside something that never works. */}
+        {searchParams.keys === "bad" && (
+          <div className="notice err" style={{ marginTop: 16 }}>
+            ⚠️ Not saved: <strong>{(searchParams.which ?? "").split(",").join(", ")}</strong> — what arrived was not a usable
+            key. It is usually a paste that lost part of itself. Copy the file whole (in Terminal:
+            <code style={{ margin: "0 4px" }}>pbcopy &lt; yourkey.p8</code>) and paste it again. Everything else on this page was saved.
+          </div>
+        )}
       {searchParams.mailtest && <div className={`notice ${searchParams.mailtest.startsWith("✅") ? "ok" : "err"}`} style={{ marginTop: 16 }}>{searchParams.mailtest}</div>}
 
       {/* STATUS */}
@@ -288,8 +320,8 @@ export default async function IntegrationsPage(
           Type <code>CLEAR</code> to remove a key.
         </p>
         <form action={saveSecrets} autoComplete="off">
-          <KeyField name="FCM_SERVICE_ACCOUNT" label="Firebase service account (whole JSON file)" placeholder='{"type":"service_account","project_id":"…"}' />
-          <KeyField name="APNS_KEY_P8" label="Apple push key (.p8 file contents)" placeholder="-----BEGIN PRIVATE KEY-----…" />
+          <KeyField multiline name="FCM_SERVICE_ACCOUNT" label="Firebase service account (whole JSON file)" placeholder='{"type":"service_account","project_id":"…"}' />
+          <KeyField multiline name="APNS_KEY_P8" label="Apple push key (.p8 file contents)" placeholder="-----BEGIN PRIVATE KEY-----…" />
           <KeyField name="APNS_KEY_ID" label="Apple push key ID" placeholder="ABC1234DEF" />
           <KeyField name="APNS_TEAM_ID" label="Apple team ID" placeholder="XYZ9876GHI" />
           <KeyField name="TELEGRAM_BOT_TOKEN" label="Telegram bot token" placeholder="123456:ABC-DEF…" />

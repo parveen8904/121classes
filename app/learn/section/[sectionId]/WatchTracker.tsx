@@ -38,6 +38,10 @@ export default function WatchTracker({
   const maxPos = useRef(0);
   const realAccum = useRef(0);
   const playing = useRef(false);
+  // When the last position arrived. Positions stop the moment a video is
+  // paused, so silence is how a pause is noticed on a player that never says
+  // so out loud.
+  const lastTick = useRef(0);
 
   const finalSrc = provider === "youtube" ? withParam(src, "enablejsapi", "1") : src;
 
@@ -58,7 +62,16 @@ export default function WatchTracker({
       }
     };
 
-    timers.push(setInterval(() => { if (playing.current) realAccum.current += 1; }, 1000));
+    timers.push(setInterval(() => {
+      // Positions arrive several times a second while a video runs and stop
+      // dead when it is paused. Two seconds of silence means paused, whether or
+      // not the player bothered to say so.
+      if (playing.current && lastTick.current && Date.now() - lastTick.current > 2500) {
+        playing.current = false;
+        flush(false);
+      }
+      if (playing.current) realAccum.current += 1;
+    }, 1000));
     timers.push(setInterval(() => { if (realAccum.current >= 15) flush(false); }, 5000));
     const onHide = () => { if (document.hidden) { playing.current = false; flush(false); } };
     document.addEventListener("visibilitychange", onHide);
@@ -99,8 +112,22 @@ export default function WatchTracker({
         const player = new window.playerjs.Player(iframeRef.current);
         player.on("ready", () => {
           readyFired = true;
-          player.on("timeupdate", (d: any) => { const s = Number(d?.seconds) || 0; if (s > maxPos.current) maxPos.current = s; });
-          player.on("play", () => { playing.current = true; });
+          // The POSITION is what says somebody is watching — not the play
+          // event. Measured on two live classes: one sent play, the other sent
+          // ready and fifty-two timeupdates and no play at all. On that second
+          // class nothing was ever counted as watched, so no time accrued, so
+          // nothing was written for as long as it ran — and on a phone the
+          // page is rarely closed cleanly, so the position went nowhere.
+          //
+          // A moving position is proof of watching, and it arrives about four
+          // times a second whatever else the player does or does not announce.
+          player.on("timeupdate", (d: any) => {
+            const s = Number(d?.seconds) || 0;
+            if (s > maxPos.current) maxPos.current = s;
+            playing.current = true;
+            lastTick.current = Date.now();
+          });
+          player.on("play", () => { playing.current = true; lastTick.current = Date.now(); });
           player.on("pause", () => { playing.current = false; flush(false); });
           player.on("ended", () => { playing.current = false; flush(true); });
         });

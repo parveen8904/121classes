@@ -4,7 +4,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { formatINR } from "@/lib/pricing";
 import { viaProxy } from "@/lib/fileProxy";
 import AdminHero from "../_components/AdminHero";
-import { setOrderStatus, sendDispatchEmail, approveForZoho, approveDayForZoho, holdForZoho, approveSelectedForZoho, generateInvoice } from "./actions";
+import { setOrderStatus, sendDispatchEmail, approveForZoho, approveDayForZoho, holdForZoho, approveSelectedForZoho, generateInvoice, reissueInvoice } from "./actions";
 import SelectAll from "./SelectAll";
 
 // Zoho posting state → what the admin sees in the register. Normal flow is
@@ -262,7 +262,19 @@ export default async function AdminOrdersPage(
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
                   {p.invoice_url ? (
-                    <a className="btn small secondary" href={viaProxy(p.invoice_url)} target="_blank" rel="noopener noreferrer">🧾 {p.invoice_no ?? "Invoice"} ↓</a>
+                    <>
+                      <a className="btn small secondary" href={viaProxy(p.invoice_url)} target="_blank" rel="noopener noreferrer">🧾 {p.invoice_no ?? "Invoice"} ↓</a>
+                      {/* Put right an invoice raised before the student's
+                          address was on file — same number, same date, same
+                          amount, correct address and correct tax split, emailed
+                          again with an explanation. It refuses if the address
+                          is still missing rather than reissue another
+                          incomplete document. */}
+                      <form action={reissueInvoice} style={{ margin: 0 }}>
+                        <input type="hidden" name="orderId" value={p.id} />
+                        <SubmitButton className="btn small secondary" savedLabel="✓ Reissued">♻️ Reissue</SubmitButton>
+                      </form>
+                    </>
                   ) : p.status === "paid" ? (
                     <form action={generateInvoice} style={{ margin: 0 }}>
                       <input type="hidden" name="id" value={p.id} />

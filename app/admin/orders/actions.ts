@@ -130,3 +130,21 @@ export async function sendDispatchEmail() {
   revalidatePath("/admin/orders");
   redirect(`/admin/orders?dispatch=${r.skipped ? "skipped" : r.count}`);
 }
+
+/**
+ * Put right an invoice that was issued wrong.
+ *
+ * Same number, same date, same amount — only the address and the tax split are
+ * corrected, from whatever the student's profile now holds. It refuses if that
+ * profile still has no complete address, because replacing one defective tax
+ * invoice with another helps nobody. The corrected copy is emailed to the
+ * student with a plain explanation.
+ */
+export async function reissueInvoice(formData: FormData): Promise<void> {
+  if (!(await requireArea("store"))) return;
+  const orderId = String(formData.get("orderId") ?? "");
+  if (!orderId) return;
+  const { reissueOrderInvoice } = await import("@/lib/orderInvoice");
+  await reissueOrderInvoice(orderId);
+  revalidatePath("/admin/orders");
+}

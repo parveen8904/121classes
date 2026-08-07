@@ -95,3 +95,106 @@ export async function issueOrderInvoice(opts: {
     }
   } catch { /* invoicing must never break a successful payment */ }
 }
+
+/**
+ * Re-issue an invoice that has already been raised, under the SAME number.
+ *
+ * Invoice CAPS/2026-27/0003 went out with no address on it and IGST instead of
+ * CGST and SGST, because the student's profile carried no state and a blank
+ * state used to mean "somewhere else". Both causes are fixed, but the document
+ * itself is still wrong and a wrong tax invoice cannot simply be left.
+ *
+ * Same number on purpose. This is a B2C supply to an unregistered person and
+ * the GST return for the period has not been filed, so the correct remedy is to
+ * correct the invoice before filing — not to raise a credit note against a
+ * customer who was never given one. The number, the date and the amount do not
+ * move; only the address and the tax split are put right, from whatever the
+ * profile now says.
+ *
+ * It REFUSES to run without a complete address. Reissuing an incomplete invoice
+ * would replace one defective document with another.
+ */
+export async function reissueOrderInvoice(orderId: string): Promise<{ ok: boolean; reason?: string; invoiceNo?: string }> {
+  const svc = createServiceClient();
+  const { data: ord } = await svc
+    .from("orders")
+    .select("id, invoice_no, order_no, subject_id, amount_inr, student_id, razorpay_order_id, created_at")
+    .eq("id", orderId).maybeSingle();
+  if (!ord) return { ok: false, reason: "order not found" };
+  const invoiceNo = (ord as { invoice_no?: string | null }).invoice_no;
+  if (!invoiceNo) return { ok: false, reason: "this order has no invoice yet" };
+
+  const { data: p } = await svc
+    .from("profiles")
+    .select("full_name, email, state, gstin, business_name, address_line1, address_line2, city, pincode, registration_no")
+    .eq("id", (ord as { student_id: string }).student_id).maybeSingle();
+
+  const line1 = String(p?.address_line1 ?? "").trim();
+  const city = String(p?.city ?? "").trim();
+  const state = String(p?.state ?? "").trim();
+  const pin = String(p?.pincode ?? "").trim();
+  if (!line1 || !city || !state || !pin) {
+    return { ok: false, reason: "the student has no complete billing address on file — add it first, then reissue" };
+  }
+
+  const address = [p?.address_line1, p?.address_line2, [city, pin].filter(Boolean).join(" ")]
+    .filter(Boolean).join("\n");
+
+  // The validity window this payment bought, for the receipt half.
+  let receiptDetail: string | null = null;
+  const subjectId = (ord as { subject_id?: string | null }).subject_id ?? null;
+  if (subjectId) {
+    const { data: sub } = await svc
+      .from("subscriptions").select("starts_at, ends_at")
+      .eq("student_id", (ord as { student_id: string }).student_id).eq("subject_id", subjectId)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (sub) {
+      const d = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
+      receiptDetail = `Starting: ${d(sub.starts_at as string | null) || "on payment"}  ·  Valid till: ${d(sub.ends_at as string | null) || "-"}`;
+    }
+  }
+
+  const amount = Number((ord as { amount_inr: number }).amount_inr) || 0;
+  const s = await getGstSettings();
+  const gst = computeGst(amount, state, s);
+  // The ORIGINAL date, not today. Reissuing does not move the supply.
+  const date = new Date((ord as { created_at: string }).created_at);
+
+  const { data: subj } = subjectId
+    ? await svc.from("subjects").select("title").eq("id", subjectId).maybeSingle()
+    : { data: null };
+  const description = (subj?.title as string) ?? "Online coaching subscription";
+
+  const pdf = await buildInvoicePdf({
+    invoiceNo, date, s, gst,
+    buyerName: (p?.business_name as string) || (p?.full_name as string) || "Student",
+    buyerGstin: (p?.gstin as string) || null,
+    buyerAddress: address,
+    buyerState: state,
+    itemDescription: description,
+    registrationNo: (p?.registration_no as number) ?? null,
+    receiptNo: (ord as { order_no?: number | null }).order_no != null ? String((ord as { order_no: number }).order_no) : null,
+    paymentRef: (ord as { razorpay_order_id?: string | null }).razorpay_order_id ?? null,
+    paymentMode: "Online Payment [Razorpay]",
+    receiptDetail,
+  });
+
+  const path = `invoices/${invoiceNo.replace(/[^\w-]/g, "_")}.pdf`;
+  const up = await svc.storage.from("secure").upload(path, Buffer.from(pdf), { contentType: "application/pdf", upsert: true });
+  if (up.error) return { ok: false, reason: `could not store the PDF: ${up.error.message}` };
+  await svc.from("orders").update({ invoice_url: `secure:${path}` }).eq("id", orderId);
+
+  const email = (p?.email as string) || "";
+  if (email) {
+    const { sendEmailWithAttachment, emailShell } = await import("@/lib/notify");
+    const html = emailShell(
+      "Your corrected invoice 🧾",
+      `<p>We have corrected the invoice for your payment of <strong>Rs. ${Math.round(amount).toLocaleString("en-IN")}</strong>.</p>
+       <p>The earlier copy was issued before your address was on file, and the tax was shown incorrectly as a result. The corrected invoice (<strong>${invoiceNo}</strong>) is attached — the number, the date and the amount you paid are unchanged. Please use this copy and discard the earlier one. Apologies for the confusion.</p>`,
+    );
+    await sendEmailWithAttachment(email, `Corrected invoice ${invoiceNo} — CA Parveen Sharma`, html, {
+      filename: `${invoiceNo.replace(/[^\w-]/g, "_")}.pdf`, content: Buffer.from(pdf), contentType: "application/pdf",
+    }).catch(() => false);
+  }
+  return { ok: true, invoiceNo };
+}

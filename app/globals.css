@@ -895,3 +895,39 @@ body { padding-bottom: env(safe-area-inset-bottom); }
   .key-split iframe { height: 55vh !important; }
   .key-split textarea { height: 45vh !important; }
 }
+
+/* ===================== Room for the phone's own bars ===================== */
+/* Android 16 draws every app under the status bar and the navigation bar, and
+   leaves it to the app to keep its content clear of them. The native side
+   measures them and sets these four variables (see InAppMode); iOS supplies
+   the same thing through env(safe-area-inset-*). Both default to zero, so a
+   browser and an older phone are completely unaffected.
+
+   The padding goes on the HEADER rather than on the body, so the header's own
+   background — which follows whichever theme the student chose — reaches up
+   behind the clock instead of leaving a strip of the wrong colour. */
+html.in-app {
+  --inset-top: env(safe-area-inset-top, 0px);
+  --inset-right: env(safe-area-inset-right, 0px);
+  --inset-bottom: env(safe-area-inset-bottom, 0px);
+  --inset-left: env(safe-area-inset-left, 0px);
+}
+html.in-app .portal-header,
+html.in-app .lp-nav {
+  padding-top: var(--inset-top);
+}
+html.in-app body {
+  padding-left: var(--inset-left);
+  padding-right: var(--inset-right);
+  /* The last row of a long class list must not sit under the home indicator. */
+  padding-bottom: var(--inset-bottom);
+}
+/* A page with no header of its own still has to start below the clock. */
+html.in-app body:not(:has(.portal-header)):not(:has(.lp-nav)) {
+  padding-top: var(--inset-top);
+}
+/* The floating help button and the ask-me bubble ride above the bar too. */
+html.in-app .askme-fab,
+html.in-app .pagehelp-fab {
+  bottom: calc(16px + var(--inset-bottom));
+}

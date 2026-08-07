@@ -37,6 +37,16 @@ export default function PushRegister() {
       const platform = cap.getPlatform?.() ?? "";
       if (platform !== "ios" && platform !== "android") return;
 
+      // On Android, registering without Firebase configured does not fail
+      // politely — it throws on a native thread and takes the app down five
+      // seconds after launch, every launch, with nothing the page can catch.
+      // The app itself says whether Firebase is really there; anything other
+      // than a clear yes means do not ask.
+      if (platform === "android") {
+        const ready = (window as unknown as { __pushReady?: boolean }).__pushReady;
+        if (ready !== true) return;
+      }
+
       try {
         let perm = await PushNotifications.checkPermissions();
         if (perm.receive === "prompt" || perm.receive === "prompt-with-rationale") {

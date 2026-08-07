@@ -363,33 +363,46 @@ export default function OfflineDownloads({
               <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
             </div>
             <div className="sec-list">
-              {items.map((c) => {
+              {(() => { const shown = new Set<string>(); return items.map((c) => {
                 // Every quality prepared for this class, best first.
-                const variants = byClass.get((c.section_id as string) ?? c.id) ?? [c];
-                // Show the class ONCE — on its best quality row — with the
-                // others offered as choices beside it.
-                if (variants[0].id !== c.id) return null;
-                const have = variants.find((v) => ready[v.id]);
+                const key = (c.section_id as string) ?? c.id;
+                // Show the class ONCE. This used to anchor on the BEST quality
+                // row — but in the "not downloaded" view that row is filtered
+                // out as soon as it has been downloaded, so the whole class
+                // silently disappeared from the list. Anchor on whichever of
+                // its rows arrives first instead.
+                if (shown.has(key)) return null;
+                shown.add(key);
+                const variants = byClass.get(key) ?? [c];
+                const got = variants.filter((v) => ready[v.id]);
+                const missing = variants.filter((v) => !ready[v.id]);
                 return (
                 <div className="list-row" key={c.id}>
                   <div>
-                    <span className="row-title">🔐 {c.class_no ? `Class ${c.class_no} · ` : ""}{c.title}</span>
+                    <span className="row-title">{got.length ? "✅" : "🔐"} {c.class_no ? `Class ${c.class_no} · ` : ""}{c.title}</span>
                     <p className="row-sub">
-                      {have
-                        ? `Downloaded at ${have.resolution ?? "720p"} · ${sizeLabel(have.byte_size)}`
+                      {got.length
+                        ? `On this device at ${got.map((v) => v.resolution ?? "720p").join(", ")}${missing.length ? " · another size is available below" : ""}`
                         : variants.length > 1
                           ? "Choose a quality — smaller files download faster and use less data"
                           : sizeLabel(c.byte_size)}
                     </p>
                   </div>
                   <div className="row-actions" style={{ flexWrap: "wrap", gap: 6 }}>
-                    {/* One button per prepared quality, each carrying its own
-                        size. A student on mobile data can see that 360p is
-                        374 MB against 1.4 GB and decide for themselves. */}
-                    {!have && variants.map((v) => (
+                    {/* Play what is here, and STILL offer what is not.
+                        Downloading 720p used to hide every other size for that
+                        class for ever — so a student who grabbed the big one on
+                        wifi could never take the small one for the train. Each
+                        quality now stands on its own. */}
+                    {got.map((v) => (
+                      <button key={v.id} className="btn small" type="button" onClick={() => play(v)}>
+                        ▶️ Play {variants.length > 1 ? (v.resolution ?? "720p") : ""}
+                      </button>
+                    ))}
+                    {missing.map((v) => (
                       <button
                         key={v.id}
-                        className={`btn small ${v.id === variants[0].id ? "" : "secondary"}`}
+                        className={`btn small ${v.id === missing[0].id && !got.length ? "" : "secondary"}`}
                         type="button"
                         onClick={() => download(v)}
                         title={`${v.resolution ?? "720p"} — ${sizeLabel(v.byte_size)}`}
@@ -397,18 +410,13 @@ export default function OfflineDownloads({
                         {labels[v.id] ?? `⬇️ ${v.resolution ?? "720p"}${sizeLabel(v.byte_size) ? ` · ${sizeLabel(v.byte_size)}` : ""}`}
                       </button>
                     ))}
-                    {have && (
-                      <>
-                        <button className="btn small" type="button" onClick={() => play(have)}>▶️ Play</button>
-                        {native.remove && (
-                          <button className="btn small secondary" type="button" onClick={() => removeDownload(have)} title="Remove from this device">🗑️</button>
-                        )}
-                      </>
+                    {got.length > 0 && native.remove && (
+                      <button className="btn small secondary" type="button" onClick={() => removeDownload(got[0])} title="Remove from this device">🗑️</button>
                     )}
                   </div>
                 </div>
                 );
-              })}
+              }); })()}
             </div>
           </div>
         ))

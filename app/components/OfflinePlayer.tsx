@@ -218,10 +218,18 @@ export default function OfflinePlayer({
         </div>
 
         {/* Custom control bar (lives INSIDE the fullscreened container). */}
+        {/* The bar FLOATS over the picture rather than sitting under it.
+            As a flex sibling it took about ninety points of height away from
+            the video — a fifth of the screen once the picture is turned — so
+            the class never filled the space even when the turn worked. Every
+            video player puts its controls on top of the picture; this one was
+            putting the picture on top of nothing. */}
         <div onPointerDown={showChrome} style={{
+          position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 5,
           display: "flex", alignItems: "center", gap: 8,
           padding: "10px 12px calc(10px + env(safe-area-inset-bottom))",
-          background: "rgba(0,0,0,.85)", flexWrap: "wrap",
+          background: "linear-gradient(to top, rgba(0,0,0,.92), rgba(0,0,0,.55) 70%, transparent)",
+          flexWrap: "wrap",
           // Out of the way while watching, back on a tap — the same as the
           // streamed player, so the two feel like one app.
           // Retires whatever the player thinks its "fullscreen" state is —

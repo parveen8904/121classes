@@ -90,74 +90,100 @@ export default function OfflinePlayer({
     setRate(next);
     if (vidRef.current) vidRef.current.playbackRate = next;
   };
-  // Fullscreen behaves the same here as it does for a streamed class. It did
-  // not before: a downloaded class went fullscreen upright, so a 16:9 lecture
-  // sat as a strip between two black bands, and this player's control bar never
-  // retired — which is exactly why fullscreen "works in the normal player but
-  // not through the download".
-  const [isFull, setIsFull] = useState(false);
-  const [selfRotate, setSelfRotate] = useState(false);
-  const [showChrome, setShowChrome] = useState(true);
+  // FULLSCREEN, WITHOUT THE FULLSCREEN API.
+  //
+  // This player is already the whole screen — the overlay below is
+  // position:fixed, inset:0. Asking WebKit for fullscreen on a child of it was
+  // redundant, and it caused all three faults at once:
+  //
+  //  · the ✕ Close button sits OUTSIDE the element that went fullscreen, so it
+  //    vanished the moment fullscreen began — and never faded when it did not;
+  //  · the control bar only faded when `isFull` was true, so on a player that
+  //    is visually always fullscreen the bar simply never went away. That is
+  //    "the controls continue to remain";
+  //  · and none of it fired at all if the fullscreen request was refused,
+  //    which on a downloaded file inside a WKWebView it often is.
+  //
+  // So: no fullscreen request. The chrome — close button and control bar
+  // together — retires on its own while the class plays, and one tap brings it
+  // back. ⛶ turns the picture a quarter turn when the phone is upright, which
+  // is what fills the screen on a phone nobody wants to rotate.
+  const [chrome, setChrome] = useState(true);
+  const [turned, setTurned] = useState(false);
+  const [portrait, setPortrait] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const bumpChrome = () => {
-    setShowChrome(true);
+  const showChrome = () => {
+    setChrome(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setShowChrome(false), 2800);
+    // Only retire while something is actually playing — a paused video with no
+    // controls looks like a frozen app.
+    hideTimer.current = setTimeout(() => { if (!vidRef.current?.paused) setChrome(false); }, 3000);
   };
 
   useEffect(() => {
-    const onChange = () => {
-      const on = !!(document.fullscreenElement || (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement);
-      setIsFull(on);
-      const orientation = (screen as unknown as { orientation?: { lock?: (o: string) => Promise<void>; unlock?: () => void } }).orientation;
-      if (!on) {
-        try { orientation?.unlock?.(); } catch { /* nothing to unlock */ }
-        setSelfRotate(false); setShowChrome(true);
-        return;
-      }
-      bumpChrome();
-      // Android turns the screen; iOS has no orientation lock at all, so the
-      // picture is turned instead.
-      const portrait = window.innerHeight > window.innerWidth;
-      const lock = orientation?.lock;
-      if (!lock) { setSelfRotate(portrait); return; }
-      try {
-        Promise.resolve(lock.call(orientation, "landscape"))
-          .then(() => setSelfRotate(false))
-          .catch(() => setSelfRotate(window.innerHeight > window.innerWidth));
-      } catch { setSelfRotate(portrait); }
-    };
-    document.addEventListener("fullscreenchange", onChange);
-    document.addEventListener("webkitfullscreenchange", onChange);
+    showChrome();
+    const onResize = () => setPortrait(window.innerHeight > window.innerWidth);
+    onResize();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
     return () => {
-      document.removeEventListener("fullscreenchange", onChange);
-      document.removeEventListener("webkitfullscreenchange", onChange);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
       if (hideTimer.current) clearTimeout(hideTimer.current);
     };
   }, []);
 
-  const fullscreen = () => {
-    const el = wrapRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;
-    if (!el) return;
-    if (document.fullscreenElement) { document.exitFullscreen?.(); return; }
-    (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+  // Tapping the picture shows or hides the chrome — it does NOT pause. Tapping
+  // to see the controls and pausing the class by accident is its own small
+  // annoyance, and no other video player does it.
+  const tapPicture = () => {
+    if (chrome) { setChrome(false); if (hideTimer.current) clearTimeout(hideTimer.current); }
+    else showChrome();
   };
+
+  // Turn the picture a quarter turn so a 16:9 class fills an upright phone,
+  // instead of sitting as a strip between two black bands. On a phone already
+  // held sideways there is nothing to turn.
+  const toggleTurn = () => {
+    const next = !turned;
+    setTurned(next);
+    showChrome();
+    if (next) {
+      // Ask the phone to rotate as well — Android obliges, iOS refuses, and the
+      // turn above covers iOS either way.
+      const o = (screen as unknown as { orientation?: { lock?: (x: string) => Promise<void>; unlock?: () => void } }).orientation;
+      try { Promise.resolve(o?.lock?.("landscape")).catch(() => {}); } catch { /* not supported */ }
+    } else {
+      const o = (screen as unknown as { orientation?: { unlock?: () => void } }).orientation;
+      try { o?.unlock?.(); } catch { /* not supported */ }
+    }
+  };
+
+  const turnedNow = turned && portrait;
 
   const btn: React.CSSProperties = { background: "rgba(255,255,255,.14)", color: "#fff", border: 0, borderRadius: 8, padding: "8px 12px", fontSize: "1rem", fontWeight: 700, cursor: "pointer", minWidth: 44 };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 1000, display: "flex", flexDirection: "column" }}>
-      <button type="button" onClick={onClose} style={{ ...btn, position: "absolute", top: "calc(10px + env(safe-area-inset-top))", right: 12, zIndex: 4 }}>✕ Close</button>
+      {/* The close button belongs to the CHROME, and fades with it. It used to
+          sit outside the element that went fullscreen, so it was either always
+          on top of the class or gone entirely. */}
+      <button
+        type="button"
+        onClick={onClose}
+        style={{
+          ...btn, position: "absolute", top: "calc(10px + env(safe-area-inset-top))", right: 12, zIndex: 6,
+          opacity: chrome ? 1 : 0, pointerEvents: chrome ? "auto" : "none", transition: "opacity .25s ease",
+        }}
+      >✕ Close</button>
 
-      {/* This container is what goes fullscreen — so the watermark stays visible. */}
       <div
         ref={wrapRef}
-        className={`offline-stage${isFull && selfRotate ? " fs-rotate" : ""}`}
+        className={`offline-stage${turnedNow ? " turned" : ""}`}
         style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", background: "#000", minHeight: 0 }}
-        onPointerDown={() => { if (isFull) bumpChrome(); }}
       >
-        <div style={{ position: "relative", flex: 1, minHeight: 0 }} onClick={toggle}>
+        <div style={{ position: "relative", flex: 1, minHeight: 0 }} onClick={tapPicture}>
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video ref={vidRef} src={src} autoPlay playsInline style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
           {watermark && <span className="vwm">{watermark}</span>}
@@ -176,14 +202,17 @@ export default function OfflinePlayer({
         </div>
 
         {/* Custom control bar (lives INSIDE the fullscreened container). */}
-        <div style={{
+        <div onPointerDown={showChrome} style={{
           display: "flex", alignItems: "center", gap: 8,
           padding: "10px 12px calc(10px + env(safe-area-inset-bottom))",
           background: "rgba(0,0,0,.85)", flexWrap: "wrap",
           // Out of the way while watching, back on a tap — the same as the
           // streamed player, so the two feel like one app.
-          opacity: isFull && !showChrome ? 0 : 1,
-          pointerEvents: isFull && !showChrome ? "none" : "auto",
+          // Retires whatever the player thinks its "fullscreen" state is —
+          // this overlay is always the whole screen, so there is no other
+          // state worth waiting for.
+          opacity: chrome ? 1 : 0,
+          pointerEvents: chrome ? "auto" : "none",
           transition: "opacity .25s ease",
         }}>
           <button type="button" onClick={toggle} style={btn}>{playing ? "⏸" : "▶️"}</button>
@@ -196,7 +225,7 @@ export default function OfflinePlayer({
           />
           <span style={{ color: "#fff", fontSize: ".8rem", fontVariantNumeric: "tabular-nums", minWidth: 88, textAlign: "center" }}>{fmt(cur)} / {fmt(dur)}</span>
           <button type="button" onClick={cycleSpeed} style={btn} title="Playback speed">{rate}×</button>
-          <button type="button" onClick={fullscreen} style={btn} title="Fullscreen">⛶</button>
+          <button type="button" onClick={toggleTurn} style={btn} title={turnedNow ? "Back to upright" : "Fill the screen"}>{turnedNow ? "⤡" : "⛶"}</button>
         </div>
       </div>
     </div>

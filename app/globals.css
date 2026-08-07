@@ -453,6 +453,21 @@ input[type="radio"], input[type="checkbox"] {
   }
 }
 
+/* The downloaded-class player turning its picture a quarter turn.
+   No :fullscreen here on purpose — that player is already the whole screen, so
+   asking WebKit for fullscreen bought nothing and failed often. `.turned` is
+   set by the player itself, which means it works the same on both phones and
+   cannot be refused. Width and height swap because after the turn they mean
+   the opposite thing; the translate brings the box back over the screen after
+   rotating about its top-left corner. */
+.offline-stage.turned {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100vh; height: 100vw;
+  transform-origin: top left;
+  transform: rotate(90deg) translateY(-100%);
+}
+
 /* The offline player fullscreens a flex child. Out of its flex parent, flex:1
    means nothing and the box collapses — so it is sized explicitly. */
 .offline-stage:fullscreen { width: 100vw; width: 100dvw; height: 100vh; height: 100dvh; background: #000; }

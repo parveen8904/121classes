@@ -76,6 +76,76 @@ class OfflineClassesPlugin : Plugin() {
     // notification at all and looks like a download that never started.
     private var notificationsAsked = false
 
+    /** Classes already retried in-app, so a real failure is reported not looped. */
+    private val retried = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    /** No point retrying when the phone is simply full — it will fail again. */
+    private fun outOfSpace(dm: DownloadManager, dlId: Long): Boolean {
+        var reason = 0
+        try {
+            dm.query(DownloadManager.Query().setFilterById(dlId))?.use { c ->
+                if (c.moveToFirst()) reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+            }
+        } catch (_: Exception) { /* assume there is room */ }
+        return reason == DownloadManager.ERROR_INSUFFICIENT_SPACE
+    }
+
+    /**
+     * Download the class ourselves, in this app, when the system downloader
+     * has refused. Streams straight to the final file and reports progress the
+     * same way, so the screen behaves identically.
+     */
+    private fun fetchInApp(id: String, url: String, expected: Long, call: PluginCall): Boolean {
+        val dest = tmpFile(id) ?: return false
+        return try {
+            val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+                connectTimeout = 30_000
+                readTimeout = 60_000
+                instanceFollowRedirects = true
+            }
+            if (conn.responseCode !in 200..299) {
+                conn.disconnect()
+                call.reject("download failed (server said ${conn.responseCode}) — please retry")
+                return true
+            }
+            val total = if (expected > 0) expected else conn.contentLengthLong
+            conn.inputStream.use { input ->
+                java.io.FileOutputStream(dest).use { out ->
+                    val buf = ByteArray(1 shl 20) // 1 MB
+                    var done = 0L
+                    var lastPct = -1
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        out.write(buf, 0, n)
+                        done += n
+                        // Same throttle as everywhere else: the number on screen
+                        // changes a hundred times, not a thousand.
+                        val pct = if (total > 0) ((done * 100) / total).toInt() else 0
+                        if (pct != lastPct) {
+                            lastPct = pct
+                            val p = JSObject(); p.put("id", id); p.put("received", done); p.put("total", total)
+                            notifyListeners("downloadProgress", p)
+                        }
+                    }
+                }
+            }
+            conn.disconnect()
+            if (expected > 0 && dest.length() != expected) {
+                dest.delete()
+                call.reject("download arrived incomplete (${dest.length()} of $expected bytes) — please retry")
+            } else {
+                retried.remove(id)
+                val r = JSObject(); r.put("path", dest.absolutePath); call.resolve(r)
+            }
+            true
+        } catch (e: Exception) {
+            try { dest.delete() } catch (_: Exception) { /* nothing to clean */ }
+            call.reject("download failed (${e.message ?: "connection lost"}) — please retry")
+            true
+        }
+    }
+
     private fun askForNotificationsOnce() {
         if (notificationsAsked || Build.VERSION.SDK_INT < 33) return
         notificationsAsked = true
@@ -170,9 +240,20 @@ class OfflineClassesPlugin : Plugin() {
                             return@execute
                         }
                         DownloadManager.STATUS_FAILED -> {
-                            // The reason code is the difference between "no
-                            // internet" and "this phone is full".
-                            call.reject("download failed (${failReason(dm, dlId)}) — please retry")
+                            val why = failReason(dm, dlId)
+                            // DownloadManager is a separate OS service, and it
+                            // can decline for reasons that have nothing to do
+                            // with this app — disabled by the user, starved by
+                            // battery saving, or simply refusing. When it does,
+                            // the class does not have to be lost: fetch it here
+                            // instead. Worse, because it only runs while the app
+                            // is open — but a class that downloads while you
+                            // watch beats a class that does not download.
+                            if (!retried.contains(id) && !outOfSpace(dm, dlId)) {
+                                retried.add(id)
+                                if (fetchInApp(id, url, expected, call)) return@execute
+                            }
+                            call.reject("download failed ($why) — please retry")
                             return@execute
                         }
                         else -> {

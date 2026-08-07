@@ -48,7 +48,11 @@ export default function WatchTracker({
     const flush = (ended = false) => {
       const r = Math.round(realAccum.current);
       realAccum.current = 0;
-      if (maxPos.current > 0 || ended) {
+      // Time spent counts even when the player never reported a position —
+      // otherwise a class watched in a player we cannot read leaves no trace at
+      // all. Half the watch records had no video position; they should at least
+      // have carried the minutes.
+      if (maxPos.current > 0 || r > 0 || ended) {
         recordWatch({ sectionId, videoSeconds: maxPos.current, deltaRealSeconds: r, durationSeconds, ended });
       }
     };
@@ -91,12 +95,24 @@ export default function WatchTracker({
       const setup = () => {
         if (!window.playerjs || !iframeRef.current) return;
         const player = new window.playerjs.Player(iframeRef.current);
-        player.on("ready", () => {
+        const subscribe = () => {
           player.on("timeupdate", (d: any) => { const s = Number(d?.seconds) || 0; if (s > maxPos.current) maxPos.current = s; });
           player.on("play", () => { playing.current = true; });
           player.on("pause", () => { playing.current = false; flush(false); });
           player.on("ended", () => { playing.current = false; flush(true); });
-        });
+        };
+        player.on("ready", subscribe);
+        // The player announces "ready" exactly once. This script is fetched
+        // from a CDN after the page has mounted, so on a quick connection the
+        // video is often ready BEFORE anyone is listening — that one message is
+        // sent to nobody, nothing is ever subscribed, and the class is recorded
+        // as opened with no position for as long as the student watches it.
+        // Subscribing again shortly afterwards costs nothing if ready did fire
+        // (the handlers simply replace themselves) and rescues the case where
+        // it fired too early to be heard.
+        timers.push(setInterval(() => {
+          if (maxPos.current === 0) subscribe();
+        }, 4000));
       };
       if (window.playerjs) setup();
       else {

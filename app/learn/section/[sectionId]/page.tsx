@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 // 60s was not enough for descriptive grading (two PDFs through the AI).
 export const maxDuration = 300;
 
-type Downloadable = { id: string; section_id: string | null; storage_url: string; iv_b64: string | null; alg: string | null; byte_size: number | null };
+type Downloadable = { id: string; section_id: string | null; storage_url: string; iv_b64: string | null; alg: string | null; byte_size: number | null; resolution: string | null };
 
 function fmtMins(mins: number): string {
   const m = Math.max(0, Math.round(mins || 0));
@@ -101,7 +101,16 @@ export default async function SectionPage(
 
   const watermark = [prof?.full_name, user.email ?? prof?.phone].filter(Boolean).join(" · ");
   const { data: dlRows } = await supabase.rpc("list_downloadable_classes");
-  const dl = ((dlRows ?? []) as Downloadable[]).find((d) => d.section_id === section.id) ?? null;
+  // Every quality prepared for this class, best first — find() kept only one and
+  // hid the choice between 720p and a much smaller file.
+  const QUALITY_ORDER = ["1080p", "720p", "480p", "360p"];
+  const qualityRank = (r: string | null) => {
+    const i = QUALITY_ORDER.indexOf(String(r ?? "720p"));
+    return i < 0 ? 99 : i;
+  };
+  const dl = ((dlRows ?? []) as Downloadable[])
+    .filter((d) => d.section_id === section.id)
+    .sort((a, b) => qualityRank(a.resolution) - qualityRank(b.resolution));
 
   // Fair-usage: a student may watch a subject's recorded Bunny classes for a
   // total of (multiplier × raw class hours). Live classes aren't Bunny
@@ -183,7 +192,7 @@ export default async function SectionPage(
           <p className="muted" style={{ marginTop: 16 }}>Video coming soon.</p>
         )}
 
-        {dl && <ClassDownload pv={dl} watermark={watermark} />}
+        {dl.length > 0 && <ClassDownload variants={dl} watermark={watermark} />}
 
         {(c.description || c.link_url) && (
           <div style={{ marginTop: 14 }}>

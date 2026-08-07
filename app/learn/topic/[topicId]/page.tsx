@@ -19,6 +19,7 @@ type Downloadable = {
   iv_b64: string | null;
   alg: string | null;
   byte_size: number | null;
+  resolution: string | null;
 };
 
 export const dynamic = "force-dynamic";
@@ -432,9 +433,25 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
 
   // Encrypted classes the student may download, keyed by section (for the
   // "Download for offline" button on the class).
-  const downloadBySection = new Map<string, Downloadable>();
+  // EVERY quality prepared for a class, not just whichever row came last.
+  // This was a Map of one video per class, so a class prepared at both 720p and
+  // 480p silently lost one of them and the student was offered a single button
+  // with no idea what size it was. The downloads page has always shown the
+  // choice; the class page quietly threw it away.
+  const QUALITY_ORDER = ["1080p", "720p", "480p", "360p"];
+  const qualityRank = (r: string | null) => {
+    const i = QUALITY_ORDER.indexOf(String(r ?? "720p"));
+    return i < 0 ? 99 : i;
+  };
+  const downloadBySection = new Map<string, Downloadable[]>();
   for (const d of (dlRows ?? []) as Downloadable[]) {
-    if (d.section_id) downloadBySection.set(d.section_id, d);
+    if (!d.section_id) continue;
+    const list = downloadBySection.get(d.section_id) ?? [];
+    list.push(d);
+    downloadBySection.set(d.section_id, list);
+  }
+  for (const list of downloadBySection.values()) {
+    list.sort((a, b) => qualityRank(a.resolution) - qualityRank(b.resolution));
   }
 
   const subject = (topic as { subjects?: { title?: string; course_id?: string } | null }).subjects;
@@ -669,7 +686,7 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
             />
             {descLink}
             {downloadBySection.has(s.id) && (
-              <ClassDownload pv={downloadBySection.get(s.id)!} watermark={watermarkText} />
+              <ClassDownload variants={downloadBySection.get(s.id)!} watermark={watermarkText} />
             )}
             {VIDEO_TYPES.has(s.type) && (
               <div style={{ marginTop: 18 }}>

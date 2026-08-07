@@ -12,7 +12,16 @@ type PV = {
   iv_b64: string | null;
   alg: string | null;
   byte_size: number | null;
+  resolution: string | null;
 };
+
+// A size a student can act on. "1.43 GB" answers "will this fit, and what will
+// it cost me in data" — which is the whole reason to offer a choice of quality.
+function sizeLabel(bytes: number | null | undefined): string {
+  const n = Number(bytes) || 0;
+  if (!n) return "";
+  return n >= 1e9 ? `${(n / 1e9).toFixed(2)} GB` : `${Math.round(n / 1e6)} MB`;
+}
 
 // Desktop app (Electron) bridge — injected by its preload script.
 type Native = {
@@ -35,7 +44,11 @@ type CapGlobal = {
   Plugins?: { OfflineClasses?: CapPlugin };
 };
 
-export default function ClassDownload({ pv, watermark }: { pv: PV; watermark: string }) {
+export default function ClassDownload({ variants, watermark }: { variants: PV[]; watermark: string }) {
+  // Best quality first; it is the one offered by default and the one a student
+  // on wifi should get without thinking about it.
+  const [chosen, setChosen] = useState<PV>(variants[0]);
+  const pv = chosen;
   const [native, setNative] = useState<Native | null>(null);
   const [label, setLabel] = useState("Download for offline");
   const [ready, setReady] = useState(false);
@@ -102,11 +115,11 @@ export default function ClassDownload({ pv, watermark }: { pv: PV; watermark: st
     );
   }
 
-  async function download() {
+  async function download(v: PV = pv) {
     setLabel("Downloading… 0%");
     try {
-      await native!.download(pv.id, pv.storage_url, pv.byte_size ?? undefined);
-      cacheOfflineKey(pv.id); // mirror the play key now, while online — enables airplane-mode playback
+      await native!.download(v.id, v.storage_url, v.byte_size ?? undefined);
+      cacheOfflineKey(v.id); // mirror the play key now, while online — enables airplane-mode playback
       setLabel("Downloaded ✓");
       setReady(true);
     } catch (e) {
@@ -135,10 +148,26 @@ export default function ClassDownload({ pv, watermark }: { pv: PV; watermark: st
 
   return (
     <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
-      <button className="btn small secondary" type="button" onClick={download}>
-        📥 {label}
-      </button>
-      <Help text="Saves this class to your device so you can watch it without internet. It downloads securely (encrypted) and CONTINUES IN THE BACKGROUND — you can lock the phone or leave the app; check back in a few minutes." />
+      {/* One button per quality that has actually been prepared, each carrying
+          its own size. A student on mobile data can see that 360p is 374 MB
+          against 1.4 GB and decide for themselves — the same choice the
+          downloads page has always offered. With only one quality ready there
+          is nothing to choose, so it stays a single button. */}
+      {!ready && variants.map((v) => (
+        <button
+          key={v.id}
+          className={`btn small ${v.id === pv.id ? "" : "secondary"}`}
+          type="button"
+          onClick={() => { setChosen(v); download(v); }}
+          title={`${v.resolution ?? "720p"}${sizeLabel(v.byte_size) ? ` — ${sizeLabel(v.byte_size)}` : ""}`}
+        >
+          {v.id === pv.id && label !== "Download for offline"
+            ? `📥 ${label}`
+            : `📥 ${v.resolution ?? "720p"}${sizeLabel(v.byte_size) ? ` · ${sizeLabel(v.byte_size)}` : ""}`}
+        </button>
+      ))}
+      {ready && <span className="muted" style={{ fontSize: ".82rem" }}>✅ Downloaded at {pv.resolution ?? "720p"}</span>}
+      <Help text="Saves this class to your device so you can watch it without internet. It downloads securely (encrypted) and CONTINUES IN THE BACKGROUND — you can lock the phone or leave the app; check back in a few minutes. Pick a smaller size if you are on mobile data." />
       {ready && (
         <>
           <button className="btn small" type="button" onClick={play}>

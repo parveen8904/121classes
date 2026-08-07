@@ -159,6 +159,9 @@ public class MainActivity extends BridgeActivity {
      * notch, a phone with gesture navigation and a phone with three buttons
      * each get the measurement the system reports rather than a guess.
      */
+    /** The last measurement the system gave us, in CSS pixels. */
+    private int[] lastInsets = new int[] { 0, 0, 0, 0 };
+
     private void keepContentClearOfTheBars() {
         final android.webkit.WebView web = getBridge().getWebView();
         ViewCompat.setOnApplyWindowInsetsListener(web, (v, windowInsets) -> {
@@ -167,51 +170,81 @@ public class MainActivity extends BridgeActivity {
             // underneath the camera.
             Insets bars = windowInsets.getInsets(
                     WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
-            // While a video owns the screen it should have the notch and the
-            // whole panel, so the page is told there is nothing in its way.
             float d = getResources().getDisplayMetrics().density;
-            int t = immersive ? 0 : Math.round(bars.top / d);
-            int r = immersive ? 0 : Math.round(bars.right / d);
-            int b = immersive ? 0 : Math.round(bars.bottom / d);
-            int l = immersive ? 0 : Math.round(bars.left / d);
-            // Guarded, because the insets arrive before the page has loaded on
-            // a cold start — and again on every rotation, when it has.
-            web.evaluateJavascript(
-                    "window.__appInsets && window.__appInsets(" + t + "," + r + "," + b + "," + l + ")",
-                    null);
+            lastInsets = new int[] {
+                Math.round(bars.top / d), Math.round(bars.right / d),
+                Math.round(bars.bottom / d), Math.round(bars.left / d),
+            };
+            sendInsetsToPage();
             return windowInsets;
         });
 
-        // The page paints the whole screen, including behind the bars, so the
-        // bars themselves must not paint over it.
-        WindowInsetsControllerCompat c =
-                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        // Which theme the student picked decides whether the clock should be
-        // dark or light, and they can change it while the app is open. Asking
-        // the page for its own text colour is the one answer that is never
-        // stale — and it is the same question either theme answers correctly.
-        applyBarIconsFromPage();
+        // The system measures the bars while the activity is still laying
+        // itself out — long before the page has loaded and defined the
+        // function that receives them. Sent once, the measurement arrives to
+        // nobody and the header sits under the clock for the whole session.
+        // So it is sent again as the page comes up.
+        final android.webkit.WebView w = getBridge().getWebView();
+        for (int delay : new int[] { 500, 1500, 3000, 6000, 10000 }) {
+            w.postDelayed(this::sendInsetsToPage, delay);
+        }
+
+    }
+
+    private void sendInsetsToPage() {
+        // While a video owns the screen it should have the notch and the whole
+        // panel, so the page is told there is nothing in its way.
+        int t = immersive ? 0 : lastInsets[0];
+        int r = immersive ? 0 : lastInsets[1];
+        int b = immersive ? 0 : lastInsets[2];
+        int l = immersive ? 0 : lastInsets[3];
+        getBridge().getWebView().evaluateJavascript(
+                "window.__appInsets && window.__appInsets(" + t + "," + r + "," + b + "," + l + ")",
+                null);
     }
 
     /**
      * Match the clock and the battery to whatever theme the page is showing.
-     * The site starts dark and has a light setting, so this cannot be fixed at
-     * build time; it is asked again whenever the page settles.
+     *
+     * The site starts dark and has a light setting, and the student can change
+     * it at any moment — so this cannot be settled at launch. Checked once, a
+     * student who switches to dark keeps dark icons on a dark bar and simply
+     * cannot see the time. It is asked again while the app is in front, and
+     * stops the moment it is not.
      */
-    private void applyBarIconsFromPage() {
-        final android.webkit.WebView web = getBridge().getWebView();
-        web.postDelayed(() -> web.evaluateJavascript(
-                "getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()",
-                value -> {
-                    // A dark page background needs light icons, and the other
-                    // way round. Anything unreadable falls back to light icons
-                    // on the dark default.
-                    boolean lightPage = value != null && value.contains("#f7f8fc");
-                    WindowInsetsControllerCompat c = WindowCompat.getInsetsController(
-                            getWindow(), getWindow().getDecorView());
-                    c.setAppearanceLightStatusBars(lightPage);
-                    c.setAppearanceLightNavigationBars(lightPage);
-                }), 800);
+    private final android.os.Handler barWatch = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable checkBars = new Runnable() {
+        @Override
+        public void run() {
+            final android.webkit.WebView web = getBridge().getWebView();
+            web.evaluateJavascript(
+                    "getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()",
+                    value -> {
+                        // A light page needs dark icons and a dark page needs
+                        // light ones. Anything unreadable leaves it alone.
+                        if (value == null || value.length() < 4) return;
+                        boolean lightPage = value.contains("#f7f8fc");
+                        WindowInsetsControllerCompat c = WindowCompat.getInsetsController(
+                                getWindow(), getWindow().getDecorView());
+                        c.setAppearanceLightStatusBars(lightPage);
+                        c.setAppearanceLightNavigationBars(lightPage);
+                    });
+            barWatch.postDelayed(this, 2000);
+        }
+    };
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        barWatch.removeCallbacks(checkBars);
+        barWatch.post(checkBars);
+    }
+
+    @Override
+    public void onPause() {
+        // Nothing to watch while the app is not on screen.
+        barWatch.removeCallbacks(checkBars);
+        super.onPause();
     }
 
     private void applyImmersive(boolean on) {
@@ -219,7 +252,7 @@ public class MainActivity extends BridgeActivity {
         runOnUiThread(() -> {
             // The padding is decided by the listener above, which reads the
             // flag — so ask for the insets again now that it has changed.
-            ViewCompat.requestApplyInsets(getBridge().getWebView());
+            sendInsetsToPage();
             WindowInsetsControllerCompat c =
                     WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
             if (on) {

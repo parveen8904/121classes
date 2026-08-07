@@ -156,12 +156,35 @@ async function sendAndroid(tokens: string[], msg: PushMessage): Promise<{ result
 
 type AppleKey = { p8: string; keyId: string; teamId: string };
 
+/**
+ * Put a pasted key back into the shape crypto expects.
+ *
+ * A .p8 opened in TextEdit and copied out rarely survives intact: the
+ * -----BEGIN----- and -----END----- lines get left behind, or the line breaks
+ * are flattened, or the newlines arrive escaped from a form post. The key
+ * material is all still there — only its wrapping is gone — and rejecting it
+ * would mean iPhone notifications quietly never work, with a form that looked
+ * perfectly filled in. So it is repaired instead.
+ */
+function asPem(raw: string): string {
+  const text = raw.replace(/\\n/g, "\n").trim();
+  const body = text
+    .replace(/-----BEGIN[^-]*-----/g, "")
+    .replace(/-----END[^-]*-----/g, "")
+    .replace(/\s+/g, "");
+  if (!body) return "";
+  // Anything that is not base64 is not a key, and guessing further would only
+  // turn a clear failure into a confusing one.
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(body)) return "";
+  const lines = body.match(/.{1,64}/g) ?? [];
+  return `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----\n`;
+}
+
 async function appleKey(): Promise<AppleKey | null> {
-  const p8 = (await getSecret("APNS_KEY_P8")).replace(/\\n/g, "\n").trim();
+  const p8 = asPem(await getSecret("APNS_KEY_P8"));
   const keyId = (await getSecret("APNS_KEY_ID")).trim();
   const teamId = (await getSecret("APNS_TEAM_ID")).trim();
   if (!p8 || !keyId || !teamId) return null;
-  if (!p8.includes("BEGIN PRIVATE KEY")) return null;
   return { p8, keyId, teamId };
 }
 

@@ -44,6 +44,7 @@ export default function WatchTracker({
   useEffect(() => {
     logActivity("class_open", { sectionId, topicId });
     const timers: ReturnType<typeof setInterval>[] = [];
+    const cleanups: (() => void)[] = [];
 
     const flush = (ended = false) => {
       const r = Math.round(realAccum.current);
@@ -94,25 +95,34 @@ export default function WatchTracker({
       // ---- Player.js (Bunny, Vimeo, Wistia & other embeds that support it) ----
       const setup = () => {
         if (!window.playerjs || !iframeRef.current) return;
+        let readyFired = false;
         const player = new window.playerjs.Player(iframeRef.current);
-        const subscribe = () => {
+        player.on("ready", () => {
+          readyFired = true;
           player.on("timeupdate", (d: any) => { const s = Number(d?.seconds) || 0; if (s > maxPos.current) maxPos.current = s; });
           player.on("play", () => { playing.current = true; });
           player.on("pause", () => { playing.current = false; flush(false); });
           player.on("ended", () => { playing.current = false; flush(true); });
-        };
-        player.on("ready", subscribe);
-        // The player announces "ready" exactly once. This script is fetched
-        // from a CDN after the page has mounted, so on a quick connection the
-        // video is often ready BEFORE anyone is listening — that one message is
-        // sent to nobody, nothing is ever subscribed, and the class is recorded
-        // as opened with no position for as long as the student watches it.
-        // Subscribing again shortly afterwards costs nothing if ready did fire
-        // (the handlers simply replace themselves) and rescues the case where
-        // it fired too early to be heard.
-        timers.push(setInterval(() => {
-          if (maxPos.current === 0) subscribe();
-        }, 4000));
+        });
+
+        // The video frame announces "ready" exactly once, when it finishes
+        // loading. player.js is fetched from a CDN AFTER this page has mounted,
+        // so on a quick connection that announcement has already been made and
+        // missed — and every later request is queued behind a "ready" that will
+        // never come again, so nothing is ever subscribed and the class records
+        // no position however long it is watched.
+        //
+        // Subscribing again does not help; it joins the same stuck queue. The
+        // frame has to introduce itself a second time, while somebody is
+        // listening. Reloading it once does that. Nothing has been played yet —
+        // a student still has to press play — so there is nothing to interrupt.
+        const reintroduce = setTimeout(() => {
+          if (!readyFired && iframeRef.current) {
+            // eslint-disable-next-line no-self-assign
+            iframeRef.current.src = iframeRef.current.src;
+          }
+        }, 1800);
+        cleanups.push(() => clearTimeout(reintroduce));
       };
       if (window.playerjs) setup();
       else {
@@ -126,6 +136,7 @@ export default function WatchTracker({
 
     return () => {
       timers.forEach(clearInterval);
+      cleanups.forEach((fn) => fn());
       document.removeEventListener("visibilitychange", onHide);
       flush(false);
     };

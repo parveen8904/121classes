@@ -276,9 +276,14 @@ export async function buildInvoicePdf(input: {
 
   // ---------- tear line ----------
   yy = invBottom - 14;
-  const dashes = "- ".repeat(85);
+  // Cut the dashes to the space that is actually between the two pairs of
+  // scissors, rather than to a fixed 160 characters. At 8pt that guess fell
+  // short of the right-hand scissors, so the tear line did not reach across the
+  // page and the two halves never looked properly separated.
   txtAt(">8", M, yy, 9, bold, grey);
-  txtAt(dashes.slice(0, 160), M + 16, yy, 8, font, grey);
+  const dashFrom = M + 16, dashTo = R - 16;
+  const dashUnit = font.widthOfTextAtSize("- ", 8);
+  txtAt("- ".repeat(Math.max(0, Math.floor((dashTo - dashFrom) / dashUnit))), dashFrom, yy, 8, font, grey);
   txtAt("8<", R - 12, yy, 9, bold, grey);
 
   // ---------- RECEIPT ----------
@@ -290,6 +295,9 @@ export async function buildInvoicePdf(input: {
   txtAt(`Dated ${dmy(input.date)}`, M, yy, 9);
   yy -= 16;
   hline(yy + 6);
+  // Breathing room under that rule. The "Received with thanks from ..."
+  // paragraph started immediately beneath it and the two touched.
+  yy -= 6;
 
   const regNo = input.registrationNo != null && input.registrationNo !== "" ? String(input.registrationNo) : "-";
   const para =
@@ -315,7 +323,12 @@ export async function buildInvoicePdf(input: {
     let ty = yy - 2;
     for (const l of c.head) { txtAt(l, c.x - bold.widthOfTextAtSize(l, 6.8), ty, 6.8, bold); ty -= 8; }
   }
-  yy -= 20; hline(yy + 6);
+  // 26, not 20. The column headings here run to TWO lines ("Previous / Net
+  // Paid"), so the second baseline sits 10pt below the first — and the rule
+  // that closes the header band was landing 4pt under it, which at 6.8pt type
+  // draws the line through the bottom of the words. This is the lining that
+  // overlapped the text on the receipt.
+  yy -= 26; hline(yy + 6);
   txtAt("1", RCno + 4, yy - 4, 8);
   txtAt(input.itemDescription.slice(0, 58), RCitem + 2, yy - 4, 8, bold);
   const rvals = [g.total, 0, g.total, 0];

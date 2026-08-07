@@ -129,16 +129,22 @@ export async function reissueOrderInvoice(orderId: string): Promise<{ ok: boolea
     .select("full_name, email, state, gstin, business_name, address_line1, address_line2, city, pincode, registration_no")
     .eq("id", (ord as { student_id: string }).student_id).maybeSingle();
 
-  const line1 = String(p?.address_line1 ?? "").trim();
+  // The STATE is what this refuses without, because the state decides the tax.
+  //
+  // The street address is wanted, and is now asked for before every payment,
+  // but it is not what makes the document valid: for an unregistered recipient
+  // the name and address are only required on the invoice where the value
+  // exceeds Rs.50,000 (rule 46, CGST Rules). A Rs.2,700 subscription is well
+  // under that. What is always required is the place of supply — the state.
   const city = String(p?.city ?? "").trim();
   const state = String(p?.state ?? "").trim();
   const pin = String(p?.pincode ?? "").trim();
-  if (!line1 || !city || !state || !pin) {
-    return { ok: false, reason: "the student has no complete billing address on file — add it first, then reissue" };
+  if (!state) {
+    return { ok: false, reason: "the student has no state on file — the tax cannot be worked out without it" };
   }
 
   const address = [p?.address_line1, p?.address_line2, [city, pin].filter(Boolean).join(" ")]
-    .filter(Boolean).join("\n");
+    .filter(Boolean).join("\n") || null;
 
   // The validity window this payment bought, for the receipt half.
   let receiptDetail: string | null = null;

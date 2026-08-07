@@ -91,7 +91,22 @@ export function computeGst(total: number, buyerState: string, s: GstSettings): G
   const taxable = s.inclusive ? Math.round((total / (1 + s.rate / 100)) * 100) / 100 : total;
   const gst = s.inclusive ? Math.round((total - taxable) * 100) / 100 : Math.round((total * s.rate / 100) * 100) / 100;
   const grandTotal = s.inclusive ? total : Math.round((total + gst) * 100) / 100;
-  const intraState = buyerState.trim().toLowerCase() === s.state.trim().toLowerCase();
+  // WHERE the supply is treated as taking place.
+  //
+  // A blank buyer state used to fall through to IGST, which is both wrong and
+  // the wrong way round: a student in Delhi buying from a Delhi supplier was
+  // charged IGST because the profile had no address on it. That is what
+  // happened on invoice CAPS/2026-27/0003.
+  //
+  // Where the recipient is unregistered and no address is on record, the place
+  // of supply is the LOCATION OF THE SUPPLIER (section 12(2)(b), IGST Act) —
+  // so the correct fallback is intra-state, CGST + SGST. Blank now means "same
+  // state as us", never "somewhere else".
+  //
+  // The address is still collected before payment; this only decides what
+  // happens when it somehow is not.
+  const buyer = buyerState.trim().toLowerCase();
+  const intraState = buyer === "" || buyer === s.state.trim().toLowerCase();
   if (intraState) {
     const half = Math.round((gst / 2) * 100) / 100;
     return { taxable, cgst: half, sgst: gst - half, igst: 0, total: grandTotal, rate: s.rate, intraState: true, applied: true };
@@ -291,7 +306,7 @@ export async function buildInvoicePdf(input: {
     { x: 380, head: ["Fees"] },
     { x: 440, head: ["Previous", "Net Paid"] },
     { x: 505, head: ["Current", "Net Paid"] },
-    { x: 558, head: ["Balance", "Fees*"] },
+    { x: 558, head: ["Balance", "Fees"] },
   ];
   hline(yy + 8);
   txtAt("#", RCno + 4, yy - 2, 7.5, bold);
@@ -325,7 +340,6 @@ export async function buildInvoicePdf(input: {
     for (const l of wrap(t, font, 6.8, R - M - 16)) { txtAt(l, M + 10, yy, 6.8); yy -= 8.5; }
   }
   yy -= 4;
-  txtAt("*Balance Fees amount is indicative, subjected to timely payment and charges if applicable and Services to be rendered.", M + 2, yy, 7.5, bold); yy -= 10;
   txtAt("You can now Pay online directly at www.caparveensharma.com", M + 2, yy, 7.5, bold); yy -= 9;
   txtAt("Payment modes available: Debit Card / Credit Card / Net Banking / UPI.", M + 2, yy, 7, font, grey);
 

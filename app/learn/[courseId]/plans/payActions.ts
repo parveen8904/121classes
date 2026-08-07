@@ -145,18 +145,22 @@ export async function createPlanOrder(input: {
     .eq("id", user.id)
     .single();
 
-  // 9+ month Gold ships FREE printed books (India delivery only). The student
-  // can decline them (outside India / doesn't want hard copies) — then no
-  // address is needed and no parcel is created; PDFs are free anyway. When
-  // books ARE wanted, a complete shipping address is required BEFORE payment
-  // so the warehouse never has to chase the student.
-  const wantsBooks = input.tier === "gold" && months >= 9 && input.wantBooks !== false;
-  if (wantsBooks) {
-    const p = profile as { address_line1?: string | null; city?: string | null; state?: string | null; pincode?: string | null } | null;
-    if (!(p?.address_line1 ?? "").trim() || !(p?.city ?? "").trim() || !(p?.state ?? "").trim() || !(p?.pincode ?? "").trim()) {
-      return { ok: false, reason: "address" };
-    }
+  // A BILLING ADDRESS IS REQUIRED FOR EVERY PAYMENT, not only for parcels.
+  //
+  // It used to be asked for only when printed books were being shipped. But
+  // every payment raises a tax invoice, and an invoice with no address is not a
+  // proper invoice — worse, with no state on it the tax cannot be worked out.
+  // That is what produced CAPS/2026-27/0003: a student in Delhi, buying from a
+  // supplier in Delhi, charged IGST instead of CGST and SGST, on an invoice
+  // with no address at all.
+  //
+  // The billing address IS the shipping address; there is one address per
+  // student and the invoice prints it under both headings.
+  const p = profile as { address_line1?: string | null; city?: string | null; state?: string | null; pincode?: string | null } | null;
+  if (!(p?.address_line1 ?? "").trim() || !(p?.city ?? "").trim() || !(p?.state ?? "").trim() || !(p?.pincode ?? "").trim()) {
+    return { ok: false, reason: "address" };
   }
+  const wantsBooks = input.tier === "gold" && months >= 9 && input.wantBooks !== false;
 
   let amountInr = baseAmount;
   let couponId = "";

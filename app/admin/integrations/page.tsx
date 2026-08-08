@@ -580,8 +580,12 @@ async function MetaPanel() {
       {m.business && (
         <Row
           label="Business verification"
-          value={inPlainEnglish("verification_status", m.business.verification_status)}
-          note={m.business.name}
+          value={
+            m.business.verification_status
+              ? inPlainEnglish("verification_status", m.business.verification_status)
+              : "🔒 Meta will not say"
+          }
+          note={m.business.why ? `${m.business.name} — ${m.business.why}` : m.business.name}
         />
       )}
       {m.waba && (

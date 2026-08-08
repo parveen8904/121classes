@@ -14,7 +14,7 @@ export type MetaStatus = {
   ok: boolean;
   /** Set when we could not ask at all. */
   problem?: string;
-  business?: { name?: string; verification_status?: string };
+  business?: { name?: string; verification_status?: string; why?: string };
   waba?: { name?: string; account_review_status?: string };
   phone?: {
     display_phone_number?: string;
@@ -64,7 +64,18 @@ export async function metaStatus(): Promise<MetaStatus> {
     else {
       out.waba = { name: w?.name, account_review_status: w?.account_review_status };
       const b = w?.owner_business_info;
-      if (b) out.business = { name: b.name, verification_status: b.verification_status };
+      if (b) {
+        out.business = { name: b.name, verification_status: b.verification_status };
+        // Meta will name the business but withhold its verification status
+        // unless the token carries business_management. Asked the second way,
+        // the answer either arrives or Meta says plainly why not — which is
+        // more use than a blank that could mean anything.
+        if (!b.verification_status && b.id) {
+          const d = await ask(`${b.id}?fields=name,verification_status`, token);
+          if (d?.verification_status) out.business.verification_status = d.verification_status;
+          else if (d?.__error) out.business.why = d.__error;
+        }
+      }
     }
   }
 

@@ -289,7 +289,18 @@ async function lanes<T>(items: T[], width: number, job: (item: T) => Promise<voi
   await Promise.all(Array.from({ length: Math.min(width, items.length) }, lane));
 }
 
-type Device = { token: string; platform: string };
+export type Device = { token: string; platform: string };
+
+/**
+ * Send to an explicit list of phones, each routed to its own service.
+ *
+ * Exported because the digest already knows exactly which devices it means,
+ * and re-deriving them from student ids would be a second trip for an answer
+ * it is holding.
+ */
+export async function pushToDevices(devices: Device[], msg: PushMessage): Promise<SendResult> {
+  return send(devices, msg);
+}
 
 async function send(devices: Device[], msg: PushMessage): Promise<SendResult> {
   if (!devices.length) return NOTHING;

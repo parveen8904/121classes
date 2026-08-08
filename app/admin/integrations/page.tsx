@@ -4,6 +4,7 @@ import { emailConfigured, whatsappConfigured, telegramConfigured, telegramBotUse
 import { razorpayConfigured } from "@/lib/razorpay";
 import { r2Configured } from "@/lib/r2";
 import { getSecret } from "@/lib/secrets";
+import { metaStatus, inPlainEnglish } from "@/lib/metaStatus";
 import AdminHero from "../_components/AdminHero";
 import { connectTelegramWebhook, saveLinks, saveSecrets, testRazorpayConnection, sendTestEmail, registerDiscordCommand, saveSubjectGroup, setupAuthSmtp, getSupabaseInfra, raiseAuthPool, upgradeCompute } from "./actions";
 import { isSavableSecret } from "./secretKeys";
@@ -188,6 +189,10 @@ export default async function IntegrationsPage(
         subtitle="Paste your API keys here — no Vercel needed. A green light means it's working."
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {/* "Are we verified yet?" used to mean logging into Business Manager and
+          hunting. Meta will just tell us, using the token we already hold. */}
+      <MetaPanel />
 
       {/* The answer to "which of these are still pending", without reading
           eighty key fields and remembering what each one was for. */}
@@ -537,5 +542,69 @@ export default async function IntegrationsPage(
         </form>
       </div>
     </section>
+  );
+}
+
+/**
+ * What Meta currently thinks of us.
+ *
+ * Business verification, the WhatsApp account's review, and the number's own
+ * state each live on a different object in Meta's world, which is why looking
+ * in one place and concluding "nothing is happening" is so easy to do.
+ */
+async function MetaPanel() {
+  const m = await metaStatus();
+  if (!m.ok && !m.problem) return null;
+
+  const Row = ({ label, value, note }: { label: string; value: string; note?: string }) => (
+    <div style={{ display: "flex", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
+      <span style={{ minWidth: 210, fontSize: ".86rem" }}>{label}</span>
+      <strong style={{ fontSize: ".86rem" }}>{value}</strong>
+      {note && <span className="muted" style={{ fontSize: ".78rem" }}>{note}</span>}
+    </div>
+  );
+
+  return (
+    <div className="card" style={{ marginTop: 18 }}>
+      <h2 style={{ margin: 0, fontSize: "1.05rem" }}>📘 Facebook / Meta — where verification stands</h2>
+      <p className="muted" style={{ margin: "6px 0 10px", fontSize: ".85rem" }}>
+        Asked of Meta directly, using the WhatsApp token. Refreshed hourly.
+      </p>
+
+      {m.problem && (
+        <div className="notice err" style={{ marginBottom: 10, fontSize: ".85rem" }}>
+          Could not ask Meta: {m.problem}
+        </div>
+      )}
+
+      {m.business && (
+        <Row
+          label="Business verification"
+          value={inPlainEnglish("verification_status", m.business.verification_status)}
+          note={m.business.name}
+        />
+      )}
+      {m.waba && (
+        <Row
+          label="WhatsApp account review"
+          value={inPlainEnglish("account_review_status", m.waba.account_review_status)}
+          note={m.waba.name}
+        />
+      )}
+      {m.phone && (
+        <>
+          <Row label="Number" value={m.phone.display_phone_number || "—"} note={m.phone.verified_name} />
+          <Row label="Display name" value={inPlainEnglish("name_status", m.phone.name_status)} />
+          <Row label="Number verified" value={inPlainEnglish("code_verification_status", m.phone.code_verification_status)} />
+          <Row label="Quality rating" value={inPlainEnglish("quality_rating", m.phone.quality_rating)} />
+          <Row label="Can message" value={inPlainEnglish("messaging_limit", m.phone.messaging_limit)} />
+        </>
+      )}
+
+      <p className="muted" style={{ margin: "10px 0 0", fontSize: ".8rem" }}>
+        Business verification is what the soft WhatsApp verify prompt on the dashboard is waiting for.
+        Until it says verified, that prompt stays hidden.
+      </p>
+    </div>
   );
 }

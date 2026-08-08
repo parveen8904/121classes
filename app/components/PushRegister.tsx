@@ -79,7 +79,21 @@ export default function PushRegister() {
           "pushNotificationActionPerformed",
           (a: { notification?: { data?: { link?: string } } }) => {
             const link = a?.notification?.data?.link;
-            if (link && link.startsWith("/")) window.location.assign(link);
+            if (!link) return;
+            // The same Link box on the broadcast desk feeds Telegram and email,
+            // where a full https:// address is the only thing that makes sense.
+            // Accepting only a bare path meant a perfectly normal link opened
+            // nothing at all — the notification arrived and the tap did
+            // nothing. Both forms are honoured; anything pointing off our own
+            // site is refused, so a notification can never be a way to send a
+            // student somewhere else.
+            try {
+              if (link.startsWith("/")) { window.location.assign(link); return; }
+              const u = new URL(link, window.location.origin);
+              if (u.origin === window.location.origin) window.location.assign(u.pathname + u.search + u.hash);
+            } catch {
+              // Not a link we can make sense of; leave the student where they are.
+            }
           },
         );
 

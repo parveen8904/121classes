@@ -9,7 +9,28 @@ www/.DS_Store
 # plugin's own Kotlin under mobile/plugins/, and any native fix we make is
 # thrown away the next time the platform folder is regenerated. Whatever we
 # have written by hand has to be tracked, or it is not really a fix.
-ios/
+# The same applies to iOS, and it was not doing so. Four files here are
+# hand-edited: the push entitlement, the token forwarding in AppDelegate, the
+# encryption declaration and deployment target in the project. All four were
+# untracked while being written tonight — a fresh clone would have built an app
+# that silently receives no notifications and asks the export question again.
+ios/*
+!ios/App/
+ios/App/*
+!ios/App/App/
+ios/App/App/*
+# ITSAppUsesNonExemptEncryption, and the camera/mic usage strings whose absence
+# terminates the process rather than failing politely.
+!ios/App/App/Info.plist
+# aps-environment. Without it the app cannot register for notifications at all.
+!ios/App/App/App.entitlements
+# Apple hands the device token to the app delegate and nowhere else.
+!ios/App/App/AppDelegate.swift
+!ios/App/App.xcodeproj/
+ios/App/App.xcodeproj/*
+# Deployment target, version, build number, and the entitlements path.
+!ios/App/App.xcodeproj/project.pbxproj
+
 android/*
 !plugins/**/android/
 # git cannot re-include a file inside an excluded DIRECTORY, so every level on

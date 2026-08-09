@@ -20,6 +20,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 const PLACES: { where: string; what: string }[] = [
   { where: "/dashboard", what: "The student's own home: their subjects, today's study target, and what is new." },
   { where: "/learn/downloads", what: "Classes downloaded to the phone for watching offline, inside the app." },
+  { where: "/learn/hitlist", what: "The hitlist: the must-do question numbers, chapter by chapter, for their subjects. A page, not a PDF." },
+  { where: "/learn/paper/<id>", what: "One RTP, MTP or past exam paper — attempt it there and have the answer checked." },
   { where: "/learn/performance", what: "Their own marks and progress across tests." },
   { where: "/learn/cases", what: "Case-study questions with answers and explanations." },
   { where: "/learn/notes", what: "Notes and written material for their subjects." },

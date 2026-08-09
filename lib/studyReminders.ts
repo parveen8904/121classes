@@ -56,7 +56,8 @@ export async function runStudyReminders(): Promise<{ sent: number }> {
 
     await svc.from("notifications").insert({
       student_id: p.user_id,
-      channel: prof?.telegram_chat_id ? "whatsapp" : "email",
+      // Telegram when they have linked it, email otherwise. Never WhatsApp.
+      channel: prof?.telegram_chat_id ? "telegram" : "email",
       template: "study_reminder",
       payload: { user_id: p.user_id, week },
       status: delivered ? "sent" : "skipped",

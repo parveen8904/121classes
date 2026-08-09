@@ -594,7 +594,12 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                           ))}</div>
                         )}
                         {nCases > 0 && <div>🧩 <strong>{nCases}</strong> case scenario{nCases === 1 ? "" : "s"}{nCaseSets > 1 ? ` (${nCaseSets} sets)` : ""} — practise below</div>}
-                        <div>📌 Important-question lists — First revision: <strong>{hasRev1 ? "✓ available" : "— not added"}</strong> · Second revision: <strong>{hasRev2 ? "✓ available" : "— not added"}</strong></div>
+                        {/* It said "available" and gave nowhere to go. Two
+                            students had to write in and ask where the hitlist
+                            was; it now opens from the word that promises it. */}
+                        <div>📌 Important-question lists (the hitlist) — First revision: <strong>{hasRev1 ? "✓ available" : "— not added"}</strong> · Second revision: <strong>{hasRev2 ? "✓ available" : "— not added"}</strong>
+                          {(hasRev1 || hasRev2) && <> · <Link href="/learn/hitlist" style={{ fontWeight: 700 }}>open the hitlist →</Link></>}
+                        </div>
                         <div>📚 Materials: {mats.length ? mats.join(" · ") : "coming soon"}</div>
                         <div>📅 Applicable {applicable || "for all attempts"}</div>
                       </div>

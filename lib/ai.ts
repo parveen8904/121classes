@@ -224,6 +224,9 @@ const LAST_RESORT_SYSTEM =
   "You are replying on behalf of CA Parveen Sharma Classes to a student whose question could not be " +
   "answered from the study material.\n" +
   "Write a SHORT reply: 2 to 4 sentences, plain English, no headings.\n" +
+  "If a list of what we hold is given below, answer from it: name the paper and give its link — " +
+  "never attach or promise a file. If the same thing exists for more than one course and you cannot " +
+  "tell which they are on, ask one short question instead of guessing. " +
   "If they asked where to find something, name the page from the map below. " +
   "If we do not have the thing they named, say so plainly, once, and offer the nearest thing we do have. " +
   "NEVER invent a page, a link, a price, a date or a section number. " +
@@ -244,8 +247,15 @@ export const PLAIN_FALLBACK =
  * Returns null only when AI is unavailable; callers then use PLAIN_FALLBACK.
  */
 export async function replyFromSiteMap(question: string): Promise<string | null> {
-  const { siteDirectory } = await import("@/lib/siteDirectory");
-  const where = await siteDirectory().catch(() => "");
+  const [{ siteDirectory }, { findContent }] = await Promise.all([
+    import("@/lib/siteDirectory"),
+    import("@/lib/contentFinder"),
+  ]);
+  const [map, found] = await Promise.all([
+    siteDirectory().catch(() => ""),
+    findContent(question).catch(() => ""),
+  ]);
+  const where = found ? `${found}\n\n${map}` : map;
   const out = await callClaude(
     `${LAST_RESORT_SYSTEM}\n\n${where}`,
     `STUDENT'S MESSAGE:\n${question}`,
@@ -302,6 +312,12 @@ const REPO_SYSTEM =
   "labels in the material, e.g. 'Covered in Class 42.' If several, name them; if you truly can't tell, omit it.\n" +
   "For 'solve question 15 of Amalgamation / Q6 of ICAI / question 10 of RTP May 2026': find it in the material " +
   "and solve fully. If it is NOT in the uploaded material, say so in one line and offer to solve if they paste it.\n" +
+  "WHEN A LIST OF WHAT WE HOLD IS GIVEN ABOVE, answer from it: name the paper and give its link. " +
+  "Send the LINK, never a file — the papers open on their own page where the student can attempt them " +
+  "and have the answer checked, and the hitlist is a page of question numbers, not a PDF.\n" +
+  "IF THE SAME THING EXISTS FOR MORE THAN ONE COURSE and you cannot tell which the student is on, " +
+  "ASK ONE SHORT QUESTION — 'Are you doing CA Final or CA Intermediate?' — instead of guessing or " +
+  "sending both. If it is ready for one course and not the other, say exactly that.\n" +
   "IF THEY ARE ASKING WHERE SOMETHING IS — a test series, mock papers, notes, a class, the planner, " +
   "downloads, a list they have heard of — answer from the WHERE THINGS ARE map: name the page and say what " +
   "is on it. If we do not have the thing they named, say so plainly in one line and offer the nearest thing " +
@@ -333,9 +349,18 @@ export async function answerDoubtFromMaterial(
   // The map of the site travels with the study material. A great many messages
   // are not doubts but "where is it?" — and answering those from material that
   // does not mention pages meant declining them all.
-  const { siteDirectory } = await import("@/lib/siteDirectory");
-  const where = await siteDirectory();
-  const user = `${taught}${where}\n\nSTUDY MATERIAL:\n${material || "(none provided)"}\n\nSTUDENT QUESTION:\n${question}`;
+  const [{ siteDirectory }, { findContent }] = await Promise.all([
+    import("@/lib/siteDirectory"),
+    import("@/lib/contentFinder"),
+  ]);
+  // The map says which pages exist; the finder says which of OUR papers and
+  // lists answer this particular message, with the link to each. It costs one
+  // small query and only runs when the question names something we stock.
+  const [where, found] = await Promise.all([siteDirectory(), findContent(question)]);
+  const user =
+    `${taught}${where}\n\n` +
+    (found ? `${found}\n\n` : "") +
+    `STUDY MATERIAL:\n${material || "(none provided)"}\n\nSTUDENT QUESTION:\n${question}`;
   const raw = await callClaude(REPO_SYSTEM, user, 2000, { model: await teachingModel(), feature });
   // A reply CA Parveen Sharma reads and sends himself carries no machine
   // disclaimer — it is his answer by the time the student sees it.

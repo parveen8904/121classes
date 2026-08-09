@@ -50,7 +50,10 @@ export async function runDailyTargets(): Promise<{ sent: number }> {
     const text = `🎯 Today's target — ${input.subjectTitle}\n\n${lines}${warn}`;
 
     const ok = await sendTelegramMessage(chat, text);
-    await svc.from("notifications").insert({ student_id: p.user_id, channel: "whatsapp", template: "daily_target", payload: { user_id: p.user_id, day: today }, status: ok ? "sent" : "skipped", sent_at: ok ? new Date().toISOString() : null });
+    // Sent on Telegram — recorded as Telegram. It was written down as WhatsApp
+    // only because the channel enum had no truer value, and 497 of these then
+    // read as paid WhatsApp traffic on a page of student conversations.
+    await svc.from("notifications").insert({ student_id: p.user_id, channel: "telegram", template: "daily_target", payload: { user_id: p.user_id, day: today }, status: ok ? "sent" : "skipped", sent_at: ok ? new Date().toISOString() : null });
     if (ok) sent++;
   }
   return { sent };

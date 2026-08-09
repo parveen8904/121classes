@@ -7,6 +7,17 @@ import { createServiceClient } from "@/lib/supabase/service";
 //      questions/concepts, and per class: transcript, concepts, homework.
 // This is the unified repository: anything entered for students is available
 // to the AI without re-uploading.
+// Words that describe the ASKING rather than the subject. They appear in
+// almost every class, so counting them buries the one word that matters.
+const ASKING_WORDS = new Set([
+  "which", "what", "where", "when", "explain", "explained", "explains", "explaining",
+  "class", "classes", "lecture", "lectures", "video", "videos", "chapter", "topic",
+  "sharma", "parveen", "sir", "maam", "madam", "please", "kindly", "tell", "told",
+  "about", "regarding", "there", "these", "those", "have", "having", "does", "doing",
+  "study", "material", "learn", "watch", "number", "numbers", "kaun", "kaunsi",
+  "konsi", "kaha", "kahan", "bata", "batao", "samjha", "samjhaya", "padhaya",
+]);
+
 export async function getRepositoryContext(
   subjectId?: string | null,
   maxChars = 40000,
@@ -102,6 +113,7 @@ export async function getRepositoryContext(
     chunks.push({ subject_id: (a as { subject_id?: string | null }).subject_id ?? null, topic_id: (a as { topic_id?: string | null }).topic_id ?? null, text: `### Amendment — ${a.title}\n${a.body}` });
   }
 
+  const classChunks: Chunk[] = [];
   for (const t of topics ?? []) {
     const subj = (t as { subjects?: { title?: string } | null }).subjects?.title ?? "";
     const lines: string[] = [];
@@ -131,13 +143,30 @@ export async function getRepositoryContext(
       // Label each class with its CLASS NUMBER so the AI can tell the student
       // which class to watch for this concept.
       const cno = c.class_no ? `Class ${c.class_no} — ` : "";
-      if (parts.length) lines.push(`— ${cno}${s.title} —\n${parts.join("\n")}`);
+      // EACH CLASS IS ITS OWN CHUNK.
+      //
+      // A whole topic used to travel as one block, so "which class explained
+      // investments?" competed at topic granularity and the answer — a class
+      // number sitting somewhere inside a very long block — was as likely to be
+      // cut off by the character budget as to be read. A class is the unit the
+      // student is asking about, so it is the unit that gets ranked and kept.
+      if (parts.length) {
+        classChunks.push({
+          subject_id: t.subject_id,
+          topic_id: t.id,
+          text: `### ${subj ? subj + " — " : ""}${t.title}\n— ${cno}${s.title} —\n${parts.join("\n")}`,
+        });
+      }
     }
+    // The topic's own material (weightage, important-question lists) still
+    // travels as one piece; it belongs to the topic, not to any one class.
     if (lines.length) chunks.push({ subject_id: t.subject_id, topic_id: t.id, text: `${head}\n${lines.join("\n")}` });
   }
 
   // 1) If a specific topic is in focus (e.g. a doubt asked inside a class),
   //    use ONLY that topic's material — far smaller input.
+  chunks.push(...classChunks);
+
   let pool = chunks;
   if (opts.topicId) {
     const topicOnly = chunks.filter((c) => c.topic_id === opts.topicId);
@@ -149,10 +178,36 @@ export async function getRepositoryContext(
   //    general doubts.
   let ranked = false;
   if (pool === chunks && opts.query) {
-    const terms = [...new Set((opts.query.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []))];
+    // WORDS THAT ACTUALLY NARROW ANYTHING.
+    //
+    // "In which class did Sharma Sir explain investments?" scored six words —
+    // and five of them (which, class, sharma, explained, about) appear in
+    // essentially every chunk here. The one word that mattered, "investment",
+    // counted for a sixth of the score, so the ranking was decided by question
+    // shape rather than subject, and the right class never rose to the top.
+    //
+    // A term found nearly everywhere tells us nothing, so it is worth nothing.
+    const terms = [...new Set((opts.query.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []))]
+      .filter((w) => !ASKING_WORDS.has(w));
     if (terms.length) {
+      const lower = pool.map((c) => c.text.toLowerCase());
+      // How many chunks contain each term. Anything in more than half of them
+      // is doing no work.
+      const spread = new Map(terms.map((w) => [w, lower.filter((t) => t.includes(w)).length]));
+      const useful = terms.filter((w) => (spread.get(w) ?? 0) <= pool.length * 0.5);
+      const scoring = useful.length ? useful : terms;
+
       const scored = pool
-        .map((c) => ({ c, s: terms.reduce((n, w) => n + (c.text.toLowerCase().includes(w) ? 1 : 0), 0) }))
+        .map((c, i) => ({
+          c,
+          // Rarer terms weigh more, so one mention of "investment" beats five
+          // mentions of "class".
+          s: scoring.reduce((n, w) => {
+            if (!lower[i].includes(w)) return n;
+            const seen = spread.get(w) ?? 1;
+            return n + Math.max(1, Math.round(pool.length / Math.max(1, seen)));
+          }, 0),
+        }))
         .filter((x) => x.s > 0)
         .sort((a, b) => b.s - a.s);
       if (scored.length) {

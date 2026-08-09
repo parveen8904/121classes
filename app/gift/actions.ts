@@ -271,3 +271,67 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
 
   return { ok: true };
 }
+
+/**
+ * Check a coupon and say what the supporter will actually pay — BEFORE paying.
+ *
+ * The discount was only ever applied inside createGiftOrder, so the button said
+ * "Pay ₹27,000" while Razorpay charged less. A supporter had no way to tell,
+ * before committing, whether their code had worked at all — and a code that was
+ * expired or wrong failed in silence, with the full amount taken.
+ *
+ * The price is worked out here on the server from the subject's own pricing,
+ * never from anything the browser sends, so the figure shown is the figure
+ * charged.
+ */
+export async function previewGiftPrice(input: { subjectId: string; couponCode?: string }): Promise<
+  | { ok: true; base: number; payable: number; discount: number; couponApplied: boolean; couponCode: string | null; months: number }
+  | { ok: false; reason: "auth" | "error" | "noprice" | "badcoupon"; base?: number; months?: number }
+> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, reason: "auth" };
+
+  const svc = createServiceClient();
+  const { data: subject } = await svc
+    .from("subjects")
+    .select("id, validity_months, gold_price_inr, gold_slabs, batch_months, batch_price_inr")
+    .eq("id", input.subjectId)
+    .single();
+  if (!subject) return { ok: false, reason: "error" };
+
+  // The SAME ladder createGiftOrder uses. Two copies of a price calculation is
+  // how the button and the invoice come to disagree, so if this ever moves it
+  // moves in both places.
+  const baseMonths = subject.validity_months || 12;
+  const batchMonths = Number((subject as { batch_months?: number | null }).batch_months) || 0;
+  let months = baseMonths;
+  let base: number;
+  if (batchMonths > 0) {
+    const price = Number((subject as { batch_price_inr?: number | null }).batch_price_inr) || 0;
+    if (price <= 0) return { ok: false, reason: "noprice" };
+    months = batchMonths;
+    base = price;
+  } else {
+    const { parseSlabs, slabTotal } = await import("@/lib/pricing");
+    const slabs = parseSlabs((subject as { gold_slabs?: unknown }).gold_slabs);
+    if (slabs) base = slabTotal(slabs, months);
+    else if (subject.gold_price_inr && subject.gold_price_inr > 0) base = subject.gold_price_inr;
+    else return { ok: false, reason: "noprice" };
+  }
+
+  const code = (input.couponCode ?? "").trim();
+  if (!code) {
+    return { ok: true, base, payable: base, discount: 0, couponApplied: false, couponCode: null, months };
+  }
+
+  const applied = await applyCoupon(code, base, { kind: "donor", email: user.email });
+  // A code that does not work is SAID to not work. It used to be dropped
+  // quietly and the full amount charged.
+  if (!applied) return { ok: false, reason: "badcoupon", base, months };
+
+  return {
+    ok: true, base, payable: applied.amount, discount: base - applied.amount,
+    couponApplied: true, couponCode: applied.code, months,
+  };
+}

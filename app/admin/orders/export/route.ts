@@ -31,12 +31,26 @@ export async function GET(req: NextRequest) {
   const fromIso = fromDay ? new Date(`${fromDay}T00:00:00+05:30`).toISOString() : null;
   const toIso = toDay ? new Date(`${toDay}T23:59:59+05:30`).toISOString() : null;
 
-  const [{ data: orderRows }, { data: bookRows }] = await Promise.all([
+  // WHICH STATUSES TO INCLUDE.
+  //
+  // The download always carried every order, so a file meant to be a record of
+  // takings also held the attempts that were never paid for — and the total at
+  // the bottom of the spreadsheet was not money we had. Pick "paid" and the
+  // file holds paid orders and nothing else.
+  const wanted = (sp.get("status") ?? "")
+    .split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const keep = (status: string | null | undefined) =>
+    wanted.length === 0 || wanted.includes(String(status ?? "").toLowerCase());
+  const applyStatus = <T extends { in: (col: string, v: string[]) => T }>(q: T): T =>
+    wanted.length ? q.in("status", wanted) : q;
+
+  const [{ data: orderRows }, { data: bookRows }, { data: giftRows }] = await Promise.all([
     (() => {
       let q = svc.from("orders")
-        .select("kind, amount_inr, status, created_at, invoice_no, order_no, subject_id, subjects:subject_id(title), profiles:student_id(id, full_name, email, phone, state, gstin, address_line1, address_line2, city, pincode)");
+        .select("kind, amount_inr, status, created_at, invoice_no, order_no, subject_id, subjects:subject_id(title, courses(title)), profiles:student_id(id, full_name, email, phone, state, gstin, address_line1, address_line2, city, pincode)");
       if (fromIso) q = q.gte("created_at", fromIso);
       if (toIso) q = q.lte("created_at", toIso);
+      q = applyStatus(q as never) as never;
       return q.order("created_at", { ascending: false }).limit(5000);
     })(),
     (() => {
@@ -44,12 +58,22 @@ export async function GET(req: NextRequest) {
         .select("amount_inr, status, created_at, guest_contact, ship_to, invoice_no, order_no");
       if (fromIso) q = q.gte("created_at", fromIso);
       if (toIso) q = q.lte("created_at", toIso);
+      q = applyStatus(q as never) as never;
+      return q.order("created_at", { ascending: false }).limit(5000);
+    })(),
+    // Supporter sales belong in the register, and so in the download.
+    (() => {
+      let q = svc.from("gift_orders")
+        .select("amount_inr, discount_inr, coupon_code, status, created_at, invoice_no, order_no, months, tier, recipient_name, recipient_email, recipient_phone, billing_state, subjects:subject_id(title, courses(title)), gifter:gifter_id(full_name, email)");
+      if (fromIso) q = q.gte("created_at", fromIso);
+      if (toIso) q = q.lte("created_at", toIso);
+      q = applyStatus(q as never) as never;
       return q.order("created_at", { ascending: false }).limit(5000);
     })(),
   ]);
 
   type OrderProf = { id: string; full_name: string | null; email: string | null; phone: string | null; state: string | null; gstin: string | null; address_line1: string | null; address_line2: string | null; city: string | null; pincode: string | null };
-  const subs = (orderRows ?? []) as unknown as { kind: string; amount_inr: number; status: string; created_at: string; invoice_no: string | null; order_no: number | null; subject_id: string | null; subjects: { title: string } | null; profiles: OrderProf | null }[];
+  const subs = (orderRows ?? []) as unknown as { kind: string; amount_inr: number; status: string; created_at: string; invoice_no: string | null; order_no: number | null; subject_id: string | null; subjects: { title: string; courses?: { title?: string } | { title?: string }[] | null } | null; profiles: OrderProf | null }[];
 
   // Level (Final / Inter) + subscription dates from each buyer's records.
   const ids = [...new Set(subs.map((o) => o.profiles?.id).filter(Boolean))] as string[];
@@ -82,6 +106,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const courseLevel = (subj: { courses?: { title?: string } | { title?: string }[] | null } | null): string => {
+    const c = subj?.courses;
+    const t = ((Array.isArray(c) ? c[0]?.title : c?.title) ?? "").toLowerCase();
+    return t.includes("final") ? "Final" : t.includes("inter") ? "Inter" : t.includes("foundation") ? "Foundation" : "";
+  };
+
   const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
   const dt = (iso: string) => new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" });
   const d = (iso: string | null | undefined) =>
@@ -89,7 +119,7 @@ export async function GET(req: NextRequest) {
   const rows = [[
     "Order no", "Date", "Sale type", "Subject", "Plan", "Status", "Invoice no", "Name", "Level", "Phone", "Email",
     "Address", "GSTIN", "Subscription start", "Subscription end",
-    "Amount without GST", "GST amount", "Total paid (Rs)",
+    "Amount without GST", "GST amount", "Total paid (Rs)", "Sold by", "Coupon", "Discount (Rs)",
   ].join(",")];
 
   for (const o of subs) {
@@ -103,11 +133,14 @@ export async function GET(req: NextRequest) {
       // Gold / Silver / Bronze — the thing the plan column exists for.
       esc(dates?.tier ? dates.tier.charAt(0).toUpperCase() + dates.tier.slice(1) : ""),
       esc(o.status), esc(o.invoice_no ?? ""),
-      esc(pr?.full_name ?? ""), esc(pr ? levelByUser.get(pr.id) ?? "" : ""),
+      // From the order's OWN course, not from everything the buyer holds —
+      // otherwise a CA Final order under a buyer who also has Inter is
+      // exported as "Inter" beside the Final subject.
+      esc(pr?.full_name ?? ""), esc(courseLevel(o.subjects) || (pr ? levelByUser.get(pr.id) ?? "" : "")),
       esc(pr?.phone ?? ""), esc(pr?.email ?? ""), esc(address), esc(pr?.gstin ?? ""),
       esc(d(dates?.starts_at)), esc(d(dates?.ends_at)),
       esc(gst.taxable.toFixed(2)), esc((gst.cgst + gst.sgst + gst.igst).toFixed(2)),
-      esc((o.amount_inr ?? 0).toFixed(2)),
+      esc((o.amount_inr ?? 0).toFixed(2)), esc(""), esc(""), esc(""),
     ].join(","));
   }
 
@@ -122,7 +155,33 @@ export async function GET(req: NextRequest) {
       esc(b.guest_contact?.phone ?? ship.phone ?? ""), esc(b.guest_contact?.email ?? ""),
       esc(address), esc(""), esc(""), esc(""),
       esc(gst.taxable.toFixed(2)), esc((gst.cgst + gst.sgst + gst.igst).toFixed(2)),
-      esc((b.amount_inr ?? 0).toFixed(2)),
+      esc((b.amount_inr ?? 0).toFixed(2)), esc(""), esc(""), esc(""),
+    ].join(","));
+  }
+
+  // Supporter sales — the same columns, plus who sold it and what they took off.
+  type GiftExport = {
+    amount_inr: number; discount_inr: number | null; coupon_code: string | null;
+    status: string; created_at: string; invoice_no: string | null; order_no: number | null;
+    months: number | null; tier: string | null; billing_state: string | null;
+    recipient_name: string | null; recipient_email: string | null; recipient_phone: string | null;
+    subjects: { title: string; courses?: { title?: string } | { title?: string }[] | null } | null;
+    gifter: { full_name: string | null; email: string | null } | null;
+  };
+  for (const g of (giftRows ?? []) as unknown as GiftExport[]) {
+    const gst = computeGst(g.amount_inr ?? 0, g.billing_state ?? "", s);
+    rows.push([
+      esc(g.order_no != null ? `#${g.order_no}` : ""),
+      esc(dt(g.created_at)), esc("supporter sale"), esc(g.subjects?.title ?? ""),
+      esc(g.tier ? g.tier.charAt(0).toUpperCase() + g.tier.slice(1) + (g.months ? ` · ${g.months} months` : "") : ""),
+      esc(g.status), esc(g.invoice_no ?? ""),
+      esc(g.recipient_name ?? ""), esc(courseLevel(g.subjects)),
+      esc(g.recipient_phone ?? ""), esc(g.recipient_email ?? ""),
+      esc(""), esc(""), esc(""), esc(""),
+      esc(gst.taxable.toFixed(2)), esc((gst.cgst + gst.sgst + gst.igst).toFixed(2)),
+      esc((g.amount_inr ?? 0).toFixed(2)),
+      esc(g.gifter?.full_name || g.gifter?.email || ""),
+      esc(g.coupon_code ?? ""), esc(g.discount_inr != null ? g.discount_inr.toFixed(2) : ""),
     ].join(","));
   }
 

@@ -33,7 +33,10 @@ export default async function SupporterProfilePage(props: {
   return (
     <main>
       <section className="container" style={{ paddingTop: 32, paddingBottom: 60, maxWidth: 640 }}>
-        <p className="crumb"><Link href="/supporter">← My desk</Link></p>
+        <p className="crumb" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <Link href="/supporter">← My desk</Link>
+          <a href="/auth/signout" style={{ fontSize: ".85rem" }}>Log out</a>
+        </p>
         <span className="badge">👤 My details</span>
         <h1 style={{ margin: "12px 0 6px" }}>Your details</h1>
         <p className="muted" style={{ lineHeight: 1.7 }}>

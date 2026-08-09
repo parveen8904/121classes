@@ -92,6 +92,12 @@ export default async function SupporterPage(props: {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
           <Link className="btn small" href="/supporter/sell">🛒 Place an order</Link>
           <Link className="btn small secondary" href="/supporter/profile">👤 My details &amp; GST</Link>
+          {/* There was no way out of this portal at all. A supporter selling
+              from a shared or shop counter had to clear the browser to end
+              their session — on a desk where the next person may be a student. */}
+          <a className="btn small secondary" href="/auth/signout" style={{ marginLeft: "auto" }}>
+            ↪ Log out
+          </a>
         </div>
 
         {/* WHAT YOU SELL. Two products, priced exactly as a student would pay.

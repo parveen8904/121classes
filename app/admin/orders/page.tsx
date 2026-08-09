@@ -75,11 +75,22 @@ type PayRow = {
   id: string; kind: string; amount_inr: number; status: string; created_at: string;
   razorpay_order_id: string | null; invoice_no: string | null; invoice_url: string | null;
   zoho_status: string | null; subject_id: string | null; order_no: number | null;
-  subjects: { title: string } | null;
+  subjects: { title: string; courses?: { title?: string } | { title?: string }[] | null } | null;
   profiles: {
     id: string; full_name: string | null; email: string | null; phone: string | null;
     address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; pincode: string | null;
   } | null;
+};
+
+type GiftRow = {
+  id: string; amount_inr: number; discount_inr: number | null; coupon_code: string | null;
+  status: string; created_at: string; razorpay_order_id: string | null;
+  invoice_no: string | null; invoice_url: string | null; order_no: number | null;
+  months: number | null; tier: string | null; subject_id: string | null;
+  recipient_name: string | null; recipient_email: string | null; recipient_phone: string | null;
+  billing_name: string | null;
+  subjects: { title: string; courses?: { title?: string } | { title?: string }[] | null } | null;
+  gifter: { full_name: string | null; email: string | null } | null;
 };
 
 const TIER_ICON: Record<string, string> = { gold: "🥇", silver: "🥈", bronze: "🥉" };
@@ -95,7 +106,7 @@ function monthsBetween(a: string | null, b: string | null): number | null {
 
 export default async function AdminOrdersPage(
   props: {
-    searchParams: Promise<{ dispatch?: string; q?: string; from?: string; to?: string }>;
+    searchParams: Promise<{ dispatch?: string; q?: string; from?: string; to?: string; status?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -107,13 +118,20 @@ export default async function AdminOrdersPage(
   const toDay = okDate(searchParams.to);
   const fromIso = fromDay ? new Date(`${fromDay}T00:00:00+05:30`).toISOString() : null;
   const toIso = toDay ? new Date(`${toDay}T23:59:59+05:30`).toISOString() : null;
+  // Which statuses to download. Everything, unless he picks.
+  const STATUSES = ["paid", "created", "failed", "refunded", "provisioned"];
+  const chosen = (searchParams.status ?? "")
+    .split(",").map((x) => x.trim().toLowerCase()).filter((x) => STATUSES.includes(x));
+
   const rangeQs = new URLSearchParams();
   if (fromDay) rangeQs.set("from", fromDay);
   if (toDay) rangeQs.set("to", toDay);
+  const exportQs = new URLSearchParams(rangeQs);
+  if (chosen.length) exportQs.set("status", chosen.join(","));
   const supabase = createClient();
   const svc = createServiceClient();
 
-  const [{ data }, { data: payData }] = await Promise.all([
+  const [{ data }, { data: payData }, { data: giftData }] = await Promise.all([
     (() => {
       let qy = supabase
         .from("book_orders")
@@ -126,14 +144,42 @@ export default async function AdminOrdersPage(
     (() => {
       let qy = svc
         .from("orders")
-        .select("id, kind, amount_inr, status, created_at, razorpay_order_id, invoice_no, invoice_url, zoho_status, subject_id, order_no, subjects:subject_id(title), profiles:student_id(id, full_name, email, phone, address_line1, address_line2, city, state, pincode)");
+        .select("id, kind, amount_inr, status, created_at, razorpay_order_id, invoice_no, invoice_url, zoho_status, subject_id, order_no, subjects:subject_id(title, courses(title)), profiles:student_id(id, full_name, email, phone, address_line1, address_line2, city, state, pincode)");
+      if (fromIso) qy = qy.gte("created_at", fromIso);
+      if (toIso) qy = qy.lte("created_at", toIso);
+      return qy.order("created_at", { ascending: false }).limit(500);
+    })(),
+    // SUPPORTER ORDERS. A supporter selling from their own desk writes to
+    // gift_orders, which this page never read — so an order placed through the
+    // supporter portal was taken, paid for and invoiced, and still did not
+    // appear in the sales register. It is a sale like any other.
+    (() => {
+      let qy = svc
+        .from("gift_orders")
+        .select("id, amount_inr, discount_inr, coupon_code, status, created_at, razorpay_order_id, invoice_no, invoice_url, order_no, months, tier, subject_id, recipient_name, recipient_email, recipient_phone, billing_name, subjects:subject_id(title, courses(title)), gifter:gifter_id(full_name, email)");
       if (fromIso) qy = qy.gte("created_at", fromIso);
       if (toIso) qy = qy.lte("created_at", toIso);
       return qy.order("created_at", { ascending: false }).limit(500);
     })(),
   ]);
 
-  // Level (Final/Inter) + the exact subscription dates each payment created.
+  // WHICH COURSE THIS ORDER IS FOR — read from the order itself.
+  //
+  // The level used to be looked up from my_courses: every course the STUDENT
+  // holds, collapsed to one word. So a student who had bought CA Inter earlier
+  // and then bought CA Final Financial Reporting had that order labelled
+  // "Inter" beside the subject "Financial Reporting" — order 10017 exactly.
+  // The order knows its own subject, and the subject knows its course.
+  const levelOfOrder = (p: PayRow): string => {
+    const c = p.subjects?.courses;
+    const title = ((Array.isArray(c) ? c[0]?.title : c?.title) ?? "").toLowerCase();
+    if (title.includes("final")) return "Final";
+    if (title.includes("inter")) return "Inter";
+    if (title.includes("foundation")) return "Foundation";
+    return "";
+  };
+
+  // The exact subscription dates each payment created.
   const payRowsRaw = (payData ?? []) as unknown as PayRow[];
   const payerIds = [...new Set(payRowsRaw.map((p) => p.profiles?.id).filter(Boolean))] as string[];
   const levelByUser = new Map<string, string>();
@@ -171,11 +217,36 @@ export default async function AdminOrdersPage(
     }
   }
 
+  // Folded into the payment list rather than shown apart: the founder reads one
+  // register, and a sale is a sale whoever keyed it in.
+  const giftRows = ((giftData ?? []) as unknown as GiftRow[]).map((g): PayRow & { viaSupporter: string; discount: number | null; coupon: string | null } => ({
+    id: g.id,
+    kind: "supporter",
+    amount_inr: g.amount_inr,
+    status: g.status,
+    created_at: g.created_at,
+    razorpay_order_id: g.razorpay_order_id,
+    invoice_no: g.invoice_no,
+    invoice_url: g.invoice_url,
+    zoho_status: null,
+    subject_id: g.subject_id,
+    order_no: g.order_no,
+    subjects: g.subjects,
+    profiles: {
+      id: "", full_name: g.recipient_name, email: g.recipient_email, phone: g.recipient_phone,
+      address_line1: null, address_line2: null, city: null, state: null, pincode: null,
+    },
+    viaSupporter: g.gifter?.full_name || g.gifter?.email || "a supporter",
+    discount: g.discount_inr ?? null,
+    coupon: g.coupon_code ?? null,
+  }));
+
   const match = (parts: (string | null | undefined)[]) => !q || parts.some((p) => (p ?? "").toLowerCase().includes(q));
   const orders = ((data ?? []) as unknown as (OrderRow & { invoice_no?: string | null; invoice_url?: string | null })[])
     .filter((o) => match([o.guest_contact?.name, o.guest_contact?.email, o.guest_contact?.phone, o.ship_to?.name, o.ship_to?.phone, o.invoice_no, o.order_no != null ? String(o.order_no) : null, o.tracking_code]));
-  const payments = payRowsRaw
-    .filter((p) => match([p.profiles?.full_name, p.profiles?.email, p.profiles?.phone, p.invoice_no, p.razorpay_order_id, p.subjects?.title, p.order_no != null ? String(p.order_no) : null]));
+  const payments = [...payRowsRaw, ...giftRows]
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+    .filter((p) => match([p.profiles?.full_name, p.profiles?.email, p.profiles?.phone, p.invoice_no, p.razorpay_order_id, p.subjects?.title, p.order_no != null ? String(p.order_no) : null, (p as { viaSupporter?: string }).viaSupporter]));
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
@@ -191,6 +262,23 @@ export default async function AdminOrdersPage(
         <div style={{ display: "flex", gap: 8, maxWidth: 520 }}>
           <input name="q" defaultValue={searchParams.q ?? ""} placeholder="🔍 Search order no, name, email, phone, invoice no…" style={{ marginBottom: 0 }} />
           <SubmitButton className="btn small" savedLabel="✓">Search</SubmitButton>
+        </div>
+        {/* WHAT GOES INTO THE DOWNLOAD.
+            The file used to carry every order whatever its state, so a
+            spreadsheet meant to show takings also held the attempts nobody
+            ever paid for — and its total was not money. Tick "paid" and the
+            file holds paid orders only. */}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+          <span style={{ fontSize: ".78rem", fontWeight: 700 }}>Include:</span>
+          {STATUSES.map((st) => (
+            <label key={st} style={{ display: "inline-flex", alignItems: "center", gap: 5, marginBottom: 0, fontSize: ".82rem", textTransform: "capitalize" }}>
+              <input type="checkbox" name="status" value={st} defaultChecked={chosen.includes(st)} />
+              {st}
+            </label>
+          ))}
+          <span className="muted" style={{ fontSize: ".76rem" }}>
+            {chosen.length ? "Search to apply, then download." : "Nothing ticked = everything."}
+          </span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginTop: 10 }}>
           <div>
@@ -231,14 +319,15 @@ export default async function AdminOrdersPage(
           Razorpay account data lives on its own page: the same Razorpay key is
           used by other businesses too, so it is NOT our sales register.
           Card layout on purpose: every detail visible, NO horizontal scrolling. */}
-      <h2 className="admin-section-title" style={{ marginTop: 22 }}>💳 Website payments — subscriptions &amp; extensions ({payments.length})</h2>
+      <h2 className="admin-section-title" style={{ marginTop: 22 }}>💳 Website payments — subscriptions, extensions &amp; supporter sales ({payments.length})</h2>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center", margin: "10px 0" }}>
         <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>
           Sales made through this website only — the register you verify Razorpay against.
         </p>
         <span style={{ display: "inline-flex", gap: 8 }}>
-          <a className="btn small" href={`/admin/orders/export${rangeQs.toString() ? `?${rangeQs}` : ""}`}>
-            ⬇️ Download Excel {fromDay || toDay ? "(filtered range)" : "(CSV)"}
+          <a className="btn small" href={`/admin/orders/export${exportQs.toString() ? `?${exportQs}` : ""}`}>
+            ⬇️ Download Excel
+            {chosen.length ? ` (${chosen.join(", ")})` : fromDay || toDay ? " (filtered range)" : " (everything)"}
           </a>
           <a className="btn small secondary" href="/admin/orders/razorpay">📈 Razorpay account data</a>
         </span>
@@ -278,7 +367,18 @@ export default async function AdminOrdersPage(
                     </strong>
                     <p className="muted" style={{ fontSize: ".82rem", margin: "3px 0 0" }}>
                       {p.status === "paid" ? "✅ paid" : p.status} · {fmt(p.created_at)} · {p.kind}
-                      {pr ? ` · 🎓 ${levelByUser.get(pr.id) ?? "—"}` : ""} · 📘 {p.subjects?.title ?? "—"}
+                      {` · 🎓 ${levelOfOrder(p) || levelByUser.get(pr?.id ?? "") || "—"}`} · 📘 {p.subjects?.title ?? "—"}
+                      {(p as { viaSupporter?: string }).viaSupporter && (
+                        <span className="badge" style={{ marginLeft: 6 }}>
+                          🤝 sold by {(p as { viaSupporter?: string }).viaSupporter}
+                        </span>
+                      )}
+                      {(p as { coupon?: string | null }).coupon && (
+                        <span className="muted" style={{ marginLeft: 6, fontSize: ".8rem" }}>
+                          · coupon {(p as { coupon?: string | null }).coupon}
+                          {(p as { discount?: number | null }).discount ? ` (−${formatINR((p as { discount?: number | null }).discount!)})` : ""}
+                        </span>
+                      )}
                     </p>
                     <p className="muted" style={{ fontSize: ".82rem", margin: "3px 0 0" }}>
                       {dates?.tier ? `${TIER_ICON[dates.tier] ?? ""} ${cap(dates.tier)}` : ""}

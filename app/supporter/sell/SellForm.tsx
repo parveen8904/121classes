@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Script from "next/script";
 import { formatINR } from "@/lib/pricing";
-import { createGiftOrder, verifyGiftPayment } from "@/app/gift/actions";
+import { createGiftOrder, verifyGiftPayment, previewGiftPrice } from "@/app/gift/actions";
 
 // The supporter's order form, in the order they actually work.
 //
@@ -26,11 +26,46 @@ export default function SellForm({
   const [address, setAddress] = useState("");
   const [startsOn, setStartsOn] = useState(today());
   const [coupon, setCoupon] = useState("");
+  // What the coupon actually did, decided on the server. Null until they press
+  // Apply — the amount on the button never moves on an unchecked code.
+  const [applied, setApplied] = useState<{ payable: number; discount: number; code: string } | null>(null);
+  const [couponMsg, setCouponMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [checking, setChecking] = useState(false);
   const [bState, setBState] = useState(billing.state || "Delhi");
   const [busy, setBusy] = useState(false); const [done, setDone] = useState(false); const [err, setErr] = useState<string | null>(null);
 
   const product = products.find((p) => p.id === subjectId);
   const later = startsOn > today();
+  // The price on the button, and the price sent to Razorpay.
+  const payable = applied ? applied.payable : product?.priceInr ?? 0;
+
+  // A coupon proved against ONE subject cannot stand once another is chosen.
+  function forget() { setApplied(null); setCouponMsg(null); }
+
+  async function applyCouponNow() {
+    const code = coupon.trim();
+    if (!code || !product) return;
+    setChecking(true);
+    setCouponMsg(null);
+    try {
+      const r = await previewGiftPrice({ subjectId, couponCode: code });
+      if (r.ok && r.couponApplied) {
+        setApplied({ payable: r.payable, discount: r.discount, code: r.couponCode ?? code });
+        setCouponMsg({ ok: true, text: `Coupon applied successfully — ${formatINR(r.discount)} off.` });
+      } else if (!r.ok && r.reason === "badcoupon") {
+        setApplied(null);
+        setCouponMsg({ ok: false, text: "That code is not valid, has expired, or is not for this purchase." });
+      } else {
+        setApplied(null);
+        setCouponMsg({ ok: false, text: "Could not check the code just now. Please try again." });
+      }
+    } catch {
+      setApplied(null);
+      setCouponMsg({ ok: false, text: "Could not check the code just now. Please try again." });
+    } finally {
+      setChecking(false);
+    }
+  }
 
   async function pay(e: React.FormEvent) {
     e.preventDefault();
@@ -116,7 +151,7 @@ export default function SellForm({
               border: `1.5px solid ${p.id === subjectId ? "var(--accent)" : "var(--border)"}`,
               borderRadius: 12, cursor: "pointer", marginBottom: 0,
             }}>
-              <input type="radio" name="subject" checked={p.id === subjectId} onChange={() => setSubjectId(p.id)} />
+              <input type="radio" name="subject" checked={p.id === subjectId} onChange={() => { setSubjectId(p.id); forget(); }} />
               <span style={{ flex: 1 }}>
                 <strong>{p.title}</strong>
                 <span className="muted" style={{ display: "block", fontSize: ".82rem" }}>{p.course} · Gold · {p.months} months</span>
@@ -135,7 +170,22 @@ export default function SellForm({
         </p>
 
         <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>5 · Coupon</h2>
-        <input placeholder="Your discount code (optional)" value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} />
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <input
+            placeholder="Your discount code (optional)"
+            value={coupon}
+            onChange={(e) => { setCoupon(e.target.value.toUpperCase()); forget(); }}
+            style={{ flex: "1 1 200px", marginBottom: 0 }}
+          />
+          <button type="button" className="btn secondary" onClick={applyCouponNow} disabled={!coupon.trim() || checking}>
+            {checking ? "Checking…" : applied ? "Re-apply" : "Apply coupon"}
+          </button>
+        </div>
+        {couponMsg && (
+          <div className={`notice ${couponMsg.ok ? "ok" : "err"}`} style={{ marginTop: 10 }}>
+            {couponMsg.ok ? "✅ " : "⚠️ "}{couponMsg.text}
+          </div>
+        )}
 
         <div style={{ marginTop: 8 }}>
           <label htmlFor="st">Your billing state (decides the tax on your invoice)</label>
@@ -146,11 +196,40 @@ export default function SellForm({
 
         {err && <div className="notice err" style={{ marginTop: 12 }}>⚠️ {err}</div>}
 
+        {/* WHAT YOU WILL PAY, before you go anywhere near the payment screen.
+            The button used to show the full price while Razorpay charged the
+            discounted one, so the only way to find out what a coupon had done
+            was to start paying. */}
+        {product && (
+          <div className="card" style={{ marginTop: 14, background: "var(--bg-soft)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".9rem" }}>
+              <span>{product.title} · Gold · {product.months} months</span>
+              <span style={{ textDecoration: applied ? "line-through" : "none", opacity: applied ? 0.6 : 1 }}>
+                {formatINR(product.priceInr)}
+              </span>
+            </div>
+            {applied && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".9rem", marginTop: 6 }}>
+                <span>Coupon {applied.code}</span>
+                <span>− {formatINR(applied.discount)}</span>
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+              <span>To pay</span>
+              <span>{formatINR(payable)}</span>
+            </div>
+          </div>
+        )}
+
         <button className="btn block" type="submit" disabled={busy || !configured} style={{ marginTop: 14 }}>
-          {busy ? "Opening payment…" : product ? `Pay ${formatINR(product.priceInr)}` : "Choose a subject"}
+          {busy ? "Opening payment…" : product ? `Pay ${formatINR(payable)}` : "Choose a subject"}
         </button>
         <p className="muted" style={{ fontSize: ".78rem", marginTop: 8, textAlign: "center" }}>
-          The final amount, after any coupon, is shown on the payment screen before you pay.
+          {applied
+            ? "This is the amount Razorpay will charge."
+            : coupon.trim()
+              ? "Press “Apply coupon” to see your discounted amount before paying."
+              : "GST is shown on your invoice."}
         </p>
       </form>
     </>

@@ -49,5 +49,19 @@ check("the private wording carries no threat of withdrawal",
   !/ABUSE_WARNING_DIRECT[\s\S]{0,400}withdrawn/.test(src),
   "a first private message should not threaten a student's access");
 
+// STAYING INSIDE WHAT IS TAUGHT HERE.
+//
+// A student listed his three Group 1 papers correctly and was told he was
+// wrong — "Group 1 of CA Final has four papers" — and then given study plans
+// for two subjects nobody here teaches. ICAI moves the syllabus about; we do
+// not teach those papers; and the student sitting the exam knows his own
+// timetable better than we do.
+check("the answering prompt refuses to state the syllabus structure",
+  /NEVER state how many papers/.test(src), true);
+check("it refuses to correct a student about their own papers",
+  /NEVER correct a student on any of it/.test(src), true);
+check("it refuses to plan for subjects not taught here",
+  /NEVER teach, plan or advise on another subject/.test(src), true);
+
 console.log(fails === 0 ? "PASS  moderation vocabulary and safeguards in place" : `${fails} failure(s)`);
 process.exit(fails === 0 ? 0 : 1);

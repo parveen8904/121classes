@@ -85,7 +85,21 @@ export default async function PricingPage() {
               {courseSubs.map((s) => {
                 const isBatch = (Number(s.batch_months) || 0) > 0;
                 if (isBatch) {
-                  const price = Number(s.batch_price_inr) || 0;
+                  // THE PRICE SHOWN MUST BE THE PRICE CHARGED.
+                  //
+                  // This read batch_price_inr alone and said "To be announced"
+                  // when it was empty — while checkout quietly fell back to the
+                  // slab ladder and took ₹1,900. A student had already paid that
+                  // for a batch the pricing page called unannounced.
+                  //
+                  // Same ladder as checkout, same order of preference, so the
+                  // two cannot say different things again.
+                  const months = Number(s.batch_months) || 0;
+                  const slabs = parseSlabs((s as { gold_slabs?: unknown }).gold_slabs);
+                  const price =
+                    Number(s.batch_price_inr) ||
+                    (slabs ? slabTotal(slabs, months) : 0) ||
+                    0;
                   const sched = schedByBatch.get(s.id) ?? null;
                   const parent = s.included_with_subject_id ? titleById.get(s.included_with_subject_id) : "";
                   return (

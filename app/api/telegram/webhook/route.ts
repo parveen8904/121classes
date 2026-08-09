@@ -288,7 +288,9 @@ export async function POST(req: NextRequest) {
       const facts = await ctx.studentFactsByTelegram(String(chatId)).catch(() => null);
       if (facts) material = `${ctx.accountAnswerRules(facts)}\n\n---\n\n${material}`;
     }
-    const raw = await answerDoubtFromMaterial(text, material);
+    const { loggedHistory } = await import("@/lib/conversation");
+    const history = await loggedHistory({ channel: "telegram", telegramChatId: String(chatId), current: text }).catch(() => "");
+    const raw = await answerDoubtFromMaterial(text, material, "doubt", { history });
     if (raw && raw.trim() !== NEED_FACULTY) answer = raw;
   }
   if (answer) {

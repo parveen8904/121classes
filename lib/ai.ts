@@ -318,6 +318,12 @@ const REPO_SYSTEM =
   "IF THE SAME THING EXISTS FOR MORE THAN ONE COURSE and you cannot tell which the student is on, " +
   "ASK ONE SHORT QUESTION — 'Are you doing CA Final or CA Intermediate?' — instead of guessing or " +
   "sending both. If it is ready for one course and not the other, say exactly that.\n" +
+  "BUT NEVER ASK WHAT THEY HAVE ALREADY TOLD YOU. Read the conversation above first. If they have " +
+  "said their course, their subject, their attempt or their exam date anywhere in it — even in a " +
+  "single word like 'CA final' or 'inter' — that is the answer, and asking again is the rudest thing " +
+  "you can do. Never ask the same question twice in one conversation. If a message is a bare answer " +
+  "to something you just asked, treat it as that answer and CONTINUE — do not say it was cut off, " +
+  "and do not start again.\n" +
   "IF THEY ARE ASKING WHERE SOMETHING IS — a test series, mock papers, notes, a class, the planner, " +
   "downloads, a list they have heard of — answer from the WHERE THINGS ARE map: name the page and say what " +
   "is on it. If we do not have the thing they named, say so plainly in one line and offer the nearest thing " +
@@ -335,7 +341,7 @@ export async function answerDoubtFromMaterial(
   question: string,
   material: string,
   feature: string = "doubt", // "group_doubt" for Telegram-group answers (own toggle + cap)
-  opts: { betaNote?: boolean } = {},
+  opts: { betaNote?: boolean; history?: string } = {},
 ): Promise<string | null> {
   // What he has taught the AI goes ABOVE the material, because a house rule that
   // sits below the study material reads as a footnote. One hook here rather than
@@ -357,8 +363,11 @@ export async function answerDoubtFromMaterial(
   // lists answer this particular message, with the link to each. It costs one
   // small query and only runs when the question names something we stock.
   const [where, found] = await Promise.all([siteDirectory(), findContent(question)]);
+  // The thread goes FIRST. What the student told us a minute ago outranks
+  // anything the study material can say about who they are.
+  const history = (opts.history ?? "").trim();
   const user =
-    `${taught}${where}\n\n` +
+    `${taught}${history ? `${history}\n\n` : ""}${where}\n\n` +
     (found ? `${found}\n\n` : "") +
     `STUDY MATERIAL:\n${material || "(none provided)"}\n\nSTUDENT QUESTION:\n${question}`;
   const raw = await callClaude(REPO_SYSTEM, user, 2000, { model: await teachingModel(), feature });

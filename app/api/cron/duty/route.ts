@@ -159,7 +159,11 @@ export async function GET(req: NextRequest) {
           : d.email ? await ctx.studentFacts(String(d.email)).catch(() => null) : null;
         if (facts) material = `${ctx.accountAnswerRules(facts)}\n\n---\n\n${material}`;
       }
-      const answer = await answerDoubtFromMaterial(question, material, "doubt", { betaNote: false });
+      const { loggedHistory } = await import("@/lib/conversation");
+      const history = d.user_id
+        ? await loggedHistory({ channel: String(d.page_path ?? "site"), userId: String(d.user_id), current: question }).catch(() => "")
+        : "";
+      const answer = await answerDoubtFromMaterial(question, material, "doubt", { betaNote: false, history });
 
       if (answer && answer.trim() !== NEED_FACULTY) {
         const sent = await deliverQuestionAnswer(String(d.id), answer, { markStatus: "replied" });

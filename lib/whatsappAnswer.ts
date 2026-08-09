@@ -79,7 +79,12 @@ export async function answerWhatsAppDoubt(from: string, text: string): Promise<"
     const facts = await studentFactsByPhone(from).catch(() => null);
     if (facts) material = `${accountAnswerRules(facts)}\n\n---\n\n${material}`;
   }
-  const raw = await answerDoubtFromMaterial(question2, material);
+  // The last few turns of THIS conversation. Without it the follow-up question
+  // was asked into a void: a student who had just said "CA Final" was asked
+  // which course he was on, three times.
+  const { whatsappHistory } = await import("@/lib/conversation");
+  const history = await whatsappHistory(from, question).catch(() => "");
+  const raw = await answerDoubtFromMaterial(question2, material, "doubt", { history });
   if (!raw || raw.trim() === NEED_FACULTY) return escalate(from, question2);
 
   // Outside the 24-hour window WhatsApp refuses the message. The answer is

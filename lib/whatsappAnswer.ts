@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendWhatsAppText } from "@/lib/notify";
+import { reachStudent } from "@/lib/reachStudent";
 import { getRepositoryContext } from "@/lib/repository";
 import { answerDoubtFromMaterial, aiConfigured, judgeStudentMessage, ABUSE_WARNING, NEED_FACULTY, replyFromSiteMap, PLAIN_FALLBACK } from "@/lib/ai";
 import { notifyFaculty } from "@/lib/notify";
@@ -68,8 +69,11 @@ export async function answerWhatsAppDoubt(from: string, text: string): Promise<"
   const raw = await answerDoubtFromMaterial(question2, material);
   if (!raw || raw.trim() === NEED_FACULTY) return escalate(from, question2);
 
-  const sent = await sendWhatsAppText(from, `${raw}\n\n— CA Parveen Sharma Classes`).catch(() => false);
-  if (!sent) return escalate(from, question2);
+  // Outside the 24-hour window WhatsApp refuses the message. The answer is
+  // written either way, so it goes by email rather than being thrown away.
+  const out = await reachStudent(from, `${raw}\n\n— CA Parveen Sharma Classes`, "A reply to your question")
+    .catch(() => ({ via: "none" as const, to: null }));
+  if (out.via === "none") return escalate(from, question2);
 
   // Kept, so the founder can read what was asked and what went back.
   await log(svc, from, question2, raw, "answered");
@@ -91,10 +95,14 @@ async function escalate(from: string, question: string): Promise<"escalated"> {
   }
   const text = reply ?? PLAIN_FALLBACK;
 
-  await sendWhatsAppText(from, `${text}\n\n— CA Parveen Sharma Classes`).catch(() => false);
+  const out = await reachStudent(from, `${text}\n\n— CA Parveen Sharma Classes`, "A reply to your question")
+    .catch(() => ({ via: "none" as const, to: null }));
   await notifyFaculty(
     "A student doubt needs your reply (WhatsApp)",
-    `From: ${from}\n\nQuestion:\n${question}\n\nWhat already went to the student:\n${text}\n\n` +
+    `From: ${from}\n\nQuestion:\n${question}\n\nWhat already went to the student (by ${out.via}):\n${text}\n\n` +
+      (out.via === "none"
+        ? "NOTHING REACHED THEM — WhatsApp is past its 24-hour window and we have no email for this number.\n\n"
+        : "") +
       `Add to it from Admin → Messages → WhatsApp.`,
   ).catch(() => {});
   // Logged as what it is: an answer went, and a person still owes a better one.

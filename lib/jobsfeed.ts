@@ -40,6 +40,30 @@ function parseRelative(s: string): string | null {
   return new Date(Date.now() - n * ms).toISOString();
 }
 
+/**
+ * How many paid searches remain this month, straight from SerpAPI.
+ *
+ * Their billing month turns on its own date — the 19th here, not the 1st — so
+ * this is the only figure worth trusting. Null when the question cannot be
+ * asked; the caller then falls back to its own daily share rather than
+ * assuming plenty.
+ *
+ * Checking costs nothing: account.json is not itself a search.
+ */
+async function searchesLeft(key: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://serpapi.com/account.json?api_key=${encodeURIComponent(key)}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { total_searches_left?: number };
+    return typeof j.total_searches_left === "number" ? j.total_searches_left : null;
+  } catch {
+    return null;
+  }
+}
+
 // Google Jobs via SerpAPI — real listings with CORRECT locations (paid key).
 async function fromSerpApi(): Promise<Raw[]> {
   const key = await getSecret("SERPAPI_KEY");
@@ -50,8 +74,34 @@ async function fromSerpApi(): Promise<Raw[]> {
   if (!locations.length) locations.push("India");
   const combos: { q: string; loc: string }[] = [];
   for (const q of queries) for (const loc of locations) combos.push({ q, loc });
+
+  // LIVE WITHIN THE ALLOWANCE, AND ASK SERPAPI WHAT IT IS.
+  //
+  // The free plan is 250 searches a month and this feed was spending twelve a
+  // day: twenty-one days into the billing month it had used 252, and the
+  // account simply ran dry. Nothing said so — the feed went on calling an
+  // account with nothing left, and the placement page quietly stopped growing.
+  //
+  // Two guards. First, ask SerpAPI how many searches remain, because only
+  // SerpAPI knows: its month turns on the 19th, not the 1st, so any calendar
+  // arithmetic here would drift out of step with the thing being counted.
+  // Second, take no more than an even daily share, so one day cannot eat the
+  // month and leave the feed silent for three weeks.
+  const svc = createServiceClient();
+  const left = await searchesLeft(key);
+  if (left !== null && left <= 0) {
+    console.error("[jobs] SerpAPI has no searches left this month — skipping until it renews.");
+    return [];
+  }
+  const cap = Math.max(0, Number(await getSecret("SERP_MONTHLY_CAP")) || 250);
+  const perDay = Math.max(1, Math.floor(cap / 31));
+  const budget = left === null ? perDay : Math.min(perDay, left);
+
   const out: Raw[] = [];
-  for (const { q, loc } of combos.slice(0, 12)) {
+  for (const { q, loc } of combos.slice(0, budget)) {
+    // Counted before it is spent, so the meter on /admin/placement is honest
+    // even when SerpAPI is unreachable.
+    try { await svc.rpc("serp_take", { p_cap: cap }); } catch { /* the meter must never block the feed */ }
     const location = /india/i.test(loc) ? loc : `${loc}, India`;
     const u = `https://serpapi.com/search.json?engine=google_jobs&q=${encodeURIComponent(q)}&location=${encodeURIComponent(location)}&hl=en&gl=in&api_key=${key}`;
     try {

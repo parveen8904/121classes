@@ -21,6 +21,8 @@ export const AI_CHANNELS: Record<string, string> = {
   whatsapp: "WhatsApp",
   discord: "Discord",
   site: "Website — Ask a doubt",
+  instagram: "Instagram comment",
+  facebook: "Facebook comment",
   class_doubt: "Asked inside a class",
   "login-help": "Login help",
   group_doubt: "Study group",

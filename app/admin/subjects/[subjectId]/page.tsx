@@ -474,12 +474,12 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
                   <input id="su-batchm" name="batch_months" type="number" min={1} max={24} defaultValue={(subject as { batch_months?: number | null }).batch_months ?? ""} placeholder="e.g. 2" />
                 </div>
                 <div>
-                  <label htmlFor="su-batchlast">Last class on</label>
-                  {/* Months alone were counted from the day the money arrived,
-                      so buying in August for a batch starting in October gave a
-                      week of it. With a date here, access runs to whichever is
-                      later — the months bought, or the last class plus the
-                      grace below. Buying early can only ever give more. */}
+                  <label htmlFor="su-batchlast">Last class on (leave blank — read from the schedule)</label>
+                  {/* Normally BLANK. The class schedule already holds every
+                      session, so the last class is read from there and a
+                      rescheduled class extends everyone's access on its own.
+                      Fill this in only to override — for a batch whose
+                      schedule is not in the system yet. */}
                   <input id="su-batchlast" name="batch_last_class_on" type="date" defaultValue={(subject as { batch_last_class_on?: string | null }).batch_last_class_on ?? ""} />
                 </div>
                 <div>

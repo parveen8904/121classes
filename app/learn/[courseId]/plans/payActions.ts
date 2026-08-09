@@ -12,6 +12,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { notifyByEmail, emailShell } from "@/lib/notify";
 import { applyCoupon, redeemCoupon } from "@/lib/coupons";
 import { subscriptionEnd } from "@/lib/planWindow";
+import { batchWindow } from "@/lib/batchWindow";
 
 const PAID_TIERS = ["silver", "gold"];
 
@@ -255,14 +256,8 @@ export async function verifyPlanPayment(input: {
   // Counting months from the payment sold somebody a week of a course that had
   // not started yet.
   const svcEarly = createServiceClient();
-  const { data: subjRow } = n.subjectId
-    ? await svcEarly.from("subjects").select("batch_last_class_on, batch_grace_days").eq("id", n.subjectId).maybeSingle()
-    : { data: null };
   const starts = new Date();
-  const ends = subscriptionEnd(starts, months, {
-    lastClassOn: (subjRow as { batch_last_class_on?: string | null } | null)?.batch_last_class_on ?? null,
-    graceDays: (subjRow as { batch_grace_days?: number | null } | null)?.batch_grace_days ?? null,
-  });
+  const ends = subscriptionEnd(starts, months, await batchWindow(svcEarly, n.subjectId ?? null));
 
   // Service client: students have no INSERT policy on subscriptions; this is a
   // trusted server action running only after a verified payment. The grant is

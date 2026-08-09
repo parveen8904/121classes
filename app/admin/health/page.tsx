@@ -75,9 +75,19 @@ function Stat({
   );
 }
 
+/** "since 14 Jul 2026" — a running total needs its starting line. */
+function sinceWords(iso: string | null | undefined): string {
+  if (!iso) return "all time";
+  const d = new Date(iso);
+  return `since ${d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
+}
+
 type Visitors = {
   visitors_today: number;
   visitors_7d: number;
+  visitors_total?: number;
+  views_total?: number;
+  tracking_since?: string | null;
   views_today: number;
   signed_in_today: number;
   login_success_today: number;
@@ -221,7 +231,25 @@ export default async function HealthPage(props: { searchParams: Promise<{ sort?:
               <h3 style={{ margin: "22px 0 8px" }}>🚶 Visitors today (since midnight IST)</h3>
               <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
                 <Stat label="Visitors today" value={String(v.visitors_today)} sub={`${v.visitors_7d} in the last 7 days`} />
+                {/* Today on its own says nothing about whether the site is
+                    growing — a good day and a bad day looked identical. The
+                    running total sits beside it, with the date counting began,
+                    because a lifetime figure means nothing without that. */}
+                <Stat
+                  label="Visitors till today"
+                  value={v.visitors_total != null ? v.visitors_total.toLocaleString("en-IN") : "—"}
+                  sub={sinceWords(v.tracking_since)}
+                />
                 <Stat label="Pages viewed today" value={String(v.views_today)} />
+                <Stat
+                  label="Pages viewed till today"
+                  value={v.views_total != null ? v.views_total.toLocaleString("en-IN") : "—"}
+                  sub={
+                    v.views_total != null && v.visitors_total
+                      ? `about ${(v.views_total / v.visitors_total).toFixed(1)} pages per visitor`
+                      : undefined
+                  }
+                />
                 <Stat label="Students signed in" value={String(v.signed_in_today)} sub="unique accounts active" />
                 <Stat label="Successful logins" value={String(v.login_success_today)} />
                 <Stat label="Failed login attempts" value={String(v.login_failed_today)} sub={v.login_failed_today > 20 ? "⚠️ unusually high" : "normal"} />
@@ -233,8 +261,10 @@ export default async function HealthPage(props: { searchParams: Promise<{ sort?:
                 />
               </div>
               <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
-                Counting started today when this feature went live — numbers grow from now on. Tracked on our own
-                database only (no Google Analytics, nothing shared outside).
+                {v.tracking_since
+                  ? `Counting began on ${new Date(v.tracking_since).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} — anything before that date was never recorded.`
+                  : "Counting started when this feature went live — numbers grow from now on."}{" "}
+                Tracked on our own database only (no Google Analytics, nothing shared outside).
               </p>
 
               {/* Over time — week / month / three months, each figure against

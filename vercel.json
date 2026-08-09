@@ -106,6 +106,10 @@
     {
       "path": "/api/cron/app-links",
       "schedule": "10 2 * * *"
+    },
+    {
+      "path": "/api/cron/ticket-doubts",
+      "schedule": "35 * * * *"
     }
   ]
 }

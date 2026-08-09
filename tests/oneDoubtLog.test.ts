@@ -36,6 +36,17 @@ const DOORS: { file: string; what: string }[] = [
   { file: "app/learn/section/[sectionId]/testActions.ts", what: "doubts asked from a test page" },
 ];
 
+// Support tickets raised on the website are doubts too — six sat unanswered,
+// one for five days, because they lived in their own table and the log had
+// never heard of them. Phone tickets are deliberately NOT included: the IVR
+// opens one per call and the team settles those on the call.
+check("website tickets reach the log",
+  read("app/api/cron/ticket-doubts/route.ts").includes('page_path: CHANNEL'),
+  "the ticket bridge no longer writes into page_questions");
+check("phone tickets are still left alone",
+  /eq\("source", "website"\)/.test(read("app/api/cron/ticket-doubts/route.ts")),
+  "the bridge must only take website tickets");
+
 for (const d of DOORS) {
   const src = read(d.file);
   check(`${d.what} still writes to the one log`, src.includes("logAiExchange"),

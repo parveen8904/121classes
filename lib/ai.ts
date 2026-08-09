@@ -1038,6 +1038,13 @@ export async function judgeStudentMessage(text: string): Promise<MessageJudgemen
     "chatter - a greeting, thanks, a single word, an unfinished sentence, small talk, or a message with " +
     "no answerable question in it.\n" +
     "abusive - abuse, obscenity, insults, threats, harassment, or deliberate spam.\n" +
+    "\nSTUDENT VOCABULARY. These are ordinary words here and are NEVER abuse:\n" +
+    "  'hit list' / 'hitlist' = the list of most-important questions to do. It is the single most " +
+    "requested thing on this channel. A student asking for the hit list is asking for study material.\n" +
+    "  'kill' / 'killer' question, 'attack' a paper, 'crack' the exam, 'target', 'shoot me the notes', " +
+    "'MIQ', 'ABC analysis' — all normal exam talk.\n" +
+    "A message is abusive only if the ABUSE IS AIMED AT A PERSON. Alarming-sounding study vocabulary " +
+    "is not abuse. If you are unsure, it is not abusive.\n" +
     "If it could reasonably be a question, say question.";
 
   const raw = await callClaude(system, t.slice(0, 1500), 8, {
@@ -1045,16 +1052,55 @@ export async function judgeStudentMessage(text: string): Promise<MessageJudgemen
     feature: "judge_message",
   });
   const word = String(raw ?? "").toLowerCase();
-  if (word.includes("abusive")) return { kind: "abusive", why: "flagged as abusive" };
   if (word.includes("chatter")) return { kind: "chatter", why: "no answerable question" };
-  return { kind: "question", why: "answerable" };
+  if (!word.includes("abusive")) return { kind: "question", why: "answerable" };
+
+  // ACCUSING SOMEBODY OF ABUSE NEEDS MORE THAN ONE OPINION.
+  //
+  // A student asked "Can you provide me the hit list" and was told his access
+  // would be withdrawn. One model call, one word, no appeal, and a paying
+  // student is accused of abuse and threatened. The cost of the two mistakes is
+  // nowhere near equal: answering an insult politely costs nothing, while
+  // threatening a student who asked for study material can lose them for good.
+  //
+  // So a second opinion is asked, from a stricter question, and both must
+  // agree. A single call can no longer produce a warning.
+  const confirm = await callClaude(
+    "You review a moderation decision for a CA coaching study group. Another system flagged the " +
+      "message below as abusive. Is that RIGHT?\n" +
+      "Answer YES only if the message contains abuse, obscenity, insults, threats or harassment " +
+      "AIMED AT A PERSON, or is deliberate spam.\n" +
+      "Answer NO if it is a study or course question, however oddly worded — including exam slang " +
+      "like 'hit list' (the most-important-questions list), 'killer question' or 'crack the exam'.\n" +
+      "Reply with one word: YES or NO. If you are not sure, answer NO.",
+    t.slice(0, 1500),
+    8,
+    { model: await fastModel(), feature: "judge_message" },
+  );
+  if (!/\byes\b/i.test(String(confirm ?? ""))) {
+    // The two disagreed, so the student is given the benefit of it and the
+    // message is answered like any other.
+    return { kind: "question", why: "flagged, but not confirmed on review" };
+  }
+  return { kind: "abusive", why: "flagged as abusive, and confirmed on review" };
 }
 
-// Said once, plainly, and only to the student who earned it.
+// Said once, plainly, and only where it belongs.
+//
+// This was written for the study groups and then sent down a one-to-one
+// WhatsApp thread, so a student messaging us privately was told off for how he
+// behaves "here" in a group he was not in — and threatened with losing access
+// to it. Each channel now says the true thing.
 export const ABUSE_WARNING =
   "This is a study group for CA Intermediate and CA Final students. " +
   "Messages like that are not acceptable here.\n\n" +
   "Please keep to your studies. If it happens again, your access to this group will be withdrawn.\n\n" +
+  "— CA Parveen Sharma Classes";
+
+/** The same point, for a private message, and without a threat attached. */
+export const ABUSE_WARNING_DIRECT =
+  "We are happy to help with anything about your classes, tests or notes. " +
+  "Please keep messages on this number to that.\n\n" +
   "— CA Parveen Sharma Classes";
 
 // Is this "official solution" actually a typeset document, or somebody's

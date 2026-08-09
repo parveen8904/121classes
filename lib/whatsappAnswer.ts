@@ -2,7 +2,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { sendWhatsAppText } from "@/lib/notify";
 import { reachStudent } from "@/lib/reachStudent";
 import { getRepositoryContext } from "@/lib/repository";
-import { answerDoubtFromMaterial, aiConfigured, judgeStudentMessage, ABUSE_WARNING, NEED_FACULTY, replyFromSiteMap, PLAIN_FALLBACK } from "@/lib/ai";
+import { answerDoubtFromMaterial, aiConfigured, judgeStudentMessage, ABUSE_WARNING_DIRECT, NEED_FACULTY, replyFromSiteMap, PLAIN_FALLBACK } from "@/lib/ai";
 import { notifyFaculty } from "@/lib/notify";
 
 // Answer a WhatsApp doubt the way Telegram already does.
@@ -43,7 +43,8 @@ export async function answerWhatsAppDoubt(from: string, text: string): Promise<"
   const judged = await judgeStudentMessage(question);
   if (judged.kind === "abusive") {
     await recordWarning(svc, from, question);
-    await sendWhatsAppText(from, ABUSE_WARNING).catch(() => false);
+    // The private wording: this is a one-to-one thread, not the study group.
+    await sendWhatsAppText(from, ABUSE_WARNING_DIRECT).catch(() => false);
     return "warned";
   }
   // People type on WhatsApp the way they speak: "I wanna extend this batch",

@@ -136,9 +136,16 @@ export async function answerOpenConversations() {
     .not("sent_at", "is", null)
     .order("sent_at", { ascending: false })
     .limit(400);
+  const { ABUSE_WARNING, ABUSE_WARNING_DIRECT } = await import("@/lib/ai");
   const repliedAt = new Map<string, number>();
   for (const r of sent ?? []) {
-    const to = String(((r.payload ?? {}) as Record<string, unknown>).to ?? "");
+    const p = (r.payload ?? {}) as Record<string, unknown>;
+    const to = String(p.to ?? "");
+    const body = String((p.text as { body?: string } | undefined)?.body ?? "");
+    // A telling-off is not an answer. A student who asked for the hit list was
+    // warned instead of helped, and counting that as "already replied to" would
+    // have left him with the warning and nothing else.
+    if (body && (body === ABUSE_WARNING || body === ABUSE_WARNING_DIRECT)) continue;
     const when = new Date(String(r.sent_at)).getTime();
     if (to && when > (repliedAt.get(to) ?? 0)) repliedAt.set(to, when);
   }

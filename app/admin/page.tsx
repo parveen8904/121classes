@@ -54,7 +54,8 @@ export default async function AdminHome() {
     // One tile, one number, one destination. It used to be two — "open doubts"
     // from one table and "open questions" from another — which read as two
     // different problems and led to the same place.
-    { label: "Doubts waiting", value: String(s.doubts + s.questions), href: "/admin/doubt-log", alert: s.doubts + s.questions > 0 },
+    // One number from one table, now that every channel writes to it.
+    { label: "Doubts waiting", value: String(s.questions), href: "/admin/doubt-log", alert: s.questions > 0 },
     { label: "AI cost (this month)", value: inr(s.aiMonth), href: "/admin/costs" },
     ...(s.bunnyMonth !== null ? [{ label: "Bunny (this month)", value: inr(s.bunnyMonth), href: "/admin/costs" }] : []),
     { label: "Storage used", value: `${s.storageMb.toFixed(1)} MB`, href: "/admin/costs" },

@@ -364,6 +364,12 @@ export async function askDoubt(input: {
     }
   }
 
+  // The same rule as every other channel: something real always goes back.
+  if (!answer) {
+    const { replyFromSiteMap, PLAIN_FALLBACK } = await import("@/lib/ai");
+    answer = (await replyFromSiteMap(question).catch(() => null)) ?? PLAIN_FALLBACK;
+  }
+
   await supabase.from("doubts").insert({
     student_id: user.id,
     section_id: input.sectionId,
@@ -372,11 +378,20 @@ export async function askDoubt(input: {
     status,
   });
 
+  // Into the one log, alongside WhatsApp, Telegram, Discord and email.
+  try {
+    const { logAiExchange } = await import("@/lib/aiAnswerLog");
+    await logAiExchange({
+      channel: "class_doubt", question, answer, userId: user.id,
+      status: status === "open" ? "open" : "answered",
+    });
+  } catch { /* best effort */ }
+
   // Couldn't answer from the repository → alert faculty to reply.
   if (status === "open") {
     await notifyFaculty(
       "A student doubt needs your reply",
-      `From: ${user.email ?? user.id}\n\nQuestion:\n${question}\n\nReply from Admin → Inbox.`,
+      `From: ${user.email ?? user.id}\n\nQuestion:\n${question}\n\nWhat already went to the student:\n${answer}\n\nAdd to it from the doubt report.`,
     );
   }
 

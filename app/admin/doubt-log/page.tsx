@@ -57,42 +57,22 @@ export default async function DoubtLogPage(props: {
   const svc = createServiceClient();
   const since = new Date(Date.now() - windowDays * 86400_000).toISOString();
 
-  // BOTH TABLES, ONE REPORT.
+  // ONE TABLE. ONE LOG.
   //
-  // Doubts asked from inside a class live in `doubts`; everything else — the
-  // site, email, WhatsApp, Telegram — lives in `page_questions`. The admin home
-  // counted them separately, so it showed "5 open doubts" and "8 open
-  // questions" as if they were different things, and both led to the same
-  // inbox. They are one list of students waiting, and this is it.
-  const [{ data }, { data: classDoubts }] = await Promise.all([
-    svc.from("page_questions")
-      .select("id, question, status, page_path, created_at, user_id, email")
-      .gte("created_at", since)
-      .order("created_at", { ascending: false })
-      .limit(1000),
-    svc.from("doubts")
-      .select("id, question, status, created_at, student_id, ai_answer")
-      .gte("created_at", since)
-      .order("created_at", { ascending: false })
-      .limit(1000),
-  ]);
+  // Every door a student can ask through — Telegram, Discord, WhatsApp, email,
+  // the site, and the "Ask your doubt" box inside a class — writes here now.
+  // Class doubts used to land in their own table, which is why the admin home
+  // once showed "5 open doubts" and "8 open questions" as though they were
+  // different things. They are read from one place, so the counts cannot
+  // disagree and there is nowhere else to look.
+  const { data } = await svc
+    .from("page_questions")
+    .select("id, question, status, page_path, created_at, user_id, email")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(1000);
 
   const rows = (data ?? []) as Row[];
-
-  // Folded into the same shape. A class doubt carries its answer in a column
-  // rather than a paired row, so it is treated as answered when that is filled.
-  const classRows: Row[] = ((classDoubts ?? []) as unknown as {
-    id: string; question: string; status: string; created_at: string;
-    student_id: string | null; ai_answer: string | null;
-  }[]).map((d) => ({
-    id: `doubt:${d.id}`,
-    question: d.question,
-    status: d.ai_answer?.trim() ? "answered" : d.status,
-    page_path: "class_doubt",
-    created_at: d.created_at,
-    user_id: d.student_id,
-    email: null,
-  }));
 
   // A reply is stored as its own row with page_path "reply:<question id>", so
   // pair each answer back to the question it belongs to.
@@ -107,9 +87,6 @@ export default async function DoubtLogPage(props: {
       questions.push(r);
     }
   }
-
-  questions.push(...classRows);
-  questions.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 
   // Who asked — resolved in one query rather than one per row.
   const ids = [...new Set(questions.map((q) => q.user_id).filter(Boolean))] as string[];

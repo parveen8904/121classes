@@ -46,13 +46,33 @@ export async function askSubjectDoubt(input: {
       : await answerDoubtFromMaterial(question, material);
     if (raw && raw.trim() !== NEED_FACULTY) answer = raw;
   }
-  // Log so it counts toward the daily limit and shows in the student's inbox.
+  // EVERY LEARNER GETS A REPLY, HERE TOO.
+  //
+  // A doubt the material could not answer used to end as a blank: null answer,
+  // status open, and the student staring at an empty box. Every other channel
+  // sends something real — where the thing lives, or that we do not have it —
+  // and there is no reason this one should be the exception.
+  if (!answer) {
+    const { replyFromSiteMap, PLAIN_FALLBACK } = await import("@/lib/ai");
+    answer = (await replyFromSiteMap(question).catch(() => null)) ?? PLAIN_FALLBACK;
+  }
+
+  // Kept here because the student reads it back on this page, and because the
+  // daily allowance counts from this table.
   await supabase.from("doubts").insert({
     student_id: user.id,
     question,
     ai_answer: answer,
     status: answer ? "answered" : "open",
   });
+
+  // AND into the one log every other channel writes to, so a doubt asked
+  // inside a class sits in the same report as one asked on WhatsApp. One
+  // system, whatever door the student came through.
+  try {
+    const { logAiExchange } = await import("@/lib/aiAnswerLog");
+    await logAiExchange({ channel: "class_doubt", question, answer, userId: user.id });
+  } catch { /* the student's answer matters more than our record of it */ }
   await supabase.from("student_activity").insert({
     student_id: user.id,
     kind: "doubt",

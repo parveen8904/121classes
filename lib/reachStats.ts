@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { selectAll } from "@/lib/pageAll";
+import { selectAll, inChunks } from "@/lib/pageAll";
 
 // WHO EACH CHANNEL ACTUALLY REACHES.
 //
@@ -33,16 +33,28 @@ export async function reachStats(): Promise<Channel[]> {
   // ── The apps ─────────────────────────────────────────────────────────────
   // Named, because these are the people who have the app AND agreed to be
   // notified — the most valuable list here, and today the shortest.
-  const devices = await selectAll<{
-    platform: string; created_at: string; user_id: string;
-    profiles: { full_name: string | null; email: string | null } | null;
-  }>((f, t) =>
+  // NAMES ARE FETCHED SEPARATELY, ON PURPOSE.
+  //
+  // This asked PostgREST to embed profiles through push_devices.user_id — but
+  // that column's foreign key points at auth.users, not profiles, so there was
+  // no relationship to follow. PostgREST refused the whole query, the refusal
+  // was swallowed as an empty list, and the page reported nobody registered on
+  // either platform while eleven phones sat in the table waiting.
+  //
+  // "No devices" and "the query failed" must never look the same again.
+  const devices = await selectAll<{ platform: string; created_at: string; user_id: string }>((f, t) =>
     svc.from("push_devices")
-      .select("platform, created_at, user_id, profiles:user_id(full_name, email)")
+      .select("platform, created_at, user_id")
       .is("disabled_at", null)
       .order("created_at", { ascending: false })
-      .range(f, t) as never,
+      .range(f, t),
   );
+
+  const owners = await inChunks<{ id: string; full_name: string | null; email: string | null }>(
+    [...new Set(devices.map((d) => d.user_id).filter(Boolean))],
+    (b) => svc.from("profiles").select("id, full_name, email").in("id", b),
+  );
+  const ownerById = new Map(owners.map((o) => [o.id, o]));
 
   for (const [key, label] of [["ios", "iPhone / iPad"], ["android", "Android"]] as const) {
     const mine = devices.filter((d) => d.platform === key);
@@ -50,11 +62,14 @@ export async function reachStats(): Promise<Channel[]> {
       key: `push_${key}`,
       label,
       count: mine.length,
-      people: mine.slice(0, NAME_LIMIT).map((d) => ({
-        name: d.profiles?.full_name || d.profiles?.email || "—",
-        detail: d.profiles?.email ?? undefined,
-        when: d.created_at,
-      })),
+      people: mine.slice(0, NAME_LIMIT).map((d) => {
+        const o = ownerById.get(d.user_id);
+        return {
+          name: o?.full_name || o?.email || "—",
+          detail: o?.email ?? undefined,
+          when: d.created_at,
+        };
+      }),
       note: mine.length === 0
         ? "Nobody yet. A phone appears here only once it has the new app AND the student has allowed notifications."
         : undefined,

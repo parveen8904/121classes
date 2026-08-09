@@ -37,7 +37,28 @@ export async function selectAll<T>(
   const out: T[] = [];
   for (let from = 0; from < cap; from += size) {
     const { data, error } = await page(from, from + size - 1);
-    if (error) break;
+    if (error) {
+      // A REFUSED QUERY IS NOT AN EMPTY TABLE.
+      //
+      // This used to break quietly and hand back whatever had been collected so
+      // far, which for a failure on the first page is nothing at all. The
+      // Notify page then reported nobody registered for push on either
+      // platform while eleven phones sat in the table — the query had asked
+      // PostgREST to embed a relationship that does not exist, and the refusal
+      // read exactly like "no devices".
+      //
+      // Still returns what it has, because half an answer beats a crashed page.
+      // But it says so, loudly, where somebody will see it.
+      console.error(
+        `[pageAll] selectAll failed at row ${from} after ${out.length} rows — ` +
+          `the answer below is INCOMPLETE: ${
+            typeof error === "object" && error && "message" in error
+              ? String((error as { message: unknown }).message)
+              : String(error)
+          }`,
+      );
+      break;
+    }
     const rows = data ?? [];
     out.push(...rows);
     // A short page means the end. Anything else and we would loop for ever on

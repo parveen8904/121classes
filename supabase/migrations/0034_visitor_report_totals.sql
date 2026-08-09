@@ -76,9 +76,9 @@ begin
     'visitors_today', (select count(distinct coalesce(user_id::text, visitor_key)) from page_views where created_at >= day_start and event = 'view'),
     'visitors_7d', (select count(distinct coalesce(user_id::text, visitor_key)) from page_views where created_at >= week_start and event = 'view'),
     -- Everyone who has ever come, and every page they have ever opened.
-    'visitors_total', (select count(distinct coalesce(user_id::text, visitor_key)) from page_views where event = 'view'),
+    'visitors_total', (select count(*) from visitor_seen),
     'views_total', (select count(*) from page_views where event = 'view'),
-    'tracking_since', (select min(created_at) from page_views),
+    'tracking_since', (select min(first_seen) from visitor_seen),
     'views_today', (select count(*) from page_views where created_at >= day_start and event = 'view'),
     'signed_in_today', (select count(distinct user_id) from page_views where created_at >= day_start and user_id is not null),
     'login_success_today', (select count(*) from page_views where created_at >= day_start and event = 'login_success'),

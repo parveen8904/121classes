@@ -46,8 +46,19 @@ export default async function PortalHeader() {
     }
   }
 
+  // How many things have happened that this student has not looked at. Asked
+  // only for students: staff get the admin desk, not a personal feed.
+  let unread = 0;
+  if (user && !isStaff) {
+    const { data: n } = await supabase.rpc("my_unread_count", { p_user: user.id });
+    unread = Number(n ?? 0);
+  }
+
   const links = [
     { href: "/dashboard", label: "🏠 Dashboard" },
+    // The count rides in the label so it survives however the header renders
+    // its links — and it disappears the moment the list is opened.
+    { href: "/notifications", label: unread > 0 ? `🔔 Notifications (${unread > 99 ? "99+" : unread})` : "🔔 Notifications" },
     { href: "/live", label: "📡 Live" },
     { href: "/planner", label: "🗓️ Planner" },
     { href: "/learn/performance", label: "📊 Performance" },

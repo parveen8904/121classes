@@ -65,12 +65,30 @@ export default async function DoubtLogPage(props: {
   // once showed "5 open doubts" and "8 open questions" as though they were
   // different things. They are read from one place, so the counts cannot
   // disagree and there is nowhere else to look.
-  const { data } = await svc
-    .from("page_questions")
-    .select("id, question, status, page_path, created_at, user_id, email")
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(1000);
+  // THE NUMBERS COME FROM THE DATABASE, NOT FROM WHAT WE FETCHED.
+  //
+  // This page used to count a thousand rows in JavaScript. At launch-day
+  // volume that is about a fortnight, and past it the report would have
+  // described its first thousand rows as though they were everything — the
+  // exact silent truncation that once halved the AI bill, on the one report
+  // that must never understate how many students are waiting.
+  const [{ data: sum }, { data }] = await Promise.all([
+    svc.rpc("doubt_report_summary", { p_days: windowDays, p_channel: only || null }),
+    // Still fetched, but only to READ THROUGH — every figure above comes from
+    // the summary, so a truncated list can no longer become a wrong total.
+    svc.from("page_questions")
+      .select("id, question, status, page_path, created_at, user_id, email")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(600),
+  ]);
+
+  const S = (sum ?? {}) as {
+    total?: number; answered?: number; waiting?: number;
+    oldest_wait_mins?: number | null; median_reply_mins?: number | null;
+    by_channel?: { channel: string; asked: number; done: number; wait: number }[];
+    waiting_list?: { id: string; question: string; channel: string; created_at: string }[];
+  };
 
   const rows = (data ?? []) as Row[];
 
@@ -88,8 +106,30 @@ export default async function DoubtLogPage(props: {
     }
   }
 
-  // Who asked — resolved in one query rather than one per row.
-  const ids = [...new Set(questions.map((q) => q.user_id).filter(Boolean))] as string[];
+  // THE QUEUE COMES FROM THE SUMMARY, complete and oldest first — not from the
+  // page of rows fetched for reading. A student waiting three weeks would have
+  // fallen off the end of that page and out of the only list meant to catch
+  // them. Their full rows are read back by id so the asker still has a name.
+  const waitingIds = (S.waiting_list ?? []).map((w) => w.id);
+  const { data: waitingFull } = waitingIds.length
+    ? await svc
+        .from("page_questions")
+        .select("id, question, status, page_path, created_at, user_id, email")
+        .in("id", waitingIds)
+    : { data: [] as Row[] };
+  const byId = new Map((waitingFull ?? []).map((r) => [String((r as Row).id), r as Row]));
+  const waitingRows: Row[] = (S.waiting_list ?? []).map((w) =>
+    byId.get(w.id) ?? {
+      id: w.id, question: w.question, status: "open",
+      page_path: w.channel, created_at: w.created_at, user_id: null, email: null,
+    });
+
+  // Who asked — resolved in one query rather than one per row, and covering
+  // the waiting queue as well as the list being read through.
+  const ids = [...new Set([
+    ...questions.map((q) => q.user_id),
+    ...(waitingFull ?? []).map((q) => (q as Row).user_id),
+  ].filter(Boolean))] as string[];
   // In batches: a long day of doubts names more people than one URL will
   // hold, and a refused query would leave every asker unnamed.
   const people = await inChunks<{ id: string; full_name: string | null; email: string | null }>(
@@ -124,12 +164,11 @@ export default async function DoubtLogPage(props: {
     firstReplyAt(q.id) !== null || q.status === "answered" || q.status === "replied";
 
   const answeredRows = shown.filter(isDone);
-  const waitingRows = shown
-    .filter((q) => !isDone(q) && q.status === "open")
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
-  const answered = answeredRows.length;
-  const unanswered = waitingRows.length;
+
+  const answered = S.answered ?? answeredRows.length;
+  const unanswered = S.waiting ?? waitingRows.length;
+  const totalAsked = S.total ?? shown.length;
 
   // Minutes from asking to the first reply, for everything answered.
   const waits = answeredRows
@@ -137,20 +176,15 @@ export default async function DoubtLogPage(props: {
     .map((q) => (firstReplyAt(q.id)! - new Date(q.created_at).getTime()) / 60000)
     .filter((m) => m >= 0)
     .sort((a, b) => a - b);
-  const typicalMins = waits.length ? waits[Math.floor(waits.length / 2)] : null;
-  const longestWaitMins = waitingRows.length
+  const typicalMins = S.median_reply_mins ?? (waits.length ? waits[Math.floor(waits.length / 2)] : null);
+  const longestWaitMins = S.oldest_wait_mins ?? (waitingRows.length
     ? (now - new Date(waitingRows[0].created_at).getTime()) / 60000
-    : null;
+    : null);
 
   // Per channel, so it is obvious WHERE the unanswered ones are.
-  const byChannel = [...new Set(shown.map((q) => q.page_path ?? ""))]
-    .map((ch) => {
-      const mine = shown.filter((q) => (q.page_path ?? "") === ch);
-      const done = mine.filter(isDone).length;
-      const wait = mine.filter((q) => !isDone(q) && q.status === "open").length;
-      return { ch, label: channelLabel(ch), asked: mine.length, done, wait };
-    })
-    .sort((a, b) => b.asked - a.asked);
+  const byChannel = (S.by_channel ?? []).map((c) => ({
+    ch: c.channel, label: channelLabel(c.channel), asked: c.asked, done: c.done, wait: c.wait,
+  }));
 
   return (
     <section className="container" style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 900 }}>
@@ -164,9 +198,9 @@ export default async function DoubtLogPage(props: {
       {/* THE ANSWER IN ONE SENTENCE, before any list. */}
       <div className="card" style={{ borderLeft: `4px solid ${unanswered === 0 ? "#16a34a" : "#b45309"}` }}>
         <p style={{ margin: 0, fontSize: "1.05rem", lineHeight: 1.7 }}>
-          <strong>{shown.length}</strong> doubt{shown.length === 1 ? "" : "s"} in the last {windowDays} days
+          <strong>{totalAsked}</strong> doubt{totalAsked === 1 ? "" : "s"} in the last {windowDays} days
           {only ? ` on ${channelLabel(only)}` : ""}. <strong>{answered}</strong> answered
-          {shown.length > 0 ? ` (${Math.round((answered / shown.length) * 100)}%)` : ""}.{" "}
+          {totalAsked > 0 ? ` (${Math.round((answered / totalAsked) * 100)}%)` : ""}.{" "}
           {unanswered === 0 ? (
             <span style={{ color: "#16a34a", fontWeight: 700 }}>Nothing is waiting.</span>
           ) : (
@@ -211,7 +245,7 @@ export default async function DoubtLogPage(props: {
           chips show where the traffic actually is before he clicks. */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
         <Link className={`btn small ${only ? "secondary" : ""}`} href={`/admin/doubt-log?days=${windowDays}`}>
-          All channels ({questions.length})
+          All channels ({totalAsked})
         </Link>
         {Object.entries(AI_CHANNELS).map(([key, label]) => {
           const n = questions.filter((q) => (q.page_path ?? "") === key).length;

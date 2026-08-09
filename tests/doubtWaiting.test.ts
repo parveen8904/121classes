@@ -52,14 +52,27 @@ check("closed chatter is not waiting",
 
 check("nothing at all", classify([], new Set()), { done: 0, waiting: 0 });
 
-// Guard against the page drifting back to the counting that overstated by 8×.
+// The rule moved into the database when the page stopped counting rows it had
+// fetched — so that is where it is guarded. Both halves must survive: treating
+// answered/replied as done, and requiring "open" before calling anything
+// waiting. Losing the first overstates the queue; losing the second counts
+// closed chatter as a student left hanging.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-const src = readFileSync(join(import.meta.dirname, "..", "app/admin/doubt-log/page.tsx"), "utf8");
-check("the page still treats answered/replied as done",
-  /q\.status === "answered" \|\| q\.status === "replied"/.test(src), true);
-check("the page still requires status open to call it waiting",
-  /!isDone\(q\) && q\.status === "open"/.test(src), true);
+const sql = readFileSync(join(import.meta.dirname, "..", "supabase/migrations/0036_doubt_report_summary.sql"), "utf8");
+check("the summary still treats answered/replied as done",
+  /q\.status in \('answered','replied'\)\) as dealt/.test(sql), true);
+check("the summary still requires open to call it waiting",
+  /q\.status = 'open'\) as waiting/.test(sql), true);
+check("machine mail is still excluded",
+  /status <> 'ignored'/.test(sql), true);
+
+// And the page must take its figures from that summary, not recount a page of
+// rows — which is the whole point of the change.
+const page = readFileSync(join(import.meta.dirname, "..", "app/admin/doubt-log/page.tsx"), "utf8");
+check("the page reads the summary", /doubt_report_summary/.test(page), true);
+check("the queue comes from the summary, not the fetched page",
+  /S\.waiting_list/.test(page), true);
 
 console.log(fails === 0 ? "PASS  waiting means waiting: 6 of 46, not 46" : `${fails} failure(s)`);
 process.exit(fails === 0 ? 0 : 1);

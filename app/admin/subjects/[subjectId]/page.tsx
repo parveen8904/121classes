@@ -34,7 +34,7 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
 
   const { data: subject } = await supabase
     .from("subjects")
-    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs, batch_months, batch_price_inr, sale_from, sale_to, included_with_subject_id, intro_video_url, telegram_group_url, remarks, miq_rev1, miq_rev2, valid_from_attempt, valid_to_attempt, courses(title)")
+    .select("id, title, slug, code, order_index, course_id, gold_price_inr, validity_months, gold_slabs, silver_slabs, batch_months, batch_price_inr, batch_last_class_on, batch_grace_days, sale_from, sale_to, included_with_subject_id, intro_video_url, telegram_group_url, remarks, miq_rev1, miq_rev2, valid_from_attempt, valid_to_attempt, courses(title)")
     .eq("id", subjectId)
     .single();
 
@@ -472,6 +472,19 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
                 <div>
                   <label htmlFor="su-batchm">Access months</label>
                   <input id="su-batchm" name="batch_months" type="number" min={1} max={24} defaultValue={(subject as { batch_months?: number | null }).batch_months ?? ""} placeholder="e.g. 2" />
+                </div>
+                <div>
+                  <label htmlFor="su-batchlast">Last class on</label>
+                  {/* Months alone were counted from the day the money arrived,
+                      so buying in August for a batch starting in October gave a
+                      week of it. With a date here, access runs to whichever is
+                      later — the months bought, or the last class plus the
+                      grace below. Buying early can only ever give more. */}
+                  <input id="su-batchlast" name="batch_last_class_on" type="date" defaultValue={(subject as { batch_last_class_on?: string | null }).batch_last_class_on ?? ""} />
+                </div>
+                <div>
+                  <label htmlFor="su-batchgrace">Days after last class</label>
+                  <input id="su-batchgrace" name="batch_grace_days" type="number" min={0} max={180} defaultValue={(subject as { batch_grace_days?: number | null }).batch_grace_days ?? 10} placeholder="10" />
                 </div>
                 <div>
                   <label htmlFor="su-batchp">Fixed price ₹ (incl. GST)</label>

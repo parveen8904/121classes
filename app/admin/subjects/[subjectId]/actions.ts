@@ -346,6 +346,11 @@ export async function updateSubjectInline(formData: FormData) {
       silver_slabs: parseSlabInput(str(formData.get("silver_slabs"))),
       // Live batch: fixed months + one fixed GST-inclusive price; blank = normal subject.
       batch_months: num(formData.get("batch_months")) || null,
+      batch_last_class_on: str(formData.get("batch_last_class_on")) || null,
+      // num("") is 0, not the fallback — so a blank field would have meant
+      // "access ends the day the last class does", which is the opposite of
+      // what the field is for. Blank means the default.
+      batch_grace_days: str(formData.get("batch_grace_days")) === "" ? 10 : num(formData.get("batch_grace_days"), 10),
       batch_price_inr: money(formData.get("batch_price_inr")),
       sale_from: str(formData.get("sale_from")) || null,
       sale_to: str(formData.get("sale_to")) || null,

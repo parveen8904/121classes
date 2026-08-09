@@ -43,3 +43,36 @@ export function planWindow(
 
   return { bridge, paid: { startsAt, endsAt } };
 }
+
+/**
+ * When a subscription should END.
+ *
+ * For an ordinary subject this is simply the term they bought, counted from
+ * when it starts. For a LIVE BATCH it is whichever is later: that term, or the
+ * last class plus a grace period.
+ *
+ * The reason is what a batch is. Someone who buys in August for a batch that
+ * runs October to December has not bought "two months from today" — they have
+ * bought the batch. Counting from the payment gave them a week of it and
+ * defeated the purchase entirely. Buying early can now only ever give more
+ * access, never less, which is also the only version anybody would call fair.
+ */
+export function subscriptionEnd(
+  startsAt: Date,
+  months: number,
+  batch?: { lastClassOn?: string | Date | null; graceDays?: number | null } | null,
+): Date {
+  const term = new Date(startsAt);
+  term.setMonth(term.getMonth() + Math.max(1, Math.round(Number(months) || 12)));
+
+  const last = batch?.lastClassOn ? new Date(batch.lastClassOn) : null;
+  if (!last || Number.isNaN(last.getTime())) return term;
+
+  const grace = new Date(last);
+  grace.setDate(grace.getDate() + (Number(batch?.graceDays) || 10));
+  // End of that day, not the small hours of it — access should not stop at
+  // midnight on the morning somebody planned to revise.
+  grace.setHours(23, 59, 59, 999);
+
+  return grace > term ? grace : term;
+}

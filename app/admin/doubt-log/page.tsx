@@ -4,7 +4,7 @@ import AdminHero from "../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
 import SubmitButton from "@/app/components/SubmitButton";
 import { addCorrection } from "../ai-training/actions";
-import { answerWaiting, closeWaiting, closeAllWaiting } from "./actions";
+import { answerWaiting, closeWaiting, closeAllWaiting, closeSelected, deleteSelected } from "./actions";
 import { inChunks } from "@/lib/pageAll";
 import { AI_CHANNELS, channelLabel } from "@/lib/aiAnswerLog";
 
@@ -271,20 +271,36 @@ export default async function DoubtLogPage(props: {
             <span className="muted" style={{ fontSize: ".8rem" }}>
               Open a row to reply, or close it if it is not going to be answered.
             </span>
-            {/* Everything on this list at once, for the days when it is all
-                chatter and none of it is worth opening. */}
+            {/* Everything at once, for the days when it is all chatter. The
+                ticked-row buttons sit at the foot of the list, next to the
+                ticks themselves. */}
             <form action={closeAllWaiting} style={{ marginLeft: "auto" }}>
               <SubmitButton className="btn small secondary" savedLabel="✓ Cleared">
                 Close all {waitingRows.length}
               </SubmitButton>
             </form>
           </div>
-          <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+
+          {/* Tick what you mean, then choose. Closing keeps the question and
+              the answer in the record; deleting removes both and nothing
+              brings them back — which is why they are separate buttons and
+              why delete is the quiet one. */}
+          <form id="pick-waiting" style={{ display: "grid", gap: 6, marginTop: 8 }}>
             {waitingRows.slice(0, 15).map((q) => {
               const mins = (now - new Date(q.created_at).getTime()) / 60000;
               return (
                 <details key={q.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 6 }}>
                   <summary style={{ cursor: "pointer", display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap", fontSize: ".88rem" }}>
+                    {/* Outside the summary's toggle: ticking a row must not
+                        expand it, or picking six means opening six. */}
+                    <input
+                      type="checkbox"
+                      name="pick"
+                      value={q.id}
+                      form="pick-waiting"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label="Select this doubt"
+                    />
                     <span style={{ fontWeight: 700, color: mins > 1440 ? "#b91c1c" : "#b45309", minWidth: 92 }}>
                       {howLong(mins)}
                     </span>
@@ -292,11 +308,6 @@ export default async function DoubtLogPage(props: {
                     <span style={{ flex: 1, minWidth: 200 }}>{q.question.slice(0, 90)}</span>
                     <span className="muted">{nameOf.get(q.user_id ?? "") ?? q.email ?? "—"}</span>
                   </summary>
-
-                  {/* Dismissing was buried inside this expander, so the only
-                      visible option was to answer — and some of these will
-                      never be answered. It sits on the row now, next to the
-                      question, where deciding "not this one" takes one press. */}
 
                   {/* Answered where it is listed. The inbox used to be a second
                       place to do this, which is how one student came to appear
@@ -316,7 +327,25 @@ export default async function DoubtLogPage(props: {
                 </details>
               );
             })}
-          </div>
+
+            {/* Inside the form, and plain buttons on purpose: formAction is a
+                native attribute, and SubmitButton does not take it — passing it
+                there would have dropped it silently and the buttons would have
+                done nothing at all. */}
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
+              <span className="muted" style={{ fontSize: ".8rem" }}>With the ticked ones:</span>
+              <button type="submit" formAction={closeSelected} className="btn small secondary">
+                Close selected
+              </button>
+              <button type="submit" formAction={deleteSelected} className="btn small secondary">
+                🗑 Delete selected
+              </button>
+              <span className="muted" style={{ fontSize: ".78rem" }}>
+                Closing keeps the question and the answer in the record below. Deleting removes both, for good.
+              </span>
+            </div>
+          </form>
+
           {waitingRows.length > 15 && (
             <p className="muted" style={{ margin: "8px 0 0", fontSize: ".8rem" }}>
               …and {waitingRows.length - 15} more, listed in full below.

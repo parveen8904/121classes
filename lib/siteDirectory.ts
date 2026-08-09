@@ -69,7 +69,10 @@ export async function siteDirectory(): Promise<string> {
       subjects =
         "\nSUBJECTS TAUGHT HERE: " +
         list.map((s) => s.title).join("; ") +
-        ".\nA subject's classes are opened from the dashboard, or from /courses.";
+        ".\nTWO subjects are taught here: Financial Reporting (CA Final) and Advanced Accounting " +
+        "(CA Intermediate) — the same accounting at two levels. Financial Instruments is a PART of " +
+        "Financial Reporting sold as its own live batch, NOT a third subject." +
+        "\nA subject's classes are opened from the dashboard, or from /courses.";
     }
   } catch {
     // The map is still useful without the subject list.

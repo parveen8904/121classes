@@ -76,3 +76,52 @@ export async function closeAllWaiting() {
   }
   revalidatePath("/admin/doubt-log");
 }
+
+/** Close the ticked ones — they stay in the record, they stop waiting. */
+export async function closeSelected(formData: FormData) {
+  if (!(await requireArea("inbox"))) return;
+  const ids = formData.getAll("pick").map(String).filter(Boolean);
+  if (!ids.length) return;
+
+  const svc = createServiceClient();
+  const plain = ids.filter((i) => !i.startsWith("doubt:"));
+  const classDoubts = ids.filter((i) => i.startsWith("doubt:")).map((i) => i.slice(6));
+
+  for (let i = 0; i < plain.length; i += 200) {
+    await svc.from("page_questions").update({ status: "done" }).in("id", plain.slice(i, i + 200));
+  }
+  for (let i = 0; i < classDoubts.length; i += 200) {
+    await svc.from("doubts").update({ status: "closed" }).in("id", classDoubts.slice(i, i + 200));
+  }
+  revalidatePath("/admin/doubt-log");
+}
+
+/**
+ * Delete the ticked ones outright.
+ *
+ * Separate from closing, and deliberately so: closing keeps the question and
+ * whatever went back, which is what the report is FOR. This removes both, and
+ * nothing brings them back — so it is only ever the ticked rows, never a sweep,
+ * and the answers are taken with them rather than left behind pointing at a
+ * question that no longer exists.
+ */
+export async function deleteSelected(formData: FormData) {
+  if (!(await requireArea("inbox"))) return;
+  const ids = formData.getAll("pick").map(String).filter(Boolean);
+  if (!ids.length) return;
+
+  const svc = createServiceClient();
+  const plain = ids.filter((i) => !i.startsWith("doubt:"));
+  const classDoubts = ids.filter((i) => i.startsWith("doubt:")).map((i) => i.slice(6));
+
+  for (let i = 0; i < plain.length; i += 200) {
+    const batch = plain.slice(i, i + 200);
+    // The paired replies first, or they would survive as orphans in the log.
+    await svc.from("page_questions").delete().in("page_path", batch.map((id) => `reply:${id}`));
+    await svc.from("page_questions").delete().in("id", batch);
+  }
+  for (let i = 0; i < classDoubts.length; i += 200) {
+    await svc.from("doubts").delete().in("id", classDoubts.slice(i, i + 200));
+  }
+  revalidatePath("/admin/doubt-log");
+}

@@ -73,6 +73,25 @@ function PendingRow({ r }: { r: IntegrationReport }) {
 }
 
 // Masked input for a single key: shows whether it's already set, lets you paste a new one.
+// WHAT A CORRECT VALUE LOOKS LIKE.
+//
+// A green light meant "something is stored", never "the right thing is stored".
+// The whole .p8 private key was pasted into the Apple Key ID box and sat there
+// looking healthy while every notification Apple received was signed with a
+// nonsense key id and thrown away. Nothing said a word.
+//
+// These are the shapes that are unmistakable. Anything not listed is left
+// alone — a guess that cries wolf is worse than no check.
+const SHAPES: Record<string, { ok: (v: string) => boolean; expected: string }> = {
+  APNS_KEY_ID:  { ok: (v) => /^[A-Z0-9]{10}$/.test(v.trim()), expected: "ten characters, like L7U28SG58S" },
+  APNS_TEAM_ID: { ok: (v) => /^[A-Z0-9]{10}$/.test(v.trim()), expected: "ten characters, like 32W63QKXH8" },
+  APNS_KEY_P8:  { ok: (v) => v.includes("PRIVATE KEY"), expected: "the .p8 file contents, beginning -----BEGIN PRIVATE KEY-----" },
+  FCM_SERVICE_ACCOUNT: {
+    ok: (v) => { try { const j = JSON.parse(v); return Boolean(j.project_id && j.client_email && j.private_key); } catch { return false; } },
+    expected: "the whole service-account JSON, with project_id, client_email and private_key",
+  },
+};
+
 async function KeyField({ name, label, placeholder, multiline }: { name: string; label: string; placeholder: string; multiline?: boolean }) {
   // A field whose name is missing from SECRET_KEYS would LOOK saveable while
   // the save action silently drops it — 16 social keys sat in exactly that
@@ -88,12 +107,25 @@ async function KeyField({ name, label, placeholder, multiline }: { name: string;
       </div>
     );
   }
-  const set = Boolean(await getSecret(name));
+  const stored = await getSecret(name);
+  const set = Boolean(stored);
+  const shape = SHAPES[name];
+  const wrong = set && shape && !shape.ok(stored);
   return (
     <div style={{ marginBottom: 12 }}>
       <label>
-        {set ? "🟢 " : "⚪ "}{label} {set && <span className="muted" style={{ fontSize: ".78rem" }}>(set — leave blank to keep)</span>}
+        {wrong ? "🔴 " : set ? "🟢 " : "⚪ "}{label}{" "}
+        {set && !wrong && <span className="muted" style={{ fontSize: ".78rem" }}>(set — leave blank to keep)</span>}
       </label>
+      {/* Said loudly, because a wrong value here fails in total silence: Apple
+          and Firebase simply refuse every message and nobody is told. */}
+      {wrong && (
+        <div className="notice err" style={{ margin: "0 0 6px", fontSize: ".82rem" }}>
+          ⚠️ What is saved here does not look right — it is {stored.trim().length} characters
+          {stored.includes("PRIVATE KEY") ? " and appears to be a private key" : ""}. Expected {shape.expected}.
+          Nothing will be delivered until this is corrected.
+        </div>
+      )}
       {/* type=text (not password) so browser password managers can't autofill/overwrite
           the key you paste. The field is empty on load, so nothing is exposed.
 

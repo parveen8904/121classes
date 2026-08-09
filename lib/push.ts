@@ -186,11 +186,40 @@ function asPem(raw: string): string {
   return `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----\n`;
 }
 
+/**
+ * A key id and a team id are both exactly ten characters of A–Z and 0–9.
+ *
+ * Somebody pasted the whole .p8 private key into the Key ID box, so every JWT
+ * we signed carried a 262-character PEM as its "kid". Apple rejected all of
+ * them, no iPhone ever received a notification, and nothing anywhere said why —
+ * the code took whatever was in the field and signed with it.
+ *
+ * The shape is unmistakable, so a wrong one is now caught here and NAMED.
+ */
+const looksLikeAppleId = (v: string) => /^[A-Z0-9]{10}$/.test(v);
+
 async function appleKey(): Promise<AppleKey | null> {
   const p8 = asPem(await getSecret("APNS_KEY_P8"));
   const keyId = (await getSecret("APNS_KEY_ID")).trim();
   const teamId = (await getSecret("APNS_TEAM_ID")).trim();
   if (!p8 || !keyId || !teamId) return null;
+
+  if (!looksLikeAppleId(keyId)) {
+    console.error(
+      `[push] APNS_KEY_ID is not a key id — it is ${keyId.length} characters` +
+        `${keyId.includes("PRIVATE KEY") ? " and appears to be the .p8 private key itself" : ""}. ` +
+        `Apple expects ten characters like L7U28SG58S. Fix it in Admin → Integrations; ` +
+        `iPhone notifications cannot work until it is right.`,
+    );
+    return null;
+  }
+  if (!looksLikeAppleId(teamId)) {
+    console.error(
+      `[push] APNS_TEAM_ID is not a team id — it is ${teamId.length} characters. ` +
+        `Apple expects ten characters like 32W63QKXH8.`,
+    );
+    return null;
+  }
   return { p8, keyId, teamId };
 }
 

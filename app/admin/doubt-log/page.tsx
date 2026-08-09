@@ -27,6 +27,17 @@ type Row = {
   email: string | null;
 };
 
+/** "3 hours", "2 days" — a wait said the way a person would say it. */
+function howLong(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} hour${h === 1 ? "" : "s"}`;
+  const d = Math.round(h / 24);
+  return `${d} day${d === 1 ? "" : "s"}`;
+}
+
 const IST = (s: string) =>
   new Date(s).toLocaleString("en-IN", {
     day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata",
@@ -80,22 +91,91 @@ export default async function DoubtLogPage(props: {
   // channel, so filtering in the query would have thrown away every answer.
   const shown = only ? questions.filter((q) => (q.page_path ?? "") === only) : questions;
 
-  const answered = shown.filter((q) => (answersFor.get(q.id)?.length ?? 0) > 0).length;
-  const unanswered = shown.length - answered;
+  // HOW MANY, HOW FAST, AND WHAT IS STILL WAITING.
+  //
+  // The page used to open with a wall of question-and-answer cards and three
+  // bare numbers on top, which answered "what was asked" but never "is anything
+  // still sitting there, and for how long" — the thing actually worth knowing
+  // when you open it in the morning.
+  const now = Date.now();
+  const firstReplyAt = (id: string): number | null => {
+    const list = answersFor.get(id) ?? [];
+    if (!list.length) return null;
+    return Math.min(...list.map((a) => new Date(a.created_at).getTime()));
+  };
+
+  // DEALT WITH means dealt with, however it happened.
+  //
+  // Not every answer leaves a paired reply row: login-help requests are settled
+  // automatically and marked answered, and older replies pre-date the pairing.
+  // Counting only paired rows said 46 were waiting when 6 were — the same kind
+  // of overstatement that made this page hard to trust in the first place. A
+  // row is waiting only if it is still OPEN and nothing came back.
+  const isDone = (q: Row) =>
+    firstReplyAt(q.id) !== null || q.status === "answered" || q.status === "replied";
+
+  const answeredRows = shown.filter(isDone);
+  const waitingRows = shown
+    .filter((q) => !isDone(q) && q.status === "open")
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  const answered = answeredRows.length;
+  const unanswered = waitingRows.length;
+
+  // Minutes from asking to the first reply, for everything answered.
+  const waits = answeredRows
+    .filter((q) => firstReplyAt(q.id) !== null)
+    .map((q) => (firstReplyAt(q.id)! - new Date(q.created_at).getTime()) / 60000)
+    .filter((m) => m >= 0)
+    .sort((a, b) => a - b);
+  const typicalMins = waits.length ? waits[Math.floor(waits.length / 2)] : null;
+  const longestWaitMins = waitingRows.length
+    ? (now - new Date(waitingRows[0].created_at).getTime()) / 60000
+    : null;
+
+  // Per channel, so it is obvious WHERE the unanswered ones are.
+  const byChannel = [...new Set(shown.map((q) => q.page_path ?? ""))]
+    .map((ch) => {
+      const mine = shown.filter((q) => (q.page_path ?? "") === ch);
+      const done = mine.filter(isDone).length;
+      const wait = mine.filter((q) => !isDone(q) && q.status === "open").length;
+      return { ch, label: channelLabel(ch), asked: mine.length, done, wait };
+    })
+    .sort((a, b) => b.asked - a.asked);
 
   return (
     <section className="container" style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 900 }}>
       <AdminHero
         badge="🗒️ Doubt log"
-        title="Every question, and the answer that went back"
-        subtitle="Doubts are answered and sent automatically. This is the record to read through afterwards — question and answer, in order, with follow-ups under the question they follow."
+        title="Doubts asked, and answers sent"
+        subtitle="How many were asked, how many got an answer, and what is still waiting — then the full question-and-answer record underneath."
         back={{ href: "/admin", label: "Admin" }}
       />
 
+      {/* THE ANSWER IN ONE SENTENCE, before any list. */}
+      <div className="card" style={{ borderLeft: `4px solid ${unanswered === 0 ? "#16a34a" : "#b45309"}` }}>
+        <p style={{ margin: 0, fontSize: "1.05rem", lineHeight: 1.7 }}>
+          <strong>{shown.length}</strong> doubt{shown.length === 1 ? "" : "s"} in the last {windowDays} days
+          {only ? ` on ${channelLabel(only)}` : ""}. <strong>{answered}</strong> answered
+          {shown.length > 0 ? ` (${Math.round((answered / shown.length) * 100)}%)` : ""}.{" "}
+          {unanswered === 0 ? (
+            <span style={{ color: "#16a34a", fontWeight: 700 }}>Nothing is waiting.</span>
+          ) : (
+            <span style={{ color: "#b45309", fontWeight: 700 }}>
+              {unanswered} still waiting{longestWaitMins != null ? `, the oldest for ${howLong(longestWaitMins)}` : ""}.
+            </span>
+          )}
+        </p>
+        {typicalMins != null && (
+          <p className="muted" style={{ margin: "6px 0 0", fontSize: ".88rem" }}>
+            {typicalMins < 2
+              ? "Answers go back straight away — typically within a minute of being asked."
+              : `A student who gets an answer typically waits ${howLong(typicalMins)}.`}
+          </p>
+        )}
+      </div>
+
       <div className="card" style={{ display: "flex", gap: 22, flexWrap: "wrap", alignItems: "baseline" }}>
-        <div><strong style={{ fontSize: "1.5rem" }}>{shown.length}</strong><div className="muted">questions</div></div>
-        <div><strong style={{ fontSize: "1.5rem" }}>{answered}</strong><div className="muted">answered</div></div>
-        <div><strong style={{ fontSize: "1.5rem" }}>{unanswered}</strong><div className="muted">no answer sent</div></div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           {[7, 30, 90].map((d) => (
             <Link
@@ -138,6 +218,62 @@ export default async function DoubtLogPage(props: {
           );
         })}
       </div>
+
+      {/* WHAT IS STILL WAITING, oldest first. The only part of this page that
+          asks anything of him; everything below it is a record. */}
+      {waitingRows.length > 0 && (
+        <div className="card" style={{ marginTop: 14 }}>
+          <strong style={{ fontSize: ".95rem" }}>⏳ Waiting for an answer ({waitingRows.length})</strong>
+          <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+            {waitingRows.slice(0, 15).map((q) => {
+              const mins = (now - new Date(q.created_at).getTime()) / 60000;
+              return (
+                <div key={q.id} style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap", fontSize: ".88rem" }}>
+                  <span style={{ fontWeight: 700, color: mins > 1440 ? "#b91c1c" : "#b45309", minWidth: 92 }}>
+                    {howLong(mins)}
+                  </span>
+                  <span className="badge">{channelLabel(q.page_path)}</span>
+                  <span style={{ flex: 1, minWidth: 200 }}>{q.question.slice(0, 90)}</span>
+                  <span className="muted">{nameOf.get(q.user_id ?? "") ?? q.email ?? "—"}</span>
+                </div>
+              );
+            })}
+          </div>
+          {waitingRows.length > 15 && (
+            <p className="muted" style={{ margin: "8px 0 0", fontSize: ".8rem" }}>
+              …and {waitingRows.length - 15} more, listed in full below.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Where the unanswered ones are, so a blocked channel is obvious. */}
+      {byChannel.length > 1 && (
+        <div className="card" style={{ marginTop: 14, overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".88rem" }}>
+            <thead>
+              <tr style={{ textAlign: "left" }}>
+                <th style={{ padding: "4px 8px" }}>Channel</th>
+                <th style={{ padding: "4px 8px" }}>Asked</th>
+                <th style={{ padding: "4px 8px" }}>Answered</th>
+                <th style={{ padding: "4px 8px" }}>Waiting</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byChannel.map((c) => (
+                <tr key={c.ch} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "4px 8px" }}>{c.label}</td>
+                  <td style={{ padding: "4px 8px" }}>{c.asked}</td>
+                  <td style={{ padding: "4px 8px" }}>{c.done}</td>
+                  <td style={{ padding: "4px 8px", fontWeight: c.wait ? 700 : 400, color: c.wait ? "#b45309" : "inherit" }}>
+                    {c.wait || "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {shown.length === 0 && (
         <p className="muted" style={{ marginTop: 16 }}>Nothing asked here in this period.</p>

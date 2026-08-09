@@ -280,6 +280,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  // Distress first, always.
+  const { checkDistress, raiseDistress, DISTRESS_REPLY } = await import("@/lib/distress");
+  const distress = await checkDistress(text).catch(() => null);
+  if (distress?.distressed) {
+    await sendTelegramMessage(chatId, DISTRESS_REPLY);
+    await raiseDistress({ channel: "telegram", question: text, who: String(chatId), severe: distress.severe });
+    return;
+  }
+
   let answer: string | null = null;
   if (await aiConfigured()) {
     let material = await getRepositoryContext(null, 12000, { query: text });

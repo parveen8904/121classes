@@ -39,6 +39,16 @@ export async function answerWhatsAppDoubt(from: string, text: string): Promise<"
     return "answered";
   }
 
+  // BEFORE ANYTHING ELSE. A message about far more than an exam must not be
+  // sorted as chatter, tested for abuse, or answered with study material.
+  const { checkDistress, raiseDistress, DISTRESS_REPLY } = await import("@/lib/distress");
+  const distress = await checkDistress(question).catch(() => null);
+  if (distress?.distressed) {
+    await sendWhatsAppText(from, DISTRESS_REPLY).catch(() => false);
+    await raiseDistress({ channel: "whatsapp", question, who: from, severe: distress.severe });
+    return "answered";
+  }
+
   // Is this worth answering at all?
   const judged = await judgeStudentMessage(question);
   if (judged.kind === "abusive") {

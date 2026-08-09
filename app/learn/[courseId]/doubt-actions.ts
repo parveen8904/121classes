@@ -33,6 +33,18 @@ export async function askSubjectDoubt(input: {
     return { ok: true, answer: null, upgrade: true, used: q.used, limit: q.limit, paid };
   }
 
+  // BEFORE THE DAILY LIMIT, even. A student in trouble is not turned away
+  // because they have used their allowance of study questions.
+  const { checkDistress, raiseDistress, DISTRESS_REPLY } = await import("@/lib/distress");
+  const distress = await checkDistress(question).catch(() => null);
+  if (distress?.distressed) {
+    await raiseDistress({
+      channel: "class_doubt", question, userId: user.id,
+      who: user.email ?? user.id, severe: distress.severe,
+    });
+    return { ok: true, answer: DISTRESS_REPLY, limited: false };
+  }
+
   // Max 20 AI queries per student per day (shared counter across doubts + Ask me).
   if (await dailyDoubtLimitReached(user.id)) return { ok: true, answer: null, limited: true };
 

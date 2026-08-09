@@ -364,6 +364,17 @@ export async function askDoubt(input: {
     }
   }
 
+  // Distress outranks the study answer entirely.
+  const { checkDistress, raiseDistress, DISTRESS_REPLY } = await import("@/lib/distress");
+  const distressed = await checkDistress(question).catch(() => null);
+  if (distressed?.distressed) {
+    await raiseDistress({
+      channel: "class_doubt", question, userId: user.id,
+      who: user.email ?? user.id, severe: distressed.severe,
+    });
+    return { ok: true, answer: DISTRESS_REPLY, pending: false };
+  }
+
   // The same rule as every other channel: something real always goes back.
   if (!answer) {
     const { replyFromSiteMap, PLAIN_FALLBACK } = await import("@/lib/ai");

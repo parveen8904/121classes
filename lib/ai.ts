@@ -1100,6 +1100,36 @@ export async function judgeStudentMessage(text: string): Promise<MessageJudgemen
 // WhatsApp thread, so a student messaging us privately was told off for how he
 // behaves "here" in a group he was not in — and threatened with losing access
 // to it. Each channel now says the true thing.
+/**
+ * Is this student in real distress, or is it exam talk?
+ *
+ * Asked only when a softer word has already appeared, so this is not a cost on
+ * every message. The instruction leans toward YES: an unnecessary offer of help
+ * is a small awkwardness, a missed one is not something that can be put right
+ * afterwards.
+ */
+export async function judgeDistress(text: string): Promise<boolean> {
+  const out = await callClaude(
+    "A student at a CA (Indian chartered accountancy) coaching institute sent the message below.\n" +
+      "Is this person expressing REAL distress about themselves — despair, depression, hopelessness, " +
+      "not coping, self-harm, or thoughts of ending their life?\n" +
+      "Answer NO for ordinary exam pressure and student hyperbole: 'this paper killed me', 'I'm dying', " +
+      "'mar gaya', 'I failed again', 'this subject is impossible', complaints about difficulty or marks.\n" +
+      "Answer NO when the words appear ACADEMICALLY rather than about themselves — 'what is the suicide " +
+      "clause in a life insurance policy', 'treatment of death benefit under Ind AS 104', a question about " +
+      "a case law or a section. Those are textbook questions, not a person in trouble.\n" +
+      "Answer YES if a real person sounds genuinely unwell or unsafe, even if they are also asking a " +
+      "study question in the same message.\n" +
+      "If you are genuinely unsure, answer YES — the cost of missing this is far higher than the cost " +
+      "of an unnecessary offer of help.\n" +
+      "Reply with one word: YES or NO.",
+    text.slice(0, 1500),
+    8,
+    { model: await fastModel(), feature: "judge_message" },
+  );
+  return /\byes\b/i.test(String(out ?? ""));
+}
+
 export const ABUSE_WARNING =
   "This is a study group for CA Intermediate and CA Final students. " +
   "Messages like that are not acceptable here.\n\n" +

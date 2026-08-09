@@ -131,6 +131,27 @@ export async function GET(req: NextRequest) {
       if (!(await aiConfigured())) break;
 
       const question = String(d.question ?? "");
+
+      // Checked before the message is sorted at all. A doubt written at two in
+      // the morning may not be about the syllabus.
+      const { checkDistress, raiseDistress, DISTRESS_REPLY } = await import("@/lib/distress");
+      const distress = await checkDistress(question).catch(() => null);
+      if (distress?.distressed) {
+        await deliverQuestionAnswer(String(d.id), DISTRESS_REPLY, { markStatus: "open" });
+        await svc.from("page_questions").update({ drafted_at: new Date().toISOString() }).eq("id", d.id);
+        await raiseDistress({
+          channel: String(d.page_path ?? "site"), question,
+          userId: d.user_id ? String(d.user_id) : null,
+          who: (d.email as string | null) ?? null, severe: distress.severe,
+        });
+        needsHuman.push({
+          what: distress.severe ? "🚨 A STUDENT MAY BE IN DANGER — call them" : "⚠️ A student sounds like they are struggling",
+          detail: question.slice(0, 120),
+          since: String(d.created_at),
+        });
+        continue;
+      }
+
       const judged = await judgeStudentMessage(question);
 
       if (judged.kind === "abusive") {

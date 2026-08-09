@@ -48,24 +48,29 @@ export default async function SiteFooter() {
         </div>
         <div>
           <h4>Explore</h4>
-          <Link href="/#courses">Courses</Link>
-          <Link href="/pricing#ca-intermediate">Prices — CA Intermediate</Link>
-          <Link href="/pricing#ca-final">Prices — CA Final</Link>
-          <Link href="/ask">Ask a doubt</Link>
-          <Link href="/articles">Study Articles</Link>
-          <Link href="/#books">Books</Link>
-          <Link href="/#whats-new">What&apos;s New</Link>
+          {/* prefetch={false} — Next.js fetches every <Link> that scrolls into view.
+              A footer sits on every page, so fifteen links here meant fifteen requests
+              per visit for pages almost nobody opens: the refund policy was being
+              fetched a thousand times an hour and read by nobody. Hover and touch still
+              prefetch, so a link the student actually aims at is still instant. */}
+          <Link prefetch={false} href="/#courses">Courses</Link>
+          <Link prefetch={false} href="/pricing#ca-intermediate">Prices — CA Intermediate</Link>
+          <Link prefetch={false} href="/pricing#ca-final">Prices — CA Final</Link>
+          <Link prefetch={false} href="/ask">Ask a doubt</Link>
+          <Link prefetch={false} href="/articles">Study Articles</Link>
+          <Link prefetch={false} href="/#books">Books</Link>
+          <Link prefetch={false} href="/#whats-new">What&apos;s New</Link>
         </div>
         <div>
           <h4>Company</h4>
-          <Link href="/#about">About Us</Link>
-          <Link href="/#vision">Vision</Link>
-          <Link href="/#contact">Contact Us</Link>
-          <Link href="/support">Help &amp; Support</Link>
-          <Link href="/guide">Student Guide</Link>
-          <Link href="/privacy">Privacy Policy</Link>
-          <Link href="/refund">Refund Policy</Link>
-          <Link href="/terms">Terms of Service</Link>
+          <Link prefetch={false} href="/#about">About Us</Link>
+          <Link prefetch={false} href="/#vision">Vision</Link>
+          <Link prefetch={false} href="/#contact">Contact Us</Link>
+          <Link prefetch={false} href="/support">Help &amp; Support</Link>
+          <Link prefetch={false} href="/guide">Student Guide</Link>
+          <Link prefetch={false} href="/privacy">Privacy Policy</Link>
+          <Link prefetch={false} href="/refund">Refund Policy</Link>
+          <Link prefetch={false} href="/terms">Terms of Service</Link>
         </div>
       </div>
       <div className="copy">

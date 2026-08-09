@@ -21,6 +21,13 @@ const MENU_ONLY_LINKS: { href: string; label: string }[] = [];
 // No server-side auth read here — reading cookies would force every marketing
 // page to render dynamically (no caching). AuthCta/MobileMenu detect the session
 // in the browser and correct themselves right after hydration.
+// prefetch={false} throughout. This nav is on every marketing page, and
+// Next.js fetches each <Link> as it scrolls into view — so one visitor opening
+// the homepage quietly pulled the whole site: Pricing, Courses, Results,
+// Startups, Placements and the rest, whether or not they went there. That is
+// what turned ordinary student traffic into a fifteen-fold jump in requests.
+// Hover and touch still prefetch, so a link someone actually reaches for is
+// still instant.
 export default function SiteNav() {
   const signedIn = false;
 
@@ -29,13 +36,13 @@ export default function SiteNav() {
       <div className="lp-nav-inner">
         <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
         <BackButton />
-        <Link href="/" aria-label="CA Parveen Sharma home" className="lp-brand">
+        <Link prefetch={false} href="/" aria-label="CA Parveen Sharma home" className="lp-brand">
           <Logo />
         </Link>
         </span>
         <div className="lp-nav-links">
           {NAV_LINKS.map((l) => (
-            <Link key={l.href} className="hide-sm" href={l.href}>
+            <Link prefetch={false} key={l.href} className="hide-sm" href={l.href}>
               {l.label}
             </Link>
           ))}

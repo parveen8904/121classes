@@ -298,8 +298,8 @@ export default async function Home() {
           guidance</strong>. Top-notch teaching that clears the clutter.
         </p>
         <div className="cta-row">
-          <Link className="btn" href="/login">Get started — it&apos;s free to join</Link>
-          <Link className="btn" href="/#mentor" style={{ background: "var(--accent-2)" }}>Meet CA Parveen Sharma</Link>
+          <Link prefetch={false} className="btn" href="/login">Get started — it&apos;s free to join</Link>
+          <Link prefetch={false} className="btn" href="/#mentor" style={{ background: "var(--accent-2)" }}>Meet CA Parveen Sharma</Link>
         </div>
         {/* App downloads — direct store links when live, else the download page. */}
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 16 }}>
@@ -310,7 +310,7 @@ export default async function Home() {
           {siteImg.get("app_url_android") ? (
             <a className="btn small secondary" href={siteImg.get("app_url_android") as string} target="_blank" rel="noopener noreferrer">▶ Google Play</a>
           ) : null}
-          <Link className="btn small secondary" href="/download">🍎 Mac · 🪟 Windows</Link>
+          <Link prefetch={false} className="btn small secondary" href="/download">🍎 Mac · 🪟 Windows</Link>
         </div>
         {heroStats.length > 0 && (
           <div
@@ -429,7 +429,7 @@ export default async function Home() {
         </div>
         <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".85rem" }}>
           Need help installing?{" "}
-          <Link href="/help" style={{ color: "var(--accent)", fontWeight: 700 }}>Step-by-step guide →</Link>
+          <Link prefetch={false} href="/help" style={{ color: "var(--accent)", fontWeight: 700 }}>Step-by-step guide →</Link>
         </p>
       </section>
 
@@ -508,10 +508,10 @@ export default async function Home() {
                 written on your own pages. <strong>No plan needed.</strong>
               </div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-                <Link className="btn" href="/mock-tests" style={{ background: "#fff", color: "#b45309", fontWeight: 800 }}>
+                <Link prefetch={false} className="btn" href="/mock-tests" style={{ background: "#fff", color: "#b45309", fontWeight: 800 }}>
                   Take a mock test →
                 </Link>
-                <Link className="btn secondary" href="/check-my-paper" style={{ background: "rgba(255,255,255,.16)", color: "#fff", borderColor: "rgba(255,255,255,.5)" }}>
+                <Link prefetch={false} className="btn secondary" href="/check-my-paper" style={{ background: "rgba(255,255,255,.16)", color: "#fff", borderColor: "rgba(255,255,255,.5)" }}>
                   📝 Get any paper checked — free
                 </Link>
               </div>
@@ -521,7 +521,7 @@ export default async function Home() {
       </section>
 
       <section className="section" style={{ paddingTop: 26, paddingBottom: 26 }}>
-        <Link href="/startups" style={{ display: "block", maxWidth: 1140, margin: "0 auto", textDecoration: "none" }}>
+        <Link prefetch={false} href="/startups" style={{ display: "block", maxWidth: 1140, margin: "0 auto", textDecoration: "none" }}>
           <div style={{ background: "linear-gradient(120deg, #134e4a, #0d9488 70%, #2dd4bf)", color: "#fff", borderRadius: 20, padding: "30px 28px", display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>
             <div style={{ background: "#fff", borderRadius: 12, padding: "10px 14px", flexShrink: 0 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -582,7 +582,7 @@ export default async function Home() {
       {/* HIGHLIGHT BANNER — latest announcement / course */}
       {latestHighlight && (
         <div className="container" style={{ marginTop: -10, marginBottom: 10, maxWidth: 1140 }}>
-          <Link href={latestHighlight.link_url || "/#whats-new"} style={{ display: "block" }}>
+          <Link prefetch={false} href={latestHighlight.link_url || "/#whats-new"} style={{ display: "block" }}>
             <div className="leadline" style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "flex-start", textAlign: "left", flexWrap: "wrap", maxWidth: "none", width: "100%", border: "1px solid var(--accent)" }}>
               <span className="badge">📣 {KIND_LABEL[latestHighlight.kind] ?? "Latest"}</span>
               <span>{latestHighlight.title}</span>
@@ -785,7 +785,7 @@ export default async function Home() {
                     👨‍🏫 Taught by CA Parveen Sharma
                   </p>
                   <p style={{ marginTop: 12 }}>
-                    <Link className="btn secondary small" href="/courses">View course</Link>
+                    <Link prefetch={false} className="btn secondary small" href="/courses">View course</Link>
                   </p>
                 </div>
               ))
@@ -795,13 +795,13 @@ export default async function Home() {
                   <h3>{c.title}</h3>
                   <p>{c.desc}</p>
                   <p style={{ marginTop: 12 }}>
-                    <Link className="btn secondary small" href="/courses">View course</Link>
+                    <Link prefetch={false} className="btn secondary small" href="/courses">View course</Link>
                   </p>
                 </div>
               ))}
         </div>
         <div style={{ textAlign: "center", marginTop: 30 }}>
-          <Link className="btn" href="/courses">Explore all courses →</Link>
+          <Link prefetch={false} className="btn" href="/courses">Explore all courses →</Link>
         </div>
       </section>
 
@@ -815,7 +815,7 @@ export default async function Home() {
           </div>
           <div className="grid grid-3" style={{ maxWidth: 980, margin: "0 auto" }}>
             {books.map((b) => (
-              <Link key={b.id} href="/books" className="tile" style={{ color: "var(--text)" }}>
+              <Link prefetch={false} key={b.id} href="/books" className="tile" style={{ color: "var(--text)" }}>
                 {b.cover_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={lightImg(b.cover_url as string, 384)} loading="lazy" decoding="async" alt={b.title as string} style={{ width: "100%", maxWidth: 180, borderRadius: 10, margin: "0 auto 10px", display: "block", boxShadow: "0 4px 14px rgba(0,0,0,.15)" }} />
@@ -828,7 +828,7 @@ export default async function Home() {
             ))}
           </div>
           <div style={{ textAlign: "center", marginTop: 26 }}>
-            <Link className="btn" href="/books">📦 See all books &amp; order →</Link>
+            <Link prefetch={false} className="btn" href="/books">📦 See all books &amp; order →</Link>
           </div>
         </section>
       )}
@@ -844,8 +844,8 @@ export default async function Home() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-          <Link className="btn" href="/build-your-plan">See how it works →</Link>
-          <Link className="btn secondary" href="/planner">Build my plan</Link>
+          <Link prefetch={false} className="btn" href="/build-your-plan">See how it works →</Link>
+          <Link prefetch={false} className="btn secondary" href="/planner">Build my plan</Link>
         </div>
       </section>
 
@@ -858,7 +858,7 @@ export default async function Home() {
             Live CA &amp; articleship openings, AI mock interviews, a CV builder and direct links to top firms — updated every day.
           </p>
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-            <Link className="btn" href="/placements" style={{ background: "#fff", color: "#0d9488", fontWeight: 800 }}>Explore placements →</Link>
+            <Link prefetch={false} className="btn" href="/placements" style={{ background: "#fff", color: "#0d9488", fontWeight: 800 }}>Explore placements →</Link>
           </div>
         </div>
       </section>
@@ -920,7 +920,7 @@ export default async function Home() {
                   {s.audience ? ` · ${s.audience}` : ""}
                 </p>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
-                  <Link className="btn small secondary" href="/live">Details / Join</Link>
+                  <Link prefetch={false} className="btn small secondary" href="/live">Details / Join</Link>
                   <NotifyButton sessionId={s.id} signedIn={signedIn} />
                 </div>
               </div>
@@ -930,7 +930,7 @@ export default async function Home() {
           <p className="muted" style={{ textAlign: "center" }}>No live classes scheduled this week yet — check the calendar for what&apos;s ahead.</p>
         )}
         <div style={{ textAlign: "center", marginTop: 26 }}>
-          <Link className="btn secondary" href="/calendar">🗓️ See full calendar →</Link>
+          <Link prefetch={false} className="btn secondary" href="/calendar">🗓️ See full calendar →</Link>
         </div>
       </section>
 
@@ -1017,7 +1017,7 @@ export default async function Home() {
           ].map(([label, url]) => (
             <a key={url} className="btn small secondary" href={url} target="_blank" rel="noopener noreferrer">{label} ↗</a>
           ))}
-          <Link className="btn small" href="/login?next=/career">Career Corner (log in) →</Link>
+          <Link prefetch={false} className="btn small" href="/login?next=/career">Career Corner (log in) →</Link>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", maxWidth: 760, margin: "0 auto 16px" }}>
           <span className="muted" style={{ fontSize: ".84rem", alignSelf: "center" }}>📍 By city:</span>
@@ -1037,7 +1037,7 @@ export default async function Home() {
                       <p className="muted" style={{ fontSize: ".85rem", margin: "2px 0 0" }}>{[firm, location].filter(Boolean).join(" · ")}</p>
                     )}
                   </div>
-                  <Link className="btn small" href="/login?next=/career">Apply (log in) →</Link>
+                  <Link prefetch={false} className="btn small" href="/login?next=/career">Apply (log in) →</Link>
                 </div>
               );
             })}

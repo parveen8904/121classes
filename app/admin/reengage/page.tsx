@@ -1,13 +1,15 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
-import { approveAndSend, rejectDraft } from "./actions";
+import { approveAndSend, rejectDraft, sendReengagementNow } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Re-engagement — Admin" };
 
 const KIND_LABEL: Record<string, string> = {
-  never_started: "🆕 Signed up, never started",
+  never_started: "🆕 Signed up, never started (old, needs approving)",
+  never_started_d3: "📩 Day 3 — sent automatically",
+  never_started_d7: "📩 Day 7 — last note, sent automatically",
   inactive_14d: "😴 Inactive 14+ days",
 };
 
@@ -17,7 +19,10 @@ type Draft = {
   profiles: { full_name: string | null } | null;
 };
 
-export default async function ReengagePage() {
+export default async function ReengagePage(props: {
+  searchParams: Promise<{ d3?: string; d7?: string }>;
+}) {
+  const sp = await props.searchParams;
   const svc = createServiceClient();
   const { data } = await svc
     .from("reengage_drafts")
@@ -33,9 +38,31 @@ export default async function ReengagePage() {
       <AdminHero
         badge="🔁 Re-engagement"
         title="Bring-them-back emails"
-        subtitle="Drafted automatically every night — NOTHING is sent until your team approves each email here. ✅"
+        subtitle="Two emails, then we leave them alone: day 3 after signing up if they never opened a class, and one last note on day 7. Sent automatically. Anyone who opens a class drops out at once."
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {(sp.d3 !== undefined || sp.d7 !== undefined) && (
+        <div className="notice ok">
+          Sent {sp.d3 ?? 0} day-3 note{sp.d3 === "1" ? "" : "s"} and {sp.d7 ?? 0} day-7 note{sp.d7 === "1" ? "" : "s"}.
+          {sp.d3 === "0" && sp.d7 === "0" ? " Nobody was due — everyone has either started, or already had both." : ""}
+        </div>
+      )}
+
+      {/* The same function the nightly round calls, so pressing this cannot
+          give a different answer from waiting until tonight. Safe to press
+          twice: nobody gets a rung of the ladder they have already had. */}
+      <form action={sendReengagementNow} className="card" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <strong>Send now to everyone due</strong>
+          <div className="muted" style={{ fontSize: ".82rem" }}>
+            Runs tonight&apos;s round immediately. Day 3 to those who signed up three days ago and never
+            opened a class; day 7 to those who had the first note and still have not. Nobody else, and
+            nobody twice.
+          </div>
+        </div>
+        <SubmitButton className="btn" savedLabel="✓ Sent">Send now</SubmitButton>
+      </form>
 
       <h3 style={{ margin: "22px 0 8px" }}>⏳ Waiting for your approval ({pending.length})</h3>
       <div style={{ display: "grid", gap: 12 }}>

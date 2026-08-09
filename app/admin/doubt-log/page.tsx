@@ -39,17 +39,28 @@ function howLong(minutes: number): string {
   return `${d} day${d === 1 ? "" : "s"}`;
 }
 
+/** "9 Aug 2026, 4:52 pm" — the year matters once a log is months old. */
 const IST = (s: string) =>
   new Date(s).toLocaleString("en-IN", {
-    day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata",
+    day: "numeric", month: "short", year: "numeric",
+    hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata",
   });
 
 export default async function DoubtLogPage(props: {
-  searchParams: Promise<{ days?: string; channel?: string }>;
+  searchParams: Promise<{ days?: string; channel?: string; from?: string; to?: string }>;
 }) {
   await assertArea("inbox");
-  const { days, channel } = await props.searchParams;
+  const { days, channel, from, to } = await props.searchParams;
   const windowDays = Math.min(180, Math.max(1, Number(days) || 30));
+
+  // AN EXACT RANGE, when "last 30 days" is not the question.
+  // Entered as IST calendar days; "to" covers the whole of that day, so picking
+  // the same date twice gives exactly that one day.
+  const okDate = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+  const fromDay = okDate(from);
+  const toDay = okDate(to);
+  const fromIso = fromDay ? new Date(`${fromDay}T00:00:00+05:30`).toISOString() : null;
+  const toIso = toDay ? new Date(`${toDay}T23:59:59+05:30`).toISOString() : null;
   // Every channel writes into this one table, so "show me only WhatsApp" is a
   // filter rather than a second page. Same format everywhere, as asked.
   const only = channel && AI_CHANNELS[channel] ? channel : "";
@@ -76,11 +87,13 @@ export default async function DoubtLogPage(props: {
     svc.rpc("doubt_report_summary", { p_days: windowDays, p_channel: only || null }),
     // Still fetched, but only to READ THROUGH — every figure above comes from
     // the summary, so a truncated list can no longer become a wrong total.
-    svc.from("page_questions")
-      .select("id, question, status, page_path, created_at, user_id, email")
-      .gte("created_at", since)
-      .order("created_at", { ascending: false })
-      .limit(600),
+    (() => {
+      let qy = svc.from("page_questions")
+        .select("id, question, status, page_path, created_at, user_id, email")
+        .gte("created_at", fromIso ?? since);
+      if (toIso) qy = qy.lte("created_at", toIso);
+      return qy.order("created_at", { ascending: false }).limit(600);
+    })(),
   ]);
 
   const S = (sum ?? {}) as {
@@ -241,6 +254,31 @@ export default async function DoubtLogPage(props: {
         </div>
       </div>
 
+      {/* AN EXACT RANGE. The chips answer "recently"; a date range answers
+          "what happened on the day that student complained". */}
+      <form style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginTop: 10 }}>
+        {only && <input type="hidden" name="channel" value={only} />}
+        <div>
+          <label style={{ fontSize: ".78rem" }}>From (IST)</label>
+          <input type="date" name="from" defaultValue={fromDay} style={{ marginBottom: 0 }} />
+        </div>
+        <div>
+          <label style={{ fontSize: ".78rem" }}>To (IST)</label>
+          <input type="date" name="to" defaultValue={toDay} style={{ marginBottom: 0 }} />
+        </div>
+        <SubmitButton className="btn small" savedLabel="✓">Show these dates</SubmitButton>
+        {(fromDay || toDay) && (
+          <a className="btn small secondary" href={`/admin/doubt-log?days=${windowDays}${only ? `&channel=${only}` : ""}`}>
+            Clear dates
+          </a>
+        )}
+        {(fromDay || toDay) && (
+          <span className="muted" style={{ fontSize: ".78rem" }}>
+            The summary above still covers the last {windowDays} days; the list below is the dates you picked.
+          </span>
+        )}
+      </form>
+
       {/* One row of channels. The counts come from what is already loaded, so the
           chips show where the traffic actually is before he clicks. */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
@@ -307,6 +345,7 @@ export default async function DoubtLogPage(props: {
                     <span className="badge">{channelLabel(q.page_path)}</span>
                     <span style={{ flex: 1, minWidth: 200 }}>{q.question.slice(0, 90)}</span>
                     <span className="muted">{nameOf.get(q.user_id ?? "") ?? q.email ?? "—"}</span>
+                    <span className="muted" style={{ fontSize: ".78rem" }}>{IST(q.created_at)}</span>
                   </summary>
 
                   {/* Answered where it is listed. The inbox used to be a second

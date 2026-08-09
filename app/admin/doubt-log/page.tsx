@@ -322,8 +322,16 @@ export default async function DoubtLogPage(props: {
           {/* Tick what you mean, then choose. Closing keeps the question and
               the answer in the record; deleting removes both and nothing
               brings them back — which is why they are separate buttons and
-              why delete is the quiet one. */}
-          <form id="pick-waiting" style={{ display: "grid", gap: 6, marginTop: 8 }}>
+              why delete is the quiet one.
+
+              Deliberately a plain div. Each row already holds its own reply
+              form, and one form inside another is invalid HTML — the browser
+              quietly drops the inner ones, the server's markup and the
+              browser's DOM stop matching, and the page reloads itself into a
+              blank screen. That is what broke this page. The tick boxes reach
+              their own form by id instead, which is what the form attribute
+              exists for. */}
+          <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
             {waitingRows.slice(0, 15).map((q) => {
               const mins = (now - new Date(q.created_at).getTime()) / 60000;
               return (
@@ -367,22 +375,24 @@ export default async function DoubtLogPage(props: {
               );
             })}
 
-            {/* Inside the form, and plain buttons on purpose: formAction is a
-                native attribute, and SubmitButton does not take it — passing it
-                there would have dropped it silently and the buttons would have
-                done nothing at all. */}
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
-              <span className="muted" style={{ fontSize: ".8rem" }}>With the ticked ones:</span>
-              <button type="submit" formAction={closeSelected} className="btn small secondary">
-                Close selected
-              </button>
-              <button type="submit" formAction={deleteSelected} className="btn small secondary">
-                🗑 Delete selected
-              </button>
-              <span className="muted" style={{ fontSize: ".78rem" }}>
-                Closing keeps the question and the answer in the record below. Deleting removes both, for good.
-              </span>
-            </div>
+          </div>
+
+          {/* The form the tick boxes belong to: buttons only, standing on its
+              own after the list so nothing is nested inside anything.
+              Plain buttons on purpose — formAction is a native attribute and
+              SubmitButton does not take it, so passing it there would have been
+              dropped in silence and the buttons would have done nothing. */}
+          <form id="pick-waiting" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+            <span className="muted" style={{ fontSize: ".8rem" }}>With the ticked ones:</span>
+            <button type="submit" formAction={closeSelected} className="btn small secondary">
+              Close selected
+            </button>
+            <button type="submit" formAction={deleteSelected} className="btn small secondary">
+              🗑 Delete selected
+            </button>
+            <span className="muted" style={{ fontSize: ".78rem" }}>
+              Closing keeps the question and the answer in the record below. Deleting removes both, for good.
+            </span>
           </form>
 
           {waitingRows.length > 15 && (

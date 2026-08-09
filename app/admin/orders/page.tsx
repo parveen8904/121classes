@@ -131,8 +131,12 @@ export default async function AdminOrdersPage(
     const [{ data: mc }, { data: subRows }] = await Promise.all([
       // In batches — see lib/pageAll. A refused .in() blanks the level and
       // subscription-date columns for every payer at once.
-      inChunks<never>(payerIds, (b) => svc.from("my_courses").select("student_id, courses(title)").in("student_id", b) as never).then((data) => ({ data })),
-      inChunks<never>(payerIds, (b) => svc.from("subscriptions").select("student_id, subject_id, starts_at, ends_at, created_at").in("student_id", b).order("created_at") as never).then((data) => ({ data })),
+      inChunks<{ student_id: string; courses?: { title?: string } | null }>(
+        payerIds, (b) => svc.from("my_courses").select("student_id, courses(title)").in("student_id", b) as never,
+      ).then((data) => ({ data })),
+      inChunks<{ student_id: string; subject_id: string | null; starts_at: string | null; ends_at: string | null; created_at: string }>(
+        payerIds, (b) => svc.from("subscriptions").select("student_id, subject_id, starts_at, ends_at, created_at").in("student_id", b).order("created_at") as never,
+      ).then((data) => ({ data })),
     ]);
     for (const r of mc ?? []) {
       const t = ((r as { courses?: { title?: string } | null }).courses?.title ?? "").toLowerCase();

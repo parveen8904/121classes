@@ -18,6 +18,31 @@ type BookOrderRow = {
   items: { book_id?: string; qty?: number }[] | null;
 };
 
+/**
+ * Every subscription, not the first thousand.
+ *
+ * PostgREST answers a plain select with at most 1,000 rows and says nothing
+ * about the rest. There are more than 1,500 active subscriptions, so this
+ * report quietly counted about two thirds of them — the tier breakdown was
+ * short by hundreds and looked perfectly plausible, which is what made it
+ * dangerous. The same silence once hid two thirds of the AI bill.
+ */
+async function readAllSubscriptions(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const PAGE = 1000;
+  const all: unknown[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("subscriptions")
+      .select("status, ends_at, plans(tier)")
+      .range(from, from + PAGE - 1);
+    if (error) break;
+    const page = data ?? [];
+    all.push(...page);
+    if (page.length < PAGE) break;
+  }
+  return { data: all };
+}
+
 export default async function ReportsPage() {
   const supabase = createClient();
   const now = new Date();
@@ -27,7 +52,7 @@ export default async function ReportsPage() {
     await Promise.all([
       supabase.from("orders").select("amount_inr, created_at").eq("kind", "subscription").eq("status", "paid"),
       supabase.from("book_orders").select("amount_inr, status, created_at, items"),
-      supabase.from("subscriptions").select("status, ends_at, plans(tier)"),
+      readAllSubscriptions(supabase),
       supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "student"),
       supabase.from("books").select("id, title"),
     ]);

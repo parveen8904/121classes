@@ -51,8 +51,10 @@ export default async function AdminHome() {
   const cards = [
     { label: "Students", value: String(s.students), href: "/admin/users" },
     { label: "Openings to review", value: String(s.openings), href: "/admin/placement", alert: s.openings > 0 },
-    { label: "Open doubts", value: String(s.doubts), href: "/admin/inbox", alert: s.doubts > 0 },
-    { label: "Open questions", value: String(s.questions), href: "/admin/inbox", alert: s.questions > 0 },
+    // One tile, one number, one destination. It used to be two — "open doubts"
+    // from one table and "open questions" from another — which read as two
+    // different problems and led to the same place.
+    { label: "Doubts waiting", value: String(s.doubts + s.questions), href: "/admin/doubt-log", alert: s.doubts + s.questions > 0 },
     { label: "AI cost (this month)", value: inr(s.aiMonth), href: "/admin/costs" },
     ...(s.bunnyMonth !== null ? [{ label: "Bunny (this month)", value: inr(s.bunnyMonth), href: "/admin/costs" }] : []),
     { label: "Storage used", value: `${s.storageMb.toFixed(1)} MB`, href: "/admin/costs" },

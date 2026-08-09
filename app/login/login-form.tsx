@@ -12,7 +12,10 @@ type Mode = "login" | "signup" | "forgot";
 export default function LoginForm() {
   const supabase = createClient();
   const params = useSearchParams();
-  const next = params.get("next") || "/dashboard";
+  // No "next" of their own? The server decides where they belong — a warehouse
+  // packer to the warehouse, a student to their dashboard. The browser cannot
+  // make that call, because it cannot be trusted to read permissions.
+  const next = params.get("next") || "/auth/home";
   const reason = params.get("reason");
   // /auth/confirm sends people here when their email link no longer works —
   // usually because it was already used (a mail scanner can open it first) or

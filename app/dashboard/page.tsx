@@ -24,7 +24,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role, target_attempt, telegram_chat_id, phone, account_type, welcome_sent_at, phone_verified_at")
+    .select("full_name, role, permissions, target_attempt, telegram_chat_id, phone, account_type, welcome_sent_at, phone_verified_at")
     .eq("id", user.id)
     .single();
 
@@ -39,6 +39,22 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
   // a supporter keeps role 'student' and stays here; the is_supporter tick
   // just adds a link to their portal.
   if (profile?.role === "supporter") redirect("/supporter");
+
+  // Staff whose only job is one area belong in that area, not on a shelf of
+  // subjects they do not have. A supporter is already sent to their own desk
+  // above; this does the same for a warehouse packer or any other single-area
+  // operator, however they arrive here — a bookmark, the app, a shared link.
+  // Anyone with more than one area, or with subjects of their own, is left
+  // alone: they may genuinely be studying here too.
+  if (profile?.role === "operator" || profile?.role === "faculty") {
+    const { staffHome } = await import("@/lib/adminAccess");
+    const home = staffHome({
+      id: user.id,
+      role: profile.role as string,
+      permissions: ((profile as { permissions?: string[] }).permissions ?? []),
+    });
+    if (home && home !== "/admin") redirect(home);
+  }
 
   // First time on the dashboard → the welcome-guide email (exactly once; the
   // helper re-checks and stamps before sending). Costs nothing on later visits

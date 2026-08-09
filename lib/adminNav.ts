@@ -16,7 +16,7 @@ export type AdminGroup = { id: string; icon: string; title: string; tagline: str
 // more purposeful tiles.
 export const REPORTS: AdminPanel[] = [
   { icon: "💰", title: "Sales report", desc: "Revenue in total and this month, split between subscriptions and books; active plans by tier; top-selling titles; gift purchases with their GST breakup and invoices.", href: "/admin/reports/sales" },
-  { icon: "💬", title: "Doubt report", desc: "Every question a student asked and the answer that went back — on every channel, in order, with follow-ups under the question they follow.", href: "/admin/doubt-log" },
+  { icon: "💬", title: "Doubt report", desc: "Every doubt on every channel: how many were answered, how many are still waiting and for how long, then the full question-and-answer record. The only doubt list there is.", href: "/admin/doubt-log" },
   { icon: "✉️", title: "Email report", desc: "Did our email actually arrive? Mailgun's own delivered and failed counts, and which kinds of message the site is sending.", href: "/admin/reports/email" },
   { icon: "🎓", title: "Subscriber report", desc: "Who holds a live plan right now — tier, subject, dates, amount and full contact details, ready to export.", href: "/admin/reports/subscribers" },
   { icon: "🧾", title: "Orders report", desc: "Every payment received — subscriptions, extensions and books — with buyer details, GST invoices and dispatch state.", href: "/admin/orders" },
@@ -69,7 +69,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       // meant guessing which of them held the message you were looking for.
       // One door now; the three desks are inside it.
       { icon: "✅", title: "Office tasks", desc: "Post a job and it lands on someone's list. They finish it, add a remark, or pass it on — and every hand-off stays on the record.", href: "/admin/tasks" },
-      { icon: "📥", title: "Messages — doubts, WhatsApp & the log", desc: "Everything students send you, in one place: the doubt inbox, the WhatsApp inbox (and connecting your own number), and the log of every question answered so far.", href: "/admin/messages" },
+      { icon: "💬", title: "WhatsApp inbox", desc: "The conversations students have on the business number — read and replied to here, and where you connect your own number. What was asked and answered on every channel is in the doubt report, under Reports.", href: "/admin/whatsapp" },
       { icon: "🖊️", title: "Examiner desk", desc: "Verify AI-checked descriptive copies and release them to students — sortable by subject/test; copies lock while an examiner checks.", href: "/examiner" },
       { icon: "🎫", title: "Support tickets", desc: "Website & phone issues as tickets — assign, call, log activity, resolve; overdue tickets escalate automatically.", href: "/admin/tickets" },
       { icon: "🛡️", title: "Group moderation", desc: "Flagged messages, search all group chats, hide/ban/mute — Telegram kept in sync.", href: "/admin/discussion" },

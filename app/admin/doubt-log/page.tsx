@@ -4,6 +4,7 @@ import AdminHero from "../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
 import SubmitButton from "@/app/components/SubmitButton";
 import { addCorrection } from "../ai-training/actions";
+import { answerWaiting, closeWaiting } from "./actions";
 import { inChunks } from "@/lib/pageAll";
 import { AI_CHANNELS, channelLabel } from "@/lib/aiAnswerLog";
 
@@ -56,14 +57,42 @@ export default async function DoubtLogPage(props: {
   const svc = createServiceClient();
   const since = new Date(Date.now() - windowDays * 86400_000).toISOString();
 
-  const { data } = await svc
-    .from("page_questions")
-    .select("id, question, status, page_path, created_at, user_id, email")
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(1000);
+  // BOTH TABLES, ONE REPORT.
+  //
+  // Doubts asked from inside a class live in `doubts`; everything else — the
+  // site, email, WhatsApp, Telegram — lives in `page_questions`. The admin home
+  // counted them separately, so it showed "5 open doubts" and "8 open
+  // questions" as if they were different things, and both led to the same
+  // inbox. They are one list of students waiting, and this is it.
+  const [{ data }, { data: classDoubts }] = await Promise.all([
+    svc.from("page_questions")
+      .select("id, question, status, page_path, created_at, user_id, email")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1000),
+    svc.from("doubts")
+      .select("id, question, status, created_at, student_id, ai_answer")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1000),
+  ]);
 
   const rows = (data ?? []) as Row[];
+
+  // Folded into the same shape. A class doubt carries its answer in a column
+  // rather than a paired row, so it is treated as answered when that is filled.
+  const classRows: Row[] = ((classDoubts ?? []) as unknown as {
+    id: string; question: string; status: string; created_at: string;
+    student_id: string | null; ai_answer: string | null;
+  }[]).map((d) => ({
+    id: `doubt:${d.id}`,
+    question: d.question,
+    status: d.ai_answer?.trim() ? "answered" : d.status,
+    page_path: "class_doubt",
+    created_at: d.created_at,
+    user_id: d.student_id,
+    email: null,
+  }));
 
   // A reply is stored as its own row with page_path "reply:<question id>", so
   // pair each answer back to the question it belongs to.
@@ -78,6 +107,9 @@ export default async function DoubtLogPage(props: {
       questions.push(r);
     }
   }
+
+  questions.push(...classRows);
+  questions.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 
   // Who asked — resolved in one query rather than one per row.
   const ids = [...new Set(questions.map((q) => q.user_id).filter(Boolean))] as string[];
@@ -228,14 +260,32 @@ export default async function DoubtLogPage(props: {
             {waitingRows.slice(0, 15).map((q) => {
               const mins = (now - new Date(q.created_at).getTime()) / 60000;
               return (
-                <div key={q.id} style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap", fontSize: ".88rem" }}>
-                  <span style={{ fontWeight: 700, color: mins > 1440 ? "#b91c1c" : "#b45309", minWidth: 92 }}>
-                    {howLong(mins)}
-                  </span>
-                  <span className="badge">{channelLabel(q.page_path)}</span>
-                  <span style={{ flex: 1, minWidth: 200 }}>{q.question.slice(0, 90)}</span>
-                  <span className="muted">{nameOf.get(q.user_id ?? "") ?? q.email ?? "—"}</span>
-                </div>
+                <details key={q.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 6 }}>
+                  <summary style={{ cursor: "pointer", display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap", fontSize: ".88rem" }}>
+                    <span style={{ fontWeight: 700, color: mins > 1440 ? "#b91c1c" : "#b45309", minWidth: 92 }}>
+                      {howLong(mins)}
+                    </span>
+                    <span className="badge">{channelLabel(q.page_path)}</span>
+                    <span style={{ flex: 1, minWidth: 200 }}>{q.question.slice(0, 90)}</span>
+                    <span className="muted">{nameOf.get(q.user_id ?? "") ?? q.email ?? "—"}</span>
+                  </summary>
+
+                  {/* Answered where it is listed. The inbox used to be a second
+                      place to do this, which is how one student came to appear
+                      in two queues with two different counts. */}
+                  <p style={{ margin: "8px 0 0", whiteSpace: "pre-wrap", fontSize: ".88rem" }}>{q.question}</p>
+                  <form action={answerWaiting} style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                    <input type="hidden" name="id" value={q.id} />
+                    <textarea name="reply" rows={3} required placeholder="Write the reply that goes to the student…" />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <SubmitButton className="btn small">Send reply</SubmitButton>
+                    </div>
+                  </form>
+                  <form action={closeWaiting} style={{ marginTop: 6 }}>
+                    <input type="hidden" name="id" value={q.id} />
+                    <SubmitButton className="btn small secondary">Nothing to answer — close it</SubmitButton>
+                  </form>
+                </details>
               );
             })}
           </div>

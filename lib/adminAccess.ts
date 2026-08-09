@@ -17,7 +17,7 @@ export const ADMIN_AREAS: AdminArea[] = [
   // WhatsApp desk and the doubt log inside it. The grant kept authorising only
   // the OLD path, so a staff member given "Inbox & student doubts" clicked the
   // Messages tile and was refused — rights he had been given "did not reflect".
-  { key: "inbox", label: "📥 Inbox & student doubts", prefixes: ["/admin/inbox", "/admin/messages", "/admin/whatsapp", "/admin/doubt-log"] },
+  { key: "inbox", label: "💬 Student doubts & WhatsApp", prefixes: ["/admin/inbox", "/admin/messages", "/admin/whatsapp", "/admin/doubt-log"] },
   { key: "tasks", label: "✅ Office tasks", prefixes: ["/admin/tasks"] },
   { key: "tickets", label: "🎫 Support tickets", prefixes: ["/admin/tickets"] },
   { key: "articles", label: "📝 Articles & SEO", prefixes: ["/admin/articles"] },
@@ -49,6 +49,24 @@ export async function currentStaff(): Promise<Staff | null> {
 
 export function isStaffRole(role: string): boolean {
   return role === "admin" || role === "operator" || role === "faculty";
+}
+
+/**
+ * The page a staff member should land on.
+ *
+ * A warehouse packer is an operator whose only right is the warehouse. Sending
+ * them to /dashboard put them on the STUDENT home — a shelf of subjects they do
+ * not have, with their actual work nowhere in sight. Somebody granted exactly
+ * one area is taken straight to it; anyone with several gets the admin home to
+ * choose from.
+ */
+export function staffHome(staff: Staff | null): string | null {
+  if (!staff) return null;
+  if (staff.role === "admin") return "/admin";
+  if (staff.role !== "operator" && staff.role !== "faculty") return null;
+  const areas = ADMIN_AREAS.filter((a) => staff.permissions.includes(a.key));
+  if (areas.length === 0) return null;
+  return areas.length === 1 ? areas[0].prefixes[0] : "/admin";
 }
 
 // Can this staff member manage the given area? (admin → always)

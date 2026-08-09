@@ -23,8 +23,10 @@ const PLACES: { where: string; what: string }[] = [
   { where: "/learn/hitlist", what: "The hitlist: the must-do question numbers, chapter by chapter, for their subjects. A page, not a PDF." },
   { where: "/learn/paper/<id>", what: "One RTP, MTP or past exam paper — attempt it there and have the answer checked." },
   { where: "/learn/performance", what: "Their own marks and progress across tests." },
-  { where: "/learn/cases", what: "Case-study questions with answers and explanations." },
-  { where: "/learn/notes", what: "Notes and written material for their subjects." },
+  // Case scenarios and notes have no index page of their own — they are reached
+  // from inside a course. Advertising /learn/cases sent students to a 404, which
+  // is the one thing this map exists to prevent.
+  { where: "/dashboard → your course", what: "Case scenarios, notes and materials for a subject: open the course from the dashboard, and they are listed inside it." },
   { where: "/mock-tests", what: "Mock test papers." },
   { where: "/test-series", what: "The test series." },
   { where: "/check-my-paper", what: "Upload a written answer copy to have it checked." },

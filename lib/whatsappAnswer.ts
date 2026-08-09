@@ -65,7 +65,19 @@ export async function answerWhatsAppDoubt(from: string, text: string): Promise<"
 
   if (!(await aiConfigured())) return escalate(from, question2);
 
-  const material = await getRepositoryContext(null, 12000, { query: question2 });
+  // WHO is asking, before answering them.
+  //
+  // Every WhatsApp reply used to be written without knowing whether the person
+  // had ever paid for anything. A student who could not find the case studies
+  // was told where case studies live — when the true answer was that his
+  // account had no plan on it at all, which no amount of study material could
+  // have revealed.
+  const { studentFactsByPhone, isAccountQuestion, accountAnswerRules } = await import("@/lib/studentContext");
+  let material = await getRepositoryContext(null, 12000, { query: question2 });
+  if (isAccountQuestion(question2)) {
+    const facts = await studentFactsByPhone(from).catch(() => null);
+    if (facts) material = `${accountAnswerRules(facts)}\n\n---\n\n${material}`;
+  }
   const raw = await answerDoubtFromMaterial(question2, material);
   if (!raw || raw.trim() === NEED_FACULTY) return escalate(from, question2);
 

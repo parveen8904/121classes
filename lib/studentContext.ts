@@ -25,21 +25,73 @@ const fmt = (d: string | null) =>
 
 export async function studentFacts(email: string): Promise<StudentFacts> {
   const addr = (email ?? "").trim().toLowerCase();
+  if (!addr.includes("@")) return { known: false, name: null, email: addr, lines: [] };
+  const svc = createServiceClient();
+  const { data } = await svc
+    .from("profiles")
+    .select("id, full_name, email, study_level, created_at")
+    .ilike("email", addr)
+    .maybeSingle();
+  return factsFor(data, addr, "This email does NOT have an account on the site.");
+}
+
+/**
+ * The same record, found by the number they messaged from.
+ *
+ * WhatsApp never tells us an email, so every reply on that channel was written
+ * without knowing whether the person had ever paid for anything. A student who
+ * could not find the case studies was told where case studies live; the true
+ * answer was that his account had no plan on it at all.
+ */
+export async function studentFactsByPhone(phone: string): Promise<StudentFacts> {
+  const digits = (phone ?? "").replace(/\D/g, "").slice(-10);
+  if (digits.length !== 10) return { known: false, name: null, email: "", lines: [] };
+  const svc = createServiceClient();
+  const { data } = await svc
+    .from("profiles")
+    .select("id, full_name, email, study_level, created_at")
+    .ilike("phone", `%${digits}`)
+    .limit(1)
+    .maybeSingle();
+  return factsFor(data, "", "This number is NOT registered on the site.");
+}
+
+/** By account id — the website's own doubt box knows exactly who asked. */
+export async function studentFactsById(userId: string): Promise<StudentFacts> {
+  if (!userId) return { known: false, name: null, email: "", lines: [] };
+  const svc = createServiceClient();
+  const { data } = await svc
+    .from("profiles")
+    .select("id, full_name, email, study_level, created_at")
+    .eq("id", userId)
+    .maybeSingle();
+  return factsFor(data, "", "This account could not be read.");
+}
+
+/** By Telegram chat — the bot knows the chat, the profile knows the person. */
+export async function studentFactsByTelegram(chatId: string): Promise<StudentFacts> {
+  if (!chatId) return { known: false, name: null, email: "", lines: [] };
+  const svc = createServiceClient();
+  const { data } = await svc
+    .from("profiles")
+    .select("id, full_name, email, study_level, created_at")
+    .eq("telegram_chat_id", String(chatId))
+    .maybeSingle();
+  return factsFor(data, "", "This Telegram account is not linked to a student here.");
+}
+
+type Profile = { id: string; full_name: string | null; email: string | null; study_level: string | null } | null;
+
+async function factsFor(profile: Profile, addr: string, whenUnknown: string): Promise<StudentFacts> {
   const out: StudentFacts = { known: false, name: null, email: addr, lines: [] };
-  if (!addr.includes("@")) return out;
 
   try {
     const svc = createServiceClient();
-    const { data: profile } = await svc
-      .from("profiles")
-      .select("id, full_name, email, study_level, created_at")
-      .ilike("email", addr)
-      .maybeSingle();
-
     if (!profile?.id) {
-      out.lines.push("This email does NOT have an account on the site.");
+      out.lines.push(whenUnknown);
       return out;
     }
+    out.email = addr || (profile.email ?? "");
 
     out.known = true;
     out.name = (profile.full_name as string) ?? null;
@@ -79,8 +131,16 @@ export async function studentFacts(email: string): Promise<StudentFacts> {
 
 /** True when the question is about access, money or their own account. */
 export function isAccountQuestion(text: string): boolean {
-  return /\b(free|paid|pay|payment|price|pricing|fee|fees|cost|charge|refund|subscription|subscribe|plan|renew|renewal|expire|expiry|validity|valid till|access|login|log in|account|upgrade|discount|coupon|offer|₹|rs\.?\s*\d|rupees|money|purchase|bought|buy)\b/i
-    .test(text ?? "");
+  const t = text ?? "";
+  const money = /\b(free|paid|pay|payment|price|pricing|fee|fees|cost|charge|refund|subscription|subscribe|plan|renew|renewal|expire|expiry|validity|valid till|access|login|log in|account|upgrade|discount|coupon|offer|₹|rs\.?\s*\d|rupees|money|purchase|bought|buy)\b/i;
+  // "I signed up but cannot find the case studies" is an ACCESS question wearing
+  // the clothes of a navigation one. Answered as navigation it gets a tour of a
+  // page the student cannot open; answered from their record it gets the truth,
+  // which is that nothing has been taken on the account. Hindi and Hinglish
+  // count — "portal par class nahi aa rahi" is the same sentence.
+  const cannotSee =
+    /(can'?t|cannot|unable to|not able to)\s+(find|see|open|access|watch|play|download)|not (showing|opening|visible|working|coming)|nahi (aa|mil|khul|chal)\s*rah|nhi aa rah|where (is|are) (my|the)|kaha(n)? (hai|milega)/i;
+  return money.test(t) || cannotSee.test(t);
 }
 
 /** Instruction block for the model when the question is about their account. */
@@ -94,11 +154,16 @@ export function accountAnswerRules(facts: StudentFacts): string {
     "RULES, IN ORDER:",
     "1. ANSWER THE QUESTION THEY ASKED. Not the nearest question. If they asked whether they",
     "   must pay, the first line of your reply says yes or no.",
-    "2. Use ONLY the record above for anything about their access or plans. If it does not settle",
+    "2. IF THEY CANNOT FIND OR OPEN SOMETHING AND THE RECORD SHOWS NO PLAN RUNNING, that is the",
+    "   answer — say plainly that nothing has been taken on their account yet, which is why the",
+    "   subject and its material do not appear. Do not send them hunting through pages they",
+    "   cannot open. Say where the plans are listed, and offer to trace a payment if they",
+    "   believe they have already paid. Never claim they did or did not pay.",
+    "3. Use ONLY the record above for anything about their access or plans. If it does not settle",
     "   the question, say a colleague will confirm — do NOT estimate, assume or reassure.",
-    "3. NEVER state, imply or guess a price, a refund, a discount or what they previously bought.",
+    "4. NEVER state, imply or guess a price, a refund, a discount or what they previously bought.",
     "   If they ask about money already paid, that goes to a person.",
-    "4. Do not list features they did not ask about. No sales writing.",
-    "5. If you cannot follow rule 1 and rule 2 together, reply with exactly NEED_FACULTY.",
+    "5. Do not list features they did not ask about. No sales writing.",
+    "6. If you cannot follow rule 1 and rule 2 together, reply with exactly NEED_FACULTY.",
   ].join("\n");
 }

@@ -282,7 +282,12 @@ export async function POST(req: NextRequest) {
 
   let answer: string | null = null;
   if (await aiConfigured()) {
-    const material = await getRepositoryContext(null, 12000, { query: text });
+    let material = await getRepositoryContext(null, 12000, { query: text });
+    const ctx = await import("@/lib/studentContext");
+    if (ctx.isAccountQuestion(text)) {
+      const facts = await ctx.studentFactsByTelegram(String(chatId)).catch(() => null);
+      if (facts) material = `${ctx.accountAnswerRules(facts)}\n\n---\n\n${material}`;
+    }
     const raw = await answerDoubtFromMaterial(text, material);
     if (raw && raw.trim() !== NEED_FACULTY) answer = raw;
   }

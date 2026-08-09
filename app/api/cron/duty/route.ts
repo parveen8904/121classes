@@ -148,7 +148,17 @@ export async function GET(req: NextRequest) {
 
       // Answer ONLY from his material — the same repository path the portal's
       // own doubt answering uses, so a reply cites his classes and notes.
-      const material = await getRepositoryContext(null, 24000, { query: question });
+      let material = await getRepositoryContext(null, 24000, { query: question });
+      // A doubt asked on the site comes with the account that asked it, so an
+      // access question is answered from that student's own record instead of
+      // from teaching material that can never settle it.
+      const ctx = await import("@/lib/studentContext");
+      if (ctx.isAccountQuestion(question)) {
+        const facts = d.user_id
+          ? await ctx.studentFactsById(String(d.user_id)).catch(() => null)
+          : d.email ? await ctx.studentFacts(String(d.email)).catch(() => null) : null;
+        if (facts) material = `${ctx.accountAnswerRules(facts)}\n\n---\n\n${material}`;
+      }
       const answer = await answerDoubtFromMaterial(question, material, "doubt", { betaNote: false });
 
       if (answer && answer.trim() !== NEED_FACULTY) {

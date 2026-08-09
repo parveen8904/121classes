@@ -2,7 +2,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
 import AdminHero from "../_components/AdminHero";
 import SelectAllKeys from "../solutions/SelectAllKeys";
-import { markQuestionDone, replyToQuestion, sendAllDrafts, deleteSelectedQuestions, markSelectedDone } from "./actions";
+import { markQuestionDone, replyToQuestion, sendAllDrafts, deleteSelectedQuestions, markSelectedDone, suggestAnswer, suggestAllOpen } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Inbox — Admin" };
@@ -30,7 +30,7 @@ function fmt(s: string): string {
 }
 
 export default async function AdminInbox(props: {
-  searchParams?: Promise<{ sent?: string; failed?: string; deleted?: string; done?: string }>;
+  searchParams?: Promise<{ sent?: string; failed?: string; deleted?: string; done?: string; drafted?: string }>;
 }) {
   const searchParams = (await props.searchParams) ?? {};
   const svc = createServiceClient();
@@ -54,6 +54,7 @@ export default async function AdminInbox(props: {
   }
 
   const draftCount = questions.filter((q) => q.draft_reply && q.status === "open").length;
+  const undrafted = questions.filter((q) => !q.draft_reply && q.status === "open").length;
 
   return (
     <section className="container" style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 900 }}>
@@ -68,6 +69,13 @@ export default async function AdminInbox(props: {
         <a href="/admin/doubt-log">doubt log</a>. Anything here is either waiting on a person, or a draft written
         before automatic answering was switched on.
       </p>
+
+      {searchParams?.drafted && (
+        <div className="notice ok" style={{ marginBottom: 16 }}>
+          ✨ Wrote {searchParams.drafted} suggested answer{searchParams.drafted === "1" ? "" : "s"}. Read each one below before sending.
+          {Number(searchParams.drafted) === 0 && " Nothing was written — the remaining messages did not read as questions, or the AI had no material for them."}
+        </div>
+      )}
 
       {searchParams?.sent && (
         <div className="notice ok">
@@ -84,6 +92,20 @@ export default async function AdminInbox(props: {
             open each one below to edit it first.
           </p>
           <SubmitButton className="btn small" savedLabel="Sending…">📤 Send all the drafted replies</SubmitButton>
+        </form>
+      )}
+
+      {/* Answers written under each doubt, ready to read and send. Nothing
+          reaches a student from here — the draft lands in the same box a
+          person would type into, and only Send delivers it. */}
+      {undrafted > 0 && (
+        <form action={suggestAllOpen} className="notice" style={{ marginTop: 12 }}>
+          <strong>✨ {undrafted} open doubt{undrafted === 1 ? "" : "s"} with no suggested answer yet</strong>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 8px" }}>
+            Writes a suggestion under each one from your own classes and notes. You read, edit and send.
+            Up to 25 at a time — press again for the rest.
+          </p>
+          <SubmitButton className="btn small" savedLabel="Writing…">✨ Suggest answers for all of them</SubmitButton>
         </form>
       )}
 
@@ -161,6 +183,12 @@ export default async function AdminInbox(props: {
                   />
                   <SubmitButton className="btn small" style={{ marginTop: 6 }}>Send reply</SubmitButton>
                 </form>
+                {!q.draft_reply && (
+                  <form action={suggestAnswer} style={{ marginTop: 6 }}>
+                    <input type="hidden" name="id" value={q.id} />
+                    <SubmitButton className="btn small secondary" savedLabel="Writing…">✨ Suggest an answer</SubmitButton>
+                  </form>
+                )}
                 {!q.email && !q.user_id && (
                   <p className="muted" style={{ fontSize: ".78rem", marginTop: 6 }}>⚠️ No email/account on this question — can&apos;t deliver a reply.</p>
                 )}

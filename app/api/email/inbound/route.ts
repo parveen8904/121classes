@@ -146,7 +146,26 @@ export async function POST(req: NextRequest) {
 
   const svc = createServiceClient();
 
-  // On the record before anything else happens to it.
+  // IS THIS EVEN A STUDENT?
+  //
+  // contact@ is BOTH the address students reply to and the address the site
+  // escalates to. Once it forwards in here, our own notifications arrive as
+  // inbound mail — "🔔 A student doubt needs your reply", "🔔 9 things need a
+  // person" — and the site would answer itself, each answer arriving again.
+  // Both sides are checked: the writer AND the machine that handed it over.
+  //
+  // This is decided BEFORE the row is written, which it was not before. The
+  // message was recorded as an OPEN question and only then judged, so every
+  // alert the site sent itself sat in the inbox looking like a student waiting
+  // for a reply. Forty-one of sixty-five open doubts were our own emails.
+  const notFromAStudent =
+    !from || !question ||
+    isMachineMail(form, from, subject) ||
+    (await isOurOwnMail(from)) ||
+    (envelope && (await isOurOwnMail(envelope)) && !headerFrom);
+
+  // Still recorded — losing mail is worse than filing it wrongly — but as
+  // `ignored`, so it stays out of the queue of people actually waiting.
   const { data: row } = await svc
     .from("page_questions")
     .insert({
@@ -154,23 +173,13 @@ export async function POST(req: NextRequest) {
       email: from || null,
       page_path: "email",
       question: `${subject}\n\n${question}`.trim().slice(0, 8000),
-      status: "open",
+      status: notFromAStudent ? "ignored" : "open",
     })
     .select("id")
     .maybeSingle();
 
-  // contact@ is BOTH the address students reply to and the address the site
-  // escalates to. Once it forwards in here, our own notifications arrive as
-  // inbound mail — so anything sent by us is recorded and left alone. Without
-  // this the site would answer itself, and each answer would arrive again.
-  // Both sides are checked: the writer AND the machine that handed it over.
-  if (
-    !from || !question ||
-    isMachineMail(form, from, subject) ||
-    (await isOurOwnMail(from)) ||
-    (envelope && (await isOurOwnMail(envelope)) && !headerFrom)
-  ) {
-    return NextResponse.json({ ok: true, result: "recorded, not answered" });
+  if (notFromAStudent) {
+    return NextResponse.json({ ok: true, result: "recorded as ignored, not a student" });
   }
 
   if (await loopingHard(svc, from)) {

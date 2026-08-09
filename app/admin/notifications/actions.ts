@@ -97,6 +97,20 @@ export async function broadcast(formData: FormData) {
       const r = await pushToEveryone({ title, body, link: link || undefined });
       pushSent = r.sent;
       pushTotal = r.sent + r.failed;
+
+      // Keep a record. A push that appeared not to arrive on an iPhone could
+      // not be explained afterwards, because nothing anywhere remembered that
+      // it had been sent — or that at the time there were no iPhones to send
+      // to. A row here makes the question answerable next time.
+      await createServiceClient().from("push_outbox").insert({
+        kind: "general",
+        title,
+        body,
+        link: link || null,
+        dedupe_key: `broadcast:${Date.now()}`,
+        sent_at: new Date().toISOString(),
+        sent_count: r.sent,
+      });
     }
   }
 

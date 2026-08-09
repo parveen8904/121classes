@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
 import { emailConfigured, whatsappConfigured, telegramConfigured } from "@/lib/notify";
 import { pushConfigured } from "@/lib/push";
+import { reachStats } from "@/lib/reachStats";
 import AdminHero from "../_components/AdminHero";
 import { broadcast } from "./actions";
 
@@ -69,6 +70,8 @@ export default async function NotificationsPage(
         </span>
       </div>
 
+      <ReachPanel />
+
       <div className="form-card" style={{ marginTop: 18 }}>
         <h3>✍️ Compose</h3>
         <form action={broadcast}>
@@ -117,5 +120,63 @@ export default async function NotificationsPage(
         </p>
       </div>
     </section>
+  );
+}
+
+/**
+ * How many people are behind each tick on the compose form.
+ *
+ * Written after a notification appeared not to arrive on an iPhone. It had
+ * arrived nowhere, because at the moment it was sent no iPhone had registered
+ * yet — and there was no screen anywhere that would have shown that.
+ */
+async function ReachPanel() {
+  const channels = await reachStats();
+
+  return (
+    <div className="card" style={{ marginTop: 18 }}>
+      <h2 style={{ margin: 0, fontSize: "1.05rem" }}>📊 Who each channel reaches</h2>
+      <p className="muted" style={{ margin: "6px 0 12px", fontSize: ".85rem" }}>
+        Counted now, from the database.
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 10 }}>
+        {channels.map((c) => (
+          <div key={c.key} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+              <strong style={{ fontSize: ".9rem" }}>{c.label}</strong>
+              <span style={{ fontSize: "1.2rem", fontWeight: 700 }}>
+                {c.count < 0 ? "—" : c.count.toLocaleString("en-IN")}
+              </span>
+            </div>
+            {c.note && (
+              <p className="muted" style={{ margin: "4px 0 0", fontSize: ".76rem", lineHeight: 1.5 }}>{c.note}</p>
+            )}
+            {c.people.length > 0 && (
+              <details style={{ marginTop: 6 }}>
+                <summary style={{ cursor: "pointer", fontSize: ".78rem" }}>
+                  Who ({c.people.length}{c.count > c.people.length ? ` of ${c.count}` : ""})
+                </summary>
+                <ul style={{ margin: "6px 0 0 16px", padding: 0, fontSize: ".78rem", lineHeight: 1.7 }}>
+                  {c.people.map((p, i) => (
+                    <li key={i}>
+                      {p.name}
+                      {p.detail && p.detail !== p.name && (
+                        <span className="muted"> · {p.detail}</span>
+                      )}
+                      {p.when && (
+                        <span className="muted">
+                          {" "}· {new Date(p.when).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

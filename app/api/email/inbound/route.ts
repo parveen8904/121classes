@@ -116,6 +116,23 @@ function isMachineMail(form: FormData, from: string, subject: string): boolean {
   if (header("Precedence").match(/bulk|junk|list/)) return true;
   if (/^(mailer-daemon|postmaster|no-?reply|do-?not-?reply|bounce)/i.test(from)) return true;
   if (/^(auto|automatic)[\s-]?(reply|response)|out of office|delivery status/i.test(subject)) return true;
+
+  // ANYTHING SENT TO A LIST. A List-Unsubscribe header is the one thing every
+  // bulk sender sets and no student ever does — Facebook's notifications and
+  // cold marketing both carry it. Four Facebook notices and two identical
+  // marketing pitches were sitting in the doubt inbox as open student
+  // questions, waiting for somebody to answer them.
+  if (header("List-Unsubscribe") || header("List-Id")) return true;
+
+  // Notification senders that are not called "no-reply": Facebook alone writes
+  // as notification@, reminders@ and friendsuggestion@.
+  const local = from.split("@")[0] ?? "";
+  if (/^(notification|notifications|reminder|reminders|friendsuggestion|update|updates|alert|alerts|news|newsletter|digest|mailer|notify|support-noreply|team)$/i.test(local)) return true;
+
+  // Domains that only ever send machine mail.
+  const domain = (from.split("@")[1] ?? "").toLowerCase();
+  if (/(^|\.)(facebookmail|linkedin|twitter|x|instagram|googlemail-noreply|bounces)\.(com|net)$/i.test(domain)) return true;
+
   return false;
 }
 

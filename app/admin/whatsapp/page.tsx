@@ -2,7 +2,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
-import { replyOnWhatsApp, draftWhatsAppReply, saveWhatsAppAutoReply } from "./actions";
+import { replyOnWhatsApp, draftWhatsAppReply, saveWhatsAppAutoReply, answerOpenConversations } from "./actions";
 import { getAutoReply } from "@/lib/whatsappAutoReply";
 
 // The WhatsApp inbox. A Cloud API number cannot use the WhatsApp app and does
@@ -31,7 +31,9 @@ function textOf(p: Record<string, unknown> | null): string {
   return type ? `(${type} message — WhatsApp does not pass its content to businesses)` : "";
 }
 
-export default async function AdminWhatsAppPage(props: { searchParams: Promise<{ sent?: string; saved?: string }> }) {
+export default async function AdminWhatsAppPage(props: {
+  searchParams: Promise<{ sent?: string; saved?: string; answered?: string; left?: string }>;
+}) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
 
@@ -59,6 +61,29 @@ export default async function AdminWhatsAppPage(props: { searchParams: Promise<{
       .map((d) => [String(d.key).replace("wadraft:", ""), String(d.value)]),
   );
 
+  // How many conversations can still be answered freely. One per person, on
+  // their newest message, and only if we have not already written since.
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const newestIn = new Map<string, number>();
+  const lastOut = new Map<string, number>();
+  for (const r of rows) {
+    const p = (r.payload ?? {}) as Record<string, unknown>;
+    if (r.template === "inbound") {
+      const at = Number(p.timestamp ?? p.ts ?? 0) * 1000;
+      const who = String(p.from ?? "");
+      const body = String((p.text as { body?: string } | undefined)?.body ?? "").trim();
+      if (who && at && body) newestIn.set(who, Math.max(newestIn.get(who) ?? 0, at));
+    } else if (r.sent_at) {
+      const who = String(p.to ?? "");
+      const at = new Date(r.sent_at).getTime();
+      if (who) lastOut.set(who, Math.max(lastOut.get(who) ?? 0, at));
+    }
+  }
+  let openNow = 0;
+  for (const [who, at] of newestIn) {
+    if (at >= cutoff && (lastOut.get(who) ?? 0) < at) openNow++;
+  }
+
   const threads = new Map<string, Row[]>();
   for (const r of rows) {
     const p = r.payload ?? {};
@@ -79,13 +104,34 @@ export default async function AdminWhatsAppPage(props: { searchParams: Promise<{
 
       {/* The same question-and-answer record as every other channel. This page
           is the conversation; that one is the read-through. */}
-      <p style={{ marginTop: -6 }}>
+      <div style={{ marginTop: -6, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <a className="btn small secondary" href="/admin/doubt-log?days=30&channel=whatsapp">
           🗒️ Read the questions and answers &rarr;
         </a>
-      </p>
+        {/* WhatsApp only carries a free reply for 24 hours after the student
+            writes. The count is worked out here so the number of people about
+            to be messaged is on the button, not a surprise after pressing it. */}
+        {openNow > 0 && (
+          <form action={answerOpenConversations}>
+            <SubmitButton className="btn small">
+              💬 Answer the {openNow} still inside the 24-hour window
+            </SubmitButton>
+          </form>
+        )}
+        <span className="muted" style={{ fontSize: ".8rem" }}>
+          {openNow === 0
+            ? "Nobody is inside the 24-hour window right now — new messages are answered automatically as they arrive."
+            : "Older conversations are left alone: Meta allows only an approved template outside the window."}
+        </span>
+      </div>
 
       {searchParams.sent === "1" && <div className="notice ok">Reply sent.</div>}
+      {searchParams.answered !== undefined && (
+        <div className="notice ok">
+          Answered {searchParams.answered} conversation{searchParams.answered === "1" ? "" : "s"}.
+          {Number(searchParams.left) > 0 && ` ${searchParams.left} left alone (already replied to, or nothing to answer).`}
+        </div>
+      )}
       {searchParams.sent === "0" && (
         <div className="notice err">
           Not delivered. Free replies only work within 24 hours of the student&apos;s last message; after that only an approved

@@ -88,3 +88,75 @@ export async function draftWhatsAppReply(formData: FormData) {
   }
   revalidatePath("/admin/whatsapp");
 }
+
+/**
+ * Answer everyone still inside their 24-hour window.
+ *
+ * WhatsApp only lets a free-form reply through for 24 hours after the student
+ * writes. Older conversations can be reached only with a Meta-approved
+ * template, so they are left alone rather than half-answered — the founder's
+ * instruction was to reply inside the window and ignore what came before.
+ *
+ * Each conversation is answered ONCE, on its newest message, through the same
+ * path a live message takes: repository first, then a reply built from what the
+ * site actually holds. Nobody is left with silence.
+ */
+export async function answerOpenConversations() {
+  await assertArea("inbox");
+  const svc = createServiceClient();
+
+  const { data } = await svc
+    .from("notifications")
+    .select("payload")
+    .eq("channel", "whatsapp")
+    .eq("template", "inbound")
+    .order("id", { ascending: false })
+    .limit(400);
+
+  // Newest message per sender, and only those still inside the window.
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const newest = new Map<string, { at: number; text: string }>();
+  for (const r of data ?? []) {
+    const p = (r.payload ?? {}) as Record<string, unknown>;
+    const from = String(p.from ?? "");
+    const at = Number(p.timestamp ?? p.ts ?? 0) * 1000;
+    const text = String((p.text as { body?: string } | undefined)?.body ?? "").trim();
+    if (!from || !at || at < cutoff || !text) continue;
+    const seen = newest.get(from);
+    if (!seen || at > seen.at) newest.set(from, { at, text });
+  }
+
+  // Anyone we have already written to since their last message is left alone —
+  // pressing this twice must not send the same student a second answer.
+  const { data: sent } = await svc
+    .from("notifications")
+    .select("payload, sent_at")
+    .eq("channel", "whatsapp")
+    .eq("template", "outbound")
+    .not("sent_at", "is", null)
+    .order("sent_at", { ascending: false })
+    .limit(400);
+  const repliedAt = new Map<string, number>();
+  for (const r of sent ?? []) {
+    const to = String(((r.payload ?? {}) as Record<string, unknown>).to ?? "");
+    const when = new Date(String(r.sent_at)).getTime();
+    if (to && when > (repliedAt.get(to) ?? 0)) repliedAt.set(to, when);
+  }
+
+  const { answerWhatsAppDoubt } = await import("@/lib/whatsappAnswer");
+  let answered = 0;
+  let skipped = 0;
+  for (const [from, msg] of newest) {
+    if ((repliedAt.get(from) ?? 0) > msg.at) { skipped++; continue; }
+    try {
+      const outcome = await answerWhatsAppDoubt(from, msg.text);
+      if (outcome === "ignored") skipped++;
+      else answered++;
+    } catch {
+      skipped++;
+    }
+  }
+
+  revalidatePath("/admin/whatsapp");
+  redirect(`/admin/whatsapp?answered=${answered}&left=${skipped}`);
+}

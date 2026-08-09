@@ -105,8 +105,9 @@ export default async function AdminWhatsAppPage(props: {
       {/* The same question-and-answer record as every other channel. This page
           is the conversation; that one is the read-through. */}
       <div style={{ marginTop: -6, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <a className="btn small secondary" href="/admin/doubt-log?days=30&channel=whatsapp">
-          🗒️ Read the questions and answers &rarr;
+        {/* A pointer, not a second copy of the report. */}
+        <a className="muted" style={{ fontSize: ".82rem" }} href="/admin/doubt-log?days=30&channel=whatsapp">
+          The WhatsApp questions and answers are in the doubt report &rarr;
         </a>
         {/* WhatsApp only carries a free reply for 24 hours after the student
             writes. The count is worked out here so the number of people about

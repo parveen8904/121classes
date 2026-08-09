@@ -8,21 +8,27 @@ export const metadata = { title: "Messages — Admin" };
 
 // One door for everything a student sends.
 //
-// The doubt inbox, the WhatsApp inbox and the doubt log were three separate
-// tiles on the admin home, all for the same job — read what a student asked and
-// answer it — so finding a message meant guessing which tile it had landed in.
-// They are one tile now, and this page is what it opens: the three desks side
-// by side, each with its own count, so you can see where the work is before you
-// choose.
+// The doubt inbox and the WhatsApp inbox were separate tiles on the admin home,
+// both for the same job — read what a student asked and answer it — so finding
+// a message meant guessing which tile it had landed in. They are one tile now,
+// and this page is what it opens.
+//
+// The doubt REPORT is not here. Reading is split from doing: this page is where
+// work is done, and the record of what was asked and answered lives once, in
+// Reports. It used to sit here as a third tile as well, which is how the same
+// figures came to be quoted in two places and disagree.
 export default async function MessagesPage() {
   await assertArea("inbox");
   const svc = createServiceClient();
 
-  const [doubts, waiting, wa, log] = await Promise.all([
+  const [doubts, waiting, wa] = await Promise.all([
     svc.from("doubts").select("id", { count: "exact", head: true }),
     svc.from("doubts").select("id", { count: "exact", head: true }).eq("status", "open"),
-    svc.from("notifications").select("id", { count: "exact", head: true }).eq("channel", "whatsapp"),
-    svc.from("doubts").select("id", { count: "exact", head: true }).eq("status", "answered"),
+    // Conversations only — the daily targets and reminders that ride on this
+    // table are Telegram, and counting them here made the inbox look busier
+    // than it is.
+    svc.from("notifications").select("id", { count: "exact", head: true })
+       .eq("channel", "whatsapp").in("template", ["inbound", "outbound"]),
   ]).then((r) => r.map((x) => x.count ?? 0));
 
   const desks = [
@@ -42,14 +48,6 @@ export default async function MessagesPage() {
       countLabel: "messages",
       desc: "Messages students send to the business number, read and answered here — and where you connect your own number so students can keep writing to the one they already use.",
     },
-    {
-      href: "/admin/doubt-log",
-      icon: "🗒️",
-      title: "Answered log",
-      count: log,
-      countLabel: "answered",
-      desc: "Every question a student asked and the answer that went back. Doubts are answered automatically now, so this is where you check whether the answers are good enough.",
-    },
   ];
 
   return (
@@ -57,7 +55,7 @@ export default async function MessagesPage() {
       <AdminHero
         badge="📥 Messages"
         title="Everything students send you"
-        subtitle={`${doubts} doubts on record. Three desks, one door — the inbox to answer, WhatsApp to reply on their own number, and the log to check what the AI has been saying.`}
+        subtitle={`${doubts} doubts on record. Two desks, one door — the inbox to answer, and WhatsApp to reply on the number they already write to.`}
         back={{ href: "/admin", label: "Admin" }}
       />
 
@@ -74,6 +72,11 @@ export default async function MessagesPage() {
           </Link>
         ))}
       </div>
+      <p className="muted" style={{ marginTop: 18, fontSize: ".85rem" }}>
+        Looking for the record of what was asked and what went back? That is the{" "}
+        <Link href="/admin/doubt-log">doubt report</Link>, under Reports — kept in one place so the
+        numbers cannot disagree with themselves.
+      </p>
     </section>
   );
 }

@@ -45,12 +45,35 @@ export default async function LeadsReport(props: {
   const { data } = await q;
   const leads = (data ?? []) as Lead[];
 
-  // Every source that exists, so the filter offers what is actually there
-  // rather than a list somebody typed once.
-  const { data: allSources } = await svc.from("leads").select("source").limit(5000);
-  const sources = [...new Set((allSources ?? []).map((r) => (r.source as string) || "").filter(Boolean))].sort();
+  // Every source that exists, asked of the database rather than reduced from a
+  // sample. Selecting five thousand source strings out of a quarter of a
+  // million missed any source used only by older leads — and a source missing
+  // from the filter means those leads cannot be found at all.
+  const { data: srcRows } = await svc.rpc("lead_sources");
+  const sources = ((srcRows ?? []) as { source: string }[]).map((r) => r.source).filter(Boolean);
 
-  const converted = leads.filter((l) => l.matched_user_id).length;
+  // COUNTED, not measured off the page.
+  //
+  // The list above stops at three thousand rows — sensible for something a
+  // person scrolls. But "enrolled" and the conversion rate were worked out
+  // from that same slice, so with a quarter of a million leads they described
+  // the first three thousand and were presented as the whole picture. The
+  // numbers now come from the database, under the same filters as the list.
+  const countWith = (extra?: (b: ReturnType<typeof svc.from>) => unknown) => {
+    let c = svc.from("leads").select("id", { count: "exact", head: true });
+    if (from) c = c.gte("created_at", `${from}T00:00:00Z`);
+    if (to) c = c.lte("created_at", `${to}T23:59:59Z`);
+    if (source) c = c.eq("source", source);
+    if (status === "converted") c = c.not("matched_user_id", "is", null);
+    if (status === "open") c = c.is("matched_user_id", null);
+    return c;
+  };
+  const [{ count: totalCount }, { count: convertedCount }] = await Promise.all([
+    countWith(),
+    countWith().not("matched_user_id", "is", null),
+  ]);
+  const total = totalCount ?? leads.length;
+  const converted = convertedCount ?? 0;
 
   return (
     <section className="container" style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 1100 }}>
@@ -84,11 +107,11 @@ export default async function LeadsReport(props: {
       </form>
 
       <div className="admin-cards" style={{ marginTop: 16, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
-        <div className="admin-tile"><div className="tile-ic">📇</div><h3 style={{ fontSize: "1.5rem" }}>{leads.length}</h3><p>leads shown</p></div>
+        <div className="admin-tile"><div className="tile-ic">📇</div><h3 style={{ fontSize: "1.5rem" }}>{total.toLocaleString("en-IN")}</h3><p>leads{total > leads.length ? ` (showing ${leads.length.toLocaleString("en-IN")})` : ""}</p></div>
         <div className="admin-tile"><div className="tile-ic">🎓</div><h3 style={{ fontSize: "1.5rem" }}>{converted}</h3><p>enrolled</p></div>
         <div className="admin-tile">
           <div className="tile-ic">📈</div>
-          <h3 style={{ fontSize: "1.5rem" }}>{leads.length ? Math.round((converted / leads.length) * 100) : 0}%</h3>
+          <h3 style={{ fontSize: "1.5rem" }}>{total ? Math.round((converted / total) * 100) : 0}%</h3>
           <p>of these enrolled</p>
         </div>
       </div>

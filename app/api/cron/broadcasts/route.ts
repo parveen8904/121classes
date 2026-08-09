@@ -4,6 +4,7 @@ import { getSecret } from "@/lib/secrets";
 import { sendTelegramMessage, sendWhatsApp, sendEmail, emailShell } from "@/lib/notify";
 import { tgSendToGroup } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
+import { selectAll } from "@/lib/pageAll";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -70,13 +71,17 @@ export async function GET(req: NextRequest) {
   const needDirect = due.some((p) => p.to_direct && (p.wa_offset ?? 0) === 0);
   let directIds: string[] = [];
   if (needDirect) {
-    const [{ data: profs }, { data: subs }] = await Promise.all([
-      svc.from("profiles").select("telegram_chat_id").not("telegram_chat_id", "is", null),
-      svc.from("telegram_subscribers").select("chat_id"),
+    // Paged. Read plainly, these stop at a thousand and the broadcast quietly
+    // reaches a fraction of the people it names.
+    const [profs, subs] = await Promise.all([
+      selectAll<{ telegram_chat_id: string }>((f, t) =>
+        svc.from("profiles").select("telegram_chat_id").not("telegram_chat_id", "is", null).range(f, t)),
+      selectAll<{ chat_id: string }>((f, t) =>
+        svc.from("telegram_subscribers").select("chat_id").range(f, t)),
     ]);
     directIds = [...new Set([
-      ...(profs ?? []).map((r) => String(r.telegram_chat_id)),
-      ...(subs ?? []).map((r) => String(r.chat_id)),
+      ...profs.map((r) => String(r.telegram_chat_id)),
+      ...subs.map((r) => String(r.chat_id)),
     ])];
   }
 
@@ -85,12 +90,17 @@ export async function GET(req: NextRequest) {
   const needWa = due.some((p) => p.to_whatsapp);
   let waPhones: string[] = [];
   if (needWa) {
-    const [{ data: profs }, { data: leadRows }] = await Promise.all([
-      svc.from("profiles").select("phone").eq("role", "student").not("phone", "is", null),
-      svc.from("leads").select("phone").is("matched_user_id", null).not("phone", "is", null),
+    // There are more than two thousand students and a quarter of a million
+    // leads. Unpaged, this addressed a thousand of each — so a campaign that
+    // reported success had reached well under one percent of the list.
+    const [profs, leadRows] = await Promise.all([
+      selectAll<{ phone: string }>((f, t) =>
+        svc.from("profiles").select("phone").eq("role", "student").not("phone", "is", null).range(f, t)),
+      selectAll<{ phone: string }>((f, t) =>
+        svc.from("leads").select("phone").is("matched_user_id", null).not("phone", "is", null).range(f, t)),
     ]);
     waPhones = [...new Set(
-      [...(profs ?? []), ...(leadRows ?? [])]
+      [...profs, ...leadRows]
         .map((r) => String(r.phone).replace(/\D/g, "").slice(-10))
         .filter((d) => d.length === 10),
     )];

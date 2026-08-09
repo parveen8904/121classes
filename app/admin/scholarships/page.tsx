@@ -3,6 +3,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import { viaProxy } from "@/lib/fileProxy";
 import { decideScholarship } from "./actions";
+import { inChunks } from "@/lib/pageAll";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Scholarships — Admin" };
@@ -16,8 +17,11 @@ export default async function ScholarshipsAdmin() {
   const ids = [...new Set(rows.map((r) => r.student_id))];
   const names = new Map<string, { name: string | null; email: string | null }>();
   if (ids.length) {
-    const { data: profs } = await svc.from("profiles").select("id, full_name, email").in("id", ids);
-    for (const p of profs ?? []) names.set(p.id as string, { name: p.full_name as string, email: p.email as string });
+    // In batches. One .in() over every id is a URL the server refuses, and a
+    // refused query empties the column without saying so.
+    const profs = await inChunks<{ id: string; full_name: string | null; email: string | null }>(
+      ids, (b) => svc.from("profiles").select("id, full_name, email").in("id", b));
+    for (const p of profs) names.set(p.id as string, { name: p.full_name as string, email: p.email as string });
   }
   const pending = rows.filter((r) => r.status === "pending");
   const done = rows.filter((r) => r.status !== "pending");

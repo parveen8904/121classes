@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { selectAll } from "@/lib/pageAll";
 
 export const dynamic = "force-dynamic";
 
@@ -25,12 +26,15 @@ export async function GET(request: NextRequest) {
   const d14 = new Date(now - 14 * 86400_000).toISOString();
   const d30 = new Date(now - 30 * 86400_000).toISOString();
 
-  const { data: profs } = await svc
-    .from("profiles")
-    .select("id, full_name, email, created_at, role, account_type")
-    .eq("role", "student")
-    .not("email", "is", null);
-  const students = (profs ?? []).filter((p) => p.account_type !== "sponsor");
+  // Paged: there are more than two thousand students, and unpaged this picked
+  // the first thousand — so the same slice was reconsidered every run and the
+  // rest were never re-engaged at all.
+  const profs = await selectAll<{ id: string; full_name: string | null; email: string | null; created_at: string; role: string; account_type: string | null }>(
+    (f, t) => svc.from("profiles")
+      .select("id, full_name, email, created_at, role, account_type")
+      .eq("role", "student").not("email", "is", null).range(f, t),
+  );
+  const students = profs.filter((p) => p.account_type !== "sponsor");
   const ids = students.map((p) => p.id as string);
 
   const lastWatch = new Map<string, string>();

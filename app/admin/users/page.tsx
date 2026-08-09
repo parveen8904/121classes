@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../_components/AdminHero";
 import { addUsers, rescueFirstLogins, importSupporters } from "./actions";
 import { createServiceClient } from "@/lib/supabase/service";
+import { inChunks } from "@/lib/pageAll";
 
 const ROLE_EMOJI: Record<string, string> = { student: "🎓", admin: "🛠️", faculty: "👩‍🏫" };
 
@@ -50,11 +51,12 @@ export default async function UsersPage(
   const ids = (users ?? []).map((u) => u.id as string);
   if (ids.length) {
     const { createServiceClient } = await import("@/lib/supabase/service");
-    const { data: mc } = await createServiceClient()
-      .from("my_courses")
-      .select("student_id, courses(title)")
-      .in("student_id", ids);
-    for (const r of mc ?? []) {
+    const svc2 = createServiceClient();
+    // In batches. One .in() over every id is a URL the server refuses, and a
+    // refused query empties the column without saying so.
+    const mc = await inChunks<{ student_id: string; courses?: { title?: string } | null }>(
+      ids, (b) => svc2.from("my_courses").select("student_id, courses(title)").in("student_id", b) as never);
+    for (const r of mc) {
       const t = ((r as { courses?: { title?: string } | null }).courses?.title ?? "").toLowerCase();
       const lvl = t.includes("final") ? "Final" : t.includes("inter") ? "Inter" : "";
       if (!lvl) continue;

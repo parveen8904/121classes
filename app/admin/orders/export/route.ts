@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getGstSettings, computeGst } from "@/lib/invoice";
+import { inChunks } from "@/lib/pageAll";
 
 export const dynamic = "force-dynamic";
 
@@ -55,11 +56,16 @@ export async function GET(req: NextRequest) {
   const levelByUser = new Map<string, string>();
   const subDates = new Map<string, { starts_at: string | null; ends_at: string | null; tier: string | null }>();
   if (ids.length) {
-    const [{ data: mc }, { data: subRows }] = await Promise.all([
-      svc.from("my_courses").select("student_id, courses(title)").in("student_id", ids),
-      svc.from("subscriptions").select("student_id, subject_id, starts_at, ends_at, created_at, plans(tier)").in("student_id", ids).order("created_at"),
+    // In batches. One .in() over every buyer is a URL the server refuses, and a
+    // refused query here empties the level and date columns of the export
+    // without a word.
+    const [mc, subRows] = await Promise.all([
+      inChunks<{ student_id: string; courses?: { title?: string } | null }>(ids, (b) =>
+        svc.from("my_courses").select("student_id, courses(title)").in("student_id", b) as never),
+      inChunks<{ student_id: string; subject_id: string | null; starts_at: string | null; ends_at: string | null; created_at: string; plans?: { tier?: string } | null }>(ids, (b) =>
+        svc.from("subscriptions").select("student_id, subject_id, starts_at, ends_at, created_at, plans(tier)").in("student_id", b).order("created_at") as never),
     ]);
-    for (const r of mc ?? []) {
+    for (const r of mc) {
       const t = ((r as { courses?: { title?: string } | null }).courses?.title ?? "").toLowerCase();
       const lvl = t.includes("final") ? "Final" : t.includes("inter") ? "Inter" : "";
       if (!lvl) continue;

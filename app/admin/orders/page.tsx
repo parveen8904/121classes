@@ -6,6 +6,7 @@ import { viaProxy } from "@/lib/fileProxy";
 import AdminHero from "../_components/AdminHero";
 import { setOrderStatus, sendDispatchEmail, approveForZoho, approveDayForZoho, holdForZoho, approveSelectedForZoho, generateInvoice, reissueInvoice } from "./actions";
 import SelectAll from "./SelectAll";
+import { inChunks } from "@/lib/pageAll";
 
 // Zoho posting state → what the admin sees in the register. Normal flow is
 // the one-click DAY approval above the table; per-row buttons are for
@@ -128,8 +129,10 @@ export default async function AdminOrdersPage(
   const subDates = new Map<string, { starts_at: string | null; ends_at: string | null }>();
   if (payerIds.length) {
     const [{ data: mc }, { data: subRows }] = await Promise.all([
-      svc.from("my_courses").select("student_id, courses(title)").in("student_id", payerIds),
-      svc.from("subscriptions").select("student_id, subject_id, starts_at, ends_at, created_at").in("student_id", payerIds).order("created_at"),
+      // In batches — see lib/pageAll. A refused .in() blanks the level and
+      // subscription-date columns for every payer at once.
+      inChunks<never>(payerIds, (b) => svc.from("my_courses").select("student_id, courses(title)").in("student_id", b) as never).then((data) => ({ data })),
+      inChunks<never>(payerIds, (b) => svc.from("subscriptions").select("student_id, subject_id, starts_at, ends_at, created_at").in("student_id", b).order("created_at") as never).then((data) => ({ data })),
     ]);
     for (const r of mc ?? []) {
       const t = ((r as { courses?: { title?: string } | null }).courses?.title ?? "").toLowerCase();

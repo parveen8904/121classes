@@ -3,6 +3,7 @@ import { getSecret } from "@/lib/secrets";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendEmail, emailShell, aiReplyBcc } from "@/lib/notify";
 import { channelLabel } from "@/lib/aiAnswerLog";
+import { inChunks } from "@/lib/pageAll";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -100,10 +101,12 @@ export async function GET(req: NextRequest) {
 
   // Who asked, in one query.
   const ids = [...new Set(answered.map((q) => q.user_id).filter(Boolean))] as string[];
-  const { data: people } = ids.length
-    ? await svc.from("profiles").select("id, full_name, email").in("id", ids)
-    : { data: [] as { id: string; full_name: string | null; email: string | null }[] };
-  const nameOf = new Map((people ?? []).map((p) => [p.id, p.full_name || p.email || "Student"]));
+  // In batches: a day of questions can name more people than one URL will hold,
+  // and a refused query would leave every name reading "Student".
+  const people = await inChunks<{ id: string; full_name: string | null; email: string | null }>(
+    ids, (batch) => svc.from("profiles").select("id, full_name, email").in("id", batch),
+  );
+  const nameOf = new Map(people.map((p) => [p.id, p.full_name || p.email || "Student"]));
 
   // Grouped by channel, because "what is the WhatsApp bot saying" is the
   // question he actually asks of this report.

@@ -4,6 +4,7 @@ import AdminHero from "../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
 import SubmitButton from "@/app/components/SubmitButton";
 import { addCorrection } from "../ai-training/actions";
+import { inChunks } from "@/lib/pageAll";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Doubt log — Admin" };
@@ -63,10 +64,11 @@ export default async function DoubtLogPage(props: { searchParams: Promise<{ days
 
   // Who asked — resolved in one query rather than one per row.
   const ids = [...new Set(questions.map((q) => q.user_id).filter(Boolean))] as string[];
-  const { data: people } = ids.length
-    ? await svc.from("profiles").select("id, full_name, email").in("id", ids)
-    : { data: [] as { id: string; full_name: string | null; email: string | null }[] };
-  const nameOf = new Map((people ?? []).map((p) => [p.id, p.full_name || p.email || "Student"]));
+  // In batches: a long day of doubts names more people than one URL will
+  // hold, and a refused query would leave every asker unnamed.
+  const people = await inChunks<{ id: string; full_name: string | null; email: string | null }>(
+    ids, (b) => svc.from("profiles").select("id, full_name, email").in("id", b));
+  const nameOf = new Map(people.map((p) => [p.id, p.full_name || p.email || "Student"]));
 
   const answered = questions.filter((q) => (answersFor.get(q.id)?.length ?? 0) > 0).length;
   const unanswered = questions.length - answered;

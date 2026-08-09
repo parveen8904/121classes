@@ -35,11 +35,22 @@ export default async function SubscribersPage(props: { searchParams: Promise<{ t
   }
 
   const svc = createServiceClient();
-  const { data } = await svc
-    .from("subscriptions")
-    .select("status, starts_at, ends_at, channel, created_at, plans(tier, name), subjects:subject_id(title), profiles:student_id(id, full_name, email, phone, address_line1, address_line2, city, state, pincode)")
-    .eq("status", "active")
-    .order("created_at", { ascending: false });
+  // Every active subscription, not the first thousand. PostgREST stops at 1,000
+  // rows without a word, and there are more than 1,500 — so this report was
+  // quietly leaving out around six hundred of the very people it exists to
+  // list.
+  const data: unknown[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data: page, error } = await svc
+      .from("subscriptions")
+      .select("status, starts_at, ends_at, channel, created_at, plans(tier, name), subjects:subject_id(title), profiles:student_id(id, full_name, email, phone, address_line1, address_line2, city, state, pincode)")
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .range(from, from + 999);
+    if (error) break;
+    data.push(...(page ?? []));
+    if ((page ?? []).length < 1000) break;
+  }
 
   const now = new Date();
   let rows = ((data ?? []) as unknown as Row[]).filter((r) => !r.ends_at || new Date(r.ends_at) > now);
@@ -50,9 +61,27 @@ export default async function SubscribersPage(props: { searchParams: Promise<{ t
   const paidByUser = new Map<string, number>();
   const levelByUser = new Map<string, string>();
   if (ids.length) {
-    const [{ data: ord }, { data: mc }] = await Promise.all([
-      svc.from("orders").select("student_id, amount_inr").eq("status", "paid").in("student_id", ids),
-      svc.from("my_courses").select("student_id, courses(title)").in("student_id", ids),
+    // Asked in batches. A single .in() carrying a thousand UUIDs is about
+    // thirty-seven thousand characters of URL — the server refuses it, the
+    // query comes back empty, and EVERY amount on the report renders as zero.
+    // Which is exactly what happened: two students who had genuinely paid
+    // ₹9,897 and ₹1,900 appeared to have paid nothing.
+    const inBatches = async <T,>(build: (batch: string[]) => PromiseLike<{ data: T[] | null }>) => {
+      const out: T[] = [];
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data: part } = await build(ids.slice(i, i + 200));
+        out.push(...(part ?? []));
+      }
+      return out;
+    };
+    const [ord, mc] = await Promise.all([
+      inBatches<{ student_id: string; amount_inr: number }>((b) =>
+        svc.from("orders").select("student_id, amount_inr").eq("status", "paid").in("student_id", b)),
+      inBatches<{ student_id: string; courses?: { title?: string } | null }>(async (b) => {
+        // The join comes back typed as an array; the report reads one title.
+        const { data: d } = await svc.from("my_courses").select("student_id, courses(title)").in("student_id", b);
+        return { data: (d ?? []) as unknown as { student_id: string; courses?: { title?: string } | null }[] };
+      }),
     ]);
     for (const o of ord ?? []) {
       paidByUser.set(o.student_id as string, (paidByUser.get(o.student_id as string) ?? 0) + (o.amount_inr ?? 0));

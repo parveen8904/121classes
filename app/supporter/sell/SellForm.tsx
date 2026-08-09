@@ -11,7 +11,7 @@ import { createGiftOrder, verifyGiftPayment, previewGiftPrice } from "@/app/gift
 // their access should start → the coupon → pay. Nothing else is asked, because
 // nothing else changes what is sold: it is always Gold, always twelve months.
 
-type Product = { id: string; title: string; course: string; priceInr: number; months: number };
+type Product = { id: string; title: string; course: string; priceInr: number; months: number; options?: { months: number; priceInr: number }[] };
 type Billing = { name: string; gstin: string; address: string; state: string };
 
 const STATES = ["Delhi", "Haryana", "Uttar Pradesh", "Punjab", "Rajasthan", "Maharashtra", "Gujarat", "Karnataka", "Tamil Nadu", "Telangana", "West Bengal", "Bihar", "Madhya Pradesh", "Kerala", "Andhra Pradesh", "Uttarakhand", "Himachal Pradesh", "Jharkhand", "Chhattisgarh", "Odisha", "Assam", "Goa", "Chandigarh", "Jammu and Kashmir", "Other"];
@@ -22,6 +22,7 @@ export default function SellForm({
   products, preselect, billing, configured,
 }: { products: Product[]; preselect?: string; billing: Billing; configured: boolean }) {
   const [subjectId, setSubjectId] = useState(preselect || products[0]?.id || "");
+  const [months, setMonths] = useState(12);
   const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [startsOn, setStartsOn] = useState(today());
@@ -36,8 +37,10 @@ export default function SellForm({
 
   const product = products.find((p) => p.id === subjectId);
   const later = startsOn > today();
+  const terms = product?.options?.length ? product.options : [{ months: 12, priceInr: product?.priceInr ?? 0 }];
+  const term = terms.find((t) => t.months === months) ?? terms[0];
   // The price on the button, and the price sent to Razorpay.
-  const payable = applied ? applied.payable : product?.priceInr ?? 0;
+  const payable = applied ? applied.payable : term?.priceInr ?? 0;
 
   // A coupon proved against ONE subject cannot stand once another is chosen.
   function forget() { setApplied(null); setCouponMsg(null); }
@@ -48,7 +51,7 @@ export default function SellForm({
     setChecking(true);
     setCouponMsg(null);
     try {
-      const r = await previewGiftPrice({ subjectId, couponCode: code });
+      const r = await previewGiftPrice({ subjectId, couponCode: code, months });
       if (r.ok && r.couponApplied) {
         setApplied({ payable: r.payable, discount: r.discount, code: r.couponCode ?? code });
         setCouponMsg({ ok: true, text: `Coupon applied successfully — ${formatINR(r.discount)} off.` });
@@ -77,7 +80,7 @@ export default function SellForm({
     setBusy(true);
     try {
       const res = await createGiftOrder({
-        subjectId, tier: "gold", months: product.months, couponCode: coupon, startsOn,
+        subjectId, tier: "gold", months: term?.months ?? product.months, couponCode: coupon, startsOn,
         recipient: { name: name.trim(), email: email.trim(), phone: phone.trim(), address: address.trim() },
         billing: { name: billing.name || name, gstin: billing.gstin, address: billing.address, state: bState },
       });
@@ -161,15 +164,43 @@ export default function SellForm({
           ))}
         </div>
 
-        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>4 · When should their access start?</h2>
+        {/* HOW LONG FOR.
+            A supporter used to sell one shape only: twelve months, take it or
+            leave it. A student sitting a later attempt needs their access to
+            reach the exam, so a longer term can be sold — priced on exactly the
+            ladder a student would pay, never a second price list. Shorter than
+            a year is not offered: those slabs are for students topping up. */}
+        {terms.length > 1 && (
+          <>
+            <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>4 · For how long?</h2>
+            <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>
+              {terms.map((t) => (
+                <label key={t.months} style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
+                  border: `1.5px solid ${t.months === months ? "var(--accent)" : "var(--border)"}`,
+                  borderRadius: 12, cursor: "pointer", marginBottom: 0,
+                }}>
+                  <input type="radio" name="months" checked={t.months === months}
+                    onChange={() => { setMonths(t.months); forget(); }} />
+                  <span style={{ flex: 1 }}>
+                    <strong>{t.months} months</strong>
+                    <span className="muted" style={{ display: "block", fontSize: ".82rem" }}>{formatINR(t.priceInr)}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </>
+        )}
+
+        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>{terms.length > 1 ? "5" : "4"} · When should their access start?</h2>
         <input type="date" value={startsOn} min={today()} onChange={(e) => setStartsOn(e.target.value)} />
         <p className="muted" style={{ fontSize: ".82rem", marginTop: -6 }}>
           {later
-            ? `Their ${product?.months ?? 12} months begin on that date — not today — so selling early costs them nothing. Until then they can sign in and watch the demo classes.`
+            ? `Their ${term?.months ?? 12} months begin on that date — not today — so selling early costs them nothing. Until then they can sign in and watch the demo classes.`
             : "Starting today. Pick a later date if they are joining a future batch."}
         </p>
 
-        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>5 · Coupon</h2>
+        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>{terms.length > 1 ? "6" : "5"} · Coupon</h2>
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
           <input
             placeholder="Your discount code (optional)"
@@ -203,9 +234,9 @@ export default function SellForm({
         {product && (
           <div className="card" style={{ marginTop: 14, background: "var(--bg-soft)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".9rem" }}>
-              <span>{product.title} · Gold · {product.months} months</span>
+              <span>{product.title} · Gold · {term?.months ?? product.months} months</span>
               <span style={{ textDecoration: applied ? "line-through" : "none", opacity: applied ? 0.6 : 1 }}>
-                {formatINR(product.priceInr)}
+                {formatINR(term?.priceInr ?? product.priceInr)}
               </span>
             </div>
             {applied && (

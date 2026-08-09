@@ -54,7 +54,13 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
     months = batchMonths;
     amount = price;
   } else if (input.tier === "gold") {
-    months = input.months ? Math.min(60, Math.max(1, Math.round(input.months))) : baseMonths;
+    // A supporter sale is never shorter than a year — the short slabs are
+    // priced for students topping up, not for a first sale. Enforced here as
+    // well as in the form, because the form is not what charges the card.
+    const { SELL_MIN_MONTHS, SELL_MAX_MONTHS } = await import("@/lib/supporterCatalogue");
+    months = input.months
+      ? Math.min(SELL_MAX_MONTHS, Math.max(SELL_MIN_MONTHS, Math.round(input.months)))
+      : baseMonths;
     // Same ladder as student checkout: slabTotal when the subject has one.
     const { parseSlabs, slabTotal } = await import("@/lib/pricing");
     const slabs = parseSlabs((subject as { gold_slabs?: unknown }).gold_slabs);
@@ -284,7 +290,7 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
  * never from anything the browser sends, so the figure shown is the figure
  * charged.
  */
-export async function previewGiftPrice(input: { subjectId: string; couponCode?: string }): Promise<
+export async function previewGiftPrice(input: { subjectId: string; couponCode?: string; months?: number }): Promise<
   | { ok: true; base: number; payable: number; discount: number; couponApplied: boolean; couponCode: string | null; months: number }
   | { ok: false; reason: "auth" | "error" | "noprice" | "badcoupon"; base?: number; months?: number }
 > {
@@ -313,11 +319,16 @@ export async function previewGiftPrice(input: { subjectId: string; couponCode?: 
     months = batchMonths;
     base = price;
   } else {
+    const { SELL_MIN_MONTHS, SELL_MAX_MONTHS } = await import("@/lib/supporterCatalogue");
+    // Clamped here, on the server. A term typed into the request cannot buy a
+    // year's access for a month's money.
+    months = Math.min(SELL_MAX_MONTHS, Math.max(SELL_MIN_MONTHS, Math.round(input.months || baseMonths)));
     const { parseSlabs, slabTotal } = await import("@/lib/pricing");
     const slabs = parseSlabs((subject as { gold_slabs?: unknown }).gold_slabs);
     if (slabs) base = slabTotal(slabs, months);
-    else if (subject.gold_price_inr && subject.gold_price_inr > 0) base = subject.gold_price_inr;
-    else return { ok: false, reason: "noprice" };
+    else if (subject.gold_price_inr && subject.gold_price_inr > 0) {
+      base = Math.max(1, Math.round((subject.gold_price_inr * months) / baseMonths));
+    } else return { ok: false, reason: "noprice" };
   }
 
   const code = (input.couponCode ?? "").trim();

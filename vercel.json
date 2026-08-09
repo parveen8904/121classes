@@ -102,6 +102,10 @@
     {
       "path": "/api/cron/social-comments",
       "schedule": "50 * * * *"
+    },
+    {
+      "path": "/api/cron/app-links",
+      "schedule": "10 2 * * *"
     }
   ]
 }

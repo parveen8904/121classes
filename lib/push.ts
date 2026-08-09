@@ -32,7 +32,13 @@ export type PushMessage = {
   link?: string;
 };
 
-export type SendResult = { sent: number; failed: number; retired: number };
+export type SendResult = {
+  sent: number;
+  failed: number;
+  retired: number;
+  /** Per platform, so "it did not arrive on iPhones" is answerable from a record. */
+  byPlatform?: { android: { sent: number; failed: number }; ios: { sent: number; failed: number } };
+};
 const NOTHING: SendResult = { sent: 0, failed: 0, retired: 0 };
 const add = (a: SendResult, b: SendResult): SendResult => ({
   sent: a.sent + b.sent,
@@ -219,11 +225,54 @@ async function sendApple(tokens: string[], msg: PushMessage): Promise<{ result: 
     ...(msg.link ? { link: msg.link } : {}),
   });
 
+  // Apple runs TWO push services, and a token is only valid on the one that
+  // issued it. A phone carrying a build signed for development holds a SANDBOX
+  // token; production APNs answers BadDeviceToken for it and the message is
+  // dropped in silence. That is what stopped the iPhones while Android worked:
+  // both iOS devices failed, six Android succeeded, and the count read 6 of 8.
+  //
+  // Worse, BadDeviceToken was treated as proof the app had been deleted, so the
+  // phone was retired and never written to again — one send was enough to lose
+  // it for good.
+  //
+  // So production is tried first and anything Apple calls a bad token is tried
+  // again on sandbox. Only a token both services refuse is really dead.
+  const prod = await sendAppleVia("https://api.push.apple.com", tokens, jwt, payload);
+  let sent = prod.sent;
+  let failed = prod.failed - prod.wrongEnvironment.length;
+  const dead: string[] = [...prod.dead];
+
+  if (prod.wrongEnvironment.length) {
+    const sand = await sendAppleVia(
+      "https://api.sandbox.push.apple.com",
+      prod.wrongEnvironment,
+      jwt,
+      payload,
+    );
+    sent += sand.sent;
+    failed += sand.failed;
+    // Refused by both services — now it is genuinely gone.
+    dead.push(...sand.dead, ...sand.wrongEnvironment);
+  }
+
+  return { result: { sent, failed, retired: 0 }, dead };
+}
+
+type AppleRun = { sent: number; failed: number; dead: string[]; wrongEnvironment: string[] };
+
+/** One APNs host, one connection, every token. */
+async function sendAppleVia(
+  host: string,
+  tokens: string[],
+  jwt: string,
+  payload: string,
+): Promise<AppleRun> {
   // Apple speaks HTTP/2 only, which fetch() does not — every message would come
   // back as a connection error. One connection carries the whole broadcast,
   // which is also the efficient way to do it.
-  const client = http2.connect("https://api.push.apple.com");
+  const client = http2.connect(host);
   const dead: string[] = [];
+  const wrongEnvironment: string[] = [];
   let sent = 0;
   let failed = 0;
 
@@ -251,8 +300,12 @@ async function sendApple(tokens: string[], msg: PushMessage): Promise<{ result: 
             failed++;
             let reason = "";
             try { reason = JSON.parse(bodyText)?.reason ?? ""; } catch { /* not JSON */ }
-            // The app was deleted, or this token belongs to another app.
-            if (status === 410 || reason === "BadDeviceToken" || reason === "Unregistered") dead.push(token);
+            // 410 Unregistered is Apple saying the app is gone — that is final.
+            // BadDeviceToken usually means the token belongs to the OTHER
+            // service, so it is worth one more try before writing the phone off.
+            if (status === 410 || reason === "Unregistered") dead.push(token);
+            else if (reason === "BadDeviceToken") wrongEnvironment.push(token);
+            else console.error(`[push] apple refused (${status} ${reason || "no reason"})`);
           }
           finish();
         });
@@ -271,7 +324,7 @@ async function sendApple(tokens: string[], msg: PushMessage): Promise<{ result: 
     client.close();
   }
 
-  return { result: { sent, failed, retired: 0 }, dead };
+  return { sent, failed, dead, wrongEnvironment };
 }
 
 // ---- the shared part ---------------------------------------------------------
@@ -325,7 +378,17 @@ async function send(devices: Device[], msg: PushMessage): Promise<SendResult> {
     }
   }
 
-  return { ...add(a.result, i.result), retired: dead.length };
+  return {
+    ...add(a.result, i.result),
+    retired: dead.length,
+    // Split by platform. The counts used to arrive as one number, so a
+    // broadcast that reached every Android and no iPhone read as "6 of 8" —
+    // true, and useless for working out which half had failed.
+    byPlatform: {
+      android: { sent: a.result.sent, failed: a.result.failed },
+      ios: { sent: i.result.sent, failed: i.result.failed },
+    },
+  };
 }
 
 /** Send to one student's phones. */

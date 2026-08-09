@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { viaProxy } from "@/lib/fileProxy";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -651,7 +652,12 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                               {rows.map((r) => {
                                 const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(r.file_url);
                                 const isPaper = ["mtp", "rtp", "past_papers"].includes(r.kind);
-                                const href = isPaper ? `/learn/paper/${r.id}` : r.file_url;
+                                // A stored file is "secure:<path>", which is not
+                                // a URL — used as an href it opens a blank page.
+                                // Everything not a paper goes through the proxy,
+                                // which is also what keeps the storage address
+                                // out of the student's address bar.
+                                const href = isPaper ? `/learn/paper/${r.id}` : viaProxy(r.file_url);
                                 return (
                                   <a key={r.id} href={href} target={isPaper ? undefined : "_blank"} rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", background: "var(--card)", borderRadius: 8, padding: "8px 12px", color: "var(--text)" }}>
                                     <span style={{ fontSize: ".88rem" }}><strong>{r.title}</strong>{r.valid_from_attempt ? <span className="muted"> · {r.valid_from_attempt}{r.valid_to_attempt ? ` up to ${r.valid_to_attempt}` : ""}</span> : null}</span>
@@ -667,7 +673,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                       {(subjResources.get(s.id) ?? []).filter((r) => r.kind === "custom").map((r) => {
                         const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(r.file_url);
                         return (
-                          <a key={r.id} href={r.file_url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", gap: 6, border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", padding: "12px 14px", color: "var(--text)", minHeight: 84 }}>
+                          <a key={r.id} href={viaProxy(r.file_url)} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", gap: 6, border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", padding: "12px 14px", color: "var(--text)", minHeight: 84 }}>
                             <span style={{ fontSize: "1.4rem", lineHeight: 1 }}>{isVideo ? "🎬" : "📄"}</span>
                             <span style={{ fontSize: ".9rem", fontWeight: 700, lineHeight: 1.25 }}>{r.title}</span>
                             <span style={{ marginTop: "auto", color: "var(--accent)", fontWeight: 700, fontSize: ".82rem" }}>{isVideo ? "Watch →" : "Open →"}</span>

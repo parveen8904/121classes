@@ -93,7 +93,18 @@ export async function broadcast(formData: FormData) {
   // the only channel here that arrives without them opening anything.
   if (chPush) {
     const { pushToEveryone, pushConfigured } = await import("@/lib/push");
-    if (await pushConfigured()) {
+    const ready = await pushConfigured();
+    if (!ready) {
+      // Recorded rather than passed over in silence. A send that never happened
+      // used to leave nothing behind at all, so "I sent it again and nobody got
+      // it" could not be told apart from "it was sent and did not arrive".
+      await createServiceClient().from("push_outbox").insert({
+        kind: "general", title, body, link: link || null,
+        dedupe_key: `broadcast:${Date.now()}`,
+        sent_at: null, sent_count: 0,
+      });
+    }
+    if (ready) {
       const r = await pushToEveryone({ title, body, link: link || undefined });
       pushSent = r.sent;
       pushTotal = r.sent + r.failed;
@@ -102,9 +113,12 @@ export async function broadcast(formData: FormData) {
       // not be explained afterwards, because nothing anywhere remembered that
       // it had been sent — or that at the time there were no iPhones to send
       // to. A row here makes the question answerable next time.
+      const p = r.byPlatform;
       await createServiceClient().from("push_outbox").insert({
         kind: "general",
-        title,
+        // The platform split rides in the title of the record, because that is
+        // what gets read when somebody says it did not arrive on iPhones.
+        title: p ? `${title}  [android ${p.android.sent}/${p.android.sent + p.android.failed} · iPhone ${p.ios.sent}/${p.ios.sent + p.ios.failed}]` : title,
         body,
         link: link || null,
         dedupe_key: `broadcast:${Date.now()}`,

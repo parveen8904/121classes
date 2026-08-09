@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { viaProxy } from "@/lib/fileProxy";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "The hitlist — CA Parveen Sharma" };
@@ -22,6 +23,14 @@ type TopicList = {
   subject_id: string;
   important_qs_rev1: string | null;
   important_qs_rev2: string | null;
+};
+
+type Uploaded = {
+  id: string;
+  subject_id: string;
+  title: string;
+  file_url: string | null;
+  valid_from_attempt: string | null;
 };
 
 type Subject = {
@@ -117,8 +126,38 @@ export default async function HitlistPage() {
     perTopic.set(t.subject_id, arr);
   }
 
+  // An UPLOADED hitlist wins over the typed lists.
+  //
+  // The typed most-important-question lists carry no attempt, and they are the
+  // older ones; the current list is uploaded as a PDF and tagged with the exam
+  // it is for ("Hitlist for Sep'26 Exam"). Showing both without saying which is
+  // current would have a student revising last year's questions.
+  const { data: uploaded } = ids.length
+    ? await svc
+        .from("repository_items")
+        .select("id, subject_id, title, file_url, valid_from_attempt")
+        .in("subject_id", ids)
+        .eq("kind", "custom")
+        .eq("is_active", true)
+        .eq("student_visible", true)
+        .or("title.ilike.%hitlist%,title.ilike.%hit list%")
+        .order("created_at", { ascending: false })
+    : { data: [] as Uploaded[] };
+  const pdfFor = new Map<string, Uploaded[]>();
+  for (const u of (uploaded ?? []) as Uploaded[]) {
+    if (!u.file_url) continue;
+    const arr = pdfFor.get(u.subject_id) ?? [];
+    arr.push(u);
+    pdfFor.set(u.subject_id, arr);
+  }
+
   const hasAnything = (s: Subject) =>
-    Boolean((s.miq_rev1 ?? "").trim() || (s.miq_rev2 ?? "").trim() || perTopic.get(s.id)?.length);
+    Boolean(
+      pdfFor.get(s.id)?.length ||
+      (s.miq_rev1 ?? "").trim() ||
+      (s.miq_rev2 ?? "").trim() ||
+      perTopic.get(s.id)?.length,
+    );
   const withList = subjects.filter(hasAnything);
   const without = subjects.filter((s) => !hasAnything(s));
 
@@ -154,12 +193,39 @@ export default async function HitlistPage() {
               <strong style={{ fontSize: "1.05rem" }}>{s.title}</strong>
               <span className="badge">{courseName.get(s.course_id) ?? ""}</span>
             </div>
-            {(s.miq_rev1 ?? "").trim() && <List title="First revision" raw={s.miq_rev1!} />}
-            {(s.miq_rev2 ?? "").trim() && <List title="Second revision" raw={s.miq_rev2!} />}
+            {(pdfFor.get(s.id) ?? []).map((u) => (
+              <a
+                key={u.id}
+                href={viaProxy(u.file_url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "flex", gap: 12, alignItems: "center", marginTop: 14,
+                  border: "2px solid var(--accent)", borderRadius: 12,
+                  background: "var(--bg-soft)", padding: "12px 14px", color: "var(--text)",
+                }}
+              >
+                <span style={{ fontSize: "1.6rem", lineHeight: 1 }}>📄</span>
+                <span style={{ flex: 1 }}>
+                  <strong style={{ fontSize: ".95rem" }}>{u.title}</strong>
+                  {u.valid_from_attempt && (
+                    <span className="muted" style={{ display: "block", fontSize: ".8rem" }}>
+                      For the {u.valid_from_attempt} exam
+                    </span>
+                  )}
+                </span>
+                <span style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".85rem" }}>Open →</span>
+              </a>
+            ))}
+
+            {/* The typed lists carry no attempt and are the earlier ones, so
+                they only stand in where nothing has been uploaded. */}
+            {!(pdfFor.get(s.id) ?? []).length && (s.miq_rev1 ?? "").trim() && <List title="First revision" raw={s.miq_rev1!} />}
+            {!(pdfFor.get(s.id) ?? []).length && (s.miq_rev2 ?? "").trim() && <List title="Second revision" raw={s.miq_rev2!} />}
 
             {/* Only shown when the subject has no consolidated list — otherwise
                 the same question numbers would appear twice on one page. */}
-            {!(s.miq_rev1 ?? "").trim() && !(s.miq_rev2 ?? "").trim() &&
+            {!(pdfFor.get(s.id) ?? []).length && !(s.miq_rev1 ?? "").trim() && !(s.miq_rev2 ?? "").trim() &&
               (perTopic.get(s.id) ?? []).map((t) => (
                 <div key={t.id} style={{ marginTop: 14 }}>
                   <strong style={{ fontSize: ".92rem" }}>{t.title}</strong>

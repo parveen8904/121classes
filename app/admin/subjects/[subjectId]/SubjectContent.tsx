@@ -5,7 +5,7 @@ import DeleteButton from "../../_components/DeleteButton";
 import { saveSubjectMIQ, saveSubjectWeightage, addSubjectMaterial, deleteSubjectMaterial, editSubjectMaterial } from "./actions";
 
 type Topic = { id: string; title: string; weightage_marks: number | null };
-type Material = { id: string; kind: string; title: string; valid_from_attempt: string | null; valid_to_attempt: string | null; solution_url?: string | null; public_sample?: boolean };
+type Material = { id: string; kind: string; title: string; file_url?: string | null; valid_from_attempt: string | null; valid_to_attempt: string | null; solution_url?: string | null; public_sample?: boolean };
 
 // MTP / RTP / past papers become full "practice papers": question + suggested
 // answers, and students can upload their own answers for AI evaluation.
@@ -52,9 +52,23 @@ export default function SubjectContent({
                     </div>
                   )}
                 </div>
-                <PdfUpload name="file_url" folder="repository" label={`Replace ${PAPER_KINDS.includes(kind) ? "question paper" : "PDF"} (leave blank to keep current)`} />
+                {/* The current file is filled in, so it can be SEEN and opened.
+                    It used to start blank with "leave blank to keep current" —
+                    which kept the file safely but left no way to tell what was
+                    already uploaded, or to check the right one was there. */}
+                <PdfUpload
+                  name="file_url"
+                  folder="repository"
+                  defaultValue={m.file_url ?? ""}
+                  label={`${PAPER_KINDS.includes(kind) ? "Question paper" : "PDF"} — currently uploaded (Replace to change it)`}
+                />
                 {PAPER_KINDS.includes(kind) && (
-                  <PdfUpload name="solution_url" folder="repository" label={m.solution_url ? "Replace suggested-answers PDF (leave blank to keep)" : "➕ Add suggested-answers PDF (turns on AI evaluation)"} />
+                  <PdfUpload
+                    name="solution_url"
+                    folder="repository"
+                    defaultValue={m.solution_url ?? ""}
+                    label={m.solution_url ? "Suggested-answers PDF — currently uploaded (Replace to change it)" : "➕ Add suggested-answers PDF (turns on AI evaluation)"}
+                  />
                 )}
                 {kind !== "icai" && (
                   <label className="remember" style={{ marginTop: 8 }}>
@@ -145,7 +159,12 @@ export default function SubjectContent({
                     <div><label>Name (what students see)</label><input name="title" defaultValue={m.title} /></div>
                     <div><label>For which attempt (optional)</label><AttemptPicker name="valid_from_attempt" defaultValue={m.valid_from_attempt ?? ""} allowNone /></div>
                   </div>
-                  <PdfUpload name="file_url" folder="repository" label="Replace PDF (leave blank to keep current)" />
+                  <PdfUpload
+                    name="file_url"
+                    folder="repository"
+                    defaultValue={m.file_url ?? ""}
+                    label="PDF — currently uploaded (Replace to change it)"
+                  />
                   <label style={{ marginTop: 8 }}>🎬 Replace video link (leave blank to keep)</label>
                   <input name="video_url" placeholder="https://youtu.be/…" />
                   <label className="remember" style={{ marginTop: 8 }}>

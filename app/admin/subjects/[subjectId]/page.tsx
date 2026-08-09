@@ -77,7 +77,10 @@ export default async function SubjectDetail(props: { params: Promise<{ subjectId
   // service client (repository_items has no client RLS policy).
   const { data: subjMaterials } = await createServiceClient()
     .from("repository_items")
-    .select("id, kind, title, valid_from_attempt, valid_to_attempt, solution_url, public_sample")
+    // file_url was never read here, so the edit form had nothing to show and
+    // its "Replace" box could only ever be blank — the uploaded paper was
+    // invisible to the person who uploaded it, while students opened it fine.
+    .select("id, kind, title, file_url, valid_from_attempt, valid_to_attempt, solution_url, public_sample")
     .eq("subject_id", subjectId)
     .is("topic_id", null)
     .eq("is_active", true)

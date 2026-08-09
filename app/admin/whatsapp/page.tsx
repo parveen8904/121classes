@@ -77,6 +77,14 @@ export default async function AdminWhatsAppPage(props: { searchParams: Promise<{
         back={{ href: "/admin", label: "Admin" }}
       />
 
+      {/* The same question-and-answer record as every other channel. This page
+          is the conversation; that one is the read-through. */}
+      <p style={{ marginTop: -6 }}>
+        <a className="btn small secondary" href="/admin/doubt-log?days=30&channel=whatsapp">
+          🗒️ Read the questions and answers &rarr;
+        </a>
+      </p>
+
       {searchParams.sent === "1" && <div className="notice ok">Reply sent.</div>}
       {searchParams.sent === "0" && (
         <div className="notice err">

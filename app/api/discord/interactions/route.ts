@@ -33,17 +33,23 @@ async function answerAndFollowup(token: string, question: string) {
   } catch {
     /* fall through to the faculty message */
   }
-  // Recorded before it goes out, so a Discord answer is on the same report as
-  // every other channel. A hand-off to the faculty is logged with no answer.
+  const fromMaterial = Boolean(answer);
+  if (!answer) {
+    // Say where the thing lives rather than sending them away empty-handed.
+    const { replyFromSiteMap, PLAIN_FALLBACK } = await import("@/lib/ai");
+    answer = (await replyFromSiteMap(question).catch(() => null)) ?? PLAIN_FALLBACK;
+  }
+
+  // Logged AFTER the stopgap is chosen, so the record shows what the student
+  // actually received. Logging before it meant every hand-off read as
+  // "no answer sent" even though one had.
   try {
     const { logAiExchange } = await import("@/lib/aiAnswerLog");
-    await logAiExchange({ channel: "discord", question, answer: answer || null });
+    await logAiExchange({
+      channel: "discord", question, answer,
+      status: fromMaterial ? "answered" : "open",
+    });
   } catch { /* the student's answer matters more than our record of it */ }
-
-  if (!answer) {
-    answer =
-      "I couldn't answer that from the class material. Please ask it on the website (the *Ask your doubts* button on your subject page) — it can reach the faculty. 🙏";
-  }
   const content = `**Q:** ${question}\n\n${answer}\n\n— guided by CA Parveen Sharma`.slice(0, 1900);
   try {
     await fetch(`https://discord.com/api/v10/webhooks/${appId}/${token}/messages/@original`, {

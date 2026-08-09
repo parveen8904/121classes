@@ -211,6 +211,52 @@ export async function answerDoubt(question: string, context?: string): Promise<s
 // Sentinel the model returns when the repository doesn't cover the question.
 export const NEED_FACULTY = "NEED_FACULTY";
 
+// WHEN WE CANNOT ANSWER, SAY SOMETHING TRUE — never nothing.
+//
+// The old behaviour was one line: "Our faculty will look at it and reply here
+// shortly." Then nothing followed. A promise nobody keeps is worse than "we do
+// not have that", because the student waits instead of looking elsewhere.
+//
+// So before a question is handed to a person, one more reply goes: what we DO
+// have, and which page it is on. It is allowed to say we do not have something.
+// It is not allowed to invent a page — that sends a student to a wall.
+const LAST_RESORT_SYSTEM =
+  "You are replying on behalf of CA Parveen Sharma Classes to a student whose question could not be " +
+  "answered from the study material.\n" +
+  "Write a SHORT reply: 2 to 4 sentences, plain English, no headings.\n" +
+  "If they asked where to find something, name the page from the map below. " +
+  "If we do not have the thing they named, say so plainly, once, and offer the nearest thing we do have. " +
+  "NEVER invent a page, a link, a price, a date or a section number. " +
+  "Do not say faculty will reply shortly — a person may still write, but this reply must be useful on its own. " +
+  "If it needs a person (payment, refund, access already paid for), ask them to raise it at " +
+  "caparveensharma.com/support with their registered email, so it is tracked. " +
+  "Never mention AI or that you could not answer." +
+  PLAIN_STYLE;
+
+/** Said when even that fails, so a reply still goes out. */
+export const PLAIN_FALLBACK =
+  "Thank you for writing. I could not place this one straight away — please raise it at " +
+  "caparveensharma.com/support with your registered email and we will come back to you there, " +
+  "so that it is not lost.";
+
+/**
+ * A truthful reply built from what the site actually has.
+ * Returns null only when AI is unavailable; callers then use PLAIN_FALLBACK.
+ */
+export async function replyFromSiteMap(question: string): Promise<string | null> {
+  const { siteDirectory } = await import("@/lib/siteDirectory");
+  const where = await siteDirectory().catch(() => "");
+  const out = await callClaude(
+    `${LAST_RESORT_SYSTEM}\n\n${where}`,
+    `STUDENT'S MESSAGE:\n${question}`,
+    400,
+    { model: await fastModel(), feature: "doubt" },
+  );
+  const text = (out ?? "").trim();
+  return text.length > 15 && text !== NEED_FACULTY ? text : null;
+}
+
+
 // Removed at the founder's instruction (2026-08-05). It used to read "Beta
 // version — AI answers can make mistakes", appended under every answer.
 //
@@ -256,8 +302,15 @@ const REPO_SYSTEM =
   "labels in the material, e.g. 'Covered in Class 42.' If several, name them; if you truly can't tell, omit it.\n" +
   "For 'solve question 15 of Amalgamation / Q6 of ICAI / question 10 of RTP May 2026': find it in the material " +
   "and solve fully. If it is NOT in the uploaded material, say so in one line and offer to solve if they paste it.\n" +
-  `Only reply with exactly "${NEED_FACULTY}" if the request is genuinely NOT about the CA syllabus ` +
-  "(personal, fees, login, or account matters)." +
+  "IF THEY ARE ASKING WHERE SOMETHING IS — a test series, mock papers, notes, a class, the planner, " +
+  "downloads, a list they have heard of — answer from the WHERE THINGS ARE map: name the page and say what " +
+  "is on it. If we do not have the thing they named, say so plainly in one line and offer the nearest thing " +
+  "we do have. Never invent a page: a student sent to a page that does not exist is worse off than one told " +
+  "we do not have it.\n" +
+  `Only reply with exactly "${NEED_FACULTY}" when a PERSON must act — a payment dispute, a refund, ` +
+  "access they have paid for and cannot open, or anything about their own account that needs checking. " +
+  "Not knowing an answer is not a reason: say what you do know, point them at the page, and let a person " +
+  "add the rest." +
   PLAIN_STYLE;
 
 // Answer strictly from the repository material. Returns the answer, the literal
@@ -277,7 +330,12 @@ export async function answerDoubtFromMaterial(
 
   // Enough room to actually SOLVE a numbered question (working notes, journal
   // entries), not just a one-line conceptual reply.
-  const user = `${taught}STUDY MATERIAL:\n${material || "(none provided)"}\n\nSTUDENT QUESTION:\n${question}`;
+  // The map of the site travels with the study material. A great many messages
+  // are not doubts but "where is it?" — and answering those from material that
+  // does not mention pages meant declining them all.
+  const { siteDirectory } = await import("@/lib/siteDirectory");
+  const where = await siteDirectory();
+  const user = `${taught}${where}\n\nSTUDY MATERIAL:\n${material || "(none provided)"}\n\nSTUDENT QUESTION:\n${question}`;
   const raw = await callClaude(REPO_SYSTEM, user, 2000, { model: await teachingModel(), feature });
   // A reply CA Parveen Sharma reads and sends himself carries no machine
   // disclaimer — it is his answer by the time the student sees it.

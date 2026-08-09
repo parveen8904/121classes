@@ -289,13 +289,14 @@ export async function POST(req: NextRequest) {
   if (answer) {
     await sendTelegramMessage(chatId, answer + "\n\n— CA Parveen Sharma");
   } else {
-    await sendTelegramMessage(
-      chatId,
-      "✅ Got your doubt! Our faculty will review it and reply here soon.",
-    );
+    // Not "faculty will reply soon" and then nothing. A reply built from what
+    // the site actually has goes now; a person can still add to it.
+    const { replyFromSiteMap, PLAIN_FALLBACK } = await import("@/lib/ai");
+    const stopgap = (await replyFromSiteMap(text).catch(() => null)) ?? PLAIN_FALLBACK;
+    await sendTelegramMessage(chatId, stopgap + "\n\n— CA Parveen Sharma");
     await notifyFaculty(
       "A student doubt needs your reply (Telegram)",
-      `Question:\n${text}\n\nReply from Admin → Inbox.`,
+      `Question:\n${text}\n\nWhat already went to the student:\n${stopgap}\n\nAdd to it from Admin → Inbox.`,
     );
   }
 

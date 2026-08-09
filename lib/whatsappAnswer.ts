@@ -1,7 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendWhatsAppText } from "@/lib/notify";
 import { getRepositoryContext } from "@/lib/repository";
-import { answerDoubtFromMaterial, aiConfigured, judgeStudentMessage, ABUSE_WARNING, NEED_FACULTY } from "@/lib/ai";
+import { answerDoubtFromMaterial, aiConfigured, judgeStudentMessage, ABUSE_WARNING, NEED_FACULTY, replyFromSiteMap, PLAIN_FALLBACK } from "@/lib/ai";
 import { notifyFaculty } from "@/lib/notify";
 
 // Answer a WhatsApp doubt the way Telegram already does.
@@ -45,32 +45,60 @@ export async function answerWhatsAppDoubt(from: string, text: string): Promise<"
     await sendWhatsAppText(from, ABUSE_WARNING).catch(() => false);
     return "warned";
   }
-  if (judged.kind !== "question") return "ignored"; // "ok sir", "thank you" — the acknowledgement already went
+  // People type on WhatsApp the way they speak: "I wanna extend this batch",
+  // then "I got this batch complimentary", then "4 month access". Judged one
+  // line at a time, the last two look like chatter and were dropped — so the
+  // student was answered halfway through their own sentence and then ignored.
+  //
+  // If the message alone reads as chatter but the same number wrote minutes
+  // ago, the thread is judged instead of the line.
+  let question2 = question;
+  if (judged.kind !== "question") {
+    const thread = await recentFrom(svc, from);
+    if (!thread) return "ignored"; // "ok sir", "thank you" — the acknowledgement already went
+    const joined = `${thread}\n${question}`;
+    const rejudged = await judgeStudentMessage(joined);
+    if (rejudged.kind !== "question") return "ignored";
+    question2 = joined;
+  }
 
-  if (!(await aiConfigured())) return escalate(from, question);
+  if (!(await aiConfigured())) return escalate(from, question2);
 
-  const material = await getRepositoryContext(null, 12000, { query: question });
-  const raw = await answerDoubtFromMaterial(question, material);
-  if (!raw || raw.trim() === NEED_FACULTY) return escalate(from, question);
+  const material = await getRepositoryContext(null, 12000, { query: question2 });
+  const raw = await answerDoubtFromMaterial(question2, material);
+  if (!raw || raw.trim() === NEED_FACULTY) return escalate(from, question2);
 
   const sent = await sendWhatsAppText(from, `${raw}\n\n— CA Parveen Sharma Classes`).catch(() => false);
-  if (!sent) return escalate(from, question);
+  if (!sent) return escalate(from, question2);
 
   // Kept, so the founder can read what was asked and what went back.
-  await log(svc, from, question, raw, "answered");
+  await log(svc, from, question2, raw, "answered");
   return "answered";
 }
 
+// Handed to a person — but never in silence.
+//
+// This used to send "our faculty will look at it and reply here shortly" and
+// then nothing followed. So a real reply goes first, built from what the site
+// actually has, and the founder is still told. If the student then hears from a
+// person, they have had two useful messages instead of one empty one.
 async function escalate(from: string, question: string): Promise<"escalated"> {
-  await sendWhatsAppText(
-    from,
-    "✅ Got your question. Our faculty will look at it and reply here shortly.",
-  ).catch(() => false);
+  let reply: string | null = null;
+  try {
+    reply = await replyFromSiteMap(question);
+  } catch {
+    /* falls through to the plain line below */
+  }
+  const text = reply ?? PLAIN_FALLBACK;
+
+  await sendWhatsAppText(from, `${text}\n\n— CA Parveen Sharma Classes`).catch(() => false);
   await notifyFaculty(
     "A student doubt needs your reply (WhatsApp)",
-    `From: ${from}\n\nQuestion:\n${question}\n\nReply from Admin → Messages → WhatsApp.`,
+    `From: ${from}\n\nQuestion:\n${question}\n\nWhat already went to the student:\n${text}\n\n` +
+      `Add to it from Admin → Messages → WhatsApp.`,
   ).catch(() => {});
-  await log(createServiceClient(), from, question, null, "open");
+  // Logged as what it is: an answer went, and a person still owes a better one.
+  await log(createServiceClient(), from, question, text, "open");
   return "escalated";
 }
 
@@ -128,4 +156,43 @@ async function recordWarning(
       { onConflict: "chat_id" },
     );
   } catch { /* table optional */ }
+}
+
+/**
+ * The last few things this number said, within the hour.
+ *
+ * Only used to rescue a fragment that means nothing on its own. Returns null
+ * when there is no recent history, so a lone "Hi" is still left alone.
+ */
+async function recentFrom(
+  svc: ReturnType<typeof createServiceClient>,
+  from: string,
+  withinMinutes = 60,
+): Promise<string | null> {
+  try {
+    const { data } = await svc
+      .from("notifications")
+      .select("payload")
+      .eq("channel", "whatsapp")
+      .eq("template", "inbound")
+      .order("id", { ascending: false })
+      .limit(40);
+
+    const cutoff = Date.now() - withinMinutes * 60_000;
+    const lines: string[] = [];
+    for (const r of data ?? []) {
+      const p = (r.payload ?? {}) as Record<string, unknown>;
+      if (String(p.from ?? "") !== from) continue;
+      const at = Number(p.timestamp ?? p.ts ?? 0) * 1000;
+      if (!at || at < cutoff) continue;
+      const body = String((p.text as { body?: string } | undefined)?.body ?? "").trim();
+      if (body) lines.push(body);
+      if (lines.length >= 5) break;
+    }
+    // The newest is the message we are already handling.
+    const earlier = lines.slice(1).reverse();
+    return earlier.length ? earlier.join("\n") : null;
+  } catch {
+    return null;
+  }
 }

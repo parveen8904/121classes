@@ -165,10 +165,24 @@ export async function sendEmailWithAttachment(
 // WhatsApp Cloud API (direct Meta — replaced Interakt so there is no
 // middleman subscription). Templates must be approved on the WABA first;
 // sendWhatsAppText works only inside a 24h customer-service window.
-async function waSend(payload: Record<string, unknown>): Promise<boolean> {
+// Every WhatsApp send is written down — including the ones that fail.
+//
+// Nothing was recorded before, and Meta's error body was thrown away, so the
+// inbox showed a column of student messages with no replies beside them and
+// there was no way to tell whether a reply had gone, been refused by Meta, or
+// never been attempted. That silence is exactly what made 75 messages look
+// unanswered. A send that fails now says WHY, in the same thread.
+async function waSend(
+  payload: Record<string, unknown>,
+  kind: "outbound" | "outbound_template" = "outbound",
+): Promise<boolean> {
   const token = await getSecret("WHATSAPP_CLOUD_TOKEN");
   const phoneId = await getSecret("WHATSAPP_PHONE_NUMBER_ID");
-  if (!token || !phoneId) return false;
+  const to = String(payload.to ?? "");
+  if (!token || !phoneId) {
+    await record(null, "whatsapp", kind, { ...payload, error: "WhatsApp is not configured" }, false);
+    return false;
+  }
   try {
     const res = await fetch(`https://graph.facebook.com/v23.0/${phoneId}/messages`, {
       method: "POST",
@@ -176,8 +190,17 @@ async function waSend(payload: Record<string, unknown>): Promise<boolean> {
       body: JSON.stringify({ messaging_product: "whatsapp", ...payload }),
       cache: "no-store",
     });
-    return res.ok;
-  } catch {
+    if (res.ok) {
+      await record(null, "whatsapp", kind, payload, true);
+      return true;
+    }
+    // Meta explains its refusals properly — outside the 24-hour window, an
+    // unapproved template, a blocked number. Worth keeping, every time.
+    const why = await res.text().catch(() => "");
+    await record(null, "whatsapp", kind, { ...payload, to, error: why.slice(0, 800), http: res.status }, false);
+    return false;
+  } catch (e) {
+    await record(null, "whatsapp", kind, { ...payload, to, error: e instanceof Error ? e.message : String(e) }, false);
     return false;
   }
 }
@@ -211,11 +234,16 @@ export async function sendWhatsApp(
       parameters: [{ type: "text", text: opts.buttonParam }],
     });
   }
-  return waSend({
-    to,
-    type: "template",
-    template: { name: templateName, language: { code: opts?.lang ?? "en_US" }, components },
-  });
+  // Marketing and reminder blasts are recorded separately, so a 500-student
+  // campaign does not bury the conversations in the inbox.
+  return waSend(
+    {
+      to,
+      type: "template",
+      template: { name: templateName, language: { code: opts?.lang ?? "en_US" }, components },
+    },
+    "outbound_template",
+  );
 }
 
 /** Free-form text — delivered only inside an open 24h session window. */

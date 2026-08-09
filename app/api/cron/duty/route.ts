@@ -169,8 +169,22 @@ export async function GET(req: NextRequest) {
           });
         }
       } else {
+        // Would not answer — but the student still hears back. A reply built
+        // from what the site actually holds ("the test series is at /test-series",
+        // "we do not have that") is worth far more than the silence that used to
+        // follow, and the founder is still told to add to it.
+        const stopgap = await ai.replyFromSiteMap(question).catch(() => null);
+        const text = stopgap ?? ai.PLAIN_FALLBACK;
+        const sent = await deliverQuestionAnswer(String(d.id), text, { markStatus: "open" });
+        // Left "open" so it stays in his queue, but stamped as touched — the
+        // selection above skips anything with drafted_at set, and without this
+        // the same student would get the same stopgap every six hours.
+        await svc
+          .from("page_questions")
+          .update({ drafted_at: new Date().toISOString() })
+          .eq("id", d.id);
         needsHuman.push({
-          what: "Doubt the AI would not answer",
+          what: sent.delivered ? "Doubt answered only in outline — needs your reply" : "Doubt the AI would not answer",
           detail: String(d.question).slice(0, 120),
           since: String(d.created_at),
         });

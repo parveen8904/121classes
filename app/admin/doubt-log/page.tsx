@@ -5,6 +5,7 @@ import { assertArea } from "@/lib/adminAccess";
 import SubmitButton from "@/app/components/SubmitButton";
 import { addCorrection } from "../ai-training/actions";
 import { inChunks } from "@/lib/pageAll";
+import { AI_CHANNELS, channelLabel } from "@/lib/aiAnswerLog";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Doubt log — Admin" };
@@ -31,10 +32,15 @@ const IST = (s: string) =>
     day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata",
   });
 
-export default async function DoubtLogPage(props: { searchParams: Promise<{ days?: string }> }) {
+export default async function DoubtLogPage(props: {
+  searchParams: Promise<{ days?: string; channel?: string }>;
+}) {
   await assertArea("inbox");
-  const { days } = await props.searchParams;
+  const { days, channel } = await props.searchParams;
   const windowDays = Math.min(180, Math.max(1, Number(days) || 30));
+  // Every channel writes into this one table, so "show me only WhatsApp" is a
+  // filter rather than a second page. Same format everywhere, as asked.
+  const only = channel && AI_CHANNELS[channel] ? channel : "";
 
   const svc = createServiceClient();
   const since = new Date(Date.now() - windowDays * 86400_000).toISOString();
@@ -70,8 +76,12 @@ export default async function DoubtLogPage(props: { searchParams: Promise<{ days
     ids, (b) => svc.from("profiles").select("id, full_name, email").in("id", b));
   const nameOf = new Map(people.map((p) => [p.id, p.full_name || p.email || "Student"]));
 
-  const answered = questions.filter((q) => (answersFor.get(q.id)?.length ?? 0) > 0).length;
-  const unanswered = questions.length - answered;
+  // Filtered after pairing: a reply row's page_path is "reply:<id>", never the
+  // channel, so filtering in the query would have thrown away every answer.
+  const shown = only ? questions.filter((q) => (q.page_path ?? "") === only) : questions;
+
+  const answered = shown.filter((q) => (answersFor.get(q.id)?.length ?? 0) > 0).length;
+  const unanswered = shown.length - answered;
 
   return (
     <section className="container" style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 900 }}>
@@ -83,7 +93,7 @@ export default async function DoubtLogPage(props: { searchParams: Promise<{ days
       />
 
       <div className="card" style={{ display: "flex", gap: 22, flexWrap: "wrap", alignItems: "baseline" }}>
-        <div><strong style={{ fontSize: "1.5rem" }}>{questions.length}</strong><div className="muted">questions</div></div>
+        <div><strong style={{ fontSize: "1.5rem" }}>{shown.length}</strong><div className="muted">questions</div></div>
         <div><strong style={{ fontSize: "1.5rem" }}>{answered}</strong><div className="muted">answered</div></div>
         <div><strong style={{ fontSize: "1.5rem" }}>{unanswered}</strong><div className="muted">no answer sent</div></div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
@@ -91,7 +101,7 @@ export default async function DoubtLogPage(props: { searchParams: Promise<{ days
             <Link
               key={d}
               className={`btn small ${windowDays === d ? "" : "secondary"}`}
-              href={`/admin/doubt-log?days=${d}`}
+              href={`/admin/doubt-log?days=${d}${only ? `&channel=${only}` : ""}`}
             >
               {d} days
             </Link>
@@ -108,18 +118,39 @@ export default async function DoubtLogPage(props: { searchParams: Promise<{ days
         </div>
       </div>
 
-      {questions.length === 0 && (
-        <p className="muted" style={{ marginTop: 16 }}>Nothing asked in this period.</p>
+      {/* One row of channels. The counts come from what is already loaded, so the
+          chips show where the traffic actually is before he clicks. */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+        <Link className={`btn small ${only ? "secondary" : ""}`} href={`/admin/doubt-log?days=${windowDays}`}>
+          All channels ({questions.length})
+        </Link>
+        {Object.entries(AI_CHANNELS).map(([key, label]) => {
+          const n = questions.filter((q) => (q.page_path ?? "") === key).length;
+          if (!n && only !== key) return null;
+          return (
+            <Link
+              key={key}
+              className={`btn small ${only === key ? "" : "secondary"}`}
+              href={`/admin/doubt-log?days=${windowDays}&channel=${key}`}
+            >
+              {label} ({n})
+            </Link>
+          );
+        })}
+      </div>
+
+      {shown.length === 0 && (
+        <p className="muted" style={{ marginTop: 16 }}>Nothing asked here in this period.</p>
       )}
 
       <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
-        {questions.map((q) => {
+        {shown.map((q) => {
           const answers = (answersFor.get(q.id) ?? []).slice().reverse();
           return (
             <div className="card" key={q.id}>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
                 <strong style={{ fontSize: ".9rem" }}>{nameOf.get(q.user_id ?? "") ?? q.email ?? "Student"}</strong>
-                <span className="badge">{q.page_path || "site"}</span>
+                <span className="badge">{channelLabel(q.page_path)}</span>
                 <span className="muted" style={{ marginLeft: "auto", fontSize: ".8rem" }}>{IST(q.created_at)}</span>
               </div>
 

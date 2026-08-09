@@ -11,9 +11,9 @@ import { createServiceClient } from "@/lib/supabase/service";
 // the first question they ask is often how to buy. So:
 //
 //   Paying          — unlimited, as they have bought.
-//   Registered      — a few full answers a day, then told plainly what a plan
-//                     opens, and pointed at the genuinely free things.
-//   Unknown number  — one full answer, then asked to make a free account.
+//   Everyone else   — FIVE questions a day, then told plainly that this is a
+//                     paid service and what a plan opens. A stranger is also
+//                     asked to make a free account, since they have none.
 //
 // Everyone always gets something true and useful. Nobody is met with silence,
 // and nobody is scolded for asking.
@@ -32,14 +32,40 @@ export type WaAccess = {
   name: string | null;
 };
 
+// FIVE A DAY ON THE FREE PLAN, set by the founder. The same five whether or not
+// they have registered — the difference between a stranger and a registered
+// student is what we ask them to do next, not how much they are owed.
+const FREE_DAILY = 5;
+
 const ALLOWANCE: Record<WaTier, number> = {
   paying: 1000,   // effectively unlimited; still a ceiling against a runaway loop
-  registered: 3,
-  stranger: 1,
+  registered: FREE_DAILY,
+  stranger: FREE_DAILY,
 };
 
 /** Last ten digits, so 919810012345 and 9810012345 are one person. */
 const tail = (phone: string) => (phone ?? "").replace(/\D/g, "").slice(-10);
+
+/**
+ * Is the free-plan limit switched on?
+ *
+ * OFF by default, and deliberately. Answering strangers for nothing is
+ * marketing: somebody who has never heard of us asks a question at midnight,
+ * gets a real answer from Sir's own classes, and that is the whole pitch made
+ * without a word of selling. The founder wants that running while the launch is
+ * fresh, and a switch to close it the day it stops paying for itself.
+ */
+export async function limitOn(): Promise<boolean> {
+  try {
+    const { data } = await createServiceClient()
+      .from("site_settings").select("value").eq("key", "wa_free_limit_on").maybeSingle();
+    return String(data?.value ?? "") === "1";
+  } catch {
+    // If we cannot tell, keep answering. A limit applied by accident turns
+    // students away; one skipped by accident costs a few pennies.
+    return false;
+  }
+}
 
 export async function whatsappAccess(from: string): Promise<WaAccess> {
   const svc = createServiceClient();
@@ -102,8 +128,54 @@ export async function whatsappAccess(from: string): Promise<WaAccess> {
   }
 
   const allowance = ALLOWANCE[tier];
-  return { tier, answeredToday, allowance, allowed: answeredToday < allowance, name };
+  const enforcing = await limitOn();
+  return {
+    tier,
+    answeredToday,
+    allowance,
+    // With the limit off, everybody is allowed — the count is still kept, so
+    // the day it is switched on there is already a record of who asks how much.
+    allowed: !enforcing || tier === "paying" || answeredToday < allowance,
+    name,
+  };
 }
+
+/**
+ * A stranger, remembered.
+ *
+ * Somebody who writes in without an account is a person interested enough to
+ * type a question — the warmest lead there is, and until now they left no trace
+ * beyond a message nobody counted. Recorded once, never duplicated, and never
+ * for a number that already belongs to a student.
+ */
+export async function rememberStranger(from: string, firstQuestion: string): Promise<void> {
+  const digits = tail(from);
+  if (digits.length !== 10) return;
+  try {
+    const svc = createServiceClient();
+
+    const { data: known } = await svc
+      .from("leads").select("id").eq("phone", digits).limit(1).maybeSingle();
+    if (known?.id) return;
+
+    await svc.from("leads").insert({
+      phone: digits,
+      source: "whatsapp",
+      note: `Asked on WhatsApp: ${firstQuestion.slice(0, 200)}`,
+      verified: false,
+    });
+  } catch { /* a missed lead must never cost the student their answer */ }
+}
+
+/** Said once to a stranger, under their answer. Never twice. */
+export const JOIN_INVITE =
+  "\n\n———\n" +
+  "You are not registered with us yet. An account is free and takes a minute — " +
+  "it opens the first 5 classes of every subject, the practice papers and the study planner:\n" +
+  "caparveensharma.com\n\n" +
+  "The classes also work offline in our app:\n" +
+  "Android: https://play.google.com/store/apps/details?id=in.caclasses.app\n" +
+  "iPhone: https://apps.apple.com/app/id6789032629";
 
 /**
  * What to say when the allowance is used up.
@@ -114,26 +186,28 @@ export async function whatsappAccess(from: string): Promise<WaAccess> {
 export function gateMessage(a: WaAccess): string {
   const hi = a.name ? `${a.name.split(" ")[0]}, ` : "";
 
+  const limit =
+    `${hi}that is ${a.allowance} questions today, which is the daily limit on the free plan — ` +
+    `five questions a day, and they reset tomorrow morning.\n\n` +
+    `Beyond that this is a paid service: you need a plan to keep asking. A plan also opens the ` +
+    `classes, the question bank, the hitlist, and gets your written papers checked.\n` +
+    `caparveensharma.com/pricing\n\n`;
+
+  const free =
+    `Free either way:\n` +
+    `• The first 5 classes of every subject\n` +
+    `• Revision Test Papers, Mock Test Papers and past exam papers — caparveensharma.com/notes\n` +
+    `• Case-scenario MCQs — caparveensharma.com/try/cases\n\n`;
+
   if (a.tier === "stranger") {
     return (
-      `${hi}happy to help — but I can only answer properly for students with an account here, and this ` +
-      `number is not registered yet.\n\n` +
-      `Making one is free and takes a minute: caparveensharma.com\n\n` +
-      `Once you are in, these cost nothing:\n` +
-      `• The first 5 classes of every subject\n` +
-      `• Revision Test Papers, Mock Test Papers and past papers — caparveensharma.com/notes\n` +
-      `• Free case-scenario MCQs — caparveensharma.com/try/cases\n\n` +
-      `Sign up and ask me again — I answer from CA Parveen Sharma's own classes.\n\n` +
+      limit +
+      `This number is not registered with us either. An account is free and takes a minute: ` +
+      `caparveensharma.com\n\n` +
+      free +
       `— CA Parveen Sharma Classes [[gate]]`
     );
   }
 
-  return (
-    `${hi}that is your ${a.allowance} free doubts for today — do come back tomorrow.\n\n` +
-    `Students on a plan can ask as much as they like, and get the classes, the question bank, ` +
-    `the hitlist and their written papers checked. The plans are at caparveensharma.com/pricing\n\n` +
-    `Free in the meantime: the first 5 classes of every subject, and the practice papers at ` +
-    `caparveensharma.com/notes\n\n` +
-    `— CA Parveen Sharma Classes [[gate]]`
-  );
+  return limit + free + `— CA Parveen Sharma Classes [[gate]]`;
 }

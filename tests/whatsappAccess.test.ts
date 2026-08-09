@@ -25,22 +25,29 @@ const check = (name: string, ok: boolean, why = "") => {
 };
 
 // The allowances, lifted from the source so the test cannot drift from it.
+// FREE_DAILY is a named constant, so it is resolved before the table is read —
+// matching bare digits silently found nothing and reported "undefined".
+const freeDaily = Number(/const FREE_DAILY = (\d+)/.exec(access)?.[1] ?? NaN);
 const allowances = Object.fromEntries(
-  [...(/const ALLOWANCE: Record<WaTier, number> = \{([\s\S]*?)\}/.exec(access)?.[1] ?? "")
-    .matchAll(/(\w+):\s*(\d+)/g)].map((m) => [m[1], Number(m[2])]),
+  [...(/const ALLOWANCE: Record<WaTier, number> = \{([\s\S]*?)\n\};/.exec(access)?.[1] ?? "")
+    .matchAll(/(\w+):\s*([A-Z_]+|\d+)/g)]
+    .map((m) => [m[1], m[2] === "FREE_DAILY" ? freeDaily : Number(m[2])]),
 );
 
 check("a paying student is not rationed", (allowances.paying ?? 0) >= 100,
   `paying allowance is ${allowances.paying}`);
-check("a registered student gets a few a day",
-  allowances.registered > 0 && allowances.registered <= 10,
-  `registered allowance is ${allowances.registered}`);
-check("a stranger gets at least one",
-  allowances.stranger >= 1, "nobody should be met with silence on their first message");
-check("a stranger gets less than a registered student",
-  allowances.stranger < allowances.registered);
-check("a registered student gets less than a payer",
+// Five a day on the free plan — the founder's number.
+check("the free plan is five questions a day",
+  allowances.registered === 5 && allowances.stranger === 5,
+  `registered ${allowances.registered}, stranger ${allowances.stranger}`);
+check("a free user gets far less than a payer",
   allowances.registered < allowances.paying);
+
+// The notice must SAY what the limit is, not just enforce it.
+check("the notice states the daily limit",
+  /five questions a day/i.test(access), "a limit nobody was told about reads as a fault");
+check("the notice says plainly that it is a paid service",
+  /paid service/i.test(access));
 
 // ── The two things that must never break ────────────────────────────────────
 
@@ -64,6 +71,29 @@ check("marked messages are not counted as answers",
 const aiAt = answer.indexOf("aiConfigured()");
 check("the gate is checked before the model is paid for",
   gateAt !== -1 && aiAt !== -1 && gateAt < aiAt);
+
+// THE LIMIT IS A SWITCH, AND IT IS OFF BY DEFAULT.
+// Answering strangers for nothing is the marketing; the founder wants it
+// running while the launch is fresh, and a way to close it later.
+check("the limit is off unless switched on",
+  /String\(data\?\.value \?\? ""\) === "1"/.test(access),
+  "the default must be OFF");
+check("a failure to read the switch keeps answering",
+  /catch \{[\s\S]{0,300}return false;/.test(access),
+  "if we cannot tell, we must not turn students away");
+check("a paying student is never gated even when it is on",
+  /tier === "paying" \|\| answeredToday < allowance/.test(access));
+
+// Strangers are remembered, and invited once.
+check("an unregistered number is saved as a lead",
+  /from\("leads"\)[\s\S]{0,200}insert/.test(access));
+check("a lead is never duplicated",
+  /eq\("phone", digits\)[\s\S]{0,120}if \(known\?\.id\) return;/.test(access));
+check("the invitation names both app stores",
+  /play\.google\.com/.test(access) && /apps\.apple\.com/.test(access));
+check("the invitation goes only on a first answer",
+  /wasNew \? JOIN_INVITE : ""/.test(answer),
+  "repeating it under every reply turns help into advertising");
 
 // Nobody is refused in silence.
 check("a gated message still says something useful",

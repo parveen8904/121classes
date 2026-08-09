@@ -167,3 +167,22 @@ export async function answerOpenConversations() {
   revalidatePath("/admin/whatsapp");
   redirect(`/admin/whatsapp?answered=${answered}&left=${skipped}`);
 }
+
+/**
+ * Turn the free-question limit on or off.
+ *
+ * Off while the launch is fresh: answering strangers for nothing IS the
+ * marketing — a real answer from Sir's own classes, at midnight, to somebody
+ * who had never heard of us. On the day that stops paying for itself, this
+ * closes it. Nothing else changes; the count of who asks how much is kept
+ * either way, so the figures are already there when it is switched on.
+ */
+export async function toggleFreeLimit(formData: FormData) {
+  await assertArea("inbox");
+  const on = str(formData.get("on")) === "1";
+  await createServiceClient()
+    .from("site_settings")
+    .upsert({ key: "wa_free_limit_on", value: on ? "1" : "0" }, { onConflict: "key" });
+  revalidatePath("/admin/whatsapp");
+  redirect(`/admin/whatsapp?limit=${on ? "on" : "off"}`);
+}

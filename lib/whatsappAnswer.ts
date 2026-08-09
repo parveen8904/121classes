@@ -80,8 +80,15 @@ export async function answerWhatsAppDoubt(from: string, text: string): Promise<"
   // distress — somebody in trouble is not a billing question — and before the
   // expensive part, because there is no sense paying a model to answer somebody
   // we are about to gate.
-  const { whatsappAccess, gateMessage } = await import("@/lib/whatsappAccess");
+  const { whatsappAccess, gateMessage, rememberStranger, JOIN_INVITE } =
+    await import("@/lib/whatsappAccess");
   const access = await whatsappAccess(from).catch(() => null);
+
+  // A stranger is the warmest lead there is — interested enough to type a
+  // question. Kept whether or not the limit is on, and only ever once.
+  const wasNew = access?.tier === "stranger" && access.answeredToday === 0;
+  if (access?.tier === "stranger") await rememberStranger(from, question);
+
   if (access && !access.allowed) {
     await sendWhatsAppText(from, gateMessage(access)).catch(() => false);
     await log(svc, from, question2, gateMessage(access), "answered");
@@ -113,7 +120,10 @@ export async function answerWhatsAppDoubt(from: string, text: string): Promise<"
 
   // Outside the 24-hour window WhatsApp refuses the message. The answer is
   // written either way, so it goes by email rather than being thrown away.
-  const out = await reachStudent(from, `${raw}\n\n— CA Parveen Sharma Classes`, "A reply to your question")
+  // Their first answer carries the invitation to register and to get the apps.
+  // Only the first: repeating it under every reply turns help into advertising.
+  const body = `${raw}\n\n— CA Parveen Sharma Classes${wasNew ? JOIN_INVITE : ""}`;
+  const out = await reachStudent(from, body, "A reply to your question")
     .catch(() => ({ via: "none" as const, to: null }));
   if (out.via === "none") return escalate(from, question2);
 

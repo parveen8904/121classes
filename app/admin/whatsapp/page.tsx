@@ -2,7 +2,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
-import { replyOnWhatsApp, draftWhatsAppReply, saveWhatsAppAutoReply, answerOpenConversations } from "./actions";
+import { replyOnWhatsApp, draftWhatsAppReply, saveWhatsAppAutoReply, answerOpenConversations, toggleFreeLimit } from "./actions";
 import { getAutoReply } from "@/lib/whatsappAutoReply";
 
 // The WhatsApp inbox. A Cloud API number cannot use the WhatsApp app and does
@@ -32,7 +32,7 @@ function textOf(p: Record<string, unknown> | null): string {
 }
 
 export default async function AdminWhatsAppPage(props: {
-  searchParams: Promise<{ sent?: string; saved?: string; answered?: string; left?: string }>;
+  searchParams: Promise<{ sent?: string; saved?: string; answered?: string; left?: string; limit?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
@@ -47,6 +47,8 @@ export default async function AdminWhatsAppPage(props: {
 
   const rows = (data ?? []) as Row[];
   const number = await getSecret("WHATSAPP_PHONE_NUMBER_ID");
+  const { limitOn } = await import("@/lib/whatsappAccess");
+  const freeLimitOn = await limitOn();
   const auto = await getAutoReply();
 
   // Group by the other party's number, newest conversation first.
@@ -127,6 +129,30 @@ export default async function AdminWhatsAppPage(props: {
       </div>
 
       {searchParams.sent === "1" && <div className="notice ok">Reply sent.</div>}
+      {searchParams.limit && (
+        <div className="notice ok">
+          Free-question limit is now <strong>{searchParams.limit}</strong>.
+        </div>
+      )}
+
+      {/* THE SWITCH. Off means anybody who finds the number gets answered, which
+          is the cheapest marketing there is. On means five a day for anyone
+          without a plan. The count is kept either way, so switching it on is
+          not starting from nothing. */}
+      <form action={toggleFreeLimit} className="card" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <input type="hidden" name="on" value={freeLimitOn ? "0" : "1"} />
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <strong>{freeLimitOn ? "🔒 Free questions are limited" : "🎁 Anyone can ask, free"}</strong>
+          <div className="muted" style={{ fontSize: ".82rem" }}>
+            {freeLimitOn
+              ? "Anyone without a plan gets 5 questions a day, then is told this is a paid service. Students on a plan are never limited."
+              : "Everyone who writes in is answered, whether or not they have paid — the answers themselves are the advertisement. Every unregistered number is saved as a lead, and gets one invitation to register and download the app."}
+          </div>
+        </div>
+        <SubmitButton className="btn small secondary">
+          {freeLimitOn ? "Open it up again" : "Limit to 5 a day"}
+        </SubmitButton>
+      </form>
       {searchParams.answered !== undefined && (
         <div className="notice ok">
           Answered {searchParams.answered} conversation{searchParams.answered === "1" ? "" : "s"}.

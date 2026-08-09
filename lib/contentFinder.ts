@@ -110,32 +110,58 @@ export async function findContent(question: string): Promise<string> {
   }
 
   // ── The hitlist ──────────────────────────────────────────────────────────
+  // The hitlist is the list of important TOPICS for an attempt, with expected
+  // marks, uploaded as a PDF. It is NOT subjects.miq_rev1, which is the
+  // most-important-QUESTIONS list — a different list for a different purpose.
+  // Reading one as the other would point a student at the wrong revision.
   if (wantsHitlist) {
     const { data } = await svc
-      .from("subjects")
-      .select("title, miq_rev1, miq_rev2, courses(title)")
-      .order("order_index");
+      .from("repository_items")
+      .select("title, valid_from_attempt, subjects(title, courses(title))")
+      .eq("is_active", true)
+      .eq("student_visible", true)
+      .or("title.ilike.%hitlist%,title.ilike.%hit list%")
+      .order("created_at", { ascending: false });
 
-    // The embedded course comes back as an array or an object depending on how
-    // the relationship is read; flattened here so the rest is plain.
+    // The embedded relations come back as an array or an object depending on
+    // how the relationship is read; flattened here so the rest is plain.
+    const one = <T,>(v: T | T[] | null): T | undefined => (Array.isArray(v) ? v[0] : v ?? undefined);
     const rows = ((data ?? []) as unknown as {
-      title: string; miq_rev1: string | null; miq_rev2: string | null;
-      courses: { title: string } | { title: string }[] | null;
+      title: string; valid_from_attempt: string | null;
+      subjects: { title: string; courses: { title: string } | { title: string }[] | null }
+              | { title: string; courses: { title: string } | { title: string }[] | null }[] | null;
+    }[]).map((r) => {
+      const subj = one(r.subjects);
+      return {
+        title: r.title,
+        attempt: r.valid_from_attempt ?? "",
+        subject: subj?.title ?? "",
+        course: one(subj?.courses ?? null)?.title ?? "",
+      };
+    });
+
+    // Which subjects have one, and which do not — read from the data, so the
+    // answer stays right the day another is uploaded.
+    const { data: allSubj } = await svc
+      .from("subjects").select("title, courses(title)").order("order_index");
+    const every = ((allSubj ?? []) as unknown as {
+      title: string; courses: { title: string } | { title: string }[] | null;
     }[]).map((r) => ({
-      ...r,
+      subject: r.title,
       course: (Array.isArray(r.courses) ? r.courses[0]?.title : r.courses?.title) ?? "",
     }));
-    const has = rows.filter((r) => (r.miq_rev1 ?? "").trim() || (r.miq_rev2 ?? "").trim());
-    const not = rows.filter((r) => !has.includes(r));
+    const covered = new Set(rows.map((r) => `${r.course}|${r.subject}`));
+    const missing = every.filter((e) => !covered.has(`${e.course}|${e.subject}`));
 
     blocks.push(
-      "THE HITLIST (the most-important-questions list, chapter by chapter) lives at /learn/hitlist — " +
-        "it is a page, not a PDF, so send the link.\n" +
-        (has.length
-          ? `  Ready for: ${has.map((r) => `${r.course} — ${r.title}`).join("; ")}\n`
-          : "  Not ready for any subject yet.\n") +
-        (not.length
-          ? `  NOT released yet for: ${not.map((r) => `${r.course} — ${r.title}`).join("; ")}\n`
+      "THE HITLIST is CA Parveen Sharma's list of the important TOPICS for an exam, with the marks " +
+        "each is expected to carry. It is NOT the most-important-questions list — do not describe it " +
+        "as question numbers. It opens at /learn/hitlist; send that link rather than a file.\n" +
+        (rows.length
+          ? `  Released: ${rows.map((r) => `${r.course} — ${r.subject} (${r.attempt || "attempt not stated"})`).join("; ")}\n`
+          : "  Not released for any subject yet.\n") +
+        (missing.length
+          ? `  NOT released yet for: ${missing.map((m) => `${m.course} — ${m.subject}`).join("; ")}\n`
           : "") +
         "  If you cannot tell which course they are on, ASK — one short question, e.g. " +
         "'Are you doing CA Final or CA Intermediate?' — rather than guessing.",

@@ -42,7 +42,7 @@ export async function reachStats(): Promise<Channel[]> {
   // either platform while eleven phones sat in the table waiting.
   //
   // "No devices" and "the query failed" must never look the same again.
-  const devices = await selectAll<{ platform: string; created_at: string; user_id: string; device: string | null }>((f, t) =>
+  const devices = await selectAll<{ platform: string; created_at: string; user_id: string | null; device: string | null }>((f, t) =>
     svc.from("push_devices")
       .select("platform, created_at, user_id, device")
       .is("disabled_at", null)
@@ -51,7 +51,7 @@ export async function reachStats(): Promise<Channel[]> {
   );
 
   const owners = await inChunks<{ id: string; full_name: string | null; email: string | null }>(
-    [...new Set(devices.map((d) => d.user_id).filter(Boolean))],
+    [...new Set(devices.map((d) => d.user_id).filter(Boolean))] as string[],
     (b) => svc.from("profiles").select("id, full_name, email").in("id", b),
   );
   const ownerById = new Map(owners.map((o) => [o.id, o]));
@@ -63,9 +63,13 @@ export async function reachStats(): Promise<Channel[]> {
       label,
       count: mine.length,
       people: mine.slice(0, NAME_LIMIT).map((d) => {
-        const o = ownerById.get(d.user_id);
+        const o = d.user_id ? ownerById.get(d.user_id) : undefined;
         return {
-          name: o?.full_name || o?.email || "—",
+          // A phone with no account behind it is still on the list, and is
+          // said so plainly rather than shown as a dash — these are people who
+          // installed the app and allowed notifications without registering,
+          // and they DO receive general announcements.
+          name: o?.full_name || o?.email || (d.user_id ? "—" : "App installed · not signed in"),
           // The phone itself where it says so, since a phone never gives a
           // person's name — Android names its model, iOS says only "iPhone".
           detail: [o?.email, d.device].filter(Boolean).join(" · ") || undefined,
@@ -73,8 +77,13 @@ export async function reachStats(): Promise<Channel[]> {
         };
       }),
       note: mine.length === 0
-        ? "Nobody yet. A phone appears here only once it has the new app AND the student has allowed notifications."
-        : undefined,
+        ? "Nobody yet. A phone appears here once it has the app and notifications are allowed — signing in is not required."
+        : (() => {
+            const anon = mine.filter((d) => !d.user_id).length;
+            return anon
+              ? `${anon} of these have the app but have not signed in. They get general announcements, but nothing about a subject — we do not know what they study.`
+              : undefined;
+          })(),
     });
   }
 

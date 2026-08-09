@@ -42,9 +42,9 @@ export async function reachStats(): Promise<Channel[]> {
   // either platform while eleven phones sat in the table waiting.
   //
   // "No devices" and "the query failed" must never look the same again.
-  const devices = await selectAll<{ platform: string; created_at: string; user_id: string }>((f, t) =>
+  const devices = await selectAll<{ platform: string; created_at: string; user_id: string; device: string | null }>((f, t) =>
     svc.from("push_devices")
-      .select("platform, created_at, user_id")
+      .select("platform, created_at, user_id, device")
       .is("disabled_at", null)
       .order("created_at", { ascending: false })
       .range(f, t),
@@ -66,7 +66,9 @@ export async function reachStats(): Promise<Channel[]> {
         const o = ownerById.get(d.user_id);
         return {
           name: o?.full_name || o?.email || "—",
-          detail: o?.email ?? undefined,
+          // The phone itself where it says so, since a phone never gives a
+          // person's name — Android names its model, iOS says only "iPhone".
+          detail: [o?.email, d.device].filter(Boolean).join(" · ") || undefined,
           when: d.created_at,
         };
       }),

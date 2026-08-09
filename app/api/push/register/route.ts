@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   // Not signed in yet is ordinary — the app registers again after login.
   if (!user) return NextResponse.json({ ok: false, reason: "signed out" }, { status: 401 });
 
-  let body: { token?: string; platform?: string; appVersion?: string };
+  let body: { token?: string; platform?: string; appVersion?: string; device?: string };
   try {
     body = await req.json();
   } catch {
@@ -39,6 +39,7 @@ export async function POST(req: Request) {
       user_id: user.id,
       platform,
       app_version: String(body.appVersion ?? "").slice(0, 20) || null,
+      device: String(body.device ?? "").slice(0, 60) || null,
       last_seen_at: new Date().toISOString(),
       disabled_at: null,
     },

@@ -16,6 +16,22 @@ import { useEffect } from "react";
 //    appears before the student has seen anything reads as an intrusion; one
 //    that appears while they are already looking at their classes reads as an
 //    offer.
+/** "Redmi Note 12", "SM-G991B", or just "iPhone" — whatever the phone admits to. */
+function deviceFromUserAgent(): string {
+  try {
+    const ua = navigator.userAgent || "";
+    // Android puts the model between the OS version and the browser build:
+    //   … Android 14; SM-G991B Build/… )
+    const android = /Android\s+[\d.]+;\s*([^;)]+?)(?:\s+Build\/|[;)])/i.exec(ua);
+    if (android?.[1]) return android[1].trim().slice(0, 60);
+    if (/iPad/i.test(ua)) return "iPad";
+    if (/iPhone/i.test(ua)) return "iPhone";
+    return "";
+  } catch {
+    return "";
+  }
+}
+
 export default function PushRegister() {
   useEffect(() => {
     let stop = false;
@@ -66,6 +82,12 @@ export default function PushRegister() {
                 token: t.value,
                 platform,
                 appVersion: (window as unknown as { APP_VERSION?: string }).APP_VERSION ?? "",
+                // What phone this is. Free, needs no permission, and reaches
+                // phones already installed — unlike a native plugin, which
+                // would mean a rebuild and two store reviews for a label.
+                // Android names the model; iOS says only "iPhone", because
+                // Apple hides the rest on purpose.
+                device: deviceFromUserAgent(),
               }),
             });
           } catch {

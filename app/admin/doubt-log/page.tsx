@@ -335,18 +335,25 @@ export default async function DoubtLogPage(props: {
             {waitingRows.slice(0, 15).map((q) => {
               const mins = (now - new Date(q.created_at).getTime()) / 60000;
               return (
-                <details key={q.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 6 }}>
+                <div key={q.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", borderTop: "1px solid var(--border)", paddingTop: 6 }}>
+                  {/* BESIDE the row, not inside its summary.
+                      It lived in the <summary> with an onClick to stop the
+                      click reaching the toggle — and this page is a server
+                      component, which may not pass an event handler to the
+                      browser at all. That threw on every render and left the
+                      page reloading into a blank screen. Sitting outside the
+                      summary, ticking simply cannot open the row, and no
+                      handler is needed. */}
+                  <input
+                    type="checkbox"
+                    name="pick"
+                    value={q.id}
+                    form="pick-waiting"
+                    aria-label="Select this doubt"
+                    style={{ marginTop: 4 }}
+                  />
+                  <details style={{ flex: 1, minWidth: 0 }}>
                   <summary style={{ cursor: "pointer", display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap", fontSize: ".88rem" }}>
-                    {/* Outside the summary's toggle: ticking a row must not
-                        expand it, or picking six means opening six. */}
-                    <input
-                      type="checkbox"
-                      name="pick"
-                      value={q.id}
-                      form="pick-waiting"
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label="Select this doubt"
-                    />
                     <span style={{ fontWeight: 700, color: mins > 1440 ? "#b91c1c" : "#b45309", minWidth: 92 }}>
                       {howLong(mins)}
                     </span>
@@ -371,7 +378,8 @@ export default async function DoubtLogPage(props: {
                     <input type="hidden" name="id" value={q.id} />
                     <SubmitButton className="btn small secondary">Not replying to this — close it</SubmitButton>
                   </form>
-                </details>
+                  </details>
+                </div>
               );
             })}
 

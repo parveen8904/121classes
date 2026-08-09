@@ -110,6 +110,10 @@
     {
       "path": "/api/cron/ticket-doubts",
       "schedule": "35 * * * *"
+    },
+    {
+      "path": "/api/cron/uptime",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

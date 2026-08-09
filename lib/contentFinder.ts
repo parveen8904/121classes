@@ -32,6 +32,12 @@ const KIND_WORDS: { kind: string; words: RegExp }[] = [
 
 const WANTS_HITLIST = /hit\s*-?\s*list|hitlist|most important question|important question|\bmiq\b/i;
 
+// "please provide demo classes" was answered with "we have no demo videos".
+// We give five free classes in every subject and always have — they are the
+// classes with no plan required on them. Nothing told the AI that, so it
+// invented an absence, which is the one thing worse than inventing a link.
+const WANTS_DEMO = /\bdemo\b|trial class|free class|sample class|sample lecture|free lecture|try the class/i;
+
 /** "may 2025", "sept 2025", "jan 26" → a loose matcher against paper titles. */
 function attemptWords(q: string): string[] {
   const out: string[] = [];
@@ -65,7 +71,8 @@ export async function findContent(question: string): Promise<string> {
 
   const kinds = KIND_WORDS.filter((k) => k.words.test(q)).map((k) => k.kind);
   const wantsHitlist = WANTS_HITLIST.test(q);
-  if (!kinds.length && !wantsHitlist) return "";
+  const wantsDemo = WANTS_DEMO.test(q);
+  if (!kinds.length && !wantsHitlist && !wantsDemo) return "";
 
   const svc = createServiceClient();
   const blocks: string[] = [];
@@ -168,7 +175,57 @@ export async function findContent(question: string): Promise<string> {
     );
   }
 
+  // ── Free demo classes ────────────────────────────────────────────────────
+  if (wantsDemo) {
+    // Counted from the classes themselves, so the number is never a claim we
+    // have stopped honouring. A free demo is a published class with no plan
+    // required on it.
+    const counts = await freeDemoCounts(svc);
+    blocks.push(
+      counts.length
+        ? "FREE DEMO CLASSES — we give the first classes of every subject free. Anyone can create a " +
+          "free account and watch them; no payment and no card.\n" +
+          counts.map((c) => `  ${c.course} · ${c.subject} — ${c.free} free classes (of ${c.total})`).join("\n") +
+          "\n  They open from the subject page under /courses, after signing in. Say the number plainly."
+        : "We do not currently have free demo classes to offer. Say so plainly.",
+    );
+  }
+
   return blocks.join("\n\n");
+}
+
+/** How many classes in each subject are free to watch without a plan. */
+async function freeDemoCounts(
+  svc: ReturnType<typeof createServiceClient>,
+): Promise<{ course: string; subject: string; free: number; total: number }[]> {
+  try {
+    const { data } = await svc
+      .from("sections")
+      .select("min_plan, is_published, type, topics!inner(subjects!inner(title, courses!inner(title)))")
+      .eq("type", "full_class_video")
+      .eq("is_published", true)
+      .limit(2000);
+
+    const rows = (data ?? []) as unknown as {
+      min_plan: string | null;
+      topics: { subjects: { title: string; courses: { title: string } } };
+    }[];
+
+    const tally = new Map<string, { course: string; subject: string; free: number; total: number }>();
+    for (const r of rows) {
+      const subject = r.topics?.subjects?.title ?? "";
+      const course = r.topics?.subjects?.courses?.title ?? "";
+      if (!subject) continue;
+      const key = `${course}|${subject}`;
+      const cur = tally.get(key) ?? { course, subject, free: 0, total: 0 };
+      cur.total += 1;
+      if (r.min_plan == null) cur.free += 1;
+      tally.set(key, cur);
+    }
+    return [...tally.values()].filter((t) => t.free > 0);
+  } catch {
+    return [];
+  }
 }
 
 async function subjectNames(

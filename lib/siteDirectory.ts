@@ -38,7 +38,7 @@ const PLACES: { where: string; what: string }[] = [
   { where: "/books", what: "Printed books, and how to order them." },
   { where: "/notifications", what: "Everything the student has been told, kept so nothing is missed." },
   { where: "/pricing", what: "Plans and what each includes." },
-  { where: "/courses", what: "Every course and subject taught here." },
+  { where: "/courses", what: "Every course and subject taught here — and the FREE DEMO CLASSES: the first five classes of each subject are free to watch with a free account, no payment." },
   { where: "/articles", what: "Articles and guidance written for CA students." },
   { where: "/career", what: "Career guidance, interviews and CV help." },
   { where: "/placements", what: "Job openings for CA students and freshers." },

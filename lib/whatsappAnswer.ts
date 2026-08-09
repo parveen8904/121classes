@@ -74,6 +74,20 @@ export async function answerWhatsAppDoubt(from: string, text: string): Promise<"
     question2 = joined;
   }
 
+  // WHO IS THIS, AND HOW MUCH ARE THEY OWED?
+  //
+  // The number is printed on the website, so anyone can find it. Checked AFTER
+  // distress — somebody in trouble is not a billing question — and before the
+  // expensive part, because there is no sense paying a model to answer somebody
+  // we are about to gate.
+  const { whatsappAccess, gateMessage } = await import("@/lib/whatsappAccess");
+  const access = await whatsappAccess(from).catch(() => null);
+  if (access && !access.allowed) {
+    await sendWhatsAppText(from, gateMessage(access)).catch(() => false);
+    await log(svc, from, question2, gateMessage(access), "answered");
+    return "answered";
+  }
+
   if (!(await aiConfigured())) return escalate(from, question2);
 
   // WHO is asking, before answering them.

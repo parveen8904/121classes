@@ -12,11 +12,20 @@ async function loadStats() {
   const svc = createServiceClient();
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
   const head = { count: "exact" as const, head: true };
-  const [students, openings, doubts, questions, ai, storage, bunny] = await Promise.all([
+  const [students, openings, doubtSummary, ai, storage, bunny] = await Promise.all([
     svc.from("profiles").select("id", head).eq("role", "student"),
     svc.from("job_listings").select("id", head).eq("status", "new"),
-    svc.from("doubts").select("id", head).eq("status", "open"),
-    svc.from("page_questions").select("id", head).eq("status", "open"),
+    // ONE DEFINITION OF "WAITING", AND IT LIVES IN ONE PLACE.
+    //
+    // This counted every row marked open, which is not the same thing: a doubt
+    // can be open AND already answered — a distress reply stays open until a
+    // person has spoken to them, and login-help settles itself. So the tile
+    // said 8 while the report it links to listed 6, and the difference looked
+    // like something had gone missing on the way.
+    //
+    // Both now ask the same function. There is nowhere left for them to
+    // disagree.
+    svc.rpc("doubt_report_summary", { p_days: 30 }),
     // Aggregated in the DATABASE. Summing the raw rows here was silently cut
     // off by the 1,000-row cap, so the figure stopped moving four days into
     // the month and read barely half of what was really being spent.
@@ -29,8 +38,7 @@ async function loadStats() {
   return {
     students: students.count ?? 0,
     openings: openings.count ?? 0,
-    doubts: doubts.count ?? 0,
-    questions: questions.count ?? 0,
+    waiting: Number((doubtSummary.data as { waiting?: number } | null)?.waiting ?? 0),
     aiMonth,
     storageMb: stRow ? (Number(stRow.bytes) || 0) / (1024 * 1024) : 0,
     bunnyMonth: bunny ? bunny.thisMonth : null,
@@ -55,7 +63,7 @@ export default async function AdminHome() {
     // from one table and "open questions" from another — which read as two
     // different problems and led to the same place.
     // One number from one table, now that every channel writes to it.
-    { label: "Doubts waiting", value: String(s.questions), href: "/admin/doubt-log", alert: s.questions > 0 },
+    { label: "Doubts waiting", value: String(s.waiting), href: "/admin/doubt-log", alert: s.waiting > 0 },
     { label: "AI cost (this month)", value: inr(s.aiMonth), href: "/admin/costs" },
     ...(s.bunnyMonth !== null ? [{ label: "Bunny (this month)", value: inr(s.bunnyMonth), href: "/admin/costs" }] : []),
     { label: "Storage used", value: `${s.storageMb.toFixed(1)} MB`, href: "/admin/costs" },

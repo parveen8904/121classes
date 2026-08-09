@@ -4,7 +4,7 @@ import AdminHero from "../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
 import SubmitButton from "@/app/components/SubmitButton";
 import { addCorrection } from "../ai-training/actions";
-import { answerWaiting, closeWaiting } from "./actions";
+import { answerWaiting, closeWaiting, closeAllWaiting } from "./actions";
 import { inChunks } from "@/lib/pageAll";
 import { AI_CHANNELS, channelLabel } from "@/lib/aiAnswerLog";
 
@@ -266,7 +266,19 @@ export default async function DoubtLogPage(props: {
           asks anything of him; everything below it is a record. */}
       {waitingRows.length > 0 && (
         <div className="card" style={{ marginTop: 14 }}>
-          <strong style={{ fontSize: ".95rem" }}>⏳ Waiting for an answer ({waitingRows.length})</strong>
+          <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+            <strong style={{ fontSize: ".95rem" }}>⏳ Waiting for an answer ({waitingRows.length})</strong>
+            <span className="muted" style={{ fontSize: ".8rem" }}>
+              Open a row to reply, or close it if it is not going to be answered.
+            </span>
+            {/* Everything on this list at once, for the days when it is all
+                chatter and none of it is worth opening. */}
+            <form action={closeAllWaiting} style={{ marginLeft: "auto" }}>
+              <SubmitButton className="btn small secondary" savedLabel="✓ Cleared">
+                Close all {waitingRows.length}
+              </SubmitButton>
+            </form>
+          </div>
           <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
             {waitingRows.slice(0, 15).map((q) => {
               const mins = (now - new Date(q.created_at).getTime()) / 60000;
@@ -281,6 +293,11 @@ export default async function DoubtLogPage(props: {
                     <span className="muted">{nameOf.get(q.user_id ?? "") ?? q.email ?? "—"}</span>
                   </summary>
 
+                  {/* Dismissing was buried inside this expander, so the only
+                      visible option was to answer — and some of these will
+                      never be answered. It sits on the row now, next to the
+                      question, where deciding "not this one" takes one press. */}
+
                   {/* Answered where it is listed. The inbox used to be a second
                       place to do this, which is how one student came to appear
                       in two queues with two different counts. */}
@@ -294,7 +311,7 @@ export default async function DoubtLogPage(props: {
                   </form>
                   <form action={closeWaiting} style={{ marginTop: 6 }}>
                     <input type="hidden" name="id" value={q.id} />
-                    <SubmitButton className="btn small secondary">Nothing to answer — close it</SubmitButton>
+                    <SubmitButton className="btn small secondary">Not replying to this — close it</SubmitButton>
                   </form>
                 </details>
               );

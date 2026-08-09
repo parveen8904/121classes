@@ -52,3 +52,27 @@ export async function closeWaiting(formData: FormData) {
   }
   revalidatePath("/admin/doubt-log");
 }
+
+/**
+ * Close everything currently waiting.
+ *
+ * For the days when the queue is all chatter and opening each one to dismiss it
+ * is busywork. Deliberately takes no id list: it closes what is waiting NOW, on
+ * the same definition the report uses, so a doubt that arrived while the page
+ * was open is not swept away unseen.
+ */
+export async function closeAllWaiting() {
+  if (!(await requireArea("inbox"))) return;
+  const svc = createServiceClient();
+
+  const { data } = await svc.rpc("doubt_report_summary", { p_days: 180 });
+  const waiting = ((data as { waiting_list?: { id: string }[] } | null)?.waiting_list ?? []).map((w) => w.id);
+  if (!waiting.length) return;
+
+  // In batches — a long queue names more ids than one URL will hold, and a
+  // refused query would close nothing while appearing to work.
+  for (let i = 0; i < waiting.length; i += 200) {
+    await svc.from("page_questions").update({ status: "done" }).in("id", waiting.slice(i, i + 200));
+  }
+  revalidatePath("/admin/doubt-log");
+}

@@ -105,6 +105,16 @@ export async function answerWhatsAppDoubt(from: string, text: string): Promise<"
 
   // Kept, so the founder can read what was asked and what went back.
   await log(svc, from, question2, raw, "answered");
+
+  // If that looks like the end of it, one note about the apps and the feedback
+  // form — AFTER their answer, never instead of it, and once a fortnight at
+  // most. Never sent when we could not answer them.
+  try {
+    const { maybeClosingNote } = await import("@/lib/conversationClose");
+    const note = await maybeClosingNote({ who: from, channel: "whatsapp", history, latest: question });
+    if (note) await sendWhatsAppText(from, note).catch(() => false);
+  } catch { /* the answer already went; this is a nicety */ }
+
   return "answered";
 }
 

@@ -1130,6 +1130,31 @@ export async function judgeDistress(text: string): Promise<boolean> {
   return /\byes\b/i.test(String(out ?? ""));
 }
 
+/**
+ * Has this exchange run its course?
+ *
+ * Leans toward NO. Ending a conversation early — sending "glad that helped"
+ * while the student is mid-thought — is far more irritating than never sending
+ * it at all, and it is the sort of thing that makes a person stop writing in.
+ */
+export async function judgeConversationEnded(history: string, latest: string): Promise<boolean> {
+  const out = await callClaude(
+    "You are reading a conversation between a CA coaching institute and a student.\n" +
+      "Has it FINISHED — the student's question was answered and they are satisfied or signing off?\n" +
+      "Answer YES only for a clear ending: 'thanks sir', 'got it', 'ok clear', 'thank you so much', " +
+      "'that helps', or a plain acknowledgement with nothing left open.\n" +
+      "Answer NO if they asked anything new, asked a follow-up, sound confused, are waiting on " +
+      "something from us, mentioned a payment or access problem, or said anything about how they " +
+      "are feeling. Answer NO if the last message is a question of any kind.\n" +
+      "If you are unsure at all, answer NO.\n" +
+      "Reply with one word: YES or NO.",
+    `${history}\n\nStudent's latest message:\n${latest}`.slice(0, 4000),
+    8,
+    { model: await fastModel(), feature: "judge_message" },
+  );
+  return /\byes\b/i.test(String(out ?? ""));
+}
+
 export const ABUSE_WARNING =
   "This is a study group for CA Intermediate and CA Final students. " +
   "Messages like that are not acceptable here.\n\n" +

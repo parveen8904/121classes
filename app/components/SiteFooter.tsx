@@ -67,6 +67,9 @@ export default async function SiteFooter() {
           <Link prefetch={false} href="/#vision">Vision</Link>
           <Link prefetch={false} href="/#contact">Contact Us</Link>
           <Link prefetch={false} href="/support">Help &amp; Support</Link>
+          {/* Asked for plainly, in the place people look when they have
+              something to say and nobody obvious to say it to. */}
+          <Link prefetch={false} href="/feedback">Give feedback</Link>
           <Link prefetch={false} href="/guide">Student Guide</Link>
           <Link prefetch={false} href="/privacy">Privacy Policy</Link>
           <Link prefetch={false} href="/refund">Refund Policy</Link>

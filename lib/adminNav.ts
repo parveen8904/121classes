@@ -16,6 +16,7 @@ export type AdminGroup = { id: string; icon: string; title: string; tagline: str
 // more purposeful tiles.
 export const REPORTS: AdminPanel[] = [
   { icon: "💰", title: "Sales report", desc: "Revenue in total and this month, split between subscriptions and books; active plans by tier; top-selling titles; gift purchases with their GST breakup and invoices.", href: "/admin/reports/sales" },
+  { icon: "📝", title: "Feedback", desc: "What students say about us — the complaints first, in their own words, with a way to reach them. Averages underneath, worst question first.", href: "/admin/reports/feedback" },
   { icon: "💬", title: "Doubt report", desc: "Every doubt on every channel: how many were answered, how many are still waiting and for how long, then the full question-and-answer record. The only doubt list there is.", href: "/admin/doubt-log" },
   { icon: "✉️", title: "Email report", desc: "Did our email actually arrive? Mailgun's own delivered and failed counts, and which kinds of message the site is sending.", href: "/admin/reports/email" },
   { icon: "🎓", title: "Subscriber report", desc: "Who holds a live plan right now — tier, subject, dates, amount and full contact details, ready to export.", href: "/admin/reports/subscribers" },

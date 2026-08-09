@@ -290,6 +290,10 @@ export async function POST(req: NextRequest) {
   }
 
   let answer: string | null = null;
+  // Read once, out here, because the closing note needs the same thread the
+  // answer was written from. Named for what it is: TypeScript already has a
+  // History in scope, and shadowing it silently handed the wrong value along.
+  let thread = "";
   if (await aiConfigured()) {
     let material = await getRepositoryContext(null, 12000, { query: text });
     const ctx = await import("@/lib/studentContext");
@@ -298,12 +302,19 @@ export async function POST(req: NextRequest) {
       if (facts) material = `${ctx.accountAnswerRules(facts)}\n\n---\n\n${material}`;
     }
     const { loggedHistory } = await import("@/lib/conversation");
-    const history = await loggedHistory({ channel: "telegram", telegramChatId: String(chatId), current: text }).catch(() => "");
-    const raw = await answerDoubtFromMaterial(text, material, "doubt", { history });
+    thread = await loggedHistory({ channel: "telegram", telegramChatId: String(chatId), current: text }).catch(() => "");
+    const raw = await answerDoubtFromMaterial(text, material, "doubt", { history: thread });
     if (raw && raw.trim() !== NEED_FACULTY) answer = raw;
   }
   if (answer) {
     await sendTelegramMessage(chatId, answer + "\n\n— CA Parveen Sharma");
+    try {
+      const { maybeClosingNote } = await import("@/lib/conversationClose");
+      const note = await maybeClosingNote({
+        who: String(chatId), channel: "telegram", history: thread, latest: text,
+      });
+      if (note) await sendTelegramMessage(chatId, note);
+    } catch { /* the answer already went */ }
   } else {
     // Not "faculty will reply soon" and then nothing. A reply built from what
     // the site actually has goes now; a person can still add to it.

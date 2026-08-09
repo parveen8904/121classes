@@ -44,6 +44,7 @@ const PLACES: { where: string; what: string }[] = [
   { where: "/placements", what: "Job openings for CA students and freshers." },
   { where: "/results", what: "Results and rank-holders." },
   { where: "/support", what: "Raise a support ticket about the website, payment or access." },
+  { where: "/feedback", what: "Tell us what is working and what is not — ten questions, two minutes." },
   { where: "/help", what: "How to use the site." },
   { where: "/install", what: "Getting the mobile app." },
 ];

@@ -10,7 +10,7 @@ const ROLE_EMOJI: Record<string, string> = { student: "🎓", admin: "🛠️", 
 
 export default async function UsersPage(
   props: {
-    searchParams: Promise<{ q?: string; role?: string; added?: string; invited?: string; failed?: string; rescued?: string; rescueleft?: string; rescueerr?: string; supp_created?: string; supp_marked?: string; supp_failed?: string }>;
+    searchParams: Promise<{ q?: string; role?: string; supporter?: string; added?: string; invited?: string; failed?: string; rescued?: string; rescueleft?: string; rescueerr?: string; supp_created?: string; supp_marked?: string; supp_failed?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -33,14 +33,20 @@ export default async function UsersPage(
     tried = ((data ?? []) as unknown[]).length;
   } catch { /* same */ }
   const role = searchParams.role ?? "";
+  // Supporters are not a role — they are students and staff who also sponsor.
+  // So it is its own filter rather than another entry in the role list, which
+  // is why "find my supporters" was impossible before.
+  const supporter = searchParams.supporter ?? "";
 
   let query = supabase
     .from("profiles")
-    .select("id, full_name, email, phone, role, target_attempt, created_at")
+    .select("id, full_name, email, phone, role, target_attempt, created_at, is_supporter")
     .order("created_at", { ascending: false })
     .limit(300);
   if (q) query = query.or(`full_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`);
   if (role && ["student", "admin", "faculty"].includes(role)) query = query.eq("role", role);
+  if (supporter === "yes") query = query.eq("is_supporter", true);
+  else if (supporter === "no") query = query.or("is_supporter.is.null,is_supporter.eq.false");
 
   const { data: users } = await query;
 
@@ -174,7 +180,7 @@ export default async function UsersPage(
       </details>
 
       <form className="form-card" style={{ marginTop: 16 }}>
-        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr auto", alignItems: "end" }}>
+        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "2fr 1fr 1fr auto", alignItems: "end" }}>
           <div>
             <label htmlFor="q">Search (name, email, phone)</label>
             <input id="q" name="q" defaultValue={q} placeholder="Type to search…" style={{ marginBottom: 0 }} />
@@ -186,6 +192,14 @@ export default async function UsersPage(
               <option value="student">🎓 Students</option>
               <option value="faculty">👩‍🏫 Faculty</option>
               <option value="admin">🛠️ Admins</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="supporter">Supporter</label>
+            <select id="supporter" name="supporter" defaultValue={supporter} style={{ marginBottom: 0 }}>
+              <option value="">Everyone</option>
+              <option value="yes">💚 Supporters only</option>
+              <option value="no">Not supporters</option>
             </select>
           </div>
           <SubmitButton className="btn">
@@ -212,6 +226,10 @@ export default async function UsersPage(
                 <div>
                   <span className="row-title">
                     {ROLE_EMOJI[u.role] ?? "👤"} {u.full_name || "(no name)"}
+                    {/* Marked in the list too, so the filter's result is
+                        obvious and a supporter is recognisable when found by
+                        name rather than by filter. */}
+                    {(u as { is_supporter?: boolean }).is_supporter ? " 💚" : ""}
                   </span>
                   <p className="row-sub">
                     {u.email ?? u.phone ?? "—"} · {u.role}

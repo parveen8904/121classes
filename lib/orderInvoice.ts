@@ -5,6 +5,14 @@ import { getGstSettings, computeGst, nextInvoiceNo, buildInvoicePdf } from "@/li
 // the payer. The admin Sales panel links it; it is NEVER shown inside the
 // student login (founder's rule). Idempotent per order; a failure here must
 // never break a successful payment.
+/** Whole months between two dates, for rows where the length was never stored. */
+function monthsBetween(a: string | null, b: string | null): number | null {
+  if (!a || !b) return null;
+  const from = new Date(a), to = new Date(b);
+  const m = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+  return m > 0 ? m : null;
+}
+
 export async function issueOrderInvoice(opts: {
   razorpayOrderId: string;
   payerUserId?: string | null;
@@ -148,15 +156,27 @@ export async function reissueOrderInvoice(orderId: string): Promise<{ ok: boolea
 
   // The validity window this payment bought, for the receipt half.
   let receiptDetail: string | null = null;
+  let planLine: string | null = null;
   const subjectId = (ord as { subject_id?: string | null }).subject_id ?? null;
   if (subjectId) {
     const { data: sub } = await svc
-      .from("subscriptions").select("starts_at, ends_at")
+      .from("subscriptions").select("starts_at, ends_at, months_total, plans(tier)")
       .eq("student_id", (ord as { student_id: string }).student_id).eq("subject_id", subjectId)
       .order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (sub) {
       const d = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
       receiptDetail = `Starting: ${d(sub.starts_at as string | null) || "on payment"}  ·  Valid till: ${d(sub.ends_at as string | null) || "-"}`;
+      // What they bought, in the words they chose it by. An invoice that says
+      // only the subject leaves the student — and anyone checking the books —
+      // to work out from two dates whether this was Gold for a year or Silver
+      // for three months.
+      const tier = (sub as { plans?: { tier?: string } | null }).plans?.tier ?? null;
+      const months = (sub as { months_total?: number | null }).months_total
+        ?? monthsBetween(sub.starts_at as string | null, sub.ends_at as string | null);
+      planLine = [
+        tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : null,
+        months ? `${months} month${months === 1 ? "" : "s"}` : null,
+      ].filter(Boolean).join(" · ") || null;
     }
   }
 
@@ -169,7 +189,9 @@ export async function reissueOrderInvoice(orderId: string): Promise<{ ok: boolea
   const { data: subj } = subjectId
     ? await svc.from("subjects").select("title").eq("id", subjectId).maybeSingle()
     : { data: null };
-  const description = (subj?.title as string) ?? "Online coaching subscription";
+  const base = (subj?.title as string) ?? "Online coaching subscription";
+  // "Financial Reporting — Gold · 12 months" rather than "Financial Reporting".
+  const description = planLine ? `${base} — ${planLine}` : base;
 
   const pdf = await buildInvoicePdf({
     invoiceNo, date, s, gst,

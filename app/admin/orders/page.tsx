@@ -82,6 +82,17 @@ type PayRow = {
   } | null;
 };
 
+const TIER_ICON: Record<string, string> = { gold: "🥇", silver: "🥈", bronze: "🥉" };
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Whole months between two dates — used when months_total was never recorded. */
+function monthsBetween(a: string | null, b: string | null): number | null {
+  if (!a || !b) return null;
+  const from = new Date(a), to = new Date(b);
+  const m = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+  return m > 0 ? m : null;
+}
+
 export default async function AdminOrdersPage(
   props: {
     searchParams: Promise<{ dispatch?: string; q?: string; from?: string; to?: string }>;
@@ -126,7 +137,9 @@ export default async function AdminOrdersPage(
   const payRowsRaw = (payData ?? []) as unknown as PayRow[];
   const payerIds = [...new Set(payRowsRaw.map((p) => p.profiles?.id).filter(Boolean))] as string[];
   const levelByUser = new Map<string, string>();
-  const subDates = new Map<string, { starts_at: string | null; ends_at: string | null }>();
+  // Tier and length travel with the dates now: "Gold · 12 months" answers
+  // "what did they actually buy" without opening the invoice.
+  const subDates = new Map<string, { starts_at: string | null; ends_at: string | null; tier: string | null; months: number | null }>();
   if (payerIds.length) {
     const [{ data: mc }, { data: subRows }] = await Promise.all([
       // In batches — see lib/pageAll. A refused .in() blanks the level and
@@ -134,8 +147,8 @@ export default async function AdminOrdersPage(
       inChunks<{ student_id: string; courses?: { title?: string } | null }>(
         payerIds, (b) => svc.from("my_courses").select("student_id, courses(title)").in("student_id", b) as never,
       ).then((data) => ({ data })),
-      inChunks<{ student_id: string; subject_id: string | null; starts_at: string | null; ends_at: string | null; created_at: string }>(
-        payerIds, (b) => svc.from("subscriptions").select("student_id, subject_id, starts_at, ends_at, created_at").in("student_id", b).order("created_at") as never,
+      inChunks<{ student_id: string; subject_id: string | null; starts_at: string | null; ends_at: string | null; created_at: string; months_total: number | null; plans?: { tier?: string } | null }>(
+        payerIds, (b) => svc.from("subscriptions").select("student_id, subject_id, starts_at, ends_at, created_at, months_total, plans(tier)").in("student_id", b).order("created_at") as never,
       ).then((data) => ({ data })),
     ]);
     for (const r of mc ?? []) {
@@ -147,7 +160,14 @@ export default async function AdminOrdersPage(
     }
     // Later rows overwrite earlier ones → each student+subject keeps its latest dates.
     for (const s of subRows ?? []) {
-      subDates.set(`${s.student_id}:${s.subject_id}`, { starts_at: s.starts_at as string | null, ends_at: s.ends_at as string | null });
+      subDates.set(`${s.student_id}:${s.subject_id}`, {
+        starts_at: s.starts_at as string | null,
+        ends_at: s.ends_at as string | null,
+        tier: s.plans?.tier ?? null,
+        // Not every row records its length, so it is worked out from the dates
+        // when missing rather than left blank.
+        months: s.months_total ?? monthsBetween(s.starts_at as string | null, s.ends_at as string | null),
+      });
     }
   }
 
@@ -261,6 +281,9 @@ export default async function AdminOrdersPage(
                       {pr ? ` · 🎓 ${levelByUser.get(pr.id) ?? "—"}` : ""} · 📘 {p.subjects?.title ?? "—"}
                     </p>
                     <p className="muted" style={{ fontSize: ".82rem", margin: "3px 0 0" }}>
+                      {dates?.tier ? `${TIER_ICON[dates.tier] ?? ""} ${cap(dates.tier)}` : ""}
+                      {dates?.months ? ` · ${dates.months} month${dates.months === 1 ? "" : "s"}` : ""}
+                      {dates?.tier || dates?.months ? " · " : ""}
                       🗓️ {dates?.starts_at ? fmt(dates.starts_at) : "—"} → {dates?.ends_at ? fmt(dates.ends_at) : "—"}
                       {" · "}✉️ {pr?.email ?? "—"}{pr?.phone ? ` · 📞 ${pr.phone}` : ""}
                     </p>

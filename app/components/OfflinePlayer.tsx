@@ -24,10 +24,13 @@ export default function OfflinePlayer({
   src,
   watermark,
   onClose,
+  classId,
 }: {
   src: string;
   watermark?: string;
   onClose: () => void;
+  /** Which class this is, so the student can be put back where they stopped. */
+  classId?: string;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const vidRef = useRef<HTMLVideoElement>(null);
@@ -35,6 +38,17 @@ export default function OfflinePlayer({
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
   const [rate, setRate] = useState(1);
+  // WHILE A FINGER IS ON THE SLIDER, the video does not get to move it.
+  //
+  // The bar showed the live position from timeupdate, which fires four times a
+  // second. So every drag was overwritten a few milliseconds later by wherever
+  // the video actually was — the handle sprang back and jumping to a point in
+  // the class was impossible. Now a drag owns the bar until it is let go.
+  const [scrubbing, setScrubbing] = useState(false);
+  const [scrubAt, setScrubAt] = useState(0);
+  // The listener below is attached once, so it would capture the first value of
+  // `scrubbing` for ever. A ref is the value it can actually read.
+  const scrubbingRef = useRef(false);
   // WHAT ACTUALLY WENT WRONG, on screen.
   //
   // "It stopped when I turned on aeroplane mode" can mean the file was never
@@ -43,10 +57,49 @@ export default function OfflinePlayer({
   // player now says which one it was, on the device, at the moment it happens.
   const [fault, setFault] = useState<string | null>(null);
 
+  // WHERE THEY STOPPED.
+  //
+  // A student watching half a class, closing the app and coming back an hour
+  // later had to hunt for their place by dragging — with a bar that did not
+  // drag. Kept on the device, not the server: a downloaded class is watched
+  // with no connection, so a position that needed the network would be no
+  // position at all. It is written to the server too, when there is one, so
+  // the same class resumes on the website.
+  const posKey = classId ? `watch.pos.${classId}` : null;
+
+  useEffect(() => {
+    const v = vidRef.current;
+    if (!v || !posKey) return;
+    const saved = Number(localStorage.getItem(posKey) || 0);
+    if (!saved) return;
+    const restore = () => {
+      // Never resume within a few seconds of the end — that would drop them
+      // straight onto the credits of a class they had finished.
+      if (v.duration && saved < v.duration - 15) v.currentTime = saved;
+      v.removeEventListener("loadedmetadata", restore);
+    };
+    if (v.readyState >= 1) restore();
+    else v.addEventListener("loadedmetadata", restore);
+    return () => v.removeEventListener("loadedmetadata", restore);
+  }, [posKey]);
+
+  useEffect(() => {
+    const v = vidRef.current;
+    if (!v || !posKey) return;
+    // Every five seconds is often enough to lose nothing worth minding, and
+    // rare enough not to write to storage on every frame.
+    const save = () => {
+      if (v.currentTime > 5) localStorage.setItem(posKey, String(Math.floor(v.currentTime)));
+    };
+    const t = setInterval(save, 5000);
+    // Closing the player is the moment most worth catching.
+    return () => { save(); clearInterval(t); };
+  }, [posKey]);
+
   useEffect(() => {
     const v = vidRef.current;
     if (!v) return;
-    const onTime = () => setCur(v.currentTime);
+    const onTime = () => { if (!scrubbingRef.current) setCur(v.currentTime); };
     const onMeta = () => setDur(v.duration || 0);
     const onPlay = () => { setPlaying(true); setFault(null); };
     const onPause = () => setPlaying(false);
@@ -243,8 +296,32 @@ export default function OfflinePlayer({
           <button type="button" onClick={() => seek(-10)} style={btn} title="Back 10s">⏪ 10</button>
           <button type="button" onClick={() => seek(10)} style={btn} title="Forward 10s">10 ⏩</button>
           <input
-            type="range" min={0} max={dur || 0} value={cur} step="1"
-            onChange={(e) => { const v = vidRef.current; if (v) v.currentTime = Number(e.target.value); }}
+            type="range" min={0} max={dur || 0} step="1"
+            // While dragging, the bar shows the finger's position, not the
+            // video's. Seeking on every pixel of a drag also made a large
+            // class stutter badly, because each move asked the file to jump.
+            value={scrubbing ? scrubAt : cur}
+            onPointerDown={() => { scrubbingRef.current = true; setScrubbing(true); }}
+            onChange={(e) => {
+              const at = Number(e.target.value);
+              setScrubAt(at);
+              if (!scrubbingRef.current) {
+                // A keyboard or tap-to-position change, with no drag around it.
+                const v = vidRef.current; if (v) v.currentTime = at;
+                setCur(at);
+              }
+            }}
+            onPointerUp={() => {
+              const v = vidRef.current;
+              if (v) { v.currentTime = scrubAt; setCur(scrubAt); }
+              scrubbingRef.current = false; setScrubbing(false);
+            }}
+            // A finger that leaves the control still means "go there".
+            onPointerCancel={() => {
+              const v = vidRef.current;
+              if (v) { v.currentTime = scrubAt; setCur(scrubAt); }
+              scrubbingRef.current = false; setScrubbing(false);
+            }}
             style={{ flex: 1, minWidth: 120, accentColor: "#0d9488" }}
           />
           <span style={{ color: "#fff", fontSize: ".8rem", fontVariantNumeric: "tabular-nums", minWidth: 88, textAlign: "center" }}>{fmt(cur)} / {fmt(dur)}</span>

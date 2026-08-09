@@ -94,6 +94,7 @@ export default function OfflineDownloads({
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [ready, setReady] = useState<Record<string, boolean>>({});
   // Mobile plays inline in this overlay (desktop opens its own player window).
+  const [playerId, setPlayerId] = useState<string | null>(null);
   const [playerSrc, setPlayerSrc] = useState<string | null>(null);
   // Which of the three views. "Downloaded" is the one students need most and
   // the one that was hardest to get at, so it leads.
@@ -146,6 +147,7 @@ export default function OfflineDownloads({
           play: async (id, keyB64, ivB64, alg, _wm) => {
             const { path } = await plugin.decrypt({ id, keyB64, ivB64, alg });
             const src = nativeFileSrc(path, cap.convertFileSrc);
+            setPlayerId(id);
             setPlayerSrc(src);
             return true;
           },
@@ -423,7 +425,7 @@ export default function OfflineDownloads({
       )}
 
       {/* Secure offline player: custom controls, watermark survives fullscreen. */}
-      {playerSrc && <OfflinePlayer src={playerSrc} watermark={watermark} onClose={() => setPlayerSrc(null)} />}
+      {playerSrc && <OfflinePlayer src={playerSrc} classId={playerId ?? undefined} watermark={watermark} onClose={() => setPlayerSrc(null)} />}
     </>
   );
 }

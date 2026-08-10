@@ -26,6 +26,60 @@ function e164(phone: string): string {
   return d.length === 10 ? `91${d}` : d;
 }
 
+/**
+ * Send whoever owns this address the link that will actually get them in.
+ *
+ * Two different links, and which one matters enormously:
+ *   • an account with no password yet — 1,659 of them, granted access in bulk
+ *     and never asked to choose one — gets "set your password";
+ *   • an account with a password gets "reset your password".
+ *
+ * Both are recovery links underneath, because a recovery link works whether or
+ * not there is a password to recover. An "invite" link does not: Supabase
+ * refuses it for an address that already has an account, which is every single
+ * one of these students.
+ *
+ * Returns what was sent so the caller can say something true on the screen.
+ * Never says whether the address exists — the answer goes to the mailbox.
+ */
+export async function sendAccessLink(email: string, name?: string): Promise<
+  { sent: boolean; kind: "set_password" | "reset" | "none"; note: string }
+> {
+  const svc = createServiceClient();
+  const addr = (email ?? "").trim().toLowerCase();
+  if (!addr) return { sent: false, kind: "none", note: "no email given" };
+
+  const { data } = await svc
+    .from("profiles")
+    .select("id, email, full_name, has_password")
+    .ilike("email", addr)
+    .maybeSingle();
+  const account = data as { id: string; email: string; full_name: string | null; has_password: boolean | null } | null;
+  if (!account?.email) return { sent: false, kind: "none", note: "no account on that address" };
+
+  const needsPassword = account.has_password === false;
+  const { data: linkData } = await svc.auth.admin.generateLink({ type: "recovery", email: account.email } as never);
+  const tokenHash = (linkData as { properties?: { hashed_token?: string } } | null)?.properties?.hashed_token;
+  if (!tokenHash) return { sent: false, kind: "none", note: "could not generate a link" };
+
+  const next = needsPassword ? "/auth/set-password" : "/auth/reset-password";
+  const url = `${SITE_URL}/auth/confirm?token_hash=${tokenHash}&type=recovery&next=${next}`;
+  const ok = await sendTemplate(needsPassword ? "account_created" : "password_reset", account.email, {
+    heading: needsPassword ? "Set your password" : "Reset your password",
+    action_url: url,
+    action_label: needsPassword ? "Set my password" : "Reset my password",
+    name: name || account.full_name || "",
+  });
+
+  return {
+    sent: !!ok,
+    kind: needsPassword ? "set_password" : "reset",
+    note: ok
+      ? `${needsPassword ? "set-password" : "reset"} link emailed to ${maskEmail(account.email)}`
+      : "the email could not be sent",
+  };
+}
+
 export async function rescueLogin(input: {
   name?: string;
   phone: string;

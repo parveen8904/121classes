@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Script from "next/script";
+import Link from "next/link";
 import { formatINR } from "@/lib/pricing";
 import { createGiftOrder, verifyGiftPayment, previewGiftPrice } from "@/app/gift/actions";
 
@@ -22,6 +23,10 @@ export default function SellForm({
   products, preselect, billing, configured,
 }: { products: Product[]; preselect?: string; billing: Billing; configured: boolean }) {
   const [subjectId, setSubjectId] = useState(preselect || products[0]?.id || "");
+  // Did they name the subject before they got here? A tile on their desk links
+  // in with it; the plain "Place an order" button does not. Only a subject we
+  // actually sell counts — a stale or hand-typed one falls back to asking.
+  const chosenUpFront = !!preselect && products.some((p) => p.id === preselect);
   const [months, setMonths] = useState(12);
   const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -128,13 +133,18 @@ export default function SellForm({
     );
   }
 
+  // Steps are numbered as they are drawn, so a step that is not shown does not
+  // leave a hole — and nobody has to remember to renumber the ones after it.
+  let n = 0;
+  const step = () => ++n;
+
   return (
     <>
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
       <form className="card" style={{ marginTop: 18 }} onSubmit={pay}>
         {!configured && <div className="notice err">Payment is not switched on yet — please call the office.</div>}
 
-        <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>1 · Who is the student?</h2>
+        <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>{step()} · Who is the student?</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10 }}>
           <div><label htmlFor="n">Full name</label><input id="n" value={name} onChange={(e) => setName(e.target.value)} required /></div>
           <div><label htmlFor="e">Email</label><input id="e" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
@@ -144,29 +154,55 @@ export default function SellForm({
           Their login is created from this email, so it must be theirs and correct.
         </p>
 
-        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>2 · Where do the books go?</h2>
+        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>{step()} · Where do the books go?</h2>
         <label htmlFor="a">Full postal address with PIN code</label>
         <textarea id="a" rows={3} value={address} onChange={(e) => setAddress(e.target.value)} required
           style={{ width: "100%", background: "var(--bg-soft)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px", fontFamily: "inherit" }} />
         <p className="muted" style={{ fontSize: ".8rem" }}>The printed books are posted to the student, not to you.</p>
 
-        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>3 · Which subject?</h2>
-        <div style={{ display: "grid", gap: 8 }}>
-          {products.map((p) => (
-            <label key={p.id} style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "12px 14px",
-              border: `1.5px solid ${p.id === subjectId ? "var(--accent)" : "var(--border)"}`,
-              borderRadius: 12, cursor: "pointer", marginBottom: 0,
-            }}>
-              <input type="radio" name="subject" checked={p.id === subjectId} onChange={() => { setSubjectId(p.id); forget(); }} />
-              <span style={{ flex: 1 }}>
-                <strong>{p.title}</strong>
-                <span className="muted" style={{ display: "block", fontSize: ".82rem" }}>{p.course} · Gold · {p.months} months</span>
+        {/* WHICH SUBJECT — ONLY IF THEY HAVE NOT ALREADY SAID.
+            They pick Financial Reporting or Advanced Accounting on their desk
+            and press "Place an order" underneath it. Asking again three fields
+            later reads as though the first answer was not heard, and invites a
+            second, different answer — which is the sale going out wrong. So
+            when the subject arrived with them it is shown as settled, with a
+            way back to the desk if they picked the wrong tile. The plain
+            "Place an order" button, which names no subject, still asks. */}
+        {chosenUpFront ? (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "12px 14px",
+            border: "1.5px solid var(--accent)", borderRadius: 12, marginTop: 18,
+          }}>
+            <span style={{ flex: 1 }}>
+              <strong>{product?.title}</strong>
+              <span className="muted" style={{ display: "block", fontSize: ".82rem" }}>
+                {product?.course} · Gold · {product?.months} months
               </span>
-              <strong>{formatINR(p.priceInr)}</strong>
-            </label>
-          ))}
-        </div>
+            </span>
+            <strong>{product ? formatINR(product.priceInr) : ""}</strong>
+            <Link href="/supporter" className="muted" style={{ fontSize: ".82rem", whiteSpace: "nowrap" }}>change</Link>
+          </div>
+        ) : (
+          <>
+            <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>{step()} · Which subject?</h2>
+            <div style={{ display: "grid", gap: 8 }}>
+              {products.map((p) => (
+                <label key={p.id} style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: "12px 14px",
+                  border: `1.5px solid ${p.id === subjectId ? "var(--accent)" : "var(--border)"}`,
+                  borderRadius: 12, cursor: "pointer", marginBottom: 0,
+                }}>
+                  <input type="radio" name="subject" checked={p.id === subjectId} onChange={() => { setSubjectId(p.id); forget(); }} />
+                  <span style={{ flex: 1 }}>
+                    <strong>{p.title}</strong>
+                    <span className="muted" style={{ display: "block", fontSize: ".82rem" }}>{p.course} · Gold · {p.months} months</span>
+                  </span>
+                  <strong>{formatINR(p.priceInr)}</strong>
+                </label>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* HOW LONG FOR.
             A supporter used to sell one shape only: twelve months, take it or
@@ -196,7 +232,7 @@ export default function SellForm({
           </>
         )}
 
-        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>{terms.length > 1 ? "5" : "4"} · When should their access start?</h2>
+        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>{step()} · When should their access start?</h2>
         <input type="date" value={startsOn} min={today()} onChange={(e) => setStartsOn(e.target.value)} />
         <p className="muted" style={{ fontSize: ".82rem", marginTop: -6 }}>
           {later
@@ -204,7 +240,7 @@ export default function SellForm({
             : "Starting today. Pick a later date if they are joining a future batch."}
         </p>
 
-        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>{terms.length > 1 ? "6" : "5"} · Coupon</h2>
+        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>{step()} · Coupon</h2>
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
           <input
             placeholder="Your discount code (optional)"

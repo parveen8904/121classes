@@ -141,6 +141,7 @@ export async function updateUser(formData: FormData) {
     .from("profiles")
     .update({
       full_name: nullable(formData.get("full_name")),
+      designation: nullable(formData.get("designation")),
       phone: nullable(formData.get("phone")),
       target_attempt: nullable(formData.get("target_attempt")),
       permissions: perms,

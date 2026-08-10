@@ -33,7 +33,7 @@ export default async function UserDetail(
   const { data: u } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, email, phone, role, permissions, target_attempt, created_at, address_line1, address_line2, city, state, pincode, gstin, business_name, is_supporter",
+      "id, full_name, email, phone, role, permissions, target_attempt, created_at, address_line1, address_line2, city, state, pincode, gstin, business_name, designation, is_supporter",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -206,6 +206,14 @@ export default async function UserDetail(
             </div>
           </div>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
+            <div>
+              {/* What they are here — shown beside their name wherever they
+                  acted on something, so "approved by Ritu" reads as a job
+                  rather than as a name the reader has to place. A supporter's
+                  designation is the same field, asked on their own profile. */}
+              <label>Designation</label>
+              <input name="designation" defaultValue={u.designation ?? ""} placeholder="e.g. Office Manager" />
+            </div>
             <div>
               <label>Target attempt</label>
               <input name="target_attempt" defaultValue={u.target_attempt ?? ""} placeholder="e.g. MAY_2026" />

@@ -92,7 +92,7 @@ type GiftRow = {
   recipient_name: string | null; recipient_email: string | null; recipient_phone: string | null;
   billing_name: string | null;
   subjects: { title: string; courses?: { title?: string } | { title?: string }[] | null } | null;
-  gifter: { full_name: string | null; email: string | null; business_name: string | null; is_supporter: boolean | null } | null;
+  gifter: { full_name: string | null; email: string | null; business_name: string | null; designation: string | null; is_supporter: boolean | null } | null;
 };
 
 const TIER_ICON: Record<string, string> = { gold: "🥇", silver: "🥈", bronze: "🥉" };
@@ -165,7 +165,7 @@ export default async function AdminOrdersPage(
     (() => {
       let qy = svc
         .from("gift_orders")
-        .select("id, amount_inr, discount_inr, coupon_code, status, created_at, razorpay_order_id, invoice_no, invoice_url, order_no, months, tier, subject_id, recipient_name, recipient_email, recipient_phone, billing_name, subjects:subject_id(title, courses(title)), gifter:gifter_id(full_name, email, business_name, is_supporter)");
+        .select("id, amount_inr, discount_inr, coupon_code, status, created_at, razorpay_order_id, invoice_no, invoice_url, order_no, months, tier, subject_id, recipient_name, recipient_email, recipient_phone, billing_name, subjects:subject_id(title, courses(title)), gifter:gifter_id(full_name, email, business_name, designation, is_supporter)");
       if (fromIso) qy = qy.gte("created_at", fromIso);
       if (toIso) qy = qy.lte("created_at", toIso);
       return qy.order("created_at", { ascending: false }).limit(500);
@@ -228,7 +228,7 @@ export default async function AdminOrdersPage(
 
   // Folded into the payment list rather than shown apart: the founder reads one
   // register, and a sale is a sale whoever keyed it in.
-  const giftRows = ((giftData ?? []) as unknown as GiftRow[]).map((g): PayRow & { viaSupporter: string; source: "vendor" | "sponsored"; discount: number | null; coupon: string | null } => ({
+  const giftRows = ((giftData ?? []) as unknown as GiftRow[]).map((g): PayRow & { viaSupporter: string; viaDesignation: string | null; source: "vendor" | "sponsored"; discount: number | null; coupon: string | null } => ({
     id: g.id,
     kind: "supporter",
     amount_inr: g.amount_inr,
@@ -246,6 +246,9 @@ export default async function AdminOrdersPage(
       address_line1: null, address_line2: null, city: null, state: null, pincode: null,
     },
     viaSupporter: g.gifter?.business_name || g.gifter?.full_name || g.gifter?.email || "a supporter",
+    // Their contact person's job, so the office knows who to ring — and does
+    // not open the profile to find out.
+    viaDesignation: g.gifter?.designation ?? null,
     // VENDOR ORDER, OR ONE STUDENT HELPING ANOTHER.
     //
     // Both are gift_orders and looked identical here. They are told apart by
@@ -403,8 +406,10 @@ export default async function AdminOrdersPage(
                       {(() => {
                         const src = (p as { source?: string }).source;
                         const who = (p as { viaSupporter?: string }).viaSupporter;
-                        if (src === "vendor") return <span className="badge" style={{ marginLeft: 6 }}>🏪 Vendor order — {who}</span>;
-                        if (src === "sponsored") return <span className="badge" style={{ marginLeft: 6 }}>💚 Student sponsored — {who}</span>;
+                        const job = (p as { viaDesignation?: string | null }).viaDesignation;
+                        const named = `${who}${job ? ` (${job})` : ""}`;
+                        if (src === "vendor") return <span className="badge" style={{ marginLeft: 6 }}>🏪 Vendor order — {named}</span>;
+                        if (src === "sponsored") return <span className="badge" style={{ marginLeft: 6 }}>💚 Student sponsored — {named}</span>;
                         return <span className="badge" style={{ marginLeft: 6 }}>🧑‍🎓 Direct student order</span>;
                       })()}
                       {(p as { coupon?: string | null }).coupon && (

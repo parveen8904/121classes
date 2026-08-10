@@ -26,7 +26,7 @@ export default async function SupporterProfilePage(props: {
   const svc = createServiceClient();
   const { data: me } = await svc
     .from("profiles")
-    .select("full_name, business_name, email, phone, gstin, address_line1, address_line2, city, state, pincode, is_supporter, role, supporter_site, supporter_site_ok_at, supporter_ship_to")
+    .select("full_name, business_name, designation, email, phone, gstin, address_line1, address_line2, city, state, pincode, is_supporter, role, supporter_site, supporter_site_ok_at, supporter_ship_to")
     .eq("id", user.id).maybeSingle();
   if (!me?.is_supporter && me?.role !== "admin" && me?.role !== "supporter") redirect("/dashboard");
 
@@ -64,6 +64,29 @@ export default async function SupporterProfilePage(props: {
             <div>
               <label htmlFor="phone">Phone</label>
               <input id="phone" name="phone" defaultValue={me?.phone ?? ""} placeholder="10-digit mobile" />
+            </div>
+            <div>
+              {/* WHO WE ARE ACTUALLY DEALING WITH.
+                  A shop name is not a person. When an invoice has to be
+                  queried, or a page on their site has to be corrected, the
+                  office needs to know whether they are speaking to the owner
+                  or to somebody at a counter. Suggested, not restricted —
+                  every business names its own roles differently. */}
+              <label htmlFor="designation">Your designation</label>
+              <input
+                id="designation"
+                name="designation"
+                list="designations"
+                defaultValue={me?.designation ?? ""}
+                placeholder="e.g. Proprietor"
+              />
+              <datalist id="designations">
+                <option value="Proprietor" />
+                <option value="Partner" />
+                <option value="Director" />
+                <option value="Manager" />
+                <option value="Owner" />
+              </datalist>
             </div>
             <div>
               <label htmlFor="email">Email (invoices come here)</label>

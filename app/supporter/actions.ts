@@ -108,6 +108,8 @@ export async function saveSupporterProfile(formData: FormData) {
   await svc.from("profiles").update({
     full_name: s("full_name") || null,
     business_name: s("business_name") || null,
+    // Who we deal with at that business, not just what it is called.
+    designation: s("designation") || null,
     phone: s("phone") || null,
     email: s("email") || null,
     gstin: s("gstin").toUpperCase() || null,

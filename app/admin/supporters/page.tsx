@@ -57,7 +57,7 @@ export default async function AdminSupporters(props: {
       .select("id, ref, raised_by, against_url, against_id, what_happened, evidence_url, status, reviewed_at, outcome_note, created_at")
       .order("created_at", { ascending: false }).limit(200),
     svc.from("profiles")
-      .select("id, full_name, business_name, email, phone, supporter_site, supporter_site_ok_at, supporter_blocked_at, supporter_block_reason")
+      .select("id, full_name, business_name, designation, email, phone, supporter_site, supporter_site_ok_at, supporter_blocked_at, supporter_block_reason")
       .eq("is_supporter", true).limit(1000),
     svc.from("supporter_site_checks")
       .select("id, supporter_id, url, checked_at, ok, problem, detail, evidence")
@@ -71,6 +71,9 @@ export default async function AdminSupporters(props: {
   const byId = new Map(sellers.map((x) => [s(x.id), x]));
   const byHost = new Map(sellers.filter((x) => x.supporter_site).map((x) => [host(s(x.supporter_site)), x]));
   const name = (x?: Row) => (x ? s(x.business_name) || s(x.full_name) || s(x.email) || "Unnamed supporter" : "");
+  // A hold is put on a business but read by a person; the designation says who
+  // will be reading it.
+  const who = (x?: Row) => (x ? `${name(x)}${x.designation ? ` — ${s(x.designation)}` : ""}` : "");
 
   const open = complaints.filter((c) => s(c.status) === "open");
   const settled = complaints.filter((c) => s(c.status) !== "open").slice(0, 25);
@@ -141,7 +144,7 @@ export default async function AdminSupporters(props: {
 
                   <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0" }}>
                     {them
-                      ? <>Their account here: <strong>{name(them)}</strong>{them.email ? ` · ${s(them.email)}` : ""}{them.phone ? ` · ${s(them.phone)}` : ""}</>
+                      ? <>Their account here: <strong>{who(them)}</strong>{them.email ? ` · ${s(them.email)}` : ""}{them.phone ? ` · ${s(them.phone)}` : ""}</>
                       : <>No supporter account matches that address — it may be somebody who is not registered with us.</>}
                     {from ? <> · Reported by {name(from)}</> : null}
                   </p>
@@ -254,7 +257,7 @@ export default async function AdminSupporters(props: {
             {held.map((x) => (
               <div className="card" key={s(x.id)}>
                 <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
-                  <strong>{name(x)}</strong>
+                  <strong>{who(x)}</strong>
                   <span className="muted" style={{ fontSize: ".82rem" }}>{s(x.email)}{x.phone ? ` · ${s(x.phone)}` : ""}</span>
                   <span className="muted" style={{ fontSize: ".8rem", marginLeft: "auto" }}>Since {when(x.supporter_blocked_at)}</span>
                 </div>
@@ -283,7 +286,7 @@ export default async function AdminSupporters(props: {
                 return (
                   <tr key={s(x.id)}>
                     <td style={TD}>
-                      {name(x)}
+                      {who(x)}
                       {x.supporter_blocked_at ? <span className="badge" style={{ marginLeft: 6 }}>on hold</span> : null}
                     </td>
                     <td style={{ ...TD, wordBreak: "break-all", maxWidth: 260 }}>

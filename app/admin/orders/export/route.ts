@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
     // Supporter sales belong in the register, and so in the download.
     (() => {
       let q = svc.from("gift_orders")
-        .select("amount_inr, discount_inr, coupon_code, status, created_at, invoice_no, order_no, months, tier, recipient_name, recipient_email, recipient_phone, billing_state, subjects:subject_id(title, courses(title)), gifter:gifter_id(full_name, email, business_name, is_supporter)");
+        .select("amount_inr, discount_inr, coupon_code, status, created_at, invoice_no, order_no, months, tier, recipient_name, recipient_email, recipient_phone, billing_state, subjects:subject_id(title, courses(title)), gifter:gifter_id(full_name, email, business_name, designation, is_supporter)");
       if (fromIso) q = q.gte("created_at", fromIso);
       if (toIso) q = q.lte("created_at", toIso);
       q = applyStatus(q as never, "gift_orders") as never;
@@ -141,7 +141,8 @@ export async function GET(req: NextRequest) {
   // the buyer is a registered supporter, so the file said "supporter sale" for
   // both and named nobody.
   const sourceOfGift = (g: GiftExport): string => {
-    const who = g.gifter?.business_name || g.gifter?.full_name || g.gifter?.email || "";
+    const job = g.gifter?.designation ? ` (${g.gifter.designation})` : "";
+    const who = (g.gifter?.business_name || g.gifter?.full_name || g.gifter?.email || "") + (g.gifter?.business_name || g.gifter?.full_name || g.gifter?.email ? job : "");
     return g.gifter?.is_supporter
       ? `Vendor order${who ? ` — ${who}` : ""}`
       : `Student sponsored${who ? ` — ${who}` : ""}`;
@@ -201,7 +202,7 @@ export async function GET(req: NextRequest) {
     months: number | null; tier: string | null; billing_state: string | null;
     recipient_name: string | null; recipient_email: string | null; recipient_phone: string | null;
     subjects: { title: string; courses?: { title?: string } | { title?: string }[] | null } | null;
-    gifter: { full_name: string | null; email: string | null; business_name: string | null; is_supporter: boolean | null } | null;
+    gifter: { full_name: string | null; email: string | null; business_name: string | null; designation: string | null; is_supporter: boolean | null } | null;
   };
   for (const g of (giftRows ?? []) as unknown as GiftExport[]) {
     const gst = computeGst(g.amount_inr ?? 0, g.billing_state ?? "", s);
@@ -218,7 +219,7 @@ export async function GET(req: NextRequest) {
       esc(""), esc(""), esc(""), esc(""),
       esc(gst.taxable.toFixed(2)), esc((gst.cgst + gst.sgst + gst.igst).toFixed(2)),
       esc((g.amount_inr ?? 0).toFixed(2)),
-      esc(g.gifter?.full_name || g.gifter?.email || ""),
+      esc([g.gifter?.business_name || g.gifter?.full_name || g.gifter?.email || "", g.gifter?.designation].filter(Boolean).join(" · ")),
       esc(g.coupon_code ?? ""), esc(g.discount_inr != null ? g.discount_inr.toFixed(2) : ""),
     ].join(","));
   }

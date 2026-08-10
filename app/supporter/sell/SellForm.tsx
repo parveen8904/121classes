@@ -17,7 +17,6 @@ import { createGiftOrder, verifyGiftPayment, previewGiftPrice } from "@/app/gift
 type Product = { id: string; title: string; course: string; priceInr: number; months: number; options?: { months: number; priceInr: number }[] };
 type Billing = { name: string; gstin: string; address: string; state: string };
 
-const STATES = ["Delhi", "Haryana", "Uttar Pradesh", "Punjab", "Rajasthan", "Maharashtra", "Gujarat", "Karnataka", "Tamil Nadu", "Telangana", "West Bengal", "Bihar", "Madhya Pradesh", "Kerala", "Andhra Pradesh", "Uttarakhand", "Himachal Pradesh", "Jharkhand", "Chhattisgarh", "Odisha", "Assam", "Goa", "Chandigarh", "Jammu and Kashmir", "Other"];
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -44,7 +43,8 @@ export default function SellForm({
   const [applied, setApplied] = useState<{ payable: number; discount: number; code: string } | null>(null);
   const [couponMsg, setCouponMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [checking, setChecking] = useState(false);
-  const [bState, setBState] = useState(billing.state || "Delhi");
+  // Read from their profile and never edited here — see the note further down.
+  const bState = billing.state || "Delhi";
   const [busy, setBusy] = useState(false); const [done, setDone] = useState(false); const [err, setErr] = useState<string | null>(null);
 
   const product = products.find((p) => p.id === subjectId);
@@ -419,12 +419,20 @@ export default function SellForm({
           </div>
         )}
 
-        <div style={{ marginTop: 8 }}>
-          <label htmlFor="st">Your billing state (decides the tax on your invoice)</label>
-          <select id="st" value={bState} onChange={(e) => setBState(e.target.value)}>
-            {STATES.map((x) => <option key={x} value={x}>{x}</option>)}
-          </select>
-        </div>
+        {/* ASKED ONCE, ON THEIR PROFILE. NOT AGAIN HERE.
+            Their billing state is already on file — this page will not even
+            load without it — so putting the question a second time is not
+            thoroughness, it is doubt. Worse, it let a vendor pick a state
+            different from the one they are registered in, which puts the wrong
+            tax split on their own invoice and is their problem to explain to
+            their accountant, not ours to have caused. Shown, with the one
+            place it can be changed. */}
+        <p className="muted" style={{ fontSize: ".82rem", marginTop: 10 }}>
+          🧾 Invoiced to <strong>{billing.name || "your business"}</strong> in <strong>{bState}</strong>
+          {billing.gstin ? <> · GSTIN {billing.gstin}</> : null}
+          {" — "}
+          <Link href="/supporter/profile?next=/supporter/sell">change my details</Link>
+        </p>
 
         {err && <div className="notice err" style={{ marginTop: 12 }}>⚠️ {err}</div>}
 

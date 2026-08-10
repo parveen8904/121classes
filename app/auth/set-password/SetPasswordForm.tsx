@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { passwordProblem, friendlyPasswordError, PASSWORD_RULE } from "@/lib/passwordRule";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import Logo from "@/app/components/Logo";
@@ -19,21 +20,10 @@ export default function SetPasswordForm({ next }: { next: string }) {
   const [needCode, setNeedCode] = useState(false);
   const [code, setCode] = useState("");
 
-  function friendly(raw: string): string {
-    const m = raw.toLowerCase();
-    if (m.includes("aal2")) return "__MFA__";
-    if (m.includes("weak") || m.includes("strength") || m.includes("pwned") || m.includes("compromis") || m.includes("breach") || m.includes("leaked"))
-      return "That password has appeared in a known data breach, so it's not safe. Please choose a DIFFERENT, unique password you haven't used elsewhere (it can be simple, just not a common one).";
-    if (m.includes("at least") || m.includes("length") || m.includes("short") || m.includes("char"))
-      return "Use at least 8 characters.";
-    if (m.includes("same") || m.includes("different from")) return "Please choose a different password from your current one.";
-    return raw;
-  }
-
   async function apply(): Promise<boolean> {
     const { error } = await supabase.auth.updateUser({ password });
     if (!error) return true;
-    const f = friendly(error.message);
+    const f = friendlyPasswordError(error.message);
     if (f === "__MFA__") { setNeedCode(true); setErr("🔐 Two-factor is on for your account. Enter your 6-digit authenticator code below to confirm the change."); return false; }
     setErr(f);
     return false;
@@ -42,7 +32,10 @@ export default function SetPasswordForm({ next }: { next: string }) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
-    if (password.length < 8) return setErr("Use at least 8 characters.");
+    // Checked here before the server is asked, so the answer names the one
+    // thing that is missing instead of a rule they have to guess at.
+    const problem = passwordProblem(password);
+    if (problem) return setErr(problem);
     if (password !== confirm) return setErr("Both passwords must match.");
     setBusy(true);
     const ok = await apply();
@@ -73,7 +66,7 @@ export default function SetPasswordForm({ next }: { next: string }) {
         <div className="card">
           <h1 style={{ fontSize: "1.5rem", marginBottom: 6 }}>Set your password 🔐</h1>
           <p className="muted" style={{ marginBottom: 16, fontSize: ".9rem" }}>
-            Choose a password of at least <strong>8 characters</strong>. It doesn&apos;t need to be complicated —
+            {PASSWORD_RULE} It doesn&apos;t need to be complicated —
             just <strong>not a common one</strong> (very common passwords are rejected for safety).
           </p>
           {err && <div className={`notice ${needCode ? "" : "err"}`}>{err}</div>}
@@ -83,12 +76,20 @@ export default function SetPasswordForm({ next }: { next: string }) {
               <label htmlFor="np">New password</label>
               <div style={{ position: "relative" }}>
                 <input id="np" type={showPw ? "text" : "password"} required value={password}
-                  onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" style={{ paddingRight: 60 }} autoComplete="new-password" />
+                  onChange={(e) => setPassword(e.target.value)} placeholder="e.g. Study@2026" style={{ paddingRight: 60 }} autoComplete="new-password" />
                 <button type="button" onClick={() => setShowPw((s) => !s)} aria-label={showPw ? "Hide password" : "Show password"}
                   style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--accent)", fontWeight: 700, fontSize: ".8rem", cursor: "pointer" }}>
                   {showPw ? "Hide" : "Show"}
                 </button>
               </div>
+              {/* Said while they type, not after they press. The whole reason
+                  this went wrong is that the requirement only ever appeared as
+                  a refusal, and the refusal named the wrong requirement. */}
+              {password.length > 0 && (
+                <p className="muted" style={{ fontSize: ".82rem", marginTop: -6 }}>
+                  {passwordProblem(password) ?? "✅ That will do nicely."}
+                </p>
+              )}
               <label htmlFor="cp">Confirm password</label>
               <input id="cp" type={showPw ? "text" : "password"} required value={confirm}
                 onChange={(e) => setConfirm(e.target.value)} placeholder="Re-type your password" autoComplete="new-password" />

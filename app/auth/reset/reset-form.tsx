@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { passwordProblem, friendlyPasswordError, PASSWORD_RULE } from "@/lib/passwordRule";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -20,13 +21,18 @@ export default function ResetForm() {
     if (password !== confirm) {
       return setMsg({ kind: "err", text: "Passwords don't match." });
     }
+    // Checked here so the answer names the one thing that is missing, rather
+    // than the server refusing with a message about "characters" that reads as
+    // a length complaint.
+    const problem = passwordProblem(password);
+    if (problem) return setMsg({ kind: "err", text: problem });
     setLoading(true);
     setMsg(null);
     // Requires the recovery session set by clicking the email reset link.
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) {
-      setMsg({ kind: "err", text: error.message });
+      setMsg({ kind: "err", text: friendlyPasswordError(error.message) });
     } else {
       setMsg({ kind: "ok", text: "Password updated. Taking you in…" });
       router.push("/dashboard");
@@ -49,6 +55,8 @@ export default function ResetForm() {
             Enter your new password below.
           </p>
 
+          <p className="muted" style={{ fontSize: ".86rem", marginBottom: 12 }}>{PASSWORD_RULE}</p>
+
           {msg && <div className={`notice ${msg.kind}`}>{msg.text}</div>}
 
           <form onSubmit={submit}>
@@ -57,17 +65,17 @@ export default function ResetForm() {
               id="password"
               type="password"
               required
-              minLength={6}
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
+              placeholder="e.g. Study@2026"
             />
             <label htmlFor="confirm">Confirm new password</label>
             <input
               id="confirm"
               type="password"
               required
-              minLength={6}
+              minLength={8}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               placeholder="Re-enter password"

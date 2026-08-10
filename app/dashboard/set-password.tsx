@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { passwordProblem, friendlyPasswordError, PASSWORD_RULE } from "@/lib/passwordRule";
 import { createClient } from "@/lib/supabase/client";
 
 // Set / change password. If the account has two-factor enabled, Supabase
@@ -15,17 +16,10 @@ export default function SetPassword() {
   const [needCode, setNeedCode] = useState(false); // MFA step-up required
   const [code, setCode] = useState("");
 
-  // Friendly text for Supabase's various password errors.
-  function friendly(raw: string): string {
-    const m = raw.toLowerCase();
-    if (m.includes("aal2")) return "__MFA__"; // signal: trigger step-up
-    if (m.includes("weak") || m.includes("strength") || m.includes("pwned") || m.includes("compromis") || m.includes("breach"))
-      return "That password is too weak or has appeared in a known data breach. Use a longer, unique password (mix of letters, numbers and a symbol).";
-    if (m.includes("at least") || m.includes("length") || m.includes("6 char") || m.includes("8 char"))
-      return "Password is too short — use at least 8 characters.";
-    if (m.includes("same") || m.includes("different from")) return "Please choose a different password from your current one.";
-    return raw;
-  }
+  // One place decides what these errors mean — see lib/passwordRule.ts for
+  // why lumping them together caused a student to be told to lengthen an
+  // already-long password.
+  const friendly = friendlyPasswordError;
 
   async function applyPassword(): Promise<boolean> {
     const { error } = await supabase.auth.updateUser({ password });
@@ -43,7 +37,8 @@ export default function SetPassword() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (password.length < 8) { setMsg({ kind: "err", text: "Use at least 8 characters." }); return; }
+    const problem = passwordProblem(password);
+    if (problem) { setMsg({ kind: "err", text: problem }); return; }
     setLoading(true);
     setMsg(null);
     const ok = await applyPassword();
@@ -79,7 +74,7 @@ export default function SetPassword() {
     <div className="card" style={{ maxWidth: 420, marginTop: 16 }}>
       <h3 style={{ marginBottom: 8 }}>Set / change password</h3>
       <p className="muted" style={{ fontSize: ".85rem", marginBottom: 14 }}>
-        Use at least <strong>8 characters</strong> — a mix of letters, numbers and a symbol is safest.
+        {PASSWORD_RULE}
         Avoid common passwords (they&apos;re rejected for your security).
       </p>
       {msg && <div className={`notice ${msg.kind}`}>{msg.text}</div>}

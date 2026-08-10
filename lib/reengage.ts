@@ -19,6 +19,10 @@ import { sendEmail, emailShell, emailConfigured } from "@/lib/notify";
 //
 // Anyone who has watched even one class drops out of the ladder immediately.
 // They came back; that is the whole point.
+//
+// And anyone who has never signed in is not on the ladder at all. They did not
+// forget to start; they were never able to. That is a different problem with a
+// different answer, and it has its own cron.
 
 const CAP_PER_RUN = 300;
 
@@ -87,8 +91,23 @@ export async function runReengagement(): Promise<ReengageResult> {
       .select("id, full_name, email, created_at, role, account_type")
       .eq("role", "student").not("email", "is", null).range(f, t),
   );
-  const students = profs.filter((p) => p.account_type !== "sponsor");
-  if (!students.length) return { ok: true, day3: 0, day7: 0, skipped: "no students" };
+  // ONLY PEOPLE WHO HAVE ACTUALLY BEEN INSIDE.
+  //
+  // "You signed up and never opened a class" is only true of somebody who
+  // signed up and got in. Without this it was also true of 1,446 accounts
+  // granted in bulk in early August that have never once been opened — people
+  // who did not sign up here at all, and whose problem is that no password was
+  // ever set on their account. They need a sign-in link (see the locked-out
+  // cron), not a note asking why they have not started.
+  //
+  // Sending to them would be a cold mailshot of 1,700 from a domain that has
+  // been quiet, which is how a sender gets marked spam — and this domain also
+  // carries every student's password reset.
+  const signedIn = new Set<string>(
+    ((await svc.rpc("students_signed_in_ids")).data as { id: string }[] | null ?? []).map((r) => r.id),
+  );
+  const students = profs.filter((p) => p.account_type !== "sponsor" && signedIn.has(p.id));
+  if (!students.length) return { ok: true, day3: 0, day7: 0, skipped: "no students who have signed in" };
 
   // Anyone who has watched ANYTHING is out of the ladder. They started.
   const watched = new Set(
@@ -146,6 +165,6 @@ export async function runReengagement(): Promise<ReengageResult> {
     ok: true,
     day3,
     day7,
-    skipped: `${students.length - watched.size} never started; ${watched.size} have opened a class and are left alone`,
+    skipped: `${students.length} have signed in at least once; ${watched.size} of them opened a class and are left alone`,
   };
 }

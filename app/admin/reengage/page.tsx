@@ -30,6 +30,13 @@ export default async function ReengagePage(props: {
     .order("created_at", { ascending: false })
     .limit(200);
   const drafts = ((data ?? []) as unknown as Draft[]);
+  // LEFTOVERS FROM THE OLD DESIGN, NOT A QUEUE.
+  //
+  // These were written when a person had to approve each one, and 299 of them
+  // were never approved. The ladder sends by itself now, so nothing will ever
+  // act on these — but the page still headed them "waiting for your approval",
+  // which read as 196 students waiting on him. They are history, and are shown
+  // as history.
   const pending = drafts.filter((d) => d.status === "draft");
   const done = drafts.filter((d) => d.status !== "draft").slice(0, 50);
 
@@ -64,7 +71,12 @@ export default async function ReengagePage(props: {
         <SubmitButton className="btn" savedLabel="✓ Sent">Send now</SubmitButton>
       </form>
 
-      <h3 style={{ margin: "22px 0 8px" }}>⏳ Waiting for your approval ({pending.length})</h3>
+      <h3 style={{ margin: "22px 0 8px" }}>🗄️ Old drafts, never sent ({pending.length})</h3>
+      <p className="muted" style={{ fontSize: ".85rem", marginTop: -4, lineHeight: 1.6 }}>
+        Written under the earlier arrangement, where each one waited for your approval — and none of these ever got
+        it. Nothing acts on them now: the ladder sends by itself. They are kept only as a record. This is not a
+        number of students waiting on you.
+      </p>
       <div style={{ display: "grid", gap: 12 }}>
         {pending.length === 0 && (
           <div className="card"><p className="muted" style={{ margin: 0 }}>

@@ -69,12 +69,12 @@ export default async function PortalHeader() {
     ...(isStaff ? [{ href: "/discuss", label: "💬 Discuss" }] : []),
     { href: "/community", label: "📣 Community" },
     { href: "/inbox", label: "📥 Inbox" },
-    // A sponsor's own page. An ADMIN sees it too — not because he sells, but
-    // because he cannot answer a vendor's question about a screen he has never
-    // seen. Same for the warehouse: the packer's desk is where the parcels are,
-    // and being told "it looks wrong" is no use without being able to look.
-    ...(isSupporter || isAdmin ? [{ href: "/supporter", label: "💚 Supporter" }] : []),
-    ...(isAdmin ? [{ href: "/admin/warehouse", label: "🏭 Warehouse" }] : []),
+    // Only a sponsor sees this, and it is their own page — nobody else has one.
+    //
+    // An admin reaches the supporter desk and the warehouse from the ADMIN
+    // panel, not from here. This header sits on the student dashboard too, and
+    // a student's own screen is not the place for other people's jobs.
+    ...(isSupporter ? [{ href: "/supporter", label: "💚 Supporter" }] : []),
     { href: "/dashboard/profile", label: "👤 Profile" },
     ...(isStaff ? [{ href: "/admin", label: "🛠️ Admin" }] : []),
   ];

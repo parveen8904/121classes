@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
+import { parsePostalParts } from "@/lib/indiaStates";
 import { sendEmail, emailConfigured, emailShell } from "@/lib/notify";
 
 type Ship = { name?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string; phone?: string };
@@ -22,6 +23,11 @@ export type DispatchItem = {
   contents: string;
   createdAt: string;
   tracking: string | null;
+  // Split out for the courier sheet: a spreadsheet is sorted on a PIN code,
+  // not on a paragraph. Blank where we genuinely do not know.
+  city: string;
+  state: string;
+  pincode: string;
 };
 
 // Everything awaiting courier: paid book orders + paid books-due Gold sales,
@@ -60,6 +66,7 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       phone: s.phone ?? o.guest_contact?.phone ?? "",
       contents: (o.items ?? []).map((i) => `${titleById.get(i.book_id ?? "") ?? "Book"} × ${i.qty ?? 1}`).join(", ") || "Books",
       createdAt: o.created_at, tracking: o.tracking_code,
+      city: s.city ?? "", state: s.state ?? "", pincode: s.pincode ?? "",
     });
   }
   type GoldRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; subjects: { title: string } | null; profiles: { full_name: string | null; phone: string | null; address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; pincode: string | null } | null };
@@ -72,6 +79,7 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       phone: p?.phone ?? "",
       contents: `${g.subjects?.title ?? "Gold"} — FREE printed books set (9+ month Gold)`,
       createdAt: g.created_at, tracking: g.tracking_code,
+      city: p?.city ?? "", state: p?.state ?? "", pincode: p?.pincode ?? "",
     });
   }
   type GiftRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; recipient_name: string | null; recipient_phone: string | null; recipient_address: string | null; subjects: { title: string } | null };
@@ -83,6 +91,9 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       phone: g.recipient_phone ?? "",
       contents: `🎁 GIFT — ${g.subjects?.title ?? "Gold"} FREE printed books set (9+ month Gold)`,
       createdAt: g.created_at, tracking: g.tracking_code,
+      // A supporter sale stores the address as one written block, so it is read
+      // back rather than joined up.
+      ...parsePostalParts(g.recipient_address),
     });
   }
   out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));

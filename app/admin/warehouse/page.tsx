@@ -18,6 +18,8 @@ export default async function WarehousePage(props: { searchParams: Promise<{ lab
   const pending = filtered.filter((i) => !i.tracking);
   const done = filtered.filter((i) => i.tracking).slice(0, 60);
   const last24h = pending.filter((i) => Date.now() - new Date(i.createdAt).getTime() < 24 * 3600 * 1000).length;
+  // The search travels with the download, so the file is what is on the screen.
+  const qs = q ? `&q=${encodeURIComponent(searchParams.q ?? "")}` : "";
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 900 }}>
@@ -55,7 +57,18 @@ export default async function WarehousePage(props: { searchParams: Promise<{ lab
         </div>
       </form>
 
-      <h3 style={{ margin: "20px 0 8px" }}>📦 To dispatch ({pending.length})</h3>
+      {/* THE SAME LIST, AS A SPREADSHEET.
+          The screen is for working through parcels one at a time. The file is
+          for the rest of the job — handing a courier the day's consignments,
+          checking last month against an invoice, keeping a record that outlives
+          the queue. Both downloads carry whatever is in the search box above,
+          so the file always matches what is on the screen. */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", margin: "20px 0 8px" }}>
+        <h3 style={{ margin: 0 }}>📦 To dispatch ({pending.length})</h3>
+        <a className="btn small secondary" download href={`/admin/warehouse/export?which=pending${qs}`}>
+          ⬇️ Download Excel{q ? " (search)" : ""}
+        </a>
+      </div>
       <div style={{ display: "grid", gap: 10 }}>
         {pending.length === 0 && <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing waiting — all parcels are on their way. 🎉</p></div>}
         {pending.map((i) => (
@@ -79,7 +92,19 @@ export default async function WarehousePage(props: { searchParams: Promise<{ lab
         ))}
       </div>
 
-      <h3 style={{ margin: "24px 0 8px" }}>✅ Dispatched ({done.length})</h3>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", margin: "24px 0 8px" }}>
+        <h3 style={{ margin: 0 }}>✅ Dispatched ({done.length})</h3>
+        <span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
+          {/* The screen shows the last sixty so the page stays readable; the
+              file holds every one of them, which is the point of a record. */}
+          <a className="btn small secondary" download href={`/admin/warehouse/export?which=dispatched${qs}`}>
+            ⬇️ Download Excel
+          </a>
+          <a className="btn small secondary" download href={`/admin/warehouse/export?which=all${qs}`}>
+            ⬇️ Everything
+          </a>
+        </span>
+      </div>
       <div style={{ display: "grid", gap: 8 }}>
         {done.length === 0 && <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing dispatched yet.</p></div>}
         {done.map((i) => (

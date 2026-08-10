@@ -12,8 +12,10 @@ import { join } from "node:path";
 //
 // So: every row must be exactly as wide as the header.
 
-const file = join(import.meta.dirname, "..", "app", "admin", "orders", "export", "route.ts");
-const src = readFileSync(file, "utf8").replace(/\/\/[^\n]*/g, ""); // comments hold commas too
+const FILES = [
+  { path: ["app", "admin", "orders", "export", "route.ts"], name: "sales export", rows: 3 },
+  { path: ["app", "admin", "warehouse", "export", "route.ts"], name: "warehouse export", rows: 1 },
+];
 
 /** Commas at bracket depth zero — one per cell. */
 function cells(body: string): number {
@@ -26,27 +28,40 @@ function cells(body: string): number {
   return body.trimEnd().endsWith(",") ? n - 1 : n;
 }
 
-const header = src.match(/const rows = \[\[(.*?)\]\.join\(","\)\];/s);
-if (!header) {
-  console.log("FAIL  export: could not find the header row — has the file been restructured?");
-  process.exit(1);
-}
-const want = cells(header[1]);
+let fails = 0;
 
-const pushes = [...src.matchAll(/rows\.push\(\[(.*?)\]\.join\(","\)\);/gs)];
-if (pushes.length < 3) {
-  console.log(`FAIL  export: expected at least 3 row builders (orders, books, supporter sales), found ${pushes.length}`);
-  process.exit(1);
-}
+for (const f of FILES) {
+  const src = readFileSync(join(import.meta.dirname, "..", ...f.path), "utf8")
+    .replace(/\/\/[^\n]*/g, ""); // comments hold commas too
 
-let bad = 0;
-pushes.forEach((m, i) => {
-  const got = cells(m[1]);
-  if (got !== want) {
-    bad++;
-    console.log(`FAIL  export row ${i + 1} has ${got} columns, the header has ${want}`);
+  // Both files name their header the same way; if one is restructured the guard
+  // must fail loudly rather than quietly checking nothing.
+  const header = src.match(/(?:const rows|const out) = \[\[(.*?)\]\.join\(","\)\];/s);
+  if (!header) {
+    fails++;
+    console.log(`FAIL  ${f.name}: could not find the header row — has the file been restructured?`);
+    continue;
   }
-});
+  const want = cells(header[1]);
 
-console.log(bad === 0 ? `PASS  sales export: ${pushes.length} row shapes, all ${want} columns wide` : "");
-process.exit(bad === 0 ? 0 : 1);
+  const pushes = [...src.matchAll(/(?:rows|out)\.push\(\[(.*?)\]\.join\(","\)\);/gs)];
+  if (pushes.length < f.rows) {
+    fails++;
+    console.log(`FAIL  ${f.name}: expected at least ${f.rows} row builder(s), found ${pushes.length}`);
+    continue;
+  }
+
+  let bad = 0;
+  pushes.forEach((m, i) => {
+    const got = cells(m[1]);
+    if (got !== want) {
+      bad++;
+      console.log(`FAIL  ${f.name} row ${i + 1} has ${got} columns, the header has ${want}`);
+    }
+  });
+  fails += bad;
+  if (bad === 0) console.log(`  ${f.name}: ${pushes.length} row shape(s), all ${want} columns wide`);
+}
+
+console.log(fails === 0 ? "PASS  every download row is exactly as wide as its header" : "");
+process.exit(fails === 0 ? 0 : 1);

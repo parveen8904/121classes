@@ -103,3 +103,30 @@ export function looksPostableInIndia(address: string | null | undefined): boolea
   const hasPin = parts.some((p) => p.split(/[^0-9]+/).some(isIndianPincode));
   return hasState && hasPin;
 }
+
+/**
+ * Pull city, state and PIN back out of an address that was written as one
+ * block, for a spreadsheet a courier will sort on.
+ *
+ * Addresses reach us three ways — structured fields on a book order, a
+ * student's profile, and one composed block on a supporter sale — and only the
+ * last has to be read back. Best effort: a blank column is honest, a wrong one
+ * is not, so anything not confidently recognised is left empty.
+ */
+export function parsePostalParts(address: string | null | undefined): {
+  city: string; state: string; pincode: string;
+} {
+  const text = String(address ?? "");
+  const parts = text.split(/[\n,]|\s-\s/).map((x) => x.trim()).filter(Boolean);
+
+  const state = parts.find(isIndianState) ?? "";
+  let pincode = "";
+  for (const p of parts) {
+    const hit = p.split(/[^0-9]+/).find(isIndianPincode);
+    if (hit) { pincode = hit; break; }
+  }
+  // The city is normally the part just before the state.
+  const at = parts.findIndex(isIndianState);
+  const city = at > 0 ? parts[at - 1] : "";
+  return { city, state, pincode };
+}

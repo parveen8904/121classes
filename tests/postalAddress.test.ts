@@ -1,4 +1,4 @@
-import { INDIA_STATES, isIndianState, isIndianPincode, formatPostalAddress, looksPostableInIndia } from "../lib/indiaStates";
+import { INDIA_STATES, isIndianState, isIndianPincode, formatPostalAddress, looksPostableInIndia, parsePostalParts } from "../lib/indiaStates";
 
 // WE CANNOT POST A PARCEL ABROAD.
 //
@@ -78,6 +78,26 @@ check(!looksPostableInIndia("12 MG Road, Bengaluru, Karnataka"), "a real state w
 check(!looksPostableInIndia("12 MG Road, Bengaluru - 560001"), "a real PIN with no state is not enough either");
 check(!looksPostableInIndia(""), "an empty address is refused");
 check(!looksPostableInIndia(null), "so is a missing one");
+
+// ── Read back out again, for the courier's spreadsheet ────────────────────
+// A courier's upload sheet sorts on a PIN code. A supporter sale stores the
+// address as one written block, so it has to be taken apart again — and a
+// blank column is honest where a guessed one is not.
+const back = parsePostalParts(label);
+check(back.state === "Delhi", "the state is read back out");
+check(back.pincode === "110019", "the PIN is read back out");
+check(back.city === "New Delhi", "the city is the part before the state");
+
+const oneLine = parsePostalParts("12 MG Road, Bengaluru, Karnataka - 560001, India");
+check(oneLine.state === "Karnataka" && oneLine.pincode === "560001" && oneLine.city === "Bengaluru",
+  "a one-line address comes apart too");
+
+const vague = parsePostalParts("Somewhere abroad, no idea");
+check(vague.state === "" && vague.pincode === "" && vague.city === "",
+  "nothing recognised means blank columns, never a guess");
+check(parsePostalParts(null).pincode === "", "a missing address does not throw");
+check(parsePostalParts("Flat 4, Mumbai, Maharashtra, 400001").pincode === "400001",
+  "a PIN on its own line is still found");
 
 console.log(fails === 0 ? `PASS  postal address: ${INDIA_STATES.length} states, PIN codes, and a label a courier can read` : "");
 process.exit(fails === 0 ? 0 : 1);

@@ -50,6 +50,9 @@ export type Effort = {
   classes_ticked: number; revisions_ticked: number;
   /** Hours of video that actually ran. The least arguable number here. */
   watch_hours: number;
+  mcq_score: number; mcq_marks: number;
+  case_score: number; case_marks: number;
+  tests_marked: number;
   mcq_done: number; mcq_total: number;
   cases_done: number; cases_total: number;
   tests_done: number; tests_total: number;
@@ -129,6 +132,89 @@ export function rank(rows: Effort[]): Scored[] {
 // has sat every case study and no classes is invisible in the first and top of
 // the fourth. So the same numbers are also offered raw, one list per activity,
 // no arithmetic in between — nothing to argue with.
+
+/**
+ * A board is one question with one answer: who leads on this?
+ *
+ * `value` is what it ranks by; `caption` is what the row says next to a name.
+ * Marks boards rank on PERCENTAGE, not on the raw total — a student who sat two
+ * papers and scored 22 of 40 is ahead of one who sat five and scored 30 of 100,
+ * and only a percentage says so.
+ */
+export type Board = {
+  key: string;
+  label: string;
+  icon: string;
+  value: (e: Effort) => number;
+  caption: (e: Effort) => string;
+  /** Ranking on a percentage needs a floor, or one lucky 5/5 wins for ever. */
+  minMarks?: number;
+};
+
+export const BOARDS: Board[] = [
+  {
+    key: "classes", label: "Classes completed", icon: "🎬",
+    value: (e) => e.classes_done,
+    caption: (e) => `${e.classes_done} of ${e.classes_total} played · ${e.watch_hours}h watched`,
+  },
+  {
+    key: "planner", label: "Planner — marked done", icon: "☑️",
+    // The student's own tick. Not proof they watched it here, but it IS their
+    // account of their own progress, and that is worth its own board rather
+    // than being quietly mixed into the class figures.
+    value: (e) => e.classes_ticked + e.revisions_ticked,
+    caption: (e) => `${e.classes_ticked + e.revisions_ticked} ticked off on their planner`,
+  },
+  {
+    key: "mock", label: "Mock papers given", icon: "📄",
+    value: (e) => e.mock_done,
+    caption: (e) => `${e.mock_done} mock paper${e.mock_done === 1 ? "" : "s"} submitted`,
+  },
+  {
+    key: "descriptive", label: "Descriptive papers submitted", icon: "✍️",
+    value: (e) => e.descriptive_done,
+    caption: (e) => `${e.descriptive_done} paper${e.descriptive_done === 1 ? "" : "s"} submitted`,
+  },
+  {
+    key: "marks", label: "Marks in written papers", icon: "🎯",
+    value: (e) => (e.test_marks > 0 ? (e.test_score / e.test_marks) * 100 : 0),
+    caption: (e) =>
+      `${e.test_score} of ${e.test_marks} — ${Math.round((e.test_score / (e.test_marks || 1)) * 100)}%` +
+      ` across ${e.tests_marked} marked paper${e.tests_marked === 1 ? "" : "s"}`,
+    minMarks: 20,
+  },
+  {
+    key: "cases", label: "Case study toppers", icon: "🧩",
+    value: (e) => (e.case_marks > 0 ? (e.case_score / e.case_marks) * 100 : 0),
+    caption: (e) =>
+      `${e.case_score} of ${e.case_marks} — ${Math.round((e.case_score / (e.case_marks || 1)) * 100)}%` +
+      ` across ${e.cases_done} scenario${e.cases_done === 1 ? "" : "s"}`,
+    minMarks: 10,
+  },
+  {
+    key: "mcq", label: "MCQ toppers", icon: "✅",
+    value: (e) => (e.mcq_marks > 0 ? (e.mcq_score / e.mcq_marks) * 100 : 0),
+    caption: (e) =>
+      `${e.mcq_score} of ${e.mcq_marks} — ${Math.round((e.mcq_score / (e.mcq_marks || 1)) * 100)}%` +
+      ` across ${e.mcq_done} test${e.mcq_done === 1 ? "" : "s"}`,
+    minMarks: 10,
+  },
+];
+
+/** The rows on one board, best first. Anybody on nought is left off it. */
+export function boardRows(rows: Effort[], b: Board): Effort[] {
+  return rows
+    .filter((e) => {
+      if (b.value(e) <= 0) return false;
+      // A percentage board needs enough marks behind it to mean anything.
+      if (b.minMarks) {
+        const marks = b.key === "marks" ? e.test_marks : b.key === "cases" ? e.case_marks : e.mcq_marks;
+        if (marks < b.minMarks) return false;
+      }
+      return true;
+    })
+    .sort((x, y) => b.value(y) - b.value(x) || y.watch_hours - x.watch_hours);
+}
 
 export const ACTIVITIES = [
   { key: "watch_hours",      label: "Hours of video watched",  icon: "⏱️" },

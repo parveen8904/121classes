@@ -4,32 +4,30 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { requireArea } from "@/lib/adminAccess";
 import { inChunks } from "@/lib/pageAll";
 import AdminHero from "../../_components/AdminHero";
-import { rank, topBy, WEIGHTS, ACTIVITIES, type Effort, type Scored } from "@/lib/studentRanking";
+import { BOARDS, boardRows, rank, WEIGHTS, type Effort } from "@/lib/studentRanking";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Top students — Admin" };
+export const metadata = { title: "Leaderboards — Admin" };
 
-// WHO TO GROOM.
+// THE MENTORING REPORT.
 //
-// Not "who paid the most" and not "who logged in today" — who is actually
-// working through the course. Ranked separately for CA Final and CA Inter,
-// because they are different races, and shown with the plain numbers beside the
-// score so the founder can disagree with the ranking at a glance rather than
-// taking it on trust.
+// One board per question, each with its leader named at the top — because "who
+// is doing best" has a different answer depending on what you mean, and the
+// founder is going to ring these people. Filterable by exam attempt, since a
+// student sitting in May 2027 is not racing somebody sitting in November.
 //
-// The counting is a database view (public.student_effort); the weights are in
-// lib/studentRanking.ts.
+// Phone and email on every row. A leaderboard you cannot act on is a poster.
+//
+// The counting is the database view public.student_effort; what each board
+// ranks by is in lib/studentRanking.ts.
 
-const SHOW = 25;
-// He asked for fifty in each plain list, across all time.
-const TOP_N = 50;
+const PER_BOARD = 50;
 
 export default async function ToppersPage(props: {
-  searchParams: Promise<{ all?: string }>;
+  searchParams: Promise<{ attempt?: string; course?: string }>;
 }) {
   if (!(await requireArea("store")) && !(await requireArea("results"))) redirect("/admin");
   const sp = await props.searchParams;
-  const showAll = sp.all === "1";
   const svc = createServiceClient();
 
   const [{ data: effortRows }, { data: courseRows }] = await Promise.all([
@@ -40,191 +38,203 @@ export default async function ToppersPage(props: {
   const effort = (effortRows ?? []) as unknown as Effort[];
   const courses = new Map((courseRows ?? []).map((c) => [String(c.id), String(c.title)]));
 
-  // Nobody who has done nothing at all. A leaderboard of two thousand zeroes
-  // buries the thirty-nine people it exists to find.
+  // Anybody who has done something at all. A board of zeroes is a list of
+  // everybody, and buries the handful it exists to find.
   const doing = effort.filter(
-    (e) => e.classes_done + e.revisions_done + e.tests_done + e.mcq_done + e.cases_done > 0,
+    (e) => e.classes_done + e.classes_ticked + e.revisions_done + e.revisions_ticked +
+           e.tests_done + e.mcq_done + e.cases_done > 0,
   );
 
-  const ids = [...new Set(doing.map((e) => e.student_id))];
-  const people = new Map<string, { name: string; email: string; phone: string; attempt: string }>();
+  type Person = { name: string; email: string; phone: string; attempt: string };
+  const people = new Map<string, Person>();
   const staff = new Set<string>();
+  const ids = [...new Set(doing.map((e) => e.student_id))];
   if (ids.length) {
     const rows = await inChunks<{ id: string; full_name: string | null; email: string | null; phone: string | null; target_attempt: string | null; role: string | null }>(
-      ids, (b) => svc.from("profiles").select("id, full_name, email, phone, target_attempt").in("id", b) as never,
+      ids, (b) => svc.from("profiles").select("id, full_name, email, phone, target_attempt, role").in("id", b) as never,
     );
     for (const r of rows) {
-      // Our own accounts are not students, and an admin testing a class should
-      // not appear in a list the founder rings people from.
+      // Our own accounts are not students. An admin testing a class does not
+      // belong in a list somebody rings people from.
       if (r.role && r.role !== "student") { staff.add(r.id); continue; }
       people.set(r.id, {
         name: r.full_name ?? "—", email: r.email ?? "", phone: r.phone ?? "",
-        attempt: r.target_attempt ?? "",
+        attempt: (r.target_attempt ?? "").trim(),
       });
     }
   }
 
-  const students = doing.filter((e) => !staff.has(e.student_id));
+  const attempts = [...new Set([...people.values()].map((p) => p.attempt).filter(Boolean))].sort();
+  const wantAttempt = (sp.attempt ?? "").trim();
+  const wantCourse = (sp.course ?? "").trim();
 
-  const byCourse = new Map<string, Scored[]>();
-  for (const [courseId] of courses) {
-    const rows = students.filter((e) => e.course_id === courseId);
-    if (rows.length) byCourse.set(courseId, rank(rows));
-  }
+  const pool = doing.filter((e) => {
+    if (staff.has(e.student_id)) return false;
+    if (wantCourse && e.course_id !== wantCourse) return false;
+    if (wantAttempt && (people.get(e.student_id)?.attempt ?? "") !== wantAttempt) return false;
+    return true;
+  });
 
-  const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v * 100)}%`);
+  const qs = (over: { attempt?: string; course?: string }) => {
+    const u = new URLSearchParams();
+    const attempt = over.attempt ?? wantAttempt;
+    const course = over.course ?? wantCourse;
+    if (attempt) u.set("attempt", attempt);
+    if (course) u.set("course", course);
+    return u.toString() ? `?${u}` : "";
+  };
+  const chip = (label: string, href: string, on: boolean) => (
+    <Link key={`${href}|${label}`} href={`/admin/reports/toppers${href}`}
+      className={on ? "btn small" : "btn small secondary"} style={{ marginBottom: 0 }}>{label}</Link>
+  );
+
+  const overall = rank(pool);
 
   return (
-    <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 1040 }}>
+    <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 1080 }}>
       <AdminHero
-        badge="🏅 Top students"
-        title="Who is actually working"
-        subtitle="Ranked on what the site can see — classes, revisions, tests and practice — so the students worth mentoring are visible without guessing. 🎯"
+        badge="🏆 Leaderboards"
+        title="Who is leading, and at what"
+        subtitle="A board for each thing, with its leader named — classes, planner, mocks, written papers, marks, case studies and MCQs. Phone numbers included, because this is for mentoring. 🎯"
         back={{ href: "/admin/reports", label: "Reports" }}
       />
 
-      <div className="card" style={{ marginTop: 16, fontSize: ".86rem", lineHeight: 1.7 }}>
-        <strong>How the score is worked out.</strong> Out of 100, against everything available in that course —
-        not against the other students, so a rank never moves because somebody else studied.
-        <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
-          <li><strong>{WEIGHTS.classes}</strong> — classes <strong>played through</strong> (90% of the video actually ran)</li>
-          <li><strong>{WEIGHTS.revisions}</strong> — revision classes played through</li>
-          <li><strong>{WEIGHTS.tests}</strong> — mock &amp; descriptive papers, <em>attempted × how well they scored</em></li>
-          <li><strong>{WEIGHTS.practice}</strong> — case scenarios &amp; MCQ tests, the same way</li>
-        </ul>
-        <p className="muted" style={{ margin: "8px 0 0", fontSize: ".82rem" }}>
-          A paper submitted but not yet marked counts as full credit — the marking queue is ours, and nobody should
-          slip down this list because we have not got to their copy. Anyone who has done nothing at all is left out,
-          and so is every staff account.
-          <br /><br />
-          <strong>Ticking is not watching.</strong> A student can tick a class &ldquo;done&rdquo; on their planner —
-          it is there for classes watched elsewhere. Those ticks are <strong>not</strong> counted in any score on
-          this page; they are listed on their own at the end so you can see who is ticking rather than watching.
-          When this report first ran, 243 of the 268 &ldquo;completed&rdquo; classes had never been played at all,
-          and one student who ticked fifty in six minutes was at the top of it.
+      {/* ── Filters ──────────────────────────────────────────────────────── */}
+      <div className="card" style={{ marginTop: 16, display: "grid", gap: 10 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: ".8rem", fontWeight: 700, minWidth: 74 }}>Attempt</span>
+          {chip("All attempts", qs({ attempt: "" }), !wantAttempt)}
+          {attempts.map((a) => chip(a, qs({ attempt: a }), wantAttempt === a))}
+          {attempts.length === 0 && (
+            <span className="muted" style={{ fontSize: ".82rem" }}>No student in this list has set a target attempt yet.</span>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: ".8rem", fontWeight: 700, minWidth: 74 }}>Course</span>
+          {chip("Both", qs({ course: "" }), !wantCourse)}
+          {[...courses.entries()].map(([id, title]) => chip(title, qs({ course: id }), wantCourse === id))}
+        </div>
+        <p className="muted" style={{ fontSize: ".8rem", margin: 0, lineHeight: 1.65 }}>
+          <strong>{pool.length}</strong> record{pool.length === 1 ? "" : "s"} in view.
+          Marks boards rank on <strong>percentage</strong>, not the raw total — 22 out of 40 beats 30 out of 100 —
+          with a small minimum so one lucky 5 out of 5 cannot lead for ever. A paper still being marked is counted
+          as submitted but has no score yet. Staff accounts are excluded.
         </p>
       </div>
 
-      {/* THE PLAIN LISTS.
-          A weighted score answers "who should I mentor". It does not answer
-          "who has watched the most classes" — and a student who has sat every
-          case study and no classes is invisible in the first and top of the
-          fourth. Same numbers, no arithmetic in between, nothing to argue with. */}
-      <h2 className="admin-section-title" style={{ marginTop: 30 }}>📋 Top {TOP_N} for each thing, on its own</h2>
-      <p className="muted" style={{ fontSize: ".85rem", marginTop: -4 }}>
-        All time, both courses together, counted straight. Anybody on nought is left out — a list of fifty where
-        forty are zero is a list of everybody.
-      </p>
-
-      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", marginTop: 12 }}>
-        {ACTIVITIES.map((a) => {
-          const list = topBy(students, a.key, TOP_N);
-          return (
-            <div className="card" key={a.key} style={{ padding: "12px 14px" }}>
-              <h3 style={{ margin: "0 0 8px", fontSize: "1rem" }}>
-                {a.icon} {a.label} <span className="muted" style={{ fontWeight: 400, fontSize: ".82rem" }}>({list.length})</span>
-              </h3>
-              {list.length === 0 ? (
-                <p className="muted" style={{ margin: 0, fontSize: ".84rem" }}>
-                  Nobody has done one of these yet.
-                </p>
-              ) : (
-                <ol style={{ margin: 0, paddingLeft: 22, fontSize: ".86rem", lineHeight: 1.9 }}>
-                  {list.map((r) => {
-                    const p = people.get(r.student_id);
-                    return (
-                      <li key={`${a.key}:${r.student_id}:${r.course_id}`}>
-                        <Link href={`/admin/users/${r.student_id}`}>{p?.name || "—"}</Link>
-                        {" — "}<strong>{Number(r[a.key])}</strong>
-                        <span className="muted" style={{ fontSize: ".78rem" }}>
-                          {" "}· {(courses.get(r.course_id) ?? "").replace("CA ", "")}
-                          {p?.phone ? ` · ${p.phone}` : ""}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ol>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <h2 className="admin-section-title" style={{ marginTop: 34 }}>🏅 The weighted ranking</h2>
-
-      {byCourse.size === 0 && (
-        <div className="card" style={{ marginTop: 18 }}>
-          <p className="muted" style={{ margin: 0 }}>Nobody has finished a class, a test or a case study yet.</p>
-        </div>
-      )}
-
-      {[...byCourse.entries()].map(([courseId, scored]) => {
-        const shown = showAll ? scored : scored.slice(0, SHOW);
+      {/* ── One board per question ───────────────────────────────────────── */}
+      {BOARDS.map((b) => {
+        const all = boardRows(pool, b);
+        const rows = all.slice(0, PER_BOARD);
+        const leader = rows[0];
+        const lp = leader ? people.get(leader.student_id) : null;
         return (
-          <div key={courseId} style={{ marginTop: 26 }}>
-            <h2 className="admin-section-title">
-              🎓 {courses.get(courseId) ?? "Course"} — {scored.length} student{scored.length === 1 ? "" : "s"} working
-            </h2>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ minWidth: 860, width: "100%", borderCollapse: "collapse", fontSize: ".86rem" }}>
-                <thead>
-                  <tr>
-                    {["#", "Student", "Score", `Classes (${WEIGHTS.classes})`, `Revision (${WEIGHTS.revisions})`,
-                      `Tests (${WEIGHTS.tests})`, `Practice (${WEIGHTS.practice})`, "Contact"].map((h) => (
-                      <th key={h} style={{ textAlign: "left", padding: "8px 10px", borderBottom: "1px solid var(--border)", fontWeight: 700 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {shown.map((s, i) => {
-                    const p = people.get(s.student_id);
-                    const cell = { padding: "8px 10px", borderBottom: "1px solid var(--border)", verticalAlign: "top" } as const;
-                    return (
-                      <tr key={s.student_id}>
-                        <td style={cell}>{i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</td>
-                        <td style={cell}>
-                          <Link href={`/admin/users/${s.student_id}`}>{p?.name || "—"}</Link>
-                          {p?.attempt ? <span className="muted" style={{ display: "block", fontSize: ".78rem" }}>🎯 {p.attempt}</span> : null}
-                        </td>
-                        <td style={{ ...cell, fontWeight: 800, fontSize: "1rem" }}>{s.total}</td>
-                        <td style={cell}>
-                          {s.shown.classes}
-                          <span className="muted" style={{ display: "block", fontSize: ".76rem" }}>{s.parts.classes} pts</span>
-                        </td>
-                        <td style={cell}>
-                          {s.shown.revisions}
-                          <span className="muted" style={{ display: "block", fontSize: ".76rem" }}>{s.parts.revisions} pts</span>
-                        </td>
-                        <td style={cell}>
-                          {s.shown.tests}
-                          <span className="muted" style={{ display: "block", fontSize: ".76rem" }}>
-                            {s.parts.tests} pts · scored {pct(s.shown.testAccuracy)}
-                          </span>
-                        </td>
-                        <td style={cell}>
-                          {s.shown.practice}
-                          <span className="muted" style={{ display: "block", fontSize: ".76rem" }}>
-                            {s.parts.practice} pts · scored {pct(s.shown.practiceAccuracy)}
-                          </span>
-                        </td>
-                        <td style={{ ...cell, fontSize: ".8rem", wordBreak: "break-all" }}>
-                          {p?.phone ? <>📞 {p.phone}<br /></> : null}
-                          {p?.email ? <span className="muted">{p.email}</span> : null}
-                        </td>
+          <div key={b.key} style={{ marginTop: 28 }}>
+            <h2 className="admin-section-title">{b.icon} {b.label}</h2>
+
+            {rows.length === 0 ? (
+              <div className="card"><p className="muted" style={{ margin: 0 }}>
+                Nobody in this view has done one of these yet.
+              </p></div>
+            ) : (
+              <>
+                <div className="card" style={{ borderLeft: "4px solid var(--accent)", marginBottom: 10 }}>
+                  <strong style={{ fontSize: "1.02rem" }}>
+                    🏆 Leader — <Link href={`/admin/users/${leader.student_id}`}>{lp?.name || "—"}</Link>
+                  </strong>
+                  <p className="muted" style={{ margin: "4px 0 0", fontSize: ".86rem" }}>
+                    {b.caption(leader)} · {courses.get(leader.course_id) ?? ""}
+                    {lp?.attempt ? ` · 🎯 ${lp.attempt}` : ""}
+                  </p>
+                  <p style={{ margin: "6px 0 0", fontSize: ".86rem" }}>
+                    {lp?.phone ? <>📞 <strong>{lp.phone}</strong></> : <span className="muted">no phone on file</span>}
+                    {lp?.email ? <span className="muted"> · {lp.email}</span> : null}
+                  </p>
+                </div>
+
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ minWidth: 780, width: "100%", borderCollapse: "collapse", fontSize: ".86rem" }}>
+                    <thead>
+                      <tr>
+                        {["#", "Student", "Attempt", "How they stand", "Course", "Phone", "Email"].map((h) => (
+                          <th key={h} style={{ textAlign: "left", padding: "7px 10px", borderBottom: "1px solid var(--border)", fontWeight: 700 }}>{h}</th>
+                        ))}
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {!showAll && scored.length > SHOW && (
-              <p className="muted" style={{ fontSize: ".85rem", marginTop: 8 }}>
-                Showing the top {SHOW} of {scored.length}. <Link href="/admin/reports/toppers?all=1">See everyone →</Link>
-              </p>
+                    </thead>
+                    <tbody>
+                      {rows.map((e, i) => {
+                        const p = people.get(e.student_id);
+                        const td = { padding: "7px 10px", borderBottom: "1px solid var(--border)", verticalAlign: "top" } as const;
+                        return (
+                          <tr key={`${b.key}:${e.student_id}:${e.course_id}`}>
+                            <td style={td}>{i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</td>
+                            <td style={td}><Link href={`/admin/users/${e.student_id}`}>{p?.name || "—"}</Link></td>
+                            <td style={td}>{p?.attempt || <span className="muted">—</span>}</td>
+                            <td style={td}>{b.caption(e)}</td>
+                            <td style={td}>{(courses.get(e.course_id) ?? "").replace("CA ", "")}</td>
+                            <td style={td}>{p?.phone || <span className="muted">—</span>}</td>
+                            <td style={{ ...td, wordBreak: "break-all" }}><span className="muted">{p?.email || "—"}</span></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {all.length > PER_BOARD && (
+                  <p className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>
+                    Showing the top {PER_BOARD} of {all.length}.
+                  </p>
+                )}
+              </>
             )}
           </div>
         );
       })}
+
+      {/* ── And everything together, on the weights he set ────────────────── */}
+      <h2 className="admin-section-title" style={{ marginTop: 34 }}>
+        ⚖️ All of it together — classes {WEIGHTS.classes}, revisions {WEIGHTS.revisions},
+        papers {WEIGHTS.tests}, case studies &amp; MCQ {WEIGHTS.practice}
+      </h2>
+      <p className="muted" style={{ fontSize: ".84rem", marginTop: -4, lineHeight: 1.6 }}>
+        Out of 100, against everything available in the course — never against the other students, so nobody&apos;s
+        rank moves because a stranger studied. Planner ticks are not counted here; they have their own board above.
+      </p>
+      {overall.length === 0 ? (
+        <div className="card" style={{ marginTop: 10 }}>
+          <p className="muted" style={{ margin: 0 }}>Nobody in this view yet.</p>
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", marginTop: 10 }}>
+          <table style={{ minWidth: 740, width: "100%", borderCollapse: "collapse", fontSize: ".86rem" }}>
+            <thead>
+              <tr>
+                {["#", "Student", "Score", "Classes", "Revision", "Papers", "Case & MCQ", "Phone"].map((h) => (
+                  <th key={h} style={{ textAlign: "left", padding: "7px 10px", borderBottom: "1px solid var(--border)", fontWeight: 700 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {overall.slice(0, PER_BOARD).map((s, i) => {
+                const p = people.get(s.student_id);
+                const td = { padding: "7px 10px", borderBottom: "1px solid var(--border)" } as const;
+                return (
+                  <tr key={`w:${s.student_id}:${s.course_id}`}>
+                    <td style={td}>{i + 1}</td>
+                    <td style={td}><Link href={`/admin/users/${s.student_id}`}>{p?.name || "—"}</Link></td>
+                    <td style={{ ...td, fontWeight: 800 }}>{s.total}</td>
+                    <td style={td}>{s.shown.classes}</td>
+                    <td style={td}>{s.shown.revisions}</td>
+                    <td style={td}>{s.shown.tests}</td>
+                    <td style={td}>{s.shown.practice}</td>
+                    <td style={td}>{p?.phone || <span className="muted">—</span>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

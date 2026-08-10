@@ -167,3 +167,71 @@ export async function deleteTicket(formData: FormData) {
   revalidatePath("/admin/tickets");
   redirect("/admin/tickets");
 }
+
+// REPLYING TO THE STUDENT — WHICH THIS SCREEN COULD NOT DO.
+//
+// A ticket could be assigned, noted, escalated, prioritised and closed. Every
+// one of those notifies a member of staff. Not one of them said anything to the
+// person who raised it. Notes are internal, so a ticket worked on diligently
+// still looked, from the student's side, exactly like a ticket nobody had read
+// — and that is why they were being raised twice and then escalated.
+//
+// A reply here goes to the student by email, is written into the ticket's own
+// history so the next person can see what was already said, and moves the
+// ticket on. Answering IS the work; it should not have been the one thing the
+// screen left out.
+export async function replyToStudent(formData: FormData) {
+  if (!(await requireArea("tickets"))) return;
+  const id = str(formData.get("id"));
+  const body = str(formData.get("body"));
+  if (!id || !body) return;
+
+  const svc = createServiceClient();
+  const me = await actor();
+  const { data: t } = await svc
+    .from("tickets")
+    .select("ref, title, student_name, student_email, user_id, status")
+    .eq("id", id).maybeSingle();
+  if (!t) return;
+
+  // The address on the ticket, or the one on their account if it was raised
+  // from inside the portal without one.
+  let email = String((t as { student_email?: string | null }).student_email ?? "").trim();
+  if (!email && (t as { user_id?: string | null }).user_id) {
+    const { data: p } = await svc.from("profiles").select("email")
+      .eq("id", (t as { user_id: string }).user_id).maybeSingle();
+    email = String(p?.email ?? "").trim();
+  }
+
+  let delivered = false;
+  if (email) {
+    const { sendEmail, emailShell } = await import("@/lib/notify");
+    const name = String((t as { student_name?: string | null }).student_name ?? "").split(" ")[0];
+    const html = emailShell(
+      `About your query — ${(t as { ref: string }).ref}`,
+      `<p>${name ? `Dear ${name},` : "Hello,"}</p>
+       <p>You wrote to us about <strong>${(t as { title: string }).title}</strong>. Here is where it stands:</p>
+       <div style="border-left:3px solid #eab308;padding:2px 0 2px 14px;margin:14px 0;line-height:1.7">
+         ${body.split("\n").filter(Boolean).map((l) => `<p style="margin:0 0 10px">${l}</p>`).join("")}
+       </div>
+       <p>If this does not answer it, simply reply to this email — it comes back to the same ticket and we will pick it up.</p>`,
+    );
+    delivered = await sendEmail(email, `${(t as { ref: string }).ref} — ${(t as { title: string }).title}`, html).catch(() => false);
+  }
+
+  await logTicketEvent(svc, id, {
+    author_id: me.id, author_name: me.name, kind: "note",
+    // Marked as sent or not sent, plainly. A reply logged as though it went out
+    // when the email bounced is worse than no log at all — the next person
+    // reads it and assumes the student has been told.
+    body: delivered ? `💬 Replied to ${email}:\n\n${body}` : `⚠️ Reply NOT sent (no working email on this ticket):\n\n${body}`,
+  });
+
+  // Answered, not closed. The student may still come back on it, and closing a
+  // ticket the moment we speak is how a half-answer becomes a lost one.
+  if (delivered && OPEN_STATUSES.includes(String((t as { status: string }).status))) {
+    await svc.from("tickets").update({ status: "waiting", updated_at: new Date().toISOString() }).eq("id", id);
+  }
+  revalidatePath(`/admin/tickets/${id}`);
+  revalidatePath("/admin/tickets");
+}

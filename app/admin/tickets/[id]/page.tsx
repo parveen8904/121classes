@@ -9,7 +9,7 @@ import {
   OPEN_STATUSES, staffList,
 } from "@/lib/tickets";
 import {
-  assignTicket, addTicketNote, updateTicketStatus, setTicketFields, escalateTicket, deleteTicket,
+  assignTicket, addTicketNote, updateTicketStatus, setTicketFields, escalateTicket, deleteTicket, replyToStudent,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -94,6 +94,22 @@ export default async function TicketDetail(props: { params: Promise<{ id: string
       {/* Activity log */}
       <h2 className="admin-section-title" style={{ marginTop: 22 }}>🧾 Activity</h2>
       <div className="card" style={{ marginTop: 10 }}>
+        {/* The reply comes FIRST, above the internal note. What the screen puts
+            at the top is what the person working it does — and the thing to do
+            with a ticket is answer it. */}
+        <form action={replyToStudent} style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+          <input type="hidden" name="id" value={t.id} />
+          <label htmlFor="tkreply" style={{ margin: 0 }}>💬 Reply to the student</label>
+          <textarea id="tkreply" name="body" rows={4} required
+            placeholder="This goes to them by email, and is saved on the ticket." />
+          <div>
+            <SubmitButton className="btn small" savedLabel="✓ Sent">Send the reply</SubmitButton>
+            <span className="muted" style={{ fontSize: ".8rem", marginLeft: 10 }}>
+              Goes to {t.student_email || "the address on their account"} · the ticket moves to “waiting”
+            </span>
+          </div>
+        </form>
+
         <form action={addTicketNote} style={{ display: "grid", gap: 8 }}>
           <input type="hidden" name="id" value={t.id as string} />
           <textarea name="body" rows={2} placeholder="Add a note or log what happened on the call…" required />

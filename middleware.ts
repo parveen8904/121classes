@@ -1,6 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { deviceKind } from "@/lib/device";
+import { deviceKind, sameDevice } from "@/lib/device";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -120,13 +120,18 @@ export async function middleware(request: NextRequest) {
     const dsid = request.cookies.get("dsid")?.value;
     if (dsid && !isStaff) {
       try {
-        const kind = deviceKind(request.headers.get("user-agent") || "");
+        const ua = request.headers.get("user-agent") || "";
+        const kind = deviceKind(ua);
         const dsRes = await withTimeout(
-          supabase.from("device_sessions").select("token").eq("user_id", user.id).eq("device_kind", kind).maybeSingle(),
+          supabase.from("device_sessions").select("token, user_agent").eq("user_id", user.id).eq("device_kind", kind).maybeSingle(),
           3000,
         );
         const ds = dsRes === TIMEOUT ? null : dsRes.data;
-        if (ds && ds.token !== dsid) {
+        // The same phone signing in again — cookies cleared, app reinstalled,
+        // a private window — is not a second person. Evicting for that tells a
+        // student they are logged in elsewhere while they hold the only device
+        // they own.
+        if (ds && ds.token !== dsid && !sameDevice(ds.user_agent as string | null, ua)) {
           const url = request.nextUrl.clone();
           url.pathname = "/auth/signout";
           url.search = "";

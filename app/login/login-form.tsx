@@ -105,7 +105,29 @@ export default function LoginForm() {
     // Count signups (admin Visitors report) so a broken registration flow shows
     // up the same day, not via student complaints.
     import("@/app/components/Tracker").then(({ track }) => track(r.ok ? "signup_success" : "signup_failed", "/login")).catch(() => {});
-    if (!r.ok) return err(r.error || "Could not sign up.");
+    if (!r.ok) {
+      // ALREADY REGISTERED IS NOT A FAILURE, IT IS THE OTHER DOOR.
+      //
+      // Nine sign-ups failed today and this is what most of them are: somebody
+      // who already has an account, pressing Create account because that is
+      // what a person does when they cannot get in. Answering "an account with
+      // this email already exists" leaves them exactly where they started.
+      // Send them the link and put them on the log-in form instead.
+      if (/already/i.test(r.error ?? "")) {
+        try {
+          const fd2 = new FormData();
+          fd2.set("email", email);
+          await autoLoginRescue(fd2);
+        } catch { /* the message below still stands */ }
+        setMode("login");
+        return ok(
+          "You already have an account with this email — so there is nothing to create. " +
+          "We have emailed you a link to choose your password; open it and you are straight in. " +
+          "Check your spam folder too.",
+        );
+      }
+      return err(r.error || "Could not sign up.");
+    }
     setMode("login");
     ok("Almost there! We've emailed you a verification link. Click it to verify your email — you'll then choose your password and you're in. No need to come back here.");
   }

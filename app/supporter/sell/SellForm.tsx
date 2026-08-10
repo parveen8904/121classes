@@ -376,6 +376,10 @@ export default function SellForm({
             <span className="muted" style={{ fontSize: ".78rem", flexBasis: "100%" }}>
               Yours alone — it only works on orders you place, while signed in as you. Use it for every student;
               there is no limit and no expiry.
+              {/* A one-off code from the office is typed over this one. Without
+                  saying so, a pre-filled box reads as fixed, and a vendor given
+                  a special rate for one order would not know where to put it. */}
+              {" "}Been given a different code for one order? Type it over the box below and press Apply.
             </span>
           </div>
         )}

@@ -565,6 +565,10 @@ textarea {
 @media (max-width: 760px) { .lp-footer-inner { grid-template-columns: 1fr; } }
 .lp-footer h4 { font-size: .95rem; margin-bottom: 12px; }
 .lp-footer a { display: block; color: var(--muted); font-size: .9rem; margin-bottom: 8px; }
+/* …except a button in the footer, which must stay a button: the rule above
+   turned the feedback call-to-action into a full-width muted-grey line. */
+.lp-footer a.btn { display: inline-block; color: #fff; font-size: .95rem; margin-bottom: 0; }
+.lp-footer a.btn:hover { color: #fff; }
 .lp-footer a:hover { color: var(--text); }
 .lp-footer .copy { border-top: 1px solid var(--border); text-align: center; color: var(--muted); font-size: .82rem; padding: 20px 24px; }
 

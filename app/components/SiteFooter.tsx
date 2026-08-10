@@ -22,6 +22,40 @@ export default async function SiteFooter() {
 
   return (
     <footer className="lp-footer">
+      {/* ASKED FOR PROPERLY, WHERE IT CAN BE SEEN.
+          There has been a "Give feedback" link in the footer since the form was
+          built — sitting in a column between Help & Support and Privacy Policy,
+          which is to say nowhere. Somebody looking for it could not find it,
+          and nobody stumbles on a text link between the legal pages.
+
+          A band across the top of the footer instead: on every page, above the
+          columns, phrased as an invitation rather than a menu entry. */}
+      <div style={{ borderBottom: "1px solid var(--border)" }}>
+        <div
+          style={{
+            maxWidth: 1140,
+            margin: "0 auto",
+            padding: "22px 24px",
+            display: "flex",
+            gap: 16,
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ minWidth: 260, flex: 1 }}>
+            <strong style={{ fontSize: "1.02rem" }}>💬 Tell us what you think</strong>
+            <p className="muted" style={{ margin: "4px 0 0", fontSize: ".88rem", lineHeight: 1.6, maxWidth: 560 }}>
+              What worked, what felt clumsy, what you expected to find and could not. It takes two minutes and it is
+              read by CA Parveen Sharma himself — not filed away.
+            </p>
+          </div>
+          <Link prefetch={false} className="btn" href="/feedback" style={{ whiteSpace: "nowrap" }}>
+            Give feedback →
+          </Link>
+        </div>
+      </div>
+
       <div className="lp-footer-inner">
         <div>
           <Logo />

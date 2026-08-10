@@ -230,7 +230,8 @@ export async function checkKeysMatchPapers() {
   revalidatePath("/admin/solutions");
   redirect(
     `/admin/solutions?kmchecked=${r.checked}&kmmatch=${r.matched.length}` +
-      `&kmbad=${r.mismatched.length}&kmunclear=${r.unclear.length}&kmleft=${r.remaining}`,
+      `&kmbad=${r.mismatched.length}&kmshort=${r.incomplete.length}` +
+      `&kmunclear=${r.unclear.length}&kmleft=${r.remaining}`,
   );
 }
 

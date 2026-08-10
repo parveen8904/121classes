@@ -49,7 +49,7 @@ const LABEL: Record<string, string> = {
 export default async function AdminSolutionsPage(props: {
   searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string; removed?: string; keptapproved?: string; requeued?: string; approvedall?: string; mcqleft?: string; casesleft?: string; keypdf?: string;
   checked?: string; typeset?: string; replaced?: string; auditfailed?: string; auditleft?: string;
-  kmchecked?: string; kmmatch?: string; kmbad?: string; kmunclear?: string; kmleft?: string }>;
+  kmchecked?: string; kmmatch?: string; kmbad?: string; kmshort?: string; kmunclear?: string; kmleft?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
@@ -125,14 +125,21 @@ export default async function AdminSolutionsPage(props: {
             ? { background: "rgba(185,28,28,.12)", border: "2px solid #b91c1c", lineHeight: 1.7 }
             : { lineHeight: 1.7 }}
         >
-          🔀 Compared {searchParams.kmchecked} paper(s) with their answer key: {searchParams.kmmatch} match.
+          🔀 Compared {searchParams.kmchecked} paper(s) with their answer key: {searchParams.kmmatch} fully answered.
           {Number(searchParams.kmbad) > 0 ? (
             <>
-              {" "}<strong>{searchParams.kmbad} key(s) answer a DIFFERENT paper.</strong> Nothing has been changed —
-              a wrong key is a judgement about teaching material. Open those tests below, and note that any student
-              already marked against one of them will have been given close to zero for answers that may be right.
+              {" "}<strong>{searchParams.kmbad} key(s) belong to a DIFFERENT paper.</strong> Anyone who has already sat
+              one of those was marked against the wrong answers and given close to zero for work that may be right.
             </>
           ) : null}
+          {Number(searchParams.kmshort) > 0 ? (
+            <>
+              {" "}<strong>{searchParams.kmshort} key(s) stop short</strong> — they are for the right paper but leave
+              some questions unanswered, so a student loses those marks however well they answer them.
+            </>
+          ) : null}
+          {" "}Nothing has been changed: which of the two documents is wrong is a judgement about your teaching
+          material and belongs to you.
           {Number(searchParams.kmunclear) > 0 && ` ${searchParams.kmunclear} could not be settled either way.`}
           {Number(searchParams.kmleft) > 0
             ? ` ${searchParams.kmleft} still to compare — press again.`

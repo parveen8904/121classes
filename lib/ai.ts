@@ -1270,10 +1270,12 @@ export const ABUSE_WARNING_DIRECT =
 //
 // Only the first two pages of each go — enough to see what is being asked and
 // what is being answered, without paying for two full scans.
+export type KeyMatchVerdict = "match" | "incomplete" | "mismatch" | "unclear";
+
 export async function classifyKeyMatchesPaper(
   questionPdfUrl: string,
   solutionPdfUrl: string,
-): Promise<{ verdict: "match" | "mismatch" | "unclear"; note: string }> {
+): Promise<{ verdict: KeyMatchVerdict; note: string }> {
   const apiKey = await getSecret("ANTHROPIC_API_KEY");
   if (!apiKey || !questionPdfUrl || !solutionPdfUrl) return { verdict: "unclear", note: "not enough to compare" };
   try {
@@ -1284,7 +1286,7 @@ export async function classifyKeyMatchesPaper(
       try {
         const { PDFDocument } = await import("pdf-lib");
         const src = await PDFDocument.load(full, { ignoreEncryption: true });
-        const n = Math.min(2, src.getPageCount());
+        const n = Math.min(3, src.getPageCount());
         if (n === 0) return null;
         const out = await PDFDocument.create();
         const pages = await out.copyPages(src, Array.from({ length: n }, (_, i) => i));
@@ -1298,22 +1300,42 @@ export async function classifyKeyMatchesPaper(
     if (!q || !sol) return { verdict: "unclear", note: "one of the two files could not be opened" };
     if (q.byteLength + sol.byteLength > 20 * 1024 * 1024) return { verdict: "unclear", note: "files too large to compare" };
 
+    // ASK FOR FACTS, NOT FOR A VERDICT.
+    //
+    // The first version of this asked "do these match?" and got six flags out
+    // of six papers — because a key that answers Q1 but not Q2 feels like a
+    // mismatch to a reader, however firmly the instructions say otherwise. A
+    // tool that flags everything is a tool nobody reads.
+    //
+    // So the model is asked only what it can see: which questions the paper
+    // sets, and which of them the key answers. The verdict is worked out here,
+    // in code, where the rule is written once and cannot drift with the mood of
+    // a prompt. The two faults are genuinely different and want different
+    // answers from a teacher:
+    //
+    //   mismatch   the key answers questions this paper does not ask. The wrong
+    //              file is attached, and everyone who sits it scores near zero.
+    //   incomplete the key is for this paper but stops short. Students lose the
+    //              marks for the questions it never reaches.
     const system =
       "You are given TWO PDFs from a CA coaching portal: FIRST the QUESTION PAPER of a test, SECOND the document " +
-      "attached to it as the OFFICIAL SOLUTION / answer key. Decide only whether the second one actually answers " +
-      "the first. Compare what is asked: the questions' subject matter, their order, their marks, and the figures " +
-      "used. Ignore differences of wording, formatting, typography and completeness — a key that answers only some " +
-      "of the questions, or presents them differently, still MATCHES. Say mismatch only when the key is plainly " +
-      "for a DIFFERENT paper: different questions, different figures, a different topic. " +
-      "Reply as compact JSON and nothing else: " +
-      '{"verdict":"match"|"mismatch"|"unclear","note":"<one short sentence of evidence>"}';
+      "attached to it as the OFFICIAL SOLUTION / answer key. Do not judge quality and do not award anything. " +
+      "Report only what each document contains.\n" +
+      "For the QUESTION PAPER list every question: its number, the marks printed for it, and a few words naming its " +
+      "subject matter — include the company or person name where one is used (for example 'Misty Ltd interim results').\n" +
+      "For the SOLUTION list every question it actually answers, in the same way.\n" +
+      "Then, for each question in the PAPER, say whether the solution answers it: use the company/person names and " +
+      "the figures to decide, not the question numbers, because the numbering often differs.\n" +
+      "Respond ONLY as compact JSON, no prose, no code fences:\n" +
+      '{"paper":[{"n":"Q1","marks":5,"about":"..."}],"key":[{"n":"Q1","about":"..."}],' +
+      '"answered":[{"paper_q":"Q1","in_key":true,"why":"same Misty Ltd figures"}]}';
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model: await fastModel(),
-        max_tokens: 200,
+        max_tokens: 1500,
         temperature: 0,
         system,
         messages: [{
@@ -1334,9 +1356,47 @@ export async function classifyKeyMatchesPaper(
     const u = data.usage ?? {};
     await logUsage("key_match", await fastModel(), Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
     const raw = String(data.content?.[0]?.text ?? "").replace(/```json|```/g, "").trim();
-    const parsed = JSON.parse(raw) as { verdict?: string; note?: string };
-    const v = parsed.verdict === "match" || parsed.verdict === "mismatch" ? parsed.verdict : "unclear";
-    return { verdict: v, note: String(parsed.note ?? "").slice(0, 300) };
+    const parsed = JSON.parse(raw) as {
+      paper?: { n?: string; marks?: number; about?: string }[];
+      key?: { n?: string; about?: string }[];
+      answered?: { paper_q?: string; in_key?: boolean; why?: string }[];
+    };
+
+    const paper = parsed.paper ?? [];
+    const key = parsed.key ?? [];
+    const answered = parsed.answered ?? [];
+    if (paper.length === 0 || key.length === 0) {
+      return { verdict: "unclear", note: "the questions could not be read from one of the files" };
+    }
+
+    const missing = answered.filter((a) => a.in_key === false).map((a) => String(a.paper_q ?? "?"));
+    const covered = answered.filter((a) => a.in_key === true).length;
+
+    // The key answers MORE than this paper asks — the surplus belongs to
+    // another paper. That is the wrong file, not a short one.
+    const surplus = key.length - covered;
+
+    if (covered === 0) {
+      return {
+        verdict: "mismatch",
+        note: `The key answers none of this paper's ${paper.length} question(s). It appears to be the solution to a different test` +
+          (key[0]?.about ? ` (it answers: ${key.map((k) => k.about).filter(Boolean).slice(0, 3).join("; ")})` : "") + ".",
+      };
+    }
+    if (surplus > 0) {
+      return {
+        verdict: "mismatch",
+        note: `The key answers ${surplus} question(s) this paper does not ask` +
+          (missing.length ? `, and has no answer for ${missing.join(", ")}` : "") + ".",
+      };
+    }
+    if (missing.length > 0) {
+      return {
+        verdict: "incomplete",
+        note: `The key is for this paper but has no answer for ${missing.join(", ")} — a student who answers ${missing.length === 1 ? "it" : "those"} scores nothing for ${missing.length === 1 ? "it" : "them"}.`,
+      };
+    }
+    return { verdict: "match", note: `All ${paper.length} question(s) are answered by the key.` };
   } catch (e) {
     console.error("[key_match] failed", e instanceof Error ? e.message : e);
     return { verdict: "unclear", note: "the comparison could not be run" };

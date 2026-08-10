@@ -160,7 +160,10 @@ async function stamp(
 export type KeyMatchResult = {
   checked: number;
   matched: string[];
+  /** The key belongs to another paper — everyone who sits this scores near zero. */
   mismatched: { title: string; id: string; note: string }[];
+  /** The key is for this paper but stops short of some questions. */
+  incomplete: { title: string; id: string; note: string }[];
   unclear: { title: string; note: string }[];
   remaining: number;
 };
@@ -169,7 +172,7 @@ export async function auditKeyMatchesPaper(limit = 6, budgetMs = 230_000, rechec
   const { classifyKeyMatchesPaper } = await import("@/lib/ai");
   const svc = createServiceClient();
   const started = Date.now();
-  const out: KeyMatchResult = { checked: 0, matched: [], mismatched: [], unclear: [], remaining: 0 };
+  const out: KeyMatchResult = { checked: 0, matched: [], mismatched: [], incomplete: [], unclear: [], remaining: 0 };
 
   const SEL =
     "id, title, question_pdf:config->>paper_question_pdf, solution_pdf:config->>paper_solution_pdf, " +
@@ -203,6 +206,7 @@ export async function auditKeyMatchesPaper(limit = 6, budgetMs = 230_000, rechec
       await stampMatch(svc, row.id, verdict, note);
       if (verdict === "match") out.matched.push(row.title);
       else if (verdict === "mismatch") out.mismatched.push({ title: row.title, id: row.id, note });
+      else if (verdict === "incomplete") out.incomplete.push({ title: row.title, id: row.id, note });
       else out.unclear.push({ title: row.title, note });
     } catch (e) {
       out.unclear.push({ title: row.title, note: e instanceof Error ? e.message : "failed" });

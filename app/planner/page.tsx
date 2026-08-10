@@ -62,7 +62,7 @@ export default async function PlannerPage(
     for (const t of allTopics ?? []) (topicsBySubject[t.subject_id as string] ??= []).push({ id: t.id as string, title: t.title as string });
     return (
       <main className="container" style={{ paddingTop: 36, paddingBottom: 60, maxWidth: 720 }}>
-        <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+        <p className="crumb"><Link prefetch={false} href="/dashboard">← Dashboard</Link></p>
         <span className="badge">🗓️ Study planner</span>
         <h1 style={{ margin: "12px 0 4px" }}>Build your study plan</h1>
         <p className="muted">Pick your subject and dates — we&apos;ll lay out exactly what to do each day, through to exam day.</p>
@@ -200,7 +200,7 @@ export default async function PlannerPage(
   if (!input) {
     return (
       <main className="container" style={{ paddingTop: 36, paddingBottom: 60, maxWidth: 720 }}>
-        <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+        <p className="crumb"><Link prefetch={false} href="/dashboard">← Dashboard</Link></p>
         <div className="notice" style={{ marginTop: 12 }}>We couldn&apos;t build your plan — this subject has no published classes yet. <Link href="/planner?new=1">Pick another subject →</Link></div>
       </main>
     );
@@ -241,7 +241,7 @@ export default async function PlannerPage(
 
   return (
     <main className="container" style={{ paddingTop: 36, paddingBottom: 60, maxWidth: 900 }}>
-      <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+      <p className="crumb"><Link prefetch={false} href="/dashboard">← Dashboard</Link></p>
       <span className="badge">🗓️ Study planner</span>
       <h1 style={{ margin: "12px 0 2px" }}>{subjectTitle}</h1>
       <p className="muted">Exam {fmt(setup.examDate)} · watching at {setup.speed}× · {plan.totals.classCount} classes left</p>

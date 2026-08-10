@@ -78,7 +78,7 @@ export default async function HitlistPage() {
   return (
     <main>
       <section className="container" style={{ paddingTop: 32, paddingBottom: 60, maxWidth: 760 }}>
-        <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+        <p className="crumb"><Link prefetch={false} href="/dashboard">← Dashboard</Link></p>
         <span className="badge">🎯 The hitlist</span>
         <h1 style={{ margin: "12px 0 6px" }}>The topics that carry the marks</h1>
         <p className="muted" style={{ lineHeight: 1.7 }}>

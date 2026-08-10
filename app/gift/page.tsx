@@ -25,7 +25,7 @@ export default async function GiftPage() {
   return (
     <main>
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 640 }}>
-        <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+        <p className="crumb"><Link prefetch={false} href="/dashboard">← Dashboard</Link></p>
         <div className="learn-hero">
           <span className="badge">🎁 Sponsor a Student</span>
           <h1 style={{ fontSize: "1.5rem" }}>Sponsor a Student · Gift a subscription</h1>

@@ -25,7 +25,7 @@ export default async function LiveNowPage() {
           subject groups. Recordings appear on the portal after each class.
         </p>
         <p style={{ marginTop: 18 }}>
-          <Link className="btn" href="/dashboard">← Back to dashboard</Link>
+          <Link prefetch={false} className="btn" href="/dashboard">← Back to dashboard</Link>
         </p>
       </section>
     );

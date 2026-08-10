@@ -34,7 +34,7 @@ export default async function TestSeriesPage() {
                 {(s.subjects ?? []).length} paper set{(s.subjects ?? []).length === 1 ? "" : "s"}
               </p>
               <p style={{ marginTop: 14 }}>
-                <Link className="btn small" href="/login">
+                <Link prefetch={false} className="btn small" href="/login">
                   Enrol / view →
                 </Link>
               </p>

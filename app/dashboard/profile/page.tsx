@@ -38,7 +38,7 @@ export default async function ProfilePage(props: { searchParams: Promise<{ saved
     <main>
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
         <p className="crumb">
-          <Link href="/dashboard">← Dashboard</Link>
+          <Link prefetch={false} href="/dashboard">← Dashboard</Link>
         </p>
         <div className="learn-hero">
           <span className="badge">👤 Your profile</span>

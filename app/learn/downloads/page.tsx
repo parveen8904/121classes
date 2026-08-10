@@ -44,7 +44,7 @@ export default async function DownloadsPage() {
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
-      <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+      <p className="crumb"><Link prefetch={false} href="/dashboard">← Dashboard</Link></p>
         <div className="learn-hero">
         <span className="badge">📥 Offline</span>
         <h1>Download &amp; watch offline <Help text="Tap Download on a class to save it to this device, then Play offline anytime — no internet needed. Downloads continue in the background — you can lock the phone or leave the app. Videos are encrypted and show your name as a watermark." /></h1>

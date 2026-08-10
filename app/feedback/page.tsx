@@ -50,7 +50,7 @@ export default async function FeedbackPage(props: {
               it, and you may hear back on the email or number you left.
             </p>
             <p style={{ marginTop: 18 }}>
-              <Link className="btn" href="/dashboard">← Back to my dashboard</Link>
+              <Link prefetch={false} className="btn" href="/dashboard">← Back to my dashboard</Link>
             </p>
           </div>
         </section>

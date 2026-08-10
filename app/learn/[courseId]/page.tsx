@@ -304,7 +304,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
     <main>
       <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
         <p className="crumb">
-          <Link href="/dashboard">← Dashboard</Link>
+          <Link prefetch={false} href="/dashboard">← Dashboard</Link>
         </p>
 
         {/* Compact course header — the subject banners below are the prominent part. */}

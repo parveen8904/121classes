@@ -730,7 +730,7 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
           {courseId ? (
             <Link href={`/learn/${courseId}`}>← {subject?.title ?? "Subject"}</Link>
           ) : (
-            <Link href="/dashboard">← Dashboard</Link>
+            <Link prefetch={false} href="/dashboard">← Dashboard</Link>
           )}
         </p>
 

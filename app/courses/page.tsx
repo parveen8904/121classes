@@ -313,7 +313,7 @@ export default async function CoursesPage() {
         <p className="muted" style={{ maxWidth: 560, margin: "8px auto 16px" }}>
           Create your account, pick your subject, and your day-by-day plan + doubt-solving are ready instantly.
         </p>
-        <Link className="btn" href="/login">Get started →</Link>
+        <Link prefetch={false} className="btn" href="/login">Get started →</Link>
       </section>
     </>
   );

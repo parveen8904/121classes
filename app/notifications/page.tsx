@@ -70,7 +70,7 @@ export default async function NotificationsPage() {
   return (
     <main>
       <section className="container" style={{ paddingTop: 32, paddingBottom: 60, maxWidth: 760 }}>
-        <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+        <p className="crumb"><Link prefetch={false} href="/dashboard">← Dashboard</Link></p>
         <span className="badge">🔔 Notifications</span>
         <h1 style={{ margin: "12px 0 6px" }}>What you have been told</h1>
         <p className="muted" style={{ lineHeight: 1.7 }}>

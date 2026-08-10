@@ -28,7 +28,7 @@ export default async function DiscussPage() {
   return (
     <main>
       <section className="container" style={{ paddingTop: 30, paddingBottom: 40, maxWidth: 820 }}>
-        <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+        <p className="crumb"><Link prefetch={false} href="/dashboard">← Dashboard</Link></p>
         <div className="learn-hero">
           <span className="badge">💬 Group discussion</span>
           <h1>Discuss with your batch</h1>

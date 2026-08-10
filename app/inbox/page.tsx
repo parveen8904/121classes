@@ -130,7 +130,7 @@ export default async function StudentInbox() {
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 980 }}>
-      <p className="crumb"><Link href="/dashboard">← Dashboard</Link></p>
+      <p className="crumb"><Link prefetch={false} href="/dashboard">← Dashboard</Link></p>
         <div className="learn-hero" style={{ marginBottom: 18 }}>
         <span className="badge">📥 Inbox</span>
         <h1>Inbox</h1>

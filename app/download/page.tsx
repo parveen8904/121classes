@@ -82,7 +82,7 @@ export default async function DownloadPage() {
         )}
 
         <p className="muted" style={{ textAlign: "center", marginTop: 24, fontSize: ".85rem" }}>
-          Already installed? Just open the app and <Link href="/login" className="grad">log in</Link> — your dashboard opens straight away.
+          Already installed? Just open the app and <Link prefetch={false} href="/login" className="grad">log in</Link> — your dashboard opens straight away.
         </p>
       </section>
     </main>

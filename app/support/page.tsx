@@ -59,7 +59,7 @@ export default async function SupportPage(props: { searchParams: Promise<{ ok?: 
       </div>
 
       <p className="muted" style={{ fontSize: ".82rem", marginTop: 14 }}>
-        Prefer chat? You can also reach us on our community channels from your <Link href="/dashboard">dashboard</Link>.
+        Prefer chat? You can also reach us on our community channels from your <Link prefetch={false} href="/dashboard">dashboard</Link>.
       </p>
     </section>
   );

@@ -32,14 +32,25 @@ export function useSignedIn(initial: boolean): boolean {
 }
 
 // Landing-page top-right button: "Dashboard" when signed in, else "Log in".
+//
+// prefetch={false} ON BOTH, AND IT MATTERS MORE THAN IT LOOKS.
+//
+// This button sits in the site header, so it is on every page and always in
+// the viewport — and a Link in the viewport is prefetched. Both destinations
+// render at request time, so each prefetch is a full server render plus a
+// session check against Supabase. Our own analytics counted 1,568 views of
+// /login in a day; Vercel served it 13,522 times. The other twelve thousand
+// were this button, warming a page nobody had asked for.
+//
+// A login page does not need to be pre-warmed. It is one click, once.
 export default function AuthCta({ initialSignedIn }: { initialSignedIn: boolean }) {
   const signedIn = useSignedIn(initialSignedIn);
   return signedIn ? (
-    <Link className="btn hide-sm" href="/dashboard">
+    <Link prefetch={false} className="btn hide-sm" href="/dashboard">
       My dashboard
     </Link>
   ) : (
-    <Link className="btn hide-sm" href="/login">
+    <Link prefetch={false} className="btn hide-sm" href="/login">
       Log in
     </Link>
   );

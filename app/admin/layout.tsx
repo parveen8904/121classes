@@ -47,7 +47,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               role (operator / faculty) and the rights you need.
             </p>
             <p style={{ marginTop: 16 }}>
-              <Link className="btn secondary" href="/dashboard">
+              <Link prefetch={false} className="btn secondary" href="/dashboard">
                 ← Back to dashboard
               </Link>
             </p>

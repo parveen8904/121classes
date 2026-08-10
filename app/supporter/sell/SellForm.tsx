@@ -255,11 +255,25 @@ export default function SellForm({
           }}>
             <span style={{ flex: 1 }}>
               <strong>{product?.title}</strong>
+              {/* THE TERM THEY HAVE ACTUALLY CHOSEN, NOT THE DEFAULT.
+                  This read product.months and product.priceInr — the twelve-
+                  month figures — and never moved. So picking 18 or 24 months
+                  changed the summary at the bottom of the form while this card
+                  went on saying twelve months and ₹9,897, and the seller had
+                  two different prices on one screen. */}
               <span className="muted" style={{ display: "block", fontSize: ".82rem" }}>
-                {product?.course} · Gold · {product?.months} months
+                {product?.course} · Gold · {term?.months ?? product?.months} months
+                {applied ? ` · ${applied.code} applied` : ""}
               </span>
             </span>
-            <strong>{product ? formatINR(product.priceInr) : ""}</strong>
+            <strong>
+              {product ? formatINR(payable) : ""}
+              {applied && applied.discount > 0 && (
+                <span className="muted" style={{ fontWeight: 400, fontSize: ".8rem", textDecoration: "line-through", marginLeft: 6 }}>
+                  {formatINR(term?.priceInr ?? product?.priceInr ?? 0)}
+                </span>
+              )}
+            </strong>
             <Link href="/supporter" className="muted" style={{ fontSize: ".82rem", whiteSpace: "nowrap" }}>change</Link>
           </div>
         ) : (
@@ -369,6 +383,18 @@ export default function SellForm({
         {myCoupon && coupon.trim().toUpperCase() === myCoupon.toUpperCase() && !applied && (
           <p className="muted" style={{ fontSize: ".84rem", marginTop: -4, lineHeight: 1.6 }}>
             Already filled in below. Press <strong>Apply</strong> to see what you pay.
+          </p>
+        )}
+
+        {/* AN EMPTY BOX EXPLAINS NOTHING.
+            A vendor arrives here with their own 25% code already in it. Anybody
+            else — an admin looking at the screen to answer a question — sees an
+            empty box and reasonably concludes the discount is missing. Say
+            which of the two is happening. */}
+        {!myCoupon && (
+          <p className="muted" style={{ fontSize: ".84rem", marginTop: -4, lineHeight: 1.6 }}>
+            No discount code is attached to this account. A registered vendor sees their own code here, filled in
+            already; if you are a vendor and this box is empty, tell the office and we will put it right.
           </p>
         )}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>

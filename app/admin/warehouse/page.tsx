@@ -9,14 +9,32 @@ export const metadata = { title: "Warehouse — Admin" };
 const fmt = (s: string) =>
   new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
 
-export default async function WarehousePage(props: { searchParams: Promise<{ labels?: string; q?: string }> }) {
+export default async function WarehousePage(props: {
+  searchParams: Promise<{ labels?: string; q?: string; from?: string; to?: string }>;
+}) {
   const searchParams = await props.searchParams;
   const q = (searchParams.q ?? "").trim().toLowerCase();
-  const all = await listDispatchQueue(false);
+  // WHICH DAY'S PARCELS. Entered as IST calendar days; the same date in both
+  // boxes is exactly that one day. It filters the lists below AND the labels
+  // that get emailed, so what is printed is what is on the screen.
+  const okDate = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+  const fromDay = okDate(searchParams.from);
+  const toDay = okDate(searchParams.to);
+  const fromMs = fromDay ? new Date(`${fromDay}T00:00:00+05:30`).getTime() : null;
+  const toMs = toDay ? new Date(`${toDay}T23:59:59+05:30`).getTime() : null;
+  const inRange = (iso: string) => {
+    const at = new Date(iso).getTime();
+    if (fromMs !== null && at < fromMs) return false;
+    if (toMs !== null && at > toMs) return false;
+    return true;
+  };
+  const all = (await listDispatchQueue(false)).filter((i) => inRange(i.createdAt));
   const match = (s: (string | null)[]) => !q || s.some((x) => (x ?? "").toLowerCase().includes(q));
   const filtered = all.filter((i) => match([i.orderNo, i.name, i.phone, i.contents, i.tracking]));
   const pending = filtered.filter((i) => !i.tracking);
   const done = filtered.filter((i) => i.tracking).slice(0, 60);
+  // Couriers already used, offered first — the warehouse types a name once.
+  const couriersUsed = [...new Set(all.map((i) => (i.courier ?? "").trim()).filter(Boolean))].sort();
   const last24h = pending.filter((i) => Date.now() - new Date(i.createdAt).getTime() < 24 * 3600 * 1000).length;
   // The search travels with the download, so the file is what is on the screen.
   const qs = q ? `&q=${encodeURIComponent(searchParams.q ?? "")}` : "";
@@ -45,15 +63,58 @@ export default async function WarehousePage(props: { searchParams: Promise<{ lab
           <strong>{pending.length} parcel{pending.length === 1 ? "" : "s"} awaiting dispatch</strong>
           <span className="muted" style={{ fontSize: ".82rem" }}> · {last24h} received in the last 24 hours</span>
         </div>
-        <form action={emailShippingLabels} style={{ margin: 0 }}>
-          <SubmitButton className="btn small" savedLabel="✓ Emailed">🏷️ Email me the shipping labels (PDF)</SubmitButton>
+        {/* THE LABELS FOR ONE DAY, NOT FOR EVERYTHING.
+            The whole queue in one PDF is fine on a quiet week and useless on a
+            busy one: somebody dispatching Monday's orders does not want
+            Tuesday's labels in the same stack, printed and then thrown away.
+            The same two dates drive the lists below, so what is printed is
+            what is on the screen. Open to the warehouse operator as well as to
+            an admin — it is their job, not his. */}
+        <form action={emailShippingLabels} style={{ margin: 0, display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div>
+            <label style={{ fontSize: ".75rem" }}>From (IST)</label>
+            <input type="date" name="from" defaultValue={fromDay} style={{ marginBottom: 0 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: ".75rem" }}>To</label>
+            <input type="date" name="to" defaultValue={toDay} style={{ marginBottom: 0 }} />
+          </div>
+          <SubmitButton className="btn small" savedLabel="✓ Emailed">
+            🏷️ Email me the labels{fromDay || toDay ? " for these dates" : ""} (PDF)
+          </SubmitButton>
         </form>
       </div>
+
+      {/* Suggested, not enforced — a warehouse uses whoever is cheapest that
+          week, and a fixed list would send somebody hunting for "Other". */}
+      <datalist id="couriers">
+        {couriersUsed.map((c) => <option key={c} value={c} />)}
+        {["Delhivery", "DTDC", "Blue Dart", "India Post", "Trackon", "Professional Couriers", "Ekart", "Xpressbees"]
+          .filter((c) => !couriersUsed.includes(c))
+          .map((c) => <option key={c} value={c} />)}
+      </datalist>
 
       <form style={{ marginTop: 12 }}>
         <div style={{ display: "flex", gap: 8, maxWidth: 460 }}>
           <input name="q" defaultValue={searchParams.q ?? ""} placeholder="🔍 Search order no, name, phone, tracking…" style={{ marginBottom: 0 }} />
           <SubmitButton className="btn small" savedLabel="✓">Search</SubmitButton>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginTop: 10 }}>
+          <div>
+            <label style={{ fontSize: ".75rem" }}>Show parcels from (IST)</label>
+            <input type="date" name="from" defaultValue={fromDay} style={{ marginBottom: 0 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: ".75rem" }}>To</label>
+            <input type="date" name="to" defaultValue={toDay} style={{ marginBottom: 0 }} />
+          </div>
+          <SubmitButton className="btn small secondary" savedLabel="✓">Apply dates</SubmitButton>
+          {(fromDay || toDay) && <a className="btn small secondary" href="/admin/warehouse">Clear dates</a>}
+          <span className="muted" style={{ fontSize: ".78rem" }}>
+            {fromDay || toDay
+              ? `Showing ${fromDay || "the beginning"} → ${toDay || "today"}. The labels above cover exactly this.`
+              : "Same date in both boxes = that single day."}
+          </span>
         </div>
       </form>
 
@@ -81,11 +142,16 @@ export default async function WarehousePage(props: { searchParams: Promise<{ lab
                   📍 {i.address || "no address on file — call the student"} · 📞 {i.phone || "—"} · 🕐 {fmt(i.createdAt)}
                 </p>
               </div>
-              <form action={saveTracking} style={{ display: "flex", gap: 8, alignItems: "center", margin: 0 }}>
+              {/* Courier name AND tracking ID. A tracking number on its own
+                  is not traceable — DEL122019183 means nothing until you know
+                  whether to type it into Delhivery, DTDC or Blue Dart, and the
+                  only person who knew was whoever handed the parcel over. */}
+              <form action={saveTracking} style={{ display: "flex", gap: 8, alignItems: "center", margin: 0, flexWrap: "wrap" }}>
                 <input type="hidden" name="id" value={i.id} />
                 <input type="hidden" name="table" value={i.table} />
+                <input name="courier" list="couriers" placeholder="Courier name" style={{ marginBottom: 0, minWidth: 140 }} />
                 <input name="tracking" placeholder="Courier tracking ID" required style={{ marginBottom: 0, minWidth: 180 }} />
-                <SubmitButton className="btn small" savedLabel="✓ Saved">🚚 Save tracking</SubmitButton>
+                <SubmitButton className="btn small" savedLabel="✓ Saved">🚚 Save</SubmitButton>
               </form>
             </div>
           </div>
@@ -111,7 +177,7 @@ export default async function WarehousePage(props: { searchParams: Promise<{ lab
           <div className="list-row" key={`${i.table}:${i.id}`}>
             <div style={{ minWidth: 0 }}>
               <span className="row-title">{i.orderNo} · {i.name}</span>
-              <p className="row-sub">{i.contents} · 🚚 {i.tracking} · {fmt(i.createdAt)}</p>
+              <p className="row-sub">{i.contents} · 🚚 {i.courier ? `${i.courier} · ` : ""}{i.tracking} · {fmt(i.createdAt)}</p>
             </div>
           </div>
         ))}

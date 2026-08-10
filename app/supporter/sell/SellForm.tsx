@@ -85,7 +85,11 @@ export default function SellForm({
         billing: { name: billing.name || name, gstin: billing.gstin, address: billing.address, state: bState },
       });
       if (!res.ok) {
-        setErr(res.reason === "unconfigured" ? "Payment is not switched on yet — please call the office."
+        setErr(res.reason === "blocked"
+          ? "Your account is on hold following an upheld complaint. You can still see your orders and invoices, but no new order can be placed until the matter is settled. Please call the office."
+          : res.reason === "nosite" ? "Add the website you sell from in My details first — it is required before placing an order."
+          : res.reason === "unverified" ? "Your website is not verified yet. Open My details, publish the code on your site, and press Check my website."
+          : res.reason === "unconfigured" ? "Payment is not switched on yet — please call the office."
           : res.reason === "address" ? "The student's full delivery address is needed before paying, because the printed books go to them."
           : res.reason === "auth" ? "Please sign in again."
           : "Could not start the payment. Check the details and try once more.");

@@ -39,6 +39,31 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
   if (!user) return { ok: false, reason: "auth" };
 
   const svc = createServiceClient();
+
+  // A BLOCKED SUPPORTER MAY LOOK, BUT NOT SELL.
+  //
+  // When a breach is upheld the account stays open — they keep their orders,
+  // their invoices and their students — but no new order can be placed until
+  // the penalty is settled. Locking them out entirely would punish the students
+  // they have already sold to.
+  //
+  // Checked here, in the one place an order is actually created, rather than by
+  // hiding a button: a hidden button is a suggestion, and this is a rule.
+  const { data: seller } = await svc
+    .from("profiles")
+    .select("supporter_blocked_at, supporter_block_reason, supporter_site, supporter_site_ok_at, is_supporter, role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (seller?.supporter_blocked_at) return { ok: false, reason: "blocked" };
+
+  // And a supporter with no verified shopfront has not finished signing up.
+  const isSupporter = seller?.is_supporter || seller?.role === "supporter";
+  if (isSupporter && seller?.role !== "admin") {
+    if (!seller?.supporter_site) return { ok: false, reason: "nosite" };
+    if (!seller?.supporter_site_ok_at) return { ok: false, reason: "unverified" };
+  }
+
   const { data: subject } = await svc.from("subjects").select("id, title, course_id, gold_price_inr, validity_months, gold_slabs, batch_months, batch_price_inr").eq("id", input.subjectId).single();
   if (!subject) return { ok: false, reason: "error" };
   const { data: plan } = await svc.from("plans").select("id, name, web_price_inr").eq("tier", input.tier).eq("is_active", true).order("rank").limit(1).maybeSingle();

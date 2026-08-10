@@ -1172,6 +1172,39 @@ export async function judgeConversationEnded(history: string, latest: string): P
   return /\byes\b/i.test(String(out ?? ""));
 }
 
+/**
+ * Is our subject being sold inside somebody else's package?
+ *
+ * A reseller may sell Financial Reporting or Advanced Accounting on their own
+ * shopfront. They may not bundle it with another faculty's paper — his name
+ * becoming part of a package he never agreed to.
+ *
+ * Leans hard toward NO. This feeds a compliance record about a real business
+ * relationship, and a false accusation of cheating costs far more than a missed
+ * one, which a person will catch on the next look anyway.
+ */
+export async function judgeSupporterPage(
+  text: string,
+): Promise<{ combo: boolean; why?: string; evidence?: string } | null> {
+  const out = await callClaude(
+    "You are reading a coaching reseller's web page. They are allowed to sell CA Parveen Sharma's " +
+      "Financial Reporting and Advanced Accounting on their own site.\n" +
+      "Answer ONE question: is a CA Parveen Sharma subject being sold BUNDLED or COMBINED with a " +
+      "DIFFERENT teacher's course — a combo, a package, 'buy both', two faculty in one price?\n" +
+      "Answer NO if his courses are merely listed on the same page as other teachers' courses. A " +
+      "catalogue is not a bundle. Answer NO if you are unsure at all.\n" +
+      "Answer YES only when one price plainly buys his subject together with another teacher's.\n" +
+      'Reply as JSON: {"combo": true|false, "why": "one sentence", "evidence": "the exact words on ' +
+      'the page that show it"}',
+    text,
+    300,
+    { model: await fastModel(), feature: "other" },
+  );
+  const j = parseLooseJson(String(out ?? ""));
+  if (!j || typeof j.combo !== "boolean") return null;
+  return { combo: j.combo, why: String(j.why ?? ""), evidence: String(j.evidence ?? "") };
+}
+
 export const ABUSE_WARNING =
   "This is a study group for CA Intermediate and CA Final students. " +
   "Messages like that are not acceptable here.\n\n" +

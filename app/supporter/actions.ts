@@ -84,6 +84,27 @@ export async function saveSupporterProfile(formData: FormData) {
   const state = s("state");
   if (!state) redirect("/supporter/profile?err=Your state is needed — it decides the tax on your invoices");
 
+  // THE SHOPFRONT IS MANDATORY.
+  //
+  // A reseller sells somewhere. Without knowing where, there is no way to check
+  // that the price is honoured or that his name is not being bundled with
+  // another teacher's — which is the whole basis of the arrangement.
+  let site = s("supporter_site");
+  if (!site) redirect("/supporter/profile?err=Your website is needed — it is where you sell, and we check it");
+  if (!/^https?:\/\//i.test(site)) site = `https://${site}`;
+  try {
+    const u = new URL(site);
+    if (!u.hostname.includes(".")) throw new Error("no domain");
+    site = u.toString();
+  } catch {
+    redirect("/supporter/profile?err=That does not look like a website address");
+  }
+
+  // Changing the address un-proves it: the token was published on the old one.
+  const { data: before } = await svc
+    .from("profiles").select("supporter_site").eq("id", supporterId).maybeSingle();
+  const moved = (before?.supporter_site ?? "") !== site;
+
   await svc.from("profiles").update({
     full_name: s("full_name") || null,
     business_name: s("business_name") || null,
@@ -95,10 +116,112 @@ export async function saveSupporterProfile(formData: FormData) {
     city: s("city") || null,
     pincode: s("pincode") || null,
     state,
+    supporter_site: site,
+    supporter_ship_to: s("supporter_ship_to") || null,
+    ...(moved ? { supporter_site_ok_at: null } : {}),
   }).eq("id", supporterId);
 
   revalidatePath("/supporter");
   revalidatePath("/supporter/profile");
   const next = s("next");
   redirect(next.startsWith("/") ? next : "/supporter/profile?saved=1");
+}
+
+/**
+ * Prove the declared website is theirs.
+ *
+ * They publish a code we generate; we fetch the page and look for it. Only
+ * somebody who can publish to a site can put something on it, which is the
+ * whole point — anybody can type any address into a form.
+ */
+export async function verifySupporterSite() {
+  const supporterId = await requireSupporter();
+  const svc = createServiceClient();
+
+  const { data: me } = await svc
+    .from("profiles").select("supporter_site").eq("id", supporterId).maybeSingle();
+  const site = String(me?.supporter_site ?? "").trim();
+  if (!site) redirect("/supporter/profile?err=Add your website first");
+
+  const { siteToken, verifyOwnership, recordCheck } = await import("@/lib/supporterSite");
+  const token = siteToken(supporterId);
+  const r = await verifyOwnership(site, token);
+  await recordCheck(supporterId, site, r);
+
+  if (!r.ok) {
+    await svc.from("profiles").update({ supporter_site_ok_at: null }).eq("id", supporterId);
+    redirect(`/supporter/profile?err=${encodeURIComponent(r.detail ?? "Could not verify the site")}`);
+  }
+
+  await svc.from("profiles")
+    .update({ supporter_site_ok_at: new Date().toISOString() })
+    .eq("id", supporterId);
+  revalidatePath("/supporter/profile");
+  redirect("/supporter/profile?verified=1");
+}
+
+/** Record that they have read and accepted the terms. */
+export async function acceptSupporterTerms(formData: FormData) {
+  const supporterId = await requireSupporter();
+  await createServiceClient()
+    .from("profiles")
+    .update({ supporter_terms_at: new Date().toISOString() })
+    .eq("id", supporterId);
+  revalidatePath("/supporter");
+  const next = String(formData.get("next") ?? "");
+  redirect(next.startsWith("/") ? next : "/supporter");
+}
+
+/**
+ * One supporter reporting another.
+ *
+ * Recorded, and the team told at once. Nothing happens to the reported account
+ * automatically: an accusation between competitors is exactly the situation
+ * where a machine should not be the judge.
+ */
+export async function fileSupporterComplaint(formData: FormData) {
+  const supporterId = await requireSupporter();
+  const svc = createServiceClient();
+
+  const s = (k: string) => String(formData.get(k) ?? "").trim();
+  let url = s("against_url");
+  const what = s("what_happened");
+  if (!url || !what) redirect("/supporter/complaint?err=The page address and what you saw are both needed");
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+
+  // Is the reported site one of ours? Knowing that saves the team a search, and
+  // decides whether there is an account to put on hold at all.
+  let againstId: string | null = null;
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    const { data } = await svc
+      .from("profiles").select("id, supporter_site").ilike("supporter_site", `%${host}%`).limit(1).maybeSingle();
+    againstId = (data?.id as string) ?? null;
+  } catch { /* an unparseable URL is still worth recording */ }
+
+  const ref = `CMP-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+  await svc.from("supporter_complaints").insert({
+    ref,
+    raised_by: supporterId,
+    against_url: url,
+    against_id: againstId,
+    what_happened: what.slice(0, 4000),
+    evidence_url: s("evidence_url") || null,
+    status: "open",
+  });
+
+  try {
+    const { notifyFaculty } = await import("@/lib/notify");
+    await notifyFaculty(
+      `🚩 A supporter has reported a seller (${ref})`,
+      `Page: ${url}\n` +
+        (againstId ? `That site belongs to one of our own supporters.\n` : `Not one of our registered supporters.\n`) +
+        `\nWhat they say:\n${what}\n\n` +
+        (s("evidence_url") ? `Evidence attached.\n\n` : `No evidence attached.\n\n`) +
+        `Check it in Admin → Supporters → Complaints. Nothing has happened to the account.`,
+    );
+  } catch { /* the complaint is saved either way */ }
+
+  revalidatePath("/supporter/complaint");
+  redirect("/supporter/complaint?sent=1");
 }

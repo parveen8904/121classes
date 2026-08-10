@@ -119,7 +119,6 @@ export async function saveSupporterProfile(formData: FormData) {
     pincode: s("pincode") || null,
     state,
     supporter_site: site,
-    supporter_ship_to: s("supporter_ship_to") || null,
     ...(moved ? { supporter_site_ok_at: null } : {}),
   }).eq("id", supporterId);
 

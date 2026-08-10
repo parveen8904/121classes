@@ -27,7 +27,7 @@ export default async function SupporterProfilePage(props: {
   const svc = createServiceClient();
   const { data: me } = await svc
     .from("profiles")
-    .select("full_name, business_name, designation, email, phone, gstin, address_line1, address_line2, city, state, pincode, is_supporter, role, supporter_site, supporter_site_ok_at, supporter_ship_to")
+    .select("full_name, business_name, designation, email, phone, gstin, address_line1, address_line2, city, state, pincode, is_supporter, role, supporter_site, supporter_site_ok_at")
     .eq("id", user.id).maybeSingle();
   if (!me?.is_supporter && me?.role !== "admin" && me?.role !== "supporter") redirect("/dashboard");
 
@@ -145,7 +145,10 @@ export default async function SupporterProfilePage(props: {
               <input id="gstin" name="gstin" defaultValue={me?.gstin ?? ""} placeholder="15-digit GSTIN" />
             </div>
           </div>
-          <label htmlFor="address_line1">Billing address</label>
+          {/* A stray "Billing address" label used to sit here, with no field
+              under it — the address itself is further down, under its own
+              heading. It read as a box that had failed to render, and clicking
+              it threw the cursor half a page away. */}
           {/* THE SHOPFRONT. Mandatory, because a reseller with nowhere to sell
               is somebody we cannot check — and everything in the agreement is
               about what appears on this page. */}
@@ -200,16 +203,13 @@ export default async function SupporterProfilePage(props: {
             </div>
           </div>
 
-          <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>Where books should be sent</h2>
-          <label htmlFor="ship">Shipping address, if different from the billing address above</label>
-          <textarea
-            id="ship"
-            name="supporter_ship_to"
-            rows={2}
-            defaultValue={(me as { supporter_ship_to?: string } | null)?.supporter_ship_to ?? ""}
-            placeholder="Leave blank to use the billing address"
-            style={{ width: "100%", background: "var(--bg-soft)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", fontFamily: "inherit" }}
-          />
+          {/* "WHERE BOOKS SHOULD BE SENT" WAS ASKED HERE AND USED NOWHERE.
+              Books go to the STUDENT, at the address the vendor types when they
+              place that order — a different address every time. This box was
+              saved to the profile and never read by an order, a label or the
+              warehouse. Nobody had filled it in, which is lucky: anybody who
+              had would have been waiting for a parcel that was never coming
+              here. The vendor's own address above is for their INVOICE. */}
 
           <SubmitButton className="btn" savedLabel="✓ Saved">💾 Save my details</SubmitButton>
         </form>

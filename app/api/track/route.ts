@@ -14,12 +14,23 @@ export async function POST(req: NextRequest) {
   const event = ["view", "login_success", "login_failed", "signup_success", "signup_failed"].includes(String(body.event)) ? String(body.event) : "view";
   if (!path && event === "view") return NextResponse.json({ ok: true });
 
-  // Who is it (if logged in)? Cookie comes along on same-origin beacons.
+  // WHO IS IT — ASKED ONLY WHEN THE ANSWER MATTERS.
+  //
+  // auth.getUser() is a network hop to Supabase to verify the token. This
+  // beacon fires on EVERY page view — twelve thousand a day — so that was
+  // twelve thousand verification round trips a day, each one holding a function
+  // open while it waited, to attach a name to a page view that is already
+  // identified by its visitor key.
+  //
+  // The login and signup counters are the ones read as a number of PEOPLE on
+  // the health page, so those still ask. An ordinary view does not.
   let userId: string | null = null;
-  try {
-    const { data: { user } } = await createClient().auth.getUser();
-    userId = user?.id ?? null;
-  } catch { /* anonymous */ }
+  if (event !== "view") {
+    try {
+      const { data: { user } } = await createClient().auth.getUser();
+      userId = user?.id ?? null;
+    } catch { /* anonymous */ }
+  }
 
   try {
     await createServiceClient().from("page_views").insert({

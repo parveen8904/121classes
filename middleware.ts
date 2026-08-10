@@ -152,8 +152,24 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Run on everything except static assets and the legacy static marketing pages.
+  // WHAT THIS COSTS WHEN IT RUNS ON THE WRONG THING.
+  //
+  // This middleware asks Supabase to verify the session — a network hop to
+  // Mumbai, with a four-second timeout — on every request it matches. The old
+  // list excluded eight image extensions and nothing else, so it also ran on:
+  //
+  //   /manifest.webmanifest   10,690 requests a day
+  //   /media/*.jfif            ~8,000 requests a day across a handful of files
+  //
+  // Nineteen thousand session checks a day, none of which could ever change
+  // what was served: a manifest and a photograph do not have a logged-in
+  // version. That is the largest avoidable line on the bill, and it is not the
+  // crons — those are barely two per cent of traffic.
+  //
+  // So: everything that is a file rather than a page is excluded, by extension,
+  // along with the media folder itself. A page has no extension, which is what
+  // makes this safe — no route the portal actually guards can match it.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:html|css|js|png|jpg|jpeg|svg|gif|webp|ico)).*)",
+    "/((?!_next/static|_next/image|favicon.ico|media/|.*\\.(?:html|css|js|mjs|json|txt|xml|webmanifest|map|png|jpg|jpeg|jfif|svg|gif|webp|avif|ico|bmp|mp3|mp4|webm|ogg|wav|pdf|zip|woff|woff2|ttf|otf|eot)).*)",
   ],
 };

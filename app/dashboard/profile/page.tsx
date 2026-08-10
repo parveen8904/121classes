@@ -30,6 +30,9 @@ export default async function ProfilePage(props: { searchParams: Promise<{ saved
     supabase.from("my_courses").select("course_id").eq("student_id", user.id),
   ]);
   const currentCourseId = (myCourseRows ?? [])[0]?.course_id ?? "";
+  // Sent here from a checkout that could not proceed: the address is the whole
+  // reason they are on this page, so it cannot be saved half-done.
+  const needAddress = searchParams.need === "address";
 
   return (
     <main>
@@ -96,26 +99,46 @@ export default async function ProfilePage(props: { searchParams: Promise<{ saved
             <CourseSubjectsPicker courses={courses ?? []} currentCourseId={currentCourseId} />
           </div>
 
+          {/* BILLING ADDRESS, NOT "SHIPPING ADDRESS (FOR BOOKS)".
+              Under the old heading a student buying three months — who gets no
+              books — had every reason to skip the whole card. Nothing was
+              required, so they could save it empty, be sent back to the plan,
+              and meet exactly the same wall again. It is needed for every
+              payment, because every payment raises a GST invoice.
+
+              Required only when they were sent here to fill it in: someone who
+              opened their profile to correct a phone number should not be made
+              to type an address before they can save. */}
           <div className="card" style={{ marginTop: 16 }}>
-            <h3 style={{ marginBottom: 14 }}>Shipping address (for books)</h3>
-            <label htmlFor="address_line1">Address line 1</label>
-            <input id="address_line1" name="address_line1" defaultValue={p?.address_line1 ?? ""} />
+            <h3 style={{ marginBottom: 4 }}>Billing address</h3>
+            <p className="muted" style={{ fontSize: ".85rem", marginBottom: 14 }}>
+              Needed before any payment — your invoice is a GST invoice and must carry it. Printed books, where a
+              plan includes them, are sent here too.
+            </p>
+            <label htmlFor="address_line1">Address line 1{needAddress && <span style={{ color: "#b91c1c" }}> *</span>}</label>
+            <input id="address_line1" name="address_line1" defaultValue={p?.address_line1 ?? ""} required={needAddress} />
             <label htmlFor="address_line2">Address line 2</label>
             <input id="address_line2" name="address_line2" defaultValue={p?.address_line2 ?? ""} />
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr 1fr" }}>
               <div>
-                <label htmlFor="city">City</label>
-                <input id="city" name="city" defaultValue={p?.city ?? ""} />
+                <label htmlFor="city">City{needAddress && <span style={{ color: "#b91c1c" }}> *</span>}</label>
+                <input id="city" name="city" defaultValue={p?.city ?? ""} required={needAddress} />
               </div>
               <div>
-                <label htmlFor="state">State</label>
-                <input id="state" name="state" defaultValue={p?.state ?? ""} />
+                {/* Free text, and labelled for everybody: students outside India
+                    have provinces and counties, not states, and a form that
+                    only names one of them reads as "not for you". */}
+                <label htmlFor="state">State / province{needAddress && <span style={{ color: "#b91c1c" }}> *</span>}</label>
+                <input id="state" name="state" defaultValue={p?.state ?? ""} required={needAddress} placeholder="e.g. Karnataka" />
               </div>
               <div>
-                <label htmlFor="pincode">PIN code</label>
-                <input id="pincode" name="pincode" defaultValue={p?.pincode ?? ""} />
+                <label htmlFor="pincode">PIN / ZIP{needAddress && <span style={{ color: "#b91c1c" }}> *</span>}</label>
+                <input id="pincode" name="pincode" defaultValue={p?.pincode ?? ""} required={needAddress} />
               </div>
             </div>
+            <p className="muted" style={{ fontSize: ".8rem", marginTop: 6 }}>
+              Outside India? Put your own country&apos;s province and postcode — both boxes take anything.
+            </p>
           </div>
 
           <div className="card" style={{ marginTop: 16 }}>

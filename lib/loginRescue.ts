@@ -18,7 +18,7 @@ const SITE_URL = "https://caparveensharma.com";
 // mailbox gets it.
 
 export type RescueOutcome =
-  | { handled: true; kind: "reset_sent" | "set_password_sent" | "other_email_hint"; note: string }
+  | { handled: true; kind: "reset_sent" | "other_email_hint"; note: string }
   | { handled: false; note: string };
 
 function e164(phone: string): string {
@@ -27,57 +27,44 @@ function e164(phone: string): string {
 }
 
 /**
- * Send whoever owns this address the link that will actually get them in.
+ * Send whoever owns this address the link that gets them in.
  *
- * Two different links, and which one matters enormously:
- *   • an account with no password yet — 1,659 of them, granted access in bulk
- *     and never asked to choose one — gets "set your password";
- *   • an account with a password gets "reset your password".
+ * One link, one email, one destination. A student who has forgotten their
+ * password and a student who was granted access and never chose one both need
+ * exactly the same thing — a link that signs them in and lets them set a
+ * password — so there is no reason to ask which of the two they are.
  *
- * Both are recovery links underneath, because a recovery link works whether or
- * not there is a password to recover. An "invite" link does not: Supabase
- * refuses it for an address that already has an account, which is every single
- * one of these students.
+ * It is a recovery link underneath, which works whether or not there is a
+ * password to recover. (An "invite" link does not: Supabase refuses it for an
+ * address that already has an account, which is every one of these students.)
  *
- * Returns what was sent so the caller can say something true on the screen.
- * Never says whether the address exists — the answer goes to the mailbox.
+ * Never says whether the address exists. The answer goes to the mailbox.
  */
 export async function sendAccessLink(email: string, name?: string): Promise<
-  { sent: boolean; kind: "set_password" | "reset" | "none"; note: string }
+  { sent: boolean; note: string }
 > {
   const svc = createServiceClient();
   const addr = (email ?? "").trim().toLowerCase();
-  if (!addr) return { sent: false, kind: "none", note: "no email given" };
+  if (!addr) return { sent: false, note: "no email given" };
 
   const { data } = await svc
-    .from("profiles")
-    .select("id, email, full_name, has_password")
-    .ilike("email", addr)
-    .maybeSingle();
-  const account = data as { id: string; email: string; full_name: string | null; has_password: boolean | null } | null;
-  if (!account?.email) return { sent: false, kind: "none", note: "no account on that address" };
+    .from("profiles").select("id, email, full_name").ilike("email", addr).maybeSingle();
+  const account = data as { id: string; email: string; full_name: string | null } | null;
+  if (!account?.email) return { sent: false, note: "no account on that address" };
 
-  const needsPassword = account.has_password === false;
   const { data: linkData } = await svc.auth.admin.generateLink({ type: "recovery", email: account.email } as never);
   const tokenHash = (linkData as { properties?: { hashed_token?: string } } | null)?.properties?.hashed_token;
-  if (!tokenHash) return { sent: false, kind: "none", note: "could not generate a link" };
+  if (!tokenHash) return { sent: false, note: "could not generate a link" };
 
-  const next = needsPassword ? "/auth/set-password" : "/auth/reset-password";
-  const url = `${SITE_URL}/auth/confirm?token_hash=${tokenHash}&type=recovery&next=${next}`;
-  const ok = await sendTemplate(needsPassword ? "account_created" : "password_reset", account.email, {
-    heading: needsPassword ? "Set your password" : "Reset your password",
+  const url = `${SITE_URL}/auth/confirm?token_hash=${tokenHash}&type=recovery&next=/auth/set-password`;
+  const ok = await sendTemplate("password_reset", account.email, {
+    heading: "Choose your password",
     action_url: url,
-    action_label: needsPassword ? "Set my password" : "Reset my password",
+    action_label: "Choose my password",
     name: name || account.full_name || "",
   });
 
-  return {
-    sent: !!ok,
-    kind: needsPassword ? "set_password" : "reset",
-    note: ok
-      ? `${needsPassword ? "set-password" : "reset"} link emailed to ${maskEmail(account.email)}`
-      : "the email could not be sent",
-  };
+  return { sent: !!ok, note: ok ? `link emailed to ${maskEmail(account.email)}` : "the email could not be sent" };
 }
 
 export async function rescueLogin(input: {
@@ -91,12 +78,12 @@ export async function rescueLogin(input: {
   const firstName = (input.name ?? "").trim().split(/\s+/)[0] || "there";
 
   // 1) The email they typed.
-  type Account = { id: string; email: string; has_password: boolean | null };
+  type Account = { id: string; email: string };
   let account: Account | null = null;
   if (email) {
     const { data } = await svc
       .from("profiles")
-      .select("id, email, has_password")
+      .select("id, email")
       .ilike("email", email)
       .maybeSingle();
     account = (data as unknown as Account) ?? null;
@@ -129,50 +116,26 @@ export async function rescueLogin(input: {
     }
   }
 
-  // Case A / B — the account exists. Send the right link to the address on
-  // file, and tell them on WhatsApp that it is coming.
+  // Case A / B — the account exists. Send the one link that gets anybody in,
+  // and tell them on WhatsApp that it is coming.
   if (account?.email) {
-    const needsPassword = account.has_password === false;
-    // ALWAYS "recovery", never "invite".
-    //
-    // generateLink with type "invite" is for creating a NEW user; on an address
-    // that already has an account Supabase refuses it. Every bulk-granted
-    // student has an account and no password — precisely the people who ask for
-    // login help — so this branch failed for exactly the students it existed to
-    // rescue, and reported "could not generate a sign-in link" with no reason.
-    // A recovery link works whether or not there is a password to recover: it
-    // signs them in and lets them set one.
-    const type = "recovery";
-    const next = needsPassword ? "/auth/set-password" : "/auth/reset-password";
-    const { data: linkData } = await svc.auth.admin.generateLink({ type, email: account.email } as never);
-    const tokenHash = (linkData as { properties?: { hashed_token?: string } } | null)?.properties?.hashed_token;
-    if (!tokenHash) {
-      console.error("[login_rescue] no link for", account.email, JSON.stringify(linkData)?.slice(0, 200));
-      return { handled: false, note: "could not generate a sign-in link" };
-    }
-
-    const url = `${SITE_URL}/auth/confirm?token_hash=${tokenHash}&type=${type}&next=${next}`;
-    await sendTemplate(needsPassword ? "account_created" : "password_reset", account.email, {
-      heading: needsPassword ? "Set your password" : "Reset your password",
-      action_url: url,
-      action_label: needsPassword ? "Set my password" : "Reset my password",
-      name: input.name ?? "",
-    });
+    const r = await sendAccessLink(account.email, input.name);
+    if (!r.sent) return { handled: false, note: r.note };
 
     if (wa.length >= 11) {
       await sendWhatsAppText(
         wa,
         `Hello ${firstName}, this is CA Parveen Sharma Classes.\n\n` +
-          `We have sent a ${needsPassword ? "set-password" : "password reset"} link to your registered email (${maskEmail(account.email)}). ` +
-          `Open it and you will be back in within a minute.\n\n` +
+          `We have sent a sign-in link to your registered email (${maskEmail(account.email)}). ` +
+          `Open it, choose your password, and you are back in within a minute.\n\n` +
           `Please check the spam folder too. If it still does not work, reply here and a person will help you.`,
       ).catch(() => false);
     }
 
     return {
       handled: true,
-      kind: needsPassword ? "set_password_sent" : "reset_sent",
-      note: `Account found (${maskEmail(account.email)}) — ${needsPassword ? "set-password" : "reset"} link emailed${wa.length >= 11 ? " and WhatsApp sent" : ""}.`,
+      kind: "reset_sent",
+      note: `Account found (${maskEmail(account.email)}) — ${r.note}${wa.length >= 11 ? " and WhatsApp sent" : ""}.`,
     };
   }
 

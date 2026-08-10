@@ -90,51 +90,34 @@ export async function resendVerification(formData: FormData): Promise<Result> {
   return sent ? { ok: true } : { ok: false, error: "Couldn't send the email." };
 }
 
-// A FAILED LOGIN IS USUALLY AN ACCOUNT WITH NO PASSWORD ON IT.
+// A FAILED LOGIN IS A REQUEST FOR A PASSWORD.
 //
-// 1,659 students were granted access in bulk and never chose a password. They
-// were emailed a link on the day, most never opened it, and the link expired.
-// On launch day 231 of them tried to log in; the screen told them their email
-// or password did not match — which is true, and useless, because no password
-// they can type will ever match.
+// 1,659 students were granted access in bulk and never chose one. They were
+// emailed a link on the day, most never opened it, and it expired. On launch
+// day 231 of them were told their email or password did not match — true, and
+// useless, because no password they can type will ever match.
 //
-// The site can see this. So when a login fails, it looks the address up and
-// sends the link that will actually work, without asking the student to fill in
-// another form first. The old call-back form asked for a WhatsApp number and
-// 26 people out of hundreds filled it in.
+// So a failed login just does what "forgot password" does: sends the link. It
+// does not ask which kind of student they are, because the link is the same
+// either way — it signs them in and lets them choose a password.
 //
-// Never says whether the address has an account — the answer goes to the
-// mailbox, and the screen says the same neutral sentence either way.
-export async function autoLoginRescue(formData: FormData): Promise<{
-  sent: boolean; kind: "set_password" | "reset" | "none"; throttled?: boolean;
-}> {
+// Never says whether the address has an account. The link goes to the mailbox.
+export async function autoLoginRescue(formData: FormData): Promise<{ sent: boolean; throttled?: boolean }> {
   const email = String(formData.get("email") || "").trim().toLowerCase();
-  const attempt = Number(formData.get("attempt") || 1);
-  if (!email || !(await emailConfigured())) return { sent: false, kind: "none" };
-
-  const svc = createServiceClient();
-  const { data } = await svc
-    .from("profiles").select("has_password").ilike("email", email).maybeSingle();
-  const has = (data as { has_password?: boolean | null } | null)?.has_password;
-  if (has == null && data == null) return { sent: false, kind: "none" };
-
-  // An account with no password can never succeed, so help on the first miss.
-  // An account WITH a password probably just had a typo — wait for the second
-  // before putting an unasked-for email in somebody's inbox.
-  if (has !== false && attempt < 2) return { sent: false, kind: "none" };
+  if (!email || !(await emailConfigured())) return { sent: false };
 
   // One mailbox, twice in fifteen minutes. Enough for a real person retrying,
-  // not enough for a script to bury someone in password mails.
+  // not enough for a script to bury somebody in password mail.
   if (!(await allowEmailAction("login_rescue", email, { perEmail: 2, perIp: 12, seconds: 900 }))) {
-    return { sent: false, kind: has === false ? "set_password" : "reset", throttled: true };
+    return { sent: false, throttled: true };
   }
 
   try {
     const { sendAccessLink } = await import("@/lib/loginRescue");
     const r = await sendAccessLink(email);
-    return { sent: r.sent, kind: r.kind };
+    return { sent: r.sent };
   } catch {
-    return { sent: false, kind: "none" };
+    return { sent: false };
   }
 }
 

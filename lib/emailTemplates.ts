@@ -119,13 +119,15 @@ Didn't sign up? You can safely ignore this email.`,
     label: "Forgot password",
     when: 'Somebody uses "forgot password" on the login page.',
     group: "Account & login",
-    subject: "Reset your password — CA Parveen Sharma",
-    body: `We received a request to reset the password on your CA Parveen Sharma account.
+    subject: "Getting you back in — CA Parveen Sharma",
+    body: `Somebody asked us to help you into your CA Parveen Sharma account.
 
 {{button}}
 
-If you didn't ask for this, you can ignore this email — your password stays as it is.`,
-    vars: [BUTTON("set a new password")],
+The button signs you in and lets you choose your password. It works whether you have forgotten the one you set or have never set one at all.
+
+If you didn't ask for this, you can ignore this email — nothing changes.`,
+    vars: [BUTTON("choose your password")],
     sample: {},
   },
 

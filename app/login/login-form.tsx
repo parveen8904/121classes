@@ -59,31 +59,21 @@ export default function LoginForm() {
       const m = error.message.toLowerCase();
       if (m.includes("confirm")) return err("Please verify your email first — check your inbox for the verification link.");
 
-      // Most of these are a student who was GIVEN access and never chose a
-      // password: nothing they type can work. The server looks the address up
-      // and sends the link that will. It answers the same way whether or not
-      // the address is registered, so this reveals nothing about who studies
-      // here — the link itself goes to the mailbox.
-      const attempt = failCount + 1;
-      err("Email or password didn't match. One moment — checking your account…");
+      // Whatever the reason, the answer is the same: send them the link that
+      // lets them choose a password. The server says nothing about whether the
+      // address is registered — the link goes to the mailbox, not the screen.
       try {
         const fd = new FormData();
-        fd.set("email", email); fd.set("attempt", String(attempt));
+        fd.set("email", email);
         const r = await autoLoginRescue(fd);
         if (r.throttled) {
-          return ok("We have already emailed you a sign-in link in the last few minutes. Please check your inbox — and your spam folder.");
+          return ok("We have already emailed you a sign-in link in the last few minutes. Please open it — and do check your spam folder.");
         }
-        if (r.sent && r.kind === "set_password") {
-          return ok("You have an account here, but a password has never been set on it. We have just emailed you a link to choose one — open it and you are in. Check spam too.");
-        }
-        if (r.sent) {
-          return ok("We have emailed you a link to set a new password. Open it and you are back in. Check your spam folder too.");
-        }
-      } catch { /* fall through to the plain message */ }
-      return err(
-        attempt >= 2
-          ? "That email and password still don't match, and we could not find an account on that address. New here? Tap “Create account” — it takes a minute."
-          : "Email or password didn't match. New here? Tap “Create account”. Forgot it? Use “Forgot password”.",
+      } catch { /* fall through */ }
+      return ok(
+        "We have emailed you a link to choose your password — open it and you are straight in. " +
+        "It works whether you forgot your password or never set one. Check your spam folder too. " +
+        "If nothing arrives, you may not be registered yet: tap “Create account”.",
       );
     }
     import("@/app/components/Tracker").then(({ track }) => track("login_success", "/login")).catch(() => {});

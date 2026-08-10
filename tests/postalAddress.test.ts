@@ -65,6 +65,15 @@ check(looksPostableInIndia("Flat 4\nMumbai\nMaharashtra\n400001"), "line breaks 
 
 check(!looksPostableInIndia("1600 Amphitheatre Pkwy, Mountain View, California 94043, USA"), "an American address cannot be posted");
 check(!looksPostableInIndia("PO Box 1234, Dubai, UAE"), "nor a Dubai one");
+
+// A foreign address is a fine address — it is simply not a parcel. It must
+// still be written out with its own country, because the student's record and
+// their invoice carry it even though no courier ever will.
+const abroad = formatPostalAddress({
+  line1: "Flat 9, Marina Tower", city: "Dubai", state: "Dubai", pincode: "00000", country: "United Arab Emirates",
+});
+check(abroad.endsWith("United Arab Emirates"), "a foreign label names its own country, not India");
+check(!looksPostableInIndia(abroad), "and no parcel is raised for it");
 check(!looksPostableInIndia("12 MG Road, Bengaluru, Karnataka"), "a real state with no PIN cannot be sorted");
 check(!looksPostableInIndia("12 MG Road, Bengaluru - 560001"), "a real PIN with no state is not enough either");
 check(!looksPostableInIndia(""), "an empty address is refused");

@@ -67,7 +67,7 @@ export function isIndianPincode(v: string | null | undefined): boolean {
 
 /** One line per line, the way a courier label is read. */
 export function formatPostalAddress(a: {
-  line1?: string; line2?: string; city?: string; state?: string; pincode?: string;
+  line1?: string; line2?: string; city?: string; state?: string; pincode?: string; country?: string;
 }): string {
   const l1 = (a.line1 ?? "").trim();
   const l2 = (a.line2 ?? "").trim();
@@ -75,7 +75,10 @@ export function formatPostalAddress(a: {
   const state = (a.state ?? "").trim();
   const pin = (a.pincode ?? "").trim();
   const tail = [city, state].filter(Boolean).join(", ");
-  return [l1, l2, [tail, pin].filter(Boolean).join(" - "), "India"]
+  // The country is always written out. A courier does not assume it, and an
+  // address abroad has to say where it is even though no parcel will go.
+  const country = (a.country ?? "").trim() || "India";
+  return [l1, l2, [tail, pin].filter(Boolean).join(" - "), country]
     .filter(Boolean)
     .join("\n");
 }

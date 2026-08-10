@@ -116,10 +116,19 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
   // service on this account, so an order taken for an address abroad is an
   // order that cannot be fulfilled — and the student finds that out weeks
   // later, having paid.
-  if (input.tier === "gold" && months >= 9) {
-    const { looksPostableInIndia } = await import("@/lib/indiaStates");
-    if (!looksPostableInIndia(input.recipient.address)) return { ok: false, reason: "address" };
-  }
+  // A FOREIGN ADDRESS IS A FINE ADDRESS. IT IS JUST NOT A PARCEL.
+  //
+  // We do not courier books outside India — there is no international service
+  // on this account. That is a reason not to raise a parcel, NOT a reason to
+  // refuse the sale: the student still gets the whole course and the free PDF
+  // books, and if they want the printed set they can give an Indian address of
+  // somebody who will forward it on.
+  //
+  // So the address is still required, and still checked — but only for being
+  // there. Whether a parcel goes is decided separately, below.
+  if (!(input.recipient.address ?? "").trim()) return { ok: false, reason: "address" };
+  const { looksPostableInIndia } = await import("@/lib/indiaStates");
+  const canPost = looksPostableInIndia(input.recipient.address);
 
   try {
     const order = await createRazorpayOrder(amount, `gift_${Date.now()}`, {
@@ -140,7 +149,9 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
       coupon_code: input.couponCode || null,
       // Gifted Gold of 9+ months ships the FREE printed books to the recipient
       // (unlike admin grants, which never include books).
-      books_due: input.tier === "gold" && months >= 9,
+      // Books only where a courier can reach. A parcel raised for an address
+      // abroad sits in the warehouse queue for ever and nobody can close it.
+      books_due: input.tier === "gold" && months >= 9 && canPost,
     });
     const { data: prof } = await svc.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle();
     return {

@@ -33,7 +33,7 @@ export default function SellForm({
   // The delivery address in its parts. Composed into one label-shaped block
   // only when the order is placed, so the courier reads lines rather than a
   // paragraph somebody typed in a hurry.
-  const [addr, setAddr] = useState({ line1: "", line2: "", city: "", state: "", pincode: "" });
+  const [addr, setAddr] = useState({ line1: "", line2: "", city: "", state: "", pincode: "", country: "", inIndia: true });
   const [startsOn, setStartsOn] = useState(today());
   const [coupon, setCoupon] = useState("");
   // What the coupon actually did, decided on the server. Null until they press
@@ -89,13 +89,15 @@ export default function SellForm({
     // "the address is needed" over a form they think they filled.
     if (!addr.line1.trim()) { setErr("The books are posted to the student — please enter their address."); return; }
     if (!addr.city.trim()) { setErr("Please enter the student's city."); return; }
-    if (!addr.state.trim()) { setErr("Please choose the student's state. We post within India only."); return; }
-    if (!isIndianPincode(addr.pincode)) { setErr("Please enter a valid 6-digit Indian PIN code — the parcel cannot be sorted without one."); return; }
+    if (!addr.state.trim()) { setErr(addr.inIndia ? "Please choose the student's state." : "Please enter the student's state or province."); return; }
+    if (addr.inIndia && !isIndianPincode(addr.pincode)) { setErr("Please enter a valid 6-digit Indian PIN code — a parcel cannot be sorted without one."); return; }
+    if (!addr.inIndia && !addr.pincode.trim()) { setErr("Please enter the student's postcode."); return; }
+    if (!addr.inIndia && !addr.country.trim()) { setErr("Please enter the country."); return; }
     setBusy(true);
     try {
       const res = await createGiftOrder({
         subjectId, tier: "gold", months: term?.months ?? product.months, couponCode: coupon, startsOn,
-        recipient: { name: name.trim(), email: email.trim(), phone: phone.trim(), address: formatPostalAddress(addr) },
+        recipient: { name: name.trim(), email: email.trim(), phone: phone.trim(), address: formatPostalAddress({ ...addr, country: addr.inIndia ? "India" : addr.country }) },
         billing: { name: billing.name || name, gstin: billing.gstin, address: billing.address, state: bState },
       });
       if (!res.ok) {
@@ -166,15 +168,33 @@ export default function SellForm({
         {/* A DELIVERY ADDRESS IS NOT A PARAGRAPH.
             This was one free-text box headed "full postal address with PIN
             code". A courier label needs a city, a state and a PIN in their own
-            right, and a supporter typing in a hurry leaves out whichever one
-            they leave out — usually the state, which is the one the courier
-            sorts on. Separate boxes, and the state is chosen rather than typed.
+            right, and a seller typing in a hurry leaves out whichever one they
+            leave out — usually the state, which is the one the courier sorts
+            on. Separate boxes, and inside India the state is chosen, not typed.
 
-            The list holds only Indian states and union territories, because
-            that is where we can post: there is no international parcel service
-            on this account, so an order taken for an address abroad is an order
-            that cannot be fulfilled, and the student learns that weeks later. */}
+            An address abroad is allowed. We do not courier books outside India,
+            but that is a reason not to send a parcel, not a reason to refuse
+            the sale — the student still gets the course and the free PDFs, and
+            if they want the printed set they can give an Indian address of
+            somebody who will forward it on. They are told so, plainly, and can
+            change the address there and then. */}
         <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>{step()} · Where do the books go?</h2>
+
+        <label htmlFor="ain">Country<span style={{ color: "#b91c1c" }}> *</span></label>
+        <select id="ain" value={addr.inIndia ? "in" : "out"}
+          onChange={(e) => setAddr({ ...addr, inIndia: e.target.value === "in", state: "" })}>
+          <option value="in">India</option>
+          <option value="out">Outside India</option>
+        </select>
+
+        {!addr.inIndia && (
+          <div className="notice" style={{ background: "rgba(234,179,8,0.14)", border: "2px solid #eab308", color: "var(--text)", marginTop: 10 }}>
+            📦 <strong>We do not courier the printed books outside India.</strong> The student still gets the full
+            course and the book PDFs, which are free. If they want the printed set, put an Indian address here —
+            a friend or relative who can post it on to them — and change the country back to India.
+          </div>
+        )}
+
         <label htmlFor="a1">Address<span style={{ color: "#b91c1c" }}> *</span></label>
         <input id="a1" value={addr.line1} onChange={(e) => setAddr({ ...addr, line1: e.target.value })}
           required placeholder="Flat / house, building, street" />
@@ -188,22 +208,34 @@ export default function SellForm({
             <input id="ac" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} required />
           </div>
           <div>
-            <label htmlFor="as">State<span style={{ color: "#b91c1c" }}> *</span></label>
-            <select id="as" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} required>
-              <option value="">Choose…</option>
-              {INDIA_STATES.map((x) => <option key={x} value={x}>{x}</option>)}
-            </select>
+            <label htmlFor="as">{addr.inIndia ? "State" : "State / province"}<span style={{ color: "#b91c1c" }}> *</span></label>
+            {addr.inIndia ? (
+              <select id="as" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} required>
+                <option value="">Choose…</option>
+                {INDIA_STATES.map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+            ) : (
+              <input id="as" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} required />
+            )}
           </div>
           <div>
-            <label htmlFor="ap">PIN code<span style={{ color: "#b91c1c" }}> *</span></label>
-            <input id="ap" value={addr.pincode} inputMode="numeric" maxLength={6}
-              onChange={(e) => setAddr({ ...addr, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
-              required placeholder="6 digits" />
+            <label htmlFor="ap">{addr.inIndia ? "PIN code" : "Postcode"}<span style={{ color: "#b91c1c" }}> *</span></label>
+            <input id="ap" value={addr.pincode}
+              inputMode={addr.inIndia ? "numeric" : "text"}
+              maxLength={addr.inIndia ? 6 : 12}
+              onChange={(e) => setAddr({ ...addr, pincode: addr.inIndia ? e.target.value.replace(/\D/g, "").slice(0, 6) : e.target.value })}
+              required placeholder={addr.inIndia ? "6 digits" : ""} />
           </div>
+          {!addr.inIndia && (
+            <div>
+              <label htmlFor="acn">Country<span style={{ color: "#b91c1c" }}> *</span></label>
+              <input id="acn" value={addr.country} onChange={(e) => setAddr({ ...addr, country: e.target.value })}
+                required placeholder="e.g. United Arab Emirates" />
+            </div>
+          )}
         </div>
         <p className="muted" style={{ fontSize: ".8rem" }}>
-          The printed books are posted to the student, not to you. <strong>We post within India only</strong> — please
-          do not take an order for an address abroad, as we cannot ship it.
+          The printed books are posted to the student, not to you.
         </p>
 
         {/* WHICH SUBJECT — ONLY IF THEY HAVE NOT ALREADY SAID.

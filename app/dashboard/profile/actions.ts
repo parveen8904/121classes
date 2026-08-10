@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { str, nullable } from "../../admin/_lib/util";
+import { safeInternalPath } from "@/lib/safeNext";
 
 export async function updateProfile(formData: FormData) {
   const supabase = createClient();
@@ -62,8 +63,7 @@ export async function updateProfile(formData: FormData) {
   //
   // Only our own paths: an address that arrives in a query string is not a
   // place to send somebody after they have signed in.
-  const back = String(formData.get("next") ?? "").trim();
-  const safeBack = back.startsWith("/") && !back.startsWith("//") ? back : "";
+  const safeBack = safeInternalPath(formData.get("next"));
 
   const { data: myC } = await supabase.from("my_courses").select("course_id").eq("student_id", user.id);
   const hasCourse = courseId || (myC ?? []).length > 0;

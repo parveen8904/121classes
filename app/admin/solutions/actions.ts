@@ -235,6 +235,32 @@ export async function checkKeysMatchPapers() {
   );
 }
 
+// The same question for the tests whose key we wrote ourselves — every
+// Financial Reporting paper is one of those.
+export async function checkDraftedKeysCoverPapers() {
+  await assertArea(null);
+  const { auditDraftedKeys } = await import("@/lib/solutionAudit");
+  const r = await auditDraftedKeys(6, 230_000);
+  revalidatePath("/admin/solutions");
+  redirect(
+    `/admin/solutions?kmchecked=${r.checked}&kmmatch=${r.matched.length}` +
+      `&kmbad=${r.mismatched.length}&kmshort=${r.incomplete.length}` +
+      `&kmunclear=${r.unclear.length}&kmleft=${r.remaining}`,
+  );
+}
+
+// Put the bad ones right: write a key from the paper's own question paper and
+// detach the document that did not belong to it.
+export async function fixBadKeys() {
+  await assertArea(null);
+  const { repairBadKeys } = await import("@/lib/solutionAudit");
+  const r = await repairBadKeys(4, 230_000);
+  revalidatePath("/admin/solutions");
+  redirect(
+    `/admin/solutions?fixed=${r.repaired.length}&fixfailed=${r.failed.length}&fixleft=${r.remaining}`,
+  );
+}
+
 /**
  * Approve every drafted key at once.
  *

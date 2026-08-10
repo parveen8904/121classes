@@ -1270,6 +1270,105 @@ export const ABUSE_WARNING_DIRECT =
 //
 // Only the first two pages of each go — enough to see what is being asked and
 // what is being answered, without paying for two full scans.
+// THE SAME QUESTION, WHERE THE KEY IS TEXT RATHER THAN A PDF.
+//
+// Fifty-one of the tests here have no uploaded solution at all — their key was
+// written by us from the question paper and approved. Every Financial Reporting
+// paper is in that group. A key written FROM the paper cannot be a key to a
+// different paper, so the wrong-file fault is impossible there; what is very
+// possible is that it stops after Q2 of a three-question paper, and that costs
+// a student exactly as many marks as the wrong file does on that question.
+//
+// So the same comparison, with the key supplied as text.
+export async function classifyKeyTextCoversPaper(
+  questionPdfUrl: string,
+  keyText: string,
+): Promise<{ verdict: KeyMatchVerdict; note: string }> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey || !questionPdfUrl || !keyText.trim()) return { verdict: "unclear", note: "not enough to compare" };
+  try {
+    const r = await fetch(questionPdfUrl, { cache: "no-store" });
+    if (!r.ok) return { verdict: "unclear", note: "the question paper could not be opened" };
+    const full = new Uint8Array(await r.arrayBuffer());
+    let head: Uint8Array = full;
+    try {
+      const { PDFDocument } = await import("pdf-lib");
+      const src = await PDFDocument.load(full, { ignoreEncryption: true });
+      const n = Math.min(3, src.getPageCount());
+      if (n === 0) return { verdict: "unclear", note: "the question paper has no pages" };
+      const out = await PDFDocument.create();
+      const pages = await out.copyPages(src, Array.from({ length: n }, (_, i) => i));
+      for (const pg of pages) out.addPage(pg);
+      head = await out.save();
+    } catch {
+      return { verdict: "unclear", note: "the question paper could not be read" };
+    }
+    if (head.byteLength > 18 * 1024 * 1024) return { verdict: "unclear", note: "the question paper is too large to compare" };
+
+    const system =
+      "You are given a CA test's QUESTION PAPER as a PDF, and the text of the ANSWER KEY written for it. " +
+      "Do not judge quality and do not award anything. Report only what each contains.\n" +
+      "For the QUESTION PAPER list every question: its number, the marks printed for it, and a few words naming its " +
+      "subject matter, including any company or person name used.\n" +
+      "For the KEY list every question it actually answers, the same way.\n" +
+      "Then for each question in the PAPER say whether the key answers it — match on names and figures, not on " +
+      "question numbers, which often differ.\n" +
+      "Respond ONLY as compact JSON, no prose, no code fences:\n" +
+      '{"paper":[{"n":"Q1","marks":5,"about":"..."}],"key":[{"n":"Q1","about":"..."}],' +
+      '"answered":[{"paper_q":"Q1","in_key":true,"why":"..."}]}';
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model: await fastModel(),
+        max_tokens: 1500,
+        temperature: 0,
+        system,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: Buffer.from(head).toString("base64") } },
+            { type: "text", text: `THE ANSWER KEY:\n\n${keyText.slice(0, 60_000)}` },
+          ],
+        }],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      console.error("[key_match_text] Anthropic refused", res.status, (await res.text()).slice(0, 200));
+      return { verdict: "unclear", note: "the comparison could not be run" };
+    }
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("key_match", await fastModel(), Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    const raw = String(data.content?.[0]?.text ?? "").replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(raw) as {
+      paper?: { n?: string }[]; key?: { n?: string; about?: string }[];
+      answered?: { paper_q?: string; in_key?: boolean }[];
+    };
+    const paper = parsed.paper ?? [], key = parsed.key ?? [], answered = parsed.answered ?? [];
+    if (paper.length === 0 || key.length === 0) {
+      return { verdict: "unclear", note: "the questions could not be read" };
+    }
+    const missing = answered.filter((a) => a.in_key === false).map((a) => String(a.paper_q ?? "?"));
+    const covered = answered.filter((a) => a.in_key === true).length;
+    if (covered === 0) {
+      return { verdict: "mismatch", note: `The key answers none of this paper's ${paper.length} question(s).` };
+    }
+    if (missing.length > 0) {
+      return {
+        verdict: "incomplete",
+        note: `The key has no answer for ${missing.join(", ")} — a student who answers ${missing.length === 1 ? "it" : "those"} scores nothing for ${missing.length === 1 ? "it" : "them"}.`,
+      };
+    }
+    return { verdict: "match", note: `All ${paper.length} question(s) are answered by the key.` };
+  } catch (e) {
+    console.error("[key_match_text] failed", e instanceof Error ? e.message : e);
+    return { verdict: "unclear", note: "the comparison could not be run" };
+  }
+}
+
 export type KeyMatchVerdict = "match" | "incomplete" | "mismatch" | "unclear";
 
 export async function classifyKeyMatchesPaper(

@@ -234,3 +234,155 @@ async function stampMatch(
   cfg.key_match_at = new Date().toISOString();
   await svc.from("sections").update({ config: cfg }).eq("id", sectionId);
 }
+
+// ── PAPERS WHOSE KEY WAS WRITTEN BY US, NOT UPLOADED ──────────────────────
+//
+// Fifty-one tests have no uploaded solution: their key was drafted from the
+// question paper and approved, and every Financial Reporting paper is one of
+// them. A key written from the paper cannot belong to a different paper, so the
+// wrong-file fault cannot occur there. What can occur — and costs a student the
+// same marks — is a key that stops after Q2 of a three-question paper.
+export async function auditDraftedKeys(limit = 6, budgetMs = 230_000, recheck = false): Promise<KeyMatchResult> {
+  const { classifyKeyTextCoversPaper } = await import("@/lib/ai");
+  const svc = createServiceClient();
+  const started = Date.now();
+  const out: KeyMatchResult = { checked: 0, matched: [], mismatched: [], incomplete: [], unclear: [], remaining: 0 };
+
+  const { data } = await svc
+    .from("sections")
+    .select("id, title, question_pdf:config->>paper_question_pdf, key_match:config->>key_match")
+    .not("m_paper_question_pdf", "is", null)
+    .is("m_paper_solution_pdf", null)
+    .limit(500);
+
+  type R = { id: string; title: string; question_pdf: string | null; key_match: string | null };
+  const all = ((data ?? []) as unknown as R[]).filter((r) => String(r.question_pdf ?? "").trim());
+  const todo = all.filter((r) => recheck || !r.key_match || r.key_match.startsWith("unclear"));
+  out.remaining = todo.length;
+
+  for (const row of todo.slice(0, limit)) {
+    if (Date.now() - started > budgetMs) break;
+    try {
+      const { data: sol } = await svc
+        .from("item_solutions").select("solution_md").eq("section_id", row.id).maybeSingle();
+      const keyText = String((sol as { solution_md?: string } | null)?.solution_md ?? "");
+      if (!keyText.trim()) {
+        out.unclear.push({ title: row.title, note: "this test has no key at all" });
+        await stampMatch(svc, row.id, "unclear", "no key to compare");
+        continue;
+      }
+      const qUrl = await resolveFileUrl(row.question_pdf as string, 900);
+      if (!qUrl) {
+        out.unclear.push({ title: row.title, note: "the question paper could not be opened" });
+        continue;
+      }
+      const { verdict, note } = await classifyKeyTextCoversPaper(qUrl, keyText);
+      out.checked++;
+      await stampMatch(svc, row.id, verdict, note);
+      if (verdict === "match") out.matched.push(row.title);
+      else if (verdict === "mismatch") out.mismatched.push({ title: row.title, id: row.id, note });
+      else if (verdict === "incomplete") out.incomplete.push({ title: row.title, id: row.id, note });
+      else out.unclear.push({ title: row.title, note });
+    } catch (e) {
+      out.unclear.push({ title: row.title, note: e instanceof Error ? e.message : "failed" });
+    }
+  }
+
+  const { data: after } = await svc.from("sections")
+    .select("id, question_pdf:config->>paper_question_pdf, key_match:config->>key_match")
+    .not("m_paper_question_pdf", "is", null).is("m_paper_solution_pdf", null).limit(500);
+  out.remaining = ((after ?? []) as unknown as R[])
+    .filter((r) => String(r.question_pdf ?? "").trim())
+    .filter((r) => !r.key_match || r.key_match.startsWith("unclear")).length;
+  return out;
+}
+
+// ── PUTTING THE BAD ONES RIGHT ────────────────────────────────────────────
+//
+// A key that answers another paper, or stops halfway through this one, is
+// marking students today. The question paper is the thing we can trust — it is
+// what the student actually sat — so the answer is written from that, the same
+// way it is written for the fifty-one tests that never had a key.
+//
+// The wrong file is DETACHED, not deleted. It is a real document that belongs
+// to some other paper, and finding out which one is a job for a person; losing
+// it would make that impossible.
+export type RepairResult = {
+  repaired: { title: string; was: string }[];
+  failed: { title: string; why: string }[];
+  remaining: number;
+};
+
+export async function repairBadKeys(limit = 4, budgetMs = 230_000): Promise<RepairResult> {
+  const { draftSolutionFromPdf } = await import("@/lib/ai");
+  const svc = createServiceClient();
+  const started = Date.now();
+  const out: RepairResult = { repaired: [], failed: [], remaining: 0 };
+
+  const SEL =
+    "id, title, question_pdf:config->>paper_question_pdf, solution_pdf:config->>paper_solution_pdf, " +
+    "marks:config->>paper_total_marks, verdict:config->>key_match, topics(subjects(title))";
+  const { data } = await svc.from("sections").select(SEL).not("m_paper_question_pdf", "is", null).limit(500);
+  type R = {
+    id: string; title: string; question_pdf: string | null; solution_pdf: string | null;
+    marks: string | null; verdict: string | null; topics: { subjects: { title: string } | null } | null;
+  };
+  const bad = ((data ?? []) as unknown as R[])
+    .filter((r) => r.verdict === "mismatch" || r.verdict === "incomplete")
+    .filter((r) => String(r.question_pdf ?? "").trim());
+  out.remaining = bad.length;
+
+  for (const row of bad.slice(0, limit)) {
+    if (Date.now() - started > budgetMs) break;
+    try {
+      const qUrl = await resolveFileUrl(row.question_pdf as string, 900);
+      if (!qUrl) { out.failed.push({ title: row.title, why: "the question paper could not be opened" }); continue; }
+
+      const text = await draftSolutionFromPdf({
+        paperTitle: row.title,
+        subject: row.topics?.subjects?.title ?? "",
+        questionPdfUrl: qUrl,
+        totalMarks: Number(row.marks) || null,
+      });
+      if (!text) { out.failed.push({ title: row.title, why: "a replacement key could not be written" }); continue; }
+
+      const { data: existing } = await svc
+        .from("item_solutions").select("id").eq("section_id", row.id).maybeSingle();
+      const payload = {
+        section_id: row.id,
+        solution_md: text,
+        status: "approved",
+        parts: 1,
+        generated_at: new Date().toISOString(),
+        approved_at: new Date().toISOString(),
+        error: null,
+      };
+      if (existing?.id) await svc.from("item_solutions").update(payload).eq("id", existing.id);
+      else await svc.from("item_solutions").insert(payload);
+
+      // Any marking guide built from the old key is now wrong too — it is the
+      // compact ladder every student's copy is marked against, so leaving it in
+      // place would keep the fault alive after the key was replaced.
+      await svc.from("marking_schemes").delete().eq("section_id", row.id);
+
+      const { data: cur } = await svc.from("sections").select("config").eq("id", row.id).maybeSingle();
+      const cfg = { ...((cur?.config ?? {}) as Record<string, unknown>) };
+      const was = String(row.solution_pdf ?? "");
+      if (was) { cfg.paper_solution_pdf = null; cfg.replaced_wrong_key = was; }
+      cfg.key_match = "repaired";
+      cfg.key_match_note = `A key was written from this paper's own question paper on ${new Date().toISOString().slice(0, 10)}` +
+        (was ? ", and the document that did not belong to it was detached (kept on record)." : ".");
+      cfg.key_match_at = new Date().toISOString();
+      await svc.from("sections").update({ config: cfg }).eq("id", row.id);
+
+      out.repaired.push({ title: row.title, was });
+    } catch (e) {
+      out.failed.push({ title: row.title, why: e instanceof Error ? e.message : "failed" });
+    }
+  }
+
+  const { data: after } = await svc.from("sections").select(SEL).not("m_paper_question_pdf", "is", null).limit(500);
+  out.remaining = ((after ?? []) as unknown as R[])
+    .filter((r) => r.verdict === "mismatch" || r.verdict === "incomplete").length;
+  return out;
+}

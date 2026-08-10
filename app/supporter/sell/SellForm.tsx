@@ -21,8 +21,8 @@ type Billing = { name: string; gstin: string; address: string; state: string };
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function SellForm({
-  products, preselect, myCoupon, billing, configured,
-}: { products: Product[]; preselect?: string; myCoupon?: string; billing: Billing; configured: boolean }) {
+  products, preselect, myCoupon, billing, configured, locked,
+}: { products: Product[]; preselect?: string; myCoupon?: string; billing: Billing; configured: boolean; locked?: string }) {
   const [subjectId, setSubjectId] = useState(preselect || products[0]?.id || "");
   // Did they name the subject before they got here? A tile on their desk links
   // in with it; the plain "Place an order" button does not. Only a subject we
@@ -85,6 +85,7 @@ export default function SellForm({
   async function pay(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
+    if (locked) { setErr(locked); return; }
     if (!window.Razorpay) { setErr("Payment is still loading — one moment."); return; }
     if (!product) { setErr("Choose a subject."); return; }
     if (!name.trim() || !email.trim()) { setErr("The student's name and email are both needed — the login is created from them."); return; }
@@ -106,6 +107,7 @@ export default function SellForm({
       if (!res.ok) {
         setErr(res.reason === "blocked"
           ? "Your account is on hold following an upheld complaint. You can still see your orders and invoices, but no new order can be placed until the matter is settled. Please call the office."
+          : res.reason === "incomplete" ? "Your profile is not complete yet, so payment cannot be taken. The list at the top of this page says exactly what is left — nothing you have typed here is lost."
           : res.reason === "nosite" ? "Add the website you sell from in My details first — it is required before placing an order."
           : res.reason === "unverified" ? "Your website is not verified yet. Open My details, publish the code on your site, and press Check my website."
           : res.reason === "unconfigured" ? "Payment is not switched on yet — please call the office."
@@ -461,9 +463,24 @@ export default function SellForm({
           </div>
         )}
 
+        {/* THE LOCK, WHERE IT IS ACTUALLY FELT.
+            The notice at the top of the page explains it; this is the moment it
+            matters. They can fill in every field above and see exactly what a
+            student pays and what they pay — the one thing that does not happen
+            is the payment. The server checks the same rule when an order is
+            created, so this button is the courtesy, not the control. */}
+        {locked ? (
+          <div className="notice" style={{ marginTop: 14, background: "rgba(234,179,8,.14)", border: "2px solid #eab308", color: "var(--text)", lineHeight: 1.7 }}>
+            🔒 <strong>{locked}</strong>
+            <br />
+            Everything above is ready and will still be here. Finish the steps at the top of this page and this
+            becomes a payment button.
+          </div>
+        ) : (
         <button className="btn block" type="submit" disabled={busy || !configured} style={{ marginTop: 14 }}>
           {busy ? "Opening payment…" : product ? `Pay ${formatINR(payable)}` : "Choose a subject"}
         </button>
+        )}
         <p className="muted" style={{ fontSize: ".78rem", marginTop: 8, textAlign: "center" }}>
           {applied
             ? "This is the amount Razorpay will charge."

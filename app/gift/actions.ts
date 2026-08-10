@@ -50,19 +50,25 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
   //
   // Checked here, in the one place an order is actually created, rather than by
   // hiding a button: a hidden button is a suggestion, and this is a rule.
+  const { supporterReadiness } = await import("@/lib/supporterReady");
+  // Written out rather than built from SUPPORTER_READY_COLUMNS: PostgREST types
+  // this string at compile time and a template literal defeats it.
   const { data: seller } = await svc
     .from("profiles")
-    .select("supporter_blocked_at, supporter_block_reason, supporter_site, supporter_site_ok_at, is_supporter, role")
+    .select("full_name, business_name, phone, email, address_line1, city, state, pincode, supporter_site, supporter_site_ok_at, supporter_terms_at, supporter_blocked_at, supporter_block_reason, is_supporter, role")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (seller?.supporter_blocked_at) return { ok: false, reason: "blocked" };
-
-  // And a supporter with no verified shopfront has not finished signing up.
-  const isSupporter = seller?.is_supporter || seller?.role === "supporter";
-  if (isSupporter && seller?.role !== "admin") {
-    if (!seller?.supporter_site) return { ok: false, reason: "nosite" };
-    if (!seller?.supporter_site_ok_at) return { ok: false, reason: "unverified" };
+  // COMPLETE, PROVED, AGREED AND NOT ON HOLD — or no order.
+  //
+  // The same function the sell page uses, so the screen and the server can
+  // never disagree about who may trade. They had already drifted once: the page
+  // let a vendor fill in a student's name, address and term, and only the
+  // payment button said no.
+  const isSupporter = seller?.is_supporter || (seller as { role?: string } | null)?.role === "supporter";
+  if (isSupporter && (seller as { role?: string } | null)?.role !== "admin") {
+    const state = supporterReadiness(seller as never);
+    if (!state.ready) return { ok: false, reason: state.blocked ? "blocked" : "incomplete" };
   }
 
   const { data: subject } = await svc.from("subjects").select("id, title, course_id, gold_price_inr, validity_months, gold_slabs, batch_months, batch_price_inr").eq("id", input.subjectId).single();

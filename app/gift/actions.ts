@@ -252,8 +252,6 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
       invoiceNo, date: now, s, gst,
       buyerName: g.billing_name || g.recipient_name, buyerGstin: g.billing_gstin, buyerAddress: g.billing_address, buyerState: String(g.billing_state),
       itemDescription: desc,
-      registrationNo: (gifterProf?.registration_no as number | null) ?? null,
-      receiptNo: (g as { order_no?: number | null }).order_no != null ? String((g as { order_no?: number | null }).order_no) : null,
       paymentRef: input.razorpay_payment_id,
       paymentMode: "Online Payment [Razorpay]",
       receiptDetail: `Gift for ${g.recipient_name} · ${g.months} months`,

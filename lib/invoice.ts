@@ -38,12 +38,32 @@ const STATE_CODES: Record<string, string> = {
   "bihar": "10", "sikkim": "11", "arunachal pradesh": "12", "nagaland": "13", "manipur": "14",
   "mizoram": "15", "tripura": "16", "meghalaya": "17", "assam": "18", "west bengal": "19",
   "jharkhand": "20", "odisha": "21", "chhattisgarh": "22", "madhya pradesh": "23", "gujarat": "24",
+  // The two union territories merged in 2020 and now share code 26. Code 25 is
+  // no longer issued, but invoices raised before the merger carry it, so the
+  // old names stay here to be read — never to be offered.
+  "dadra and nagar haveli and daman and diu": "26",
   "daman and diu": "25", "dadra and nagar haveli": "26", "maharashtra": "27", "karnataka": "29",
   "goa": "30", "lakshadweep": "31", "kerala": "32", "tamil nadu": "33", "puducherry": "34",
   "andaman and nicobar islands": "35", "telangana": "36", "andhra pradesh": "37", "ladakh": "38",
 };
+// What a person types is not always what the list calls it. None of these are
+// spelling mistakes to be forgiven — they are the names in daily use, and an
+// invoice should not lose its state code because somebody wrote "Orissa".
+const ALIASES: Record<string, string> = {
+  "new delhi": "delhi", "nct of delhi": "delhi", "delhi ncr": "delhi",
+  "orissa": "odisha", "pondicherry": "puducherry", "uttaranchal": "uttarakhand",
+  "j&k": "jammu and kashmir", "jammu & kashmir": "jammu and kashmir",
+  "tamilnadu": "tamil nadu", "andaman and nicobar": "andaman and nicobar islands",
+  // Found in live records on 10 August, all typed before the state became a
+  // list. Kept so those students' old invoices still read correctly.
+  "uttrakhand": "uttarakhand", "telanagana": "telangana",
+  "mp": "madhya pradesh", "hp": "himachal pradesh", "up": "uttar pradesh",
+  "wb": "west bengal", "ap": "andhra pradesh", "tn": "tamil nadu",
+};
+
 export function stateCode(state: string): string {
-  return STATE_CODES[state.trim().toLowerCase()] ?? "";
+  const key = state.trim().toLowerCase().replace(/\s+/g, " ");
+  return STATE_CODES[key] ?? STATE_CODES[ALIASES[key] ?? ""] ?? "";
 }
 
 // "44600" → "Rupees Forty Four Thousand Six Hundred only." (Indian system).
@@ -127,18 +147,18 @@ const NUM = (n: number) => (Math.round(n * 100) / 100).toLocaleString("en-IN", {
 // Combined TAX INVOICE + RECEIPT on one A4 page — the founder's long-standing
 // Aldine format, continued for the website: boxed header with GSTIN/CIN/PAN,
 // Billed to = Shipped to (always the payer), HSN/SAC item table with CGST+SGST
-// (intra-state) or IGST, amount in words, then a tear-off RECEIPT with the
-// student's Registration No., payment reference and the standing terms.
+// (intra-state) or IGST, amount in words, then a tear-off RECEIPT carrying the
+// payment reference, the date it was paid, and the standing terms.
 export async function buildInvoicePdf(input: {
   invoiceNo: string; date: Date; s: GstSettings; gst: GstBreakup;
   buyerName: string; buyerGstin?: string | null; buyerAddress?: string | null; buyerState: string;
   itemDescription: string;
   itemHsn?: string;                 // default: settings SAC (999293 coaching)
-  registrationNo?: number | string | null;
-  receiptNo?: string | null;        // e.g. "#10001"
   paymentRef?: string | null;       // Razorpay order/payment reference
   paymentMode?: string;             // default "Online Payment"
   receiptDetail?: string | null;    // e.g. "Starting: 25-07-2026 · Valid till: 24-08-2026"
+  previousPaid?: number | null;     // paid before this receipt, if anything
+  previousPaidOn?: Date | null;     // and when — a figure without a date is no use
 }): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -184,12 +204,26 @@ export async function buildInvoicePdf(input: {
   hline(y + 2);
 
   // ---------- BILLED TO / SHIPPED TO (same person always) ----------
+  // THE STATE AND ITS CODE, ON BOTH ADDRESSES.
+  //
+  // Rule 46 of the CGST Rules requires the recipient's state and its code on a
+  // tax invoice. It is not decoration: the state is what decides CGST+SGST
+  // against IGST, and a return filed against an invoice without it cannot be
+  // matched. An invoice went out to Lucknow with "State Code:-" on it — the
+  // state field held a PIN code, so there was nothing to look up.
+  //
+  // Two things changed. The pay page now offers the thirty-six states as a list
+  // instead of a text box, so the wrong thing cannot be typed; and this line no
+  // longer prints a dash and carries on. If the state cannot be resolved to a
+  // code, the invoice falls back to the place of supply — which for us is the
+  // supplier's own state — and says so, rather than leaving a legal field blank.
   const buyerCode = stateCode(input.buyerState);
+  const supplyState = buyerCode ? input.buyerState : input.s.state;
+  const supplyCode = buyerCode || stateCode(input.s.state);
   const buyerLines = [
     ...(input.buyerAddress ? input.buyerAddress.split("\n").flatMap((l) => wrap(l.toUpperCase(), font, 8.5, 230)) : []),
-    input.buyerState.toUpperCase(),
+    `STATE: ${supplyState.toUpperCase()}  ·  STATE CODE: ${supplyCode || "-"}`,
     ...(input.buyerGstin ? [`GSTIN: ${input.buyerGstin.toUpperCase()}`] : []),
-    `State Code:${buyerCode || "-"}`,
   ].slice(0, 6);
   const boxTop = y;
   const boxH = 16 + buyerLines.length * 11 + 8;
@@ -204,13 +238,23 @@ export async function buildInvoicePdf(input: {
   vline(mid, boxTop, boxTop - boxH);
   y = boxTop - boxH;
   hline(y);
-  txtAt("Remarks:", M + 6, y - 11, 8.5); y -= 16;
+  // Place of supply is its own required field, not the same thing as the
+  // buyer's address — it is what the tax is charged against.
+  txtAt("Place of Supply:", M + 6, y - 11, 8.5, font, grey);
+  txtAt(`${supplyState.toUpperCase()} (${supplyCode || "-"})`, M + 6 + font.widthOfTextAtSize("Place of Supply:", 8.5) + 4, y - 11, 8.5, bold);
+  txtAt(intra ? "Tax: CGST + SGST (intra-state)" : "Tax: IGST (inter-state)", 330, y - 11, 8.5, font, grey);
+  y -= 16;
   hline(y);
 
   // ---------- ITEMS TABLE ----------
   // Columns (x left edges); last two are the tax columns. No discount column.
   const C = { sr: M, desc: M + 30, hsn: 196, qty: 240, unit: 268, rate: 296, total: 352, taxable: 408, t1: 466, t2: 512 };
-  const colXs = [C.sr, C.desc, C.hsn, C.qty, C.unit, C.rate, C.total, C.taxable, C.t1, C.t2, R];
+  // On an inter-state sale there is one tax column, not two. Ruling the second
+  // one anyway left an empty box at the right-hand edge of every IGST invoice,
+  // which reads as a column somebody forgot to fill in.
+  const colXs = intra
+    ? [C.sr, C.desc, C.hsn, C.qty, C.unit, C.rate, C.total, C.taxable, C.t1, C.t2, R]
+    : [C.sr, C.desc, C.hsn, C.qty, C.unit, C.rate, C.total, C.taxable, C.t1, R];
   const th = (t: string[], x: number, w: number, yTop: number) => {
     let yy = yTop - 10;
     for (const l of t) { txtAt(l, x + (w - bold.widthOfTextAtSize(l, 7.5)) / 2, yy, 7.5, bold); yy -= 9; }
@@ -220,7 +264,8 @@ export async function buildInvoicePdf(input: {
   th(["HSN/ SAC"], C.hsn, C.qty - C.hsn, y); th(["Qty"], C.qty, C.unit - C.qty, y); th(["Unit"], C.unit, C.rate - C.unit, y);
   th(["Rate per", "Item"], C.rate, C.total - C.rate, y); th(["Total"], C.total, C.taxable - C.total, y);
   th(["Taxable", "Amount"], C.taxable, C.t1 - C.taxable, y);
-  th([intra ? "CGST" : "IGST"], C.t1, C.t2 - C.t1, y); th([intra ? "SGST" : ""], C.t2, R - C.t2, y);
+  th([intra ? "CGST" : "IGST"], C.t1, (intra ? C.t2 : R) - C.t1, y);
+  if (intra) th(["SGST"], C.t2, R - C.t2, y);
   const headBottom = y - headH;
   hline(headBottom);
 
@@ -240,7 +285,7 @@ export async function buildInvoicePdf(input: {
     num(g.sgst, R - 3, true);
     txtAt(`@ ${halfRate}%`, C.t2 + 8, yy - 9, 6.5, font, grey);
   } else if (g.applied) {
-    num(g.igst, C.t2 - 3, true);
+    num(g.igst, R - 3, true);
     txtAt(`@ ${g.rate}%`, C.t1 + 8, yy - 9, 6.5, font, grey);
   }
   const rowBottom = headBottom - rowH;
@@ -252,7 +297,7 @@ export async function buildInvoicePdf(input: {
   const numT = (v: number, xr: number) => txtAt(NUM(v), xr - bold.widthOfTextAtSize(NUM(v), 7), yy, 7, bold);
   numT(g.total, C.taxable - 4);
   numT(g.taxable, C.t1 - 4);
-  if (intra) { numT(g.cgst, C.t2 - 3); numT(g.sgst, R - 3); } else if (g.applied) numT(g.igst, C.t2 - 3);
+  if (intra) { numT(g.cgst, C.t2 - 3); numT(g.sgst, R - 3); } else if (g.applied) numT(g.igst, R - 3);
   const totalBottom = rowBottom - 20;
   hline(totalBottom);
   // Table verticals
@@ -288,9 +333,14 @@ export async function buildInvoicePdf(input: {
 
   // ---------- RECEIPT ----------
   yy -= 20;
-  txtAt(`Receipt # ${(input.receiptNo ?? input.invoiceNo).replace(/^#/, "")}`, M, yy, 9.5, bold);
+  // NO RECEIPT NUMBER AND NO REGISTRATION NUMBER.
+  //
+  // The receipt is the lower half of an invoice that already carries its own
+  // number; a second number beside it is one more thing for a student to quote
+  // wrongly and for the office to reconcile. The registration number is ours,
+  // for our records — it means nothing to the student holding the paper and
+  // nothing to the tax it evidences.
   txtAt("RECEIPT", 270, yy, 13, bold);
-  txtAt(`Gen: ${dmy(input.date)}`, 480, yy, 7.5, font, grey);
   yy -= 12;
   txtAt(`Dated ${dmy(input.date)}`, M, yy, 9);
   yy -= 16;
@@ -299,9 +349,8 @@ export async function buildInvoicePdf(input: {
   // paragraph started immediately beneath it and the two touched.
   yy -= 6;
 
-  const regNo = input.registrationNo != null && input.registrationNo !== "" ? String(input.registrationNo) : "-";
   const para =
-    `Received with thanks from ${(input.buyerName || "Student").toUpperCase()} Registration No. ${regNo}, ` +
+    `Received with thanks from ${(input.buyerName || "Student").toUpperCase()}, ` +
     `a sum of Rs.${NUM(g.total)} ( ${amountInWords(g.total).replace(/^Rupees /, "Rupees ").replace(/\.$/, "")} ) ` +
     `by ${input.paymentMode ?? "Online Payment"}${input.paymentRef ? ` Ref.# ${input.paymentRef}` : ""}.`;
   for (const l of wrap(para, font, 9, R - M - 8)) { txtAt(l, M + 2, yy, 9); yy -= 12; }
@@ -309,11 +358,17 @@ export async function buildInvoicePdf(input: {
 
   // Receipt item table — value columns are RIGHT edges; headers right-align
   // over the same edges so nothing can collide.
+  // A PAYMENT COLUMN WITHOUT A DATE SAYS NOTHING.
+  //
+  // "Previous Net Paid" and "Current Net Paid" are amounts with no when. On a
+  // receipt somebody may produce a year later — to us, to their parents, or to
+  // an assessing officer — the date each sum was paid is the whole point. Each
+  // of the two payment columns now carries the date above the figure.
   const RCno = M, RCitem = M + 22;
   const REdges = [
-    { x: 380, head: ["Fees"] },
-    { x: 440, head: ["Previous", "Net Paid"] },
-    { x: 505, head: ["Current", "Net Paid"] },
+    { x: 356, head: ["Fees"] },
+    { x: 424, head: ["Previous", "Net Paid"] },
+    { x: 494, head: ["Current", "Net Paid"] },
     { x: 558, head: ["Balance", "Fees"] },
   ];
   hline(yy + 8);
@@ -331,9 +386,15 @@ export async function buildInvoicePdf(input: {
   yy -= 26; hline(yy + 6);
   txtAt("1", RCno + 4, yy - 4, 8);
   txtAt(input.itemDescription.slice(0, 58), RCitem + 2, yy - 4, 8, bold);
-  const rvals = [g.total, 0, g.total, 0];
+  const rvals = [g.total, input.previousPaid ?? 0, g.total, 0];
   rvals.forEach((v, i) => txtAt(NUM(v), REdges[i].x - font.widthOfTextAtSize(NUM(v), 7.5), yy - 4, 7.5));
-  yy -= 14;
+  // The date under each payment figure. Nothing was paid before, on almost
+  // every one of these — so it says so in words rather than leaving a blank
+  // that reads as an omission.
+  const stamp = (t: string, x: number) => txtAt(t, x - font.widthOfTextAtSize(t, 6.2), yy - 12, 6.2, font, grey);
+  stamp(input.previousPaid ? dmy(input.previousPaidOn ?? input.date) : "no earlier payment", REdges[1].x);
+  stamp(dmy(input.date), REdges[2].x);
+  yy -= 22;
   if (input.receiptDetail) { txtAt(input.receiptDetail, RCitem + 2, yy, 7.5, font, grey); yy -= 11; }
   hline(yy + 4);
   yy -= 12;

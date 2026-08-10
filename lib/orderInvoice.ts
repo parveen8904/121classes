@@ -77,8 +77,6 @@ export async function issueOrderInvoice(opts: {
       buyerState: state || s.state, itemDescription: opts.description,
       // Printed books ship as goods (HSN 4901); coaching services use the SAC.
       itemHsn: table === "book_orders" ? "4901" : undefined,
-      registrationNo: regNo,
-      receiptNo: orderNo != null ? String(orderNo) : null,
       paymentRef: opts.paymentRef ?? opts.razorpayOrderId,
       paymentMode: "Online Payment [Razorpay]",
       receiptDetail,
@@ -201,8 +199,6 @@ export async function reissueOrderInvoice(orderId: string): Promise<{ ok: boolea
     buyerAddress: address,
     buyerState: state,
     itemDescription: description,
-    registrationNo: (p?.registration_no as number) ?? null,
-    receiptNo: (ord as { order_no?: number | null }).order_no != null ? String((ord as { order_no: number }).order_no) : null,
     paymentRef: (ord as { razorpay_order_id?: string | null }).razorpay_order_id ?? null,
     paymentMode: "Online Payment [Razorpay]",
     receiptDetail,

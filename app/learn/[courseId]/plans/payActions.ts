@@ -1,5 +1,6 @@
 "use server";
 
+import { isIndianState, isIndianPincode } from "@/lib/indiaStates";
 import { createClient } from "@/lib/supabase/server";
 import {
   razorpayConfigured,
@@ -28,7 +29,7 @@ const PAID_TIERS = ["silver", "gold"];
 // hoping they came back. Now the five boxes appear on the plan page itself and
 // the payment opens the moment they are saved.
 export async function saveBillingAddress(input: {
-  line1: string; line2?: string; city: string; state: string; pincode: string;
+  line1: string; line2?: string; city: string; state: string; pincode: string; country?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -39,6 +40,25 @@ export async function saveBillingAddress(input: {
   const state = clean(input.state, 80), pincode = clean(input.pincode, 20);
   if (!line1 || !city || !state || !pincode) {
     return { ok: false, error: "Please fill address, city, state and PIN code." };
+  }
+
+  // THE STATE MUST BE A STATE.
+  //
+  // The screen offers a list of the thirty-six, but a form post is not the only
+  // way in, and the consequence of a wrong value here is not a tidiness problem:
+  // the state decides CGST+SGST against IGST, and it prints as the state code on
+  // a GST invoice. One student got an invoice with "State Code:-" on it because
+  // this was a text box and he typed his PIN into it. Checked again here, where
+  // it cannot be got around.
+  const india = String(input.country ?? "India").trim().toLowerCase() !== "" &&
+                String(input.country ?? "India").trim().toLowerCase() !== "outside india";
+  if (india) {
+    if (!isIndianState(state)) {
+      return { ok: false, error: "Please choose your state from the list — it decides the tax on your invoice." };
+    }
+    if (!isIndianPincode(pincode)) {
+      return { ok: false, error: "A PIN code is six digits, like 226029." };
+    }
   }
 
   const { error } = await supabase.from("profiles").update({

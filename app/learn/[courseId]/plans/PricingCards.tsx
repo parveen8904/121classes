@@ -8,6 +8,7 @@ import { formatINR, parseSlabs, slabTotal, slabMonthOptions, type Slab } from "@
 import { TIER_META, TIER_RANK } from "@/lib/tiers";
 import { createPlanOrder, verifyPlanPayment, createExtendOrder, verifyExtendPayment, saveBillingAddress } from "./payActions";
 import Help from "@/app/components/Help";
+import { INDIA_STATES } from "@/lib/indiaStates";
 
 type Subject = {
   id: string;
@@ -95,7 +96,8 @@ export default function PricingCards({
   const [wantBooks, setWantBooks] = useState(true);
   // Which tier is waiting on an address. Null = nothing is being asked.
   const [askAddress, setAskAddress] = useState<string | null>(null);
-  const [addr, setAddr] = useState({ line1: "", line2: "", city: "", state: "", pincode: "" });
+  const [addr, setAddr] = useState({ line1: "", line2: "", city: "", state: "", pincode: "", country: "India" });
+  const inIndia = addr.country === "India";
   const [addrErr, setAddrErr] = useState("");
   const [savingAddr, setSavingAddr] = useState(false);
 
@@ -419,20 +421,44 @@ export default function PricingCards({
           <label htmlFor="ba2">Area, landmark <span className="muted" style={{ fontWeight: 400 }}>— optional</span></label>
           <input id="ba2" value={addr.line2} onChange={(e) => setAddr({ ...addr, line2: e.target.value })} />
 
+          <label htmlFor="bacn">Country<span style={{ color: "#b91c1c" }}> *</span></label>
+          <select id="bacn" value={addr.country}
+            onChange={(e) => setAddr({ ...addr, country: e.target.value, state: "", pincode: "" })} required>
+            <option value="India">India</option>
+            <option value="">Outside India</option>
+          </select>
+
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
             <div>
               <label htmlFor="bac">City<span style={{ color: "#b91c1c" }}> *</span></label>
               <input id="bac" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} required />
             </div>
             <div>
-              {/* Free text and labelled for everybody — students outside India
-                  have provinces and counties, not states. */}
-              <label htmlFor="bas">State / province<span style={{ color: "#b91c1c" }}> *</span></label>
-              <input id="bas" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} required />
+              {/* A LIST, NOT A TEXT BOX.
+                  This was free text, and on 10 August a student in Lucknow typed
+                  his PIN code into it and "+91" into the PIN box. His invoice
+                  then went out with no state code on it — which on a GST invoice
+                  is not a cosmetic fault, it is an incomplete tax document, and
+                  the state is also what decides CGST+SGST against IGST. A box
+                  that can be filled wrongly eventually will be. Thirty-six
+                  entries; nobody can mistype one. */}
+              <label htmlFor="bas">State<span style={{ color: "#b91c1c" }}> *</span></label>
+              {inIndia ? (
+                <select id="bas" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} required>
+                  <option value="">Select your state…</option>
+                  {INDIA_STATES.map((st) => <option key={st} value={st}>{st}</option>)}
+                </select>
+              ) : (
+                <input id="bas" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })}
+                  required placeholder="State / province / county" />
+              )}
             </div>
             <div>
-              <label htmlFor="bap">PIN / ZIP<span style={{ color: "#b91c1c" }}> *</span></label>
-              <input id="bap" value={addr.pincode} onChange={(e) => setAddr({ ...addr, pincode: e.target.value })} required />
+              <label htmlFor="bap">{inIndia ? "PIN code" : "ZIP / postcode"}<span style={{ color: "#b91c1c" }}> *</span></label>
+              <input id="bap" value={addr.pincode}
+                onChange={(e) => setAddr({ ...addr, pincode: inIndia ? e.target.value.replace(/\D/g, "").slice(0, 6) : e.target.value })}
+                inputMode={inIndia ? "numeric" : "text"}
+                placeholder={inIndia ? "6 digits" : ""} required />
             </div>
           </div>
 

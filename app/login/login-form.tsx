@@ -153,34 +153,54 @@ export default function LoginForm() {
           the iPhone app's login screen). */}
       <section className="narrow" style={{ paddingTop: 40 }}>
         <div className="card">
-          <h1 style={{ fontSize: "1.5rem", marginBottom: 6 }}>
-            {mode === "signup" ? "Create your account" : mode === "forgot" ? "Forgot password" : "Log in"}
-          </h1>
+          {/* TWO DOORS, THE SAME SIZE.
+              This screen opened on "Log in" with Create account as a small line
+              of text underneath — and the app opens here too, so it is the
+              first thing a brand-new student sees. They typed an email and
+              invented a password, because that is what a login form asks for.
+              Ten of the first twenty-eight people who asked us for help getting
+              in had no account at all; they had never registered. Nobody chose
+              the wrong door on purpose. It was simply the only one that looked
+              like a door. */}
+          {mode !== "forgot" && (
+            <div role="tablist" aria-label="Log in or create an account"
+              style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
+              {([["login", "Log in"], ["signup", "Create account"]] as const).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === m}
+                  onClick={() => { setMode(m); setMsg(null); }}
+                  className={mode === m ? "btn" : "btn secondary"}
+                  style={{ width: "100%", padding: "10px 8px", fontSize: ".95rem" }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {mode === "forgot" && (
+            <h1 style={{ fontSize: "1.5rem", marginBottom: 6 }}>Forgot password</h1>
+          )}
           <p className="muted" style={{ marginBottom: 20, fontSize: ".9rem" }}>
             {mode === "signup"
               ? "Just your email — we'll send a verification link. Click it to verify, then you choose your password."
               : mode === "forgot"
               ? "Enter your email and we'll send you a link to set a new password."
-              : "Log in with your email and password."}
+              : "Already registered? Log in below. If you have never made an account here, use Create account above — it takes a minute."}
           </p>
 
-          {/* For the students who were GIVEN access rather than signing up.
-              They never chose a password, so "log in with your email and
-              password" is advice they cannot follow — and the set-password link
-              they were emailed expires. This is the one line that tells them
-              what to do, before they conclude the site is broken. */}
+          {/* One line, not four. Students who were GIVEN access never chose a
+              password, so "log in with your email and password" is advice they
+              cannot follow — but a failed login now emails them the link by
+              itself, so this only has to reassure, not instruct. */}
           {mode === "login" && (
-            <div
-              className="notice"
-              style={{ background: "var(--bg-soft)", border: "1px solid var(--border)", fontSize: ".86rem", lineHeight: 1.6 }}
-            >
-              <strong>Have access but never set a password?</strong> Or your link said it had expired?
-              Enter your email above, then press{" "}
-              <button type="button" style={{ ...linkBtn, fontWeight: 700 }} onClick={() => { setMode("forgot"); setMsg(null); }}>
-                Forgot password
-              </button>{" "}
-              — we send a fresh link straight away. Your account is already there and your access is already on it.
-            </div>
+            <p className="muted" style={{ fontSize: ".84rem", lineHeight: 1.6, marginTop: -6, marginBottom: 18 }}>
+              Never set a password, or your link expired? Enter your email and press Log in — we send you a fresh
+              link straight away. Your access is already on your account.
+            </p>
           )}
 
           {msg && <div className={`notice ${msg.kind}`}>{msg.text}</div>}
@@ -198,11 +218,10 @@ export default function LoginForm() {
                 </button>
               </div>
               <button className="btn block" disabled={loading} type="submit">{loading ? "Please wait…" : "Log in"}</button>
-              <p className="muted" style={{ textAlign: "center", marginTop: 16, fontSize: ".88rem" }}>
-                New here? <button type="button" style={linkBtn} onClick={() => { setMode("signup"); setMsg(null); }}>Create account</button>
-              </p>
-              <p className="muted" style={{ textAlign: "center", marginTop: 8, fontSize: ".82rem" }}>
+              <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".82rem" }}>
                 <button type="button" style={linkBtn} onClick={() => { setMode("forgot"); setMsg(null); }}>Forgot password?</button>
+                {" · "}
+                <span>First time here? Use <strong>Create account</strong> above.</span>
               </p>
             </form>
           )}
@@ -235,10 +254,6 @@ export default function LoginForm() {
 
           {mode === "signup" && (
             <form onSubmit={signup}>
-              <div style={{ border: "1px solid #eab308", background: "rgba(234,179,8,.12)", borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: ".82rem" }}>
-                🚧 <strong>Beta version</strong> — the portal is still being developed and has not been formally
-                launched. Some functions may not yet work as designed. Thank you for your patience!
-              </div>
               <label htmlFor="name">Full name</label>
               <input id="name" name="name" type="text" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
               <label htmlFor="semail">Email address</label>
@@ -266,7 +281,7 @@ export default function LoginForm() {
         </div>
 
         <p className="muted" style={{ textAlign: "center", marginTop: 16, fontSize: ".8rem" }}>
-          For your security, your account can be open on only one computer and one phone at a time.
+          For your security, your account stays open on one computer, one phone browser and the app — not more.
         </p>
       </section>
     </main>

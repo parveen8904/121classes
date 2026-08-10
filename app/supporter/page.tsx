@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { viaProxy } from "@/lib/fileProxy";
+import OrderList, { OrderSearch, orderMatches, type SupporterOrder } from "./OrderList";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Supporter — CA Parveen Sharma" };
@@ -19,15 +19,14 @@ const inr = (n: number) => "₹" + (Math.round(n) || 0).toLocaleString("en-IN");
 const day = (s: string | null) =>
   s ? new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—";
 
-type Gift = {
-  id: string; recipient_name: string | null; recipient_email: string | null;
-  recipient_attempt: string | null; tier: string | null; months: number | null;
-  amount_inr: number | null; invoice_no: string | null; invoice_url: string | null;
-  status: string; created_at: string; paid_at: string | null;
-};
+type Gift = SupporterOrder;
+
+// The desk shows the most recent fifty. A vendor with three hundred orders does
+// not scroll a desk — they search, or they open the full list.
+const ON_THE_DESK = 50;
 
 export default async function SupporterPage(props: {
-  searchParams: Promise<{ err?: string }>;
+  searchParams: Promise<{ err?: string; q?: string }>;
 }) {
   const sp = await props.searchParams;
   const supabase = createClient();
@@ -53,6 +52,10 @@ export default async function SupporterPage(props: {
   // Only money actually taken counts. A started-but-abandoned checkout is not a
   // gift, and showing it as one would overstate what he has given.
   const paid = gifts.filter((g) => g.status === "provisioned" || g.status === "paid");
+  // Searching looks through everything they have sold; without a search the
+  // desk shows the newest fifty and offers the rest on their own page.
+  const found = sp.q ? paid.filter((g) => orderMatches(g, sp.q!)) : paid;
+  const shown = sp.q ? found : found.slice(0, ON_THE_DESK);
   const totalPaid = paid.reduce((s, g) => s + Number(g.amount_inr || 0), 0);
   const thisYear = paid.filter((g) => new Date(g.paid_at || g.created_at).getFullYear() === new Date().getFullYear());
   const yearPaid = thisYear.reduce((s, g) => s + Number(g.amount_inr || 0), 0);
@@ -123,36 +126,21 @@ export default async function SupporterPage(props: {
         </div>
 
         {/* ── The students ──────────────────────────────────────────────── */}
-        <h2 className="admin-section-title" style={{ marginTop: 32 }}>🧾 Your orders</h2>
-        {paid.length === 0 ? (
-          <div className="card">
-            <p className="muted" style={{ margin: 0 }}>
-              Nothing yet — <Link href="/supporter/sell">place your first order</Link>.
-            </p>
-          </div>
-        ) : (
-          <div style={{ display: "grid", gap: 8 }}>
-            {paid.map((g) => (
-              <div className="list-row" key={g.id} style={{ flexWrap: "wrap" }}>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <span className="row-title">🧑‍🎓 {g.recipient_name || "Student"}</span>
-                  <p className="row-sub">
-                    {g.recipient_attempt ? `${g.recipient_attempt} · ` : ""}
-                    {g.tier ? `${g.tier}` : "plan"}{g.months ? ` · ${g.months} months` : ""} · {day(g.paid_at || g.created_at)}
-                  </p>
-                </div>
-                <div className="row-actions" style={{ alignItems: "center", gap: 10 }}>
-                  <strong>{inr(Number(g.amount_inr || 0))}</strong>
-                  {g.invoice_url ? (
-                    <a className="btn small secondary" href={viaProxy(g.invoice_url)} target="_blank" rel="noopener noreferrer">
-                      🧾 Invoice{g.invoice_no ? ` ${g.invoice_no}` : ""}
-                    </a>
-                  ) : (
-                    <span className="muted" style={{ fontSize: ".8rem" }}>invoice on its way</span>
-                  )}
-                </div>
-              </div>
-            ))}
+        <h2 className="admin-section-title" style={{ marginTop: 32 }}>🧾 Your orders ({paid.length})</h2>
+        <OrderSearch defaultValue={sp.q} action="/supporter" />
+        {sp.q && (
+          <p className="muted" style={{ fontSize: ".85rem", marginTop: -6 }}>
+            {found.length === 0
+              ? `Nothing matches “${sp.q}”. Try the order number, or the student's email or phone.`
+              : `${found.length} order${found.length === 1 ? "" : "s"} matching “${sp.q}”.`}
+          </p>
+        )}
+        <OrderList orders={shown} />
+        {!sp.q && found.length > ON_THE_DESK && (
+          <div style={{ marginTop: 14 }}>
+            <Link className="btn small secondary" href="/supporter/orders">
+              See all your orders ({found.length}) →
+            </Link>
           </div>
         )}
 

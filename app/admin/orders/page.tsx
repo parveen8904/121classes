@@ -6,7 +6,9 @@ import { viaProxy } from "@/lib/fileProxy";
 import AdminHero from "../_components/AdminHero";
 import { setOrderStatus, sendDispatchEmail, approveForZoho, approveDayForZoho, holdForZoho, approveSelectedForZoho, generateInvoice, reissueInvoice } from "./actions";
 import SelectAll from "./SelectAll";
+import FilterReset from "./FilterReset";
 import { inChunks } from "@/lib/pageAll";
+import { ORDER_STATES, chosenStates, matchesState } from "@/lib/orderStatus";
 
 // Zoho posting state → what the admin sees in the register. Normal flow is
 // the one-click DAY approval above the table; per-row buttons are for
@@ -90,7 +92,7 @@ type GiftRow = {
   recipient_name: string | null; recipient_email: string | null; recipient_phone: string | null;
   billing_name: string | null;
   subjects: { title: string; courses?: { title?: string } | { title?: string }[] | null } | null;
-  gifter: { full_name: string | null; email: string | null } | null;
+  gifter: { full_name: string | null; email: string | null; business_name: string | null; is_supporter: boolean | null } | null;
 };
 
 const TIER_ICON: Record<string, string> = { gold: "🥇", silver: "🥈", bronze: "🥉" };
@@ -118,10 +120,17 @@ export default async function AdminOrdersPage(
   const toDay = okDate(searchParams.to);
   const fromIso = fromDay ? new Date(`${fromDay}T00:00:00+05:30`).toISOString() : null;
   const toIso = toDay ? new Date(`${toDay}T23:59:59+05:30`).toISOString() : null;
-  // Which statuses to download. Everything, unless he picks.
-  const STATUSES = ["paid", "created", "failed", "refunded", "provisioned"];
-  const chosen = (searchParams.status ?? "")
-    .split(",").map((x) => x.trim().toLowerCase()).filter((x) => STATUSES.includes(x));
+  // WHICH ORDERS TO SHOW — and to download.
+  //
+  // These boxes only ever changed the download. Tick "Paid", press Search, and
+  // the list underneath still showed every order including the abandoned ones,
+  // so the page said one thing and the spreadsheet another.
+  //
+  // "provisioned" is gone from the choices: it was our word, not his, and it
+  // meant a supporter sale that went through — which is what "Paid" means.
+  // See lib/orderStatus.ts for how each table is asked in its own vocabulary.
+  const STATUSES = ORDER_STATES;
+  const chosen = chosenStates(searchParams.status);
 
   const rangeQs = new URLSearchParams();
   if (fromDay) rangeQs.set("from", fromDay);
@@ -156,7 +165,7 @@ export default async function AdminOrdersPage(
     (() => {
       let qy = svc
         .from("gift_orders")
-        .select("id, amount_inr, discount_inr, coupon_code, status, created_at, razorpay_order_id, invoice_no, invoice_url, order_no, months, tier, subject_id, recipient_name, recipient_email, recipient_phone, billing_name, subjects:subject_id(title, courses(title)), gifter:gifter_id(full_name, email)");
+        .select("id, amount_inr, discount_inr, coupon_code, status, created_at, razorpay_order_id, invoice_no, invoice_url, order_no, months, tier, subject_id, recipient_name, recipient_email, recipient_phone, billing_name, subjects:subject_id(title, courses(title)), gifter:gifter_id(full_name, email, business_name, is_supporter)");
       if (fromIso) qy = qy.gte("created_at", fromIso);
       if (toIso) qy = qy.lte("created_at", toIso);
       return qy.order("created_at", { ascending: false }).limit(500);
@@ -219,7 +228,7 @@ export default async function AdminOrdersPage(
 
   // Folded into the payment list rather than shown apart: the founder reads one
   // register, and a sale is a sale whoever keyed it in.
-  const giftRows = ((giftData ?? []) as unknown as GiftRow[]).map((g): PayRow & { viaSupporter: string; discount: number | null; coupon: string | null } => ({
+  const giftRows = ((giftData ?? []) as unknown as GiftRow[]).map((g): PayRow & { viaSupporter: string; source: "vendor" | "sponsored"; discount: number | null; coupon: string | null } => ({
     id: g.id,
     kind: "supporter",
     amount_inr: g.amount_inr,
@@ -236,20 +245,31 @@ export default async function AdminOrdersPage(
       id: "", full_name: g.recipient_name, email: g.recipient_email, phone: g.recipient_phone,
       address_line1: null, address_line2: null, city: null, state: null, pincode: null,
     },
-    viaSupporter: g.gifter?.full_name || g.gifter?.email || "a supporter",
+    viaSupporter: g.gifter?.business_name || g.gifter?.full_name || g.gifter?.email || "a supporter",
+    // VENDOR ORDER, OR ONE STUDENT HELPING ANOTHER.
+    //
+    // Both are gift_orders and looked identical here. They are told apart by
+    // whether the person who paid is a registered supporter — a vendor selling
+    // for a living, or a sponsor paying for somebody's course.
+    source: g.gifter?.is_supporter ? "vendor" : "sponsored",
     discount: g.discount_inr ?? null,
     coupon: g.coupon_code ?? null,
   }));
 
   const match = (parts: (string | null | undefined)[]) => !q || parts.some((p) => (p ?? "").toLowerCase().includes(q));
   const orders = ((data ?? []) as unknown as (OrderRow & { invoice_no?: string | null; invoice_url?: string | null })[])
+    .filter((o) => matchesState("book_orders", chosen, o.status))
     .filter((o) => match([o.guest_contact?.name, o.guest_contact?.email, o.guest_contact?.phone, o.ship_to?.name, o.ship_to?.phone, o.invoice_no, o.order_no != null ? String(o.order_no) : null, o.tracking_code]));
   const payments = [...payRowsRaw, ...giftRows]
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+    // Each table in its own words: a supporter sale that went through is
+    // "provisioned", so ticking Paid must keep it.
+    .filter((p) => matchesState(p.kind === "supporter" ? "gift_orders" : "orders", chosen, p.status))
     .filter((p) => match([p.profiles?.full_name, p.profiles?.email, p.profiles?.phone, p.invoice_no, p.razorpay_order_id, p.subjects?.title, p.order_no != null ? String(p.order_no) : null, (p as { viaSupporter?: string }).viaSupporter]));
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
+      <FilterReset />
       <AdminHero
         badge="💳 Sales & orders"
         title="Sales & orders"
@@ -263,11 +283,10 @@ export default async function AdminOrdersPage(
           <input name="q" defaultValue={searchParams.q ?? ""} placeholder="🔍 Search order no, name, email, phone, invoice no…" style={{ marginBottom: 0 }} />
           <SubmitButton className="btn small" savedLabel="✓">Search</SubmitButton>
         </div>
-        {/* WHAT GOES INTO THE DOWNLOAD.
-            The file used to carry every order whatever its state, so a
-            spreadsheet meant to show takings also held the attempts nobody
-            ever paid for — and its total was not money. Tick "paid" and the
-            file holds paid orders only. */}
+        {/* WHAT IS SHOWN, AND WHAT GOES INTO THE DOWNLOAD.
+            One set of boxes for both. They used to change only the download,
+            so the page could show every order while the spreadsheet held six —
+            and there was no way to tell from the screen which was right. */}
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
           <span style={{ fontSize: ".78rem", fontWeight: 700 }}>Include:</span>
           {STATUSES.map((st) => (
@@ -277,8 +296,9 @@ export default async function AdminOrdersPage(
             </label>
           ))}
           <span className="muted" style={{ fontSize: ".76rem" }}>
-            {chosen.length ? "Search to apply, then download." : "Nothing ticked = everything."}
+            {chosen.length ? "Press Search to apply — the list below and the download both follow this." : "Nothing ticked = everything."}
           </span>
+          {chosen.length > 0 && <a className="btn small secondary" href="/admin/orders">Show all</a>}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginTop: 10 }}>
           <div>
@@ -325,7 +345,13 @@ export default async function AdminOrdersPage(
           Sales made through this website only — the register you verify Razorpay against.
         </p>
         <span style={{ display: "inline-flex", gap: 8 }}>
-          <a className="btn small" href={`/admin/orders/export${exportQs.toString() ? `?${exportQs}` : ""}`}>
+          {/* download, not navigate.
+              A plain link replaced the whole page with the response, so a slow
+              or refused export left the person staring at the browser's own
+              "Reload website / Try again" screen where the register had been,
+              with no way back except the back button. With `download` the file
+              arrives and the page they are reading stays put. */}
+          <a className="btn small" download href={`/admin/orders/export${exportQs.toString() ? `?${exportQs}` : ""}`}>
             ⬇️ Download Excel
             {chosen.length ? ` (${chosen.join(", ")})` : fromDay || toDay ? " (filtered range)" : " (everything)"}
           </a>
@@ -366,13 +392,21 @@ export default async function AdminOrdersPage(
                       {p.order_no != null ? `#${p.order_no} · ` : ""}{pr?.full_name ?? "—"} · {formatINR(p.amount_inr)}
                     </strong>
                     <p className="muted" style={{ fontSize: ".82rem", margin: "3px 0 0" }}>
-                      {p.status === "paid" ? "✅ paid" : p.status} · {fmt(p.created_at)} · {p.kind}
+                      {p.status === "paid" || p.status === "provisioned" ? "✅ paid" : p.status} · {fmt(p.created_at)} · {p.kind}
                       {` · 🎓 ${levelOfOrder(p) || levelByUser.get(pr?.id ?? "") || "—"}`} · 📘 {p.subjects?.title ?? "—"}
-                      {(p as { viaSupporter?: string }).viaSupporter && (
-                        <span className="badge" style={{ marginLeft: 6 }}>
-                          🤝 sold by {(p as { viaSupporter?: string }).viaSupporter}
-                        </span>
-                      )}
+                      {/* WHERE THIS ORDER CAME FROM.
+                          A vendor selling for a living and a student paying for
+                          somebody else's course are the same table and looked
+                          the same here. The badge now says which, and names the
+                          vendor. Everything not in that table is a student
+                          buying for themselves. */}
+                      {(() => {
+                        const src = (p as { source?: string }).source;
+                        const who = (p as { viaSupporter?: string }).viaSupporter;
+                        if (src === "vendor") return <span className="badge" style={{ marginLeft: 6 }}>🏪 Vendor order — {who}</span>;
+                        if (src === "sponsored") return <span className="badge" style={{ marginLeft: 6 }}>💚 Student sponsored — {who}</span>;
+                        return <span className="badge" style={{ marginLeft: 6 }}>🧑‍🎓 Direct student order</span>;
+                      })()}
                       {(p as { coupon?: string | null }).coupon && (
                         <span className="muted" style={{ marginLeft: 6, fontSize: ".8rem" }}>
                           · coupon {(p as { coupon?: string | null }).coupon}

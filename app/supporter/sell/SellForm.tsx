@@ -321,9 +321,54 @@ export default function SellForm({
         </p>
 
         <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>{step()} · Your discount</h2>
+
+        {/* THE CODE ITSELF, RIGHT WHERE IT IS USED.
+            It is theirs alone: it works only on an order placed for a student,
+            and only while signed in as this account. Nobody else can use it, so
+            there is nothing to hide — and a code kept out of sight is a code
+            somebody forgets on a Friday evening and pays for themselves.
+            Shown in full, selectable, and it can be used for every student they
+            ever sell to. */}
+        {myCoupon && (
+          <div style={{
+            display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap",
+            border: "1.5px solid var(--accent)", borderRadius: 12,
+            padding: "10px 14px", margin: "4px 0 10px", background: "var(--bg-soft)",
+          }}>
+            <span className="muted" style={{ fontSize: ".82rem" }}>Your code:</span>
+            <code
+              onClick={(e) => {
+                // One tap selects the whole thing, so it can be copied on a
+                // phone without fighting the text cursor.
+                const r = document.createRange();
+                r.selectNodeContents(e.currentTarget);
+                const sel = window.getSelection();
+                sel?.removeAllRanges();
+                sel?.addRange(r);
+              }}
+              style={{
+                fontSize: "1.05rem", fontWeight: 800, letterSpacing: ".05em",
+                userSelect: "all", cursor: "text", wordBreak: "break-all",
+              }}
+            >
+              {myCoupon}
+            </code>
+            {coupon.trim().toUpperCase() !== myCoupon.toUpperCase() && (
+              <button type="button" className="btn small secondary"
+                onClick={() => { setCoupon(myCoupon.toUpperCase()); forget(); }}>
+                Use my code
+              </button>
+            )}
+            <span className="muted" style={{ fontSize: ".78rem", flexBasis: "100%" }}>
+              Yours alone — it only works on orders you place, while signed in as you. Use it for every student;
+              there is no limit and no expiry.
+            </span>
+          </div>
+        )}
+
         {myCoupon && coupon.trim().toUpperCase() === myCoupon.toUpperCase() && !applied && (
           <p className="muted" style={{ fontSize: ".84rem", marginTop: -4, lineHeight: 1.6 }}>
-            This is your own code, already filled in. Press <strong>Apply</strong> to see what you pay.
+            Already filled in below. Press <strong>Apply</strong> to see what you pay.
           </p>
         )}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>

@@ -5,7 +5,7 @@ import SelectAllKeys from "./SelectAllKeys";
 import PdfUpload from "../_components/PdfUpload";
 import AnswerKey from "@/app/components/AnswerKey";
 import { viaProxy } from "@/lib/fileProxy";
-import { relayoutKeysNow, adoptPendingLayout, discardPendingLayout, adoptAllPendingLayouts, draftMissingKeys, auditOfficialSolutions, approveAllDrafted, saveSolutionPdf, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
+import { relayoutKeysNow, adoptPendingLayout, discardPendingLayout, adoptAllPendingLayouts, draftMissingKeys, auditOfficialSolutions, checkKeysMatchPapers, approveAllDrafted, saveSolutionPdf, deleteSolution, deleteSelectedSolutions, requeueSelectedSolutions, approveSolution, unapproveSolution, saveSolution, saveSolutionVideo, retrySolution, generateExplanations } from "./actions";
 
 // Answer keys for the uploaded papers, and the button that makes them real.
 // Nothing here is used by the portal or the evaluator until it is approved.
@@ -48,7 +48,8 @@ const LABEL: Record<string, string> = {
 
 export default async function AdminSolutionsPage(props: {
   searchParams: Promise<{ queued?: string; open?: string; mcq?: string; cases?: string; drafted?: string; draftfailed?: string; stillqueued?: string; removed?: string; keptapproved?: string; requeued?: string; approvedall?: string; mcqleft?: string; casesleft?: string; keypdf?: string;
-  checked?: string; typeset?: string; replaced?: string; auditfailed?: string; auditleft?: string }>;
+  checked?: string; typeset?: string; replaced?: string; auditfailed?: string; auditleft?: string;
+  kmchecked?: string; kmmatch?: string; kmbad?: string; kmunclear?: string; kmleft?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
@@ -114,6 +115,28 @@ export default async function AdminSolutionsPage(props: {
           {Number(searchParams.auditleft) > 0
             ? ` ${searchParams.auditleft} still to check — press again.`
             : " Nothing left to check."}
+        </div>
+      )}
+
+      {searchParams.kmchecked && (
+        <div
+          className="notice"
+          style={Number(searchParams.kmbad) > 0
+            ? { background: "rgba(185,28,28,.12)", border: "2px solid #b91c1c", lineHeight: 1.7 }
+            : { lineHeight: 1.7 }}
+        >
+          🔀 Compared {searchParams.kmchecked} paper(s) with their answer key: {searchParams.kmmatch} match.
+          {Number(searchParams.kmbad) > 0 ? (
+            <>
+              {" "}<strong>{searchParams.kmbad} key(s) answer a DIFFERENT paper.</strong> Nothing has been changed —
+              a wrong key is a judgement about teaching material. Open those tests below, and note that any student
+              already marked against one of them will have been given close to zero for answers that may be right.
+            </>
+          ) : null}
+          {Number(searchParams.kmunclear) > 0 && ` ${searchParams.kmunclear} could not be settled either way.`}
+          {Number(searchParams.kmleft) > 0
+            ? ` ${searchParams.kmleft} still to compare — press again.`
+            : " All papers with both a question paper and a key have now been compared."}
         </div>
       )}
 
@@ -184,9 +207,16 @@ export default async function AdminSolutionsPage(props: {
                 📐 Re-lay out the approved keys
               </SubmitButton>
             </form>
-            <form action={auditOfficialSolutions} style={{ display: "inline-block" }}>
+            <form action={auditOfficialSolutions} style={{ display: "inline-block", marginRight: 8 }}>
               <SubmitButton className="btn small secondary" savedLabel="Checking…">
                 🔍 Check the uploaded solutions
+              </SubmitButton>
+            </form>
+            {/* A different question from the one beside it: not "is this a
+                real typeset key" but "is it the key to THIS paper". */}
+            <form action={checkKeysMatchPapers} style={{ display: "inline-block" }}>
+              <SubmitButton className="btn small secondary" savedLabel="Comparing…">
+                🔀 Does each key match its paper?
               </SubmitButton>
             </form>
           </div>

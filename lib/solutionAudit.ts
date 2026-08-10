@@ -140,3 +140,93 @@ async function stamp(
   }
   await svc.from("sections").update({ config: cfg }).eq("id", sectionId);
 }
+
+// ── DOES EACH KEY ANSWER ITS OWN PAPER? ───────────────────────────────────
+//
+// The audit above asks whether a solution is typeset or a handwritten scan. It
+// never asks whether it is the solution to THIS paper — and that is the fault
+// that actually reached a student. She sat the cash flow test, answered it, and
+// the marker reported that she had answered none of the questions, because the
+// marker is only ever shown the answer book and the key. It cannot see the
+// question paper, so a key belonging to another test looks exactly like a
+// student who wrote nonsense.
+//
+// This walks every descriptive test that has BOTH a question paper and a key
+// and records the verdict on the section. Nothing is detached and no mark is
+// changed: a wrong key is a judgement about teaching material, and it goes in
+// front of a person. What it does guarantee is that the question is asked at
+// all, which until now it never was.
+
+export type KeyMatchResult = {
+  checked: number;
+  matched: string[];
+  mismatched: { title: string; id: string; note: string }[];
+  unclear: { title: string; note: string }[];
+  remaining: number;
+};
+
+export async function auditKeyMatchesPaper(limit = 6, budgetMs = 230_000, recheck = false): Promise<KeyMatchResult> {
+  const { classifyKeyMatchesPaper } = await import("@/lib/ai");
+  const svc = createServiceClient();
+  const started = Date.now();
+  const out: KeyMatchResult = { checked: 0, matched: [], mismatched: [], unclear: [], remaining: 0 };
+
+  const SEL =
+    "id, title, question_pdf:config->>paper_question_pdf, solution_pdf:config->>paper_solution_pdf, " +
+    "key_match:config->>key_match";
+  const { data } = await svc
+    .from("sections").select(SEL)
+    .not("m_paper_solution_pdf", "is", null)
+    .not("m_paper_question_pdf", "is", null)
+    .limit(500);
+
+  type R = { id: string; title: string; question_pdf: string | null; solution_pdf: string | null; key_match: string | null };
+  const all = ((data ?? []) as unknown as R[])
+    .filter((r) => String(r.solution_pdf ?? "").trim() && String(r.question_pdf ?? "").trim());
+  // "unclear" is re-tried on a later pass; a settled match or mismatch is not.
+  const todo = all.filter((r) => recheck || !r.key_match || r.key_match.startsWith("unclear"));
+  out.remaining = todo.length;
+
+  for (const row of todo.slice(0, limit)) {
+    if (Date.now() - started > budgetMs) break;
+    try {
+      const [qUrl, sUrl] = await Promise.all([
+        resolveFileUrl(row.question_pdf as string, 900),
+        resolveFileUrl(row.solution_pdf as string, 900),
+      ]);
+      if (!qUrl || !sUrl) {
+        out.unclear.push({ title: row.title, note: "a file could not be opened" });
+        continue;
+      }
+      const { verdict, note } = await classifyKeyMatchesPaper(qUrl, sUrl);
+      out.checked++;
+      await stampMatch(svc, row.id, verdict, note);
+      if (verdict === "match") out.matched.push(row.title);
+      else if (verdict === "mismatch") out.mismatched.push({ title: row.title, id: row.id, note });
+      else out.unclear.push({ title: row.title, note });
+    } catch (e) {
+      out.unclear.push({ title: row.title, note: e instanceof Error ? e.message : "failed" });
+    }
+  }
+
+  const { data: after } = await svc.from("sections").select(SEL)
+    .not("m_paper_solution_pdf", "is", null).not("m_paper_question_pdf", "is", null).limit(500);
+  out.remaining = ((after ?? []) as unknown as R[])
+    .filter((r) => String(r.solution_pdf ?? "").trim() && String(r.question_pdf ?? "").trim())
+    .filter((r) => !r.key_match || r.key_match.startsWith("unclear")).length;
+  return out;
+}
+
+async function stampMatch(
+  svc: ReturnType<typeof createServiceClient>,
+  sectionId: string,
+  verdict: string,
+  note: string,
+) {
+  const { data } = await svc.from("sections").select("config").eq("id", sectionId).maybeSingle();
+  const cfg = { ...((data?.config ?? {}) as Record<string, unknown>) };
+  cfg.key_match = verdict;
+  cfg.key_match_note = note;
+  cfg.key_match_at = new Date().toISOString();
+  await svc.from("sections").update({ config: cfg }).eq("id", sectionId);
+}

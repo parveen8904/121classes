@@ -214,6 +214,26 @@ export async function auditOfficialSolutions() {
   );
 }
 
+// DOES EACH KEY ANSWER ITS OWN PAPER?
+//
+// A separate question from the one above, and the one nobody was asking. The
+// marker never sees the question paper — only the answer book and the key — so
+// a key attached to the wrong test produces a confident zero and a report
+// saying the student answered nothing. That is what happened to the cash flow
+// paper on 9 August.
+//
+// Press again to continue; it says how many are left.
+export async function checkKeysMatchPapers() {
+  await assertArea(null);
+  const { auditKeyMatchesPaper } = await import("@/lib/solutionAudit");
+  const r = await auditKeyMatchesPaper(6, 230_000);
+  revalidatePath("/admin/solutions");
+  redirect(
+    `/admin/solutions?kmchecked=${r.checked}&kmmatch=${r.matched.length}` +
+      `&kmbad=${r.mismatched.length}&kmunclear=${r.unclear.length}&kmleft=${r.remaining}`,
+  );
+}
+
 /**
  * Approve every drafted key at once.
  *

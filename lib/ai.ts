@@ -1254,6 +1254,95 @@ export const ABUSE_WARNING_DIRECT =
 // one test — so students opening the solution saw another student's
 // handwriting instead of a proper key. Only the FIRST PAGE is sent: enough to
 // tell, and it keeps a 13 MB scan from costing 13 MB of tokens.
+// DOES THE ANSWER KEY BELONG TO THIS QUESTION PAPER?
+//
+// Nothing in this system ever asked that. The examiner is handed the student's
+// answer book and the key — never the question paper — so if the wrong key is
+// attached to a test, the marker has no way to know: it simply reports that
+// the student answered none of the questions and gives a zero. The solution
+// audit does not catch it either; that only asks whether the key is typeset or
+// a handwritten scan, which says nothing about WHICH paper it answers.
+//
+// One student sat a cash flow paper, answered it, and was given 0 out of 17
+// with the note that she had "not answered the questions". She had. She was
+// the only person to have taken that paper, so nothing looked odd in any
+// average, and it took her writing in three times to be heard.
+//
+// Only the first two pages of each go — enough to see what is being asked and
+// what is being answered, without paying for two full scans.
+export async function classifyKeyMatchesPaper(
+  questionPdfUrl: string,
+  solutionPdfUrl: string,
+): Promise<{ verdict: "match" | "mismatch" | "unclear"; note: string }> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey || !questionPdfUrl || !solutionPdfUrl) return { verdict: "unclear", note: "not enough to compare" };
+  try {
+    const head = async (url: string): Promise<Uint8Array | null> => {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) return null;
+      const full = new Uint8Array(await r.arrayBuffer());
+      try {
+        const { PDFDocument } = await import("pdf-lib");
+        const src = await PDFDocument.load(full, { ignoreEncryption: true });
+        const n = Math.min(2, src.getPageCount());
+        if (n === 0) return null;
+        const out = await PDFDocument.create();
+        const pages = await out.copyPages(src, Array.from({ length: n }, (_, i) => i));
+        for (const pg of pages) out.addPage(pg);
+        return await out.save();
+      } catch {
+        return null;
+      }
+    };
+    const [q, sol] = await Promise.all([head(questionPdfUrl), head(solutionPdfUrl)]);
+    if (!q || !sol) return { verdict: "unclear", note: "one of the two files could not be opened" };
+    if (q.byteLength + sol.byteLength > 20 * 1024 * 1024) return { verdict: "unclear", note: "files too large to compare" };
+
+    const system =
+      "You are given TWO PDFs from a CA coaching portal: FIRST the QUESTION PAPER of a test, SECOND the document " +
+      "attached to it as the OFFICIAL SOLUTION / answer key. Decide only whether the second one actually answers " +
+      "the first. Compare what is asked: the questions' subject matter, their order, their marks, and the figures " +
+      "used. Ignore differences of wording, formatting, typography and completeness — a key that answers only some " +
+      "of the questions, or presents them differently, still MATCHES. Say mismatch only when the key is plainly " +
+      "for a DIFFERENT paper: different questions, different figures, a different topic. " +
+      "Reply as compact JSON and nothing else: " +
+      '{"verdict":"match"|"mismatch"|"unclear","note":"<one short sentence of evidence>"}';
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model: await fastModel(),
+        max_tokens: 200,
+        temperature: 0,
+        system,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: Buffer.from(q).toString("base64") } },
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: Buffer.from(sol).toString("base64") } },
+          ],
+        }],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      console.error("[key_match] Anthropic refused", res.status, (await res.text()).slice(0, 200));
+      return { verdict: "unclear", note: "the comparison could not be run" };
+    }
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("key_match", await fastModel(), Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    const raw = String(data.content?.[0]?.text ?? "").replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(raw) as { verdict?: string; note?: string };
+    const v = parsed.verdict === "match" || parsed.verdict === "mismatch" ? parsed.verdict : "unclear";
+    return { verdict: v, note: String(parsed.note ?? "").slice(0, 300) };
+  } catch (e) {
+    console.error("[key_match] failed", e instanceof Error ? e.message : e);
+    return { verdict: "unclear", note: "the comparison could not be run" };
+  }
+}
+
 export async function classifySolutionPdf(pdfUrl: string): Promise<"typeset" | "handwritten" | "unreadable"> {
   const apiKey = await getSecret("ANTHROPIC_API_KEY");
   if (!apiKey || !pdfUrl) return "unreadable";

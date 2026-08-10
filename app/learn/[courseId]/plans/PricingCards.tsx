@@ -155,8 +155,29 @@ export default function PricingCards({
         else if (res.reason === "notopen") alert("This batch has not opened for enrolment yet. Please check back on the start date.");
         else if (res.reason === "closed") alert("Enrolment for this batch has closed. Write to us and we will tell you when the next one opens.");
         else if (res.reason === "address") {
-          alert("Your 9+ month Gold plan includes FREE printed books couriered to you — please add your full shipping address (address, city, state, PIN code) first. Taking you to your profile now; come back and pay after saving it.");
-          window.location.href = "/dashboard/profile?need=address";
+          // WHY WE STOPPED THEM, IN THE WORDS THAT ARE TRUE FOR THEM.
+          //
+          // This used to say their 9+ month Gold plan came with free printed
+          // books that needed an address — to everybody, including a student
+          // buying three months, who gets no books. Being told about a plan you
+          // are not buying, at the moment you press Pay, reads as a fault in
+          // the site, and one of them wrote in to say the payment would not go
+          // through. Every payment needs the address because every payment
+          // raises a GST invoice; the books are only worth mentioning to the
+          // people actually getting books.
+          const months = tier === "gold" ? goldMonths : silverMonths;
+          const books = tier === "gold" && months >= 9 && wantBooks !== false;
+          alert(
+            "One thing before you pay: we need your billing address.\n\n" +
+            "Every payment raises a GST invoice, and the invoice has to carry your address and your state — " +
+            "the state is what decides the tax on it." +
+            (books ? "\n\nYour Gold plan also includes printed books couriered free, and this is where they will be sent." : "") +
+            "\n\nTaking you to your profile now. Save it and you will come straight back here to pay.",
+          );
+          // Come back to this exact page afterwards, rather than leaving them
+          // on the dashboard to find their way to the plan again.
+          const back = window.location.pathname + window.location.search;
+          window.location.href = `/dashboard/profile?need=address&next=${encodeURIComponent(back)}`;
         }
         else alert("Could not start checkout. Please try again or contact us.");
         return;

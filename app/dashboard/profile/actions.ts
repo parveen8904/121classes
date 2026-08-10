@@ -53,12 +53,25 @@ export async function updateProfile(formData: FormData) {
 
   // Attempt AND course/level are mandatory. If either is still missing, keep what
   // was entered but bounce back to the profile asking for the missing ones.
+  // WHERE THEY WERE BEFORE WE INTERRUPTED THEM.
+  //
+  // A student who pressed Pay and was sent here for an address used to be
+  // dropped on the dashboard afterwards, with no way back to the plan except to
+  // find it again — and if their attempt was also missing they were bounced
+  // back to this same form a second time, losing the trail entirely.
+  //
+  // Only our own paths: an address that arrives in a query string is not a
+  // place to send somebody after they have signed in.
+  const back = String(formData.get("next") ?? "").trim();
+  const safeBack = back.startsWith("/") && !back.startsWith("//") ? back : "";
+
   const { data: myC } = await supabase.from("my_courses").select("course_id").eq("student_id", user.id);
   const hasCourse = courseId || (myC ?? []).length > 0;
   if (!targetAttempt || !String(targetAttempt).trim() || !hasCourse) {
-    redirect("/dashboard/profile?need=fields");
+    redirect(`/dashboard/profile?need=fields${safeBack ? `&next=${encodeURIComponent(safeBack)}` : ""}`);
   }
 
-  // Saving closes the profile form and returns to the dashboard with a confirmation.
-  redirect("/dashboard?saved=profile");
+  // Straight back to the plan they were buying, if that is where they came
+  // from; otherwise the dashboard with a confirmation.
+  redirect(safeBack || "/dashboard?saved=profile");
 }

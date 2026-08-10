@@ -8,7 +8,7 @@ import { updateProfile } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage(props: { searchParams: Promise<{ saved?: string; need?: string }> }) {
+export default async function ProfilePage(props: { searchParams: Promise<{ saved?: string; need?: string; next?: string }> }) {
   const searchParams = await props.searchParams;
   const supabase = createClient();
   const {
@@ -54,9 +54,10 @@ export default async function ProfilePage(props: { searchParams: Promise<{ saved
 
         {searchParams.need === "address" ? (
           <div className="notice" style={{ marginTop: 18, background: "rgba(234,179,8,0.14)", border: "2px solid #eab308", color: "var(--text)" }}>
-            📦 Your 9+ month Gold plan includes <strong>FREE printed books couriered to you</strong> — please fill your
-            full shipping address below (address, city, state, PIN code), tap <strong>Save profile</strong>, then go
-            back and complete the payment.
+            🧾 <strong>We need your billing address before we can take the payment.</strong> Every payment raises a
+            GST invoice, and the invoice must carry your address and your state — the state is what decides the tax
+            on it. Fill in address, city, state and PIN code below and tap <strong>Save profile</strong>; you will be
+            taken straight back to finish paying. (If your plan includes printed books, this is where they are sent.)
           </div>
         ) : searchParams.need && (
           <div className="notice" style={{ marginTop: 18, background: "rgba(234,179,8,0.14)", border: "2px solid #eab308", color: "var(--text)" }}>
@@ -65,6 +66,10 @@ export default async function ProfilePage(props: { searchParams: Promise<{ saved
         )}
 
         <form action={updateProfile} style={{ marginTop: 20 }}>
+          {/* Where they were when we interrupted them. Carried through the save
+              so a student sent here from a plan page lands back on that plan
+              instead of on the dashboard, hunting for it again. */}
+          <input type="hidden" name="next" value={searchParams.next ?? ""} />
           <div className="card">
             <h3 style={{ marginBottom: 14 }}>About you</h3>
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>

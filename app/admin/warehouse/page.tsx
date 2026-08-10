@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { listDispatchQueue } from "@/lib/warehouse";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Warehouse — Admin" };
 
 const fmt = (s: string) =>
-  new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  formatDateTime(s);
 
 export default async function WarehousePage(props: {
   searchParams: Promise<{ labels?: string; q?: string; from?: string; to?: string; upload?: string; missed?: string; book?: string; refused?: string }>;

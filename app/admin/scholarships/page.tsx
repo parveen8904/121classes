@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -34,7 +35,7 @@ export default async function ScholarshipsAdmin() {
       <div className="card" style={{ display: "grid", gap: 6 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
           <strong>{merit ? "🎯 Merit (15%)" : "🤲 Need-based (10%)"} — {who?.name || "Student"}</strong>
-          <span className="muted" style={{ fontSize: ".8rem" }}>{new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+          <span className="muted" style={{ fontSize: ".8rem" }}>{formatDate(r.created_at)}</span>
         </div>
         <div className="muted" style={{ fontSize: ".85rem" }}>
           {who?.email}

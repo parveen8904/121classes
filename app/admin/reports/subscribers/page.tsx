@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { formatINR } from "@/lib/pricing";
@@ -19,7 +20,7 @@ type Row = {
 };
 
 const fmt = (s: string | null) =>
-  s ? new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—";
+  s ? formatDate(s) : "—";
 
 export default async function SubscribersPage(props: { searchParams: Promise<{ tier?: string }> }) {
   const sp = await props.searchParams;

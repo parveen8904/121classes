@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireArea } from "@/lib/adminAccess";
 import { listDispatchQueue } from "@/lib/warehouse";
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
 
   const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
   const day = (iso: string) =>
-    new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" });
+    formatDateTime(iso);
 
   // What the parcel is, in the words the office uses rather than a table name.
   const kind = (t: string) =>

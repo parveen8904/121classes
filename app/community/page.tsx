@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { postCommunity, deleteCommunity, pinCommunity } from "./actions";
@@ -16,7 +17,7 @@ type Row = {
 };
 
 function fmt(s: string): string {
-  return new Date(s).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  return formatDateTime(s);
 }
 
 export default async function CommunityPage() {

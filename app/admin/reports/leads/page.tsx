@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import Link from "next/link";
 import AdminHero from "../../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
@@ -11,7 +12,7 @@ export const metadata = { title: "Leads report — Admin" };
 // The Manage page is for acting on one lead; this is for reading them all.
 
 const day = (s: string | null) =>
-  s ? new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" }) : "—";
+  s ? formatDateTime(s) : "—";
 
 type Lead = {
   id: string; name: string | null; phone: string | null; email: string | null;

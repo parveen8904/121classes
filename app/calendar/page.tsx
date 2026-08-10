@@ -1,3 +1,4 @@
+import { formatDateWithDay, formatTime } from "@/lib/dates";
 import NotifyButton from "../components/NotifyButton";
 import { createClient } from "@/lib/supabase/server";
 
@@ -13,10 +14,10 @@ type Session = {
 };
 
 function dayKey(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  return formatDateWithDay(iso);
 }
 function timeOf(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+  return formatTime(iso);
 }
 
 export default async function CalendarPage() {

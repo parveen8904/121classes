@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
@@ -118,7 +119,7 @@ export default async function ReengagePage(props: {
               <span className="row-title">{d.profiles?.full_name ?? d.email}</span>
               <p className="row-sub">
                 {KIND_LABEL[d.kind] ?? d.kind} · {d.status === "sent" ? "✅ sent" : "✖ rejected"}
-                {d.sent_at ? ` · ${new Date(d.sent_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
+                {d.sent_at ? ` · ${formatDate(d.sent_at)}` : ""}
               </p>
             </div>
           </div>

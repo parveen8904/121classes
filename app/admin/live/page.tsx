@@ -1,3 +1,4 @@
+import { formatDateTime, formatTime } from "@/lib/dates";
 import Link from "next/link";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
@@ -84,7 +85,7 @@ export default async function AdminLivePage(
           <>
             <h3 style={{ marginTop: 0 }}>🔴 Class running: {running.title}</h3>
             <p className="muted" style={{ fontSize: ".85rem" }}>
-              Started {new Date(running.started_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} ·
+              Started {formatTime(running.started_at)} ·
               students were notified on Telegram · recording is ON and will reach Bunny automatically.
             </p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -198,7 +199,7 @@ export default async function AdminLivePage(
                     <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
                       {s.audience ? s.audience + " · " : ""}
                       {s.starts_at
-                        ? new Date(s.starts_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+                        ? formatDateTime(s.starts_at)
                         : "Time TBA"}
                       {" · "}
                       {s.is_published ? "🟢 published" : "⚪ draft"}

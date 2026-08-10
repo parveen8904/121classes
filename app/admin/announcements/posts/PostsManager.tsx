@@ -1,4 +1,5 @@
 "use client";
+import { formatDate } from "@/lib/dates";
 
 import { useState } from "react";
 import SubmitButton from "@/app/components/SubmitButton";
@@ -21,7 +22,7 @@ type Post = {
 // Two dates, never conflated: a headline from three days ago that we only
 // collected this morning is a different thing from one we have been sitting on.
 const day = (s: string | null) =>
-  s ? new Date(s).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "2-digit" }) : "";
+  s ? formatDate(s) : "";
 
 type Action = (fd: FormData) => void | Promise<void>;
 type Actions = {

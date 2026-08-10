@@ -1,3 +1,4 @@
+import { formatDate, formatDateTime } from "@/lib/dates";
 import { notFound } from "next/navigation";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
@@ -8,7 +9,7 @@ import { ADMIN_AREAS } from "@/lib/adminAccess";
 
 function fmt(s: string | null): string {
   if (!s) return "—";
-  return new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return formatDate(s);
 }
 
 type SubRow = {
@@ -78,7 +79,7 @@ export default async function UserDetail(
     if (m < 60) return `${m}m`;
     return `${Math.floor(m / 60)}h ${m % 60}m`;
   };
-  const fmtWhen = (d: string) => new Date(d).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  const fmtWhen = (d: string) => formatDateTime(d);
   const ACT_LABEL: Record<string, string> = { class_open: "▶️ Opened a class", class_complete: "✅ Finished a class", test_submitted: "🧠 Gave a test", doubt: "💬 Asked a doubt", plan_built: "🗓️ Built a plan" };
   type WatchRow = { video_seconds: number; real_seconds: number; duration_seconds: number; completed: boolean; last_watched_at: string; sections: { title: string; topics: { title: string } | null } | null };
   type ActRow = { kind: string; detail: Record<string, unknown> | null; created_at: string; sections: { title: string } | null };

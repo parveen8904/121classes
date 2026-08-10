@@ -1,4 +1,5 @@
 "use client";
+import { formatDateTime } from "@/lib/dates";
 
 import { useEffect, useState } from "react";
 import { resolveOfflineKey, cacheOfflineKey } from "./licenseCache";
@@ -344,7 +345,7 @@ export default function OfflineDownloads({
                 <p className="row-sub">
                   {c.subject_title ? `${c.subject_title} · ` : ""}
                   {c.byte_size ? `${(Number(c.byte_size) / 1e9).toFixed(2)} GB` : ""}
-                  {downloadedAt(c.id) ? ` · downloaded ${new Date(downloadedAt(c.id)).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}` : ""}
+                  {downloadedAt(c.id) ? ` · downloaded ${formatDateTime(downloadedAt(c.id))}` : ""}
                 </p>
               </div>
               <div className="row-actions">

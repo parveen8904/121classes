@@ -1,6 +1,6 @@
 "use server";
 
-import { todayIST } from "@/lib/dates";
+import { formatDate, todayIST } from "@/lib/dates";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -17,7 +17,7 @@ function toSchedule(plan: Plan): SchedEntry[] {
     .filter((d) => d.stage !== "break")
     .map((d) => ({
       iso: d.date,
-      date: new Date(d.date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }),
+      date: formatDate(d.date + "T00:00:00"),
       label: d.meta ? `${d.task} — ${d.meta}` : d.task,
       mock: /mock/i.test(d.task),
     }));

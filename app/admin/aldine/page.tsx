@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -12,7 +13,7 @@ export const metadata = { title: "Aldine bridge — Admin" };
 // come across the bridge.
 
 const fmt = (v: string) =>
-  new Date(v).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  formatDateTime(v);
 
 export default async function AldineAdmin(props: {
   searchParams: Promise<{ saved?: string; removed?: string; retried?: string; err?: string }>;

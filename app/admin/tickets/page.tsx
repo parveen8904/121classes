@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
@@ -115,7 +116,7 @@ export default async function TicketsPage(props: { searchParams: Promise<{ tab?:
                   {t.assigned_to ? ` · 👤 ${staffName.get(t.assigned_to) ?? "assigned"}` : " · 🆕 unassigned"}
                   {t.student_phone ? ` · 📞 ${t.student_phone}` : ""}
                   {overdue && !t.escalated ? " · ⏰ overdue" : ""}
-                  {` · ${new Date(t.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`}
+                  {` · ${formatDate(t.created_at)}`}
                 </p>
               </div>
               <span className="btn small secondary">Open →</span>

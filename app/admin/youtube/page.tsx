@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import { getChannelOverview, getRecentVideos } from "@/lib/youtubeStats";
@@ -74,7 +75,7 @@ export default async function YouTubeAdminPage() {
                     <td style={{ padding: "6px 8px", fontWeight: 600 }}>
                       <a href={`https://www.youtube.com/watch?v=${v.id}`} target="_blank" rel="noopener noreferrer">{v.title}</a>
                     </td>
-                    <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{v.publishedAt ? new Date(v.publishedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}</td>
+                    <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{v.publishedAt ? formatDate(v.publishedAt) : "—"}</td>
                     <td style={{ padding: "6px 8px" }}>{n(v.views)}</td>
                     <td style={{ padding: "6px 8px" }}>{n(v.likes)}</td>
                     <td style={{ padding: "6px 8px" }}>{n(v.comments)}</td>

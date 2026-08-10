@@ -1,3 +1,4 @@
+import { formatDateWithDay, weekdayShort } from "@/lib/dates";
 // Study-plan scheduling engine (pure — no I/O). Lays out the four stages
 // backward from the exam, packs whole classes into the exhaustive window with a
 // speed ladder, runs a feasibility check, and emits day-by-day rows. The student
@@ -63,8 +64,8 @@ const iso = (x: Date) => x.toISOString().slice(0, 10);
 const addDays = (x: Date, n: number) => new Date(x.getTime() + n * DAY);
 function addMonths(x: Date, n: number) { const r = new Date(x); r.setMonth(r.getMonth() + n); return r; }
 const isSun = (x: Date) => x.getDay() === 0;
-const wd = (x: Date) => x.toLocaleDateString("en-IN", { weekday: "short" });
-const fmtDay = (x: Date) => x.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const wd = (x: Date) => weekdayShort(x);
+const fmtDay = (x: Date) => formatDateWithDay(x);
 function hm(mins: number) { const m = Math.round(mins); const h = Math.floor(m / 60); const r = m % 60; return h > 0 ? (r > 0 ? `${h}h ${r}m` : `${h}h`) : `${r}m`; }
 function inScope(importance: string, scope: Scope): boolean {
   const imp = (importance || "").toUpperCase();

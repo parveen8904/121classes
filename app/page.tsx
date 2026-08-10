@@ -1,3 +1,4 @@
+import { formatDate, formatDateTime } from "@/lib/dates";
 import Link from "next/link";
 import { lightImg } from "@/lib/img";
 import AnnouncementSplash from "./components/AnnouncementSplash";
@@ -280,7 +281,7 @@ export default async function Home() {
             <img src={lightImg(sale.bannerHome, 1080)} alt={sale.headline} style={{ width: "100%", display: "block" }} />
           ) : (
             <div style={{ background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", padding: "12px 18px", textAlign: "center", fontWeight: 700 }}>
-              🎉 {sale.headline} — {sale.discountPct}% OFF{sale.endsAt ? ` · ends ${new Date(sale.endsAt).toLocaleDateString("en-IN")}` : ""}
+              🎉 {sale.headline} — {sale.discountPct}% OFF{sale.endsAt ? ` · ends ${formatDate(sale.endsAt)}` : ""}
             </div>
           )}
         </a>
@@ -914,7 +915,7 @@ export default async function Home() {
                 <h3>{s.title}</h3>
                 <p className="muted">
                   {s.starts_at
-                    ? new Date(s.starts_at).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })
+                    ? formatDateTime(s.starts_at)
                     : "Time to be announced"}
                   {(s as { faculties?: { full_name?: string } | null }).faculties?.full_name ? ` · by ${(s as { faculties?: { full_name?: string } }).faculties!.full_name}` : ""}
                   {s.audience ? ` · ${s.audience}` : ""}

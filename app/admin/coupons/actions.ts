@@ -1,4 +1,5 @@
 "use server";
+import { formatDate } from "@/lib/dates";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -91,7 +92,7 @@ export async function emailCoupon(formData: FormData) {
   if (!c) redirect("/admin/coupons?mail=fail");
   const { sendTemplate } = await import("@/lib/emailTemplates");
   const off = c!.percent_off ? `${c!.percent_off}% off` : c!.amount_off_inr ? `₹${c!.amount_off_inr} off` : "a special discount";
-  const validity = c!.expires_at ? ` (valid till ${new Date(c!.expires_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})` : "";
+  const validity = c!.expires_at ? ` (valid till ${formatDate(c!.expires_at)})` : "";
   // A gifter always gets the Sponsor Guide. Treat the recipient as a gifter if
   // the coupon is donor-scoped OR the email belongs to a sponsor account.
   const { data: recipient } = await svc.from("profiles").select("account_type").eq("email", to).maybeSingle();

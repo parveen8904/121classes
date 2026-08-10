@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -17,7 +18,7 @@ export const metadata = { title: "Supporter — CA Parveen Sharma" };
 
 const inr = (n: number) => "₹" + (Math.round(n) || 0).toLocaleString("en-IN");
 const day = (s: string | null) =>
-  s ? new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—";
+  s ? formatDate(s) : "—";
 
 type Gift = SupporterOrder;
 

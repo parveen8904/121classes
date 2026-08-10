@@ -1,4 +1,5 @@
 "use server";
+import { formatDate } from "@/lib/dates";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -44,7 +45,7 @@ const TIERS = ["bronze", "silver", "gold"];
 function expiryLabel(months: number): string {
   const d = new Date();
   d.setMonth(d.getMonth() + months);
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  return formatDate(d);
 }
 
 function endsAtFromNow(months: number): string {
@@ -111,7 +112,7 @@ export async function grantSubscription(formData: FormData) {
     : await dupeQuery.is("subject_id", null).maybeSingle();
   if (existing) {
     const until = existing.ends_at
-      ? new Date(existing.ends_at as string).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+      ? formatDate(existing.ends_at as string)
       : "";
     redirect(`/admin/enrolment?dupe=${encodeURIComponent(profile.email ?? email)}&until=${encodeURIComponent(until)}`);
   }

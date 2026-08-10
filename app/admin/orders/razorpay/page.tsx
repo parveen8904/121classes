@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import { formatINR } from "@/lib/pricing";
 import AdminHero from "../../_components/AdminHero";
@@ -150,7 +151,7 @@ export default async function RazorpayDataPage(props: {
                 {payments.map((p) => (
                   <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-                      {new Date(p.created_at * 1000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" })}
+                      {formatDate(p.created_at * 1000)}
                     </td>
                     <td style={{ padding: "6px 8px" }}>{p.email || p.contact || "—"}</td>
                     <td style={{ padding: "6px 8px" }}>{p.method}</td>

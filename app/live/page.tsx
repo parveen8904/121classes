@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -31,7 +32,7 @@ function shape(rows: LiveRow[]) {
 }
 
 function whenLabel(d: Date | null): string {
-  return d ? d.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "Time to be announced";
+  return d ? formatDateTime(d) : "Time to be announced";
 }
 
 export default async function LivePage() {

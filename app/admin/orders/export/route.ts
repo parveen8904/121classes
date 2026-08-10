@@ -1,3 +1,4 @@
+import { formatDate, formatDateTime } from "@/lib/dates";
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireArea } from "@/lib/adminAccess";
@@ -130,9 +131,9 @@ export async function GET(req: NextRequest) {
   };
 
   const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
-  const dt = (iso: string) => new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" });
+  const dt = (iso: string) => formatDateTime(iso);
   const d = (iso: string | null | undefined) =>
-    iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+    iso ? formatDate(iso) : "";
   // WHERE THE ORDER CAME FROM, in one column, in words.
   //
   // Three things were indistinguishable in this file: a student buying for

@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSecret } from "@/lib/secrets";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -29,9 +30,7 @@ type Row = {
 };
 
 const IST = (s: string) =>
-  new Date(s).toLocaleString("en-IN", {
-    day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata",
-  });
+  formatDateTime(s);
 
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

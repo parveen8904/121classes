@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -27,7 +28,7 @@ export const metadata = { title: "Supporter compliance — Admin" };
 type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
 const when = (v: unknown) =>
-  v ? new Date(String(v)).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
+  v ? formatDateTime(String(v)) : "—";
 
 /** theirsite.com from any address they typed, for matching a URL to an account. */
 function host(u: string): string {

@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { viaProxy } from "@/lib/fileProxy";
@@ -7,7 +8,7 @@ import AdminHero from "../../_components/AdminHero";
 const inr = (n: number) => "₹" + (Math.round(n) || 0).toLocaleString("en-IN");
 
 function fmt(s: string): string {
-  return new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return formatDate(s);
 }
 
 type SubRow = { status: string; ends_at: string | null; plans: { tier: string } | null };

@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getGstSettings, computeGst, nextInvoiceNo, buildInvoicePdf } from "@/lib/invoice";
 
@@ -61,7 +62,7 @@ export async function issueOrderInvoice(opts: {
         .eq("student_id", opts.payerUserId).eq("subject_id", subjectId)
         .order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (sub) {
-        const d = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
+        const d = (iso: string | null) => iso ? formatDate(iso) : "";
         receiptDetail = `Starting: ${d(sub.starts_at as string | null) || "on payment"}  ·  Valid till: ${d(sub.ends_at as string | null) || "-"}`;
       }
     }
@@ -164,7 +165,7 @@ export async function reissueOrderInvoice(orderId: string): Promise<{ ok: boolea
       .eq("student_id", (ord as { student_id: string }).student_id).eq("subject_id", subjectId)
       .order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (sub) {
-      const d = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
+      const d = (iso: string | null) => iso ? formatDate(iso) : "";
       receiptDetail = `Starting: ${d(sub.starts_at as string | null) || "on payment"}  ·  Valid till: ${d(sub.ends_at as string | null) || "-"}`;
       // What they bought, in the words they chose it by. An invoice that says
       // only the subject leaves the student — and anyone checking the books —

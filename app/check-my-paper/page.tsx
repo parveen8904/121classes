@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -118,7 +119,7 @@ export default async function CheckMyPaperPage(props: {
                       {released
                         ? `Marks: ${a.awarded_marks}${a.total_marks ? ` / ${a.total_marks}` : ""}`
                         : "⏳ Being checked — we will email you when it is ready."}
-                      {a.submitted_at ? ` · sent ${new Date(a.submitted_at as string).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}` : ""}
+                      {a.submitted_at ? ` · sent ${formatDateTime(a.submitted_at as string)}` : ""}
                     </p>
                     {released && a.annotated_url && (
                       <a className="btn small" style={{ marginTop: 8 }} href={viaProxy(a.annotated_url as string)} target="_blank" rel="noopener noreferrer">

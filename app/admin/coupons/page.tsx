@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../_components/AdminHero";
 import DeleteButton from "../_components/DeleteButton";
@@ -92,7 +93,7 @@ export default async function CouponsPage(props: { searchParams: Promise<{ mail?
                   {c.max_uses ? ` / ${c.max_uses}` : ""}
                   {(c as { scope?: string }).scope && (c as { scope?: string }).scope !== "any" ? ` · ${(c as { scope?: string }).scope === "donor" ? "🎁 gifters only" : "👤 users only"}` : ""}
                   {(c as { for_email?: string | null }).for_email ? ` · 🔒 ${(c as { for_email?: string }).for_email}` : ""}
-                  {(c as { expires_at?: string | null }).expires_at ? ` · ⏳ till ${new Date((c as { expires_at?: string }).expires_at!).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : ""}
+                  {(c as { expires_at?: string | null }).expires_at ? ` · ⏳ till ${formatDate((c as { expires_at?: string }).expires_at!)}` : ""}
                 </p>
               </div>
               <div className="row-actions" style={{ flexWrap: "wrap" }}>

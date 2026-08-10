@@ -1,3 +1,4 @@
+import { formatDate, formatTime } from "@/lib/dates";
 import AdminHero from "../_components/AdminHero";
 import { BarChart, Delta } from "../analytics/Chart";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -79,7 +80,7 @@ function Stat({
 function sinceWords(iso: string | null | undefined): string {
   if (!iso) return "all time";
   const d = new Date(iso);
-  return `since ${d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
+  return `since ${formatDate(d)}`;
 }
 
 type Visitors = {
@@ -124,7 +125,7 @@ export default async function HealthPage(props: { searchParams: Promise<{ sort?:
   }[];
   const h = data as Health | null;
   const v = vData as Visitors | null;
-  const peakAt = (s: string) => new Date(s).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  const peakAt = (s: string) => formatTime(s);
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 1000 }}>
@@ -262,7 +263,7 @@ export default async function HealthPage(props: { searchParams: Promise<{ sort?:
               </div>
               <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
                 {v.tracking_since
-                  ? `Counting began on ${new Date(v.tracking_since).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} — anything before that date was never recorded.`
+                  ? `Counting began on ${formatDate(v.tracking_since)} — anything before that date was never recorded.`
                   : "Counting started when this feature went live — numbers grow from now on."}{" "}
                 Tracked on our own database only (no Google Analytics, nothing shared outside).
               </p>

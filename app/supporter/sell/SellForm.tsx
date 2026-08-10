@@ -1,4 +1,5 @@
 "use client";
+import { formatDate } from "@/lib/dates";
 
 import { useState } from "react";
 import Script from "next/script";
@@ -136,7 +137,7 @@ export default function SellForm({
         <h2 style={{ marginTop: 0 }}>✅ Order placed</h2>
         <p>
           <strong>{name}</strong> has been emailed a link to set their password. They can sign in today and watch the
-          demo classes; their full access opens on <strong>{new Date(startsOn).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</strong>.
+          demo classes; their full access opens on <strong>{formatDate(startsOn)}</strong>.
         </p>
         <p className="muted" style={{ fontSize: ".88rem" }}>
           Your invoice is on your desk under Your orders. The student is never told what was paid.

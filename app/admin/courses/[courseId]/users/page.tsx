@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import AdminHero from "../../../_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -24,7 +25,7 @@ type Row = {
 };
 
 const fmtDate = (v: string | null) =>
-  v ? new Date(v).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—";
+  v ? formatDate(v) : "—";
 
 export default async function CourseUsersPage(props: { params: Promise<{ courseId: string }> }) {
   const { courseId } = await props.params;

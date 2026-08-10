@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { Fragment } from "react";
 import AdminHero from "../../_components/AdminHero";
 import { createClient } from "@/lib/supabase/server";
@@ -9,7 +10,7 @@ import { savePlannerTemplate } from "../actions";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Plan preview — Admin" };
 
-const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const fmt = (s: string) => formatDate(s + "T00:00:00");
 
 export default async function PlanPreviewPage(
   props: { searchParams: Promise<{ subject?: string; start?: string; exam?: string; done?: string; speed?: string; rev?: string }> }

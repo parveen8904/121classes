@@ -1,3 +1,4 @@
+import { formatDateWithDay } from "@/lib/dates";
 // Indian festival dates, from the source Google itself uses.
 //
 // The founder's ask was "all Indian holidays", and most of them move every
@@ -110,7 +111,7 @@ export function festivalsAhead(cal: Map<string, string[]>, from: Date, days: num
     const d = new Date(from.getTime() + i * 86400e3);
     const names = cal.get(ymd(d));
     if (!names?.length) continue;
-    const label = d.toLocaleDateString("en-IN", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric", weekday: "long" });
+    const label = formatDateWithDay(d);
     out.push(`${label} — ${names.join(", ")}`);
   }
   return out;

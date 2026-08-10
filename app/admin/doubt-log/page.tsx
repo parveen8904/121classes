@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
@@ -41,10 +42,7 @@ function howLong(minutes: number): string {
 
 /** "9 Aug 2026, 4:52 pm" — the year matters once a log is months old. */
 const IST = (s: string) =>
-  new Date(s).toLocaleString("en-IN", {
-    day: "numeric", month: "short", year: "numeric",
-    hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata",
-  });
+  formatDateTime(s);
 
 export default async function DoubtLogPage(props: {
   searchParams: Promise<{ days?: string; channel?: string; from?: string; to?: string }>;

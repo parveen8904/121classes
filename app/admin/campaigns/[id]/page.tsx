@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import AdminHero from "../../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -18,7 +19,7 @@ type Post = {
   team_done_at: string | null; sent_at: string | null; status_note: string | null;
 } & Record<string, unknown>;
 
-const istFmt = (s: string) => new Date(s).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+const istFmt = (s: string) => formatDateTime(s);
 const istInput = (s: string) => new Date(new Date(s).getTime() + (5 * 60 + 30) * 60 * 1000).toISOString().slice(0, 16);
 const fieldOf = (p: Post) => Object.keys(FIELD_LABEL).find((f) => p[f] === true) ?? "";
 

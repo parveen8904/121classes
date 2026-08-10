@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -199,7 +200,7 @@ export default async function PerformancePage() {
                       <>
                         <div className="muted" style={{ fontSize: ".88rem", marginTop: 4 }}>
                           Marks: <strong>{awarded}/{total}</strong> ({Math.round((awarded / Math.max(1, total)) * 100)}%)
-                          {a.submitted_at ? ` · submitted ${new Date(a.submitted_at as string).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
+                          {a.submitted_at ? ` · submitted ${formatDate(a.submitted_at as string)}` : ""}
                         </div>
                         {pct !== null && ratios.length > 1 && (
                           <div style={{ marginTop: 6, fontWeight: 700, color: "var(--accent)" }}>
@@ -234,7 +235,7 @@ export default async function PerformancePage() {
                       <div className="muted" style={{ fontSize: ".88rem", marginTop: 4 }}>
                         ⏳ Your copy is under review by the faculty. Your marks and your checked copy appear here as
                         soon as it is released.
-                        {a.submitted_at ? ` Submitted ${new Date(a.submitted_at as string).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}.` : ""}
+                        {a.submitted_at ? ` Submitted ${formatDate(a.submitted_at as string)}.` : ""}
                       </div>
                     )}
                   </div>

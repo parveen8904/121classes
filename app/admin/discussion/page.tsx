@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -45,7 +46,7 @@ export default async function DiscussionAdmin(props: { searchParams: Promise<{ q
   const { data: log } = await svc.from("message_moderation_log").select("action, reason, created_at").order("created_at", { ascending: false }).limit(20);
 
   const card = { background: "var(--bg-soft)", borderRadius: 10, padding: "10px 12px" } as const;
-  const when = (s: string) => new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const when = (s: string) => formatDateTime(s);
 
   const Row = ({ m, review }: { m: Msg; review?: boolean }) => (
     <div style={{ ...card, display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>

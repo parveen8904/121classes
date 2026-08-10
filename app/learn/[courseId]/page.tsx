@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import { viaProxy } from "@/lib/fileProxy";
 import { notFound, redirect } from "next/navigation";
@@ -17,7 +18,7 @@ type SubjectFacultyRow = { faculties: { id: string; full_name: string; phone: st
 
 function fmtDate(s: string | null): string {
   if (!s) return "—";
-  return new Date(s).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" });
+  return formatDate(s);
 }
 
 

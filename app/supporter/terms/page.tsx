@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -115,7 +116,7 @@ export default async function SupporterTerms(props: {
         {accepted ? (
           <p className="muted" style={{ marginTop: 18, fontSize: ".88rem" }}>
             You accepted these on{" "}
-            {new Date(accepted).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}.
+            {formatDate(accepted)}.
           </p>
         ) : (
           <form action={acceptSupporterTerms} style={{ marginTop: 18 }}>

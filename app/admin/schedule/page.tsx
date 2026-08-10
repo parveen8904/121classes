@@ -1,3 +1,4 @@
+import { formatDate, formatDateTime } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
@@ -19,9 +20,9 @@ export default async function SchedulePage() {
   ]);
   const subjTitle = new Map((subjects ?? []).map((s) => [s.id as string, s.title as string]));
 
-  const ist = (iso: string) => new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-  const istDate = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
-  const todayIST = new Date().toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
+  const ist = (iso: string) => formatDateTime(iso);
+  const istDate = (iso: string) => formatDate(iso);
+  const todayIST = formatDate(new Date());
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 900 }}>

@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 // Summarise a live-class schedule for display: dates, weekdays and start time
 // are DERIVED from the actual class_schedule rows, never hard-coded — so when
 // the admin shifts a class, takes a day off or adds an extra session, every
@@ -16,7 +17,7 @@ const WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export function summarizeSchedule(rows: { scheduled_at: string }[]): ScheduleSummary | null {
   if (!rows.length) return null;
   const sorted = [...rows].sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
-  const fmtDate = (s: string) => new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const fmtDate = (s: string) => formatDate(s);
   const daySet = new Set<number>();
   const timeCount = new Map<string, number>();
   for (const r of sorted) {

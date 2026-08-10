@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
@@ -28,9 +29,7 @@ type Row = {
 } & Record<string, number | null | string>;
 
 const IST = (s: string) =>
-  new Date(s).toLocaleString("en-IN", {
-    day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata",
-  });
+  formatDateTime(s);
 
 const colour = (avg: number) => (avg >= 4 ? "#16a34a" : avg >= 3 ? "#b45309" : "#b91c1c");
 

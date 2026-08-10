@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -110,7 +111,7 @@ export default async function ArticlePage(props: { params: Promise<{ slug: strin
         <p className="crumb"><Link href="/articles">← All articles</Link></p>
         <h1 style={{ lineHeight: 1.2 }}>{a.title}</h1>
         <p className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>
-          By CA Parveen Sharma · {new Date(a.created_at as string).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+          By CA Parveen Sharma · {formatDate(a.created_at as string)}
         </p>
         <article
           className="article-body"

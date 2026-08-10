@@ -1,3 +1,4 @@
+import { formatMonth } from "@/lib/dates";
 import AdminHero from "../_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
 import { saveAiSettings, saveAiFeatures } from "./actions";
@@ -79,7 +80,7 @@ export default async function AiUsagePage() {
     .reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
   const features = [...byFeature.entries()].sort((a, b) => b[1].cost - a[1].cost);
   const models = [...byModel.entries()].sort((a, b) => b[1].cost - a[1].cost);
-  const monthLabel = now.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  const monthLabel = formatMonth(now);
 
   const card = { background: "var(--bg-soft)", borderRadius: 10, padding: "14px 16px" } as const;
 

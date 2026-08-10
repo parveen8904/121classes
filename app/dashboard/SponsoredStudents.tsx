@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 
 // A sponsor's view: the students they've gifted a subscription to, and each
@@ -25,7 +26,7 @@ export default async function SponsoredStudents({ gifterId }: { gifterId: string
     const { data: subs } = await svc.from("subjects").select("id, title").in("id", sids);
     for (const s of subs ?? []) subjTitles.set(s.id as string, s.title as string);
   }
-  const when = (s?: string) => (s ? new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "not yet");
+  const when = (s?: string) => (s ? formatDate(s) : "not yet");
 
   return (
     <div style={{ marginTop: 24 }}>

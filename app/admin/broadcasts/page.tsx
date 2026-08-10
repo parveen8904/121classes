@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import AdminHero from "../_components/AdminHero";
 import VideoUpload from "../_components/VideoUpload";
 import SubmitButton from "@/app/components/SubmitButton";
@@ -26,7 +27,7 @@ type Post = {
 const istInput = (s: string) => new Date(new Date(s).getTime() + (5 * 60 + 30) * 60 * 1000).toISOString().slice(0, 16);
 
 const istFmt = (s: string) =>
-  new Date(s).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  formatDateTime(s);
 
 function Targets({ p }: { p: Post }) {
   return (

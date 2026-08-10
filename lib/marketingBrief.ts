@@ -1,3 +1,4 @@
+import { formatDateWithDay } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 
 // What is going on RIGHT NOW — the founder's standing brief to the copywriter.
@@ -50,7 +51,7 @@ export async function autoBriefParts(svc = createServiceClient()): Promise<{ fes
   const cal = picked.length ? null : await festivalCalendar();
   return {
     festivals: picked.length
-      ? picked.map((f) => `${new Date(`${f.on_date}T06:00:00Z`).toLocaleDateString("en-IN", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric", weekday: "long" })} — ${f.name}`)
+      ? picked.map((f) => `${formatDateWithDay(`${f.on_date}T06:00:00Z`)} — ${f.name}`)
       : festivalsAhead(cal!, new Date(), 21),
     news: [],
   };
@@ -59,7 +60,7 @@ export async function autoBriefParts(svc = createServiceClient()): Promise<{ fes
 // The brief as the copywriter reads it. Empty sections say so explicitly —
 // silence must not be read as licence to invent a situation.
 export function briefText(b: MarketingBrief, auto?: { festivals: string[]; news: string[] }): string {
-  const today = new Date().toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const today = formatDateWithDay(new Date());
   const festivals = [...(auto?.festivals ?? []), ...b.festivals.split("\n").map((l) => l.trim()).filter(Boolean)];
   const news = [...(auto?.news ?? []), ...b.news.split("\n").map((l) => l.trim()).filter(Boolean)];
   return (

@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import { NextRequest, NextResponse } from "next/server";
 import { requireArea } from "@/lib/adminAccess";
 import { listRazorpayPayments } from "@/lib/razorpay";
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
   const rows = [["Date", "Payment ID", "Status", "Method", "Email", "Phone", "Description", "Amount (Rs)"].join(",")];
   for (const p of payments) {
     rows.push([
-      esc(new Date(p.created_at * 1000).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" })),
+      esc(formatDateTime(p.created_at * 1000)),
       esc(p.id), esc(p.status), esc(p.method), esc(p.email || ""), esc(p.contact || ""),
       esc(p.description || p.notes?.kind || ""),
       esc(((p.amount || 0) / 100).toFixed(2)),

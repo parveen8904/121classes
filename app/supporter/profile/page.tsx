@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -164,7 +165,7 @@ export default async function SupporterProfilePage(props: {
 
           {siteOk ? (
             <div className="notice ok" style={{ fontSize: ".85rem" }}>
-              ✅ Verified as yours on {new Date(siteOk).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}.
+              ✅ Verified as yours on {formatDate(siteOk)}.
             </div>
           ) : (
             <div className="card" style={{ background: "var(--bg-soft)", fontSize: ".85rem" }}>

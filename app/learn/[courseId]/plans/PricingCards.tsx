@@ -1,4 +1,5 @@
 "use client";
+import { formatDate } from "@/lib/dates";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -308,7 +309,7 @@ export default function PricingCards({
                   <div style={{ fontWeight: 700, fontSize: ".9rem", marginBottom: 2 }}>➕ Extend your access</div>
                   {subEndsAt && (
                     <div className="muted" style={{ fontSize: ".76rem", marginBottom: 8 }}>
-                      Currently valid till {new Date(subEndsAt).toLocaleDateString("en-IN")}.
+                      Currently valid till {formatDate(subEndsAt)}.
                     </div>
                   )}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
@@ -642,7 +643,7 @@ export default function PricingCards({
                       <div style={{ fontWeight: 700, fontSize: ".9rem", marginBottom: 2 }}>➕ Extend your access</div>
                       {subEndsAt && (
                         <div className="muted" style={{ fontSize: ".76rem", marginBottom: 8 }}>
-                          Currently valid till {new Date(subEndsAt).toLocaleDateString("en-IN")} · up to {maxMonths} months total for this course.
+                          Currently valid till {formatDate(subEndsAt)} · up to {maxMonths} months total for this course.
                         </div>
                       )}
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>

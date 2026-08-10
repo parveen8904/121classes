@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import { tryServiceClient } from "@/lib/supabase/service";
 import { parseSlabs, slabTotal, slabMonthOptions, formatINR, type Slab } from "@/lib/pricing";
@@ -60,7 +61,7 @@ export default async function PricingPage() {
       {sale && (
         <div style={{ background: "linear-gradient(90deg, var(--accent), var(--accent-2))", color: "#fff", borderRadius: 14, padding: "12px 18px", textAlign: "center", fontWeight: 700, marginBottom: 18 }}>
           🎉 {sale.headline} — {sale.discountPct}% OFF applies automatically at checkout
-          {sale.endsAt ? ` · ends ${new Date(sale.endsAt).toLocaleDateString("en-IN")}` : ""}
+          {sale.endsAt ? ` · ends ${formatDate(sale.endsAt)}` : ""}
         </div>
       )}
 

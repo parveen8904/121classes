@@ -1,3 +1,4 @@
+import { formatDate, formatDateTime } from "@/lib/dates";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -24,7 +25,7 @@ const STATUS = {
 
 function when(s: string | null): string {
   if (!s) return "";
-  return new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  return formatDateTime(s);
 }
 
 // The office to-do list.
@@ -159,7 +160,7 @@ export default async function TasksPage(props: {
                     <span style={{ color: st.colour, fontWeight: 700, fontSize: ".8rem" }}>{st.label}</span>
                     <span className="muted" style={{ fontSize: ".8rem", marginLeft: "auto" }}>
                       {t.assignee_id ? `with ${nameOf.get(t.assignee_id) ?? "someone"}` : "unassigned"}
-                      {t.due_on ? ` · due ${new Date(t.due_on).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
+                      {t.due_on ? ` · due ${formatDate(t.due_on)}` : ""}
                       {overdue ? " ⚠️ overdue" : ""}
                     </span>
                   </div>

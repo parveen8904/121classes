@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import { viaProxy } from "@/lib/fileProxy";
 
@@ -32,7 +33,7 @@ export type SupporterOrder = {
 
 const inr = (n: number | null) => "₹" + (Math.round(n ?? 0) || 0).toLocaleString("en-IN");
 const day = (s: string | null) =>
-  s ? new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—";
+  s ? formatDate(s) : "—";
 
 /** CA Final / CA Intermediate — the category the subject sits in. */
 export function categoryOf(o: SupporterOrder): string {

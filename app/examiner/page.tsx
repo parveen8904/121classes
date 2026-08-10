@@ -1,3 +1,4 @@
+import { formatDate, formatDateTime } from "@/lib/dates";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -149,7 +150,7 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
                 <span className="row-title">🧑‍🎓 {i.student}</span>
                 <p className="row-sub">
                   📄 {i.test} · 📚 {i.subject} · 📖 {i.topic}
-                  {i.submittedAt ? ` · submitted ${new Date(i.submittedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}` : ""}
+                  {i.submittedAt ? ` · submitted ${formatDateTime(i.submittedAt)}` : ""}
                   {i.aiFailed
                     ? ` · ⚠️ AI could not check this copy — please mark it yourself${i.aiError ? ` (${i.aiError})` : ""}`
                     : i.aiPending
@@ -184,7 +185,7 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
                 ))}
                 {i.review === "checked" && (
                   <span style={{ color: "#16a34a", fontWeight: 700, fontSize: ".85rem" }}>
-                    ✅ Checked by {i.examiner ?? "examiner"}{i.checkedAt ? ` · ${new Date(i.checkedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
+                    ✅ Checked by {i.examiner ?? "examiner"}{i.checkedAt ? ` · ${formatDate(i.checkedAt)}` : ""}
                   </span>
                 )}
                 {i.review === "checked" && <Link className="btn small secondary" href={`/examiner/${i.id}`}>View</Link>}

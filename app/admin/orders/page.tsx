@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
@@ -70,7 +71,7 @@ const STATUS_EMOJI: Record<string, string> = {
 };
 
 function fmt(s: string): string {
-  return new Date(s).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" });
+  return formatDate(s);
 }
 
 type PayRow = {

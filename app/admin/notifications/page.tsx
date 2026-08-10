@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
 import { emailConfigured, whatsappConfigured, telegramConfigured } from "@/lib/notify";
@@ -166,7 +167,7 @@ async function ReachPanel() {
                       )}
                       {p.when && (
                         <span className="muted">
-                          {" "}· {new Date(p.when).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                          {" "}· {formatDate(p.when)}
                         </span>
                       )}
                     </li>

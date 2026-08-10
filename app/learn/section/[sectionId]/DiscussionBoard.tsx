@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import {
   createThread,
@@ -33,7 +34,7 @@ function authorName(p: { full_name: string | null } | null): string {
   return p?.full_name?.trim() || "Student";
 }
 function fmt(s: string): string {
-  return new Date(s).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" });
+  return formatDate(s);
 }
 
 // The reusable discussion board (no page chrome). Used full-page on the section

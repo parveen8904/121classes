@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 
 // WHO is asking, before answering them.
@@ -21,7 +22,7 @@ export type StudentFacts = {
 };
 
 const fmt = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "no end date";
+  d ? formatDate(d) : "no end date";
 
 export async function studentFacts(email: string): Promise<StudentFacts> {
   const addr = (email ?? "").trim().toLowerCase();

@@ -1,4 +1,5 @@
 "use client";
+import { formatDateTime } from "@/lib/dates";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -26,7 +27,7 @@ const LS_FOLDERS = "inbox_folders";
 const LS_LABELS = "inbox_labels";
 
 function fmt(s: string) {
-  return new Date(s).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  return formatDateTime(s);
 }
 
 export default function InboxView({

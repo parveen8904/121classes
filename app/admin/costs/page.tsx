@@ -1,3 +1,4 @@
+import { formatMonth } from "@/lib/dates";
 import Link from "next/link";
 import AdminHero from "../_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -21,7 +22,7 @@ export default async function CostsPage() {
   const svc = createServiceClient();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const monthLabel = now.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  const monthLabel = formatMonth(now);
 
   // --- AI (exact, from our log) ---
   // Aggregated in the database — see ai_spend_since. Fetching the rows to add

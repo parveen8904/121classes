@@ -1,3 +1,4 @@
+import { formatDateWithDay } from "@/lib/dates";
 import { todayISTParts } from "./dates";
 // Day-by-day study planner in THREE stages:
 //   1. Exhaustive — watch classes, homework, MCQ/descriptive tests, master
@@ -66,7 +67,7 @@ export type BuildOpts = {
 
 const DAY = 86400000;
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const disp = (d: Date) => d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+const disp = (d: Date) => formatDateWithDay(d);
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
 export function buildDayPlan(

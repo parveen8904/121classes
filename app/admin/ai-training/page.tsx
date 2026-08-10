@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import Link from "next/link";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
@@ -23,7 +24,7 @@ const SCOPES: [string, string][] = [
 ];
 
 const IST = (s: string) =>
-  new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  formatDateTime(s);
 
 type LastTry = {
   question: string; scope: string; answer: string;

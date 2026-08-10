@@ -1,3 +1,4 @@
+import { formatDateWithDay } from "@/lib/dates";
 import AdminHero from "../../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import DeleteButton from "../../_components/DeleteButton";
@@ -15,7 +16,7 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 const pretty = (d: string) =>
-  new Date(`${d}T06:00:00Z`).toLocaleDateString("en-IN", { timeZone: "UTC", weekday: "short", day: "numeric", month: "long", year: "numeric" });
+  formatDateWithDay(`${d}T06:00:00Z`);
 
 export default async function FestivalsPage(props: { searchParams: Promise<{ imported?: string; saved?: string }> }) {
   const { imported, saved } = await props.searchParams;

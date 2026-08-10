@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
@@ -100,7 +101,7 @@ export default async function AdminArticlesPage() {
             <div style={{ minWidth: 0, flex: 1 }}>
               <span className="row-title">{a.is_published ? "🟢" : "⚪"} {a.title}</span>
               <p className="row-sub">
-                /articles/{a.slug} · {a.category ?? "—"} · {new Date(a.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                /articles/{a.slug} · {a.category ?? "—"} · {formatDate(a.created_at)}
               </p>
             </div>
             <div className="row-actions">

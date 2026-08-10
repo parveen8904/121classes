@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
     const emails = [...new Set((subs ?? []).map((r) => r.email as string).filter(Boolean))];
 
     const when = s.starts_at
-      ? new Date(s.starts_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+      ? formatDateTime(s.starts_at)
       : "soon";
     // The wording is loaded and rendered ONCE, not once per student — this can
     // go to a whole batch.

@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import AdminHero from "../../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
@@ -14,7 +15,7 @@ export const metadata = { title: "Supporters report — Admin" };
 
 const inr = (n: number) => "₹" + (Math.round(n) || 0).toLocaleString("en-IN");
 const day = (s: string | null) =>
-  s ? new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—";
+  s ? formatDate(s) : "—";
 
 type Person = {
   id: string; full_name: string | null; email: string | null; phone: string | null;

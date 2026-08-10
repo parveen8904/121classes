@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -101,7 +102,7 @@ export default async function ComplaintPage(props: {
                     </span>
                   </div>
                   <p className="muted" style={{ margin: "4px 0 0", fontSize: ".8rem" }}>
-                    {new Date(String(c.created_at)).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                    {formatDate(String(c.created_at))}
                     {c.outcome_note ? ` · ${c.outcome_note}` : ""}
                   </p>
                 </div>

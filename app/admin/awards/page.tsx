@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import DeleteButton from "../_components/DeleteButton";
@@ -21,7 +22,7 @@ export default async function AwardsAdmin() {
     <div className="card" style={{ display: "grid", gap: 6 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <strong>🏆 {r.name} — {r.achievement}</strong>
-        <span className="muted" style={{ fontSize: ".8rem" }}>{new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+        <span className="muted" style={{ fontSize: ".8rem" }}>{formatDate(r.created_at)}</span>
       </div>
       <div className="muted" style={{ fontSize: ".85rem" }}>
         📞 {r.phone}{r.email ? ` · ✉️ ${r.email}` : ""}{r.marks ? ` · 📊 ${r.marks}` : ""}

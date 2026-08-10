@@ -1,3 +1,4 @@
+import { formatDate, formatTime } from "@/lib/dates";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -255,7 +256,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
                   </span>
                   <span className="badge">
                     valid till {s.ends_at
-                      ? new Date(s.ends_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                      ? formatDate(s.ends_at)
                       : "further notice"}
                   </span>
                 </div>
@@ -276,7 +277,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
                   <div>
                     <strong>{l.title}</strong>
                     <span className="muted" style={{ fontSize: ".82rem" }}>
-                      {" · "}🕒 {new Date(l.whenISO).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}
+                      {" · "}🕒 {formatTime(l.whenISO)}
                       {l.where ? ` · ${l.where}` : ""}
                     </span>
                   </div>

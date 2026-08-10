@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -40,7 +41,7 @@ export default async function TicketDetail(props: { params: Promise<{ id: string
       </div>
       <p className="muted" style={{ marginTop: 6 }}>
         {STATUS_LABEL[t.status as string]} · {PRIORITY_LABEL[t.priority as string]} · {t.source}
-        {t.category ? ` · ${t.category}` : ""} · raised {new Date(t.created_at as string).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+        {t.category ? ` · ${t.category}` : ""} · raised {formatDateTime(t.created_at as string)}
       </p>
 
       {t.description && <div className="card" style={{ marginTop: 12 }}><p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{t.description}</p></div>}
@@ -110,7 +111,7 @@ export default async function TicketDetail(props: { params: Promise<{ id: string
                 {EVENT_ICON[e.kind as string] ?? "•"} {e.body}
               </p>
               <p className="muted" style={{ margin: "2px 0 0", fontSize: ".76rem" }}>
-                {e.author_name || "System"} · {new Date(e.created_at as string).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                {e.author_name || "System"} · {formatDateTime(e.created_at as string)}
               </p>
             </div>
           ))}

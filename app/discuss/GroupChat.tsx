@@ -1,4 +1,5 @@
 "use client";
+import { formatTime } from "@/lib/dates";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -95,7 +96,7 @@ export default function GroupChat({ groups, meId, meName }: { groups: Group[]; m
                     {!mine && <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--accent)", marginBottom: 2 }}>{m.sender_name || "Member"}</div>}
                     <div style={{ whiteSpace: "pre-wrap", fontSize: ".92rem" }}>{m.body}</div>
                     <div style={{ fontSize: ".62rem", opacity: 0.7, textAlign: "right", marginTop: 2 }}>
-                      {new Date(m.created_at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}
+                      {formatTime(m.created_at)}
                     </div>
                   </div>
                 </div>

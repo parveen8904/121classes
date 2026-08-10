@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import SubmitButton from "@/app/components/SubmitButton";
@@ -10,7 +11,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 
 function fmtDate(s: string | null): string {
   if (!s) return "—";
-  return new Date(s).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" });
+  return formatDate(s);
 }
 
 type SubRow = {

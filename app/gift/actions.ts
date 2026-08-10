@@ -1,4 +1,5 @@
 "use server";
+import { formatDate } from "@/lib/dates";
 
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -288,7 +289,7 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
     const supporterName =
       (supporter?.business_name as string) || (supporter?.full_name as string) || "a supporter";
     const d = (x: Date | null) =>
-      x ? x.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "";
+      x ? formatDate(x) : "";
     const from = d(provisionStarts), to = d(provisionEnds);
 
     await sendTemplate("gift_received", email, {

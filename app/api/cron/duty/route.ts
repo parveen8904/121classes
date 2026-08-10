@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSecret } from "@/lib/secrets";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -251,7 +252,7 @@ export async function GET(req: NextRequest) {
   // ---- 4. Report — but only if there is something to say ---------------
   if (needsHuman.length || drafted.length) {
     const fmt = (s: string) =>
-      s ? new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" }) : "";
+      s ? formatDateTime(s) : "";
     await notifyFaculty(
       drafted.length
         ? `${drafted.length} doubt${drafted.length === 1 ? "" : "s"} answered and sent`

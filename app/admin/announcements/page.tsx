@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../_components/AdminHero";
@@ -80,7 +81,7 @@ export default async function AnnouncementsPage(
         </p>
         {lastRun && (
           <p className={lastRun.trouble?.length || lastRun.checked === 0 ? "notice err" : "muted"} style={{ fontSize: ".8rem", padding: lastRun.trouble?.length ? 10 : 0 }}>
-            Last check {new Date(lastRun.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} IST —
+            Last check {formatDateTime(lastRun.at)} IST —
             looked at {lastRun.checked} headline(s), saved {lastRun.added} new one(s)
             {lastRun.offTopic ? `, dropped ${lastRun.offTopic} that didn't mention your keywords` : ""}
             {lastRun.generalNews ? `, dropped ${lastRun.generalNews} as general business news` : ""}.

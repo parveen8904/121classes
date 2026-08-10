@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import DeleteButton from "../_components/DeleteButton";
@@ -140,7 +141,7 @@ export default async function LeadsPage(
                 {" · "}{SOURCE_LABEL[l.source] ?? l.source}
                 {l.matched_user_id ? " · 🎓 already a student" : ""}
                 {l.note ? ` · ${l.note}` : ""}
-                {` · ${new Date(l.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`}
+                {` · ${formatDate(l.created_at)}`}
               </p>
             </div>
             <DeleteButton action={deleteLead} id={l.id} message="Remove this lead?" />

@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendTemplate } from "@/lib/emailTemplates";
 
@@ -67,7 +68,7 @@ function endsAtFromNow(months: number): string {
 function expiryLabel(months: number): string {
   const d = new Date();
   d.setMonth(d.getMonth() + months);
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  return formatDate(d);
 }
 
 /** One drip pass. Called from the 10-minute cron; safe to call anytime. */

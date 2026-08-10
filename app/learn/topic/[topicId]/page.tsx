@@ -1,3 +1,4 @@
+import { formatDate, formatDateTime } from "@/lib/dates";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -253,7 +254,7 @@ function SectionBody({
     const when = c.starts_at ? new Date(c.starts_at) : null;
     const whenLabel =
       when && !isNaN(when.getTime())
-        ? when.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+        ? formatDateTime(when)
         : c.starts_at;
     return (
       <div style={{ marginTop: 14 }}>
@@ -792,7 +793,7 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
             className="notice"
             style={{ marginTop: 16, background: "var(--bg-soft)", borderLeft: "4px solid var(--accent)", padding: "12px 14px", borderRadius: 8 }}
           >
-            <strong>🔔 Updated content coming{(topic as { update_on?: string | null }).update_on ? ` on ${new Date((topic as { update_on?: string }).update_on!).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}` : " soon"}.</strong>
+            <strong>🔔 Updated content coming{(topic as { update_on?: string | null }).update_on ? ` on ${formatDate((topic as { update_on?: string }).update_on!)}` : " soon"}.</strong>
             {(topic as { update_note?: string | null }).update_note && (
               <span> {(topic as { update_note?: string }).update_note}</span>
             )}

@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import Logo from "@/app/components/Logo";
@@ -41,7 +42,7 @@ export default async function PortalHeader() {
         const last = active.reduce<string | null>((m, s) => (!s.ends_at ? m : !m || s.ends_at > m ? s.ends_at : m), null);
         const tiers = new Set(active.map((s) => s.plans?.tier));
         const emoji = tiers.has("gold") ? "🥇" : tiers.has("silver") ? "🥈" : "⭐";
-        subChip = `${emoji} Subscribed till ${last ? new Date(last).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "further notice"}`;
+        subChip = `${emoji} Subscribed till ${last ? formatDate(last) : "further notice"}`;
       }
     }
   }

@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import VideoUpload from "../../_components/VideoUpload";
 import AdminHero from "../../_components/AdminHero";
@@ -23,7 +24,7 @@ type Row = { id: string; title: string; body?: string | null; link_url?: string 
 
 // Two different dates, and the difference matters: when the story was
 // published, and when our feed picked it up.
-const dayFmt = (s?: string | null) => (s ? new Date(s).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" }) : "");
+const dayFmt = (s?: string | null) => (s ? formatDate(s) : "");
 
 const KINDS = [
   { key: "news", icon: "📰", label: "Something in the news", hint: "Pick one item your feed brought in — ICAI, NFRA, MCA, RBI, SEBI, NCLT." },
@@ -52,7 +53,7 @@ const ERRORS: Record<string, string> = {
   ai: "The writer couldn't produce it — try again; the reason is recorded on the campaigns list.",
 };
 
-const istDate = (s?: string) => (s ? new Date(s).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" }) : "");
+const istDate = (s?: string) => (s ? formatDate(s) : "");
 
 export default async function NewCampaignPage(props: { searchParams: Promise<{ kind?: string; pick?: string; err?: string }> }) {
   const sp = await props.searchParams;

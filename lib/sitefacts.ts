@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 
 // Compiles live facts about the platform so the assistant can answer
@@ -22,7 +23,7 @@ export async function getSiteFacts(): Promise<string> {
 
   const s = new Map((settings.data ?? []).map((r) => [r.key, r.value as string]));
   const fmt = (iso: string) =>
-    new Date(iso).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+    formatDateTime(iso);
 
   const lines: string[] = [];
   lines.push("BRAND: CA Parveen Sharma — Personalised CA coaching. Personalised one-on-one CA coaching.");

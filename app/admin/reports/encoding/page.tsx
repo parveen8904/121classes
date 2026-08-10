@@ -1,3 +1,4 @@
+import { formatDateTime, formatTime } from "@/lib/dates";
 import AdminHero from "../../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -16,7 +17,7 @@ export const metadata = { title: "Offline encoding queue — Admin" };
 
 const IST = "Asia/Kolkata";
 const when = (s: string | null) =>
-  s ? new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: IST }) : "—";
+  s ? formatDateTime(s) : "—";
 const gb = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)} GB` : `${Math.round(n / 1e6)} MB`);
 
 type Job = {
@@ -63,7 +64,7 @@ export default async function EncodingReport() {
   const urgent = pending.filter((j) => (j.priority ?? 0) > 0);
 
   // The encoder only works overnight; say so plainly with the real window.
-  const hourIST = Number(new Date().toLocaleString("en-IN", { hour: "2-digit", hour12: false, timeZone: IST }));
+  const hourIST = Number(formatTime(new Date()));
   const offPeakNow = hourIST >= 1 && hourIST < 5;
 
   const stat = (icon: string, big: string, label: string) => (

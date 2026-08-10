@@ -9,6 +9,7 @@ import { listDispatchQueue } from "@/lib/warehouse";
 import { buildShippingLabelsPdf } from "@/lib/shippingLabels";
 import { sendEmailWithAttachment } from "@/lib/notify";
 import { str } from "../_lib/util";
+import { parseDelimited } from "@/lib/delimited";
 
 // Warehouse team enters the courier tracking ID for one parcel. Book orders
 // are also marked dispatched.
@@ -30,6 +31,87 @@ export async function saveTracking(formData: FormData) {
   }).eq("id", id);
   revalidatePath("/admin/warehouse");
   revalidatePath("/admin/orders");
+}
+
+// TRACKING IDS BY THE HUNDRED, NOT ONE AT A TIME.
+//
+// A courier hands back a manifest: one row per parcel, order number and docket.
+// Typing forty of those into forty boxes is twenty minutes of work in which
+// exactly one digit will go astray, and the parcel it belongs to will be
+// untraceable until a student complains.
+//
+// So the manifest is uploaded. Any CSV with a column that looks like an order
+// number and one that looks like a tracking number is understood; a courier
+// column is used when present. Rows that do not match a waiting parcel are
+// REPORTED, not ignored — a silent skip is how you find out in November that
+// eleven parcels were never marked dispatched.
+export async function uploadTracking(formData: FormData) {
+  if (!(await requireArea("warehouse"))) return;
+
+  const file = formData.get("file");
+  const back = new URLSearchParams();
+  for (const k of ["from", "to"]) {
+    const v = str(formData.get(k));
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) back.set(k, v);
+  }
+  const qs = back.toString() ? `&${back}` : "";
+  if (!(file instanceof File) || file.size === 0) redirect(`/admin/warehouse?upload=nofile${qs}`);
+  if (file.size > 2_000_000) redirect(`/admin/warehouse?upload=toobig${qs}`);
+
+  const text = await file.text();
+  const rows = parseDelimited(text);
+  if (rows.length < 1) redirect(`/admin/warehouse?upload=empty${qs}`);
+
+  // Which column is which. Read from the header when there is one, guessed
+  // from the shape of the data when there is not.
+  const header = rows[0].map((h) => h.trim().toLowerCase());
+  const findCol = (...names: string[]) =>
+    header.findIndex((h) => names.some((n) => h.includes(n)));
+  let orderCol = findCol("order", "reference", "ref");
+  let trackCol = findCol("track", "docket", "awb", "consignment", "waybill");
+  let courierCol = findCol("courier", "carrier", "partner");
+  const hasHeader = orderCol >= 0 || trackCol >= 0;
+  if (orderCol < 0) orderCol = 0;
+  if (trackCol < 0) trackCol = 1;
+
+  const body = hasHeader ? rows.slice(1) : rows;
+
+  // Only parcels actually waiting can be marked — a manifest cannot reach back
+  // and overwrite something dispatched last month.
+  const queue = await listDispatchQueue(true);
+  const byOrderNo = new Map<string, (typeof queue)[number]>();
+  for (const q of queue) {
+    const digits = q.orderNo.replace(/\D/g, "");
+    if (digits) byOrderNo.set(digits, q);
+  }
+
+  const svc = createServiceClient();
+  let saved = 0;
+  const unmatched: string[] = [];
+
+  for (const r of body) {
+    const orderRaw = (r[orderCol] ?? "").trim();
+    const tracking = (r[trackCol] ?? "").trim();
+    const courier = courierCol >= 0 ? (r[courierCol] ?? "").trim() : "";
+    if (!orderRaw && !tracking) continue;                   // a blank line at the end of a file
+    const key = orderRaw.replace(/\D/g, "");
+    const parcel = key ? byOrderNo.get(key) : undefined;
+    if (!parcel || !tracking) {
+      unmatched.push(orderRaw || "(no order no)");
+      continue;
+    }
+    await svc.from(parcel.table).update({
+      tracking_code: tracking,
+      ...(courier ? { courier_name: courier } : {}),
+      ...(parcel.table === "book_orders" ? { status: "dispatched" } : {}),
+    }).eq("id", parcel.id);
+    saved++;
+  }
+
+  revalidatePath("/admin/warehouse");
+  revalidatePath("/admin/orders");
+  const miss = unmatched.length ? `&missed=${encodeURIComponent(unmatched.slice(0, 12).join(", "))}` : "";
+  redirect(`/admin/warehouse?upload=${saved}${miss}${qs}`);
 }
 
 // Build a PDF of shipping labels for every parcel still awaiting a tracking

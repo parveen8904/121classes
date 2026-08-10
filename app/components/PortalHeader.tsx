@@ -69,8 +69,12 @@ export default async function PortalHeader() {
     ...(isStaff ? [{ href: "/discuss", label: "💬 Discuss" }] : []),
     { href: "/community", label: "📣 Community" },
     { href: "/inbox", label: "📥 Inbox" },
-    // Only a sponsor sees this, and it is their own page — nobody else has one.
-    ...(isSupporter ? [{ href: "/supporter", label: "💚 Supporter" }] : []),
+    // A sponsor's own page. An ADMIN sees it too — not because he sells, but
+    // because he cannot answer a vendor's question about a screen he has never
+    // seen. Same for the warehouse: the packer's desk is where the parcels are,
+    // and being told "it looks wrong" is no use without being able to look.
+    ...(isSupporter || isAdmin ? [{ href: "/supporter", label: "💚 Supporter" }] : []),
+    ...(isAdmin ? [{ href: "/admin/warehouse", label: "🏭 Warehouse" }] : []),
     { href: "/dashboard/profile", label: "👤 Profile" },
     ...(isStaff ? [{ href: "/admin", label: "🛠️ Admin" }] : []),
   ];

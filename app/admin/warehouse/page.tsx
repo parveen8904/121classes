@@ -1,7 +1,8 @@
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { listDispatchQueue } from "@/lib/warehouse";
-import { saveTracking, emailShippingLabels } from "./actions";
+import { viaProxy } from "@/lib/fileProxy";
+import { saveTracking, emailShippingLabels, uploadTracking } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Warehouse — Admin" };
@@ -10,7 +11,7 @@ const fmt = (s: string) =>
   new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
 
 export default async function WarehousePage(props: {
-  searchParams: Promise<{ labels?: string; q?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ labels?: string; q?: string; from?: string; to?: string; upload?: string; missed?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const q = (searchParams.q ?? "").trim().toLowerCase();
@@ -48,6 +49,22 @@ export default async function WarehousePage(props: {
         back={{ href: "/admin", label: "Admin" }}
       />
 
+      {searchParams.upload && (
+        <div className={`notice ${/^\d+$/.test(searchParams.upload) && searchParams.upload !== "0" ? "ok" : "err"}`} style={{ marginTop: 16 }}>
+          {searchParams.upload === "nofile" ? "Choose a file first — a CSV from the courier with the order numbers and tracking IDs."
+            : searchParams.upload === "toobig" ? "That file is too large. Save just the tracking columns as a CSV and try again."
+            : searchParams.upload === "empty" ? "That file had no rows we could read. Save it as a plain CSV and try again."
+            : searchParams.upload === "0" ? "Nothing matched. The order-number column must hold the numbers shown on this page."
+            : `✅ ${searchParams.upload} parcel(s) marked dispatched from the file.`}
+          {searchParams.missed && (
+            <div style={{ marginTop: 6, fontSize: ".85rem" }}>
+              ⚠️ Not matched to a waiting parcel: {searchParams.missed}. They may already be dispatched, or the order
+              number may be wrong — nothing was changed for those.
+            </div>
+          )}
+        </div>
+      )}
+
       {searchParams.labels && (
         <div className={`notice ${searchParams.labels === "fail" ? "err" : "ok"}`} style={{ marginTop: 16 }}>
           {searchParams.labels === "fail"
@@ -82,6 +99,29 @@ export default async function WarehousePage(props: {
           <SubmitButton className="btn small" savedLabel="✓ Emailed">
             🏷️ Email me the labels{fromDay || toDay ? " for these dates" : ""} (PDF)
           </SubmitButton>
+        </form>
+
+        {/* Every invoice for the parcels going out, stapled into one file to
+            print and drop in the boxes. Only these parcels — it is not a door
+            into the whole invoice book. */}
+        <a className="btn small secondary" download
+          href={`/admin/warehouse/invoices${fromDay || toDay ? `?${new URLSearchParams({ ...(fromDay ? { from: fromDay } : {}), ...(toDay ? { to: toDay } : {}) })}` : ""}`}>
+          🧾 Print invoices for these parcels
+        </a>
+
+        {/* THE COURIER'S MANIFEST, UPLOADED.
+            They hand back a sheet: one row per parcel, order number and docket.
+            Typing forty of those into forty boxes is twenty minutes in which
+            one digit goes astray, and that parcel is untraceable until the
+            student complains. Any CSV with an order-number column and a
+            tracking column is understood; a courier column is used if there is
+            one. Rows that match nothing waiting are named back, not skipped. */}
+        <form action={uploadTracking} style={{ margin: 0, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input type="hidden" name="from" value={fromDay} />
+          <input type="hidden" name="to" value={toDay} />
+          <input type="file" name="file" accept=".csv,text/csv,text/plain,.txt" required
+            style={{ marginBottom: 0, fontSize: ".8rem", maxWidth: 230 }} />
+          <SubmitButton className="btn small secondary" savedLabel="✓ Uploaded">⬆️ Upload tracking IDs</SubmitButton>
         </form>
       </div>
 
@@ -140,6 +180,18 @@ export default async function WarehousePage(props: {
                 <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 0" }}>{i.contents}</p>
                 <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 0" }}>
                   📍 {i.address || "no address on file — call the student"} · 📞 {i.phone || "—"} · 🕐 {fmt(i.createdAt)}
+                </p>
+                {/* The tax invoice goes in the box. It used to live only under
+                    Sales & orders, so a packer had to ask an admin for every
+                    single parcel. */}
+                <p style={{ margin: "6px 0 0" }}>
+                  {i.invoiceUrl ? (
+                    <a className="btn small secondary" href={viaProxy(i.invoiceUrl)} target="_blank" rel="noopener noreferrer">
+                      🧾 Invoice{i.invoiceNo ? ` ${i.invoiceNo}` : ""}
+                    </a>
+                  ) : (
+                    <span className="muted" style={{ fontSize: ".78rem" }}>no invoice raised yet</span>
+                  )}
                 </p>
               </div>
               {/* Courier name AND tracking ID. A tracking number on its own

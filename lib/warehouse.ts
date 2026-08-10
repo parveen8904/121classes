@@ -24,6 +24,10 @@ export type DispatchItem = {
   createdAt: string;
   tracking: string | null;
   courier: string | null;
+  // The tax invoice for this sale. A packer needs it to put a copy in the box,
+  // and needed an admin to fetch it until now.
+  invoiceNo: string | null;
+  invoiceUrl: string | null;
   // Split out for the courier sheet: a spreadsheet is sorted on a PIN code,
   // not on a paragraph. Blank where we genuinely do not know.
   city: string;
@@ -37,16 +41,16 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
   const svc = createServiceClient();
   const [{ data: bookRows }, { data: goldRows }, { data: giftRows }] = await Promise.all([
     svc.from("book_orders")
-      .select("id, order_no, guest_contact, ship_to, items, created_at, tracking_code, courier_name, status")
+      .select("id, order_no, guest_contact, ship_to, items, created_at, tracking_code, courier_name, invoice_no, invoice_url, status")
       .in("status", ["paid", "dispatched"])
       .order("created_at", { ascending: false }).limit(200),
     svc.from("orders")
-      .select("id, order_no, created_at, tracking_code, courier_name, subjects:subject_id(title), profiles:student_id(full_name, phone, address_line1, address_line2, city, state, pincode)")
+      .select("id, order_no, created_at, tracking_code, courier_name, invoice_no, invoice_url, subjects:subject_id(title), profiles:student_id(full_name, phone, address_line1, address_line2, city, state, pincode)")
       .eq("books_due", true).eq("status", "paid")
       .order("created_at", { ascending: false }).limit(200),
     // Gifted 9+ month Gold also ships books — to the RECIPIENT's address.
     svc.from("gift_orders")
-      .select("id, order_no, created_at, tracking_code, recipient_name, recipient_phone, recipient_address, courier_name, subjects:subject_id(title)")
+      .select("id, order_no, created_at, tracking_code, recipient_name, recipient_phone, recipient_address, courier_name, invoice_no, invoice_url, subjects:subject_id(title)")
       .eq("books_due", true).eq("status", "paid")
       .order("created_at", { ascending: false }).limit(200),
   ]);
@@ -58,7 +62,7 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
   const titleById = new Map((books ?? []).map((b) => [b.id, b.title]));
 
   const out: DispatchItem[] = [];
-  for (const o of (bookRows ?? []) as unknown as (OrderRow & { order_no: number | null; created_at: string; tracking_code: string | null; courier_name: string | null })[]) {
+  for (const o of (bookRows ?? []) as unknown as (OrderRow & { order_no: number | null; created_at: string; tracking_code: string | null; courier_name: string | null; invoice_no: string | null; invoice_url: string | null })[]) {
     const s = o.ship_to ?? {};
     out.push({
       table: "book_orders", id: o.id, orderNo: o.order_no ? `#${o.order_no}` : "—",
@@ -67,10 +71,11 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       phone: s.phone ?? o.guest_contact?.phone ?? "",
       contents: (o.items ?? []).map((i) => `${titleById.get(i.book_id ?? "") ?? "Book"} × ${i.qty ?? 1}`).join(", ") || "Books",
       createdAt: o.created_at, tracking: o.tracking_code, courier: o.courier_name ?? null,
+      invoiceNo: o.invoice_no ?? null, invoiceUrl: o.invoice_url ?? null,
       city: s.city ?? "", state: s.state ?? "", pincode: s.pincode ?? "",
     });
   }
-  type GoldRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; courier_name?: string | null; subjects: { title: string } | null; profiles: { full_name: string | null; phone: string | null; address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; pincode: string | null } | null };
+  type GoldRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; courier_name?: string | null; invoice_no?: string | null; invoice_url?: string | null; subjects: { title: string } | null; profiles: { full_name: string | null; phone: string | null; address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; pincode: string | null } | null };
   for (const g of (goldRows ?? []) as unknown as GoldRow[]) {
     const p = g.profiles;
     out.push({
@@ -80,10 +85,11 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       phone: p?.phone ?? "",
       contents: `${g.subjects?.title ?? "Gold"} — FREE printed books set (9+ month Gold)`,
       createdAt: g.created_at, tracking: g.tracking_code, courier: g.courier_name ?? null,
+      invoiceNo: g.invoice_no ?? null, invoiceUrl: g.invoice_url ?? null,
       city: p?.city ?? "", state: p?.state ?? "", pincode: p?.pincode ?? "",
     });
   }
-  type GiftRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; courier_name?: string | null; recipient_name: string | null; recipient_phone: string | null; recipient_address: string | null; subjects: { title: string } | null };
+  type GiftRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; courier_name?: string | null; invoice_no?: string | null; invoice_url?: string | null; recipient_name: string | null; recipient_phone: string | null; recipient_address: string | null; subjects: { title: string } | null };
   for (const g of (giftRows ?? []) as unknown as GiftRow[]) {
     out.push({
       table: "gift_orders", id: g.id, orderNo: g.order_no ? `#${g.order_no}` : "—",
@@ -92,6 +98,7 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       phone: g.recipient_phone ?? "",
       contents: `🎁 GIFT — ${g.subjects?.title ?? "Gold"} FREE printed books set (9+ month Gold)`,
       createdAt: g.created_at, tracking: g.tracking_code, courier: g.courier_name ?? null,
+      invoiceNo: g.invoice_no ?? null, invoiceUrl: g.invoice_url ?? null,
       // A supporter sale stores the address as one written block, so it is read
       // back rather than joined up.
       ...parsePostalParts(g.recipient_address),

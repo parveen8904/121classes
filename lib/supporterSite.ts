@@ -80,14 +80,98 @@ export async function verifyOwnership(url: string, token: string): Promise<SiteR
   return { ok: true };
 }
 
+/** The pages worth reading on a coaching shop, in the order worth reading them. */
+const WORTH_READING =
+  /(combo|bundle|package|offer|discount|sale|course|classes|pendrive|pen-drive|google-drive|ca-final|ca-inter|final|inter|product|shop|store|buy|checkout|catalog)/i;
+
+/**
+ * Which other pages on this site should we look at?
+ *
+ * A combo is never on the homepage. It is on a product page called "CA Final
+ * Combo" or "Buy Both", two clicks in — so reading only the declared address
+ * checks the one page least likely to carry the thing being looked for.
+ *
+ * The sitemap first, because a shop that publishes one is telling us exactly
+ * where its products live. Otherwise the homepage's own links.
+ */
+async function pagesToRead(home: string): Promise<string[]> {
+  const out = new Set<string>([home]);
+  let origin = "";
+  try { origin = new URL(home).origin; } catch { return [...out]; }
+
+  const add = (href: string) => {
+    try {
+      const u = new URL(href, home);
+      if (u.origin !== origin) return;                 // never wander off their site
+      if (/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|mp4|css|js)$/i.test(u.pathname)) return;
+      u.hash = "";
+      if (WORTH_READING.test(u.pathname + u.search)) out.add(u.toString());
+    } catch { /* a malformed link is not worth a failure */ }
+  };
+
+  // A sitemap names the product pages without us having to guess.
+  for (const path of ["/sitemap.xml", "/sitemap_index.xml", "/product-sitemap.xml"]) {
+    if (out.size > 12) break;
+    try {
+      const res = await fetch(`${origin}${path}`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(12_000),
+        headers: { "user-agent": "caparveensharma-partner-check" },
+      });
+      if (!res.ok) continue;
+      const xml = (await res.text()).slice(0, 400_000);
+      for (const m of xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) add(m[1]);
+    } catch { /* no sitemap is ordinary */ }
+  }
+
+  // Failing that, the links on their own front page.
+  if (out.size <= 1) {
+    try {
+      const res = await fetch(home, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(20_000),
+        headers: { "user-agent": "caparveensharma-partner-check" },
+      });
+      if (res.ok) {
+        const html = (await res.text()).slice(0, 400_000);
+        for (const m of html.matchAll(/href\s*=\s*["']([^"'#]+)["']/gi)) add(m[1]);
+      }
+    } catch { /* the homepage read below will report it */ }
+  }
+
+  // A handful, not a crawl. We are checking a shop, not indexing it.
+  return [...out].slice(0, 8);
+}
+
 /**
  * Read a supporter's shopfront and flag what the agreement forbids.
  *
  * The plain reading comes first — a percentage next to a discount word is
  * arithmetic, not judgement — and the model is asked only about the harder
  * question of whether our subject is being sold inside somebody else's bundle.
+ *
+ * Several pages, because a combo lives on a product page and never on the
+ * homepage. The first real problem found stops the walk: one upheld breach is
+ * enough for a person to act on, and there is no sense paying to read the rest.
  */
-export async function inspectSite(url: string): Promise<SiteResult> {
+export async function inspectSite(home: string): Promise<SiteResult> {
+  const pages = await pagesToRead(home);
+  let reachedAny = false;
+  let last: SiteResult = { ok: true };
+
+  for (const url of pages) {
+    const r = await inspectOnePage(url);
+    if (r.problem === "unreachable") continue;
+    reachedAny = true;
+    if (!r.ok) return { ...r, detail: `${r.detail} (on ${url})` };
+    last = r;
+  }
+
+  if (!reachedAny) return { ok: false, problem: "unreachable", detail: `${home} did not answer.` };
+  return last;
+}
+
+async function inspectOnePage(url: string): Promise<SiteResult> {
   const text = await readPage(url);
   if (text === null) return { ok: false, problem: "unreachable", detail: `${url} did not answer.` };
 

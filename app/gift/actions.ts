@@ -109,8 +109,16 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
 
   // 9+ month Gold gifts ship FREE printed books — the recipient's address is
   // mandatory BEFORE payment so no order ever needs a chase-up call.
-  if (input.tier === "gold" && months >= 9 && !(input.recipient.address ?? "").trim()) {
-    return { ok: false, reason: "address" };
+  //
+  // And it must be an address we can actually post to. The form now asks for
+  // the parts and only offers Indian states, but the form is the browser's copy
+  // of the rules and anybody can post past it. There is no international parcel
+  // service on this account, so an order taken for an address abroad is an
+  // order that cannot be fulfilled — and the student finds that out weeks
+  // later, having paid.
+  if (input.tier === "gold" && months >= 9) {
+    const { looksPostableInIndia } = await import("@/lib/indiaStates");
+    if (!looksPostableInIndia(input.recipient.address)) return { ok: false, reason: "address" };
   }
 
   try {

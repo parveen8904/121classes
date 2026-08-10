@@ -24,6 +24,45 @@ export async function GET(req: NextRequest) {
   const done: string[] = [];
   const failed: string[] = [];
 
+  // ── DOES EACH KEY BELONG TO ITS OWN PAPER? ────────────────────────────
+  //
+  // This goes FIRST, and it goes here rather than staying a button, because a
+  // key that answers another paper marks every student who sits that test at
+  // close to zero — and it did, for a fortnight, unnoticed. Comparing two sets
+  // of first pages is cheap; drafting a whole key is not. So the checks take
+  // their small bite of the window before anything expensive starts.
+  //
+  // Two sweeps, because there are two kinds of key. Uploaded solution PDFs can
+  // be for the wrong paper entirely. Keys we wrote ourselves are drafted FROM
+  // the question paper, so they cannot be for another paper — but they can stop
+  // after Q2 of a three-question paper, which costs a student the same marks.
+  let keysChecked = 0, keysBad = 0, keysShort = 0;
+  try {
+    const { auditKeyMatchesPaper, auditDraftedKeys } = await import("@/lib/solutionAudit");
+    const a = await auditKeyMatchesPaper(4, 60_000);
+    const b = await auditDraftedKeys(4, 60_000);
+    keysChecked = a.checked + b.checked;
+    keysBad = a.mismatched.length + b.mismatched.length;
+    keysShort = a.incomplete.length + b.incomplete.length;
+  } catch (e) {
+    failed.push(`key match: ${e instanceof Error ? e.message : "failed"}`);
+  }
+
+  // Then put right whatever has been found. A wrong key is worse than a missing
+  // one — a missing key marks nobody, a wrong key marks everybody wrongly — so
+  // repairs come before drafting the keys that were never written.
+  let keysRepaired = 0;
+  try {
+    if (Date.now() - started < 120_000) {
+      const { repairBadKeys } = await import("@/lib/solutionAudit");
+      const r = await repairBadKeys(2, 100_000);
+      keysRepaired = r.repaired.length;
+      failed.push(...r.failed.map((f) => `${f.title}: ${f.why}`));
+    }
+  } catch (e) {
+    failed.push(`key repair: ${e instanceof Error ? e.message : "failed"}`);
+  }
+
   // Make sure the DESCRIPTIVE TESTS with no answer key are in the queue. They
   // live in `sections` and were missed entirely by the original drafter, so
   // 37 published tests had nothing to mark a student's answer book against.
@@ -66,7 +105,7 @@ export async function GET(req: NextRequest) {
   // approved one — nothing a student reads changes until the founder adopts it.
   let relaidOut = 0;
   let relayoutLeft = 0;
-  if (!done.length && !failed.length && Date.now() - started < 200_000) {
+  if (!done.length && !failed.length && !keysRepaired && Date.now() - started < 200_000) {
     const r = await relayoutApprovedKeysBatch(4, 200_000 - (Date.now() - started));
     relaidOut = r.done.length;
     relayoutLeft = r.remaining;
@@ -78,7 +117,7 @@ export async function GET(req: NextRequest) {
   // already has its correct answer; only the "why" was never written.
   let mcqExplained = 0;
   let caseExplained = 0;
-  if (!done.length && !failed.length && !relaidOut && !relayoutLeft) {
+  if (!done.length && !failed.length && !keysRepaired && !relaidOut && !relayoutLeft) {
     // Nothing to draft or re-lay out — spend the window on the "why" lines.
     const { backfillMcqExplanations, backfillCaseExplanations } = await import("@/lib/explainBackfill");
     while (Date.now() - started < 240_000) {
@@ -95,6 +134,10 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
+    keysChecked,
+    keysBad,
+    keysShort,
+    keysRepaired,
     queuedTests,
     mockDrafted,
     drafted: done.length,

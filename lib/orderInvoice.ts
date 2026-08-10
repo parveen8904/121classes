@@ -121,7 +121,11 @@ export async function issueOrderInvoice(opts: {
  * It REFUSES to run without a complete address. Reissuing an incomplete invoice
  * would replace one defective document with another.
  */
-export async function reissueOrderInvoice(orderId: string): Promise<{ ok: boolean; reason?: string; invoiceNo?: string }> {
+// `notify` is separable on purpose. Correcting our own copy of a document is
+// housekeeping; writing to the student about it is a letter, and the two are
+// not always wanted together — a defect found and fixed within the hour needs
+// no apology to somebody who never saw it.
+export async function reissueOrderInvoice(orderId: string, notify = true): Promise<{ ok: boolean; reason?: string; invoiceNo?: string }> {
   const svc = createServiceClient();
   const { data: ord } = await svc
     .from("orders")
@@ -209,13 +213,13 @@ export async function reissueOrderInvoice(orderId: string): Promise<{ ok: boolea
   if (up.error) return { ok: false, reason: `could not store the PDF: ${up.error.message}` };
   await svc.from("orders").update({ invoice_url: `secure:${path}` }).eq("id", orderId);
 
-  const email = (p?.email as string) || "";
+  const email = notify ? ((p?.email as string) || "") : "";
   if (email) {
     const { sendEmailWithAttachment, emailShell } = await import("@/lib/notify");
     const html = emailShell(
       "Your corrected invoice 🧾",
       `<p>We have corrected the invoice for your payment of <strong>Rs. ${Math.round(amount).toLocaleString("en-IN")}</strong>.</p>
-       <p>The earlier copy was issued before your address was on file, and the tax was shown incorrectly as a result. The corrected invoice (<strong>${invoiceNo}</strong>) is attached — the number, the date and the amount you paid are unchanged. Please use this copy and discard the earlier one. Apologies for the confusion.</p>`,
+       <p>The earlier copy was incomplete — some of the details a GST invoice must carry were missing from it. The corrected invoice (<strong>${invoiceNo}</strong>) is attached. The number, the date and the amount you paid are unchanged; nothing about your payment or your access has altered. Please use this copy and discard the earlier one, and our apologies for the trouble.</p>`,
     );
     await sendEmailWithAttachment(email, `Corrected invoice ${invoiceNo} — CA Parveen Sharma`, html, {
       filename: `${invoiceNo.replace(/[^\w-]/g, "_")}.pdf`, content: Buffer.from(pdf), contentType: "application/pdf",

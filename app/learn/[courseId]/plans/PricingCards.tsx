@@ -5,7 +5,7 @@ import Link from "next/link";
 import Script from "next/script";
 import { formatINR, parseSlabs, slabTotal, slabMonthOptions, type Slab } from "@/lib/pricing";
 import { TIER_META, TIER_RANK } from "@/lib/tiers";
-import { createPlanOrder, verifyPlanPayment, createExtendOrder, verifyExtendPayment } from "./payActions";
+import { createPlanOrder, verifyPlanPayment, createExtendOrder, verifyExtendPayment, saveBillingAddress } from "./payActions";
 import Help from "@/app/components/Help";
 
 type Subject = {
@@ -92,6 +92,11 @@ export default function PricingCards({
   // 9+ month Gold: printed books ship free within India; untick to decline
   // (outside India / PDF-only preference).
   const [wantBooks, setWantBooks] = useState(true);
+  // Which tier is waiting on an address. Null = nothing is being asked.
+  const [askAddress, setAskAddress] = useState<string | null>(null);
+  const [addr, setAddr] = useState({ line1: "", line2: "", city: "", state: "", pincode: "" });
+  const [addrErr, setAddrErr] = useState("");
+  const [savingAddr, setSavingAddr] = useState(false);
 
   // Gold price: slab total if a ladder is set, else scale the flat base price.
   const goldTotal = goldSlabs
@@ -135,6 +140,24 @@ export default function PricingCards({
     if (Number.isFinite(n) && n > 0) setSilverMonths(Math.min(60, n));
   }
 
+  /** Save the address they just typed, then open the payment they asked for. */
+  async function saveAddressAndBuy(e: React.FormEvent) {
+    e.preventDefault();
+    const tier = askAddress;
+    if (!tier) return;
+    setSavingAddr(true); setAddrErr("");
+    try {
+      const r = await saveBillingAddress(addr);
+      if (!r.ok) { setAddrErr(r.error ?? "Could not save that."); return; }
+      setAskAddress(null);
+      // Straight on. They pressed Pay a moment ago; they should not have to
+      // find the button again.
+      await buy(tier);
+    } finally {
+      setSavingAddr(false);
+    }
+  }
+
   async function buy(tier: string) {
     if (!window.Razorpay) {
       alert("Payment library is still loading — please try again in a moment.");
@@ -155,29 +178,16 @@ export default function PricingCards({
         else if (res.reason === "notopen") alert("This batch has not opened for enrolment yet. Please check back on the start date.");
         else if (res.reason === "closed") alert("Enrolment for this batch has closed. Write to us and we will tell you when the next one opens.");
         else if (res.reason === "address") {
-          // WHY WE STOPPED THEM, IN THE WORDS THAT ARE TRUE FOR THEM.
+          // ASK HERE, DO NOT SEND THEM AWAY.
           //
-          // This used to say their 9+ month Gold plan came with free printed
-          // books that needed an address — to everybody, including a student
-          // buying three months, who gets no books. Being told about a plan you
-          // are not buying, at the moment you press Pay, reads as a fault in
-          // the site, and one of them wrote in to say the payment would not go
-          // through. Every payment needs the address because every payment
-          // raises a GST invoice; the books are only worth mentioning to the
-          // people actually getting books.
-          const months = tier === "gold" ? goldMonths : silverMonths;
-          const books = tier === "gold" && months >= 9 && wantBooks !== false;
-          alert(
-            "One thing before you pay: we need your billing address.\n\n" +
-            "Every payment raises a GST invoice, and the invoice has to carry your address and your state — " +
-            "the state is what decides the tax on it." +
-            (books ? "\n\nYour Gold plan also includes printed books couriered free, and this is where they will be sent." : "") +
-            "\n\nTaking you to your profile now. Save it and you will come straight back here to pay.",
-          );
-          // Come back to this exact page afterwards, rather than leaving them
-          // on the dashboard to find their way to the plan again.
-          const back = window.location.pathname + window.location.search;
-          window.location.href = `/dashboard/profile?need=address&next=${encodeURIComponent(back)}`;
+          // Every payment raises a GST invoice and an invoice must carry the
+          // buyer's address and state, whatever the plan and whether or not
+          // any books are being posted. This used to send the student off to
+          // their profile to find the right card, fill it, and make their own
+          // way back to the plan — three pages for five boxes, and one student
+          // reported it as the payment not working. The boxes now open on this
+          // page and the payment follows the moment they are saved.
+          setAskAddress(tier);
         }
         else alert("Could not start checkout. Please try again or contact us.");
         return;
@@ -383,6 +393,63 @@ export default function PricingCards({
         <strong>{subject.title}</strong>
         {facultyNames && <span className="muted"> · {facultyNames}</span>}
       </div>
+
+      {/* FIVE BOXES, ON THE PAGE THEY ARE ALREADY ON.
+          Asked of everybody who pays, because every payment raises a GST
+          invoice and an invoice must carry the buyer's address and state.
+          Nothing to do with books: a student who declines the printed copies
+          still needs an invoice, and a three-month plan has no books at all. */}
+      {askAddress && (
+        <form
+          onSubmit={saveAddressAndBuy}
+          className="card"
+          style={{ maxWidth: 560, margin: "0 auto 18px", border: "2px solid var(--accent)" }}
+        >
+          <h3 style={{ marginTop: 0, fontSize: "1.05rem" }}>🧾 Your billing address</h3>
+          <p className="muted" style={{ fontSize: ".86rem", lineHeight: 1.6 }}>
+            Needed before we can take the payment — your invoice is a GST invoice and has to carry your address and
+            your state. Fill it once and you will never be asked again.
+          </p>
+
+          <label htmlFor="ba1">Address<span style={{ color: "#b91c1c" }}> *</span></label>
+          <input id="ba1" value={addr.line1} onChange={(e) => setAddr({ ...addr, line1: e.target.value })}
+            required autoFocus placeholder="Flat / house, building, street" />
+
+          <label htmlFor="ba2">Area, landmark <span className="muted" style={{ fontWeight: 400 }}>— optional</span></label>
+          <input id="ba2" value={addr.line2} onChange={(e) => setAddr({ ...addr, line2: e.target.value })} />
+
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
+            <div>
+              <label htmlFor="bac">City<span style={{ color: "#b91c1c" }}> *</span></label>
+              <input id="bac" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} required />
+            </div>
+            <div>
+              {/* Free text and labelled for everybody — students outside India
+                  have provinces and counties, not states. */}
+              <label htmlFor="bas">State / province<span style={{ color: "#b91c1c" }}> *</span></label>
+              <input id="bas" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} required />
+            </div>
+            <div>
+              <label htmlFor="bap">PIN / ZIP<span style={{ color: "#b91c1c" }}> *</span></label>
+              <input id="bap" value={addr.pincode} onChange={(e) => setAddr({ ...addr, pincode: e.target.value })} required />
+            </div>
+          </div>
+
+          {addrErr && <div className="notice err" style={{ marginTop: 4 }}>⚠️ {addrErr}</div>}
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
+            <button className="btn" type="submit" disabled={savingAddr}>
+              {savingAddr ? "Saving…" : "Save and continue to payment →"}
+            </button>
+            <button className="btn secondary" type="button" onClick={() => { setAskAddress(null); setAddrErr(""); }}>
+              Cancel
+            </button>
+          </div>
+          <p className="muted" style={{ fontSize: ".78rem", marginTop: 8 }}>
+            Outside India? Put your own country&apos;s province and postcode — both boxes take anything.
+          </p>
+        </form>
+      )}
 
       {configured && (
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>

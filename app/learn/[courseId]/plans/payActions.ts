@@ -16,6 +16,40 @@ import { batchWindow } from "@/lib/batchWindow";
 
 const PAID_TIERS = ["silver", "gold"];
 
+// THE ADDRESS, ASKED WHERE THEY ARE STANDING.
+//
+// Every payment raises a GST invoice, and an invoice must carry the buyer's
+// address and state — the state is what decides the tax. That is true of a
+// three-month plan with no books in it just as much as of a twelve-month one,
+// so it is asked of everybody, and ticking or unticking printed books changes
+// nothing about it.
+//
+// It used to be collected by sending the student away to their profile and
+// hoping they came back. Now the five boxes appear on the plan page itself and
+// the payment opens the moment they are saved.
+export async function saveBillingAddress(input: {
+  line1: string; line2?: string; city: string; state: string; pincode: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Please sign in again." };
+
+  const clean = (v: string | undefined, max = 120) => String(v ?? "").trim().slice(0, max);
+  const line1 = clean(input.line1), city = clean(input.city, 80);
+  const state = clean(input.state, 80), pincode = clean(input.pincode, 20);
+  if (!line1 || !city || !state || !pincode) {
+    return { ok: false, error: "Please fill address, city, state and PIN code." };
+  }
+
+  const { error } = await supabase.from("profiles").update({
+    address_line1: line1,
+    address_line2: clean(input.line2) || null,
+    city, state, pincode,
+  }).eq("id", user.id);
+  if (error) return { ok: false, error: "Could not save that — please try again." };
+  return { ok: true };
+}
+
 export type CreateOrderResult =
   | { ok: true; orderId: string; amount: number; keyId: string; name: string; description: string; prefill: { name?: string; email?: string; contact?: string } }
   | { ok: false; reason: "unconfigured" | "auth" | "noplan" | "noprice" | "address" | "notopen" | "closed" | "error" };

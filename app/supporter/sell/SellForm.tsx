@@ -21,8 +21,8 @@ const STATES = ["Delhi", "Haryana", "Uttar Pradesh", "Punjab", "Rajasthan", "Mah
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function SellForm({
-  products, preselect, billing, configured,
-}: { products: Product[]; preselect?: string; billing: Billing; configured: boolean }) {
+  products, preselect, myCoupon, billing, configured,
+}: { products: Product[]; preselect?: string; myCoupon?: string; billing: Billing; configured: boolean }) {
   const [subjectId, setSubjectId] = useState(preselect || products[0]?.id || "");
   // Did they name the subject before they got here? A tile on their desk links
   // in with it; the plain "Place an order" button does not. Only a subject we
@@ -35,7 +35,9 @@ export default function SellForm({
   // paragraph somebody typed in a hurry.
   const [addr, setAddr] = useState({ line1: "", line2: "", city: "", state: "", pincode: "", country: "", inIndia: true });
   const [startsOn, setStartsOn] = useState(today());
-  const [coupon, setCoupon] = useState("");
+  // Their own code, already in the box. They can clear it, but nobody has to
+  // remember it — and nobody sells at full price by forgetting it.
+  const [coupon, setCoupon] = useState(myCoupon ?? "");
   // What the coupon actually did, decided on the server. Null until they press
   // Apply — the amount on the button never moves on an unchecked code.
   const [applied, setApplied] = useState<{ payable: number; discount: number; code: string } | null>(null);
@@ -318,10 +320,15 @@ export default function SellForm({
             : "Starting today. Pick a later date if they are joining a future batch."}
         </p>
 
-        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>{step()} · Coupon</h2>
+        <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>{step()} · Your discount</h2>
+        {myCoupon && coupon.trim().toUpperCase() === myCoupon.toUpperCase() && !applied && (
+          <p className="muted" style={{ fontSize: ".84rem", marginTop: -4, lineHeight: 1.6 }}>
+            This is your own code, already filled in. Press <strong>Apply</strong> to see what you pay.
+          </p>
+        )}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
           <input
-            placeholder="Your discount code (optional)"
+            placeholder="Your discount code"
             value={coupon}
             onChange={(e) => { setCoupon(e.target.value.toUpperCase()); forget(); }}
             style={{ flex: "1 1 200px", marginBottom: 0 }}

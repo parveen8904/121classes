@@ -31,6 +31,12 @@ export default async function SellPage(props: {
 
   const products = await sellableProducts();
 
+  // Their standing 25% code, made on first sight if they do not have one. It is
+  // filled in for them below: a discount they have to remember to type is a
+  // discount somebody will forget on a Friday evening and eat themselves.
+  const { ensureSupporterCoupon } = await import("@/lib/supporterCoupon");
+  const coupon = await ensureSupporterCoupon(user.id);
+
   const billingAddress = [me?.address_line1, me?.address_line2, [me?.city, me?.pincode].filter(Boolean).join(" ")]
     .filter(Boolean).join("\n");
 
@@ -64,6 +70,7 @@ export default async function SellPage(props: {
           <SellForm
             products={products}
             preselect={sp.subject}
+            myCoupon={coupon?.code ?? ""}
             configured={await razorpayConfigured()}
             billing={{
               name: (me?.business_name as string) || (me?.full_name as string) || "",

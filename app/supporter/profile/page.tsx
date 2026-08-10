@@ -30,6 +30,11 @@ export default async function SupporterProfilePage(props: {
     .eq("id", user.id).maybeSingle();
   if (!me?.is_supporter && me?.role !== "admin" && me?.role !== "supporter") redirect("/dashboard");
 
+  // Made on their first visit if they do not have one yet, so a vendor added
+  // this morning has a code by the time they look for it.
+  const { ensureSupporterCoupon } = await import("@/lib/supporterCoupon");
+  const coupon = await ensureSupporterCoupon(user.id);
+
   const { siteToken } = await import("@/lib/supporterSite");
   const token = siteToken(user.id);
   const siteOk = (me as { supporter_site_ok_at?: string | null } | null)?.supporter_site_ok_at ?? null;
@@ -51,6 +56,40 @@ export default async function SupporterProfilePage(props: {
 
         {sp.err && <div className="notice err" style={{ marginTop: 12 }}>⚠️ {sp.err}</div>}
         {sp.verified === "1" && <div className="notice ok" style={{ marginTop: 12 }}>✅ Your website is verified.</div>}
+
+        {/* THEIR TRADING PRICE, NOT A PROMOTION.
+            Shown openly because it cannot be used by anybody else: it only
+            works on an order placed for a student, and only while signed in as
+            this account. A code that is useless to a stranger is not a secret. */}
+        {coupon && (
+          <div className="card" style={{ marginTop: 18, border: "2px solid var(--accent)" }}>
+            <h2 style={{ marginTop: 0, fontSize: "1.02rem" }}>🏷️ Your discount code</h2>
+            <p className="muted" style={{ fontSize: ".88rem", lineHeight: 1.7, marginTop: 0 }}>
+              You buy at{" "}
+              <strong>
+                {coupon.percentOff != null
+                  ? `${coupon.percentOff}% off`
+                  : `₹${(coupon.amountOffInr ?? 0).toLocaleString("en-IN")} off`}
+              </strong>{" "}
+              the published price and sell at the published price — the difference is yours. Use it as often as you
+              like; there is no limit and no expiry.
+            </p>
+            <p style={{
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              fontSize: "1.4rem", fontWeight: 800, letterSpacing: ".06em",
+              background: "var(--bg-soft)", border: "1px dashed var(--accent)", borderRadius: 12,
+              padding: "12px 16px", textAlign: "center", margin: "6px 0 10px", wordBreak: "break-all",
+            }}>
+              {coupon.code}
+            </p>
+            <p className="muted" style={{ fontSize: ".82rem", lineHeight: 1.7, margin: 0 }}>
+              It is already filled in for you when you place an order, so you do not need to remember it. It works
+              only on orders you place for a student, and only while you are signed in as yourself — so it is no use
+              to anybody else, and nothing is lost if a student sees it.
+            </p>
+            <Link className="btn small" href="/supporter/sell" style={{ marginTop: 12 }}>Place an order →</Link>
+          </div>
+        )}
 
         <form action={saveSupporterProfile} className="card" style={{ marginTop: 18 }}>
           <input type="hidden" name="next" value={sp.next ?? ""} />

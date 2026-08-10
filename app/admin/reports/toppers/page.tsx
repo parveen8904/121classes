@@ -48,11 +48,15 @@ export default async function ToppersPage(props: {
 
   const ids = [...new Set(doing.map((e) => e.student_id))];
   const people = new Map<string, { name: string; email: string; phone: string; attempt: string }>();
+  const staff = new Set<string>();
   if (ids.length) {
-    const rows = await inChunks<{ id: string; full_name: string | null; email: string | null; phone: string | null; target_attempt: string | null }>(
+    const rows = await inChunks<{ id: string; full_name: string | null; email: string | null; phone: string | null; target_attempt: string | null; role: string | null }>(
       ids, (b) => svc.from("profiles").select("id, full_name, email, phone, target_attempt").in("id", b) as never,
     );
     for (const r of rows) {
+      // Our own accounts are not students, and an admin testing a class should
+      // not appear in a list the founder rings people from.
+      if (r.role && r.role !== "student") { staff.add(r.id); continue; }
       people.set(r.id, {
         name: r.full_name ?? "—", email: r.email ?? "", phone: r.phone ?? "",
         attempt: r.target_attempt ?? "",
@@ -60,9 +64,11 @@ export default async function ToppersPage(props: {
     }
   }
 
+  const students = doing.filter((e) => !staff.has(e.student_id));
+
   const byCourse = new Map<string, Scored[]>();
   for (const [courseId] of courses) {
-    const rows = doing.filter((e) => e.course_id === courseId);
+    const rows = students.filter((e) => e.course_id === courseId);
     if (rows.length) byCourse.set(courseId, rank(rows));
   }
 
@@ -81,14 +87,21 @@ export default async function ToppersPage(props: {
         <strong>How the score is worked out.</strong> Out of 100, against everything available in that course —
         not against the other students, so a rank never moves because somebody else studied.
         <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
-          <li><strong>{WEIGHTS.classes}</strong> — classes finished (not merely opened)</li>
-          <li><strong>{WEIGHTS.revisions}</strong> — revision classes finished</li>
+          <li><strong>{WEIGHTS.classes}</strong> — classes <strong>played through</strong> (90% of the video actually ran)</li>
+          <li><strong>{WEIGHTS.revisions}</strong> — revision classes played through</li>
           <li><strong>{WEIGHTS.tests}</strong> — mock &amp; descriptive papers, <em>attempted × how well they scored</em></li>
           <li><strong>{WEIGHTS.practice}</strong> — case scenarios &amp; MCQ tests, the same way</li>
         </ul>
         <p className="muted" style={{ margin: "8px 0 0", fontSize: ".82rem" }}>
           A paper submitted but not yet marked counts as full credit — the marking queue is ours, and nobody should
-          slip down this list because we have not got to their copy. Anyone who has done nothing at all is left out.
+          slip down this list because we have not got to their copy. Anyone who has done nothing at all is left out,
+          and so is every staff account.
+          <br /><br />
+          <strong>Ticking is not watching.</strong> A student can tick a class &ldquo;done&rdquo; on their planner —
+          it is there for classes watched elsewhere. Those ticks are <strong>not</strong> counted in any score on
+          this page; they are listed on their own at the end so you can see who is ticking rather than watching.
+          When this report first ran, 243 of the 268 &ldquo;completed&rdquo; classes had never been played at all,
+          and one student who ticked fifty in six minutes was at the top of it.
         </p>
       </div>
 
@@ -105,7 +118,7 @@ export default async function ToppersPage(props: {
 
       <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", marginTop: 12 }}>
         {ACTIVITIES.map((a) => {
-          const list = topBy(doing, a.key, TOP_N);
+          const list = topBy(students, a.key, TOP_N);
           return (
             <div className="card" key={a.key} style={{ padding: "12px 14px" }}>
               <h3 style={{ margin: "0 0 8px", fontSize: "1rem" }}>

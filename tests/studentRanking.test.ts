@@ -15,6 +15,8 @@ const base: Effort = {
   mcq_done: 0, mcq_total: 30,
   cases_done: 0, cases_total: 20,
   tests_done: 0, tests_total: 40,
+  mock_done: 0, descriptive_done: 0,
+  classes_ticked: 0, revisions_ticked: 0, watch_hours: 0,
   practice_score: 0, practice_marks: 0,
   test_score: 0, test_marks: 0,
 };
@@ -87,6 +89,19 @@ check(tie[0].student_id === "byClasses", "on a tie, the one who did the classes 
 const s = scoreEffort(of({ classes_done: 7, mcq_done: 3, cases_done: 2 }));
 check(s.shown.classes === "7/100", "the classes column shows done out of available");
 check(s.shown.practice === "5/50", "practice adds MCQ and case studies together");
+
+// ── TICKING IS NOT WATCHING ───────────────────────────────────────────────
+// The whole first version of this report ranked on a flag that a student sets
+// by tapping "done" on their planner. One of them ticked fifty classes in six
+// minutes and led the list. Ticks must never reach the score.
+const ticker = scoreEffort(of({ classes_ticked: 100, revisions_ticked: 20 }));
+check(ticker.total === 0, "a student who ticked everything and played nothing scores zero");
+check(ticker.shown.ticked === 120, "…but the ticks are still shown, so the founder can see them");
+
+const watcher = scoreEffort(of({ classes_done: 10, watch_hours: 8 }));
+check(watcher.total > 0, "a student who played ten classes scores something");
+check(rank([of({ student_id: "ticker", classes_ticked: 100 }), of({ student_id: "watcher", classes_done: 3 })])[0]
+  .student_id === "watcher", "three classes played beat a hundred ticked");
 
 console.log(fails === 0 ? "PASS  student ranking: 50/15/25/10, marks count, unmarked papers not punished, no NaN" : "");
 process.exit(fails === 0 ? 0 : 1);

@@ -23,6 +23,15 @@
 // Where a paper has been submitted but not yet marked, accuracy is treated as
 // full rather than zero: the queue is ours, and a student should not slip down
 // the list because we have not got to their copy.
+//
+// AND THE ONE THAT MADE THE FIRST VERSION OF THIS WORTHLESS. A class becomes
+// "completed" two ways: the player runs 90% of the video, or the student ticks
+// it off on their planner — which exists for classes watched elsewhere. 243 of
+// the first 268 completed rows had ZERO seconds played, and one student ticked
+// fifty classes in six minutes and led the ranking. So only PLAYED classes
+// count here. The ticks are still shown, because a student saying "I did these
+// elsewhere" is telling you something — but it is a claim, not evidence, and it
+// is never added to the score.
 
 export const WEIGHTS = {
   classes: 50,
@@ -37,6 +46,10 @@ export type Effort = {
   course_id: string;
   classes_done: number; classes_total: number;
   revisions_done: number; revisions_total: number;
+  /** Ticked off on the planner with nothing played. A claim, not evidence. */
+  classes_ticked: number; revisions_ticked: number;
+  /** Hours of video that actually ran. The least arguable number here. */
+  watch_hours: number;
   mcq_done: number; mcq_total: number;
   cases_done: number; cases_total: number;
   tests_done: number; tests_total: number;
@@ -54,6 +67,7 @@ export type Scored = {
   /** The plain numbers behind the score, for showing beside it. */
   shown: {
     classes: string; revisions: string; tests: string; practice: string;
+    ticked: number; hours: number;
     testAccuracy: number | null; practiceAccuracy: number | null;
   };
 };
@@ -90,6 +104,8 @@ export function scoreEffort(e: Effort): Scored {
     parts: { classes: round(classes), revisions: round(revisions), tests: round(tests), practice: round(practice) },
     shown: {
       classes: `${e.classes_done}/${e.classes_total}`,
+      ticked: e.classes_ticked + e.revisions_ticked,
+      hours: e.watch_hours,
       revisions: `${e.revisions_done}/${e.revisions_total}`,
       tests: `${e.tests_done}/${e.tests_total}`,
       practice: `${practiceDone}/${practiceTotal}`,
@@ -115,12 +131,15 @@ export function rank(rows: Effort[]): Scored[] {
 // no arithmetic in between — nothing to argue with.
 
 export const ACTIVITIES = [
-  { key: "classes_done",     label: "Classes finished",        icon: "🎬" },
-  { key: "revisions_done",   label: "Revision classes",        icon: "🔁" },
+  { key: "watch_hours",      label: "Hours of video watched",  icon: "⏱️" },
+  { key: "classes_done",     label: "Classes played through",  icon: "🎬" },
+  { key: "revisions_done",   label: "Revision classes played", icon: "🔁" },
   { key: "mcq_done",         label: "MCQ tests",               icon: "✅" },
   { key: "cases_done",       label: "Case scenarios",          icon: "🧩" },
   { key: "mock_done",        label: "Mock papers",             icon: "📄" },
   { key: "descriptive_done", label: "Descriptive papers",      icon: "✍️" },
+  // Shown last and named for what it is, so nobody reads it as study.
+  { key: "classes_ticked",   label: "Classes ticked as done (not played here)", icon: "☑️" },
 ] as const;
 
 export type ActivityKey = (typeof ACTIVITIES)[number]["key"];

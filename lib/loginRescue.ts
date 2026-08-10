@@ -157,9 +157,44 @@ export async function rescueLogin(input: {
     return { handled: false, note: `phone matches ${maskEmail(otherEmail)} but no WhatsApp number to reply on` };
   }
 
-  // Case D — genuinely nothing on file. A person should look: they may have
-  // bought through Aldine, or used an email they no longer remember.
-  return { handled: false, note: "no account found on that email or phone — needs a person" };
+  // Case D — nothing on file at all. TEN OF THE TWENTY-EIGHT PEOPLE who asked
+  // for help logging in were this: they had never registered. They were not
+  // locked out of anything; they were standing outside a door they had not yet
+  // been given, because the app and the site both open on "Log in".
+  //
+  // This used to page a person to ring them back, which is the slowest possible
+  // way to say "please tap Create account". So it says it, at once, on both
+  // channels we have — and only troubles somebody if we cannot even do that.
+  {
+    const how =
+      `you are not registered on the portal yet, which is why no password worked. ` +
+      `Open caparveensharma.com, tap "Create account", and enter this email address. ` +
+      `You will get an email straight away — opening it lets you choose your password and takes you in. ` +
+      `It takes about a minute.`;
+
+    let told = false;
+    if (email) {
+      told = await sendTemplate("login_help", email, { name: firstName }).catch(() => false);
+    }
+    if (wa.length >= 11) {
+      await sendWhatsAppText(
+        wa,
+        `Hello ${firstName}, this is CA Parveen Sharma Classes.\n\nWe checked and ${how}\n\n` +
+          `If you think you registered with a different email, reply here and we will find it.`,
+      ).then((ok) => { told = told || ok; }).catch(() => {});
+    }
+
+    if (told) {
+      return {
+        handled: true,
+        kind: "other_email_hint",
+        note: "No account on that email or phone — told them how to register, by email and WhatsApp.",
+      };
+    }
+  }
+
+  // Could not even reach them. Now it is a person's job.
+  return { handled: false, note: "no account found on that email or phone, and we could not reach them — needs a person" };
 }
 
 function maskEmail(e: string): string {

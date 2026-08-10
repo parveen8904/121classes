@@ -131,6 +131,23 @@ If you didn't ask for this, you can ignore this email — nothing changes.`,
     sample: {},
   },
 
+  {
+    key: "login_help",
+    label: "They cannot sign in — and have no account",
+    when: 'Somebody asks for help logging in and there is no account on the email or the number they gave. Ten of the first twenty-eight requests were this: they had never registered, because the app and the site both open on "Log in".',
+    group: "Account & login",
+    subject: "Getting you started — CA Parveen Sharma",
+    body: `Dear {{name}},
+
+Thank you for telling us you could not sign in. We have looked, and you are not registered on the portal yet — which is why no password worked.
+
+Open caparveensharma.com, tap "Create account", and enter this email address. You will get an email straight away; opening it lets you choose your password and takes you in. It takes about a minute.
+
+If you have bought classes from us before, or think you registered with a different email address, simply reply to this email and we will find your account for you.`,
+    vars: [NAME],
+    sample: { name: "Brij" },
+  },
+
   // ── Access ────────────────────────────────────────────────────────────────
   {
     key: "access_granted",

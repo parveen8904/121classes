@@ -102,7 +102,7 @@ export async function resendVerification(formData: FormData): Promise<Result> {
 // either way — it signs them in and lets them choose a password.
 //
 // Never says whether the address has an account. The link goes to the mailbox.
-export async function autoLoginRescue(formData: FormData): Promise<{ sent: boolean; throttled?: boolean }> {
+export async function autoLoginRescue(formData: FormData): Promise<{ sent: boolean; throttled?: boolean; noAccount?: boolean }> {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   if (!email || !(await emailConfigured())) return { sent: false };
 
@@ -115,7 +115,12 @@ export async function autoLoginRescue(formData: FormData): Promise<{ sent: boole
   try {
     const { sendAccessLink } = await import("@/lib/loginRescue");
     const r = await sendAccessLink(email);
-    return { sent: r.sent };
+    // NO ACCOUNT IS NOT THE SAME AS A LINK ON ITS WAY, AND MUST NOT BE TOLD AS
+    // ONE. Ten of the twenty-eight people who asked for help logging in had
+    // never registered at all. Telling them "we have emailed you a link" sends
+    // them to wait for an email that will never arrive, and then to us. What
+    // they need is one sentence: you are not registered yet, here is how.
+    return { sent: r.sent, noAccount: r.note.includes("no account") };
   } catch {
     return { sent: false };
   }

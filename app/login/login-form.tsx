@@ -69,11 +69,21 @@ export default function LoginForm() {
         if (r.throttled) {
           return ok("We have already emailed you a sign-in link in the last few minutes. Please open it — and do check your spam folder.");
         }
+        if (r.noAccount) {
+          // Say it plainly and open the right form with their email already in
+          // it, rather than leaving them to work out that "Create account" is
+          // the thing they need.
+          setMode("signup");
+          return err(
+            `We could not find an account for ${email}. It looks like you have not registered yet — ` +
+            `your name and this email are all it takes, and it is free. If you think you registered with a ` +
+            `different email address, WhatsApp us on 98100 79162 and we will find it for you.`,
+          );
+        }
       } catch { /* fall through */ }
       return ok(
         "We have emailed you a link to choose your password — open it and you are straight in. " +
-        "It works whether you forgot your password or never set one. Check your spam folder too. " +
-        "If nothing arrives, you may not be registered yet: tap “Create account”.",
+        "It works whether you forgot your password or never set one. Check your spam folder too.",
       );
     }
     import("@/app/components/Tracker").then(({ track }) => track("login_success", "/login")).catch(() => {});

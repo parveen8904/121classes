@@ -2,7 +2,7 @@ import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { listDispatchQueue } from "@/lib/warehouse";
 import { viaProxy } from "@/lib/fileProxy";
-import { saveTracking, emailShippingLabels, uploadTracking } from "./actions";
+import { saveTracking, emailShippingLabels, uploadTracking, bookWithDelhivery } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Warehouse — Admin" };
@@ -11,7 +11,7 @@ const fmt = (s: string) =>
   new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
 
 export default async function WarehousePage(props: {
-  searchParams: Promise<{ labels?: string; q?: string; from?: string; to?: string; upload?: string; missed?: string }>;
+  searchParams: Promise<{ labels?: string; q?: string; from?: string; to?: string; upload?: string; missed?: string; book?: string; refused?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const q = (searchParams.q ?? "").trim().toLowerCase();
@@ -30,6 +30,10 @@ export default async function WarehousePage(props: {
     return true;
   };
   const all = (await listDispatchQueue(false)).filter((i) => inRange(i.createdAt));
+  // Shown only when it can actually work — a button that answers "not set up"
+  // is a button that teaches people not to press buttons.
+  const { delhiveryConfigured } = await import("@/lib/delhivery");
+  const delhiveryOn = await delhiveryConfigured();
   const match = (s: (string | null)[]) => !q || s.some((x) => (x ?? "").toLowerCase().includes(q));
   const filtered = all.filter((i) => match([i.orderNo, i.name, i.phone, i.contents, i.tracking]));
   const pending = filtered.filter((i) => !i.tracking);
@@ -48,6 +52,22 @@ export default async function WarehousePage(props: {
         subtitle="Every parcel to courier — book orders and FREE Gold book sets. Print labels, ship, enter the tracking ID. 🚚"
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {searchParams.book && (
+        <div className={`notice ${/^\d+$/.test(searchParams.book) && searchParams.book !== "0" ? "ok" : "err"}`} style={{ marginTop: 16 }}>
+          {searchParams.book === "unconfigured"
+            ? "Delhivery is not set up yet — the API token and pickup-location name are needed first."
+            : searchParams.book === "none" ? "No parcels waiting in that range."
+            : searchParams.book === "0" ? "Nothing could be booked."
+            : `✅ ${searchParams.book} parcel(s) booked with Delhivery — their waybill is now the tracking number.`}
+          {searchParams.refused && (
+            <div style={{ marginTop: 6, fontSize: ".85rem" }}>
+              ⚠️ Delhivery refused: {searchParams.refused}. Those parcels are untouched — book them by hand or fix
+              the address and try again.
+            </div>
+          )}
+        </div>
+      )}
 
       {searchParams.upload && (
         <div className={`notice ${/^\d+$/.test(searchParams.upload) && searchParams.upload !== "0" ? "ok" : "err"}`} style={{ marginTop: 16 }}>
@@ -108,6 +128,19 @@ export default async function WarehousePage(props: {
           href={`/admin/warehouse/invoices${fromDay || toDay ? `?${new URLSearchParams({ ...(fromDay ? { from: fromDay } : {}), ...(toDay ? { to: toDay } : {}) })}` : ""}`}>
           🧾 Print invoices for these parcels
         </a>
+
+        {/* One press books every parcel on screen with Delhivery and writes
+            their waybill back as the tracking number. Hidden entirely until
+            the token is in place, so nobody presses a button that cannot work. */}
+        {delhiveryOn && (
+          <form action={bookWithDelhivery} style={{ margin: 0 }}>
+            <input type="hidden" name="from" value={fromDay} />
+            <input type="hidden" name="to" value={toDay} />
+            <SubmitButton className="btn small" savedLabel="✓ Booked">
+              🚚 Book these with Delhivery
+            </SubmitButton>
+          </form>
+        )}
 
         {/* THE COURIER'S MANIFEST, UPLOADED.
             They hand back a sheet: one row per parcel, order number and docket.
@@ -205,6 +238,12 @@ export default async function WarehousePage(props: {
                 <input name="tracking" placeholder="Courier tracking ID" required style={{ marginBottom: 0, minWidth: 180 }} />
                 <SubmitButton className="btn small" savedLabel="✓ Saved">🚚 Save</SubmitButton>
               </form>
+              {delhiveryOn && (
+                <form action={bookWithDelhivery} style={{ margin: 0 }}>
+                  <input type="hidden" name="id" value={i.id} />
+                  <SubmitButton className="btn small secondary" savedLabel="✓ Booked">Book this one</SubmitButton>
+                </form>
+              )}
             </div>
           </div>
         ))}

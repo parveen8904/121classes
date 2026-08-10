@@ -33,6 +33,68 @@ export async function saveTracking(formData: FormData) {
   revalidatePath("/admin/orders");
 }
 
+// BOOK IT WITH DELHIVERY, INSTEAD OF WRITING A DOCKET BY HAND.
+//
+// Most parcels go with Delhivery. Their system will take the address and hand
+// back a waybill — which IS the tracking number — so the whole loop of writing
+// a number on a label, handing it over and typing it back in disappears: the
+// number is in our database before the parcel leaves the room.
+//
+// Does nothing at all until the token is set (see lib/delhivery.ts). One
+// parcel at a time or everything on screen; a refusal is reported per parcel
+// and never stops the rest, because one bad PIN code must not cost the other
+// twenty-nine their booking.
+export async function bookWithDelhivery(formData: FormData) {
+  if (!(await requireArea("warehouse"))) return;
+
+  const back = new URLSearchParams();
+  for (const k of ["from", "to"]) {
+    const v = str(formData.get(k));
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) back.set(k, v);
+  }
+  const qs = back.toString() ? `&${back}` : "";
+
+  const { delhiveryConfigured, bookParcel } = await import("@/lib/delhivery");
+  if (!(await delhiveryConfigured())) redirect(`/admin/warehouse?book=unconfigured${qs}`);
+
+  const onlyId = str(formData.get("id"));
+  const fromMs = back.get("from") ? new Date(`${back.get("from")}T00:00:00+05:30`).getTime() : null;
+  const toMs = back.get("to") ? new Date(`${back.get("to")}T23:59:59+05:30`).getTime() : null;
+
+  const queue = (await listDispatchQueue(true)).filter((q) => {
+    if (onlyId) return q.id === onlyId;
+    const at = new Date(q.createdAt).getTime();
+    if (fromMs !== null && at < fromMs) return false;
+    if (toMs !== null && at > toMs) return false;
+    return true;
+  });
+  if (!queue.length) redirect(`/admin/warehouse?book=none${qs}`);
+
+  const svc = createServiceClient();
+  let booked = 0;
+  const refused: string[] = [];
+
+  for (const p of queue) {
+    const r = await bookParcel({
+      orderNo: p.orderNo, name: p.name, address: p.address,
+      city: p.city, state: p.state, pincode: p.pincode,
+      phone: p.phone, contents: p.contents, valueInr: 0,
+    });
+    if (!r.ok) { refused.push(`${p.orderNo}: ${r.reason}`); continue; }
+    await svc.from(p.table).update({
+      tracking_code: r.waybill,
+      courier_name: "Delhivery",
+      ...(p.table === "book_orders" ? { status: "dispatched" } : {}),
+    }).eq("id", p.id);
+    booked++;
+  }
+
+  revalidatePath("/admin/warehouse");
+  revalidatePath("/admin/orders");
+  const bad = refused.length ? `&refused=${encodeURIComponent(refused.slice(0, 6).join(" · "))}` : "";
+  redirect(`/admin/warehouse?book=${booked}${bad}${qs}`);
+}
+
 // TRACKING IDS BY THE HUNDRED, NOT ONE AT A TIME.
 //
 // A courier hands back a manifest: one row per parcel, order number and docket.

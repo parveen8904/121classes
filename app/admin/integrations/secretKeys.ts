@@ -40,6 +40,17 @@ export const SECRET_KEYS = [
   "FACULTY_TELEGRAM_CHAT_ID",
   "FACULTY_EMAIL",
   "CRON_SECRET",
+  // DELHIVERY — booking parcels without writing docket numbers by hand.
+  // A key that is not named here is silently DISCARDED when the founder saves
+  // it, which is the quietest way possible to make an integration look broken.
+  "DELHIVERY_TOKEN",
+  "DELHIVERY_CLIENT_NAME",
+  // The registered warehouse name, character for character and CASE SENSITIVE
+  // — Delhivery matches on it exactly and rejects the booking otherwise.
+  "DELHIVERY_PICKUP_NAME",
+  // "staging" until they confirm the account is live, then "live". The live
+  // token is a DIFFERENT string from the staging one.
+  "DELHIVERY_ENV",
   "RAZORPAY_KEY_ID",
   "RAZORPAY_KEY_SECRET",
   "R2_ACCOUNT_ID",

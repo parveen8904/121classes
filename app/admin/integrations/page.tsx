@@ -443,6 +443,15 @@ export default async function IntegrationsPage(
           <KeyField name="CLOUDFLARE_STREAM_TOKEN" label="Cloudflare Stream token (one-click live classes — OBS streams through Cloudflare)" placeholder="dash.cloudflare.com → My Profile → API Tokens → Create Token → Stream:Edit permission" />
           <KeyField name="LIVE_CONTROL_KEY" label="Live-class control key (already set — the Desktop Start/End Class buttons use it; type CLEAR + re-run setup to rotate)" placeholder="set automatically" />
           <KeyField name="SUPABASE_ACCESS_TOKEN" label="Supabase access token (for the one-click SMTP button below)" placeholder="supabase.com/dashboard/account/tokens → Generate new token → paste sbp_…" />
+          {/* DELHIVERY — so the warehouse books a parcel instead of writing a
+              docket number on a label by hand. There is no self-service
+              sign-up: the token comes from the Delhivery business contact who
+              manages the account, and the live token is a different string
+              from the staging one. */}
+          <KeyField name="DELHIVERY_TOKEN" label="Delhivery API token (ask your Delhivery account manager — lastmile-integration@delhivery.com)" placeholder="the token they email you" />
+          <KeyField name="DELHIVERY_CLIENT_NAME" label="Delhivery client name (as on the account)" placeholder="e.g. CAPARVEENSHARMA" />
+          <KeyField name="DELHIVERY_PICKUP_NAME" label="Registered pickup / warehouse name — CASE SENSITIVE, must match their record exactly" placeholder="e.g. CA Parveen Sharma Gurugram" />
+          <KeyField name="DELHIVERY_ENV" label="Delhivery environment — type staging while testing, then live" placeholder="staging" />
           <KeyField name="RAZORPAY_KEY_ID" label="Razorpay Key ID" placeholder="rzp_live_… or rzp_test_…" />
           <KeyField name="RAZORPAY_KEY_SECRET" label="Razorpay Key Secret" placeholder="from Razorpay dashboard" />
           <div style={{ borderTop: "1px solid var(--border)", margin: "12px 0", paddingTop: 12 }}>

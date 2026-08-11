@@ -88,7 +88,14 @@ export default async function SupporterProfilePage(props: {
               only on orders you place for a student, and only while you are signed in as yourself — so it is no use
               to anybody else, and nothing is lost if a student sees it.
             </p>
-            <Link className="btn small" href="/supporter/sell" style={{ marginTop: 12 }}>Place an order →</Link>
+            {/* TO THE SHELF, NOT STRAIGHT INTO THE FORM.
+                This used to open the order form directly, where the course and
+                the term are typed rather than chosen — and a vendor selling
+                both CA Final and CA Intermediate can pick the wrong one without
+                anything on the screen contradicting them. Going by way of the
+                desk means the course is chosen from the cards, with its level
+                and price written on it, before any student's name is typed. */}
+            <Link className="btn small" href="/supporter" style={{ marginTop: 12 }}>Place an order →</Link>
           </div>
         )}
 

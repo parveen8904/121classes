@@ -32,7 +32,7 @@ export default async function SupporterAllOrders(props: {
 
   const rows = await selectAll<SupporterOrder>((from, to) =>
     svc.from("gift_orders")
-      .select("id, order_no, recipient_name, recipient_email, recipient_phone, recipient_attempt, tier, months, amount_inr, invoice_no, invoice_url, status, created_at, paid_at, subjects:subject_id(title, courses(title))")
+      .select("id, order_no, recipient_name, recipient_email, recipient_phone, recipient_address, recipient_attempt, tier, months, amount_inr, invoice_no, invoice_url, status, created_at, paid_at, subjects:subject_id(title, courses(title))")
       .eq("gifter_id", user.id)
       .order("created_at", { ascending: false })
       .range(from, to) as never,

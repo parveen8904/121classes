@@ -1,7 +1,7 @@
 "use client";
 import { formatDate } from "@/lib/dates";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Script from "next/script";
 import Link from "next/link";
 import { formatINR } from "@/lib/pricing";
@@ -50,7 +50,21 @@ export default function SellForm({
   const product = products.find((p) => p.id === subjectId);
   const later = startsOn > today();
   const terms = product?.options?.length ? product.options : [{ months: 12, priceInr: product?.priceInr ?? 0 }];
+
+  // THE TERM ON THE SCREEN AND THE TERM IN THE STATE MUST BE THE SAME TERM.
+  //
+  // `months` is remembered across a change of subject, and the two subjects do
+  // not offer the same terms. Pick 24 months on one, switch to a subject that
+  // stops at 12, and the fallback below quietly showed 12 in the summary while
+  // NO radio was ticked — the screen said one thing in one place and nothing in
+  // the other, and an order could be placed against a term nobody had chosen.
+  //
+  // So the fallback is not merely displayed, it is adopted: the state is
+  // corrected to the term actually being shown.
   const term = terms.find((t) => t.months === months) ?? terms[0];
+  useEffect(() => {
+    if (term && term.months !== months) setMonths(term.months);
+  }, [term, months]);
   // The price on the button, and the price sent to Razorpay.
   const payable = applied ? applied.payable : term?.priceInr ?? 0;
 

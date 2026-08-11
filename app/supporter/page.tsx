@@ -40,7 +40,7 @@ export default async function SupporterPage(props: {
   if (!me?.is_supporter && me?.role !== "admin") redirect("/dashboard");
 
   const { data: giftRows } = await svc.from("gift_orders")
-    .select("id, recipient_name, recipient_email, recipient_attempt, tier, months, amount_inr, invoice_no, invoice_url, status, created_at, paid_at")
+    .select("id, order_no, recipient_name, recipient_email, recipient_phone, recipient_address, recipient_attempt, tier, months, amount_inr, invoice_no, invoice_url, status, created_at, paid_at, subjects:subject_id(title, courses(title))")
     .eq("gifter_id", user.id)
     .order("created_at", { ascending: false })
     .limit(300);
@@ -48,7 +48,10 @@ export default async function SupporterPage(props: {
   const { sellableProducts } = await import("@/lib/supporterCatalogue");
   const products = await sellableProducts();
 
-  const gifts = (giftRows ?? []) as Gift[];
+  // PostgREST types an embedded table as an array; the row shape treats a
+  // single related row as an object. Both are true at runtime, so the cast
+  // goes through unknown rather than pretending the two agree.
+  const gifts = ((giftRows ?? []) as unknown) as Gift[];
 
   // Only money actually taken counts. A started-but-abandoned checkout is not a
   // gift, and showing it as one would overstate what he has given.

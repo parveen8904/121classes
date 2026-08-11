@@ -19,6 +19,7 @@ export type SupporterOrder = {
   recipient_name: string | null;
   recipient_email: string | null;
   recipient_phone: string | null;
+  recipient_address: string | null;
   recipient_attempt: string | null;
   tier: string | null;
   months: number | null;
@@ -41,9 +42,20 @@ export function categoryOf(o: SupporterOrder): string {
   return (Array.isArray(c) ? c[0]?.title : c?.title) ?? "";
 }
 
-/** The order number as the vendor sees it on the invoice. */
+/**
+ * THE ORDER NUMBER — not the invoice number.
+ *
+ * These rows used to fall back to the invoice number whenever order_no was
+ * missing, and on the vendor's own desk it was ALWAYS missing, because that
+ * page never selected the column. So the desk showed "CAPS/2026-27/0006" where
+ * it meant "#10006". Two different numbering systems on one screen is how a
+ * vendor quotes the wrong one down the phone.
+ *
+ * The invoice number still has its place — on the invoice button, where it
+ * belongs.
+ */
 export function orderIdOf(o: SupporterOrder): string {
-  return o.order_no != null ? `#${o.order_no}` : o.invoice_no ?? "";
+  return o.order_no != null ? `#${o.order_no}` : "";
 }
 
 /**
@@ -89,6 +101,8 @@ export default function OrderList({ orders }: { orders: SupporterOrder[] }) {
                 🧑‍🎓 {o.recipient_name || "Student"}
               </span>
               <p className="row-sub" style={{ lineHeight: 1.7 }}>
+                {/* Category first — CA Final and CA Intermediate share subject
+                    names, and a vendor selling both needs to see which. */}
                 {category && <>📚 {category} · </>}
                 📘 {o.subjects?.title ?? "—"}
                 {o.tier ? ` · ${o.tier.charAt(0).toUpperCase()}${o.tier.slice(1)}` : ""}
@@ -97,6 +111,14 @@ export default function OrderList({ orders }: { orders: SupporterOrder[] }) {
                 <br />
                 {/* The two things a vendor is asked for on the phone. */}
                 ✉️ {o.recipient_email || "no email"} · 📞 {o.recipient_phone || "no number"}
+                {/* And the third: where the books went. A vendor fielding
+                    "my books have not come" cannot answer it from a name. */}
+                {o.recipient_address ? (
+                  <>
+                    <br />
+                    🏠 {o.recipient_address.split("\n").filter(Boolean).join(", ")}
+                  </>
+                ) : null}
                 <br />
                 {day(o.paid_at || o.created_at)}
               </p>

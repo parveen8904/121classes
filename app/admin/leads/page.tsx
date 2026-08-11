@@ -50,7 +50,10 @@ export default async function LeadsPage(
     svc.rpc("lead_source_counts"),
   ]);
 
-  type SourceCount = { source: string; leads: number; not_students: number; with_phone: number };
+  type SourceCount = {
+    source: string; leads: number; not_students: number; with_phone: number;
+    busiest_second: number; spread_days: number; bulk: boolean;
+  };
   const bySource = ((bySourceRows ?? []) as unknown as SourceCount[])
     .slice().sort((a, b) => b.not_students - a.not_students);
 
@@ -123,6 +126,7 @@ export default async function LeadsPage(
             <th style={{ padding: "7px 9px", textAlign: "right", color: "var(--muted)" }}>Leads</th>
             <th style={{ padding: "7px 9px", textAlign: "right", color: "var(--muted)" }}>With a phone</th>
             <th style={{ padding: "7px 9px", textAlign: "right", color: "var(--muted)" }}>Not yet students</th>
+            <th style={{ padding: "7px 9px", textAlign: "left", color: "var(--muted)" }}>How they arrived</th>
             <th style={{ padding: "7px 9px", textAlign: "left", color: "var(--muted)" }}></th>
           </tr></thead>
           <tbody>
@@ -132,6 +136,21 @@ export default async function LeadsPage(
                 <td style={{ padding: "7px 9px", textAlign: "right" }}>{r.leads.toLocaleString("en-IN")}</td>
                 <td style={{ padding: "7px 9px", textAlign: "right" }}>{r.with_phone.toLocaleString("en-IN")}</td>
                 <td style={{ padding: "7px 9px", textAlign: "right", fontWeight: 700 }}>{r.not_students.toLocaleString("en-IN")}</td>
+                {/* THE LABEL IS TYPED; THE CLOCK IS NOT.
+                    586 leads are tagged "google" and all 586 were written in a
+                    single second. A source name is whatever the person doing
+                    the import chose; the arrival pattern cannot be mistyped. */}
+                <td style={{ padding: "7px 9px", fontSize: ".82rem" }}>
+                  {r.bulk ? (
+                    <span style={{ color: "#b45309" }}>
+                      📤 <strong>uploaded</strong> — {r.busiest_second.toLocaleString("en-IN")} in one second
+                    </span>
+                  ) : (
+                    <span style={{ color: "#16a34a" }}>
+                      ✍️ one at a time, over {r.spread_days} day{r.spread_days === 1 ? "" : "s"}
+                    </span>
+                  )}
+                </td>
                 <td style={{ padding: "7px 9px" }}>
                   <a className="btn small secondary" href={`/admin/leads?source=${encodeURIComponent(r.source)}&status=new`}>
                     Show the {r.not_students.toLocaleString("en-IN")} waiting →
@@ -143,9 +162,11 @@ export default async function LeadsPage(
         </table>
       </div>
       <p className="muted" style={{ fontSize: ".82rem", lineHeight: 1.7, marginTop: 8 }}>
-        A <strong>CSV import</strong> is a list that was bought or handed over — those people did not ask to hear
-        from us, and messaging them in bulk is a decision to take deliberately. Every other row is somebody who
-        typed their own details into our own site or rang the office.
+        <strong>Read the right-hand column, not the source name.</strong> A source is a label somebody chose while
+        importing; the arrival pattern is not. Anything marked <strong>uploaded</strong> came in as a file — those
+        people did not ask to hear from us, whatever the label says, and messaging them in bulk is a decision to
+        take deliberately. The rows marked <strong>one at a time</strong> are people who typed their own details
+        into this site or rang the office.
       </p>
 
       {/* Import — batched in the browser, so file size is not a limit. */}

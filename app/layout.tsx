@@ -55,8 +55,12 @@ const baseMetadata: Metadata = {
     default: "CA Parveen Sharma — AI-Enabled CA Coaching | caparveensharma.com",
     template: "%s | CA Parveen Sharma",
   },
+  // "Praveen" outranks "Parveen" in Search Console: 865 impressions against
+  // 376. Students look for him with an r and it is not a typo to be corrected —
+  // it is how a large share of them write the name. Saying it once, plainly and
+  // truthfully, lets Google connect the two without any keyword stuffing.
   description:
-    "Highly personalised, AI-enabled CA coaching that clears the clutter — top-notch, result-oriented 1-to-1 teaching, live classes and ad-free lectures for CA students in India.",
+    "Highly personalised, AI-enabled CA coaching by CA Parveen Sharma (also written Praveen Sharma) — top-notch, result-oriented 1-to-1 teaching, live classes and ad-free lectures for CA students in India.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "CA Parveen Sharma" },
   alternates: { canonical: "/" },
@@ -129,6 +133,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 "@type": "Person",
                 "@id": "https://caparveensharma.com/#person",
                 name: "CA Parveen Sharma",
+                // The proper field for this, rather than repeating the name in
+                // prose. Google uses alternateName to join a misspelling to the
+                // person it means; the second and third forms are what students
+                // actually type.
+                alternateName: ["CA Praveen Sharma", "Praveen Sharma", "Parveen Sharma"],
                 jobTitle: "Chartered Accountant & Educator",
                 description: "CA faculty with 36 years of teaching experience — Advanced Accounting (CA Inter) and Financial Reporting (CA Final).",
                 url: "https://caparveensharma.com",

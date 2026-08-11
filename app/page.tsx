@@ -367,7 +367,9 @@ export default async function Home() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={lightImg(heroBanner, 1200)}
-            alt="CA Parveen Sharma"
+            // Both spellings: an image search for "Praveen Sharma CA" should
+            // find him too. Still a truthful description of the photograph.
+            alt="CA Parveen Sharma, also written Praveen Sharma — CA Final Financial Reporting and CA Inter Advanced Accounting faculty"
             style={{ width: "100%", borderRadius: 16, border: "1px solid var(--border)", display: "block" }}
           />
         </div>

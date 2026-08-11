@@ -5,24 +5,34 @@ import { createServiceClient } from "@/lib/supabase/service";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-// THE PEOPLE WHO SIGNED UP AND THEN COULD NOT GET IN.
+// EVERYONE WHO HAS AN ACCOUNT AND HAS NEVER ONCE BEEN INSIDE IT.
 //
-// 103 accounts have never confirmed their email address and have never signed
-// in once. 84 of them were created in the last week. They are not people who
-// lost interest — they filled the form in, and then the verification email was
-// never opened: it went to spam, or it arrived while they were somewhere else,
-// or they simply did not understand that a second step existed.
+// There turned out to be two ways to end up here and they were being handled
+// by two different systems, with people falling between them:
 //
-// From the outside this shows up as "a hundred students with login problems",
-// and it is not a login problem at all. Their password is fine. They are stuck
-// one step earlier, and no amount of retyping will move them.
+//   · 104 signed up and never confirmed their email. The verification mail went
+//     to spam or was never understood to be a second step. Their password is
+//     fine; no amount of retyping moves them, because they are stuck earlier.
+//     From the outside this reads as "a hundred students with login problems"
+//     and it is not a login problem at all.
 //
-// The recovery link fixes both at once: opening it confirms the address AND
-// lets them set a password. So they get one, unprompted, the day after they
-// sign up — and one more three days later if they still have not appeared.
-// Then we stop. Two is a hand held out; a third is pestering somebody who has
-// decided against us.
+//   · The bulk-granted accounts — created for people who had bought elsewhere,
+//     with no password ever set. 85 of them were made on 1 August alone. A
+//     catch-up existed for these but had to be triggered by hand and never was.
+//
+// The remedy is identical in both cases, which is why they are now one job: a
+// recovery link confirms the address AND sets a password in a single step. So
+// the reason somebody is outside no longer decides whether anybody writes to
+// them.
+//
+// One the day after, one more three days later, then never again. Two is a
+// hand held out; a third is pestering somebody who has decided against us.
 
+// Paced deliberately. There are 1,620 accounts that have never been signed
+// into, most of them granted in bulk at launch; sending to all of them at once
+// would look like a blast to a mail provider and get the domain marked down,
+// which would cost every student their password mail. 40 a run, three runs a
+// day, is a fortnight of steady catching up and no spike.
 const MAX_PER_RUN = 40;
 
 export async function GET(req: NextRequest) {
@@ -41,12 +51,14 @@ export async function GET(req: NextRequest) {
 
   const now = Date.now();
   const stuck = (users?.users ?? []).filter((u) => {
-    if (u.email_confirmed_at) return false;
+    // The one thing that matters: they have never been inside. Whether the
+    // email was confirmed is a detail of HOW they got stuck, not of whether
+    // they need a hand.
     if (u.last_sign_in_at) return false;
     if (!u.email) return false;
     const age = now - new Date(u.created_at).getTime();
     // Not in the first few hours — they may still have the tab open, and an
-    // email arriving on top of the one they already have is noise.
+    // email landing on top of the one they already have is noise.
     return age > 6 * 3600_000;
   });
 

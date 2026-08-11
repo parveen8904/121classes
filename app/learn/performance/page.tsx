@@ -9,6 +9,19 @@ import { viaProxy } from "@/lib/fileProxy";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My Performance — CA Parveen Sharma" };
 
+// HOW MANY OTHERS SAT IT IS NEVER SHOWN. ANYWHERE.
+//
+// "Better than 50% of students (2 of them)" tells a student the whole school is
+// two people. That is ours to know and nobody else's, and it makes a real
+// achievement read as a joke.
+//
+// It also has to be true. A rank drawn from two papers is arithmetic, not a
+// standing, so below MIN_COHORT nothing is claimed at all — silence beats a
+// number that flatters or insults at random. The threshold does double duty:
+// it keeps the boast honest AND it means no rank can be shown at a point where
+// the reader could work out how few people there are.
+const MIN_COHORT = 5;
+
 // Percentile: how many scored <= me, as a %. "Better than X% of students."
 function percentile(values: number[], mine: number): number {
   if (values.length <= 1) return 100;
@@ -132,7 +145,7 @@ export default async function PerformancePage() {
         <p className="crumb"><Link prefetch={false} href="/dashboard">← Dashboard</Link></p>
         <div className="learn-hero">
           <span className="badge">📊 Performance</span>
-          <h1>My performance <Help text="Your saved test scores and feedback. 'Better than X% of students' shows your rank among everyone who took the same test. The 'Rewatch' links take you to the classes for topics you got wrong." /></h1>
+          <h1>My performance <Help text="Your saved test scores and feedback. 'Better than X% of students' shows your rank on the same test. The 'Rewatch' links take you to the classes for topics you got wrong." /></h1>
           <p className="meta">Your test scores, feedback and where you stand among other students.</p>
         </div>
 
@@ -150,7 +163,7 @@ export default async function PerformancePage() {
               {[...bestMine.entries()].map(([sid, best]) => {
                 const ratios = sectionRatios(sid);
                 const myRatio = best.score / Math.max(1, best.total);
-                const pct = percentile(ratios, myRatio);
+                const pct = ratios.length >= MIN_COHORT ? percentile(ratios, myRatio) : null;
                 const wrong = best.total - best.score;
                 return (
                   <div className="card" key={sid}>
@@ -159,7 +172,7 @@ export default async function PerformancePage() {
                       Score: <strong>{best.score}/{best.total}</strong> · ✅ {best.score} right · ❌ {wrong} wrong
                     </div>
                     <div style={{ marginTop: 6, fontWeight: 700, color: "var(--accent)" }}>
-                      🏅 Better than {pct}% of students{ratios.length > 1 ? ` (${ratios.length} took it)` : ""}
+                      {pct !== null && <>🏅 Better than {pct}% of students</>}
                     </div>
                     {wrong > 0 && <div style={{ marginTop: 6 }}>{rewatch(sid)}</div>}
                   </div>
@@ -189,7 +202,8 @@ export default async function PerformancePage() {
                   if (cur === undefined || r > cur) byStudent.set(x.student_id as string, r);
                 }
                 const ratios = [...byStudent.values()];
-                const pct = released ? percentile(ratios, awarded / Math.max(1, total)) : null;
+                const pct = released && ratios.length >= MIN_COHORT
+                  ? percentile(ratios, awarded / Math.max(1, total)) : null;
                 const report = a.report as { summary?: string; concepts_to_revise?: string[] } | null;
 
                 return (
@@ -204,7 +218,7 @@ export default async function PerformancePage() {
                         </div>
                         {pct !== null && ratios.length > 1 && (
                           <div style={{ marginTop: 6, fontWeight: 700, color: "var(--accent)" }}>
-                            🏅 Better than {pct}% of students ({ratios.length} sat it)
+                            🏅 Better than {pct}% of students
                           </div>
                         )}
                         {report?.summary && (
@@ -257,13 +271,14 @@ export default async function PerformancePage() {
                 const scores = (allSubj ?? [])
                   .filter((x) => x.question_id === s.question_id && typeof x.ai_score === "number")
                   .map((x) => x.ai_score as number);
-                const pct = typeof s.ai_score === "number" ? percentile(scores, s.ai_score) : null;
+                const pct = typeof s.ai_score === "number" && scores.length >= MIN_COHORT
+                  ? percentile(scores, s.ai_score) : null;
                 return (
                   <div className="card" key={i}>
                     <strong>{q?.prompt?.slice(0, 100) || "Question"}{(q?.prompt?.length ?? 0) > 100 ? "…" : ""}</strong>
                     <div className="muted" style={{ fontSize: ".88rem", marginTop: 4 }}>
                       {typeof s.ai_score === "number" ? <>Score: <strong>{s.ai_score}/{mm}</strong></> : `Status: ${s.status}`}
-                      {pct !== null && scores.length > 1 && <> · 🏅 Better than {pct}% of students</>}
+                      {pct !== null && scores.length >= MIN_COHORT && <> · 🏅 Better than {pct}% of students</>}
                     </div>
                     {s.ai_feedback && (
                       <p style={{ marginTop: 8, whiteSpace: "pre-wrap", fontSize: ".9rem" }}>{s.ai_feedback}</p>

@@ -101,6 +101,16 @@ export default async function NotificationsPage(
                 anything — so it is the loudest, and it is off by default. */}
             <label className="remember" style={{ margin: 0, opacity: pushOn ? 1 : 0.5 }}>
               <input type="checkbox" name="ch_push" defaultChecked={false} disabled={!pushOn} /> 📲 App notification (iPhone &amp; Android)
+              {/* WHAT THIS NUMBER IS, WRITTEN NEXT TO IT.
+                  It is not app users and it is not readers. It is phones that
+                  installed the app, signed in AND allowed notifications —
+                  always fewer than the people using the app, because allowing
+                  notifications is a separate yes. */}
+              <span className="muted" style={{ display: "block", fontSize: ".8rem", lineHeight: 1.6, marginTop: 4 }}>
+                Goes to <strong>{deviceCount ?? 0} phone(s)</strong> that have the app and allowed notifications.
+                That is fewer than the number of students using the app — allowing notifications is a separate yes,
+                and many never give it. Nothing tells us who opened a notification, only which phones it reached.
+              </span>
             </label>
           </div>
 

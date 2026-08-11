@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { recordWatch, logActivity } from "./watch-actions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -35,6 +35,19 @@ export default function WatchTracker({
   watermark?: string;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  // SEEKING BY TEN SECONDS, WHICH THE ARROW KEYS DID NOT DO.
+  //
+  // A student reported the arrow keys nudging the class forward a second or
+  // two. They were never ours: when the iframe has focus the keystroke goes to
+  // Bunny's own player, whose arrow step is a fraction of what anybody wants
+  // when they have missed a sentence — and a cross-origin iframe swallows the
+  // event, so nothing on this page could see it either.
+  //
+  // Both halves are fixed here. The player handle lets us seek properly, and
+  // there are visible ⏪/⏩ buttons as well, because a button works whatever
+  // has focus and a key does not.
+  const playerRef = useRef<{ getCurrentTime?: (cb: (t: number) => void) => void; setCurrentTime?: (t: number) => void } | null>(null);
+  const [seekMsg, setSeekMsg] = useState<string | null>(null);
   const maxPos = useRef(0);
   const realAccum = useRef(0);
   const playing = useRef(false);
@@ -110,6 +123,7 @@ export default function WatchTracker({
         if (!window.playerjs || !iframeRef.current) return;
         let readyFired = false;
         const player = new window.playerjs.Player(iframeRef.current);
+        playerRef.current = player as never;
         player.on("ready", () => {
           readyFired = true;
           // The POSITION is what says somebody is watching — not the play
@@ -164,6 +178,40 @@ export default function WatchTracker({
       flush(false);
     };
   }, [sectionId, durationSeconds, topicId, provider]);
+
+  // Ten seconds, the way every player a student has ever used behaves.
+  const seekBy = useCallback((delta: number) => {
+    const p = playerRef.current;
+    if (!p?.getCurrentTime || !p?.setCurrentTime) return;
+    try {
+      p.getCurrentTime((t: number) => {
+        const to = Math.max(0, (Number(t) || 0) + delta);
+        p.setCurrentTime!(to);
+        setSeekMsg(`${delta > 0 ? "⏩" : "⏪"} ${Math.abs(delta)}s`);
+        window.setTimeout(() => setSeekMsg(null), 700);
+      });
+    } catch { /* a player that will not seek must not break the page */ }
+  }, []);
+
+  // Arrow keys, when the focus is anywhere on our page rather than inside the
+  // iframe. Shift makes it a minute — useful for skipping a worked example.
+  // Typing in a box is never a seek.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const tag = (el?.tagName ?? "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || el?.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      let delta = 0;
+      if (e.key === "ArrowRight" || e.key === "l" || e.key === "L") delta = e.shiftKey ? 60 : 10;
+      if (e.key === "ArrowLeft" || e.key === "j" || e.key === "J") delta = e.shiftKey ? -60 : -10;
+      if (!delta) return;
+      e.preventDefault();
+      seekBy(delta);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [seekBy]);
 
   // Fullscreen OUR container (iframe + watermark), not the bare iframe — so the
   // moving watermark stays on top in fullscreen. (Bunny's own fullscreen button
@@ -272,6 +320,46 @@ export default function WatchTracker({
           around the iframe, which belongs to this page, not to Bunny. */}
       <iframe ref={iframeRef} src={finalSrc} allow="encrypted-media" title="Class video" />
       {watermark && <span className="vwm">{watermark}</span>}
+      {/* A BUTTON WORKS WHATEVER HAS FOCUS. Keys do not: once a student has
+          clicked the video, the keystrokes belong to Bunny and this page never
+          hears them. These are the reliable way back ten seconds. */}
+      <div
+        style={{
+          position: "absolute", bottom: 8, left: 8, zIndex: 4, display: "flex", gap: 6,
+          opacity: isFull && !showChrome ? 0 : 1,
+          pointerEvents: isFull && !showChrome ? "none" : "auto",
+          transition: "opacity .25s ease",
+        }}
+      >
+        {[-10, 10].map((d) => (
+          <button
+            key={d}
+            type="button"
+            onClick={() => seekBy(d)}
+            aria-label={d < 0 ? "Back 10 seconds" : "Forward 10 seconds"}
+            title={d < 0 ? "Back 10s (← or J · hold Shift for a minute)" : "Forward 10s (→ or L · hold Shift for a minute)"}
+            style={{
+              background: "rgba(0,0,0,.55)", color: "#fff", border: 0, borderRadius: 8,
+              padding: "6px 10px", fontSize: ".95rem", cursor: "pointer",
+            }}
+          >
+            {d < 0 ? "⏪ 10" : "10 ⏩"}
+          </button>
+        ))}
+      </div>
+
+      {seekMsg && (
+        <span
+          style={{
+            position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+            zIndex: 5, background: "rgba(0,0,0,.6)", color: "#fff", borderRadius: 10,
+            padding: "8px 14px", fontSize: "1.1rem", pointerEvents: "none",
+          }}
+        >
+          {seekMsg}
+        </span>
+      )}
+
       <button
         type="button"
         onClick={goFullscreen}

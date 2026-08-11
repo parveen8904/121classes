@@ -118,7 +118,17 @@ export async function broadcast(formData: FormData) {
         kind: "general",
         // The platform split rides in the title of the record, because that is
         // what gets read when somebody says it did not arrive on iPhones.
-        title: p ? `${title}  [android ${p.android.sent}/${p.android.sent + p.android.failed} · iPhone ${p.ios.sent}/${p.ios.sent + p.ios.failed}]` : title,
+        //
+        // SPELLED OUT, because "[android 17/19]" was read as "17 of 19 students
+        // saw it". It is neither students nor views: it is DEVICES that
+        // registered for notifications, and how many Google and Apple accepted
+        // the message for. A device fails when the app was uninstalled or the
+        // token expired — which is worth seeing, and is not a reader who
+        // ignored you. Nothing anywhere tells us who opened a notification.
+        title: p
+          ? `${title}  — delivered to ${p.android.sent}/${p.android.sent + p.android.failed} Android and ` +
+            `${p.ios.sent}/${p.ios.sent + p.ios.failed} iPhone device(s)`
+          : title,
         body,
         link: link || null,
         dedupe_key: `broadcast:${Date.now()}`,

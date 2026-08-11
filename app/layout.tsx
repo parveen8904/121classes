@@ -138,10 +138,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 logo: "https://caparveensharma.com/icon-512.png",
                 sameAs,
                 founder: { "@id": "https://caparveensharma.com/#person" },
-                // Must match the Google Business Profile address exactly —
-                // consistent NAP (name/address/phone) across web + GBP is a
-                // local-ranking signal.
-                address: { "@type": "PostalAddress", streetAddress: "W6/30, DLF Phase 3, Sector 24", addressLocality: "Gurugram", postalCode: "122010", addressCountry: "IN" },
+                // THE VISITOR OFFICE — and it must match the Google Business
+                // Profile character for character, because consistent
+                // name/address/phone across the web and GBP is what Google uses
+                // to decide two mentions are the same business.
+                //
+                // Three addresses exist and each has one job. This is the one
+                // students can come to. The REGISTERED address is B-173, Nirman
+                // Vihar, Delhi 110092 and belongs on tax invoices only, where
+                // the law requires the registered place of business — it is
+                // held in site_settings.gst_address and must not be copied
+                // here. A third, C-56 Preet Vihar, has been vacated and appears
+                // nowhere in this codebase; if it ever reappears on the Google
+                // listing it is wrong.
+                address: { "@type": "PostalAddress", streetAddress: "W6/30, DLF Phase 3, Sector 24", addressLocality: "Gurugram", addressRegion: "Haryana", postalCode: "122010", addressCountry: "IN" },
                 telephone: "+91-9810012674",
               },
               {

@@ -105,7 +105,7 @@ export default function Privacy() {
         <h2>11. Grievance Officer &amp; contact</h2>
         <p>
           <strong>CA Parveen Sharma</strong> (a venture of CA Parveen Sharma)<br />
-          W6 Sector 24, DLF Phase 3, Gurugram, Haryana 122010, India<br />
+          W6/30, DLF Phase 3, Sector 24, Gurugram, Haryana 122010, India<br />
           Email: <a className="grad" href="mailto:contact@caparveensharma.com">contact@caparveensharma.com</a>
         </p>
 

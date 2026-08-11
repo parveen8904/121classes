@@ -1059,7 +1059,7 @@ export default async function Home() {
           <div className="tile">
             <h3>Reach us</h3>
             <p style={{ marginTop: 10 }}>📧 <a className="grad" href="mailto:contact@caparveensharma.com">contact@caparveensharma.com</a></p>
-            <p style={{ marginTop: 8 }}>📍 W6/30, DLF Phase 3, Sector 24, Gurugram 122010</p>
+            <p style={{ marginTop: 8 }}>📍 W6/30, DLF Phase 3, Sector 24, Gurugram, Haryana 122010</p>
             <p style={{ marginTop: 8 }}>🌐 caparveensharma.com</p>
             <p style={{ marginTop: 16 }}>
               <a className="btn" href="mailto:contact@caparveensharma.com?subject=Enquiry%20from%20caparveensharma.com">Email us</a>

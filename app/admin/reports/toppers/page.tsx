@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireArea } from "@/lib/adminAccess";
-import { inChunks } from "@/lib/pageAll";
+import { inChunks, selectAll } from "@/lib/pageAll";
 import AdminHero from "../../_components/AdminHero";
 import { BOARDS, boardRows, rank, WEIGHTS, type Effort } from "@/lib/studentRanking";
 
@@ -30,8 +30,23 @@ export default async function ToppersPage(props: {
   const sp = await props.searchParams;
   const svc = createServiceClient();
 
-  const [{ data: effortRows }, { data: courseRows }] = await Promise.all([
-    svc.from("student_effort").select("*").limit(5000),
+  // .limit(5000) DID NOT MEAN 5000.
+  //
+  // PostgREST caps a response at a thousand rows however large a limit is
+  // asked for, and there are two thousand and seventy-two here — one row per
+  // student per course. So half the school was dropped before any board was
+  // drawn, and the half that went was decided by nothing but the order the
+  // view happened to return: 483 CA Final rows and 589 CA Intermediate ones,
+  // silently, with no error and no gap on the screen to suggest it.
+  //
+  // Thirteen of the twenty-four CA Final students who have actually done
+  // something were in the part that never arrived — which is why that board
+  // looked empty when it was not.
+  //
+  // selectAll pages until the rows run out, which is what the limit was
+  // always meant to say.
+  const [effortRows, { data: courseRows }] = await Promise.all([
+    selectAll<Effort>((from, to) => svc.from("student_effort").select("*").range(from, to) as never),
     svc.from("courses").select("id, title"),
   ]);
 

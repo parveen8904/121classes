@@ -28,7 +28,7 @@ type Gift = SupporterOrder;
 const ON_THE_DESK = 50;
 
 export default async function SupporterPage(props: {
-  searchParams: Promise<{ err?: string; q?: string }>;
+  searchParams: Promise<{ err?: string; q?: string; as?: string }>;
 }) {
   const sp = await props.searchParams;
   const supabase = createClient();
@@ -36,15 +36,44 @@ export default async function SupporterPage(props: {
   if (!user) redirect("/login?next=/supporter");
 
   const svc = createServiceClient();
-  const { data: me } = await svc
+  // Written out in full at each call. PostgREST types the select string at
+  // COMPILE time, so a constant or a template literal makes every column come
+  // back as an error type — the same trap that bit the gift order gate.
+  const { data: signedIn } = await svc
     .from("profiles")
-    .select("full_name, email, is_supporter, role, supporter_blocked_at, supporter_block_reason, supporter_hold_auto, supporter_hold_evidence, supporter_penalty_inr")
+    .select("full_name, business_name, email, is_supporter, role, supporter_blocked_at, supporter_block_reason, supporter_hold_auto, supporter_hold_evidence, supporter_penalty_inr")
     .eq("id", user.id).maybeSingle();
-  if (!me?.is_supporter && me?.role !== "admin") redirect("/dashboard");
+  const isAdmin = signedIn?.role === "admin";
+  if (!signedIn?.is_supporter && !isAdmin) redirect("/dashboard");
+
+  // LOOKING AT A VENDOR'S DESK WITHOUT BECOMING THEM.
+  //
+  // The office is asked "what does my desk show?" and until now the only way to
+  // answer was to ask the vendor for their password, which is the one thing
+  // nobody should ever be asked for. ?as=<id> shows an admin exactly what that
+  // vendor sees — their orders, their totals, their hold if they have one.
+  //
+  // ADMIN ONLY, and enforced here rather than by hiding the dropdown: a vendor
+  // who types another vendor's id into the address bar gets their own desk
+  // back, not somebody else's book of business.
+  const viewingId = isAdmin ? String(sp.as ?? "").trim() : "";
+  const { data: viewed } = viewingId
+    ? await svc.from("profiles")
+        .select("full_name, business_name, email, is_supporter, role, supporter_blocked_at, supporter_block_reason, supporter_hold_auto, supporter_hold_evidence, supporter_penalty_inr")
+        .eq("id", viewingId).maybeSingle()
+    : { data: null };
+  const me = (viewed ?? signedIn) as typeof signedIn;
+  const deskOwnerId = viewed ? viewingId : user.id;
+
+  // The list for the dropdown — only built for an admin, and only names.
+  const { data: allSellers } = isAdmin
+    ? await svc.from("profiles").select("id, full_name, business_name, supporter_blocked_at")
+        .or("is_supporter.eq.true,role.eq.supporter").order("business_name", { nullsFirst: false }).limit(500)
+    : { data: null };
 
   const { data: giftRows } = await svc.from("gift_orders")
     .select("id, order_no, recipient_name, recipient_email, recipient_phone, recipient_address, recipient_attempt, tier, months, amount_inr, invoice_no, invoice_url, status, created_at, paid_at, subjects:subject_id(title, courses(title))")
-    .eq("gifter_id", user.id)
+    .eq("gifter_id", deskOwnerId)
     .order("created_at", { ascending: false })
     .limit(300);
 
@@ -78,8 +107,12 @@ export default async function SupporterPage(props: {
           What you can sell, what you have sold, and every invoice — in one place.
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-          <Link className="btn small" href="/supporter/sell">🛒 Place an order</Link>
-          <Link className="btn small secondary" href="/supporter/profile">👤 My details &amp; GST</Link>
+          {/* While reading another vendor's desk these are hidden, not merely
+              warned about. "Place an order" here would place it under the
+              admin's OWN account — a quiet way to create a real sale against
+              the wrong seller while believing you were browsing. */}
+          {!viewed && <Link className="btn small" href="/supporter/sell">🛒 Place an order</Link>}
+          {!viewed && <Link className="btn small secondary" href="/supporter/profile">👤 My details &amp; GST</Link>}
           <Link className="btn small secondary" href="/supporter/terms">📋 How this works</Link>
           <Link className="btn small secondary" href="/supporter/complaint">🚩 Report a seller</Link>
           {/* There was no way out of this portal at all. A supporter selling
@@ -89,6 +122,49 @@ export default async function SupporterPage(props: {
             ↪ Log out
           </a>
         </div>
+
+        {/* WHOSE DESK AM I LOOKING AT.
+            Shown to an admin only. When it is somebody else's, the band says so
+            in a colour that cannot be mistaken for the ordinary screen — an
+            admin who forgets they are looking through another vendor's eyes
+            will read their totals as the business's own. */}
+        {allSellers && (
+          <div
+            className="card"
+            style={{
+              marginTop: 14,
+              borderLeft: `4px solid ${viewed ? "#7c3aed" : "var(--border)"}`,
+              background: viewed ? "rgba(124,58,237,.07)" : undefined,
+            }}
+          >
+            <form method="get" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div style={{ flex: 1, minWidth: 240 }}>
+                <label htmlFor="asv" style={{ fontSize: ".78rem" }}>
+                  {viewed ? "👁️ You are looking at another vendor's desk" : "👁️ Look at a vendor's desk"}
+                </label>
+                <select id="asv" name="as" defaultValue={viewingId} style={{ marginBottom: 0 }}>
+                  <option value="">— my own desk —</option>
+                  {(allSellers as { id: string; full_name: string | null; business_name: string | null; supporter_blocked_at: string | null }[])
+                    .map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.business_name || v.full_name || v.id}
+                        {v.supporter_blocked_at ? "  ·  ON HOLD" : ""}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <button className="btn small" type="submit">Show me</button>
+              {viewed && <Link className="btn small secondary" href="/supporter">Back to my own</Link>}
+            </form>
+            {viewed && (
+              <p className="muted" style={{ fontSize: ".82rem", lineHeight: 1.7, margin: "10px 0 0" }}>
+                Everything below is <strong>{(me?.business_name as string) || (me?.full_name as string) || "this vendor"}</strong>&apos;s
+                — their orders, their totals, their hold. You are reading it, not acting as them: nothing you press
+                here places an order or takes a payment on their behalf.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* THE HOLD, ABOVE EVERYTHING THEY CAN DO.
             A vendor who finds out about a hold by failing to place an order has
@@ -117,7 +193,9 @@ export default async function SupporterPage(props: {
               </p>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                 <strong style={{ fontSize: "1.15rem" }}>{inr(p.priceInr)}</strong>
-                <Link className="btn small" href={`/supporter/sell?subject=${p.id}`}>Place an order →</Link>
+                {viewed
+                  ? <span className="muted" style={{ fontSize: ".82rem" }}>viewing only</span>
+                  : <Link className="btn small" href={`/supporter/sell?subject=${p.id}`}>Place an order →</Link>}
               </div>
             </div>
           ))}

@@ -51,8 +51,23 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const baseMetadata: Metadata = {
   metadataBase: new URL("https://caparveensharma.com"),
+  // "OFFICIAL SITE", BECAUSE IT IS.
+  //
+  // There is no badge Google grants for this — it is simply words in the title
+  // tag, which is the blue line a student clicks. The reason to say it is that
+  // resellers rank on the same name: Zeroinfy advertises on it and Lecturewala
+  // ranks organically for it. A student who does not know which of five results
+  // is the teacher's own site is a student who may buy from somebody else.
+  //
+  // Two constraints. It must be TRUE, which it is; a site claiming to be
+  // official when it is a reseller is exactly what Google penalises. And the
+  // whole thing must stay under about sixty characters or Google truncates it
+  // mid-word — this is 58.
+  //
+  // The homepage only. Inner pages keep the template, where the page's own
+  // subject is what a searcher needs to see.
   title: {
-    default: "CA Parveen Sharma — AI-Enabled CA Coaching | caparveensharma.com",
+    default: "CA Parveen Sharma — Official Site | AI-Enabled CA Coaching",
     template: "%s | CA Parveen Sharma",
   },
   // "Praveen" outranks "Parveen" in Search Console: 865 impressions against
@@ -60,7 +75,7 @@ const baseMetadata: Metadata = {
   // it is how a large share of them write the name. Saying it once, plainly and
   // truthfully, lets Google connect the two without any keyword stuffing.
   description:
-    "Highly personalised, AI-enabled CA coaching by CA Parveen Sharma (also written Praveen Sharma) — top-notch, result-oriented 1-to-1 teaching, live classes and ad-free lectures for CA students in India.",
+    "The official site of CA Parveen Sharma (also written Praveen Sharma) — Financial Reporting for CA Final and Advanced Accounting for CA Inter. Live classes, day-by-day study plans, AI doubt-solving and ad-free lectures, taught by him.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "CA Parveen Sharma" },
   alternates: { canonical: "/" },
@@ -68,7 +83,7 @@ const baseMetadata: Metadata = {
     type: "website",
     url: "https://caparveensharma.com",
     siteName: "CA Parveen Sharma",
-    title: "CA Parveen Sharma — Personalised CA Coaching",
+    title: "CA Parveen Sharma — Official Site",
     description: "Advanced Accounting (CA Inter) & Financial Reporting (CA Final) by CA Parveen Sharma — classes, day-by-day study plans, AI doubt-solving, tests & amendments.",
     images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "CA Parveen Sharma" }],
     locale: "en_IN",

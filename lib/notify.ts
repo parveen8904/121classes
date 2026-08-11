@@ -286,11 +286,46 @@ export async function notifyFaculty(title: string, body: string): Promise<void> 
     /* ignore */
   }
   try {
-    const facultyEmail = (await getSecret("FACULTY_EMAIL")) || "contact@caparveensharma.com";
-    await sendEmail(facultyEmail, `🔔 ${title}`, emailShell(title, body.replace(/\n/g, "<br/>")));
+    // THE SITE MUST NOT WRITE TO THE ADDRESS STUDENTS REPLY TO.
+    //
+    // contact@ was doing two incompatible jobs: it is where a student's reply
+    // lands (NOTIFY_REPLY_TO) AND it was where the site sent its own alerts
+    // (FACULTY_EMAIL). contact@ forwards into the inbound bridge, so every
+    // "🔔 a student doubt needs your reply" came straight back in as though a
+    // student had written it. Eighty-seven of them in a week.
+    //
+    // The guard on the way in catches them, so they are filed as ignored rather
+    // than answered — but a machine writing to itself and being ignored on
+    // arrival is a loop that merely fails quietly, and it only takes one gap in
+    // the guard for it to be loud. sir@ never had this problem because sir@ was
+    // only ever a forwarding address, never a destination we send to.
+    //
+    // So if the two are set to the same address, the alert goes to the backup
+    // address instead — which does not forward anywhere — and says why.
+    const reply = bareAddr(await getSecret("NOTIFY_REPLY_TO"));
+    let facultyEmail = (await getSecret("FACULTY_EMAIL")) || "contact@caparveensharma.com";
+    let note = "";
+    if (reply && bareAddr(facultyEmail) === reply) {
+      const backup = (await getSecret("BACKUP_EMAIL")).trim();
+      if (backup && bareAddr(backup) !== reply) {
+        facultyEmail = backup;
+        note =
+          `<hr><p style="color:#666;font-size:12px">Sent here rather than to ${reply} because that is the address ` +
+          `students reply to, and it forwards into the site's own inbox — alerts sent there come back in as though ` +
+          `a student had written them. Set FACULTY_EMAIL on the Integrations page to an address that does not ` +
+          `forward, and this note will stop.</p>`;
+      }
+    }
+    await sendEmail(facultyEmail, `🔔 ${title}`, emailShell(title, body.replace(/\n/g, "<br/>") + note));
   } catch {
     /* ignore */
   }
+}
+
+/** "Name <a@b.com>" → "a@b.com", lowercased. */
+function bareAddr(v: string): string {
+  const m = String(v ?? "").match(/<([^>]+)>/);
+  return (m ? m[1] : String(v ?? "")).trim().toLowerCase();
 }
 
 // Send an email (and log it). Safe to call even with no provider configured.

@@ -11,15 +11,17 @@ import { usePathname } from "next/navigation";
 //   • at most once per 45 days; never again once rated; twice dismissed = stop
 //   • "something's wrong" goes to /support (tickets), not to the store
 const PLAY_URL = "https://play.google.com/store/apps/details?id=in.caclasses.app";
-// The App Store's own "write a review" deep link. `id` is filled from the
-// numeric Apple ID kept in the environment, because it is only issued once the
-// app is on sale and hard-coding a wrong one sends people to somebody else's
-// listing. With no id set, iPhone users are simply never asked — which is the
-// right failure: a prompt that leads nowhere is worse than no prompt.
-const APPLE_ID = process.env.NEXT_PUBLIC_APPLE_APP_ID || "";
-const APP_STORE_URL = APPLE_ID
-  ? `https://apps.apple.com/app/id${APPLE_ID}?action=write-review`
-  : "";
+// The App Store's own "write a review" sheet, opened straight at the review
+// box rather than at the listing.
+//
+// 6789032629 is this app's numeric Apple ID — read from Apple's own public
+// lookup for bundle in.caclasses.app, which is where it has always been. I
+// asked for it to be pasted in as an environment variable, which was wrong of
+// me: it is public, permanent, and one request away. The env var still wins if
+// it is ever set, so a future app under a different account needs no code
+// change.
+const APPLE_ID = process.env.NEXT_PUBLIC_APPLE_APP_ID || "6789032629";
+const APP_STORE_URL = `https://apps.apple.com/app/id${APPLE_ID}?action=write-review`;
 const SHOW_ON = ["/dashboard", "/learn"];
 const K_DAYS = "rate.days";        // list of distinct use-days (in-app)
 const K_LAST = "rate.lastAsk";     // timestamp of last prompt
@@ -40,9 +42,7 @@ export default function RatePrompt() {
       const cap = (window as unknown as { Capacitor?: { getPlatform?: () => string } }).Capacitor;
       const platform = cap?.getPlatform?.();
       if (platform !== "android" && platform !== "ios") return;
-      // An iPhone with no Apple ID configured is never asked, rather than being
-      // shown a button that goes nowhere.
-      if (platform === "ios" && !APP_STORE_URL) return;
+
 
       if (localStorage.getItem(K_DONE)) return;
 

@@ -65,8 +65,12 @@ check(!pay.includes("failed"), "a failed payment never appears as a payment");
 
 check(inv.startsWith("﻿"), "invoices file starts with a BOM so Excel reads the rupee amounts");
 check(pay.startsWith("﻿"), "payments file too");
-check(/Invoice Number/.test(inv) && !/Payment Mode/.test(inv), "the invoice file has invoice columns, not payment ones");
-check(/Payment Mode/.test(pay) && !/Place of Supply/.test(pay), "the payment file has payment columns, not invoice ones");
+// Both carry Place of Supply — the real Zoho formats do. What separates them
+// is that an invoice describes a LINE ITEM and a payment describes MONEY.
+check(/Item Price/.test(inv) && /HSN\/SAC/.test(inv), "the invoice file describes the item sold");
+check(!/Item Price/.test(pay) && !/HSN\/SAC/.test(pay), "the payment file does not — it is money, not goods");
+check(/Deposit To/.test(pay) && /Payment Number Prefix/.test(pay), "the payment file has the payment series and the bank account");
+check(!/Deposit To/.test(inv), "…and the invoice file does not");
 check(/pay_Y/.test(pay), "the payment reference is the PAYMENT id");
 
 console.log(fails === 0 ? "PASS  accounts exports are separate from the sales export, and payments only carry money that arrived" : "");

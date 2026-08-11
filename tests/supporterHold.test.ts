@@ -1,4 +1,4 @@
-import { isHoldable, ruleBroken, HOLDABLE, PENALTY_INR } from "../lib/supporterHold";
+import { isHoldable, ruleBroken, HOLDABLE, PENALTY_INR, penaltySplit } from "../lib/supporterHold";
 
 // WHEN A SELLER'S ACCOUNT MAY BE STOPPED AUTOMATICALLY — AND WHEN IT MAY NOT.
 //
@@ -43,5 +43,17 @@ check(ruleBroken(undefined).length > 0, "an unnamed problem still produces a sen
 check(PENALTY_INR === 5000, `the penalty is Rs.5,000 (got ${PENALTY_INR})`);
 check(Number.isInteger(PENALTY_INR) && PENALTY_INR > 0, "it is a whole positive number of rupees");
 
-console.log(fails === 0 ? "PASS  auto-hold: only discount and bundling, never an unreachable site, Rs.5,000 fixed" : "");
+// ── THE PENALTY IS INCLUSIVE OF GST ─────────────────────────────────────
+// ₹5,000 is what leaves the vendor's account. Charging ₹5,000 + 18% would take
+// ₹5,900 from somebody who was shown ₹5,000, and booking the whole ₹5,000 as
+// income would overstate it and understate the tax.
+const sp = penaltySplit();
+check(sp.total === 5000, "the vendor pays exactly Rs.5,000");
+check(Math.abs(sp.taxable - 4237.29) < 0.01, `taxable is Rs.4,237.29 (got ${sp.taxable})`);
+check(Math.abs(sp.tax - 762.71) < 0.01, `GST inside it is Rs.762.71 (got ${sp.tax})`);
+check(Math.round((sp.taxable + sp.tax) * 100) === Math.round(sp.total * 100),
+  "taxable + tax adds back to the amount charged, to the paisa");
+check(sp.taxable < sp.total, "the taxable value is LESS than the total — tax is inside, not added");
+
+console.log(fails === 0 ? "PASS  auto-hold: only discount and bundling, never an unreachable site, Rs.5,000 inclusive of GST" : "");
 process.exit(fails === 0 ? 0 : 1);

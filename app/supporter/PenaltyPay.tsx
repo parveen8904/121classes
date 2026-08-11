@@ -105,8 +105,9 @@ export default function PenaltyPay({
       )}
 
       <p style={{ lineHeight: 1.7, margin: "10px 0 6px" }}>
-        To lift it: correct the page, then pay the penalty of <strong>{formatINR(amountInr)}</strong>. Orders reopen
-        the moment the payment goes through — you do not have to wait for anybody.
+        To lift it: correct the page, then pay the penalty of <strong>{formatINR(amountInr)}</strong>{" "}
+        <span className="muted">(inclusive of GST — this is the whole amount, nothing is added at the payment page)</span>.
+        Orders reopen the moment the payment goes through — you do not have to wait for anybody.
       </p>
 
       {err && <div className="notice err" style={{ marginTop: 8 }}>⚠️ {err}</div>}

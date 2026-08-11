@@ -22,7 +22,24 @@ import type { SiteResult } from "@/lib/supporterSite";
 //   4. IT IS REVERSIBLE BY A PERSON. Everything is written to supporter_holds
 //      with `auto` set, so a wrong one can be found and undone.
 
+/**
+ * The penalty, INCLUSIVE OF GST.
+ *
+ * ₹5,000 is what leaves the vendor's account — the tax is inside it, not added
+ * on top. That matters in two places: the vendor must never be shown ₹5,000 and
+ * then charged ₹5,900, and the books must record ₹4,237.29 of income and
+ * ₹762.71 of tax rather than ₹5,000 of income.
+ */
 export const PENALTY_INR = 5000;
+export const PENALTY_GST_RATE = 18;
+
+/** The tax hiding inside the ₹5,000, to the paisa. */
+export function penaltySplit(total = PENALTY_INR, rate = PENALTY_GST_RATE): {
+  total: number; taxable: number; tax: number;
+} {
+  const taxable = Math.round((total / (1 + rate / 100)) * 100) / 100;
+  return { total, taxable, tax: Math.round((total - taxable) * 100) / 100 };
+}
 
 /** The rules a shopfront can visibly break. An unreachable site is not one. */
 export const HOLDABLE: readonly string[] = ["discount", "combo"];
@@ -99,7 +116,7 @@ export async function autoHoldForBreach(
          ${r.evidence ? `<p style="margin:0 0 8px"><strong>On the page:</strong> “${r.evidence}”</p>` : ""}
        </div>
        <p>To lift the hold: correct the page, then pay the penalty of
-          <strong>Rs. ${PENALTY_INR.toLocaleString("en-IN")}</strong> from
+          <strong>Rs. ${PENALTY_INR.toLocaleString("en-IN")}</strong> (inclusive of GST) from
           <a href="https://caparveensharma.com/supporter">your desk</a>. Orders reopen as soon as the payment goes
           through.</p>
        <p><strong>If you believe this is wrong, reply to this email and say so — it is read by a person, and a hold
@@ -135,8 +152,14 @@ export async function releaseOnPenaltyPaid(supporterId: string, razorpayOrderId:
     .eq("supporter_id", supporterId).is("released_at", null)
     .order("held_at", { ascending: false }).limit(1).maybeSingle();
   if (open?.id) {
+    const split = penaltySplit();
     await svc.from("supporter_holds").update({
-      released_at: now, release_note: `Penalty of Rs.${PENALTY_INR} paid online (${razorpayOrderId})`,
+      released_at: now,
+      // Written out so the books can be made up from this line alone: the tax
+      // is inside the ₹5,000, not on top of it.
+      release_note:
+        `Penalty of Rs.${split.total} paid online (${razorpayOrderId}) — ` +
+        `taxable Rs.${split.taxable.toFixed(2)} + GST Rs.${split.tax.toFixed(2)} @ ${PENALTY_GST_RATE}% (inclusive)`,
     }).eq("id", open.id);
   }
 }

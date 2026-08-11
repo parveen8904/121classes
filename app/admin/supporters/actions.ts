@@ -57,29 +57,83 @@ export async function holdSupporter(formData: FormData) {
 }
 
 /** Lift the hold — penalty settled, or it was a mistake. */
+// LIFTING A HOLD, WITH OR WITHOUT THE PENALTY.
+//
+// The site check decides holds on its own now, and it will get one wrong — it
+// reads a shop page and shop pages are written by people. So the way out cannot
+// be "pay ₹5,000 or stay shut": a vendor who has done nothing wrong must be
+// able to have it undone at once, for nothing, by somebody who has looked.
+//
+// `waive` is the difference between "they paid" and "we were wrong", and the
+// two are recorded differently because they mean opposite things — one is
+// income, the other is a mistake worth counting. A waived hold is a signal that
+// the check needs improving, and a count of them is the only way that ever
+// gets noticed.
 export async function releaseSupporter(formData: FormData) {
   await assertArea("store");
   const id = str(formData.get("id"));
   if (!id) return;
+  const waive = str(formData.get("waive")) === "1";
+  const note = str(formData.get("note")).slice(0, 500);
 
   const svc = createServiceClient();
   const { data: who } = await svc
-    .from("profiles").select("full_name, business_name, email").eq("id", id).maybeSingle();
+    .from("profiles").select("full_name, business_name, email, supporter_hold_auto, supporter_block_reason").eq("id", id).maybeSingle();
+  const wasAuto = Boolean(who?.supporter_hold_auto);
 
   await svc.from("profiles")
-    .update({ supporter_blocked_at: null, supporter_block_reason: null })
+    .update({
+      supporter_blocked_at: null, supporter_block_reason: null,
+      supporter_hold_auto: null, supporter_hold_evidence: null,
+      // Waived means there is nothing to pay — not a debt carried quietly on
+      // the account to surface at the next hold.
+      ...(waive ? { supporter_penalty_inr: null } : {}),
+    })
     .eq("id", id);
 
+  const { data: open } = await svc
+    .from("supporter_holds").select("id")
+    .eq("supporter_id", id).is("released_at", null)
+    .order("held_at", { ascending: false }).limit(1).maybeSingle();
+  if (open?.id) {
+    await svc.from("supporter_holds").update({
+      released_at: new Date().toISOString(),
+      release_note: waive
+        ? `WAIVED by the office — no penalty taken.${note ? ` ${note}` : ""}`
+        : `Released by the office.${note ? ` ${note}` : ""}`,
+    }).eq("id", open.id);
+  }
+
   if (who?.email) {
-    const subject = "Your supporter account is active again";
+    const subject = waive
+      ? "The hold on your account was a mistake — you are selling again"
+      : "Your supporter account is active again";
     await sendEmail(
       who.email as string,
       subject,
       emailShell(subject,
         `<p>Dear ${String(who.full_name ?? who.business_name ?? "").split(" ")[0] || "Sir/Madam"},</p>` +
-        `<p>The hold on your account has been lifted. You can place orders again from your desk.</p>` +
-        `<p>Thank you for sorting it out.</p>`),
+        (waive
+          ? `<p>We have looked at your page ourselves and the hold should not have been placed. It has been lifted and
+              <strong>there is nothing to pay</strong> — please ignore any earlier mention of a penalty.</p>
+             <p>Our apologies for the interruption. You can place orders again from your desk.</p>`
+          : `<p>The hold on your account has been lifted. You can place orders again from your desk.</p>
+             <p>Thank you for sorting it out.</p>`) +
+        (note ? `<p>${note}</p>` : "")),
     ).catch(() => false);
+  }
+
+  // A hold the machine made and a person then undid is the only evidence that
+  // the check is misreading pages. Counting them is how that gets fixed.
+  if (waive && wasAuto) {
+    const { notifyFaculty } = await import("@/lib/notify");
+    await notifyFaculty(
+      "↩️ An automatic hold was waived",
+      `${who?.business_name || who?.full_name || id}\n\n` +
+      `The site check held this account for:\n  ${who?.supporter_block_reason ?? "—"}\n\n` +
+      `A person read the page and disagreed; no penalty was taken.${note ? `\n\nNote: ${note}` : ""}\n\n` +
+      `If this keeps happening the check is misreading pages and wants looking at.`,
+    ).catch(() => {});
   }
 
   revalidatePath("/admin/supporters");

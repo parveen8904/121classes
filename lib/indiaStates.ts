@@ -130,3 +130,38 @@ export function parsePostalParts(address: string | null | undefined): {
   const city = at > 0 ? parts[at - 1] : "";
   return { city, state, pincode };
 }
+
+// ── ZOHO BOOKS' OWN STATE CODES ───────────────────────────────────────────
+//
+// Zoho writes the place of supply as a two-letter abbreviation — "DL", not
+// "Delhi" and not the GST number "07". An import with the wrong form in that
+// column is accepted and then files the sale against no state at all, which is
+// the sort of error that surfaces at a return deadline.
+//
+// These are Zoho's abbreviations, which are not always the ones you would
+// guess: Odisha is OD, Uttarakhand is UK, Telangana is TS.
+const ZOHO_STATE: Record<string, string> = {
+  "andaman and nicobar islands": "AN", "andhra pradesh": "AP", "arunachal pradesh": "AR",
+  "assam": "AS", "bihar": "BR", "chandigarh": "CH", "chhattisgarh": "CG",
+  "dadra and nagar haveli and daman and diu": "DN", "dadra and nagar haveli": "DN",
+  "daman and diu": "DD", "delhi": "DL", "goa": "GA", "gujarat": "GJ", "haryana": "HR",
+  "himachal pradesh": "HP", "jammu and kashmir": "JK", "jharkhand": "JH", "karnataka": "KA",
+  "kerala": "KL", "ladakh": "LA", "lakshadweep": "LD", "madhya pradesh": "MP",
+  "maharashtra": "MH", "manipur": "MN", "meghalaya": "ML", "mizoram": "MZ",
+  "nagaland": "NL", "odisha": "OD", "puducherry": "PY", "punjab": "PB",
+  "rajasthan": "RJ", "sikkim": "SK", "tamil nadu": "TN", "telangana": "TS",
+  "tripura": "TR", "uttar pradesh": "UP", "uttarakhand": "UK", "west bengal": "WB",
+};
+
+const ZOHO_ALIAS: Record<string, string> = {
+  "new delhi": "delhi", "nct of delhi": "delhi", "orissa": "odisha",
+  "pondicherry": "puducherry", "uttaranchal": "uttarakhand", "tamilnadu": "tamil nadu",
+  "uttrakhand": "uttarakhand", "telanagana": "telangana",
+};
+
+/** "Uttar Pradesh" → "UP". Empty when we do not know, never a guess. */
+export function zohoStateCode(state: string | null | undefined): string {
+  const key = String(state ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (!key) return "";
+  return ZOHO_STATE[key] ?? ZOHO_STATE[ZOHO_ALIAS[key] ?? ""] ?? "";
+}

@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
+import { zohoStateCode } from "@/lib/indiaStates";
 
 // WHAT THE ACCOUNTS DEPARTMENT NEEDS, WHICH IS NOT WHAT THE SALES DESK NEEDS.
 //
@@ -24,6 +25,7 @@ export type AccountRow = {
   date: string;
   customer: string;
   email: string;
+  phone: string;
   gstin: string;
   state: string;
   description: string;
@@ -38,6 +40,10 @@ export type AccountRow = {
   razorpayPaymentId: string;
   zohoStatus: string;
   zohoInvoiceId: string;
+  /** The Zoho ledger this sale is booked to — different for books and classes. */
+  account: string;
+  /** Services carry the coaching SAC; printed books are goods with their own HSN. */
+  hsn: string;
 };
 
 export type AccountsFilter = {
@@ -85,13 +91,13 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
 
   const [subs, books, gifts] = await Promise.all([
     range(svc.from("orders")
-      .select("id, order_no, invoice_no, receipt_no, amount_inr, status, created_at, razorpay_order_id, razorpay_payment_id, zoho_status, zoho_invoice_id, subjects:subject_id(title), profiles:student_id(full_name, business_name, email, gstin, state)")
+      .select("id, order_no, invoice_no, receipt_no, amount_inr, status, created_at, razorpay_order_id, razorpay_payment_id, zoho_status, zoho_invoice_id, kind, subjects:subject_id(title), profiles:student_id(full_name, business_name, email, phone, gstin, state)")
       .order("created_at", { ascending: false }).limit(2000) as never) as never,
     range(svc.from("book_orders")
       .select("id, order_no, invoice_no, receipt_no, amount_inr, status, created_at, razorpay_order_id, razorpay_payment_id, zoho_status, zoho_invoice_id, guest_contact, ship_to, items")
       .order("created_at", { ascending: false }).limit(2000) as never) as never,
     range(svc.from("gift_orders")
-      .select("id, order_no, invoice_no, receipt_no, amount_inr, taxable_value, cgst, sgst, igst, status, created_at, razorpay_order_id, razorpay_payment_id, billing_name, billing_gstin, billing_state, recipient_name, recipient_email, months, subjects:subject_id(title)")
+      .select("id, order_no, invoice_no, receipt_no, amount_inr, taxable_value, cgst, sgst, igst, status, created_at, razorpay_order_id, razorpay_payment_id, billing_name, billing_gstin, billing_state, recipient_name, recipient_email, recipient_phone, months, tier, subjects:subject_id(title)")
       .order("created_at", { ascending: false }).limit(2000) as never) as never,
   ]) as unknown as { data: Record<string, never>[] | null }[];
 
@@ -106,13 +112,17 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
       orderNo: r.order_no ? `#${r.order_no}` : "",
       invoiceNo: str(r.invoice_no), receiptNo: r.receipt_no ? String(r.receipt_no) : "",
       date: str(r.created_at),
-      customer: str(p?.business_name || p?.full_name), email: str(p?.email),
+      customer: str(p?.business_name || p?.full_name), email: str(p?.email), phone: str(p?.phone),
       gstin: str(p?.gstin), state: str(p?.state),
       description: str((r.subjects as unknown as { title?: string } | null)?.title) || "Subscription",
       total: num(r.amount_inr), taxable: 0, cgst: 0, sgst: 0, igst: 0,
       status: str(r.status),
       razorpayOrderId: str(r.razorpay_order_id), razorpayPaymentId: str(r.razorpay_payment_id),
       zohoStatus: str(r.zoho_status), zohoInvoiceId: str(r.zoho_invoice_id),
+      // An extension is booked separately from a first sale, the way the
+      // office has always kept them.
+      account: str(r.kind) === "extension" ? "Sales-Validity" : "Sales-Classes",
+      hsn: "999293",
     });
   }
 
@@ -124,13 +134,16 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
       orderNo: r.order_no ? `#${r.order_no}` : "",
       invoiceNo: str(r.invoice_no), receiptNo: r.receipt_no ? String(r.receipt_no) : "",
       date: str(r.created_at),
-      customer: str(s.name || g.name), email: str(s.email || g.email),
+      customer: str(s.name || g.name), email: str(s.email || g.email), phone: str(s.phone || g.phone),
       gstin: "", state: str(s.state),
       description: `Printed books × ${((r.items ?? []) as unknown as unknown[]).length} line(s)`,
       total: num(r.amount_inr), taxable: 0, cgst: 0, sgst: 0, igst: 0,
       status: str(r.status),
       razorpayOrderId: str(r.razorpay_order_id), razorpayPaymentId: str(r.razorpay_payment_id),
       zohoStatus: str(r.zoho_status), zohoInvoiceId: str(r.zoho_invoice_id),
+      // Books are GOODS, not a service — a different ledger and a different
+      // HSN, and booking them to the coaching account would misstate both.
+      account: "Sales-Books", hsn: "4901",
     });
   }
 
@@ -140,9 +153,9 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
       orderNo: r.order_no ? `#${r.order_no}` : "",
       invoiceNo: str(r.invoice_no), receiptNo: r.receipt_no ? String(r.receipt_no) : "",
       date: str(r.created_at),
-      customer: str(r.billing_name || r.recipient_name), email: str(r.recipient_email),
+      customer: str(r.billing_name || r.recipient_name), email: str(r.recipient_email), phone: str(r.recipient_phone),
       gstin: str(r.billing_gstin), state: str(r.billing_state),
-      description: `${str((r.subjects as unknown as { title?: string } | null)?.title) || "Subject"} — ${str(r.months)} months (vendor / sponsored)`,
+      description: `${str((r.subjects as unknown as { title?: string } | null)?.title) || "Subject"} — ${str(r.tier) || "Gold"} (${str(r.months)} months)`,
       // A vendor sale is the only one that already stores its own tax split,
       // worked out at the moment of sale. Where it exists it is used rather
       // than recomputed, so the report agrees with the invoice that was issued.
@@ -151,6 +164,7 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
       status: str(r.status),
       razorpayOrderId: str(r.razorpay_order_id), razorpayPaymentId: str(r.razorpay_payment_id),
       zohoStatus: "", zohoInvoiceId: "",
+      account: "Sales-Classes", hsn: "999293",
     });
   }
 
@@ -161,61 +175,116 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
 }
 
 const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
-const isoDay = (iso: string) => (iso ? iso.slice(0, 10) : "");
+
+/** Zoho reads dates as DD/MM/YYYY, and reads an ISO date as the wrong day. */
+const dmy = (iso: string) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const ist = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "numeric",
+  }).format(d);
+  return ist.replace(/-/g, "/");
+};
+
+/** "1,000.00" — Zoho's own amount formatting, thousands separator and all. */
+const money = (n: number) => (Math.round(n * 100) / 100).toLocaleString("en-IN", {
+  minimumFractionDigits: 2, maximumFractionDigits: 2,
+});
+
+/** The financial year a date falls in, as Zoho writes a payment prefix. */
+function fyPrefix(iso: string): string {
+  const d = iso ? new Date(iso) : new Date();
+  const y = d.getUTCFullYear(), m = d.getUTCMonth();
+  const start = m >= 3 ? y : y - 1;
+  return `E-${String(start % 100).padStart(2, "0")}-${String((start + 1) % 100).padStart(2, "0")}/`;
+}
+
+// The standing wording on every invoice raised through Zoho. Kept here so the
+// exported file carries exactly what the manual one did; changing it is a
+// business decision, not a formatting one.
+const TERMS =
+  "(i) Classes and contents against this invoice will be provided by Faculty named above. Aldine CA has no role " +
+  "what so ever in providing content/classes. In case of any dispute on providing such content/classes student " +
+  "should directly contact respective Faculty.(ii) No refund allowed/permitted against this order since it is a " +
+  "digital content.(iii) We are serving student named in above invoice. If buyer of content is not a student, then " +
+  "such buyer should issue invoice to student served by us.";
 
 /**
- * EXPORT INVOICES — the documents raised.
+ * EXPORT INVOICES — matching the file Zoho already accepts.
  *
- * Column names follow Zoho Books' own invoice import vocabulary so the file can
- * be mapped without renaming every heading by hand. Only rows that actually
- * have an invoice number appear: an abandoned checkout raised no document and
- * has nothing to import.
+ * The columns, their order and their vocabulary are taken from the export the
+ * office has been producing by hand, so this drops into the same import screen
+ * without a mapping step. Three things in it are easy to get wrong and are
+ * worth naming:
+ *
+ *   · the date is DD/MM/YYYY — an ISO date imports as the wrong day;
+ *   · Place of Supply is Zoho's two-letter code, "DL", not "Delhi" or "07";
+ *   · Item Price is the GROSS amount and Is Inclusive Tax is TRUE, so Zoho
+ *     works the tax out of it. Sending the taxable value here would overcharge
+ *     the customer by 18% in the books.
  */
 export function invoicesCsv(rows: AccountRow[]): string {
   const head = [
-    "Invoice Date", "Invoice Number", "Invoice Status", "Customer Name", "Email",
-    "GST Treatment", "GSTIN", "Place of Supply",
-    "Item Name", "Item Total", "Taxable Amount", "CGST", "SGST", "IGST", "Total",
-    "Order Number", "Receipt Number", "Payment Reference", "Zoho Status", "Zoho Invoice ID",
+    "Invoice Number", "Invoice Date", "Customer Name", "GST Treatment",
+    "GST Identification Number (GSTIN)", "Place of Supply", "PurchaseOrder", "Account",
+    "Item Name", "Item Desc", "Item Type", "HSN/SAC", "Quantity", "Item Price",
+    "Is Inclusive Tax", "Item Tax", "Item Tax Type", "Item Tax %", "Supply Type",
+    "Discount Type", "Is Discount Before Tax", "Discount Amount", "Template Name",
+    "Notes", "Terms & Conditions", "Reference Number", "Name", "Email", "Phone",
   ];
   const lines = [head.join(",")];
   for (const r of rows) {
-    if (!r.invoiceNo) continue;
+    if (!r.invoiceNo) continue;   // no document raised, nothing to import
     lines.push([
-      esc(isoDay(r.date)), esc(r.invoiceNo), esc(r.status), esc(r.customer), esc(r.email),
-      esc(r.gstin ? "business_gst" : "consumer"), esc(r.gstin), esc(r.state),
-      esc(r.description), esc(r.total.toFixed(2)),
-      esc(r.taxable ? r.taxable.toFixed(2) : ""), esc(r.cgst ? r.cgst.toFixed(2) : ""),
-      esc(r.sgst ? r.sgst.toFixed(2) : ""), esc(r.igst ? r.igst.toFixed(2) : ""),
-      esc(r.total.toFixed(2)),
-      esc(r.orderNo), esc(r.receiptNo), esc(r.razorpayPaymentId || r.razorpayOrderId),
-      esc(r.zohoStatus), esc(r.zohoInvoiceId),
+      esc(r.invoiceNo), esc(dmy(r.date)), esc(r.customer),
+      esc(r.gstin ? "business_gst" : "consumer"), esc(r.gstin), esc(zohoStateCode(r.state)),
+      esc(r.orderNo.replace(/^#/, "")), esc(r.account),
+      esc(r.description), esc(""), esc("Service"), esc(r.hsn), esc(1), esc(r.total),
+      esc("TRUE"), esc("GST18"), esc("Tax Group"), esc(18), esc("Taxable"),
+      esc("item_level"), esc(""), esc(""), esc("Spreadsheet Template"),
+      esc("Thanks for your business."), esc(TERMS),
+      esc(r.razorpayPaymentId), esc(r.customer), esc(r.email), esc(r.phone),
     ].join(","));
   }
-  return "﻿" + lines.join("\r\n");
+  return "\ufeff" + lines.join("\r\n");
 }
 
 /**
- * EXPORT PAYMENTS — the money received.
+ * EXPORT PAYMENTS — the money received, in Zoho's payment shape.
  *
- * Only sales where money actually arrived. A created-but-abandoned checkout is
- * not a payment, and importing one would put a receipt in the books against a
- * customer who never paid.
+ * Only sales where money actually arrived. Importing a created-but-abandoned
+ * checkout would put a receipt in the books against somebody who never paid,
+ * and then the bank reconciliation never closes.
+ *
+ * The payment number is Zoho's own running series (E-26-27/000001), which is a
+ * different thing again from our invoice number, our order number and our
+ * receipt number — it belongs to the books, not to us.
  */
-export function paymentsCsv(rows: AccountRow[]): string {
+export function paymentsCsv(rows: AccountRow[], startFrom = 1): string {
   const head = [
-    "Payment Date", "Payment Number", "Customer Name", "Email",
-    "Invoice Number", "Amount", "Payment Mode", "Deposit To",
-    "Reference Number", "Razorpay Order ID", "Order Number", "Description",
+    "Payment Number Prefix", "Payment Number Suffix", "Customer Name", "Place of Supply",
+    "GST Treatment", "GST Identification Number (GSTIN)", "Payment Type",
+    "Description of Supply", "Date", "Mode", "Amount", "Description", "Bank Charges",
+    "Tax Account", "Deposit To", "Reference Number", "Invoice Number", "Order No",
+    "Amount Applied to Invoice", "Invoice Amount",
   ];
   const lines = [head.join(",")];
-  for (const r of rows) {
-    if (!matchesState(r.status, "paid")) continue;
+  // Oldest first, so the running number climbs with the calendar the way a
+  // payment series is expected to.
+  const paid = rows.filter((r) => matchesState(r.status, "paid"))
+    .slice().sort((a, b) => a.date.localeCompare(b.date));
+  let n = Math.max(1, Math.floor(startFrom));
+  for (const r of paid) {
     lines.push([
-      esc(isoDay(r.date)), esc(r.receiptNo), esc(r.customer), esc(r.email),
-      esc(r.invoiceNo), esc(r.total.toFixed(2)), esc("Razorpay"), esc("Razorpay"),
-      esc(r.razorpayPaymentId), esc(r.razorpayOrderId), esc(r.orderNo), esc(r.description),
+      esc(fyPrefix(r.date)), esc(String(n).padStart(6, "0")), esc(r.customer),
+      esc(zohoStateCode(r.state)), esc(r.gstin ? "business_gst" : "consumer"), esc(r.gstin),
+      esc("Invoice Payment"), esc(r.description), esc(dmy(r.date)), esc("Razorpay"),
+      esc(money(r.total)), esc(""), esc(""), esc(""), esc("Razorpay Clearing"),
+      esc(r.razorpayPaymentId), esc(r.invoiceNo), esc(r.orderNo.replace(/^#/, "")),
+      esc(money(r.total)), esc(money(r.total)),
     ].join(","));
+    n++;
   }
-  return "﻿" + lines.join("\r\n");
+  return "\ufeff" + lines.join("\r\n");
 }

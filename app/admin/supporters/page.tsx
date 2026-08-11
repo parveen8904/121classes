@@ -58,7 +58,7 @@ export default async function AdminSupporters(props: {
       .select("id, ref, raised_by, against_url, against_id, what_happened, evidence_url, status, reviewed_at, outcome_note, created_at")
       .order("created_at", { ascending: false }).limit(200),
     svc.from("profiles")
-      .select("id, full_name, business_name, designation, email, phone, supporter_site, supporter_site_ok_at, supporter_blocked_at, supporter_block_reason")
+      .select("id, full_name, business_name, designation, email, phone, supporter_site, supporter_site_ok_at, supporter_blocked_at, supporter_block_reason, supporter_hold_auto, supporter_hold_evidence")
       .eq("is_supporter", true).limit(1000),
     svc.from("supporter_site_checks")
       .select("id, supporter_id, url, checked_at, ok, problem, detail, evidence")
@@ -263,9 +263,34 @@ export default async function AdminSupporters(props: {
                   <span className="muted" style={{ fontSize: ".8rem", marginLeft: "auto" }}>Since {when(x.supporter_blocked_at)}</span>
                 </div>
                 <p className="muted" style={{ margin: "6px 0", lineHeight: 1.6, fontSize: ".88rem" }}>{s(x.supporter_block_reason)}</p>
-                <form action={releaseSupporter} style={{ marginTop: 8 }}>
+                {x.supporter_hold_auto ? (
+                  <>
+                    <p style={{ margin: "6px 0", fontSize: ".84rem", lineHeight: 1.7 }}>
+                      🤖 <strong>Decided automatically</strong> from what was on their page.
+                    </p>
+                    {x.supporter_hold_evidence ? (
+                      <p className="muted" style={{ margin: "2px 0 8px", fontSize: ".84rem", fontStyle: "italic", lineHeight: 1.6 }}>
+                        On the page: “{s(x.supporter_hold_evidence)}”
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
+
+                {/* TWO WAYS OUT, AND THEY MEAN OPPOSITE THINGS.
+                    One says they paid. The other says we were wrong — and that
+                    one has to be here, in reach, because the check decides on
+                    its own now and will misread a page eventually. A vendor who
+                    has done nothing wrong must not have to pay ₹5,000 to be
+                    heard. */}
+                <form action={releaseSupporter} style={{ marginTop: 8, display: "grid", gap: 8 }}>
                   <input type="hidden" name="id" value={s(x.id)} />
-                  <SubmitButton className="btn" savedLabel="✓ Released">✓ Penalty settled — let them order again</SubmitButton>
+                  <input name="note" placeholder="A line for them, if you want one (optional)" style={{ marginBottom: 0 }} />
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <SubmitButton className="btn" savedLabel="✓ Released">✓ Penalty settled — let them order again</SubmitButton>
+                    <button className="btn secondary" name="waive" value="1" type="submit">
+                      ↩️ Wrongly held — release, no penalty
+                    </button>
+                  </div>
                 </form>
               </div>
             ))}

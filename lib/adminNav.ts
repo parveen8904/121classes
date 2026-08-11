@@ -16,6 +16,7 @@ export type AdminGroup = { id: string; icon: string; title: string; tagline: str
 // more purposeful tiles.
 export const REPORTS: AdminPanel[] = [
   { icon: "💰", title: "Sales report", desc: "Revenue in total and this month, split between subscriptions and books; active plans by tier; top-selling titles; gift purchases with their GST breakup and invoices.", href: "/admin/reports/sales" },
+      { icon: "🧮", title: "Accounts & Zoho", desc: "For the accounts department: every sale with its invoice, receipt, Razorpay reference and Zoho status, filtered by date and state — plus Export Invoice and Export Payment. Separate from the sales Excel, which is unchanged.", href: "/admin/accounts" },
   { icon: "🏆", title: "Leaderboards — who to mentor", desc: "A board for each thing with its leader named: classes played, planner ticked, mock papers, descriptive papers, marks as a percentage, case-study and MCQ toppers. Filter by exam attempt, phone and email on every row.", href: "/admin/reports/toppers" },
   { icon: "📝", title: "Feedback", desc: "What students say about us — the complaints first, in their own words, with a way to reach them. Averages underneath, worst question first.", href: "/admin/reports/feedback" },
   { icon: "💬", title: "Doubt report", desc: "Every doubt on every channel: how many were answered, how many are still waiting and for how long, then the full question-and-answer record. The only doubt list there is.", href: "/admin/doubt-log" },

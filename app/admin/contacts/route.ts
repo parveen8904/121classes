@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requireArea } from "@/lib/adminAccess";
+import { currentStaff } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
 import { selectAll } from "@/lib/pageAll";
 
@@ -41,7 +41,11 @@ function e164(raw: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await requireArea(null))) {
+  // SUPER-ADMIN ONLY. This is every student's name and mobile number in one
+  // file — the single most exportable thing in the system — so it is not open
+  // to a staff area, only to him.
+  const staff = await currentStaff();
+  if (staff?.role !== "admin") {
     return new NextResponse("Admins only.", { status: 403 });
   }
   const svc = createServiceClient();

@@ -100,10 +100,41 @@ async function loopingHard(svc: ReturnType<typeof createServiceClient>, from: st
       .eq("page_path", "email")
       .eq("email", from)
       .gte("created_at", since);
-    return (count ?? 0) > 6;
+    // Three, not seven. A student with four genuine questions in one hour is
+    // rare; seven automatic replies to somebody in one hour is never right.
+    return (count ?? 0) > 3;
   } catch {
     return false;
   }
+}
+
+/**
+ * "Re: Re: Re: Your first class is waiting" — the shape of a loop.
+ *
+ * The reply subject used to be `Re: ${subject}` whatever the subject already
+ * was, so every turn added another prefix. Anshu Bansal got three in ten
+ * minutes and the subject line was keeping count for us: Re: Re:, then
+ * Re: Re: Re:.
+ *
+ * Two things come out of that. A reply now carries exactly ONE "Re:", however
+ * many arrived — and an incoming subject that already has two or more is
+ * treated as proof of a loop on its own, without waiting for a counter to fill
+ * up. Mail conventions differ by language and client, so the Fwd and the
+ * Spanish/German forms are recognised too: a loop that speaks another language
+ * is still a loop.
+ */
+const RE_PREFIX = /^\s*((re|aw|sv|antw|res|fwd|fw|wg|tr)\s*(\[\d+\])?\s*:\s*)+/i;
+
+export function replySubject(subject: string, fallback: string): string {
+  const bare = subject.replace(RE_PREFIX, "").trim();
+  return bare ? `Re: ${bare}` : fallback;
+}
+
+/** How many Re:/Fwd: prefixes are already stacked on an arriving subject. */
+export function replyDepth(subject: string): number {
+  const m = subject.match(RE_PREFIX);
+  if (!m) return 0;
+  return (m[0].match(/:/g) ?? []).length;
 }
 
 /** Mail that must never be replied to: bounces, vacation notices, other robots. */
@@ -199,6 +230,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, result: "recorded as ignored, not a student" });
   }
 
+  // A SUBJECT THAT IS COUNTING THE ROUNDS FOR US.
+  //
+  // One "Re:" is a person replying. Two or more means our reply came back and
+  // was replied to again, which is a loop whatever started it — and unlike the
+  // counter below, this trips on the SECOND turn rather than the seventh. That
+  // matters: seven emails in an hour to a student is already a bad morning.
+  if (replyDepth(subject) >= 2) {
+    console.error("[email/inbound] subject already stacked —", JSON.stringify(subject.slice(0, 80)), "from", from);
+    try {
+      const { notifyFaculty } = await import("@/lib/notify");
+      await notifyFaculty(
+        "🔁 An email loop was stopped",
+        `A message arrived from ${from} with the subject:\n\n  ${subject.slice(0, 200)}\n\n` +
+        `Two or more "Re:" prefixes means our own reply came back to us and was answered again. ` +
+        `Nothing further has been sent to this person automatically — please look at the thread and reply by hand ` +
+        `if they are owed an answer.`,
+      ).catch(() => {});
+    } catch { /* telling somebody must not itself fail the request */ }
+    return NextResponse.json({ ok: true, result: "recorded, reply chain too deep" });
+  }
+
   if (await loopingHard(svc, from)) {
     console.error("[email/inbound] too many messages from", from, "— answering stopped");
     return NextResponse.json({ ok: true, result: "recorded, loop guard tripped" });
@@ -221,7 +273,7 @@ export async function POST(req: NextRequest) {
       const { sendEmail, emailShell, notifyFaculty, aiReplyBcc } = await import("@/lib/notify");
       await sendEmail(
         from,
-        subject ? `Re: ${subject}` : "Your answer book",
+        replySubject(subject, "Your answer book"),
         emailShell(
           "We have your paper",
           "<p>Thank you — your answer book has reached us and is in the checking queue.</p>" +
@@ -249,7 +301,7 @@ export async function POST(req: NextRequest) {
     const { isEvaluationComplaint, EVALUATION_HELP } = await import("@/lib/evaluationHelp");
     if (isEvaluationComplaint(question)) {
       const { sendEmail, emailShell, aiReplyBcc } = await import("@/lib/notify");
-      await sendEmail(from, subject ? `Re: ${subject}` : "Getting your copy checked",
+      await sendEmail(from, replySubject(subject, "Getting your copy checked"),
         emailShell("Getting your copy checked", `<p>${EVALUATION_HELP.replace(/\n\n/g, "</p><p>")}</p>`),
         { bcc: await aiReplyBcc() });
       if (row?.id) await svc.from("page_questions").update({ status: "answered" }).eq("id", row.id);
@@ -301,7 +353,7 @@ export async function POST(req: NextRequest) {
     );
     // He is blind-copied on every answer sent in his name, so nothing goes out
     // in his voice that he has not seen. The student never knows he was copied.
-    const sent = await sendEmail(from, subject ? `Re: ${subject}` : "Your question", html, {
+    const sent = await sendEmail(from, replySubject(subject, "Your question"), html, {
       bcc: await aiReplyBcc(),
     });
 

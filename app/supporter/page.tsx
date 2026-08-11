@@ -113,6 +113,7 @@ export default async function SupporterPage(props: {
               the wrong seller while believing you were browsing. */}
           {!viewed && <Link className="btn small" href="/supporter/sell">🛒 Place an order</Link>}
           {!viewed && <Link className="btn small secondary" href="/supporter/profile">👤 My details &amp; GST</Link>}
+          <Link className="btn small secondary" href="/supporter/leads">📇 Leads I have passed on</Link>
           <Link className="btn small secondary" href="/supporter/terms">📋 How this works</Link>
           <Link className="btn small secondary" href="/supporter/complaint">🚩 Report a seller</Link>
           {/* There was no way out of this portal at all. A supporter selling

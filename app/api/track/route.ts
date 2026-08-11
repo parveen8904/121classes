@@ -32,12 +32,34 @@ export async function POST(req: NextRequest) {
     } catch { /* anonymous */ }
   }
 
+  // WHERE, NOT WHO.
+  //
+  // Vercel works out the country and region at its edge and hands them over as
+  // headers, so nothing is called and nothing is paid for. Two coarse labels
+  // are kept — "IN" and "UP" — and the IP they were derived from is not stored,
+  // not logged, and not read for any other purpose.
+  //
+  // This is as far as it goes, and the limit is not a setting. An IP contains
+  // no name, no phone and no email; the vendors who sell "visitor
+  // identification" are matching addresses against purchased broker files,
+  // which is a different activity with a different legal footing, and this
+  // column is not a step towards it.
+  //
+  // Indian mobile traffic geolocates poorly — the big carriers route through a
+  // handful of gateways, so a student in Lucknow often reads as Mumbai. Good
+  // enough for "which states are we reaching", useless for anything narrower,
+  // and it should not be presented as more than that.
+  const country = (req.headers.get("x-vercel-ip-country") ?? "").slice(0, 2).toUpperCase() || null;
+  const region = (req.headers.get("x-vercel-ip-country-region") ?? "").slice(0, 8).toUpperCase() || null;
+
   try {
     await createServiceClient().from("page_views").insert({
       path: path || "/login",
       event,
       user_id: userId,
       visitor_key: String(body.visitor ?? "").slice(0, 64) || null,
+      country,
+      region,
     });
   } catch { /* analytics must never break the site */ }
   return NextResponse.json({ ok: true });

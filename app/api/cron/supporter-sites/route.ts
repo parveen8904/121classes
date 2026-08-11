@@ -13,11 +13,19 @@ export const maxDuration = 300;
 // per cent off, and bundling with another faculty — are both visible on a
 // public page, and neither is visible from here unless somebody goes and looks.
 //
-// NOTHING IS DECIDED HERE. A finding is written down and a person is told. An
-// account is only ever put on hold by a human being who has read the page, and
-// the supporter is shown the exact words that were found. A machine that reads
-// a shop page will misread one eventually, and an accusation of cheating is not
-// a thing to be wrong about at three in the morning.
+// THIS NOW DECIDES. It did not use to: a finding was written down, a person was
+// told, and only a human who had read the page ever put an account on hold —
+// because a machine reading a shop page will misread one eventually, and an
+// accusation of cheating is not a thing to be wrong about at three in the
+// morning. The founder has asked for it to act, so it acts.
+//
+// The caution moves into the code instead of into a person's judgement:
+//   · a site that does not answer is never a breach, only a site that is down;
+//   · the words found on the page are stored and quoted back to the vendor;
+//   · the vendor is emailed the moment it happens, told how to have it undone
+//     for nothing if it is wrong, and the office is told separately;
+//   · every hold is written to supporter_holds marked `auto`, so the mistakes
+//     can be found rather than merely regretted.
 
 const PER_RUN = 25;
 
@@ -65,28 +73,35 @@ export async function GET(req: NextRequest) {
     .slice(0, PER_RUN);
 
   const { inspectSite, recordCheck } = await import("@/lib/supporterSite");
+  const { autoHoldForBreach, isHoldable, PENALTY_INR } = await import("@/lib/supporterHold");
   const found: string[] = [];
+  let heldCount = 0;
 
   for (const seller of due) {
     const r = await inspectSite(seller.supporter_site);
     await recordCheck(seller.id, seller.supporter_site, r);
-    if (!r.ok && r.problem !== "unreachable") {
-      const who = seller.business_name || seller.full_name || seller.id;
-      found.push(
-        `${who}\n  ${seller.supporter_site}\n  ${r.problem}: ${r.detail}` +
-        (r.evidence ? `\n  On the page: “${r.evidence}”` : ""),
-      );
-    }
+    if (!isHoldable(r)) continue;
+
+    const outcome = await autoHoldForBreach(seller.id, seller.supporter_site, r);
+    if (outcome.held) heldCount++;
+    const who = seller.business_name || seller.full_name || seller.id;
+    found.push(
+      `${who}\n  ${seller.supporter_site}\n  ${r.problem}: ${r.detail}` +
+      (r.evidence ? `\n  On the page: “${r.evidence}”` : "") +
+      `\n  → ${outcome.held ? `ON HOLD, penalty Rs.${PENALTY_INR}` : outcome.already ? "already on hold" : "not held"}`,
+    );
   }
 
   if (found.length) {
     await notifyFaculty(
-      `🚩 ${found.length} supporter site${found.length === 1 ? "" : "s"} need a look`,
+      `🚩 ${heldCount} seller${heldCount === 1 ? "" : "s"} put on hold`,
       `${found.join("\n\n")}\n\n` +
-        `Nothing has been done to any account. Read the pages yourself, and put an account on ` +
-        `hold from Admin → Supporters if it is right to.`,
+        `These were decided automatically from what was on the page, and each seller has been emailed the ` +
+        `finding, the words that were found, and how to have it undone for nothing if it is wrong. ` +
+        `READ THE PAGES YOURSELF before any penalty is banked — a hold made in error is released from ` +
+        `Admin → Supporters and costs the seller nothing.`,
     ).catch(() => {});
   }
 
-  return NextResponse.json({ ok: true, checked: due.length, flagged: found.length });
+  return NextResponse.json({ ok: true, checked: due.length, flagged: found.length, held: heldCount });
 }

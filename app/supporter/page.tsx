@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import OrderList, { OrderSearch, orderMatches, type SupporterOrder } from "./OrderList";
+import PenaltyPay from "./PenaltyPay";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Supporter — CA Parveen Sharma" };
@@ -36,7 +37,9 @@ export default async function SupporterPage(props: {
 
   const svc = createServiceClient();
   const { data: me } = await svc
-    .from("profiles").select("full_name, email, is_supporter, role").eq("id", user.id).maybeSingle();
+    .from("profiles")
+    .select("full_name, email, is_supporter, role, supporter_blocked_at, supporter_block_reason, supporter_hold_auto, supporter_hold_evidence, supporter_penalty_inr")
+    .eq("id", user.id).maybeSingle();
   if (!me?.is_supporter && me?.role !== "admin") redirect("/dashboard");
 
   const { data: giftRows } = await svc.from("gift_orders")
@@ -86,6 +89,20 @@ export default async function SupporterPage(props: {
             ↪ Log out
           </a>
         </div>
+
+        {/* THE HOLD, ABOVE EVERYTHING THEY CAN DO.
+            A vendor who finds out about a hold by failing to place an order has
+            wasted a student's details and their own evening. It goes first. */}
+        {me?.supporter_blocked_at ? (
+          <div style={{ marginTop: 18 }}>
+            <PenaltyPay
+              reason={(me.supporter_block_reason as string) ?? null}
+              evidence={(me.supporter_hold_evidence as string) ?? null}
+              amountInr={Number(me.supporter_penalty_inr) || 5000}
+              auto={Boolean(me.supporter_hold_auto)}
+            />
+          </div>
+        ) : null}
 
         {/* WHAT YOU SELL. Two products, priced exactly as a student would pay.
             The discount a supporter passes on comes from a coupon, openly, not

@@ -122,6 +122,10 @@
     {
       "path": "/api/cron/day-orders",
       "schedule": "30 18 * * *"
+    },
+    {
+      "path": "/api/cron/stuck-at-signup",
+      "schedule": "0 5,10,15 * * *"
     }
   ]
 }

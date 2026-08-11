@@ -93,6 +93,10 @@ type Visitors = {
   signed_in_today: number;
   login_success_today: number;
   login_failed_today: number;
+  people_who_failed: number;
+  people_who_recovered: number;
+  people_still_locked_out: number;
+  stuck_at_verification: number;
   signup_success_today: number;
   signup_failed_today: number;
   new_accounts_today: number;
@@ -253,7 +257,30 @@ export default async function HealthPage(props: { searchParams: Promise<{ sort?:
                 />
                 <Stat label="Students signed in" value={String(v.signed_in_today)} sub="unique accounts active" />
                 <Stat label="Successful logins" value={String(v.login_success_today)} />
-                <Stat label="Failed login attempts" value={String(v.login_failed_today)} sub={v.login_failed_today > 20 ? "⚠️ unusually high" : "normal"} />
+                {/* PEOPLE, NOT KEYSTROKES.
+                    This read "75 failed login attempts" on a day when 31
+                    browsers failed, 24 of them got straight in, and seven
+                    people were actually stuck. A number that says 75 when the
+                    answer is 7 does not just exaggerate — it sends you after
+                    the wrong problem. */}
+                <Stat
+                  label="Locked out right now"
+                  value={String(v.people_still_locked_out)}
+                  sub={
+                    v.people_still_locked_out === 0
+                      ? "everyone who tried today got in"
+                      : `${v.people_who_recovered} of ${v.people_who_failed} who fumbled got in on their own`
+                  }
+                />
+                <Stat
+                  label="Stuck at email verification"
+                  value={String(v.stuck_at_verification)}
+                  sub={
+                    v.stuck_at_verification > 20
+                      ? "🔴 signed up, never confirmed, never once got in"
+                      : "signed up but never confirmed their address"
+                  }
+                />
                 <Stat label="New registrations" value={String(v.new_accounts_today)} sub="accounts created today" />
                 <Stat
                   label="Failed sign-up attempts"

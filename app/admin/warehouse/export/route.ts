@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
   const all = await listDispatchQueue(false);
   const match = (s: (string | null)[]) => !q || s.some((x) => (x ?? "").toLowerCase().includes(q));
-  const searched = all.filter((i) => match([i.orderNo, i.name, i.phone, i.contents, i.tracking]));
+  const searched = all.filter((i) => match([i.orderNo, i.name, i.phone, i.email, i.contents, i.tracking]));
 
   const rows =
     which === "dispatched" ? searched.filter((i) => i.tracking)
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     : "Gold plan — free book set";
 
   const out = [[
-    "Order no", "Ordered on", "Parcel", "Send to", "Phone",
+    "Order no", "Ordered on", "Parcel", "Send to", "Phone", "Email",
     "Address", "City", "State", "PIN code",
     "Contents", "Status", "Tracking ID",
   ].join(",")];
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
   for (const i of rows) {
     out.push([
       esc(i.orderNo), esc(day(i.createdAt)), esc(kind(i.table)),
-      esc(i.name), esc(i.phone),
+      esc(i.name), esc(i.phone), esc(i.email),
       esc(i.address), esc(i.city), esc(i.state), esc(i.pincode),
       esc(i.contents),
       esc(i.tracking ? "Dispatched" : "Awaiting dispatch"),

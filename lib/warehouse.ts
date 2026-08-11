@@ -2,11 +2,11 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { parsePostalParts } from "@/lib/indiaStates";
 import { sendEmail, emailConfigured, emailShell } from "@/lib/notify";
 
-type Ship = { name?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string; phone?: string };
+type Ship = { name?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string; phone?: string; email?: string };
 type Item = { book_id?: string; qty?: number };
 type OrderRow = {
   id: string;
-  guest_contact: { name?: string; phone?: string } | null;
+  guest_contact: { name?: string; phone?: string; email?: string } | null;
   ship_to: Ship | null;
   items: Item[] | null;
 };
@@ -20,6 +20,9 @@ export type DispatchItem = {
   name: string;
   address: string;
   phone: string;
+  // The address a parcel query is answered to. A packer chasing a bad PIN, or
+  // the office telling somebody their books have gone, writes to this.
+  email: string;
   contents: string;
   createdAt: string;
   tracking: string | null;
@@ -45,12 +48,12 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       .in("status", ["paid", "dispatched"])
       .order("created_at", { ascending: false }).limit(200),
     svc.from("orders")
-      .select("id, order_no, created_at, tracking_code, courier_name, invoice_no, invoice_url, subjects:subject_id(title), profiles:student_id(full_name, phone, address_line1, address_line2, city, state, pincode)")
+      .select("id, order_no, created_at, tracking_code, courier_name, invoice_no, invoice_url, subjects:subject_id(title), profiles:student_id(full_name, email, phone, address_line1, address_line2, city, state, pincode)")
       .eq("books_due", true).eq("status", "paid")
       .order("created_at", { ascending: false }).limit(200),
     // Gifted 9+ month Gold also ships books — to the RECIPIENT's address.
     svc.from("gift_orders")
-      .select("id, order_no, created_at, tracking_code, recipient_name, recipient_phone, recipient_address, courier_name, invoice_no, invoice_url, subjects:subject_id(title)")
+      .select("id, order_no, created_at, tracking_code, recipient_name, recipient_email, recipient_phone, recipient_address, courier_name, invoice_no, invoice_url, subjects:subject_id(title)")
       .eq("books_due", true).eq("status", "paid")
       .order("created_at", { ascending: false }).limit(200),
   ]);
@@ -69,13 +72,14 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       name: s.name ?? o.guest_contact?.name ?? "Customer",
       address: [s.line1, s.line2, [s.city, s.state, s.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", "),
       phone: s.phone ?? o.guest_contact?.phone ?? "",
+      email: s.email ?? o.guest_contact?.email ?? "",
       contents: (o.items ?? []).map((i) => `${titleById.get(i.book_id ?? "") ?? "Book"} × ${i.qty ?? 1}`).join(", ") || "Books",
       createdAt: o.created_at, tracking: o.tracking_code, courier: o.courier_name ?? null,
       invoiceNo: o.invoice_no ?? null, invoiceUrl: o.invoice_url ?? null,
       city: s.city ?? "", state: s.state ?? "", pincode: s.pincode ?? "",
     });
   }
-  type GoldRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; courier_name?: string | null; invoice_no?: string | null; invoice_url?: string | null; subjects: { title: string } | null; profiles: { full_name: string | null; phone: string | null; address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; pincode: string | null } | null };
+  type GoldRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; courier_name?: string | null; invoice_no?: string | null; invoice_url?: string | null; subjects: { title: string } | null; profiles: { full_name: string | null; email: string | null; phone: string | null; address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; pincode: string | null } | null };
   for (const g of (goldRows ?? []) as unknown as GoldRow[]) {
     const p = g.profiles;
     out.push({
@@ -83,19 +87,21 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       name: p?.full_name ?? "Student",
       address: p ? [p.address_line1, p.address_line2, [p.city, p.state, p.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "",
       phone: p?.phone ?? "",
+      email: p?.email ?? "",
       contents: `${g.subjects?.title ?? "Gold"} — FREE printed books set (9+ month Gold)`,
       createdAt: g.created_at, tracking: g.tracking_code, courier: g.courier_name ?? null,
       invoiceNo: g.invoice_no ?? null, invoiceUrl: g.invoice_url ?? null,
       city: p?.city ?? "", state: p?.state ?? "", pincode: p?.pincode ?? "",
     });
   }
-  type GiftRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; courier_name?: string | null; invoice_no?: string | null; invoice_url?: string | null; recipient_name: string | null; recipient_phone: string | null; recipient_address: string | null; subjects: { title: string } | null };
+  type GiftRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; courier_name?: string | null; invoice_no?: string | null; invoice_url?: string | null; recipient_name: string | null; recipient_email: string | null; recipient_phone: string | null; recipient_address: string | null; subjects: { title: string } | null };
   for (const g of (giftRows ?? []) as unknown as GiftRow[]) {
     out.push({
       table: "gift_orders", id: g.id, orderNo: g.order_no ? `#${g.order_no}` : "—",
       name: g.recipient_name ?? "Gift recipient",
       address: g.recipient_address ?? "",
       phone: g.recipient_phone ?? "",
+      email: g.recipient_email ?? "",
       contents: `🎁 GIFT — ${g.subjects?.title ?? "Gold"} FREE printed books set (9+ month Gold)`,
       createdAt: g.created_at, tracking: g.tracking_code, courier: g.courier_name ?? null,
       invoiceNo: g.invoice_no ?? null, invoiceUrl: g.invoice_url ?? null,

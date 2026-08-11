@@ -39,15 +39,26 @@ export default async function EncodingReport() {
       .order("priority", { ascending: false })
       .order("updated_at", { ascending: true, nullsFirst: true })
       .limit(4000),
-    svc.from("sections").select("id, title, class_no:config->>class_no").eq("type", "full_class_video").limit(4000),
+    svc.from("sections").select("id, title, topic_id, class_no:config->>class_no, bunny:m_bunny_video_id, yt:config->>youtube_url").eq("type", "full_class_video").limit(4000),
     svc.from("protected_videos").select("section_id, resolution, byte_size, created_at").eq("is_published", true).limit(4000),
   ]);
 
   const jobs = (jobRows ?? []) as Job[];
-  const name = new Map(
-    ((secRows ?? []) as { id: string; title: string; class_no: string | null }[])
-      .map((s) => [s.id, `${s.class_no ? `Class ${s.class_no} · ` : ""}${s.title}`]),
-  );
+  type Sec = { id: string; title: string; topic_id: string | null; class_no: string | null; bunny: string | null; yt: string | null };
+  const sections = (secRows ?? []) as unknown as Sec[];
+  const name = new Map(sections.map((s) => [s.id, `${s.class_no ? `Class ${s.class_no} · ` : ""}${s.title}`]));
+
+  // CLASSES THAT CAN NEVER REACH THIS QUEUE.
+  //
+  // The queue only ever contains work it has been given, so a class with no
+  // source file in Bunny is not "waiting" — it is invisible. Thirteen of them
+  // sat outside the screen entirely, and from the founder's chair that reads as
+  // "pending files are not showing in encoding". They are not pending. They
+  // were never entered, and nothing said so.
+  //
+  // A YouTube link is not a substitute here: offline download needs our own
+  // encrypted copy, and YouTube cannot give us one.
+  const noSource = sections.filter((s) => !String(s.bunny ?? "").trim());
 
   const now = Date.now();
   const since = (h: number) => new Date(now - h * 3600_000).toISOString();
@@ -143,6 +154,44 @@ export default async function EncodingReport() {
                     <td style={td}>{j.resolution || "—"}</td>
                     <td style={{ ...td, color: "var(--bad)" }}>{j.error ?? "—"}</td>
                     <td style={td}>{when(j.updated_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* ── Not in the queue at all ──────────────────────────────────────── */}
+      {noSource.length > 0 && (
+        <>
+          <h2 className="admin-section-title" style={{ marginTop: 30 }}>
+            🚫 Not in the queue — no video to encode ({noSource.length})
+          </h2>
+          <p className="muted" style={{ fontSize: ".82rem", marginTop: -4, lineHeight: 1.7 }}>
+            These classes have no file in Bunny, so there is nothing to encrypt and they will never appear in the
+            waiting list above — they are not late, they were never entered. A YouTube link does not help here:
+            an offline download needs our own encrypted copy, and YouTube cannot give us one.
+            <strong> Students cannot download these classes.</strong> Upload the video to Bunny and it joins the
+            queue on its own that night.
+          </p>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".84rem" }}>
+              <thead><tr><th style={th}>Class</th><th style={th}>Plays online from</th><th style={th}>What is needed</th></tr></thead>
+              <tbody>
+                {noSource.map((s) => (
+                  <tr key={s.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={td}>{s.class_no ? `Class ${s.class_no} · ` : ""}{s.title}</td>
+                    <td style={td}>
+                      {String(s.yt ?? "").trim()
+                        ? <span className="muted">YouTube</span>
+                        : <strong style={{ color: "var(--bad)" }}>nothing — no video at all</strong>}
+                    </td>
+                    <td style={td}>
+                      {s.topic_id
+                        ? <a className="btn small secondary" href={`/admin/topics/${s.topic_id}`}>Open the class →</a>
+                        : <span className="muted">—</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

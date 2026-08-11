@@ -350,6 +350,9 @@ export async function verifyPlanPayment(input: {
       payerEmail: user.email ?? null,
       description: `${subject?.title ?? "Subscription"} · ${String(n.tier).toUpperCase()} plan (${months} month${months === 1 ? "" : "s"})`,
       amountInr: (Number(order.amount) || 0) / 100,
+      // The receipt must evidence the PAYMENT. This was to hand all along and
+      // simply never passed on, so every receipt printed an order reference.
+      paymentRef: input.razorpay_payment_id,
     });
   }
 
@@ -555,6 +558,7 @@ export async function verifyExtendPayment(input: {
       payerEmail: user.email ?? null,
       description: `Subscription extension (+${addMonths} month${addMonths === 1 ? "" : "s"})`,
       amountInr: (Number(order.amount) || 0) / 100,
+      paymentRef: input.razorpay_payment_id,
     });
   }
 

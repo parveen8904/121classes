@@ -148,6 +148,7 @@ export async function verifyCartPayment(input: {
       description: `Books: ${items.map((i) => `${titleById.get(i.b)?.title ?? "Book"} × ${i.q}`).join(", ")}`.slice(0, 180),
       amountInr: order.amount / 100,
       table: "book_orders",
+      paymentRef: input.razorpay_payment_id,
     });
   }
 

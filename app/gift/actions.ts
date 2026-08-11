@@ -8,7 +8,7 @@ import {
   razorpayConfigured, razorpayKeyId, createRazorpayOrder, fetchRazorpayOrder, verifyRazorpaySignature,
 } from "@/lib/razorpay";
 import { sendEmail, sendEmailWithAttachment, emailShell } from "@/lib/notify";
-import { getGstSettings, computeGst, nextInvoiceNo, buildInvoicePdf } from "@/lib/invoice";
+import { getGstSettings, computeGst, nextInvoiceNo, nextReceiptNo, buildInvoicePdf } from "@/lib/invoice";
 import { applyCoupon, redeemCoupon } from "@/lib/coupons";
 
 const SITE = "https://caparveensharma.com";
@@ -246,8 +246,11 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
   const { data: subj } = await svc.from("subjects").select("title").eq("id", g.subject_id).maybeSingle();
   const desc = `${subj?.title ?? "Subject"} — ${g.tier} (${g.months} months) — gift for ${g.recipient_name}`;
   let invoiceRef: string | null = null;
+  // Reserved outside the try so the row can record it: a receipt number that is
+  // printed but not stored cannot be reprinted, and a reissue would burn a new
+  // one — two pieces of paper for one payment.
+  const receiptNo = await nextReceiptNo();
   try {
-    const { data: gifterProf } = await svc.from("profiles").select("registration_no").eq("id", user.id).maybeSingle();
     const pdf = await buildInvoicePdf({
       invoiceNo, date: now, s, gst,
       buyerName: g.billing_name || g.recipient_name, buyerGstin: g.billing_gstin, buyerAddress: g.billing_address, buyerState: String(g.billing_state),
@@ -255,6 +258,8 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
       paymentRef: input.razorpay_payment_id,
       paymentMode: "Online Payment [Razorpay]",
       receiptDetail: `Gift for ${g.recipient_name} · ${g.months} months`,
+      receiptNo,
+      orderId: (g as { order_no?: number | null }).order_no ?? null,
     });
     const path = `invoices/${invoiceNo.replace(/[^\w-]/g, "_")}.pdf`;
     const up = await svc.storage.from("secure").upload(path, Buffer.from(pdf), { contentType: "application/pdf", upsert: true });
@@ -316,7 +321,7 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
   } catch { /* best-effort */ }
 
   await svc.from("gift_orders").update({
-    status: "provisioned", recipient_user_id: recipientId, invoice_no: invoiceNo, invoice_url: invoiceRef,
+    status: "provisioned", recipient_user_id: recipientId, invoice_no: invoiceNo, invoice_url: invoiceRef, receipt_no: receiptNo,
     razorpay_payment_id: input.razorpay_payment_id, taxable_value: gst.taxable, cgst: gst.cgst, sgst: gst.sgst, igst: gst.igst,
     paid_at: now.toISOString(),
   }).eq("id", g.id);

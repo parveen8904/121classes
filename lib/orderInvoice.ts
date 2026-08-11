@@ -1,6 +1,6 @@
 import { formatDate } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getGstSettings, computeGst, nextInvoiceNo, buildInvoicePdf } from "@/lib/invoice";
+import { getGstSettings, computeGst, nextInvoiceNo, nextReceiptNo, buildInvoicePdf } from "@/lib/invoice";
 
 // Issue the GST invoice for a PAID order: PDF → private bucket → EMAILED to
 // the payer. The admin Sales panel links it; it is NEVER shown inside the
@@ -71,21 +71,30 @@ export async function issueOrderInvoice(opts: {
     const gst = computeGst(opts.amountInr, state, s);
     const now = new Date();
     const invoiceNo = await nextInvoiceNo(s.prefix, now);
+    const receiptNo = await nextReceiptNo();
     const pdf = await buildInvoicePdf({
       invoiceNo, date: now, s, gst,
       buyerName: name || "Student", buyerGstin: gstin, buyerAddress: address,
       buyerState: state || s.state, itemDescription: opts.description,
       // Printed books ship as goods (HSN 4901); coaching services use the SAC.
       itemHsn: table === "book_orders" ? "4901" : undefined,
+      // The PAYMENT, when the caller has it. Falling back to the order
+      // reference is a last resort and says nothing about money having moved —
+      // it is what used to be printed every time.
       paymentRef: opts.paymentRef ?? opts.razorpayOrderId,
       paymentMode: "Online Payment [Razorpay]",
       receiptDetail,
+      receiptNo,
+      orderId: orderNo ?? null,
     });
 
     const path = `invoices/${invoiceNo.replace(/[^\w-]/g, "_")}.pdf`;
     const up = await svc.storage.from("secure").upload(path, Buffer.from(pdf), { contentType: "application/pdf", upsert: true });
     const ref = up.error ? null : `secure:${path}`;
-    await svc.from(table).update({ invoice_no: invoiceNo, invoice_url: ref }).eq("razorpay_order_id", opts.razorpayOrderId);
+    await svc.from(table).update({
+      invoice_no: invoiceNo, invoice_url: ref, receipt_no: receiptNo,
+      ...(opts.paymentRef ? { razorpay_payment_id: opts.paymentRef } : {}),
+    }).eq("razorpay_order_id", opts.razorpayOrderId);
 
     if (email) {
       const { sendEmail, sendEmailWithAttachment, emailShell } = await import("@/lib/notify");
@@ -129,7 +138,7 @@ export async function reissueOrderInvoice(orderId: string, notify = true): Promi
   const svc = createServiceClient();
   const { data: ord } = await svc
     .from("orders")
-    .select("id, invoice_no, order_no, subject_id, amount_inr, student_id, razorpay_order_id, created_at")
+    .select("id, invoice_no, order_no, receipt_no, subject_id, amount_inr, student_id, razorpay_order_id, razorpay_payment_id, created_at")
     .eq("id", orderId).maybeSingle();
   if (!ord) return { ok: false, reason: "order not found" };
   const invoiceNo = (ord as { invoice_no?: string | null }).invoice_no;
@@ -203,9 +212,16 @@ export async function reissueOrderInvoice(orderId: string, notify = true): Promi
     buyerAddress: address,
     buyerState: state,
     itemDescription: description,
-    paymentRef: (ord as { razorpay_order_id?: string | null }).razorpay_order_id ?? null,
+    // The payment first; the order reference only if no payment id was ever
+    // captured for this sale.
+    paymentRef: (ord as { razorpay_payment_id?: string | null }).razorpay_payment_id
+      ?? (ord as { razorpay_order_id?: string | null }).razorpay_order_id ?? null,
     paymentMode: "Online Payment [Razorpay]",
     receiptDetail,
+    // A reissue REPRINTS the receipt; it does not issue a new one. A receipt
+    // whose number changes when you print it again is not a receipt.
+    receiptNo: (ord as { receipt_no?: number | null }).receipt_no ?? null,
+    orderId: (ord as { order_no?: number | null }).order_no ?? null,
   });
 
   const path = `invoices/${invoiceNo.replace(/[^\w-]/g, "_")}.pdf`;

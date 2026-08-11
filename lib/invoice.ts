@@ -134,12 +134,54 @@ export function computeGst(total: number, buyerState: string, s: GstSettings): G
   return { taxable, cgst: 0, sgst: 0, igst: gst, total: grandTotal, rate: s.rate, intraState: false, applied: true };
 }
 
-// Reserve the next sequential invoice number, e.g. "CAPS/2026-27/0001".
+/** The most an invoice number may ever be. Asked for; enforced here. */
+export const INVOICE_NO_MAX = 15;
+
+/**
+ * "CAPS/26-27/0001" — fifteen characters exactly.
+ *
+ * It used to read "CAPS/2026-27/0010", which is seventeen. Accounting systems
+ * that take an invoice number in a fixed-width field truncate the overflow
+ * silently, and a truncated invoice number is worse than a short one: two
+ * different invoices can end up looking like the same document.
+ *
+ * The year is the only thing that gave way. Five for the prefix, six for the
+ * financial year, four for the serial — 9,999 invoices a year, which is a long
+ * way beyond what this business will raise.
+ */
+export function buildInvoiceNo(prefix: string, when: Date, n: number): string {
+  const fy = fyLabel(when).slice(2);                     // "2026-27" → "26-27"
+  const serial = String(n).padStart(4, "0");
+  const tail = `${fy}/${serial}`;                        // 10 characters
+  // A configurable prefix must not be allowed to break the promise above.
+  const room = Math.max(0, INVOICE_NO_MAX - tail.length);
+  return `${prefix.slice(0, room)}${tail}`;
+}
+
+// Reserve the next sequential invoice number.
 export async function nextInvoiceNo(prefix: string, when: Date): Promise<string> {
   const svc = createServiceClient();
   const { data } = await svc.rpc("next_invoice_number");
   const n = Number(data) || 1;
-  return `${prefix}${fyLabel(when)}/${String(n).padStart(4, "0")}`;
+  return buildInvoiceNo(prefix, when, n);
+}
+
+/**
+ * The receipt's own number.
+ *
+ * Not the order number, which is what used to be printed here. An invoice
+ * numbers a tax document, an order numbers a sale, and a receipt numbers the
+ * acknowledgement that money arrived; when two of those share a number, an
+ * accountant matching "10038" cannot tell which document is meant.
+ */
+export async function nextReceiptNo(): Promise<number | null> {
+  const svc = createServiceClient();
+  const { data, error } = await svc.rpc("next_receipt_number");
+  if (error) {
+    console.error("[receipt_no] could not be reserved", error.message);
+    return null;
+  }
+  return Number(data) || null;
 }
 
 const NUM = (n: number) => (Math.round(n * 100) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -159,6 +201,8 @@ export async function buildInvoicePdf(input: {
   receiptDetail?: string | null;    // e.g. "Starting: 25-07-2026 · Valid till: 24-08-2026"
   previousPaid?: number | null;     // paid before this receipt, if anything
   previousPaidOn?: Date | null;     // and when — a figure without a date is no use
+  receiptNo?: number | string | null;  // the receipt's OWN serial, never the order number
+  orderId?: number | string | null;    // the order this receipt acknowledges
 }): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -333,13 +377,16 @@ export async function buildInvoicePdf(input: {
 
   // ---------- RECEIPT ----------
   yy -= 20;
-  // NO RECEIPT NUMBER AND NO REGISTRATION NUMBER.
+  // THE RECEIPT'S OWN NUMBER — NOT THE ORDER'S.
   //
-  // The receipt is the lower half of an invoice that already carries its own
-  // number; a second number beside it is one more thing for a student to quote
-  // wrongly and for the office to reconcile. The registration number is ours,
-  // for our records — it means nothing to the student holding the paper and
-  // nothing to the tax it evidences.
+  // This printed the order number for a while, which meant one number stood for
+  // two documents and neither the office nor an accountant could tell from a
+  // quoted "10038" whether the sale or the acknowledgement was meant. The
+  // receipt now carries a serial of its own, and the order is named separately
+  // below so both can be quoted without ambiguity.
+  if (input.receiptNo != null && String(input.receiptNo) !== "") {
+    txtAt(`Receipt # ${String(input.receiptNo)}`, M, yy, 9.5, bold);
+  }
   txtAt("RECEIPT", 270, yy, 13, bold);
   yy -= 12;
   txtAt(`Dated ${dmy(input.date)}`, M, yy, 9);
@@ -349,8 +396,13 @@ export async function buildInvoicePdf(input: {
   // paragraph started immediately beneath it and the two touched.
   yy -= 6;
 
+  // The ORDER is named here, where the registration number used to be. A
+  // registration number is ours, for our records; the student holding this
+  // paper has an order number on every email we have sent them.
+  const orderLine = input.orderId != null && String(input.orderId) !== ""
+    ? ` Order ID ${String(input.orderId)},` : "";
   const para =
-    `Received with thanks from ${(input.buyerName || "Student").toUpperCase()}, ` +
+    `Received with thanks from ${(input.buyerName || "Student").toUpperCase()},${orderLine} ` +
     `a sum of Rs.${NUM(g.total)} ( ${amountInWords(g.total).replace(/^Rupees /, "Rupees ").replace(/\.$/, "")} ) ` +
     `by ${input.paymentMode ?? "Online Payment"}${input.paymentRef ? ` Ref.# ${input.paymentRef}` : ""}.`;
   for (const l of wrap(para, font, 9, R - M - 8)) { txtAt(l, M + 2, yy, 9); yy -= 12; }

@@ -2340,7 +2340,24 @@ const TRENDS_SYSTEM =
 // needed: study-guide topics for CA students, never repeating existing ones.
 const EVERGREEN_SYSTEM =
   "You pick article topics for a CA-student education site (caparveensharma.com) run by CA Parveen Sharma (Financial Reporting for CA Final, Advanced Accounting for CA Inter). " +
-  "Propose up to 15 NEW evergreen article topics students actually search for: specific Ind AS / AS explainers, tricky concepts (EIR, deferred tax, consolidation steps), exam strategy, revision plans, common mistakes, answer-writing, career paths after CA, articleship. " +
+  "Propose up to 15 NEW evergreen article topics students actually search for. " +
+  // AT LEAST TWELVE OF FIFTEEN MUST BE THE SUBJECTS HE TEACHES.
+  //
+  // This prompt used to list "career paths after CA, articleship" among its
+  // suggestions, and the machine obliged: of 195 articles published, 119 were
+  // about something he does not teach. They do bring CA students — the
+  // scholarship and articleship-transfer pieces were the most-read on the site
+  // — but they bring students who will never buy Financial Reporting or
+  // Advanced Accounting, and they clicked at 1.4% against the homepage's 18%.
+  // The one article on his own subject, AS 13, out-drew every other page bar
+  // the homepage. So the balance is now written into the instruction rather
+  // than left to chance.
+  "AT LEAST 12 of the 15 must be squarely on HIS OWN SUBJECTS — specific Ind AS / AS explainers, " +
+  "tricky treatments (EIR, deferred tax, consolidation steps, cum-interest vs ex-interest, ESOP, leases), " +
+  "worked problems, and the mistakes students actually make in them. " +
+  "At most 3 may be exam strategy, revision planning or answer-writing, and ONLY where tied to those two subjects. " +
+  "Do NOT propose articleship, dummy articleship, scholarships, stipends, firm reviews, salary or career-path topics at all — " +
+  "they draw readers who will never take these classes. " +
   "Each topic must be concrete and searchable (not generic like 'how to study'). Do NOT duplicate or closely repeat any EXISTING topic. " +
   "category must be one of: fr | advanced-accounting | strategy | career | news. " +
   NOT_TAUGHT +

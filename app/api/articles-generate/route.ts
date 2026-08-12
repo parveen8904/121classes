@@ -11,8 +11,31 @@ export const maxDuration = 300;
 // invocation. When the queue runs DRY it refills itself with fresh evergreen
 // topics (the queue emptied on 20 Jul and articles silently stopped for days),
 // and a daily cap keeps output a steady SEO drip instead of a burst.
-const BATCH = 3;
-const DAILY_CAP = 6; // articles per rolling 24h — steady beats bursty for SEO
+const BATCH = 2;
+const DAILY_CAP = 2; // articles per rolling 24h — see WHAT GOOGLE TOLD US, below
+
+// WHAT GOOGLE TOLD US, 12 AUGUST 2026.
+//
+// 195 articles published, and Search Console had indexed 179 pages while
+// refusing 56 — "discovered/crawled, currently not indexed", which is Google's
+// way of saying it found the page and judged it not worth keeping. Six a day
+// was outrunning what the site had earned the right to publish.
+//
+// The traffic said something sharper. In sixteen days the homepage took 822 of
+// the site's 986 clicks. Every article together brought about 160 — and the
+// best of them were about SCHOLARSHIPS, ARTICLESHIP TRANSFERS and DUMMY
+// ARTICLESHIP. Real CA students, but not students who will ever buy Financial
+// Reporting or Advanced Accounting; they clicked at around 1.4%. The one
+// article on his actual subject, AS 13, already drew more impressions than any
+// other page on the site bar the homepage.
+//
+// 119 of the 195 were on subjects he does not teach. So: two a day instead of
+// six, and his own subjects first in the queue. Fewer, aimed, is the whole
+// change — the alternative on the table was switching the engine off.
+
+// The two subjects taught here. A topic filed under anything else is a general
+// CA-life piece: worth writing occasionally, never worth being the bulk.
+const SUBJECT_CATS = ["fr", "advanced-accounting"];
 
 function slugify(title: string): string {
   return title
@@ -42,12 +65,29 @@ export async function GET(req: NextRequest) {
   if ((last24h ?? 0) >= DAILY_CAP) return NextResponse.json({ ok: true, capped: true, written: 0 });
   const budget = Math.min(BATCH, DAILY_CAP - (last24h ?? 0));
 
+  // HIS SUBJECTS FIRST. Oldest-first alone let a queue full of career topics
+  // crowd out the FR and Advanced Accounting ones behind them for days.
   let { data: pending } = await svc
     .from("article_topics")
     .select("id, topic, category, keywords")
     .eq("status", "pending")
+    .in("category", SUBJECT_CATS)
     .order("created_at")
     .limit(budget);
+
+  // Only once the subject queue is empty do the general topics get a turn, so
+  // articleship and scholarship pieces become the exception rather than 61% of
+  // everything published.
+  if ((pending?.length ?? 0) < budget) {
+    const { data: rest } = await svc
+      .from("article_topics")
+      .select("id, topic, category, keywords")
+      .eq("status", "pending")
+      .not("category", "in", `(${SUBJECT_CATS.join(",")})`)
+      .order("created_at")
+      .limit(budget - (pending?.length ?? 0));
+    pending = [...(pending ?? []), ...(rest ?? [])];
+  }
 
   // Queue dry → REFILL, NEWS-FIRST (founder: articles must cover accounting
   // topics IN THE NEWS, not only syllabus explainers). The hourly news feed
@@ -74,7 +114,13 @@ export async function GET(req: NextRequest) {
       await svc.from("article_topics").insert(ideas.map((i) => ({ topic: i.topic, category: i.category, keywords: i.keywords, status: "pending" })));
       ({ data: pending } = await svc
         .from("article_topics").select("id, topic, category, keywords")
-        .eq("status", "pending").order("created_at").limit(budget));
+        .eq("status", "pending").in("category", SUBJECT_CATS)
+        .order("created_at").limit(budget));
+      if (!pending?.length) {
+        ({ data: pending } = await svc
+          .from("article_topics").select("id, topic, category, keywords")
+          .eq("status", "pending").order("created_at").limit(budget));
+      }
     }
   }
   if (!pending?.length) return NextResponse.json({ ok: true, done: true, written: 0 });

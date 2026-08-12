@@ -230,12 +230,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, result: "recorded as ignored, not a student" });
   }
 
-  // A SUBJECT THAT IS COUNTING THE ROUNDS FOR US.
+  // ONE AUTOMATIC ANSWER PER SUBJECT, PER PERSON. EVER.
   //
-  // One "Re:" is a person replying. Two or more means our reply came back and
-  // was replied to again, which is a loop whatever started it — and unlike the
-  // counter below, this trips on the SECOND turn rather than the seventh. That
-  // matters: seven emails in an hour to a student is already a bad morning.
+  // This is the guard that actually holds, and the one I got wrong first time.
+  // I made replies normalise to a single "Re:" so the subject would stop
+  // growing — and in doing so I disabled my own depth check, because the depth
+  // can now never reach two. Anshu Bansal kept receiving replies through it.
+  //
+  // Depth was the wrong thing to count. What matters is whether we have ALREADY
+  // answered this person about this subject: if we have, a further message on
+  // the same thread is either our own reply coming back, or a real person who
+  // was not helped the first time. Both want a human, and neither wants another
+  // robot. So the machine answers a given subject once and then stands aside.
+  const subjectKey = subject.replace(RE_PREFIX, "").trim().toLowerCase().slice(0, 120);
+  if (subjectKey) {
+    const { count: answeredBefore } = await svc
+      .from("page_questions")
+      .select("id", { count: "exact", head: true })
+      .eq("page_path", "email")
+      .eq("email", from)
+      .eq("status", "answered")
+      .ilike("question", `${subjectKey.replace(/[%_]/g, "")}%`);
+    if ((answeredBefore ?? 0) > 0) {
+      console.error("[email/inbound] already answered", JSON.stringify(subjectKey), "for", from, "— not answering again");
+      try {
+        const { notifyFaculty } = await import("@/lib/notify");
+        await notifyFaculty(
+          "🔁 A second message on a thread we already answered",
+          `${from} has written again about:\n\n  ${subject.slice(0, 200)}\n\n` +
+          `We answered this subject once already and have NOT answered again — either our own reply came back to ` +
+          `us, or they were not helped the first time. Please read the thread and reply by hand.`,
+        ).catch(() => {});
+      } catch { /* telling somebody must not fail the request */ }
+      return NextResponse.json({ ok: true, result: "recorded, already answered this subject" });
+    }
+  }
+
+  // And the stacked-prefix check stays, for clients that keep piling them on.
   if (replyDepth(subject) >= 2) {
     console.error("[email/inbound] subject already stacked —", JSON.stringify(subject.slice(0, 80)), "from", from);
     try {

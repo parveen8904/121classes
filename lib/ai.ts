@@ -85,12 +85,34 @@ function priceFor(model: string): { in: number; out: number } {
   return key ? PRICES[key] : PRICES["claude-sonnet"];
 }
 
-async function logUsage(feature: string, model: string, inTok: number, outTok: number) {
+// WHAT A CACHED PROMPT COSTS.
+//
+// Anthropic bills three different rates against the input price: fresh tokens
+// at 1x, tokens WRITTEN into the cache at 1.25x, and tokens READ back out at
+// 0.1x. It also reports them separately — a cache read is NOT included in
+// input_tokens — so charging only for input_tokens would quietly understate the
+// bill on a write and overstate the saving on a read. The monthly spend alert
+// runs off this figure, so it has to be right.
+const CACHE_WRITE_MULTIPLIER = 1.25;
+const CACHE_READ_MULTIPLIER = 0.1;
+
+async function logUsage(
+  feature: string, model: string, inTok: number, outTok: number,
+  cacheRead = 0, cacheWrite = 0,
+) {
   try {
     const p = priceFor(model);
-    const cost = (inTok / 1e6) * p.in + (outTok / 1e6) * p.out;
+    const cost =
+      (inTok / 1e6) * p.in +
+      (cacheWrite / 1e6) * p.in * CACHE_WRITE_MULTIPLIER +
+      (cacheRead / 1e6) * p.in * CACHE_READ_MULTIPLIER +
+      (outTok / 1e6) * p.out;
     const svc = createServiceClient();
-    await svc.from("ai_usage").insert({ feature, model, input_tokens: inTok, output_tokens: outTok, cost_usd: Number(cost.toFixed(5)) });
+    await svc.from("ai_usage").insert({
+      feature, model, input_tokens: inTok, output_tokens: outTok,
+      cache_read_tokens: cacheRead, cache_write_tokens: cacheWrite,
+      cost_usd: Number(cost.toFixed(5)),
+    });
     await maybeSpendAlert(svc);
   } catch {
     // never let usage logging break an AI call
@@ -149,7 +171,38 @@ async function maybeSpendAlert(svc: ReturnType<typeof createServiceClient>) {
   }
 }
 
-type CallOpts = { model?: string; feature?: string };
+type CallOpts = {
+  model?: string;
+  feature?: string;
+  /**
+   * Cache the system prompt, so a repeated prefix is billed at a tenth.
+   *
+   * Only worth setting where the system prompt is BOTH large and identical
+   * call to call. Two things make it a waste otherwise: Anthropic will not
+   * cache a prefix under ~1024 tokens at all (the flag is silently ignored),
+   * and a cache WRITE costs 1.25x — so caching a prompt nothing reads back
+   * within the five-minute window is a 25% surcharge, not a saving.
+   *
+   * The size guard below enforces the first of those. Judging the second is
+   * the caller's job, and the numbers to judge it by are on /admin/ai-usage.
+   */
+  cache?: boolean;
+};
+
+// THE MINIMUM DEPENDS ON THE MODEL, AND GETTING IT WRONG COSTS NOTHING BUT
+// GAINS NOTHING EITHER.
+//
+// Anthropic refuses to cache a prefix below a floor, and the floor is TWICE as
+// high on Haiku as on Sonnet and Opus. Doubts run on both — 632 Sonnet calls
+// and 159 Haiku in the last thirty days — so a single flat threshold would
+// either skip caching that Sonnet could have done, or attach a cache_control
+// to Haiku prompts that silently does nothing.
+//
+// Four characters per token is the usual rough rule for English prose; the
+// margin below keeps us clear of the boundary rather than gambling on it.
+function minCacheableChars(model: string): number {
+  return model.includes("haiku") ? 8800 : 4400; // 2048 vs 1024 tokens
+}
 
 async function callClaude(system: string, user: string, maxTokens = 1024, opts: CallOpts = {}): Promise<string | null> {
   const apiKey = await getSecret("ANTHROPIC_API_KEY");
@@ -157,6 +210,9 @@ async function callClaude(system: string, user: string, maxTokens = 1024, opts: 
   // Admin kill-switch: a disabled feature makes no AI call at all.
   if (opts.feature && opts.feature !== "other" && (await aiDisabledSet()).has(opts.feature)) return null;
   const model = opts.model || (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
+  // Asked for AND big enough to actually take. A prompt below the minimum is
+  // sent plainly rather than with a cache_control the API would ignore.
+  const wantsCache = !!opts.cache && system.length >= minCacheableChars(model);
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -168,7 +224,13 @@ async function callClaude(system: string, user: string, maxTokens = 1024, opts: 
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
-        system,
+        // A cached system prompt must be sent as BLOCKS, not a bare string —
+        // cache_control attaches to a content block and there is nowhere to
+        // hang it on a plain string. Everything below the breakpoint (the user
+        // message) stays uncached, which is right: it is different every time.
+        system: wantsCache
+          ? [{ type: "text", text: system, cache_control: { type: "ephemeral" } }]
+          : system,
         messages: [{ role: "user", content: user }],
       }),
       cache: "no-store",
@@ -176,7 +238,12 @@ async function callClaude(system: string, user: string, maxTokens = 1024, opts: 
     if (!res.ok) return null;
     const data = await res.json();
     const u = data.usage ?? {};
-    await logUsage(opts.feature || "other", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    await logUsage(
+      opts.feature || "other", model,
+      Number(u.input_tokens) || 0, Number(u.output_tokens) || 0,
+      Number(u.cache_read_input_tokens) || 0,
+      Number(u.cache_creation_input_tokens) || 0,
+    );
     const text = (data.content ?? [])
       .filter((b: { type: string }) => b.type === "text")
       .map((b: { text: string }) => b.text)
@@ -413,11 +480,31 @@ export async function answerDoubtFromMaterial(
   // The thread goes FIRST. What the student told us a minute ago outranks
   // anything the study material can say about who they are.
   const history = (opts.history ?? "").trim();
+
+  // WHAT NEVER CHANGES GOES ABOVE THE LINE, SO IT IS BILLED ONCE.
+  //
+  // This is the single biggest AI cost in the system — 791 calls and 4.2M input
+  // tokens in thirty days — and two thirds of those calls land within five
+  // minutes of another one, because students ask in clusters. That makes it the
+  // one place prompt caching genuinely pays.
+  //
+  // The rule is that a cached prefix must be IDENTICAL and must come FIRST, so
+  // the two stable pieces move into the system prompt: the house rules, and the
+  // map of the site (which changes only when a subject is added, and is already
+  // held in memory between calls). Everything that differs per student — the
+  // lessons chosen for this question, the thread so far, the papers this
+  // message matched, the material and the question itself — stays below in the
+  // user message, where it is billed normally.
+  //
+  // The map used to sit in the middle of the user message, and moving it up is
+  // what makes the prefix cacheable at all: a single varying character anywhere
+  // above the breakpoint invalidates the whole thing.
+  const system = `${REPO_SYSTEM}\n\n${where}`;
   const user =
-    `${taught}${history ? `${history}\n\n` : ""}${where}\n\n` +
+    `${taught}${history ? `${history}\n\n` : ""}` +
     (found ? `${found}\n\n` : "") +
     `STUDY MATERIAL:\n${material || "(none provided)"}\n\nSTUDENT QUESTION:\n${question}`;
-  const raw = await callClaude(REPO_SYSTEM, user, 2000, { model: await teachingModel(), feature });
+  const raw = await callClaude(system, user, 2000, { model: await teachingModel(), feature, cache: true });
   // A reply CA Parveen Sharma reads and sends himself carries no machine
   // disclaimer — it is his answer by the time the student sees it.
   if (opts.betaNote === false) return raw && raw.trim() !== NEED_FACULTY ? plainText(raw) : raw;
@@ -449,10 +536,15 @@ export async function answerDoubtWithAttachment(
       body: JSON.stringify({
         model,
         max_tokens: 1400,
-        system: REPO_SYSTEM,
+        // Same house rules as every other doubt, and the same reason to cache
+        // them: a photographed question usually arrives in the middle of a
+        // conversation, so this prompt has very often just been sent.
+        system: [{ type: "text", text: REPO_SYSTEM, cache_control: { type: "ephemeral" } }],
         messages: [{
           role: "user",
           content: [
+            // The attachment stays BELOW the breakpoint. It is a different
+            // photograph every time, so there is nothing here to reuse.
             block,
             { type: "text", text: `STUDY MATERIAL:\n${material || "(none provided)"}\n\nThe attached ${isPdf ? "PDF" : "image"} is part of the student's doubt — read it carefully. STUDENT'S TYPED MESSAGE:\n${question || "(see the attachment)"}` },
           ],
@@ -463,7 +555,10 @@ export async function answerDoubtWithAttachment(
     if (!res.ok) return null;
     const data = await res.json();
     const u = data.usage ?? {};
-    await logUsage("doubt", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    await logUsage(
+      "doubt", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0,
+      Number(u.cache_read_input_tokens) || 0, Number(u.cache_creation_input_tokens) || 0,
+    );
     const text = (data.content ?? []).filter((b: { type: string }) => b.type === "text").map((b: { text: string }) => b.text).join("\n").trim();
     return withBeta(text || null);
   } catch {

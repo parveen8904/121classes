@@ -61,9 +61,9 @@ export default async function AiUsagePage() {
   }
   const aiOn = await aiConfigured();
 
-  type Spend = { feature: string; model: string; calls: number; input_tokens: number; output_tokens: number; cost_usd: number | string };
+  type Spend = { feature: string; model: string; calls: number; input_tokens: number; output_tokens: number; cache_read_tokens: number; cache_write_tokens: number; cost_usd: number | string };
   const all = (rows ?? []) as Spend[];
-  let monthCost = 0, monthCalls = 0, monthIn = 0, monthOut = 0;
+  let monthCost = 0, monthCalls = 0, monthIn = 0, monthOut = 0, cacheRead = 0, cacheWrite = 0;
   const byFeature = new Map<string, { cost: number; calls: number }>();
   const byModel = new Map<string, { cost: number; calls: number }>();
   for (const r of all) {
@@ -71,6 +71,7 @@ export default async function AiUsagePage() {
     const calls = Number(r.calls) || 0;
     monthCost += cost; monthCalls += calls;
     monthIn += Number(r.input_tokens) || 0; monthOut += Number(r.output_tokens) || 0;
+    cacheRead += Number(r.cache_read_tokens) || 0; cacheWrite += Number(r.cache_write_tokens) || 0;
     const f = byFeature.get(r.feature) ?? { cost: 0, calls: 0 };
     f.cost += cost; f.calls += calls; byFeature.set(r.feature, f);
     const m = byModel.get(r.model) ?? { cost: 0, calls: 0 };
@@ -80,6 +81,18 @@ export default async function AiUsagePage() {
     .reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
   const features = [...byFeature.entries()].sort((a, b) => b[1].cost - a[1].cost);
   const models = [...byModel.entries()].sort((a, b) => b[1].cost - a[1].cost);
+  // IS THE CACHE ACTUALLY PAYING FOR ITSELF?
+  //
+  // Reads are what save money (a tenth of the input rate); writes cost 1.25x.
+  // So the number that matters is not "how much did we cache" but how much was
+  // READ BACK compared with what it cost to put there. Below 1.0 the caching is
+  // losing money and should be switched off for that path.
+  const cachedTotal = cacheRead + cacheWrite;
+  const readsPerWrite = cacheWrite > 0 ? cacheRead / cacheWrite : 0;
+  // What those reads would have cost at the full input rate, less what they did
+  // cost, less the 25% surcharge on every write. Sonnet's $3/M is the blended
+  // rate here; it is an estimate for the page, not an invoice.
+  const savedUsd = ((cacheRead * 0.9) - (cacheWrite * 0.25)) / 1e6 * 3;
   const monthLabel = formatMonth(now);
 
   const card = { background: "var(--bg-soft)", borderRadius: 10, padding: "14px 16px" } as const;
@@ -167,6 +180,48 @@ export default async function AiUsagePage() {
         <SubmitButton className="btn" style={{ marginTop: 12 }}>Save AI features</SubmitButton>
         <p className="muted" style={{ fontSize: ".78rem", marginTop: 6 }}>Ticked = on. Changes take effect within ~30 seconds.</p>
       </form>
+
+      <h2 className="admin-section-title" style={{ marginTop: 28 }}>Prompt cache — {monthLabel}</h2>
+      <div className="card" style={{ marginTop: 10 }}>
+        {cachedTotal === 0 ? (
+          <p className="muted" style={{ margin: 0, lineHeight: 1.7 }}>
+            Nothing cached yet this month. The house rules sent with every student doubt are the only prompt long
+            enough and repeated enough to be worth caching; the figures appear here after the next few questions.
+          </p>
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: 26, flexWrap: "wrap" }}>
+              <div>
+                <div className="muted" style={{ fontSize: ".74rem", textTransform: "uppercase", letterSpacing: ".04em" }}>Read from cache</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 700 }}>{cacheRead.toLocaleString("en-IN")}</div>
+                <div className="muted" style={{ fontSize: ".76rem" }}>billed at a tenth</div>
+              </div>
+              <div>
+                <div className="muted" style={{ fontSize: ".74rem", textTransform: "uppercase", letterSpacing: ".04em" }}>Written to cache</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 700 }}>{cacheWrite.toLocaleString("en-IN")}</div>
+                <div className="muted" style={{ fontSize: ".76rem" }}>billed at 1.25×</div>
+              </div>
+              <div>
+                <div className="muted" style={{ fontSize: ".74rem", textTransform: "uppercase", letterSpacing: ".04em" }}>Reads per write</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 700, color: readsPerWrite >= 1 ? "var(--accent)" : "#b45309" }}>
+                  {readsPerWrite.toFixed(1)}×
+                </div>
+                <div className="muted" style={{ fontSize: ".76rem" }}>above 1.0 = saving</div>
+              </div>
+              <div>
+                <div className="muted" style={{ fontSize: ".74rem", textTransform: "uppercase", letterSpacing: ".04em" }}>Roughly saved</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 700 }}>${savedUsd.toFixed(2)}</div>
+                <div className="muted" style={{ fontSize: ".76rem" }}>this month</div>
+              </div>
+            </div>
+            <p className="muted" style={{ fontSize: ".82rem", lineHeight: 1.7, marginTop: 12, marginBottom: 0 }}>
+              {readsPerWrite >= 1
+                ? "Caching is paying for itself. A repeated prompt is stored once and then billed at a tenth of the normal rate for every later question that reuses it."
+                : "⚠️ More is being written than read back, which costs 25% MORE than not caching at all. That means questions are arriving too far apart to reuse the stored prompt — worth turning caching off on this path if it stays below 1.0 for a full month."}
+            </p>
+          </>
+        )}
+      </div>
 
       <h2 className="admin-section-title" style={{ marginTop: 28 }}>By feature — {monthLabel}</h2>
       {features.length === 0 ? (

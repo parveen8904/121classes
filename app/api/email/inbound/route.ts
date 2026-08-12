@@ -242,15 +242,22 @@ export async function POST(req: NextRequest) {
   // the same thread is either our own reply coming back, or a real person who
   // was not helped the first time. Both want a human, and neither wants another
   // robot. So the machine answers a given subject once and then stands aside.
+  //
+  // AND THE MATCH MUST IGNORE "Re:" ON BOTH SIDES. First time round I stripped
+  // the prefix from the incoming subject and then compared it against stored
+  // text that still BEGINS with "Re: " — so the prefix match could never hit,
+  // the guard never fired, and Anshu Bansal received two more replies. Hence
+  // `%<subject>%` rather than `<subject>%`: what matters is that this thread
+  // was answered, not where in the string the words happen to start.
   const subjectKey = subject.replace(RE_PREFIX, "").trim().toLowerCase().slice(0, 120);
   if (subjectKey) {
+    const like = `%${subjectKey.replace(/[%_\\]/g, "")}%`;
     const { count: answeredBefore } = await svc
       .from("page_questions")
       .select("id", { count: "exact", head: true })
-      .eq("page_path", "email")
       .eq("email", from)
       .eq("status", "answered")
-      .ilike("question", `${subjectKey.replace(/[%_]/g, "")}%`);
+      .ilike("question", like);
     if ((answeredBefore ?? 0) > 0) {
       console.error("[email/inbound] already answered", JSON.stringify(subjectKey), "for", from, "— not answering again");
       try {

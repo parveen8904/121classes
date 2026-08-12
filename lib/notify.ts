@@ -84,10 +84,45 @@ export async function aiReplyBcc(): Promise<string> {
   return (await getSecret("AI_REPLY_BCC")).trim();
 }
 
+// PEOPLE THIS SYSTEM MAY NOT EMAIL, WHATEVER IS ASKING.
+//
+// Every previous fix was aimed at a cause — the re-engagement ladder that could
+// not record its sends, the auto-reply that counted "Re:" prefixes. Each was
+// real, each was fixed, and mail kept arriving, because there was always one
+// more sender nobody had thought of. Three times the founder had to ask again.
+//
+// So this is deliberately NOT aimed at a cause. It sits at the one place every
+// message must pass, which means a listed address is unreachable from the
+// ladder, the auto-reply, the digests, the crons, and from anything written
+// next year by somebody who never read this comment.
+//
+// Add an address with:  insert into email_blocklist (email, reason) values (…)
+async function isBlocked(to: string): Promise<boolean> {
+  try {
+    const { createServiceClient } = await import("@/lib/supabase/service");
+    const svc = createServiceClient();
+    const addr = to.trim().toLowerCase();
+    const { data } = await svc.from("email_blocklist").select("email").eq("email", addr).maybeSingle();
+    if (!data) return false;
+    // Counted, so the size of a problem is visible rather than guessed at.
+    await svc.rpc("note_email_blocked", { p_email: addr }).then(() => null, () => null);
+    console.error(`[email] BLOCKED — ${addr} is on the do-not-email list. Subject was suppressed.`);
+    return true;
+  } catch {
+    // A database wobble must not become a licence to send. Anything we cannot
+    // verify as safe is treated as safe to send ONLY because the alternative —
+    // silently dropping every email in the system — is worse; but the error is
+    // loud so it cannot pass unnoticed.
+    console.error("[email] could not read the blocklist; proceeding");
+    return false;
+  }
+}
+
 export async function sendEmail(to: string, subject: string, html: string, opts: SendEmailOpts = {}): Promise<boolean> {
   const apiKey = await getSecret("MAILGUN_API_KEY");
   const domain = await getSecret("MAILGUN_DOMAIN");
   if (!apiKey || !domain || !to) return false;
+  if (await isBlocked(to)) return false;
   // The address may stay noreply@… but the NAME the inbox shows must be his.
   // A bare address in NOTIFY_FROM_EMAIL used to surface as "noreply" in the
   // recipient's inbox — wrap it in a display name unless one is already set.

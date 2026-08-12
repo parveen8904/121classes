@@ -397,8 +397,13 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
 
         {!isSponsor && <MyCourses courses={myCourses.map((c) => ({ id: c.id, title: c.title }))} />}
 
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link className="btn small secondary" href="/gift">🎁 Sponsor a Student · Gift a subscription</Link>
+          {/* Where the courier and docket number now live. Shown to everyone
+              rather than only to people with a parcel in flight, because the
+              question this answers — "where are my books?" — is asked by
+              students who cannot remember whether they ordered any. */}
+          <Link className="btn small secondary" href="/dashboard/deliveries">📦 Your books · Track a parcel</Link>
         </div>
 
         {!isAdminUser && !needsSetup && myCourses.length > 0 && (

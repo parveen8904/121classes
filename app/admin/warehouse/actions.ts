@@ -8,6 +8,7 @@ import { requireArea } from "@/lib/adminAccess";
 import { listDispatchQueue } from "@/lib/warehouse";
 import { buildShippingLabelsPdf } from "@/lib/shippingLabels";
 import { sendEmailWithAttachment } from "@/lib/notify";
+import { notifyDispatch, notifyDispatchMany, type DispatchTable } from "@/lib/dispatchNotify";
 import { str } from "../_lib/util";
 import { parseDelimited } from "@/lib/delimited";
 
@@ -29,6 +30,12 @@ export async function saveTracking(formData: FormData) {
     courier_name: courier || null,
     ...(table === "book_orders" ? { status: "dispatched" } : {}),
   }).eq("id", id);
+
+  // AND TELL THE STUDENT. This is the step that was missing: the number went
+  // into the database and no further, so the buyer had to ask where the parcel
+  // was. Sends once per parcel and never throws.
+  await notifyDispatch(table as DispatchTable, id);
+
   revalidatePath("/admin/warehouse");
   revalidatePath("/admin/orders");
 }
@@ -86,6 +93,7 @@ export async function bookWithDelhivery(formData: FormData) {
       courier_name: "Delhivery",
       ...(p.table === "book_orders" ? { status: "dispatched" } : {}),
     }).eq("id", p.id);
+    await notifyDispatch(p.table as DispatchTable, p.id);
     booked++;
   }
 
@@ -150,6 +158,7 @@ export async function uploadTracking(formData: FormData) {
   const svc = createServiceClient();
   let saved = 0;
   const unmatched: string[] = [];
+  const dispatched: { table: DispatchTable; id: string }[] = [];
 
   for (const r of body) {
     const orderRaw = (r[orderCol] ?? "").trim();
@@ -167,8 +176,13 @@ export async function uploadTracking(formData: FormData) {
       ...(courier ? { courier_name: courier } : {}),
       ...(parcel.table === "book_orders" ? { status: "dispatched" } : {}),
     }).eq("id", parcel.id);
+    dispatched.push({ table: parcel.table as DispatchTable, id: parcel.id });
     saved++;
   }
+
+  // Forty parcels in a manifest is forty students who each want to know. Done
+  // after the loop so a slow mail server cannot stall the import.
+  await notifyDispatchMany(dispatched);
 
   revalidatePath("/admin/warehouse");
   revalidatePath("/admin/orders");

@@ -245,3 +245,32 @@ export async function emailShippingLabels(formData?: FormData) {
   );
   redirect(`/admin/warehouse?labels=${ok ? queue.length : "fail"}${back}`);
 }
+
+
+// PARCELS THAT WENT OUT WITHOUT THE STUDENT BEING TOLD.
+//
+// Two ways a parcel ends up here. It was dispatched before the dispatch email
+// existed — three were, on 9 and 10 August, and those students had no way to
+// learn a tracking number that was sitting in our database. Or the send failed
+// at the time: notifyDispatch claims the stamp BEFORE it tries the mail server,
+// so a refusal leaves the parcel quiet rather than retrying it nightly, and
+// this is the deliberate way back.
+//
+// Safe to press twice. Anything already announced is skipped by the stamp.
+export async function emailMissedDispatches() {
+  if (!(await requireArea("warehouse"))) return;
+  const svc = createServiceClient();
+
+  const waiting: { table: DispatchTable; id: string }[] = [];
+  for (const table of ["book_orders", "orders", "gift_orders"] as DispatchTable[]) {
+    const { data } = await svc.from(table).select("id")
+      .not("tracking_code", "is", null)
+      .is("dispatch_notified_at", null)
+      .limit(500);
+    for (const r of data ?? []) waiting.push({ table, id: r.id as string });
+  }
+
+  const sent = await notifyDispatchMany(waiting);
+  revalidatePath("/admin/warehouse");
+  redirect(`/admin/warehouse?told=${sent}`);
+}

@@ -3,7 +3,7 @@ import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { listDispatchQueue } from "@/lib/warehouse";
 import { viaProxy } from "@/lib/fileProxy";
-import { saveTracking, emailShippingLabels, uploadTracking, bookWithDelhivery } from "./actions";
+import { saveTracking, emailShippingLabels, uploadTracking, bookWithDelhivery, emailMissedDispatches } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Warehouse — Admin" };
@@ -12,7 +12,7 @@ const fmt = (s: string) =>
   formatDateTime(s);
 
 export default async function WarehousePage(props: {
-  searchParams: Promise<{ labels?: string; q?: string; from?: string; to?: string; upload?: string; missed?: string; book?: string; refused?: string }>;
+  searchParams: Promise<{ labels?: string; q?: string; from?: string; to?: string; upload?: string; missed?: string; book?: string; refused?: string; told?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const q = (searchParams.q ?? "").trim().toLowerCase();
@@ -96,6 +96,14 @@ export default async function WarehousePage(props: {
         </div>
       )}
 
+      {searchParams.told && (
+        <div className={`notice ${searchParams.told === "0" ? "" : "ok"}`} style={{ marginTop: 16 }}>
+          {searchParams.told === "0"
+            ? "Nobody was waiting — every dispatched parcel has already had its tracking number emailed."
+            : `📧 ${searchParams.told} student(s) emailed their courier and tracking number.`}
+        </div>
+      )}
+
       <div className="card" style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <strong>{pending.length} parcel{pending.length === 1 ? "" : "s"} awaiting dispatch</strong>
@@ -156,6 +164,16 @@ export default async function WarehousePage(props: {
           <input type="file" name="file" accept=".csv,text/csv,text/plain,.txt" required
             style={{ marginBottom: 0, fontSize: ".8rem", maxWidth: 230 }} />
           <SubmitButton className="btn small secondary" savedLabel="✓ Uploaded">⬆️ Upload tracking IDs</SubmitButton>
+        </form>
+
+        {/* Every dispatch now emails the student the courier and docket number
+            automatically. This is only for the ones that missed it — parcels
+            sent before that email existed, or a send the mail server refused.
+            Pressing it twice is harmless. */}
+        <form action={emailMissedDispatches} style={{ margin: 0 }}>
+          <SubmitButton className="btn small secondary" savedLabel="✓ Sent">
+            📧 Email students who were never sent their tracking
+          </SubmitButton>
         </form>
       </div>
 

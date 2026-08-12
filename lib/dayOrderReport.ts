@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { formatDate } from "@/lib/dates";
+import { parsePostalParts } from "@/lib/indiaStates";
 
 // THE DAY'S ORDERS, SENT WITHOUT ANYONE ASKING.
 //
@@ -28,6 +29,16 @@ export type DayOrderRow = {
   status: string;
   booksDue: boolean;
   address: string;
+  // CITY, STATE AND PIN GET COLUMNS OF THEIR OWN.
+  //
+  // A courier's upload sheet sorts on a PIN code and wants the state in its own
+  // field. One mashed-together address column means somebody retypes every
+  // parcel by hand, and a PIN mistyped at 6am is a parcel that goes to the
+  // wrong district. The warehouse spreadsheet has had these three columns all
+  // along; the nightly report is the one that was still sending prose.
+  city: string;
+  state: string;
+  pincode: string;
   placedAt: string;
 };
 
@@ -81,6 +92,10 @@ export async function ordersForDay(day: string): Promise<DayOrderRow[]> {
       status: String(r.status ?? ""),
       booksDue: Boolean(r.books_due),
       address: [p?.address_line1, p?.address_line2, [p?.city, p?.state, p?.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+      // Held as separate fields on the profile, so they are simply read.
+      city: String(p?.city ?? ""),
+      state: String(p?.state ?? ""),
+      pincode: String(p?.pincode ?? ""),
       placedAt: String(r.created_at),
     });
   }
@@ -101,6 +116,10 @@ export async function ordersForDay(day: string): Promise<DayOrderRow[]> {
       status: String(r.status ?? ""),
       booksDue: true,
       address: [s.line1, s.line2, [s.city, s.state, s.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+      // ship_to is the address the buyer typed at checkout, already in fields.
+      city: s.city ?? "",
+      state: s.state ?? "",
+      pincode: s.pincode ?? "",
       placedAt: String(r.created_at),
     });
   }
@@ -123,6 +142,13 @@ export async function ordersForDay(day: string): Promise<DayOrderRow[]> {
       status: String(r.status ?? ""),
       booksDue: Boolean(r.books_due),
       address: String(r.recipient_address ?? "").split("\n").filter(Boolean).join(", "),
+      // THE ONLY ONE WE HAVE TO GUESS AT. A gift is addressed in a single free
+      // text box, so the parts are read back out: the PIN by its six digits,
+      // the state by matching the list of real ones, the city as the piece just
+      // before the state. Where a piece cannot be identified it is left EMPTY
+      // rather than filled with a guess — a blank cell tells the packer to look
+      // at the address column, and a wrong PIN sends the parcel to Kerala.
+      ...parsePostalParts(String(r.recipient_address ?? "")),
       placedAt: String(r.created_at),
     });
   }
@@ -135,13 +161,19 @@ const inr = (n: number) => "Rs. " + Math.round(n).toLocaleString("en-IN");
 
 export function dayReportCsv(rows: DayOrderRow[]): string {
   const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
-  const head = ["Order no", "Type", "Student", "Email", "Phone", "Course", "Term", "Amount", "Status", "Books to send", "Address", "Placed at"];
+  const head = ["Order no", "Type", "Student", "Email", "Phone", "Course", "Term", "Amount", "Status", "Books to send",
+                "Address", "City", "State", "PIN code", "Placed at"];
   const lines = [head.join(",")];
   for (const r of rows) {
     lines.push([
       esc(r.orderNo), esc(r.kind), esc(r.student), esc(r.email), esc(r.phone),
       esc(r.course), esc(r.months), esc(Math.round(r.amount)), esc(r.status),
-      esc(r.booksDue ? "YES" : "no"), esc(r.address), esc(r.placedAt),
+      esc(r.booksDue ? "YES" : "no"),
+      esc(r.address), esc(r.city), esc(r.state),
+      // Quoted like everything else, which keeps a PIN starting in zero intact —
+      // Excel would otherwise read 110092 as a number and eat a leading zero.
+      esc(r.pincode),
+      esc(r.placedAt),
     ].join(","));
   }
   return "﻿" + lines.join("\r\n");
@@ -166,7 +198,11 @@ export function dayReportHtml(day: string, rows: DayOrderRow[]): string {
       <td style="${cell}">${r.course}${r.months ? ` · ${r.months}` : ""}</td>
       <td style="${cell};text-align:right">${inr(r.amount)}</td>
       <td style="${cell}">${r.status}${r.booksDue ? " · <strong>books</strong>" : ""}</td>
-      <td style="${cell};color:#666">${r.address || "—"}</td>
+      <td style="${cell};color:#666">${r.address || "—"}${
+        r.pincode || r.state
+          ? `<br><span style="color:#111">${[r.city, r.state].filter(Boolean).join(", ")}${r.pincode ? ` · <strong>${r.pincode}</strong>` : ""}</span>`
+          : ""
+      }</td>
     </tr>`).join("");
 
   return `

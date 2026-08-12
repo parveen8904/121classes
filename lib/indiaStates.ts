@@ -113,21 +113,66 @@ export function looksPostableInIndia(address: string | null | undefined): boolea
  * last has to be read back. Best effort: a blank column is honest, a wrong one
  * is not, so anything not confidently recognised is left empty.
  */
+// A street line with no house number on it — "Goalpara Road", "Church Street",
+// "Nehru Marg". The digit test alone lets these through, and a road name in the
+// City column sorts a parcel into the wrong pile just as surely as a house
+// number does. Only words that are unambiguously part of an address line are
+// listed: "Nagar" and "Vihar" are deliberately absent, because they are also
+// how a great many Indian towns are named.
+const STREET_WORDS = /\b(road|rd|street|st|marg|lane|gali|cross|block|sector|floor|flat|plot|house|building|bldg|apartments?|apt|tower|near|opp|opposite|behind|beside)\b/i;
+function looksLikeStreet(v: string): boolean {
+  return STREET_WORDS.test(v);
+}
+
 export function parsePostalParts(address: string | null | undefined): {
   city: string; state: string; pincode: string;
 } {
   const text = String(address ?? "");
   const parts = text.split(/[\n,]|\s-\s/).map((x) => x.trim()).filter(Boolean);
 
-  const state = parts.find(isIndianState) ?? "";
+  // THE STATE IS RARELY ON A LINE OF ITS OWN.
+  //
+  // Comparing whole comma-separated parts against the state list only works
+  // when somebody typed "…, Delhi, 110092". Real addresses on this system look
+  // like "B173 Nirman Vihar, Delhi 110092" and "…, Mumbai Maharashtra 400010" —
+  // the state glued to the PIN, or to the city, in one part. Whole-part
+  // matching found neither, so every gift parcel went to the warehouse with an
+  // empty State column while the state sat there in plain sight.
+  //
+  // So the state name is looked for ANYWHERE in the text, on word boundaries so
+  // that "Goa" cannot match inside "Goalpara".
+  const hay = text.toLowerCase();
+  const stateHit = INDIA_STATES.find((st) => {
+    const re = new RegExp(`\\b${st.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+    return re.test(hay);
+  });
+  const state = stateHit ?? "";
+
   let pincode = "";
   for (const p of parts) {
     const hit = p.split(/[^0-9]+/).find(isIndianPincode);
     if (hit) { pincode = hit; break; }
   }
-  // The city is normally the part just before the state.
-  const at = parts.findIndex(isIndianState);
-  const city = at > 0 ? parts[at - 1] : "";
+
+  // THE CITY, ONLY WHERE IT IS NOT A GUESS.
+  //
+  // It sits immediately before the state — either in the same part ("Mumbai
+  // Maharashtra 400010") or as the part before it. A candidate carrying a digit
+  // is a street line, not a city ("B173 Nirman Vihar"), and is refused: a blank
+  // column tells the packer to read the address, whereas a house number in the
+  // City column is a parcel sorted into the wrong pile.
+  let city = "";
+  if (state) {
+    const seg = parts.find((x) => x.toLowerCase().includes(state.toLowerCase())) ?? "";
+    const before = seg.slice(0, seg.toLowerCase().indexOf(state.toLowerCase())).trim().replace(/[,\-]+$/, "");
+    const at = parts.indexOf(seg);
+    const candidate = before || (at > 0 ? parts[at - 1] : "");
+    if (candidate && !/\d/.test(candidate) && !looksLikeStreet(candidate)) city = candidate;
+    // Delhi, Chandigarh and Puducherry ARE their own city. Saying so is a fact,
+    // not an inference, so the column need not be left empty.
+    if (!city && ["Delhi", "Chandigarh", "Puducherry"].includes(state)) city = state;
+  }
+
   return { city, state, pincode };
 }
 

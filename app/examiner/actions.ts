@@ -278,10 +278,36 @@ export async function rebuildCopyForAttempt(formData: FormData) {
     if (kk?.status === "approved") officialText = kk.solution_md;
   }
 
+  // FETCH THE MARGIN NOTES IF THE STORED REPORT HAS NONE.
+  //
+  // Rebuilding draws from the report we already hold, which is the whole point
+  // — it must not re-mark. But a report that came back with no annotations
+  // would be redrawn with an empty margin for ever, and an empty margin is
+  // exactly what sent somebody to press this button. So the notes alone are
+  // fetched, the marks are untouched, and they are saved onto the report so the
+  // next rebuild does not pay for them again.
+  const report = r!.report as { annotations?: unknown[]; summary?: string; per_question?: never[] };
+  if (!(report.annotations?.length ?? 0)) {
+    try {
+      const src = await fetch(studentUrl!, { cache: "no-store" });
+      if (src.ok) {
+        const b64 = Buffer.from(await src.arrayBuffer()).toString("base64");
+        const { marginNotesForPaper } = await import("@/lib/ai");
+        const notes = await marginNotesForPaper(b64, report);
+        if (notes.length) {
+          report.annotations = notes;
+          await svc.from("descriptive_attempts").update({ report }).eq("id", id);
+        }
+      }
+    } catch (e) {
+      console.error("[rebuild] margin notes could not be fetched", e instanceof Error ? e.message : e);
+    }
+  }
+
   const { buildAnnotatedPdf } = await import("@/app/learn/section/[sectionId]/paperActions");
   const bytes = await buildAnnotatedPdf(
     studentUrl,
-    r!.report as never,
+    report as never,
     { pdfUrl: officialPdf, text: officialText },
   );
   if (!bytes) redirect("/examiner?err=" + encodeURIComponent("The copy could not be drawn — the answer book may be unreadable or protected."));

@@ -234,3 +234,65 @@ export async function giveMoreTime(formData: FormData) {
   revalidatePath("/examiner");
   redirect("/examiner?status=stuck&done=time");
 }
+
+// REBUILD ONE CHECKED COPY, WITHOUT MARKING THE PAPER AGAIN.
+//
+// The marks and the checked copy are two separate things: the marking is an AI
+// call costing real money, the copy is a PDF drawn from a report we already
+// hold. When the copy is missing — as it was for mock paper 1, which marked
+// 69/100 across 26 questions and produced no document at all — re-marking to
+// get it would pay twice for an answer we already have, and could return
+// different marks on a paper an examiner may already have read.
+//
+// This draws the copy from the stored report. It works from the ATTEMPT, so it
+// covers a chapter test and a mock paper alike; the older rebuild is keyed on
+// the section and cannot see a mock paper at all.
+export async function rebuildCopyForAttempt(formData: FormData) {
+  const ex = await requireExaminer();
+  if (!ex) return;
+  const id = str(formData.get("id"));
+  if (!id) return;
+
+  const svc = createServiceClient();
+  const { data: row } = await svc.from("descriptive_attempts").select("*").eq("id", id).maybeSingle();
+  const r = row as Record<string, unknown> | null;
+  if (!r?.file_url || !r.report) redirect("/examiner?err=" + encodeURIComponent("That copy has no marked report to draw from."));
+
+  const { resolveFileUrl } = await import("@/lib/storage");
+  const studentUrl = await resolveFileUrl(String(r!.file_url));
+  if (!studentUrl) redirect("/examiner?err=" + encodeURIComponent("The student's answer book could not be opened."));
+
+  // The official answers, from wherever this paper's key lives.
+  let officialPdf: string | null = null;
+  let officialText: string | null = null;
+  if (r!.mock_paper_id) {
+    const { data: m } = await svc.from("mock_papers")
+      .select("answers_md, answers_pdf_url").eq("id", String(r!.mock_paper_id)).maybeSingle();
+    const mm = m as { answers_md: string | null; answers_pdf_url: string | null } | null;
+    officialText = mm?.answers_md ?? null;
+    officialPdf = mm?.answers_pdf_url ? await resolveFileUrl(mm.answers_pdf_url, 900) : null;
+  } else if (r!.section_id) {
+    const { data: k } = await svc.from("item_solutions")
+      .select("solution_md, status").eq("section_id", String(r!.section_id)).maybeSingle();
+    const kk = k as { solution_md: string | null; status: string | null } | null;
+    if (kk?.status === "approved") officialText = kk.solution_md;
+  }
+
+  const { buildAnnotatedPdf } = await import("@/app/learn/section/[sectionId]/paperActions");
+  const bytes = await buildAnnotatedPdf(
+    studentUrl,
+    r!.report as never,
+    { pdfUrl: officialPdf, text: officialText },
+  );
+  if (!bytes) redirect("/examiner?err=" + encodeURIComponent("The copy could not be drawn — the answer book may be unreadable or protected."));
+
+  const path = `descriptive/rebuilt/${id}-checked.pdf`;
+  const up = await svc.storage.from("secure").upload(path, Buffer.from(bytes!), {
+    contentType: "application/pdf", upsert: true,
+  });
+  if (up.error) redirect("/examiner?err=" + encodeURIComponent("The copy was drawn but could not be saved."));
+
+  await svc.from("descriptive_attempts").update({ annotated_url: `secure:${path}` }).eq("id", id);
+  revalidatePath("/examiner");
+  redirect("/examiner?done=copy");
+}

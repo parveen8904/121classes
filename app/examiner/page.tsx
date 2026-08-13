@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { claimCopy, giveMoreTime } from "./actions";
+import { claimCopy, giveMoreTime, rebuildCopyForAttempt } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export const metadata = { title: "Examiner desk — CA Parveen Sharma" };
 // The examiner desk: every submitted descriptive copy, filterable by subject /
 // test / topic. Claim a copy to check it; a copy being checked by another
 // examiner is highlighted and cannot be claimed twice.
-export default async function ExaminerDesk(props: { searchParams: Promise<{ subject?: string; section?: string; status?: string; done?: string }> }) {
+export default async function ExaminerDesk(props: { searchParams: Promise<{ subject?: string; section?: string; status?: string; done?: string; err?: string }> }) {
   const searchParams = await props.searchParams;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -149,6 +149,13 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
           AI checks every copy first; you verify and release it. The student sees marks and the checked copy only
           after you submit. <strong>{openCount}</strong> cop{openCount === 1 ? "y" : "ies"} waiting.
         </p>
+        {searchParams.done === "copy" && (
+          <div className="notice ok" style={{ marginTop: 10 }}>
+            🖍️ The checked copy has been drawn again from the marks already on record — the paper was not re-marked,
+            so nothing about the result has changed.
+          </div>
+        )}
+        {searchParams.err && <div className="notice err" style={{ marginTop: 10 }}>{searchParams.err}</div>}
         {searchParams.done === "time" && (
           <div className="notice ok" style={{ marginTop: 10 }}>
             ⏱️ Extra time given, and the student has been emailed — the message tells them to reload the page,
@@ -250,6 +257,19 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
                     <input type="hidden" name="id" value={i.id} />
                     <SubmitButton className="btn small">
                       {i.aiFailed ? "🖊️ Mark this copy myself" : "🖊️ Check this copy"}
+                    </SubmitButton>
+                  </form>
+                )}
+                {/* The marks and the copy are separate things: the marking is
+                    an AI call, the copy is a PDF drawn from a report we already
+                    hold. When the copy is missing, redrawing it must not mean
+                    paying to mark the paper again — or risking different marks
+                    on a paper already read. */}
+                {!i.aiPending && (
+                  <form action={rebuildCopyForAttempt} style={{ display: "inline" }}>
+                    <input type="hidden" name="id" value={i.id} />
+                    <SubmitButton className="btn small secondary" savedLabel="Redrawn">
+                      🖍️ Rebuild checked copy
                     </SubmitButton>
                   </form>
                 )}

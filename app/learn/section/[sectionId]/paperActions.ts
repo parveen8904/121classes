@@ -132,7 +132,7 @@ const KIND_LABEL = { right: "Correct", wrong: "Wrong", partial: "Partial", tip: 
 
 // Returns the student's pages with marking signs + margin notes, plus a final
 // summary page. null if it can't be built (caller falls back to the plain copy).
-async function buildAnnotatedPdf(
+export async function buildAnnotatedPdf(
   studentPdfUrl: string,
   grade: DescriptiveGrade,
   official?: { pdfUrl?: string | null; text?: string | null; scheme?: string | null },

@@ -309,3 +309,54 @@ export async function createUploadedPaper(formData: FormData) {
   revalidatePath("/admin/mock-papers");
   redirect("/admin/mock-papers?uploaded=1");
 }
+
+
+// RE-READ THE FILES ALREADY STORED.
+//
+// The PDFs are the paper; the extracted text beside them is what the marker and
+// the checker actually read. Those two can fall out of step — mock paper 1's
+// key text was cleared when the AI's half-written answers were taken out of it,
+// leaving his own key PDF attached with no text behind it, and a paper that
+// could not be marked.
+//
+// Rather than making him upload the same file a second time, this reads back
+// what is already in the bucket. Nothing is uploaded, nothing is written by a
+// machine — it is his own file, read again.
+export async function rereadUploadedPdfs(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  if (!id) return;
+
+  const svc = createServiceClient();
+  const { data: row } = await svc
+    .from("mock_papers").select("paper_pdf_url, answers_pdf_url").eq("id", id).maybeSingle();
+  const r = row as { paper_pdf_url: string | null; answers_pdf_url: string | null } | null;
+  if (!r) return;
+
+  const { extractPdfText, cleanPdfText } = await import("@/lib/pdf");
+  const readBack = async (ref: string | null): Promise<string> => {
+    if (!ref) return "";
+    const path = ref.replace(/^secure:/, "");
+    try {
+      const { data: signed } = await svc.storage.from(BUCKET).createSignedUrl(path, 120);
+      if (!signed?.signedUrl) return "";
+      return cleanPdfText(await extractPdfText(signed.signedUrl));
+    } catch {
+      return "";
+    }
+  };
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const q = await readBack(r.paper_pdf_url);
+  const k = await readBack(r.answers_pdf_url);
+  if (q) patch.questions_md = q;
+  if (k) { patch.answers_md = k; patch.answers_progress = 100; }
+  if (q || k) patch.error = null;
+
+  if (!q && !k) redirect("/admin/mock-papers?err=" + encodeURIComponent("Could not read the text out of those PDFs."));
+
+  await svc.from("mock_papers").update(patch).eq("id", id);
+  revalidatePath("/admin/mock-papers");
+  revalidatePath("/mock-tests");
+  redirect("/admin/mock-papers?reread=" + [q ? "paper" : "", k ? "key" : ""].filter(Boolean).join("+"));
+}

@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
 import AnswerKey from "@/app/components/AnswerKey";
 import AdminHero from "../_components/AdminHero";
-import { createSet, approvePaper, unapprovePaper, savePaper, uploadPaperFiles, removeUploadedPaper, createUploadedPaper } from "./actions";
+import { createSet, approvePaper, unapprovePaper, savePaper, uploadPaperFiles, removeUploadedPaper, createUploadedPaper, rereadUploadedPdfs } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mock test papers — Admin" };
@@ -33,7 +33,7 @@ const LABEL: Record<string, { text: string; colour: string }> = {
 // and a wrong figure in a mock paper is worse than no mock paper — a student
 // spends three hours on it and learns the wrong thing.
 export default async function MockPapersPage(props: {
-  searchParams: Promise<{ made?: string; restarted?: string; drafted?: string; approved?: string; pulled?: string; saved?: string; err?: string }>;
+  searchParams: Promise<{ made?: string; restarted?: string; drafted?: string; approved?: string; pulled?: string; saved?: string; err?: string; uploaded?: string; removed?: string; reread?: string }>;
 }) {
   await assertArea(null);
   const searchParams = await props.searchParams;
@@ -79,6 +79,12 @@ export default async function MockPapersPage(props: {
       </details>
 
       {searchParams.made && <div className="notice ok" style={{ marginTop: 16 }}>✅ {searchParams.made} paper slot(s) created.</div>}
+      {searchParams.reread && (
+        <div className="notice ok" style={{ marginTop: 16 }}>
+          ↻ Your {String(searchParams.reread).replace("+", " and ")} was read back out of the stored PDF — the text
+          the marker uses now matches your own file.
+        </div>
+      )}
       {searchParams.restarted && (
         <div className="notice ok" style={{ marginTop: 16 }}>
           Cleared. The next pass writes a completely new paper — about ten minutes for the questions, then the
@@ -120,6 +126,14 @@ export default async function MockPapersPage(props: {
               {p.error && <p className="notice err" style={{ fontSize: ".82rem", marginTop: 8 }}>{p.error}</p>}
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                {/* When the stored PDF and the text beside it have fallen out
+                    of step — the text is what gets marked against. */}
+                <form action={rereadUploadedPdfs}>
+                  <input type="hidden" name="id" value={p.id} />
+                  <SubmitButton className="btn small secondary" savedLabel="Re-read">
+                    ↻ Re-read my PDFs
+                  </SubmitButton>
+                </form>
                 {p.status === "drafted" && (
                   <form action={approvePaper}>
                     <input type="hidden" name="id" value={p.id} />

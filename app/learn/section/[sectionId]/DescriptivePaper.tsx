@@ -44,7 +44,7 @@ function fmtClock(s: number): string {
 // answers, so guessing between them helps nobody.
 type UploadResult = { url: string } | { error: string };
 
-async function uploadPdf(blob: Blob, path: string): Promise<UploadResult> {
+async function uploadPdf(blob: Blob, path: string, onProgress?: (msg: string) => void): Promise<UploadResult> {
   const supabase = createClient();
 
   // An expired login is the failure that looks most like a broken upload: the
@@ -55,24 +55,54 @@ async function uploadPdf(blob: Blob, path: string): Promise<UploadResult> {
     return { error: "Your login has expired. Open the site again and sign in, then come back — your test is still open and nothing is lost." };
   }
 
-  // Answer sheets are personal — upload to the PRIVATE "secure" bucket and
-  // store a "secure:<path>" reference (served only via signed URLs, never a
-  // public link).
-  const { error } = await supabase.storage.from("secure").upload(path, blob, { contentType: "application/pdf", upsert: true });
-  if (error) {
-    const detail = String(error.message ?? error);
-    console.error("[paper-upload] refused:", detail, "path:", path);
-    if (/jwt|expired|401|unauthor/i.test(detail)) {
+  // KEEP TRYING. A PHONE ON A BAD LINE IS THE NORMAL CASE, NOT THE EXCEPTION.
+  //
+  // The first version of this sent the file once and gave up. A student on a
+  // 4.2 MB scan and a connection running at about a kilobyte a second — which
+  // is what the screenshot from Arnav's phone showed, with the test open and
+  // the clock running — got "Failed to fetch" and nothing else. The file was
+  // fine, the login was fine, the bucket was fine; the request simply died on
+  // the way.
+  //
+  // Three attempts, with a pause between them, because a mobile connection
+  // that fails once very often succeeds a moment later. The student is told
+  // which attempt is running rather than being left watching a still bar.
+  const attempts = 3;
+  let lastDetail = "";
+  for (let n = 1; n <= attempts; n++) {
+    if (n > 1) {
+      onProgress?.(`The connection dropped. Trying again (${n} of ${attempts})…`);
+      await new Promise((r) => setTimeout(r, 2000 * (n - 1)));
+    }
+
+    // Answer sheets are personal — upload to the PRIVATE "secure" bucket and
+    // store a "secure:<path>" reference (served only via signed URLs, never a
+    // public link).
+    const { error } = await supabase.storage.from("secure").upload(path, blob, { contentType: "application/pdf", upsert: true });
+    if (!error) return { url: `secure:${path}` };
+
+    lastDetail = String(error.message ?? error);
+    console.error(`[paper-upload] attempt ${n}/${attempts} failed:`, lastDetail, "path:", path, "bytes:", blob.size);
+
+    // These will not improve by asking again, so stop and say what to do.
+    if (/jwt|expired|401|unauthor/i.test(lastDetail)) {
       return { error: "Your login expired while you were writing. Sign in again and come straight back — your test is still open." };
     }
-    if (/exceed|too large|size|413/i.test(detail)) {
+    if (/exceed|too large|size|413/i.test(lastDetail)) {
       return { error: "That PDF is too large to send. Scan it again in black and white, or at a lower quality, and try once more." };
     }
-    // Anything else, verbatim. An unfamiliar message somebody can read out is
-    // worth ten guesses.
-    return { error: `The upload was refused: ${detail}` };
   }
-  return { url: `secure:${path}` };
+
+  // "Failed to fetch" is what a browser says when the request never completed.
+  // It reads like a fault in the site and is almost always the line, so it is
+  // translated into the thing the student can actually do something about.
+  if (/failed to fetch|network|load failed|timeout|aborted/i.test(lastDetail)) {
+    const mb = (blob.size / 1048576).toFixed(1);
+    return {
+      error: `Your connection dropped while sending ${mb} MB — we tried ${attempts} times. Move somewhere with better signal, or switch off Wi-Fi and use mobile data, then press Submit again. Your file is still chosen and your test is still open.`,
+    };
+  }
+  return { error: `The upload was refused: ${lastDetail}` };
 }
 
 // Help for a student stuck at the upload — written for someone on a phone,
@@ -282,7 +312,7 @@ export default function DescriptivePaper(props: Props) {
       }
       setProgress(35);
       setNote("Uploading your paper…");
-      const up = await uploadPdf(blob, `descriptive/${sectionId}/${studentId}-${Date.now()}.pdf`);
+      const up = await uploadPdf(blob, `descriptive/${sectionId}/${studentId}-${Date.now()}.pdf`, setNote);
       if ("error" in up) {
         setNote(up.error);
         setBusy(false);
@@ -316,7 +346,7 @@ export default function DescriptivePaper(props: Props) {
     }
     setTrialMsg("Uploading a test PDF…");
     try {
-      const up = await uploadPdf(trialPdf, `descriptive/trial/${studentId}-${Date.now()}.pdf`);
+      const up = await uploadPdf(trialPdf, `descriptive/trial/${studentId}-${Date.now()}.pdf`, setTrialMsg);
       setTrialMsg("error" in up
         ? up.error
         : "✅ It works! Your device can send a PDF to us. You're ready for the real test.");

@@ -2539,9 +2539,20 @@ export async function gradeDescriptivePaperAgainstText(
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model,
-        // Room for a step-by-step award on a ten-question paper. At 4000 the
-        // model economised and returned the summary shape with no steps at all.
-        max_tokens: 8000,
+        // ROOM ENOUGH FOR THE SIZE OF THE PAPER.
+        //
+        // 8000 was set for a ten-question chapter test and is right for one:
+        // Arnav's 20-mark papers finish in about 3,100 tokens. A 100-mark mock
+        // with a step-by-step award on every question does not fit, and the
+        // failure is silent and nasty — the tool call is cut off mid-JSON, a
+        // partial object comes back carrying the summary and an EMPTY
+        // per_question, and the marks add up to nothing. Mock paper 1 came back
+        // at exactly 8,000 output tokens twice, and scored a good paper 0/100.
+        //
+        // So the ceiling follows the marks: roughly 250 tokens per mark, which
+        // matches what the 20-mark papers actually use, with a floor of 8,000
+        // and a cap well inside the model's limit.
+        max_tokens: Math.min(24000, Math.max(8000, Math.round((totalMarks || 20) * 250))),
         // An examiner must give the SAME paper the same marks. Left at the API
         // default, the model re-marked one answer book 9, then 13, then 12.
         temperature: 0,
@@ -2573,6 +2584,20 @@ export async function gradeDescriptivePaperAgainstText(
     const data = await res.json();
     const u = data.usage ?? {};
     await logUsage("grade_descriptive", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+
+    // RAN OUT OF ROOM = NO RESULT, NOT A PARTIAL ONE.
+    //
+    // When the reply is cut short the tool call still arrives, just unfinished,
+    // and it parses into something that looks like a report and is not one.
+    // That is how a good paper was recorded as zero. Refusing here sends it
+    // back to the queue and then to an examiner, which is the honest outcome.
+    if (data.stop_reason === "max_tokens") {
+      console.error("[grade_descriptive] the marking was cut off at the token limit — not using a partial result", {
+        totalMarks, output: u.output_tokens,
+      });
+      return null;
+    }
+
     // The forced tool call returns the report as an object. Falling back to
     // text keeps this working if the model ever answers the old way.
     const call = (data.content ?? []).find(

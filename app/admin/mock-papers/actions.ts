@@ -256,7 +256,19 @@ export async function uploadPaperFiles(formData: FormData) {
   redirect("/admin/mock-papers?uploaded=1");
 }
 
-/** Take his file away and fall back to whatever we hold as text. */
+/**
+ * Take his file away — AND the text that was read out of it.
+ *
+ * This used to clear only the file reference, on the reasoning that the
+ * extracted text was a useful fallback. It is not a fallback, it is the same
+ * document: every upload reads the PDF and stores its text beside it, and the
+ * checked copy prints that text whenever there is no PDF. So removing the
+ * answer key left 62,469 characters of the very same key in place, and it went
+ * on appearing — typeset instead of on his own pages, which is why it read as a
+ * second solution coming from somewhere else.
+ *
+ * Remove now means remove.
+ */
 export async function removeUploadedPaper(formData: FormData) {
   await assertArea(null);
   const id = str(formData.get("id"));
@@ -264,9 +276,17 @@ export async function removeUploadedPaper(formData: FormData) {
   if (!id || (which !== "paper" && which !== "answers")) return;
   const svc = createServiceClient();
   await svc.storage.from(BUCKET).remove([`mock-papers/${id}-${which}.pdf`]);
-  await svc.from("mock_papers")
-    .update({ [which === "paper" ? "paper_pdf_url" : "answers_pdf_url"]: null, updated_at: new Date().toISOString() })
-    .eq("id", id);
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (which === "paper") {
+    patch.paper_pdf_url = null;
+    patch.questions_md = null;
+  } else {
+    patch.answers_pdf_url = null;
+    patch.answers_md = null;
+    // Back to "no key here", so nothing treats an absent key as a finished one.
+    patch.answers_progress = 0;
+  }
+  await svc.from("mock_papers").update(patch).eq("id", id);
   revalidatePath("/admin/mock-papers");
   revalidatePath("/mock-tests");
   redirect("/admin/mock-papers?removed=1");

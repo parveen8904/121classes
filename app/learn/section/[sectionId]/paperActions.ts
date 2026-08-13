@@ -550,7 +550,20 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
     // Build the annotated "checked copy" (marks + margin notes) — best-effort.
     let annotatedUrl: string | null = null;
     try {
-      if (studentUrl && (graded.annotations?.length ?? 0) > 0) {
+      // THE MARGIN NOTES ARE ONE PART OF THE CHECKED COPY, NOT ALL OF IT.
+      //
+      // This used to build the copy only when there were annotations to draw,
+      // so a paper with none got nothing at all — no pages, no summary sheet,
+      // and not the official answers either, which is the part students
+      // actually study from. Mock paper 1 marked 26 questions at 69/100 and
+      // produced no annotations: with 26 questions to mark the model spent its
+      // reply on the marks. The copy was silently skipped, and because the
+      // "could not draw it" branch never ran, nothing was recorded to say why.
+      //
+      // So it is built whenever there is a marked report and a paper to draw
+      // on. Fewer margin notes is a thinner copy; no copy is a student left
+      // with a number and no working.
+      if (studentUrl) {
         // The student's copy carries their marked pages, the summary and the
         // OFFICIAL ANSWERS — never the step marking guide. That is an
         // examiner's working document and it stays on the examiner's screen.
@@ -558,6 +571,12 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
           pdfUrl: solutionUrl || null,
           text: approvedKey,
         });
+        // Worth knowing on the record, so an examiner reading a copy with no
+        // ticks in the margin knows it is not their eyesight.
+        if (!(graded.annotations?.length ?? 0)) {
+          (graded as unknown as Record<string, unknown>).checked_copy_note =
+            "no margin notes came back for this paper — the copy carries the marks, the summary and the official answers";
+        }
         if (!bytes) {
           console.error("[checked_copy] no annotated PDF produced for attempt", row.id);
           // Say so on the record too — a silent failure here cost two rounds of

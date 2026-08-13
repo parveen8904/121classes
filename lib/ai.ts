@@ -2499,6 +2499,105 @@ export async function proposeTrendingTopics(headlines: string[], existing: strin
 // Same examiner, but the answer key is APPROVED TEXT rather than a PDF — used
 // for the papers that never had a suggested-answers file, once the founder has
 // approved the drafted key.
+
+// MARGIN NOTES, ASKED FOR ON THEIR OWN WHEN THE MARKING DID NOT SPARE THEM.
+//
+// The marking call returns marks AND the notes to write on the student's pages,
+// and on a big paper it quite reasonably spends its reply on the marks: mock
+// paper 1 marked 26 questions at 69/100 and returned not one annotation. The
+// checked copy then has a margin and nothing in it — which is what a student
+// notices first, because ticks beside their own working is the part that reads
+// like marking rather than a score.
+//
+// So they are asked for separately, with the marks already decided and passed
+// in. A small call, and it cannot disturb a mark: it returns notes only.
+const NOTES_TOOL = {
+  name: "submit_notes",
+  description: "Return short notes to write in the margins of the student's answer pages.",
+  input_schema: {
+    type: "object",
+    properties: {
+      annotations: {
+        type: "array",
+        description: "1-4 per page, spread across the pages that have writing on them.",
+        items: {
+          type: "object",
+          properties: {
+            page: { type: "integer", description: "1-based page of the student's answer book." },
+            y: { type: "number", description: "Vertical position, 0.0 top to 1.0 bottom." },
+            kind: { type: "string", enum: ["right", "wrong", "partial", "tip"] },
+            note: { type: "string", description: "Under 12 words." },
+          },
+          required: ["page", "y", "kind", "note"],
+        },
+      },
+    },
+    required: ["annotations"],
+  },
+} as const;
+
+export async function marginNotesForPaper(
+  studentPdfB64: string,
+  grade: { summary?: string; per_question?: { q: string; awarded: number; max: number; comment?: string }[] },
+): Promise<PaperAnnotation[]> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey) return [];
+  const model = (await getSecret("ANTHROPIC_MODEL")) || "claude-sonnet-4-6";
+  const marks = (grade.per_question ?? [])
+    .map((q) => `${q.q}: ${q.awarded}/${q.max}${q.comment ? ` — ${q.comment}` : ""}`)
+    .join("\n");
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4000,
+        temperature: 0,
+        system:
+          "You are placing an examiner's margin notes on a student's handwritten answer book. " +
+          "The marks are ALREADY DECIDED and given to you — do not re-mark, do not argue with them, and do not " +
+          "change a figure. Read the pages, and for each page with writing on it place 1 to 4 short notes where " +
+          "the student would look: a tick where a step earned its mark, a cross where it lost one, a partial where " +
+          "some credit was given, a tip where a better presentation would have helped. Under 12 words each.",
+        tools: [NOTES_TOOL],
+        tool_choice: { type: "tool", name: "submit_notes" },
+        messages: [{
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: studentPdfB64 } },
+            { type: "text", text: `THE MARKS ALREADY AWARDED:\n${marks}\n\n${grade.summary ?? ""}` },
+          ],
+        }],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("grade_descriptive", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0);
+    if (data.stop_reason === "max_tokens") return [];
+    const call = (data.content ?? []).find(
+      (b: { type: string; name?: string }) => b.type === "tool_use" && b.name === "submit_notes",
+    ) as { input?: { annotations?: unknown } } | undefined;
+    const raw = Array.isArray(call?.input?.annotations) ? call!.input!.annotations as unknown[] : [];
+    const validKinds = new Set(["right", "wrong", "partial", "tip"]);
+    return raw
+      .map((a) => {
+        const x = a as { page?: unknown; y?: unknown; kind?: unknown; note?: unknown };
+        return {
+          page: Math.max(1, Math.round(Number(x.page) || 1)),
+          y: Math.min(1, Math.max(0, Number(x.y) || 0)),
+          kind: (validKinds.has(String(x.kind)) ? String(x.kind) : "tip") as PaperAnnotation["kind"],
+          note: String(x.note ?? "").trim(),
+        };
+      })
+      .filter((a) => a.note);
+  } catch {
+    return [];
+  }
+}
+
 export async function gradeDescriptivePaperAgainstText(
   studentPdfUrl: string,
   solutionText: string,

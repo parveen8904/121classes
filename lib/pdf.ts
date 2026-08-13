@@ -128,6 +128,48 @@ export function cleanPdfText(raw: string): string {
 
 // Pull the text out of a PDF at a URL. Serverless-friendly (unpdf). Returns "" on
 // failure so callers can fall back to manually-pasted text.
+/**
+ * The text of a PDF, ONE STRING PER PAGE.
+ *
+ * Needed to decide what NOT to show a student. His answer keys end with a page
+ * or two of errata — corrections to the printed booklet — which belong to him
+ * and his printer, not to a student comparing their working against the model
+ * answer. Deciding that needs to know which page says what.
+ */
+export async function extractPdfPageTexts(url: string): Promise<string[]> {
+  try {
+    const { resolveFileUrl } = await import("@/lib/storage");
+    const fetchable = await resolveFileUrl(url);
+    if (!fetchable) return [];
+    const buf = await fetch(fetchable, { cache: "no-store" }).then((r) => r.arrayBuffer());
+    const pdf = await getDocumentProxy(new Uint8Array(buf));
+    const { text } = await extractText(pdf, { mergePages: false });
+    return Array.isArray(text) ? text.map((t) => String(t ?? "")) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * How many pages at the END of a key are errata rather than answers.
+ *
+ * Counted from the back and stopping at the first page that is not: an "errata"
+ * mentioned in the middle of a worked solution is part of the answer, and
+ * dropping that page would take a student's model answer away with it.
+ */
+export function trailingErrataPages(pageTexts: string[]): number {
+  const looksErrata = (t: string) => {
+    const head = t.slice(0, 400).toLowerCase();
+    return /\berrata\b|\bcorrigend(um|a)\b|\bcorrections? to the (booklet|book|printed)/.test(head);
+  };
+  let n = 0;
+  for (let i = pageTexts.length - 1; i >= 0; i--) {
+    if (!looksErrata(pageTexts[i])) break;
+    n++;
+  }
+  return n;
+}
+
 export async function extractPdfText(url: string): Promise<string> {
   try {
     // Files moved behind login are stored as "secure:<path>" — resolve to a

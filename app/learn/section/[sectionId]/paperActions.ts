@@ -247,7 +247,26 @@ export async function buildAnnotatedPdf(
             divider.drawText(winAnsi("Compare your answers above with these."), {
               x: 40, y: 752, size: 11, font, color: rgb(0.3, 0.3, 0.3),
             });
-            const solPages = await out.embedPages(solDoc.getPages());
+            // THE ERRATA AT THE BACK IS NOT PART OF THE ANSWER.
+            //
+            // His printed answer keys finish with a page or two of errata —
+            // corrections to the booklet, meant for him and his printer. Bound
+            // into a student's checked copy they read as more model answer, and
+            // a student comparing their working against them is being sent
+            // wrong. Counted from the BACK and stopping at the first page that
+            // is not errata, so an "errata" mentioned inside a worked solution
+            // cannot take a page of real answers with it.
+            let keep = solDoc.getPages();
+            try {
+              const { extractPdfPageTexts, trailingErrataPages } = await import("@/lib/pdf");
+              const drop = trailingErrataPages(await extractPdfPageTexts(official.pdfUrl));
+              if (drop > 0 && drop < keep.length) {
+                console.error(`[checked_copy] dropping ${drop} errata page(s) from the official answers`);
+                keep = keep.slice(0, keep.length - drop);
+              }
+            } catch { /* if the text cannot be read, bind the key as it is */ }
+
+            const solPages = await out.embedPages(keep);
             for (const sp2 of solPages) {
               const pg = out.addPage([sp2.width, sp2.height]);
               pg.drawPage(sp2, { x: 0, y: 0, width: sp2.width, height: sp2.height });
@@ -550,6 +569,30 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
     // Build the annotated "checked copy" (marks + margin notes) — best-effort.
     let annotatedUrl: string | null = null;
     try {
+      // NO NOTES CAME BACK? ASK FOR THEM ON THEIR OWN.
+      //
+      // The marking call returns marks and margin notes together, and on a big
+      // paper it spends its reply on the marks — mock paper 1 marked 26
+      // questions and returned not one note, so the copy had a margin and
+      // nothing in it. A second small call, with the marks already decided and
+      // handed to it, fills them in without touching a figure.
+      if (!(graded.annotations?.length ?? 0) && studentUrl) {
+        try {
+          const src = await fetch(studentUrl, { cache: "no-store" });
+          if (src.ok) {
+            const b64 = Buffer.from(await src.arrayBuffer()).toString("base64");
+            const { marginNotesForPaper } = await import("@/lib/ai");
+            const notes = await marginNotesForPaper(b64, graded);
+            if (notes.length) {
+              graded.annotations = notes;
+              console.error(`[checked_copy] ${notes.length} margin note(s) fetched separately for attempt`, row.id);
+            }
+          }
+        } catch (e) {
+          console.error("[checked_copy] margin notes could not be fetched", e instanceof Error ? e.message : e);
+        }
+      }
+
       // THE MARGIN NOTES ARE ONE PART OF THE CHECKED COPY, NOT ALL OF IT.
       //
       // This used to build the copy only when there were annotations to draw,

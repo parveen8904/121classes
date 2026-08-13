@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ANSWER_ACCEPT, sortChosen, photosToPdf, uploadAnswerPdf } from "@/lib/answerUpload";
+import { ANSWER_ACCEPT, sortChosen, photosToPdf, shrinkPdf, uploadAnswerPdf } from "@/lib/answerUpload";
 import { submitForChecking } from "./actions";
 
 type Test = { id: string; title: string; course: string; subject: string };
@@ -68,14 +68,16 @@ export default function PaperUpload({
     setBusy(true);
     try {
       setStage(photos.length ? `Making one PDF from ${photos.length} photographs…` : "Preparing your file…");
-      const blob: Blob = pdf ?? (await photosToPdf(photos));
+      let blob: Blob = pdf ?? (await photosToPdf(photos));
+      // A scanner's PDF is far bigger than the handwriting on it needs.
+      blob = await shrinkPdf(blob, setStage);
       if (blob.size > 25 * 1024 * 1024) {
         setError("That comes to more than 25 MB. Scan it in black and white, or send fewer photographs.");
         setStage("");
         setBusy(false);
         return;
       }
-      setStage("Uploading your paper…");
+      setStage(`Uploading your paper (${(blob.size / 1048576).toFixed(1)} MB)…`);
       const up = await uploadAnswerPdf(
         blob,
         `paper-check/${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`,

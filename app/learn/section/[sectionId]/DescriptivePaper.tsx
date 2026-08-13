@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { startPaperAttempt, submitPaperAttempt, gradePaperNow, resetMyPaperAttempt, rebuildCheckedCopy, type PaperAttempt } from "./paperActions";
 import { viaProxy } from "@/lib/fileProxy";
 import AnswerKey from "@/app/components/AnswerKey";
+import { shrinkPdf } from "@/lib/answerUpload";
 
 type Props = {
   sectionId: string;
@@ -304,14 +305,25 @@ export default function DescriptivePaper(props: Props) {
     setProgress(10);
     setNote(photos.length ? "Making one PDF from your photographs…" : "Preparing your file…");
     try {
-      const blob: Blob = pdfFile ?? (await photosToPdf(photos));
+      let blob: Blob = pdfFile ?? (await photosToPdf(photos));
+
+      // A PHONE SCANNER'S PDF IS ENORMOUS, AND THE LINE IS NOT.
+      //
+      // Retrying does not rescue an upload that is simply too big for the
+      // connection — every attempt starts again from nothing. Arnav's scan was
+      // 4.2 MB on a link running at about a kilobyte a second, which does not
+      // finish however many times it is tried. Redrawn at a legible size it
+      // comes out around a tenth of that, and a tenth is the difference between
+      // arriving and not.
+      blob = await shrinkPdf(blob, setNote);
+
       if (blob.size > 20 * 1024 * 1024) {
         setNote("Those pages come to more than 20 MB together. Please send fewer photographs, or scan them instead.");
         setBusy(false);
         return;
       }
       setProgress(35);
-      setNote("Uploading your paper…");
+      setNote(`Uploading your paper (${(blob.size / 1048576).toFixed(1)} MB)…`);
       const up = await uploadPdf(blob, `descriptive/${sectionId}/${studentId}-${Date.now()}.pdf`, setNote);
       if ("error" in up) {
         setNote(up.error);

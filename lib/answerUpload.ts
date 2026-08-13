@@ -21,6 +21,75 @@ import { createClient } from "@/lib/supabase/client";
 
 export type UploadResult = { url: string } | { error: string };
 
+// SHRINK IT BEFORE IT EVER TOUCHES THE NETWORK.
+//
+// Retrying does not help a connection that is simply too slow: every attempt
+// starts from nothing, and 4.2 MB over a line running at a kilobyte a second
+// never finishes, however many times it is tried. Arnav's phone scanner
+// produced exactly that, and the file was the problem — not the code, not the
+// bucket, not the login.
+//
+// Phone scanners write enormous PDFs: full-colour images at print resolution,
+// of a page of blue biro. Rendered at a size that is still comfortably legible
+// and re-encoded as JPEG, the same answer book comes out around a tenth of the
+// size. A tenth is the difference between a paper that arrives and a paper that
+// does not.
+//
+// Only above the threshold, because a small file is already fine and rendering
+// it again would cost a slow phone a minute for nothing.
+const SHRINK_ABOVE_BYTES = 1_200_000;
+
+/**
+ * Re-draw a PDF at a legible size and re-encode it as JPEG pages.
+ * Returns the ORIGINAL if anything goes wrong or if it fails to get smaller —
+ * a student in a hurry must never lose their upload to a clever optimisation.
+ */
+export async function shrinkPdf(file: Blob, onProgress?: (msg: string) => void): Promise<Blob> {
+  if (file.size <= SHRINK_ABOVE_BYTES) return file;
+  try {
+    const pdfjs = await import("pdfjs-dist");
+    // Worker served from our own /public (copied from pdfjs-dist on install).
+    pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+    const data = new Uint8Array(await file.arrayBuffer());
+    const doc = await pdfjs.getDocument({ data }).promise;
+
+    const { PDFDocument } = await import("pdf-lib");
+    const out = await PDFDocument.create();
+
+    for (let i = 1; i <= doc.numPages; i++) {
+      onProgress?.(`Making your ${(file.size / 1048576).toFixed(1)} MB scan smaller — page ${i} of ${doc.numPages}…`);
+      const page = await doc.getPage(i);
+      // 1700px on the long edge: handwriting stays readable for the marker and
+      // for the AI, and a page lands around 60-90 KB rather than 400.
+      const base = page.getViewport({ scale: 1 });
+      const scale = Math.min(2, 1700 / Math.max(base.width, base.height));
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      const ctx = canvas.getContext("2d")!;
+      // White behind it: a PDF page is transparent, and transparency becomes
+      // black in a JPEG, which would hand the examiner a stack of dark pages.
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+
+      const jpg: Blob = await new Promise((r) => canvas.toBlob((b) => r(b!), "image/jpeg", 0.72)!);
+      const em = await out.embedJpg(new Uint8Array(await jpg.arrayBuffer()));
+      const p = out.addPage([em.width, em.height]);
+      p.drawImage(em, { x: 0, y: 0, width: em.width, height: em.height });
+    }
+
+    const blob = new Blob([(await out.save()) as BlobPart], { type: "application/pdf" });
+    // If it did not actually help, keep the original rather than sending a
+    // re-encoded copy for no gain.
+    return blob.size < file.size ? blob : file;
+  } catch (e) {
+    console.error("[answer-upload] could not shrink, sending as-is:", e);
+    return file;
+  }
+}
+
 /** Everything a file chooser should accept for an answer book. */
 export const ANSWER_ACCEPT = "application/pdf,.pdf,image/*";
 
@@ -87,6 +156,7 @@ export async function uploadAnswerPdf(
 
   const attempts = 3;
   let lastDetail = "";
+  const bytes = blob.size;
   for (let n = 1; n <= attempts; n++) {
     if (n > 1) {
       onProgress?.(`The connection dropped. Trying again (${n} of ${attempts})…`);
@@ -111,7 +181,7 @@ export async function uploadAnswerPdf(
   // "Failed to fetch" is what a browser says when a request never completed. It
   // reads like a fault in the site and is almost always the line.
   if (/failed to fetch|network|load failed|timeout|aborted/i.test(lastDetail)) {
-    const mb = (blob.size / 1048576).toFixed(1);
+    const mb = (bytes / 1048576).toFixed(1);
     return {
       error: `Your connection dropped while sending ${mb} MB — we tried ${attempts} times. Move somewhere with better signal, or switch off Wi-Fi and use mobile data, then try again. Your file is still chosen.`,
     };

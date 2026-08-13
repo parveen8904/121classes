@@ -29,14 +29,50 @@ function fmtClock(s: number): string {
 
 
 
-async function uploadPdf(blob: Blob, path: string): Promise<string | null> {
+// SAY WHAT ACTUALLY WENT WRONG.
+//
+// This used to return null on any failure, and the screen said "Upload failed —
+// please check your connection". So when a student could not submit, there was
+// nothing to go on: no error in the browser, none on the server, and no file in
+// the bucket to prove they had tried. Diagnosing one upload took most of an
+// evening, with the student sitting there and his marked paper in front of him.
+//
+// The reason now comes back with the failure. The student sees a sentence they
+// can act on, and it is written to the console so it can be read out over the
+// phone. Storage refusals are usually one of three things — an expired login,
+// a file the bucket will not take, or the network — and they need different
+// answers, so guessing between them helps nobody.
+type UploadResult = { url: string } | { error: string };
+
+async function uploadPdf(blob: Blob, path: string): Promise<UploadResult> {
   const supabase = createClient();
+
+  // An expired login is the failure that looks most like a broken upload: the
+  // page still works, the file is chosen, and storage answers 401. Checked
+  // first so it can be named rather than reported as a connection problem.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    return { error: "Your login has expired. Open the site again and sign in, then come back — your test is still open and nothing is lost." };
+  }
+
   // Answer sheets are personal — upload to the PRIVATE "secure" bucket and
   // store a "secure:<path>" reference (served only via signed URLs, never a
   // public link).
   const { error } = await supabase.storage.from("secure").upload(path, blob, { contentType: "application/pdf", upsert: true });
-  if (error) return null;
-  return `secure:${path}`;
+  if (error) {
+    const detail = String(error.message ?? error);
+    console.error("[paper-upload] refused:", detail, "path:", path);
+    if (/jwt|expired|401|unauthor/i.test(detail)) {
+      return { error: "Your login expired while you were writing. Sign in again and come straight back — your test is still open." };
+    }
+    if (/exceed|too large|size|413/i.test(detail)) {
+      return { error: "That PDF is too large to send. Scan it again in black and white, or at a lower quality, and try once more." };
+    }
+    // Anything else, verbatim. An unfamiliar message somebody can read out is
+    // worth ten guesses.
+    return { error: `The upload was refused: ${detail}` };
+  }
+  return { url: `secure:${path}` };
 }
 
 // Help for a student stuck at the upload — written for someone on a phone,
@@ -191,12 +227,13 @@ export default function DescriptivePaper(props: Props) {
       const blob: Blob = pdfFile;
       setProgress(35);
       setNote("Uploading your paper…");
-      const url = await uploadPdf(blob, `descriptive/${sectionId}/${studentId}-${Date.now()}.pdf`);
-      if (!url) {
-        setNote("Upload failed — please check your connection and try again.");
+      const up = await uploadPdf(blob, `descriptive/${sectionId}/${studentId}-${Date.now()}.pdf`);
+      if ("error" in up) {
+        setNote(up.error);
         setBusy(false);
         return;
       }
+      const url = up.url;
       setProgress(75);
       setNote("Submitting your paper…");
       const r = await submitPaperAttempt({ sectionId, fileUrl: url });
@@ -223,8 +260,10 @@ export default function DescriptivePaper(props: Props) {
     }
     setTrialMsg("Uploading a test PDF…");
     try {
-      const url = await uploadPdf(trialPdf, `descriptive/trial/${studentId}-${Date.now()}.pdf`);
-      setTrialMsg(url ? "✅ It works! Your device can send a PDF to us. You're ready for the real test." : "Upload failed — check your connection and try again.");
+      const up = await uploadPdf(trialPdf, `descriptive/trial/${studentId}-${Date.now()}.pdf`);
+      setTrialMsg("error" in up
+        ? up.error
+        : "✅ It works! Your device can send a PDF to us. You're ready for the real test.");
     } catch {
       setTrialMsg("That file could not be uploaded — make sure it is a PDF.");
     }

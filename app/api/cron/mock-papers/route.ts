@@ -46,6 +46,11 @@ export async function GET(req: NextRequest) {
     .from("mock_papers")
     .select("id, paper_no, course, subject, status")
     .in("status", ["questions_ready", "queued", "failed"])
+    // A paper he uploaded himself, WITH his own answer key, is finished — there
+    // is nothing here for the AI to write. It used to be picked up every hour
+    // and drafted over, because this queue filters on status alone and an
+    // uploaded paper sits in "questions_ready" like any other.
+    .is("answers_pdf_url", null)
     .order("status", { ascending: true })
     .order("paper_no")
     .limit(1)

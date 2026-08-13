@@ -173,7 +173,13 @@ export async function draftMockPaper(id: string): Promise<{ ok: boolean; stage?:
     `It must differ substantially from the other papers in this set: different topics leading, different companies, different figures.\n\n` +
     `TOPICS ACTUALLY TAUGHT IN THIS COURSE (set the paper from these):\n${material.slice(0, 10000)}`;
 
-  const existing = String(row.questions_md ?? "").trim();
+  // Likewise the question paper: if he uploaded one, that IS the paper. This
+  // was protected only as a side effect of questions_md being filled in from
+  // the PDF's text — clear that text for any reason and the AI would have set
+  // its own paper over his.
+  const existing = row.paper_pdf_url
+    ? String(row.questions_md ?? "").trim() || "(his uploaded question paper)"
+    : String(row.questions_md ?? "").trim();
 
   if (!existing) {
     // 20,000, not 12,000: the first attempt stopped at exactly its ceiling,
@@ -201,6 +207,28 @@ export async function draftMockPaper(id: string): Promise<{ ok: boolean; stage?:
   }
 
   const questions = existing;
+
+  // HIS OWN KEY IS THE KEY. THE AI DOES NOT TOUCH IT.
+  //
+  // Mock paper 1 had his question paper AND his answer key uploaded as PDFs,
+  // and the drafter wrote its own answers over the top of them anyway. The only
+  // thing that had been stopping it was answers_progress = 100, a sentinel set
+  // at upload time — and any redraft resets that counter, after which the AI
+  // appends its own Part I to a key he had written himself. Papers 2 and 3
+  // survived only because they had been approved, which the cron happens to
+  // skip.
+  //
+  // A number that means "leave this alone" is the wrong way to say it. The
+  // presence of his file says it, cannot be reset by anything, and is checked
+  // here where the writing actually happens rather than in the queue that feeds
+  // it.
+  if (row.answers_pdf_url) {
+    await svc
+      .from("mock_papers")
+      .update({ status: "drafted", answers_progress: 100, error: null, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    return { ok: true, stage: "his own answer key — nothing drafted" };
+  }
 
   // The answers go in THREE parts, appended in order.
   //

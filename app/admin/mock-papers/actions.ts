@@ -83,6 +83,23 @@ export async function draftAllQueued() {
 // This clears the questions, the answers and the counters, so the next pass
 // writes a genuinely new paper under the current instructions.
 export async function redraftFromScratch(formData: FormData) {
+  // REFUSE IF THE PAPER IS HIS. "Start again from scratch" means the AI throws
+  // away what is there and writes a new paper — which, on a paper he uploaded,
+  // means throwing away his own work. The button sits beside the others and
+  // says nothing about that.
+  {
+    const rid = str(formData.get("id"));
+    if (rid) {
+      const { data: own } = await createServiceClient()
+        .from("mock_papers").select("paper_pdf_url, answers_pdf_url").eq("id", rid).maybeSingle();
+      const o = own as { paper_pdf_url: string | null; answers_pdf_url: string | null } | null;
+      if (o?.paper_pdf_url || o?.answers_pdf_url) {
+        redirect("/admin/mock-papers?err=" + encodeURIComponent(
+          "That paper is your own upload — remove your PDF first if you really want the AI to write a new one.",
+        ));
+      }
+    }
+  }
   await assertArea(null);
   const id = str(formData.get("id"));
   if (!id) return;

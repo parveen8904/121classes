@@ -421,10 +421,20 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
       .maybeSingle();
     const key = String(mock?.answers_md ?? "").trim();
     if (!key) {
+      // WAITING FOR A KEY IS NOT A FAILED ATTEMPT.
+      //
+      // grade_tries exists to stop a copy that cannot be marked from re-running
+      // two AI calls every five minutes for ever. A missing answer key is not
+      // that: nothing is being spent, nothing is wrong with the paper, and the
+      // moment the key is uploaded it would mark perfectly.
+      //
+      // Counting it burned all three retries in the eight minutes between a
+      // paper being sent for mock test 1 and its key being read back out of the
+      // PDF. The copy was then dead for good, with the key sitting right there.
+      // So the reason is recorded and the count is left alone.
       console.error("[grade] mock paper has no answers yet", row.mock_paper_id);
       await svc.from("descriptive_attempts").update({
-        grade_tries: (Number(row.grade_tries) || 0) + 1,
-        grade_error: "the suggested answers for this mock paper are not ready yet",
+        grade_error: "waiting for the answer key for this mock paper — it will mark itself as soon as the key is uploaded",
       }).eq("id", row.id);
       return { status: "submitted", fileUrl: row.file_url ?? undefined, submittedAt: row.submitted_at ?? undefined, deadlineAt: row.deadline_at, total: row.total_marks };
     }

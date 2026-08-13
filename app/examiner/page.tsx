@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { claimCopy } from "./actions";
+import { claimCopy, giveMoreTime } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -87,6 +87,39 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
     };
   });
 
+  // STUDENTS WHO NEVER GOT THEIR PAPER IN.
+  //
+  // This desk used to list only "submitted" and "graded", which meant a student
+  // whose clock ran out was invisible here — the one person who most needed
+  // somebody to notice. On 13 August that cost an evening: the founder could
+  // see nothing, and reopening the test meant editing the database by hand.
+  //
+  // Anything still "started" past its deadline, or already "expired", and not
+  // older than two days (after that it is a paper they chose not to sit, not
+  // somebody stuck at a scanner).
+  const { data: stuckRows } = await svc
+    .from("descriptive_attempts")
+    .select("id, student_id, section_id, status, started_at, deadline_at, extra_time_minutes, extra_time_by")
+    .in("status", ["started", "expired"])
+    .gte("started_at", new Date(Date.now() - 2 * 86400_000).toISOString())
+    .order("deadline_at", { ascending: false });
+
+  const stuck = ((stuckRows ?? []) as {
+    id: string; student_id: string; section_id: string; status: string;
+    started_at: string; deadline_at: string; extra_time_minutes: number | null; extra_time_by: string | null;
+  }[]).filter((r) => new Date(r.deadline_at).getTime() < Date.now());
+
+  const stuckNames = new Map<string, string>();
+  const stuckTests = new Map<string, string>();
+  if (stuck.length) {
+    const [{ data: ps }, { data: secs }] = await Promise.all([
+      svc.from("profiles").select("id, full_name").in("id", [...new Set(stuck.map((r) => r.student_id))]),
+      svc.from("sections").select("id, title").in("id", [...new Set(stuck.map((r) => r.section_id))]),
+    ]);
+    for (const x of (ps ?? []) as { id: string; full_name: string | null }[]) stuckNames.set(x.id, x.full_name ?? "Student");
+    for (const x of (secs ?? []) as { id: string; title: string | null }[]) stuckTests.set(x.id, x.title ?? "Test");
+  }
+
   // Filters (subject / test); status tab defaults to "to check".
   const fSubject = searchParams.subject ?? "";
   const fSection = searchParams.section ?? "";
@@ -116,11 +149,53 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
           AI checks every copy first; you verify and release it. The student sees marks and the checked copy only
           after you submit. <strong>{openCount}</strong> cop{openCount === 1 ? "y" : "ies"} waiting.
         </p>
-        {searchParams.done && <div className="notice ok" style={{ marginTop: 10 }}>✅ Copy released to the student.</div>}
+        {searchParams.done === "time" && (
+          <div className="notice ok" style={{ marginTop: 10 }}>
+            ⏱️ Extra time given, and the student has been emailed — the message tells them to reload the page,
+            because the timer on their screen only changes when they do.
+          </div>
+        )}
+        {searchParams.done && searchParams.done !== "time" && <div className="notice ok" style={{ marginTop: 10 }}>✅ Copy released to the student.</div>}
+
+        {/* WHOEVER IS STUCK, WITH THE ONLY BUTTON THAT HELPS THEM. */}
+        {fStatus === "stuck" && (
+          <div className="card" style={{ marginTop: 14 }}>
+            <strong>⏰ Started but never submitted</strong>
+            <p className="muted" style={{ fontSize: ".85rem", lineHeight: 1.7, margin: "6px 0 12px" }}>
+              These students opened a paper and the upload window closed before anything arrived — usually a scan
+              that took longer than expected. Giving time reopens the upload; it does <strong>not</strong> reset the
+              paper, so they cannot see the questions afresh. They are emailed, and told to reload.
+            </p>
+            {stuck.length === 0 ? (
+              <p className="muted" style={{ margin: 0 }}>Nobody is stuck. Every paper begun in the last two days was handed in.</p>
+            ) : stuck.map((r) => (
+              <div key={r.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 10, marginTop: 10, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  <strong>{stuckNames.get(r.student_id) ?? "Student"}</strong>
+                  <div className="muted" style={{ fontSize: ".82rem" }}>
+                    {stuckTests.get(r.section_id) ?? "Test"} · closed {formatDateTime(r.deadline_at)}
+                    {r.extra_time_minutes ? ` · already given ${r.extra_time_minutes} min by ${r.extra_time_by ?? "someone"}` : ""}
+                  </div>
+                </div>
+                <form action={giveMoreTime} style={{ margin: 0, display: "flex", gap: 6, alignItems: "center" }}>
+                  <input type="hidden" name="id" value={r.id} />
+                  <select name="minutes" defaultValue="15" style={{ marginBottom: 0, width: 92 }}>
+                    <option value="10">10 min</option>
+                    <option value="15">15 min</option>
+                    <option value="30">30 min</option>
+                    <option value="60">60 min</option>
+                  </select>
+                  <button className="btn small" type="submit">⏱️ Give time</button>
+                </form>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Filters */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "16px 0" }}>
-          {[["open", "🔴 To check"], ["checked", "✅ Checked"], ["all", "All"]].map(([k, label]) => (
+          {[["open", "🔴 To check"], ["checked", "✅ Checked"], ["all", "All"],
+            ["stuck", `⏰ Ran out of time${stuck.length ? ` (${stuck.length})` : ""}`]].map(([k, label]) => (
             <Link key={k} className={`btn small ${fStatus === k ? "" : "secondary"}`} href={qs({ status: k })}>{label}</Link>
           ))}
           <span style={{ width: 12 }} />

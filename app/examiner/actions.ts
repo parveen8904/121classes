@@ -159,3 +159,78 @@ export async function saveExaminerCopy(formData: FormData) {
 
   revalidatePath(`/examiner/${id}`);
 }
+
+// GIVE A STUDENT MORE TIME.
+//
+// A descriptive test runs to a clock: so many minutes to solve, ten more to
+// scan and upload, and then the upload closes. That is right — it is a timed
+// test — but until now there was NO WAY to reopen it. On 13 August a student
+// ran out with his paper written in front of him, and reopening it meant
+// editing the database by hand, twice, while he waited. Anyone without a
+// database console had nothing to offer him at all.
+//
+// So this exists, and it is deliberately small: it moves the deadline, and if
+// the attempt had already closed it puts it back to "started" so the upload
+// screen returns. It does not touch marks, does not clear the paper, and does
+// not give a fresh sight of the questions — the student has already seen them,
+// and a reset would be a second attempt rather than a fair finish to the first.
+export async function giveMoreTime(formData: FormData) {
+  const ex = await requireExaminer();
+  if (!ex) return;
+
+  const id = str(formData.get("id"));
+  // Fifteen minutes is the default because the usual cause is a scan that took
+  // longer than expected, not a paper that was never written.
+  const minutes = Math.min(180, Math.max(5, Number(formData.get("minutes")) || 15));
+  if (!id) return;
+
+  const svc = createServiceClient();
+  const { data: row } = await svc
+    .from("descriptive_attempts")
+    .select("id, status, student_id, section_id, extra_time_minutes")
+    .eq("id", id)
+    .maybeSingle();
+  const r = row as { id: string; status: string; student_id: string; section_id: string; extra_time_minutes: number | null } | null;
+  // Already handed in. Reopening a submitted or graded paper would let somebody
+  // replace an answer after seeing a mark, so it is refused.
+  if (!r || !["started", "expired"].includes(r.status)) return;
+
+  await svc.from("descriptive_attempts").update({
+    deadline_at: new Date(Date.now() + minutes * 60_000).toISOString(),
+    status: "started",
+    // WHO DID IT, AND HOW MUCH — kept on the attempt, so it is in front of the
+    // next examiner deciding whether to grant it again. Cumulative: three
+    // fifteen-minute grants should read as forty-five, not fifteen.
+    extra_time_minutes: (Number(r.extra_time_minutes) || 0) + minutes,
+    extra_time_by: ex.name,
+    extra_time_at: new Date().toISOString(),
+  }).eq("id", r.id);
+
+  // And TELL the student, because the page they are looking at is still
+  // counting down from the old deadline and will keep saying "time over" until
+  // it is reloaded. That single fact cost most of an evening.
+  try {
+    const { data: p } = await svc.from("profiles").select("email, full_name").eq("id", r.student_id).maybeSingle();
+    const who = p as { email: string | null; full_name: string | null } | null;
+    if (who?.email) {
+      await notifyByEmail({
+        studentId: r.student_id,
+        email: who.email,
+        subject: "⏱️ Your test has been reopened",
+        template: "descriptive_more_time",
+        payload: { minutes, sectionId: r.section_id },
+        html: emailShell(
+          "Your test is open again",
+          `<p>Dear ${who.full_name || "Student"},</p>
+           <p>Your test has been reopened for <strong>${minutes} more minutes</strong> so you can upload your answers.</p>
+           <p><strong>Please close the test page and open it again</strong> — the timer only shows the new time after
+              the page is reloaded. Then choose your answer PDF, or photographs of your pages, and press Submit.</p>
+           <p>— CA Parveen Sharma classes</p>`,
+        ),
+      });
+    }
+  } catch { /* the extra time matters more than the email */ }
+
+  revalidatePath("/examiner");
+  redirect("/examiner?status=stuck&done=time");
+}

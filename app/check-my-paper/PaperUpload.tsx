@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { ANSWER_ACCEPT, sortChosen, photosToPdf, uploadAnswerPdf } from "@/lib/answerUpload";
 import { submitForChecking } from "./actions";
 
 type Test = { id: string; title: string; course: string; subject: string };
@@ -23,7 +23,18 @@ export default function PaperUpload({
   // and a student sending in a chapter test should never be shown the other
   // course's chapters at all.
   const [kind, setKind] = useState<"mock" | "test">(mocks.length ? "mock" : "test");
-  const [studyLevel, setStudyLevel] = useState(level || "");
+  // INTERMEDIATE UNLESS THEY SAY OTHERWISE.
+  //
+  // The rule for this page was always: be logged in, and we assume you are
+  // sitting Intermediate. It was asking anyway — "Choose…" with nothing
+  // selected and the field marked required — because it read study_level from
+  // the profile, and that column is empty on every account on the system. So
+  // every student, every visit, was made to answer a question we had already
+  // decided the answer to.
+  //
+  // It stays changeable, because Final students exist. It is simply no longer
+  // a gate in front of somebody who only wants their paper marked.
+  const [studyLevel, setStudyLevel] = useState(level || "CA Intermediate");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<string>("");
@@ -41,30 +52,44 @@ export default function PaperUpload({
     groups.get(k)!.push(t);
   }
 
-  async function upload(f: File) {
+  // A PDF, OR PHOTOGRAPHS WE TURN INTO ONE.
+  //
+  // This page told students "loose photographs cannot be marked" and accepted
+  // PDFs only — which on Android means the gallery offers nothing at all and
+  // the chooser looks broken. A photographed answer book is now stitched into a
+  // single PDF here, exactly as the timed test does.
+  async function upload(files: File[]) {
     setError(null);
-    if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) {
-      setError("It must be a PDF. Your phone can scan straight to PDF — iPhone Notes → Scan Documents, or Google Drive → + → Scan.");
-      return;
-    }
-    if (f.size > 25 * 1024 * 1024) {
-      setError("That file is over 25 MB. Scan it in black and white, or at a lower quality, and try again.");
+    const { pdf, photos } = sortChosen(files);
+    if (!pdf && !photos.length) {
+      setError("Choose your scanned PDF, or photographs of your pages.");
       return;
     }
     setBusy(true);
-    setStage("Uploading your paper…");
     try {
-      const supabase = createClient();
-      const path = `paper-check/${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`;
-      const { error: upErr } = await supabase.storage.from("secure").upload(path, f, {
-        contentType: "application/pdf",
-        upsert: false,
-      });
-      if (upErr) throw new Error(upErr.message);
-      setFileUrl(`secure:${path}`);
+      setStage(photos.length ? `Making one PDF from ${photos.length} photographs…` : "Preparing your file…");
+      const blob: Blob = pdf ?? (await photosToPdf(photos));
+      if (blob.size > 25 * 1024 * 1024) {
+        setError("That comes to more than 25 MB. Scan it in black and white, or send fewer photographs.");
+        setStage("");
+        setBusy(false);
+        return;
+      }
+      setStage("Uploading your paper…");
+      const up = await uploadAnswerPdf(
+        blob,
+        `paper-check/${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`,
+        setStage,
+      );
+      if ("error" in up) {
+        setError(up.error);
+        setStage("");
+        return;
+      }
+      setFileUrl(up.url);
       setStage("Uploaded ✓ — now press Send for checking");
     } catch (e) {
-      setError("Upload failed: " + (e as Error).message + " — check your internet and try again.");
+      setError("That file could not be prepared: " + (e as Error).message);
       setStage("");
     } finally {
       setBusy(false);
@@ -82,10 +107,12 @@ export default function PaperUpload({
         <div>
           <label>Which exam are you preparing for?</label>
           <select name="study_level" required value={studyLevel} onChange={(e) => setStudyLevel(e.target.value)}>
-            <option value="" disabled>Choose…</option>
             <option value="CA Intermediate">CA Intermediate</option>
             <option value="CA Final">CA Final</option>
           </select>
+          <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
+            Set to Intermediate. Change it if you are sitting Final.
+          </p>
         </div>
 
         <div>
@@ -121,15 +148,16 @@ export default function PaperUpload({
         </div>
 
         <div>
-          <label>Your answer book — one PDF</label>
+          <label>Your answer book — a PDF, or photographs of your pages</label>
           <input
             type="file"
-            accept="application/pdf,.pdf"
+            accept={ANSWER_ACCEPT}
+            multiple
             disabled={busy}
             onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              setFile(f);
-              if (f) upload(f);
+              const list = Array.from(e.target.files ?? []);
+              setFile(list[0] ?? null);
+              if (list.length) upload(list);
             }}
           />
           <input type="hidden" name="file_url" value={fileUrl} />
@@ -137,7 +165,8 @@ export default function PaperUpload({
           {stage && <p style={{ fontSize: ".85rem", marginTop: 4, fontWeight: 700 }}>{stage}</p>}
           {error && <p className="notice err" style={{ fontSize: ".85rem", marginTop: 6 }}>{error}</p>}
           <p className="muted" style={{ fontSize: ".8rem", marginTop: 6 }}>
-            All pages in ONE PDF, in order, sharp enough to read. Loose photographs cannot be marked.
+            Best is one scanned PDF with the pages in order. If you only have photographs, choose them all together
+            and we will make the PDF for you — check they are sharp enough to read.
           </p>
         </div>
 

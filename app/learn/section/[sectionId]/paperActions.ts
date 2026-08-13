@@ -576,6 +576,28 @@ async function gradeAndStore(row: Row, sectionId: string): Promise<PaperAttempt>
       console.error("[checked_copy] upload failed", e instanceof Error ? e.message : e);
       annotatedUrl = null;
     }
+    // A MARK OF NOTHING, WITH NO QUESTION MARKED, IS NOT A RESULT.
+    //
+    // Mock paper 1 came back with a summary any examiner would recognise as
+    // real work — "strong attempt across most questions; good grasp of AS 7,
+    // AS 21, AS 26, AS 29 and AS 13; weaker on AS 16" — and an EMPTY
+    // per_question list. The total is arithmetic on that list, so a paper the
+    // marker plainly thought was good was recorded as 0 out of 100.
+    //
+    // The student would have opened that. So an empty breakdown is treated as
+    // a failed pass, not as a zero: the copy stays "submitted", the reason is
+    // written down, and it is retried and then handed to a person. A real zero
+    // — a blank or wholly wrong paper — still has questions listed against it,
+    // which is how the two are told apart.
+    if (!graded.per_question?.length) {
+      console.error("[grade] refusing a 0 with no per-question marks for attempt", row.id);
+      await svc.from("descriptive_attempts").update({
+        grade_tries: (Number(row.grade_tries) || 0) + 1,
+        grade_error: "the marking came back with no per-question marks — not recorded, so nobody is shown a wrong zero",
+      }).eq("id", row.id);
+      return { status: "submitted", fileUrl: row.file_url ?? undefined, submittedAt: row.submitted_at ?? undefined, deadlineAt: row.deadline_at, total: row.total_marks };
+    }
+
     const { error: saveErr } = await svc
       .from("descriptive_attempts")
       .update({ status: "graded", awarded_marks: graded.awarded, total_marks: graded.total, report: graded, annotated_url: annotatedUrl, review_status: "pending", grade_error: null })

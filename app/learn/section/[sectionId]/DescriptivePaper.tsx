@@ -197,34 +197,89 @@ export default function DescriptivePaper(props: Props) {
   const [progress, setProgress] = useState(0);
   const pdfRef = useRef<HTMLInputElement>(null);
 
+  // PHOTOGRAPHS ARE ACCEPTED AGAIN, AND WE MAKE THE PDF.
+  //
+  // This took ONE PDF and refused everything else. The intention was good —
+  // a phone scan is straighter and easier to mark than a handful of snaps — but
+  // it left a student who had photographed his pages with no way in at all, and
+  // "accept=application/pdf" makes most Android galleries offer him nothing to
+  // pick. He is then staring at a file chooser that appears broken, with a
+  // clock running, having already written the paper.
+  //
+  // So the scan is still what we ask for, and photographs are stitched into a
+  // single PDF here rather than turned away. The same thing the repository
+  // uploader has always done. A crooked page can be marked; an unsubmitted
+  // paper cannot.
+  const [photos, setPhotos] = useState<File[]>([]);
+
   const choosePdf = (list: FileList | null) => {
-    const f = list?.[0];
-    if (!f) return;
-    const looksPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
-    if (!looksPdf) {
-      setNote(`"${f.name}" is not a PDF. Photographs are not accepted — scan your pages into one PDF and choose that file.`);
+    const files = Array.from(list ?? []);
+    if (!files.length) return;
+
+    const pdf = files.find((f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+    if (pdf) {
+      if (pdf.size > 20 * 1024 * 1024) {
+        setNote("That PDF is over 20 MB. Please scan it again in black and white, or at a lower quality.");
+        if (pdfRef.current) pdfRef.current.value = "";
+        return;
+      }
+      setPdfFile(pdf); setPhotos([]); setNote(null);
+      return;
+    }
+
+    const images = files.filter((f) => f.type.startsWith("image/"));
+    if (!images.length) {
+      setNote(`"${files[0].name}" is neither a PDF nor a photograph. Choose your scanned PDF, or photographs of your pages.`);
       if (pdfRef.current) pdfRef.current.value = "";
       return;
     }
-    if (f.size > 20 * 1024 * 1024) {
-      setNote("That PDF is over 20 MB. Please send a smaller scan so it can be checked.");
-      if (pdfRef.current) pdfRef.current.value = "";
-      return;
-    }
-    setPdfFile(f);
-    setNote(null);
+    // Pages come out in the order the phone lists them, which is not always the
+    // order they were written in. Sorting by name puts IMG_001 before IMG_010,
+    // and the student is told to check before submitting.
+    images.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    setPhotos(images); setPdfFile(null);
+    setNote(`${images.length} photograph${images.length === 1 ? "" : "s"} selected — check the order below before you submit.`);
   };
 
+  /** Photographs → one PDF, a page each, shrunk enough to travel on a phone. */
+  async function photosToPdf(files: File[]): Promise<Blob> {
+    const { PDFDocument } = await import("pdf-lib");
+    const doc = await PDFDocument.create();
+    for (const f of files) {
+      const img = document.createElement("img");
+      const url = URL.createObjectURL(f);
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+      // 1600px on the long edge keeps handwriting legible while keeping a
+      // twelve-page answer book inside the 20 MB limit.
+      const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      const jpg: Blob = await new Promise((r) => c.toBlob((b) => r(b!), "image/jpeg", 0.82)!);
+      const em = await doc.embedJpg(new Uint8Array(await jpg.arrayBuffer()));
+      const page = doc.addPage([em.width, em.height]);
+      page.drawImage(em, { x: 0, y: 0, width: em.width, height: em.height });
+    }
+    return new Blob([(await doc.save()) as BlobPart], { type: "application/pdf" });
+  }
+
   async function submit() {
-    if (!pdfFile) {
-      setNote("Choose your answer PDF first.");
+    if (!pdfFile && !photos.length) {
+      setNote("Choose your answer PDF, or photographs of your pages.");
       return;
     }
     setBusy(true);
     setProgress(10);
-    setNote("Preparing your file…");
+    setNote(photos.length ? "Making one PDF from your photographs…" : "Preparing your file…");
     try {
-      const blob: Blob = pdfFile;
+      const blob: Blob = pdfFile ?? (await photosToPdf(photos));
+      if (blob.size > 20 * 1024 * 1024) {
+        setNote("Those pages come to more than 20 MB together. Please send fewer photographs, or scan them instead.");
+        setBusy(false);
+        return;
+      }
       setProgress(35);
       setNote("Uploading your paper…");
       const up = await uploadPdf(blob, `descriptive/${sectionId}/${studentId}-${Date.now()}.pdf`);
@@ -240,6 +295,7 @@ export default function DescriptivePaper(props: Props) {
       setProgress(100);
       setAttempt(r);
       setPdfFile(null);
+      setPhotos([]);
       setNote(null);
     } catch {
       setNote("Something went wrong while sending your PDF. Please try again.");
@@ -462,18 +518,36 @@ export default function DescriptivePaper(props: Props) {
           </p>
 
           <div style={{ background: "var(--bg-soft)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-            <strong style={{ fontSize: ".9rem" }}>📄 Your answers as ONE PDF</strong>
+            <strong style={{ fontSize: ".9rem" }}>📄 Your answers — a PDF, or photographs of your pages</strong>
             <p className="muted" style={{ fontSize: ".8rem", margin: "2px 0 8px" }}>
-              Scan your pages into a single PDF, in order, then choose it here. Help below if you have not scanned
-              on your phone before.
+              Best is a single scanned PDF with the pages in order. If you only have photographs of your pages,
+              choose them all together and we will make the PDF for you.
             </p>
             <input
               ref={pdfRef}
               type="file"
-              accept="application/pdf,.pdf"
+              // Photographs allowed as well as a PDF, and MULTIPLE — an
+              // "application/pdf" filter leaves most Android galleries with
+              // nothing to offer, which is a file chooser that looks broken.
+              accept="application/pdf,.pdf,image/*"
+              multiple
               onChange={(e) => choosePdf(e.target.files)}
               disabled={busy}
             />
+            {photos.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 4px" }}>
+                  These become one PDF, in this order — check it reads 1, 2, 3 before you submit:
+                </p>
+                <ol style={{ margin: 0, paddingLeft: 20, fontSize: ".8rem" }}>
+                  {photos.map((f, i) => <li key={i}>{f.name}</li>)}
+                </ol>
+                <button className="btn small secondary" type="button" style={{ marginTop: 6 }}
+                  onClick={() => { setPhotos([]); if (pdfRef.current) pdfRef.current.value = ""; }}>
+                  ✕ Clear and choose again
+                </button>
+              </div>
+            )}
             {pdfFile && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
                 <span style={{ flex: 1, fontSize: ".82rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

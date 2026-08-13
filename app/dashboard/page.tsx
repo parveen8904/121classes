@@ -404,6 +404,13 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
               question this answers — "where are my books?" — is asked by
               students who cannot remember whether they ordered any. */}
           <Link className="btn small secondary" href="/dashboard/deliveries">📦 Your books · Track a parcel</Link>
+          {/* WHERE A CHECKED PAPER COMES BACK TO.
+              /check-my-paper was linked from the homepage, the mock-tests page
+              and /ask — every route IN, and none back. A student who has sent an
+              answer book and returns for the result had nowhere to look, which
+              is exactly how it was found: signed in, copy released, and no way
+              to reach it. */}
+          <Link className="btn small secondary" href="/check-my-paper">📝 Get a paper checked · My checked copies</Link>
         </div>
 
         {!isAdminUser && !needsSetup && myCourses.length > 0 && (

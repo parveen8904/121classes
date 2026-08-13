@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
 import AnswerKey from "@/app/components/AnswerKey";
 import AdminHero from "../_components/AdminHero";
-import { draftOne, draftAllQueued, createSet, approvePaper, unapprovePaper, savePaper, redraftFromScratch, uploadPaperFiles, removeUploadedPaper, createUploadedPaper } from "./actions";
+import { createSet, approvePaper, unapprovePaper, savePaper, uploadPaperFiles, removeUploadedPaper, createUploadedPaper } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mock test papers — Admin" };
@@ -95,8 +95,8 @@ export default async function MockPapersPage(props: {
         <div className="card" style={{ marginTop: 16 }}>
           <strong>Nothing here yet</strong>
           <p className="muted" style={{ fontSize: ".88rem", margin: "4px 0 10px" }}>
-            Create the three CA Intermediate — Advanced Accounting papers for the September 2026 attempt, then draft
-            them one at a time.
+            Create the three CA Intermediate — Advanced Accounting papers for the September 2026 attempt, then
+            upload your question paper and answer key onto each one.
           </p>
           <form action={createSet}>
             <SubmitButton className="btn" savedLabel="Created">➕ Create the September 2026 set</SubmitButton>
@@ -104,17 +104,6 @@ export default async function MockPapersPage(props: {
         </div>
       )}
 
-      {papers.some((p) => ["queued", "failed", "questions_ready", "halted"].includes(p.status)) && (
-        <form action={draftAllQueued} className="card" style={{ marginTop: 16 }}>
-          <strong>✍️ Draft everything waiting</strong>
-          <p className="muted" style={{ fontSize: ".86rem", margin: "4px 0 10px" }}>
-            One press does all of them. Each paper is two long calls — the questions, then the answers to those
-            exact questions — so give it a few minutes and do not close the tab. If it runs out of time it stops
-            cleanly; press again to carry on.
-          </p>
-          <SubmitButton className="btn" savedLabel="Drafting…">✍️ Draft all waiting papers</SubmitButton>
-        </form>
-      )}
 
       <div style={{ display: "grid", gap: 14, marginTop: 16 }}>
         {papers.map((p) => {
@@ -131,24 +120,6 @@ export default async function MockPapersPage(props: {
               {p.error && <p className="notice err" style={{ fontSize: ".82rem", marginTop: 8 }}>{p.error}</p>}
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                <form action={draftOne}>
-                  <input type="hidden" name="id" value={p.id} />
-                  <SubmitButton className="btn small secondary" savedLabel="Drafting…">
-                    {p.status === "drafted"
-                      ? "↻ One more pass"
-                      : p.questions_md
-                        ? "▶ Carry on drafting"
-                        : "✍️ Draft this paper"}
-                  </SubmitButton>
-                </form>
-                {p.questions_md && (
-                  <form action={redraftFromScratch}>
-                    <input type="hidden" name="id" value={p.id} />
-                    <SubmitButton className="btn small danger" savedLabel="Restarted">
-                      🗑️ Throw it away &amp; write a new paper
-                    </SubmitButton>
-                  </form>
-                )}
                 {p.status === "drafted" && (
                   <form action={approvePaper}>
                     <input type="hidden" name="id" value={p.id} />

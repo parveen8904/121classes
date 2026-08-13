@@ -517,6 +517,15 @@ export default async function Home() {
                 <Link prefetch={false} className="btn secondary" href="/check-my-paper" style={{ background: "rgba(255,255,255,.16)", color: "#fff", borderColor: "rgba(255,255,255,.5)" }}>
                   📝 Get any paper checked — free
                 </Link>
+                {/* THE WAY BACK, BESIDE THE WAY IN.
+                    Sending a paper was linked from three places and collecting
+                    the marked one from none — a student whose copy had been
+                    released had nowhere to look for it. This lands on the list
+                    of their own copies; /check-my-paper asks for a login first
+                    and returns them here, so it is safe to show to everybody. */}
+                <Link prefetch={false} className="btn secondary" href="/check-my-paper#sent" style={{ background: "rgba(255,255,255,.16)", color: "#fff", borderColor: "rgba(255,255,255,.5)" }}>
+                  ✅ See your checked copies
+                </Link>
               </div>
             </div>
           </div>

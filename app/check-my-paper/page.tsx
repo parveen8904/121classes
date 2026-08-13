@@ -105,7 +105,7 @@ export default async function CheckMyPaperPage(props: {
         )}
 
         {(mine ?? []).length > 0 && (
-          <div style={{ marginTop: 28 }}>
+          <div id="sent" style={{ marginTop: 28, scrollMarginTop: 90 }}>
             <h2 style={{ fontSize: "1.1rem" }}>📨 Papers you have sent</h2>
             <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
               {(mine ?? []).map((a) => {

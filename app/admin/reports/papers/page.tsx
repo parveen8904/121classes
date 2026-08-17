@@ -26,6 +26,7 @@ type Row = {
   paperCheck: number;  // of those, sent through the free checking page
   topic: number;       // handed in against a topic's own test
   mock: number;        // handed in against a full mock paper
+  started: number;     // transfers that BEGAN — a start with no arrival is a give-up
   failed: number;
   resultsRead: number;
   copiesOpened: number;
@@ -54,7 +55,7 @@ export default async function PaperReport() {
   const days: Row[] = ((raw ?? []) as {
     day: string; files_uploaded: number; uploaders: number; paper_check_uploads: number;
     topic_tests: number; mock_tests: number; papers_from: number;
-    failed: number; results_read: number; copies_opened: number;
+    started: number; failed: number; results_read: number; copies_opened: number;
   }[]).map((r) => ({
     day: String(r.day),
     files: Number(r.files_uploaded) || 0,
@@ -63,6 +64,7 @@ export default async function PaperReport() {
     paperCheck: Number(r.paper_check_uploads) || 0,
     topic: Number(r.topic_tests) || 0,
     mock: Number(r.mock_tests) || 0,
+    started: Number(r.started) || 0,
     failed: Number(r.failed) || 0,
     resultsRead: Number(r.results_read) || 0,
     copiesOpened: Number(r.copies_opened) || 0,
@@ -71,10 +73,11 @@ export default async function PaperReport() {
     (t, d) => ({
       files: t.files + d.files, paperCheck: t.paperCheck + d.paperCheck,
       topic: t.topic + d.topic, mock: t.mock + d.mock,
+      started: t.started + d.started,
       failed: t.failed + d.failed, resultsRead: t.resultsRead + d.resultsRead,
       copiesOpened: t.copiesOpened + d.copiesOpened,
     }),
-    { files: 0, paperCheck: 0, topic: 0, mock: 0, failed: 0, resultsRead: 0, copiesOpened: 0 },
+    { files: 0, paperCheck: 0, topic: 0, mock: 0, started: 0, failed: 0, resultsRead: 0, copiesOpened: 0 },
   );
   const handedIn = total.topic + total.mock;
   const tried = total.files + total.failed;
@@ -121,6 +124,8 @@ export default async function PaperReport() {
               <th style={th}>Scans received</th>
               <th style={th}>From how many people</th>
               <th style={th}>Of those, free page</th>
+              <th style={th}>Started</th>
+              <th style={th}>Gave up</th>
               <th style={th}>Failed</th>
               <th style={th}>Marks read</th>
               <th style={th}>Copies opened</th>
@@ -128,7 +133,7 @@ export default async function PaperReport() {
           </thead>
           <tbody>
             {days.length === 0 && (
-              <tr><td colSpan={10} style={{ ...td, textAlign: "left", color: "var(--muted)" }}>Nothing in the last 30 days.</td></tr>
+              <tr><td colSpan={12} style={{ ...td, textAlign: "left", color: "var(--muted)" }}>Nothing in the last 30 days.</td></tr>
             )}
             {days.map((d) => (
               <tr key={d.day}>
@@ -141,6 +146,10 @@ export default async function PaperReport() {
                 <td style={{ ...td, color: d.uploaders && d.files > d.uploaders * 2 ? "#b45309" : undefined }}>{d.files || "—"}</td>
                 <td style={td}>{d.uploaders || "—"}</td>
                 <td style={td}>{d.paperCheck || "—"}</td>
+                <td style={td}>{d.started || "—"}</td>
+                <td style={{ ...td, color: Math.max(0, d.started - d.files) ? "#b45309" : undefined, fontWeight: Math.max(0, d.started - d.files) ? 700 : undefined }}>
+                  {Math.max(0, d.started - d.files) || "—"}
+                </td>
                 <td style={{ ...td, color: d.failed ? "#b91c1c" : undefined, fontWeight: d.failed ? 700 : undefined }}>
                   {d.failed || "—"}
                 </td>
@@ -177,6 +186,13 @@ export default async function PaperReport() {
           the fortnight after it looked like a collapse when nothing had broken.
         </p>
         <p style={{ margin: "0 0 8px" }}>
+          <strong>Started</strong> counts transfers that actually began, and <strong>Gave up</strong> is how many of
+          those never arrived. This is the column that was missing for a fortnight. A student watching an upload that
+          shows no sign of moving decides the site is broken and closes it &mdash; nothing errors, so nothing was ever
+          written down, and the day read as quiet while she sat there unable to hand her paper in. A start with no
+          arrival is that student, and she can now be counted and rung.
+        </p>
+        <p style={{ margin: 0 }}>
           <strong>Failed</strong> is reported by the student&apos;s own browser when an upload gives up. It cannot be
           counted any other way: a refusal happens between their phone and the bucket, so nothing reaches us. That
           blind spot is why the free checking page turned away every student for weeks before a ticket revealed it.

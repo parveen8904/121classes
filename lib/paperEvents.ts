@@ -11,7 +11,13 @@ import { createServiceClient } from "@/lib/supabase/service";
 // reason an upload fails or a page 500s; a missing row costs a number on a
 // report, a thrown error costs a student their paper.
 
-export type PaperEventKind = "upload_ok" | "upload_failed" | "result_viewed" | "copy_viewed";
+export type PaperEventKind =
+  /** Bytes have begun moving. A start with no arrival is a student who gave up. */
+  | "upload_started"
+  | "upload_ok"
+  | "upload_failed"
+  | "result_viewed"
+  | "copy_viewed";
 
 export async function recordPaperEvent(e: {
   kind: PaperEventKind;

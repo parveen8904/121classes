@@ -29,14 +29,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // Only the failure kind is accepted from a browser. Successes are counted
-  // from the storage bucket, which cannot be fabricated, and views are recorded
-  // on the server where the page is rendered.
-  if (String(body.kind) !== "upload_failed") return NextResponse.json({ ok: true });
+  // Only two kinds are accepted from a browser: a failure, and the fact that a
+  // transfer began. Successes are still counted from the storage bucket, which
+  // cannot be fabricated, and views are recorded on the server that renders the
+  // page.
+  //
+  // "started" matters because the worst failure leaves no trace of its own: the
+  // student watches a slow upload, decides the site is broken and closes the
+  // tab. Nothing fails, so nothing was ever written. A start with no arrival is
+  // that student, and now it can be counted.
+  const kind = String(body.kind);
+  if (kind !== "upload_failed" && kind !== "upload_started") return NextResponse.json({ ok: true });
 
   const source = body.source === "paper_check" ? "paper_check" : "portal";
   await recordPaperEvent({
-    kind: "upload_failed",
+    kind: kind as "upload_failed" | "upload_started",
     studentId: user.id,
     source,
     detail: typeof body.detail === "string" ? body.detail : null,

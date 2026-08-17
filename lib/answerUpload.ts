@@ -125,11 +125,31 @@ export async function shrinkPdf(
  * directly for those cases.
  */
 export function reportFailure(source: "portal" | "paper_check", detail: string): void {
+  post("upload_failed", source, detail);
+}
+
+/**
+ * SAY THAT A TRANSFER BEGAN.
+ *
+ * The failure that cost the most had no failure in it. Manvi watched a frozen
+ * "Uploading your paper (3.9 MB)…" — because upload() reported no progress — and
+ * closed the tab. Nothing threw, nothing was refused, so nothing was written
+ * down, and the report showed a quiet day while a student sat there unable to
+ * hand in her paper.
+ *
+ * A start with no arrival is exactly that student. It is the only way to count
+ * somebody who gave up.
+ */
+export function reportStarted(source: "portal" | "paper_check", bytes: number): void {
+  post("upload_started", source, `${(bytes / 1048576).toFixed(2)} MB leaving the phone`);
+}
+
+function post(kind: "upload_failed" | "upload_started", source: "portal" | "paper_check", detail: string): void {
   try {
     void fetch("/api/paper-event", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "upload_failed", source, detail }),
+      body: JSON.stringify({ kind, source, detail }),
       keepalive: true,
     }).catch(() => {});
   } catch { /* nothing here is worth an exception */ }
@@ -276,11 +296,26 @@ function putWithProgress(
       return;
     }
     const started = Date.now();
+    let slowWarned = false;
 
     xhr.upload.onprogress = (e) => {
       if (!e.lengthComputable) return;
       const pct = Math.round((e.loaded / e.total) * 100);
       const secs = (Date.now() - started) / 1000;
+
+      // A LINE THIS SLOW NEEDS SAYING OUT LOUD, ONCE.
+      //
+      // At a kilobyte or two a second — which is what Arnav's phone showed, and
+      // is ordinary on a village connection — a 4 MB scan is half an hour. A
+      // student who is not told that assumes the site is broken and closes it,
+      // which is invisible to us. Told plainly, they leave it running.
+      if (!slowWarned && secs > 25 && e.loaded / secs < 20_000) {
+        slowWarned = true;
+        reportFailure(
+          path.startsWith("paper-check/") ? "paper_check" : "portal",
+          `very slow line: ${Math.round(e.loaded / secs / 1024)} KB/s on ${(e.total / 1048576).toFixed(1)} MB`,
+        );
+      }
       // Only estimate once a tenth is through — before that the figure swings
       // wildly and a wrong "12 minutes left" makes a student give up faster
       // than no figure at all.
@@ -292,7 +327,10 @@ function putWithProgress(
           ? ` · about ${Math.ceil(remain / 60)} minutes left`
           : ` · about ${Math.max(5, remain)} seconds left`;
       }
-      onProgress?.(`Sending your paper — ${pct}% of ${mb(total)} MB${left}`);
+      onProgress?.(
+        `Sending your paper — ${pct}% of ${mb(total)} MB${left}` +
+        (slowWarned ? " · your connection is slow, so this will take a while — please leave this page open, it is working" : ""),
+      );
     };
 
     xhr.onload = () => {
@@ -362,6 +400,9 @@ export async function uploadAnswerPdf(
   let lastDetail = "";
   const bytes = blob.size;
   const token = session.access_token;
+  // Written down before a single byte leaves. If no file ever arrives for this
+  // student, this row is the proof that they tried.
+  reportStarted(source, bytes);
   for (let n = 1; n <= attempts; n++) {
     if (n > 1) {
       onProgress?.(`The connection dropped. Trying again (${n} of ${attempts})…`);

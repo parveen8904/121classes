@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { startPaperAttempt, submitPaperAttempt, gradePaperNow, resetMyPaperAttempt, rebuildCheckedCopy, type PaperAttempt } from "./paperActions";
 import { viaProxy } from "@/lib/fileProxy";
 import AnswerKey from "@/app/components/AnswerKey";
-import { shrinkPdf } from "@/lib/answerUpload";
+import { shrinkPdf, reportFailure } from "@/lib/answerUpload";
 
 type Props = {
   sectionId: string;
@@ -53,6 +53,7 @@ async function uploadPdf(blob: Blob, path: string, onProgress?: (msg: string) =>
   // first so it can be named rather than reported as a connection problem.
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) {
+    reportFailure("portal", "login expired before the upload started");
     return { error: "Your login has expired. Open the site again and sign in, then come back — your test is still open and nothing is lost." };
   }
 
@@ -87,9 +88,11 @@ async function uploadPdf(blob: Blob, path: string, onProgress?: (msg: string) =>
 
     // These will not improve by asking again, so stop and say what to do.
     if (/jwt|expired|401|unauthor/i.test(lastDetail)) {
+      reportFailure("portal", `login expired mid-upload: ${lastDetail}`);
       return { error: "Your login expired while you were writing. Sign in again and come straight back — your test is still open." };
     }
     if (/exceed|too large|size|413/i.test(lastDetail)) {
+      reportFailure("portal", `too large (${(blob.size / 1048576).toFixed(1)} MB): ${lastDetail}`);
       return { error: "That PDF is too large to send. Scan it again in black and white, or at a lower quality, and try once more." };
     }
   }
@@ -99,10 +102,12 @@ async function uploadPdf(blob: Blob, path: string, onProgress?: (msg: string) =>
   // translated into the thing the student can actually do something about.
   if (/failed to fetch|network|load failed|timeout|aborted/i.test(lastDetail)) {
     const mb = (blob.size / 1048576).toFixed(1);
+    reportFailure("portal", `connection dropped after ${attempts} tries, ${mb} MB`);
     return {
       error: `Your connection dropped while sending ${mb} MB — we tried ${attempts} times. Move somewhere with better signal, or switch off Wi-Fi and use mobile data, then press Submit again. Your file is still chosen and your test is still open.`,
     };
   }
+  reportFailure("portal", `refused: ${lastDetail}`);
   return { error: `The upload was refused: ${lastDetail}` };
 }
 
@@ -318,6 +323,7 @@ export default function DescriptivePaper(props: Props) {
       blob = await shrinkPdf(blob, setNote);
 
       if (blob.size > 20 * 1024 * 1024) {
+        reportFailure("portal", `too big to send: ${(blob.size / 1048576).toFixed(1)} MB after shrinking`);
         setNote("Those pages come to more than 20 MB together. Please send fewer photographs, or scan them instead.");
         setBusy(false);
         return;
@@ -339,8 +345,17 @@ export default function DescriptivePaper(props: Props) {
       setPdfFile(null);
       setPhotos([]);
       setNote(null);
-    } catch {
-      setNote("Something went wrong while sending your PDF. Please try again.");
+    } catch (e) {
+      // THE CATCH THAT HID EVERYTHING.
+      //
+      // This wraps the whole submission — making the PDF, shrinking it, the
+      // upload, AND submitPaperAttempt — and reported all of it as "something
+      // went wrong". A student whose paper failed here left no trace at all,
+      // which is the same blindness that let the free checking page turn away
+      // every student for a fortnight. The reason is now recorded and shown.
+      const why = e instanceof Error ? e.message : String(e);
+      reportFailure("portal", `submission failed: ${why}`);
+      setNote(`Something went wrong while sending your PDF: ${why}. Please try again — your file is still chosen.`);
     } finally {
       setBusy(false);
       setProgress(0);

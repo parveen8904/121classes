@@ -101,8 +101,14 @@ export async function shrinkPdf(file: Blob, onProgress?: (msg: string) => void):
  *
  * Fire-and-forget: it must never delay or break the retry the student is
  * waiting on.
+ *
+ * EXPORTED, because the upload is not the only place a paper dies. A scan that
+ * cannot be turned into a PDF at all, or one that comes out over the size
+ * limit, never reaches the bucket — so it never reached this function either,
+ * and the student saw an error that left no trace. Both screens now call it
+ * directly for those cases.
  */
-function reportFailure(source: "portal" | "paper_check", detail: string): void {
+export function reportFailure(source: "portal" | "paper_check", detail: string): void {
   try {
     void fetch("/api/paper-event", {
       method: "POST",

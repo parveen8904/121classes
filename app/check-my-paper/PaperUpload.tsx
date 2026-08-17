@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ANSWER_ACCEPT, sortChosen, photosToPdf, shrinkPdf, uploadAnswerPdf } from "@/lib/answerUpload";
+import { ANSWER_ACCEPT, sortChosen, photosToPdf, shrinkPdf, uploadAnswerPdf, reportFailure } from "@/lib/answerUpload";
 import { submitForChecking } from "./actions";
 
 type Test = { id: string; title: string; course: string; subject: string };
@@ -72,6 +72,7 @@ export default function PaperUpload({
       // A scanner's PDF is far bigger than the handwriting on it needs.
       blob = await shrinkPdf(blob, setStage);
       if (blob.size > 25 * 1024 * 1024) {
+        reportFailure("paper_check", `too big to send: ${(blob.size / 1048576).toFixed(1)} MB after shrinking`);
         setError("That comes to more than 25 MB. Scan it in black and white, or send fewer photographs.");
         setStage("");
         setBusy(false);
@@ -91,6 +92,11 @@ export default function PaperUpload({
       setFileUrl(up.url);
       setStage("Uploaded ✓ — now press Send for checking");
     } catch (e) {
+      // A file that cannot even be READ — a broken scan, a format the browser
+      // will not decode, a phone that runs out of memory on twenty photographs.
+      // The student is told, and now so are we; this is the failure that used to
+      // vanish completely.
+      reportFailure("paper_check", `could not prepare the file: ${(e as Error).message}`);
       setError("That file could not be prepared: " + (e as Error).message);
       setStage("");
     } finally {

@@ -21,6 +21,7 @@ export const metadata = { title: "Paper report — Admin" };
 type Row = {
   day: string;
   files: number;       // scans that reached the bucket
+  uploaders: number;   // how many different people sent them
   paperCheck: number;  // of those, sent through the free checking page
   topic: number;       // handed in against a topic's own test
   mock: number;        // handed in against a full mock paper
@@ -50,12 +51,13 @@ export default async function PaperReport() {
   // up here is what made the AI spend page stop moving past a thousand rows.
   const { data: raw } = await svc.rpc("paper_report_days", { days: 30 });
   const days: Row[] = ((raw ?? []) as {
-    day: string; files_uploaded: number; paper_check_uploads: number;
+    day: string; files_uploaded: number; uploaders: number; paper_check_uploads: number;
     topic_tests: number; mock_tests: number;
     failed: number; results_read: number; copies_opened: number;
   }[]).map((r) => ({
     day: String(r.day),
     files: Number(r.files_uploaded) || 0,
+    uploaders: Number(r.uploaders) || 0,
     paperCheck: Number(r.paper_check_uploads) || 0,
     topic: Number(r.topic_tests) || 0,
     mock: Number(r.mock_tests) || 0,
@@ -114,6 +116,7 @@ export default async function PaperReport() {
               <th style={th}>Topic tests</th>
               <th style={th}>Mock tests</th>
               <th style={th}>Scans received</th>
+              <th style={th}>From how many people</th>
               <th style={th}>Of those, free page</th>
               <th style={th}>Failed</th>
               <th style={th}>Marks read</th>
@@ -122,14 +125,15 @@ export default async function PaperReport() {
           </thead>
           <tbody>
             {days.length === 0 && (
-              <tr><td colSpan={8} style={{ ...td, textAlign: "left", color: "var(--muted)" }}>Nothing in the last 30 days.</td></tr>
+              <tr><td colSpan={9} style={{ ...td, textAlign: "left", color: "var(--muted)" }}>Nothing in the last 30 days.</td></tr>
             )}
             {days.map((d) => (
               <tr key={d.day}>
                 <td style={{ ...td, textAlign: "left", whiteSpace: "nowrap" }}>{dmy(d.day)}</td>
                 <td style={{ ...td, fontWeight: d.topic ? 700 : undefined }}>{d.topic || "—"}</td>
                 <td style={{ ...td, fontWeight: d.mock ? 700 : undefined }}>{d.mock || "—"}</td>
-                <td style={{ ...td, color: d.files > d.topic + d.mock ? "#b45309" : undefined }}>{d.files || "—"}</td>
+                <td style={{ ...td, color: d.uploaders && d.files > d.uploaders * 2 ? "#b45309" : undefined }}>{d.files || "—"}</td>
+                <td style={td}>{d.uploaders || "—"}</td>
                 <td style={td}>{d.paperCheck || "—"}</td>
                 <td style={{ ...td, color: d.failed ? "#b91c1c" : undefined, fontWeight: d.failed ? 700 : undefined }}>
                   {d.failed || "—"}
@@ -150,10 +154,16 @@ export default async function PaperReport() {
           was sent through — a mock can arrive through the timed portal or the free checking page.
         </p>
         <p style={{ margin: "0 0 8px" }}>
-          <strong>Scans received</strong> counts the files that actually reached the bucket. It is normally higher than
-          the two columns before it, and the gap is the useful part: a scan with no paper behind it is a student who
-          got their file up and then did not finish — a retry, or an attempt abandoned. Amber means there were more
-          scans than papers that day.
+          <strong>Scans received</strong> is the files that actually reached the bucket, and <strong>From how many
+          people</strong> is how many different senders they came from. Read them together: one person sending a file
+          twenty times is somebody stuck, and twenty people sending one each is a good day. Amber marks a day where
+          the files far outnumber the senders. Practice uploads from the &ldquo;try it first&rdquo; panel are excluded,
+          and so are the marked copies we write back — neither is a paper.
+        </p>
+        <p style={{ margin: "0 0 8px" }}>
+          A retry leaves its file behind, and so does resetting a test while checking it, so this column measures
+          effort rather than papers. On 3&ndash;4 August it read 24 against one paper, and every one of those was the
+          same person testing a single chapter test through the evening.
         </p>
         <p style={{ margin: "0 0 8px" }}>
           <strong>Failed</strong> is reported by the student&apos;s own browser when an upload gives up. It cannot be

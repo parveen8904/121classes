@@ -1,3 +1,19 @@
+// EMBEDDED SIGNUP IS THE WRONG DOOR FOR HIS OWN NUMBER.
+//
+// This page launches Meta's Embedded Signup, which exists so a TECH PROVIDER
+// can onboard OTHER businesses' numbers. Pointed at his own number it fails
+// with "Aldine CA can't onboard customers right now" — Meta is asking whether
+// the app is approved to sign up customers, which it is not and does not need
+// to be.
+//
+// Adding your OWN number to your OWN WhatsApp Business Account is done in
+// WhatsApp Manager, and needs no app review:
+//   business.facebook.com/wa/manage/phone-numbers/?waba_id=<WABA>
+// Because the number is live on the WhatsApp Business app, Meta offers the
+// COEXISTENCE option there — connect it while it keeps working on the phone.
+// Anything that warns you will lose access to the app is the migration path and
+// must be refused: it deletes that account's history from the handset.
+
 import Link from "next/link";
 import { assertArea } from "@/lib/adminAccess";
 import { getSecret } from "@/lib/secrets";

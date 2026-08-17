@@ -338,7 +338,14 @@ export async function notifyFaculty(title: string, body: string): Promise<void> 
     // So if the two are set to the same address, the alert goes to the backup
     // address instead — which does not forward anywhere — and says why.
     const reply = bareAddr(await getSecret("NOTIFY_REPLY_TO"));
-    let facultyEmail = (await getSecret("FACULTY_EMAIL")) || "contact@caparveensharma.com";
+    // FALLING BACK TO contact@ IS FALLING BACK INTO THE LOOP.
+    //
+    // If FACULTY_EMAIL is ever cleared, this used to default to the one address
+    // that forwards into our own inbox — quietly rebuilding the thing it was
+    // written to prevent. The backup address is the safe default; if there is
+    // none, the alert is dropped rather than posted back to ourselves.
+    let facultyEmail = (await getSecret("FACULTY_EMAIL")) || (await getSecret("BACKUP_EMAIL")) || "";
+    if (!facultyEmail) return;
     let note = "";
     if (reply && bareAddr(facultyEmail) === reply) {
       const backup = (await getSecret("BACKUP_EMAIL")).trim();

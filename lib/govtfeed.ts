@@ -303,7 +303,10 @@ export async function ingestGovtFeeds(): Promise<{ added: number; checked: numbe
 // from his phone. No-op when nothing new was found.
 export async function sendFeedDigest(items: FeedItem[]): Promise<void> {
   if (items.length === 0) return;
-  const to = (await getSecret("FEED_DIGEST_EMAIL")) || (await getSecret("FACULTY_EMAIL")) || "contact@caparveensharma.com";
+  // Never contact@: it forwards into our own inbound bridge, so a digest sent
+  // there arrives back as though somebody had written in.
+  const to = (await getSecret("FEED_DIGEST_EMAIL")) || (await getSecret("FACULTY_EMAIL")) || (await getSecret("BACKUP_EMAIL")) || "";
+  if (!to) return;
   if (!to) return;
 
   const rows = items

@@ -272,7 +272,18 @@ export async function POST(req: NextRequest) {
 
   // Optional gate: only answer doubts from connected (linked) students. When on,
   // an unlinked chatter is asked to connect first — making joining worthwhile.
-  if (!who.data?.id && (await getSecret("telegram_connected_only")) === "1") {
+  // READ THE TOGGLE FROM WHERE THE ADMIN SCREEN WRITES IT.
+  //
+  // /admin/telegram saves this into site_settings; this line asked getSecret,
+  // which reads app_secrets and then the environment. Two different tables. So
+  // the switch has never done anything — it reads as off however it is set, and
+  // the screen shows it on. Whatever the setting is meant to be, it should at
+  // least be the setting that is obeyed.
+  const connectedOnly = await svc
+    .from("site_settings").select("value").eq("key", "telegram_connected_only").maybeSingle()
+    .then((r) => String((r.data as { value?: string } | null)?.value ?? "") === "1", () => false);
+
+  if (!who.data?.id && connectedOnly) {
     await sendTelegramMessage(
       chatId,
       "🔒 Please connect your CA Parveen Sharma account first — tap “Connect Telegram” on your dashboard. Once connected, I'll answer your doubts right here.",

@@ -19,7 +19,13 @@ export const DEFAULT_AUTO_REPLY =
   "Thank you for writing to CA Parveen Sharma Classes 🙏\n\n" +
   "We have received your message and our team will reply personally during working hours (10 am to 7 pm, Monday to Saturday).\n\n" +
   "Meanwhile you may find what you need at caparveensharma.com — course details, the free study planner, free chapter tests and your dashboard.\n\n" +
-  "If this is about a course you have already bought, please mention your registered email so we can check it faster.";
+  "If this is about a course you have already bought, please mention your registered email so we can check it faster.\n\n" +
+  // WHY THIS LINE IS HERE. Our messages arrive as a bare number, because WhatsApp
+  // only shows a business NAME in place of the number for an Official Business
+  // Account and Meta grants that at its own discretion. A number the student has
+  // saved shows its name everywhere at once. So the first message we ever send
+  // asks — once, politely, at the end.
+  "📇 Save our number so our messages reach you with our name on them: caparveensharma.com/save-number";
 
 export async function getAutoReply(): Promise<{ on: boolean; text: string }> {
   const svc = createServiceClient();

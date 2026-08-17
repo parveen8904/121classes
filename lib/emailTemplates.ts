@@ -77,6 +77,8 @@ The planner, chapter tests and case practice work free — start there today.
 
 Everything is explained step by step in the student guide at caparveensharma.com/guide — keep it handy for the first week.
 
+📇 **One small thing worth doing now — save our number.** Open caparveensharma.com/save-number on your phone and tap it. Our messages then arrive with our name on them instead of an unfamiliar number, so you never miss a class reminder or a marked paper because it looked like a stranger.
+
 Questions? Write to us at caparveensharma.com/support or call 9810012674.
 
 Happy studying,

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { startPaperAttempt, submitPaperAttempt, gradePaperNow, resetMyPaperAttempt, rebuildCheckedCopy, type PaperAttempt } from "./paperActions";
 import { viaProxy } from "@/lib/fileProxy";
 import AnswerKey from "@/app/components/AnswerKey";
-import { shrinkPdf, reportFailure } from "@/lib/answerUpload";
+import { shrinkPdf, reportFailure, sortChosenDeep } from "@/lib/answerUpload";
 
 type Props = {
   sectionId: string;
@@ -248,13 +248,17 @@ export default function DescriptivePaper(props: Props) {
   // paper cannot.
   const [photos, setPhotos] = useState<File[]>([]);
 
-  const choosePdf = (list: FileList | null) => {
+  const choosePdf = async (list: FileList | null) => {
     const files = Array.from(list ?? []);
     if (!files.length) return;
 
-    const pdf = files.find((f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+    // The phone's own answer first, then the file's bytes. A scanner app that
+    // supplies no MIME type and no extension used to be turned away here with
+    // the student holding exactly the right file.
+    const { pdf, photos: sniffed, rejected } = await sortChosenDeep(files);
     if (pdf) {
       if (pdf.size > 20 * 1024 * 1024) {
+        reportFailure("portal", `chosen PDF too big: ${(pdf.size / 1048576).toFixed(1)} MB`);
         setNote("That PDF is over 20 MB. Please scan it again in black and white, or at a lower quality.");
         if (pdfRef.current) pdfRef.current.value = "";
         return;
@@ -263,9 +267,10 @@ export default function DescriptivePaper(props: Props) {
       return;
     }
 
-    const images = files.filter((f) => f.type.startsWith("image/"));
-    if (!images.length) {
-      setNote(`"${files[0].name}" is neither a PDF nor a photograph. Choose your scanned PDF, or photographs of your pages.`);
+    const images = sniffed;
+    if (rejected || !images.length) {
+      reportFailure("portal", `file not recognised: ${rejected ?? files.map((f) => `${f.name} [${f.type || "no type"}]`).join("; ")}`);
+      setNote(`We could not read "${files[0].name}" as a PDF or a photograph. If you scanned it with a phone app, export it as PDF and choose that file — or photograph your pages and select them all together.`);
       if (pdfRef.current) pdfRef.current.value = "";
       return;
     }

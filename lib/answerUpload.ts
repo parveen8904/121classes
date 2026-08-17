@@ -138,6 +138,67 @@ export function sortChosen(files: File[]): { pdf: File | null; photos: File[] } 
   return { pdf: null, photos };
 }
 
+/**
+ * WHAT IS THIS FILE, REALLY?
+ *
+ * sortChosen believes the phone: it reads the MIME type the file arrives with,
+ * or the extension on its name. Both are routinely missing. Several Android
+ * scanner and file-manager apps hand over a document with type "" and a name
+ * carrying no extension at all — and the student is then told to "choose your
+ * scanned PDF" while holding the scanned PDF they just chose. On a screen where
+ * Send stays disabled until a file is accepted, that is a dead end with nothing
+ * written down anywhere.
+ *
+ * So when the phone will not say, LOOK. The first bytes of a file are decisive:
+ * "%PDF-" for a PDF, and the standard signatures for JPEG, PNG, HEIC and WebP.
+ * Reading five bytes costs nothing and settles it.
+ */
+async function sniffKind(f: File): Promise<"pdf" | "image" | null> {
+  try {
+    const head = new Uint8Array(await f.slice(0, 12).arrayBuffer());
+    const be = (...b: number[]) => b.every((v, i) => head[i] === v);
+    if (be(0x25, 0x50, 0x44, 0x46)) return "pdf";            // %PDF
+    if (be(0xff, 0xd8, 0xff)) return "image";                 // JPEG
+    if (be(0x89, 0x50, 0x4e, 0x47)) return "image";           // PNG
+    // HEIC/HEIF and WebP both carry their marker a few bytes in.
+    const tag = new TextDecoder().decode(head.slice(4, 12));
+    if (tag.startsWith("ftyp")) return "image";               // HEIC / HEIF
+    if (new TextDecoder().decode(head.slice(0, 4)) === "RIFF") return "image"; // WebP
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * sortChosen, then — only if that found nothing — the file's own contents.
+ *
+ * Returns `rejected` when even the bytes do not identify anything usable, with
+ * the names and types the phone supplied. That string is what gets recorded, so
+ * the next student who hits this leaves an explanation behind instead of a
+ * shrug.
+ */
+export async function sortChosenDeep(
+  files: File[],
+): Promise<{ pdf: File | null; photos: File[]; rejected: string | null }> {
+  const plain = sortChosen(files);
+  if (plain.pdf || plain.photos.length) return { ...plain, rejected: null };
+
+  const kinds = await Promise.all(files.map(sniffKind));
+  const pdf = files.find((_, i) => kinds[i] === "pdf") ?? null;
+  if (pdf) return { pdf, photos: [], rejected: null };
+
+  const photos = files
+    .filter((_, i) => kinds[i] === "image")
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  if (photos.length) return { pdf: null, photos, rejected: null };
+
+  const described = files.length
+    ? files.slice(0, 4).map((f) => `${f.name || "(no name)"} [${f.type || "no type"}, ${f.size} bytes]`).join("; ")
+    : "nothing chosen";
+  return { pdf: null, photos: [], rejected: described };
+}
+
 /** Photographs → one PDF, a page each, small enough to travel on a phone. */
 export async function photosToPdf(files: File[]): Promise<Blob> {
   const { PDFDocument } = await import("pdf-lib");

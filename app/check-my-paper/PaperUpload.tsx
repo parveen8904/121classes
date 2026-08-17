@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ANSWER_ACCEPT, sortChosen, photosToPdf, shrinkPdf, uploadAnswerPdf, reportFailure } from "@/lib/answerUpload";
+import { ANSWER_ACCEPT, sortChosenDeep, photosToPdf, shrinkPdf, uploadAnswerPdf, reportFailure } from "@/lib/answerUpload";
 import { submitForChecking } from "./actions";
 
 type Test = { id: string; title: string; course: string; subject: string };
@@ -60,9 +60,16 @@ export default function PaperUpload({
   // single PDF here, exactly as the timed test does.
   async function upload(files: File[]) {
     setError(null);
-    const { pdf, photos } = sortChosen(files);
-    if (!pdf && !photos.length) {
-      setError("Choose your scanned PDF, or photographs of your pages.");
+    // Believes the file's own bytes when the phone gives no type or extension.
+    // Send stays disabled until a file is accepted, so refusing one here is a
+    // dead end for the student — it must be both rare and recorded.
+    const { pdf, photos, rejected } = await sortChosenDeep(files);
+    if (rejected) {
+      reportFailure("paper_check", `file not recognised: ${rejected}`);
+      setError(
+        "We could not read that as a PDF or a photograph. If you scanned it with a phone app, " +
+        "export it as PDF and choose that file — or just photograph your pages and select them all together.",
+      );
       return;
     }
     setBusy(true);

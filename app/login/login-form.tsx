@@ -66,6 +66,14 @@ export default function LoginForm() {
         const fd = new FormData();
         fd.set("email", email);
         const r = await autoLoginRescue(fd);
+        // Their address cannot receive mail. Another link would bounce like all
+        // the others, so say what is actually wrong — with the correction in it.
+        if (r.badAddress) {
+          return err(
+            `${r.badAddress} If that address is the one on your account, WhatsApp us on 98100 79162 ` +
+            `and we will correct it for you — you will not be able to log in until it is fixed.`,
+          );
+        }
         if (r.throttled) {
           return ok("We have already emailed you a sign-in link in the last few minutes. Please open it — and do check your spam folder.");
         }

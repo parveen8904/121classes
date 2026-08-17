@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { emailConfigured } from "@/lib/notify";
 import { sendTemplate } from "@/lib/emailTemplates";
 import { allowEmailAction } from "@/lib/throttle";
+import { whyAddressLooksWrong } from "@/lib/emailSanity";
 
 // Always build auth links on the canonical domain (not whichever alias the user
 // happened to open), so verify/reset links are consistently caparveensharma.com.
@@ -21,6 +22,18 @@ export async function registerWithVerification(formData: FormData): Promise<Resu
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const phone = String(formData.get("phone") || "").trim().slice(0, 20);
   if (!email) return { ok: false, error: "Enter your email address." };
+  // CATCH THE TYPO AT THE DOOR.
+  //
+  // Eight students registered with an address that cannot receive mail at all —
+  // "@gmail" with no .com, "@gmailcom" with no dot, "@gmai.com", "@gmial.com",
+  // "@gmail.con". Every one of them was then unreachable for their password,
+  // their marked papers and everything else, and every link we sent bounced,
+  // which counts against our own sending reputation and eventually gets it
+  // restricted. Nobody notices at the time, because a bounce arrives nowhere.
+  //
+  // A minute of doubt at sign-up is worth months of an unreachable account.
+  const badAddress = whyAddressLooksWrong(email);
+  if (badAddress) return { ok: false, error: badAddress };
   if (!(await emailConfigured())) return { ok: false, error: "Email isn't set up yet. Please ask the admin to add the Mailgun key." };
   // Anyone can call this and every call sends an email. Generous enough that a
   // real person retrying never notices, tight enough that a script cannot burn
@@ -102,9 +115,24 @@ export async function resendVerification(formData: FormData): Promise<Result> {
 // either way — it signs them in and lets them choose a password.
 //
 // Never says whether the address has an account. The link goes to the mailbox.
-export async function autoLoginRescue(formData: FormData): Promise<{ sent: boolean; throttled?: boolean; noAccount?: boolean }> {
+export async function autoLoginRescue(
+  formData: FormData,
+): Promise<{ sent: boolean; throttled?: boolean; noAccount?: boolean; badAddress?: string }> {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   if (!email || !(await emailConfigured())) return { sent: false };
+
+  // THE BOUNCE LOOP.
+  //
+  // Eight students hold an address that cannot receive mail — "@gmail" with no
+  // ending, "@gmai.com", "@gmail.con". They cannot log in, because no link ever
+  // reached them to set a password. So they try, fail, and this sends another
+  // link, which bounces. Try again tomorrow: another bounce. Each one counts
+  // against our sending reputation, and Supabase wrote to us about exactly that.
+  //
+  // Sending again cannot possibly help them. Telling them their address is
+  // mistyped is the only thing that can, so that is what happens instead.
+  const wrong = whyAddressLooksWrong(email);
+  if (wrong) return { sent: false, badAddress: wrong };
 
   // One mailbox, twice in fifteen minutes. Enough for a real person retrying,
   // not enough for a script to bury somebody in password mail.
@@ -179,6 +207,11 @@ export async function requestLoginHelp(formData: FormData): Promise<Result> {
 export async function sendPasswordReset(formData: FormData): Promise<Result> {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   if (!email) return { ok: false, error: "Enter your email." };
+  // A reset to an address that cannot receive mail is a bounce, every time.
+  // Told plainly here rather than hidden behind the deliberately-vague success
+  // message, because this is a typo the student can fix themselves.
+  const wrong = whyAddressLooksWrong(email);
+  if (wrong) return { ok: false, error: wrong };
   if (!(await emailConfigured())) return { ok: false, error: "Email isn't set up yet. Please ask the admin to add the Mailgun key." };
   if (!(await allowEmailAction("reset", email, { perEmail: 5, perIp: 15, seconds: 3600 }))) {
     // Same wording as success, so this never becomes a way to discover which

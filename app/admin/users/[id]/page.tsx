@@ -6,6 +6,7 @@ import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
 import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan, resetStudentTests } from "../actions";
 import { startViewAs } from "@/app/dashboard/viewAsActions";
+import PaperForStudent from "./PaperForStudent";
 import { ADMIN_AREAS } from "@/lib/adminAccess";
 
 function fmt(s: string | null): string {
@@ -84,6 +85,16 @@ export default async function UserDetail(
   const ACT_LABEL: Record<string, string> = { class_open: "▶️ Opened a class", class_complete: "✅ Finished a class", test_submitted: "🧠 Gave a test", doubt: "💬 Asked a doubt", plan_built: "🗓️ Built a plan" };
   type WatchRow = { video_seconds: number; real_seconds: number; duration_seconds: number; completed: boolean; last_watched_at: string; sections: { title: string; topics: { title: string } | null } | null };
   type ActRow = { kind: string; detail: Record<string, unknown> | null; created_at: string; sections: { title: string } | null };
+  // The papers a paper can be handed in against — same two lists the student's
+  // own /check-my-paper page offers, and only tests with an approved key.
+  const svc2 = svcClient();
+  const { data: checkable } = await svc2.rpc("list_checkable_tests");
+  const markableTests = ((checkable ?? []) as { id: string; title: string; subject: string }[])
+    .map((t) => ({ id: t.id, title: t.title, subject: t.subject ?? "Tests" }));
+  const { data: mockRows2 } = await svc2
+    .from("mock_papers").select("id, title").eq("status", "approved").order("paper_no");
+  const markableMocks = ((mockRows2 ?? []) as { id: string; title: string }[]);
+
   const watchRows = (watch ?? []) as unknown as WatchRow[];
   const actRows = (activity ?? []) as unknown as ActRow[];
 
@@ -108,6 +119,29 @@ export default async function UserDetail(
           screen can change their account. The look is recorded, and it ends by itself after an hour.
         </p>
       </form>
+
+      {/* HAND IN A PAPER FOR THEM.
+          Manvi Maroti tried for two days from a phone on a slow line and her
+          paper still is not marked. Every fix for that runs on her handset; this
+          does not. She sends the file however she can and it goes in from here,
+          against the same key, to the same examiner. */}
+      <details style={{ marginTop: 14 }}>
+        <summary className="btn small secondary as-btn">📤 Upload a paper for this student</summary>
+        <div className="form-card" style={{ marginTop: 10 }}>
+          <p className="muted" style={{ fontSize: ".85rem", margin: 0, lineHeight: 1.7 }}>
+            For a student who cannot send it themselves — a slow connection, a phone that will not scan. They email or
+            WhatsApp you the file and it goes in from here, on a real connection. It becomes the <strong>same
+            attempt</strong> a student creates: same answer key, same step marking, same examiner, same annotated copy
+            back. Who uploaded it is recorded on their activity log.
+          </p>
+          <PaperForStudent
+            studentId={params.id}
+            studentName={u.full_name || u.email || "this student"}
+            tests={markableTests}
+            mocks={markableMocks}
+          />
+        </div>
+      </details>
 
       {searchParams.pwset && (
         <div className="notice ok" style={{ marginTop: 16 }}>

@@ -294,3 +294,92 @@ export async function importSupporters(formData: FormData) {
   revalidatePath("/admin/users");
   redirect(`/admin/users?supp_created=${created}&supp_marked=${marked}&supp_failed=${failed}`);
 }
+
+// HAND IN A PAPER FOR A STUDENT WHO CANNOT.
+//
+// Manvi Maroti tried for two days. Her file was fine, the paper selection was
+// fine, storage was fine — a 3.9 MB scan that our shrinker could not reduce on
+// her phone, crawling up a slow line behind a progress message that could not
+// move. She is a paying student and her paper still is not marked.
+//
+// Every fix for that is worth having and none of them can be relied on tonight,
+// because they all run on HER phone. This does not: she sends the file however
+// she can — email, WhatsApp, in person — and somebody here puts it in from a
+// desk with a real connection.
+//
+// It is the SAME attempt a student creates: the same key, the same step marking
+// guide, the same examiner, the same annotated copy back. Only the hands that
+// uploaded it differ, and that is written down.
+export async function submitPaperForStudent(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  if (!(await requireAdmin())) return { ok: false, error: "Admins only." };
+
+  const studentId = str(formData.get("student_id"));
+  const choice = str(formData.get("paper"));      // "mock:<id>" or a sections id
+  const fileUrl = str(formData.get("file_url"));  // "secure:paper-check/…"
+  if (!studentId || !choice || !fileUrl) {
+    return { ok: false, error: "Choose which paper it is and upload the PDF first." };
+  }
+
+  const svc = createServiceClient();
+  const { data: me } = await svc.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle();
+  const by = String(me?.full_name ?? me?.email ?? "admin");
+
+  const isMock = choice.startsWith("mock:");
+  const mockPaperId = isMock ? choice.slice(5) : null;
+  const sectionId = isMock ? null : choice;
+
+  // One attempt per student per paper, exactly as the student's own route does.
+  // A paper already being marked is not replaced — that would throw away work an
+  // examiner may be halfway through.
+  let q = svc.from("descriptive_attempts").select("id, review_status").eq("student_id", studentId);
+  q = isMock ? q.eq("mock_paper_id", mockPaperId!) : q.eq("section_id", sectionId!);
+  const { data: existing } = await q.maybeSingle();
+  if (existing) {
+    if (existing.review_status !== "checked") {
+      return { ok: false, error: "That paper is already with us and is being checked." };
+    }
+    await svc.from("descriptive_attempts").delete().eq("id", existing.id);
+  }
+
+  const now = new Date();
+  const { data: made, error } = await svc
+    .from("descriptive_attempts")
+    .insert({
+      student_id: studentId,
+      section_id: sectionId,
+      mock_paper_id: mockPaperId,
+      started_at: now.toISOString(),
+      deadline_at: new Date(now.getTime() + 3600_000).toISOString(),
+      submitted_at: now.toISOString(),
+      status: "submitted",
+      review_status: "pending",
+      file_url: fileUrl,
+      source: "paper_check",
+    })
+    .select("id")
+    .maybeSingle();
+  if (error || !made) return { ok: false, error: error?.message ?? "Could not record it." };
+
+  // WHO PUT IT IN. On the record, so a paper nobody remembers uploading is never
+  // a mystery, and so this cannot quietly become the normal way papers arrive.
+  try {
+    await svc.from("student_activity").insert({
+      student_id: studentId,
+      kind: "test_submitted",
+      detail: { note: `Answer book uploaded on the student's behalf by ${by}`, by, admin_upload: true },
+    });
+  } catch { /* the attempt matters, the note does not */ }
+
+  // Mark it now rather than waiting for the sweep.
+  try {
+    const { waitUntil } = await import("@vercel/functions");
+    const { gradeSubmittedPaper } = await import("@/app/learn/section/[sectionId]/paperActions");
+    waitUntil(gradeSubmittedPaper(String(made.id)).catch(() => undefined));
+  } catch { /* the nightly cron will pick it up */ }
+
+  revalidatePath(`/admin/users/${studentId}`);
+  return { ok: true };
+}

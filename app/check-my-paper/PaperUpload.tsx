@@ -77,7 +77,7 @@ export default function PaperUpload({
       setStage(photos.length ? `Making one PDF from ${photos.length} photographs…` : "Preparing your file…");
       let blob: Blob = pdf ?? (await photosToPdf(photos));
       // A scanner's PDF is far bigger than the handwriting on it needs.
-      blob = await shrinkPdf(blob, setStage);
+      blob = await shrinkPdf(blob, setStage, "paper_check");
       if (blob.size > 25 * 1024 * 1024) {
         reportFailure("paper_check", `too big to send: ${(blob.size / 1048576).toFixed(1)} MB after shrinking`);
         setError("That comes to more than 25 MB. Scan it in black and white, or send fewer photographs.");

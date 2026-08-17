@@ -44,7 +44,11 @@ const SHRINK_ABOVE_BYTES = 1_200_000;
  * Returns the ORIGINAL if anything goes wrong or if it fails to get smaller —
  * a student in a hurry must never lose their upload to a clever optimisation.
  */
-export async function shrinkPdf(file: Blob, onProgress?: (msg: string) => void): Promise<Blob> {
+export async function shrinkPdf(
+  file: Blob,
+  onProgress?: (msg: string) => void,
+  source: "portal" | "paper_check" = "portal",
+): Promise<Blob> {
   if (file.size <= SHRINK_ABOVE_BYTES) return file;
   try {
     const pdfjs = await import("pdfjs-dist");
@@ -85,6 +89,18 @@ export async function shrinkPdf(file: Blob, onProgress?: (msg: string) => void):
     // re-encoded copy for no gain.
     return blob.size < file.size ? blob : file;
   } catch (e) {
+    // WORTH KNOWING ABOUT, not merely worth surviving.
+    //
+    // Rendering every page through pdfjs onto a canvas is the heaviest thing
+    // this site asks of a phone, and iOS Safari abandons it on a large scan
+    // rather than raising a useful error. Until now that was a console line
+    // nobody would ever read, while the consequence — the student sending the
+    // full-size file over a phone connection, with no progress shown — looked
+    // exactly like a broken upload.
+    reportFailure(
+      source,
+      `could not shrink a ${(file.size / 1048576).toFixed(1)} MB scan, sent as-is: ${e instanceof Error ? e.message : e}`,
+    );
     console.error("[answer-upload] could not shrink, sending as-is:", e);
     return file;
   }
@@ -224,6 +240,100 @@ export async function photosToPdf(files: File[]): Promise<Blob> {
 }
 
 /**
+ * SEND IT, AND SAY HOW FAR IT HAS GOT.
+ *
+ * The Supabase client's own upload() reports nothing while a file is in flight.
+ * On a phone that is the whole problem: Manvi's screen read "Uploading your
+ * paper (3.9 MB)…" and then never changed, because there was nothing to change
+ * it. A student watching a frozen sentence for four minutes concludes the site
+ * is broken and closes it — and closing it is invisible to us, which is why
+ * this looked for two days like a failure with no error.
+ *
+ * XMLHttpRequest still has the one thing fetch lacks: upload progress. So the
+ * transfer is done by hand against the storage REST endpoint, and the student is
+ * told the percentage, the megabytes and — once there is enough of the transfer
+ * to judge by — roughly how long is left.
+ *
+ * A slow upload is then simply slow, which a student will wait out. It is the
+ * silence that loses papers.
+ */
+function putWithProgress(
+  path: string,
+  blob: Blob,
+  token: string,
+  onProgress?: (msg: string) => void,
+): Promise<{ ok: true } | { error: string }> {
+  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/secure/${path}`;
+  const total = blob.size;
+  const mb = (n: number) => (n / 1048576).toFixed(1);
+
+  return new Promise((resolve) => {
+    let xhr: XMLHttpRequest;
+    try {
+      xhr = new XMLHttpRequest();
+    } catch {
+      resolve({ error: "this browser cannot upload" });
+      return;
+    }
+    const started = Date.now();
+
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const pct = Math.round((e.loaded / e.total) * 100);
+      const secs = (Date.now() - started) / 1000;
+      // Only estimate once a tenth is through — before that the figure swings
+      // wildly and a wrong "12 minutes left" makes a student give up faster
+      // than no figure at all.
+      let left = "";
+      if (pct >= 10 && secs > 2) {
+        const rate = e.loaded / secs;
+        const remain = Math.round((e.total - e.loaded) / rate);
+        left = remain > 90
+          ? ` · about ${Math.ceil(remain / 60)} minutes left`
+          : ` · about ${Math.max(5, remain)} seconds left`;
+      }
+      onProgress?.(`Sending your paper — ${pct}% of ${mb(total)} MB${left}`);
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.("Sent ✓");
+        resolve({ ok: true });
+        return;
+      }
+      let msg = `HTTP ${xhr.status}`;
+      try {
+        const body = JSON.parse(xhr.responseText) as { message?: string; error?: string };
+        msg = body.message || body.error || msg;
+      } catch { /* a non-JSON body is still worth reporting by status */ }
+      // Keep the words the retry logic above matches on.
+      if (xhr.status === 401 || xhr.status === 403) msg = `unauthorized: ${msg}`;
+      if (xhr.status === 413) msg = `too large: ${msg}`;
+      resolve({ error: msg });
+    };
+    xhr.onerror = () => resolve({ error: "failed to fetch — the connection dropped" });
+    xhr.ontimeout = () => resolve({ error: "timeout — the connection was too slow" });
+    xhr.onabort = () => resolve({ error: "aborted" });
+
+    try {
+      xhr.open("POST", url, true);
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      xhr.setRequestHeader("apikey", String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ""));
+      xhr.setRequestHeader("Content-Type", "application/pdf");
+      // Same behaviour as upsert: true — a retry must overwrite the half-written
+      // object from the attempt before it rather than being refused as a
+      // duplicate.
+      xhr.setRequestHeader("x-upsert", "true");
+      // No timeout: a big scan on a village connection is slow, not stuck, and
+      // the student can now see it moving.
+      xhr.send(blob);
+    } catch (e) {
+      resolve({ error: `could not start the upload: ${e instanceof Error ? e.message : e}` });
+    }
+  });
+}
+
+/**
  * Put the finished PDF in the private bucket, and keep trying.
  *
  * Three attempts with a growing pause, because a mobile connection that fails
@@ -251,17 +361,16 @@ export async function uploadAnswerPdf(
   const attempts = 3;
   let lastDetail = "";
   const bytes = blob.size;
+  const token = session.access_token;
   for (let n = 1; n <= attempts; n++) {
     if (n > 1) {
       onProgress?.(`The connection dropped. Trying again (${n} of ${attempts})…`);
       await new Promise((r) => setTimeout(r, 2000 * (n - 1)));
     }
-    const { error } = await supabase.storage
-      .from("secure")
-      .upload(path, blob, { contentType: "application/pdf", upsert: true });
-    if (!error) return { url: `secure:${path}` };
+    const sent = await putWithProgress(path, blob, token, onProgress);
+    if (!("error" in sent)) return { url: `secure:${path}` };
 
-    lastDetail = String(error.message ?? error);
+    lastDetail = sent.error;
     console.error(`[answer-upload] attempt ${n}/${attempts}:`, lastDetail, "bytes:", blob.size);
 
     if (/jwt|expired|401|unauthor/i.test(lastDetail)) {

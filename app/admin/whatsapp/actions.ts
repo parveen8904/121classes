@@ -230,7 +230,10 @@ export async function setWhatsAppProfilePhoto(): Promise<void> {
     { method: "POST" },
   );
   const startBody = (await start.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
-  if (!startBody.id) redirect(`/admin/whatsapp?photoerr=${encodeURIComponent(`Could not start the upload: ${startBody.error?.message ?? start.status}`)}`);
+  console.log("[wa-photo] step 1 open session:", start.status, JSON.stringify(startBody).slice(0, 300));
+  if (!startBody.id) {
+    redirect(`/admin/whatsapp?photoerr=${encodeURIComponent(`Step 1 of 3 (opening the upload) failed — ${startBody.error?.message ?? `HTTP ${start.status}`}`)}`);
+  }
 
   const put = await fetch(`https://graph.facebook.com/v21.0/${startBody.id}`, {
     method: "POST",
@@ -243,16 +246,26 @@ export async function setWhatsAppProfilePhoto(): Promise<void> {
     },
     body: new Uint8Array(bytes),
   });
-  const putBody = (await put.json().catch(() => ({}))) as { h?: string; error?: { message?: string } };
-  if (!putBody.h) redirect(`/admin/whatsapp?photoerr=${encodeURIComponent(`Upload failed: ${putBody.error?.message ?? put.status}`)}`);
+  const putText = await put.text().catch(() => "");
+  let putBody: { h?: string; error?: { message?: string } } = {};
+  try { putBody = JSON.parse(putText) as typeof putBody; } catch { /* keep the raw text below */ }
+  console.log("[wa-photo] step 2 send bytes:", put.status, putText.slice(0, 300));
+  if (!putBody.h) {
+    redirect(`/admin/whatsapp?photoerr=${encodeURIComponent(`Step 2 of 3 (sending the image) failed — ${putBody.error?.message ?? `HTTP ${put.status}: ${putText.slice(0, 160) || "no reply"}`}`)}`);
+  }
 
   const set = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/whatsapp_business_profile`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ messaging_product: "whatsapp", profile_picture_handle: putBody.h }),
   });
-  const setBody = (await set.json().catch(() => ({}))) as { success?: boolean; error?: { message?: string } };
-  if (!set.ok || setBody.error) redirect(`/admin/whatsapp?photoerr=${encodeURIComponent(`Could not set it: ${setBody.error?.message ?? set.status}`)}`);
+  const setText = await set.text().catch(() => "");
+  let setBody: { success?: boolean; error?: { message?: string } } = {};
+  try { setBody = JSON.parse(setText) as typeof setBody; } catch { /* as above */ }
+  console.log("[wa-photo] step 3 attach:", set.status, setText.slice(0, 300));
+  if (!set.ok || setBody.error) {
+    redirect(`/admin/whatsapp?photoerr=${encodeURIComponent(`Step 3 of 3 (attaching it to the profile) failed — ${setBody.error?.message ?? `HTTP ${set.status}: ${setText.slice(0, 160) || "no reply"}`}`)}`);
+  }
 
   revalidatePath("/admin/whatsapp");
   redirect(`/admin/whatsapp?photo=${encodeURIComponent("Photo set. It shows on the profile students see when they tap the number.")}`);

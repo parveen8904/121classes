@@ -477,6 +477,17 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
               is exactly how it was found: signed in, copy released, and no way
               to reach it. */}
           <Link className="btn small secondary" href="/check-my-paper">📝 Get a paper checked · My checked copies</Link>
+          {/* SAVE THE NUMBER ONCE AND OUR NAME SHOWS FOR EVER.
+              Messages from 98100 79162 arrive as a bare number, because WhatsApp
+              only puts a business NAME in front of the number for an Official
+              Business Account and that is Meta's to grant. A saved contact shows
+              its name on every channel at once — WhatsApp, the call screen,
+              notifications — so this asks once rather than waiting on Meta.
+              A plain link, not a script: the phone's own "add contact" handles a
+              .vcf natively on both iOS and Android. */}
+          <a className="btn small secondary" href="/api/contact-card" download>
+            📇 Save our number
+          </a>
         </div>
 
         {!isAdminUser && !needsSetup && myCourses.length > 0 && (

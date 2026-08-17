@@ -13,6 +13,7 @@ import OnboardingWizard from "./OnboardingWizard";
 import SponsoredStudents from "./SponsoredStudents";
 import VerifyPhone from "./VerifyPhone";
 import { phoneVerifyLive } from "@/lib/phoneVerify";
+import { stopViewAs } from "./viewAsActions";
 
 export default async function Dashboard(props: { searchParams: Promise<{ saved?: string }> }) {
   const searchParams = await props.searchParams;
@@ -23,10 +24,25 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
 
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  // IS AN ADMIN LOOKING AT SOMEBODY ELSE'S DASHBOARD?
+  //
+  // If so this page renders for THAT student, read-only. Two things change:
+  // every read uses the service client (a student's rows are their own under
+  // RLS, so the admin's client would return nothing), and every control that
+  // writes is left undrawn. Nothing else about the page moves — the point is to
+  // see exactly what the student sees.
+  const { viewingStudent } = await import("@/lib/viewAs");
+  const viewing = await viewingStudent();
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  // `db` is what the page reads through; `supabase` stays the admin's own
+  // client and is no longer used for student data below.
+  const db = viewing ? createServiceClient() : supabase;
+  const studentId = viewing ? viewing.studentId : user.id;
+
+  const { data: profile } = await db
     .from("profiles")
-    .select("full_name, role, permissions, target_attempt, telegram_chat_id, phone, account_type, welcome_sent_at, phone_verified_at")
-    .eq("id", user.id)
+    .select("full_name, role, permissions, target_attempt, telegram_chat_id, phone, account_type, welcome_sent_at, phone_verified_at, email")
+    .eq("id", studentId)
     .single();
 
   // A SUPPORTER IS NOT A STUDENT.
@@ -39,7 +55,10 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
   // Only role 'supporter' is moved. Somebody who is BOTH a paying student and
   // a supporter keeps role 'student' and stays here; the is_supporter tick
   // just adds a link to their portal.
-  if (profile?.role === "supporter") redirect("/supporter");
+  // The redirects below send the LOGGED-IN person to their own desk. While
+  // viewing, they must not fire: an admin opening a supporter's dashboard wants
+  // to see it, not to be bounced to /supporter.
+  if (!viewing && profile?.role === "supporter") redirect("/supporter");
 
   // Staff whose only job is one area belong in that area, not on a shelf of
   // subjects they do not have. A supporter is already sent to their own desk
@@ -47,7 +66,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
   // operator, however they arrive here — a bookmark, the app, a shared link.
   // Anyone with more than one area, or with subjects of their own, is left
   // alone: they may genuinely be studying here too.
-  if (profile?.role === "operator" || profile?.role === "faculty") {
+  if (!viewing && (profile?.role === "operator" || profile?.role === "faculty")) {
     const { staffHome } = await import("@/lib/adminAccess");
     const home = staffHome({
       id: user.id,
@@ -60,7 +79,10 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
   // First time on the dashboard → the welcome-guide email (exactly once; the
   // helper re-checks and stamps before sending). Costs nothing on later visits
   // because the flag rides along in the profile query above.
-  if (profile && !profile.welcome_sent_at) {
+  // NOT WHILE VIEWING. An admin opening a student's dashboard must never send
+  // that student an email — the welcome guide would arrive out of nowhere,
+  // stamped as though they had signed in themselves.
+  if (!viewing && profile && !profile.welcome_sent_at) {
     const { sendWelcomeGuideOnce } = await import("@/lib/emailTemplates");
     await sendWelcomeGuideOnce(user.id);
   }
@@ -77,10 +99,10 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
     .eq("is_published", true)
     .order("order_index");
 
-  const { data: myCourseRows } = await supabase
+  const { data: myCourseRows } = await db
     .from("my_courses")
     .select("course_id")
-    .eq("student_id", user.id);
+    .eq("student_id", studentId);
   const myIds = new Set((myCourseRows ?? []).map((r) => r.course_id as string));
   const myCourses = (courses ?? []).filter((c) => myIds.has(c.id));
   const otherCourses = (courses ?? []).filter((c) => !myIds.has(c.id));
@@ -113,10 +135,10 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
   // Faculty contacts — only the faculty teaching the subjects this student has
   // opted for (their own subjects, plus all subjects of the courses on their
   // shelf), not the whole faculty roster.
-  const { data: mySubjectRows } = await supabase
+  const { data: mySubjectRows } = await db
     .from("my_subjects")
     .select("subject_id")
-    .eq("student_id", user.id);
+    .eq("student_id", studentId);
   // Scope to the ACTIVE level only — subjects remembered from other levels are
   // ignored here so the dashboard stays single-level.
   const myAllSubjectIds = (mySubjectRows ?? []).map((r) => r.subject_id as string);
@@ -154,7 +176,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
     liveToday.push({ title: s.title as string, whenISO: s.starts_at as string, joinUrl: (s.join_url as string) ?? null, where, href: "/live" });
   }
   if (optedSubjectIds.size > 0) {
-    const { data: optTopics } = await supabase.from("topics").select("id, title").in("subject_id", [...optedSubjectIds]);
+    const { data: optTopics } = await db.from("topics").select("id, title").in("subject_id", [...optedSubjectIds]);
     const topicTitle = new Map((optTopics ?? []).map((t) => [t.id as string, t.title as string]));
     const tIds = (optTopics ?? []).map((t) => t.id as string);
     if (tIds.length) {
@@ -178,10 +200,10 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
   // Active subscriptions — highlighted so every student always knows exactly
   // what they have and till when (no "why did I pay?" confusion).
   type ActiveSub = { subject_id: string | null; ends_at: string | null; plans: { name: string; tier: string } | null; subjects: { title: string } | null; courses: { title: string } | null };
-  const { data: mySubs } = await supabase
+  const { data: mySubs } = await db
     .from("subscriptions")
     .select("subject_id, ends_at, plans(name, tier), subjects:subject_id(title), courses:course_id(title)")
-    .eq("student_id", user.id)
+    .eq("student_id", studentId)
     .eq("status", "active");
   const activeSubsList = ((mySubs ?? []) as unknown as ActiveSub[])
     .filter((s) => !s.ends_at || new Date(s.ends_at) > nowD)
@@ -192,14 +214,18 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
   // 2× the subject's class hours; revision/exam-essential content is open
   // till validity regardless). Shown so nobody has to wonder how much is left.
   const watchLeft = new Map<string, string>();
-  if (activeSubsList.length) {
+  // fair_use_status works out WHOSE watch time from the session, so while
+  // viewing it would answer for the admin, not the student. Left out entirely
+  // rather than shown wrong — the subscription and its validity, which are the
+  // things support is usually asked about, are still right above.
+  if (activeSubsList.length && !viewing) {
     const { getAllLimits, limitFor, WATCH_CATEGORY } = await import("@/lib/entitlements");
     const limitsMap = await getAllLimits();
     await Promise.all(activeSubsList.map(async (s) => {
       if (!s.subject_id || !s.plans?.tier) return;
       const mult = limitFor(limitsMap, s.plans.tier, WATCH_CATEGORY);
       if (mult <= 0) { watchLeft.set(s.subject_id, "unlimited during validity"); return; }
-      const { data } = await supabase.rpc("fair_use_status", { p_subject: s.subject_id, p_multiplier: mult });
+      const { data } = await db.rpc("fair_use_status", { p_subject: s.subject_id, p_multiplier: mult });
       const row = (data as { budget_seconds: number; used_seconds: number }[] | null)?.[0];
       if (!row || !row.budget_seconds) return;
       const leftH = Math.max(0, (row.budget_seconds - row.used_seconds) / 3600);
@@ -219,13 +245,31 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
   return (
     <main>
 
+      {viewing && (
+        <div style={{ background: "#7c2d12", color: "#fff", padding: "10px 0" }}>
+          <div className="container" style={{ display: "flex", gap: 14, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 700, fontSize: ".92rem" }}>
+              👁️ You are looking at <strong>{viewing.studentName}</strong>&apos;s dashboard
+              <span style={{ fontWeight: 400, opacity: .85 }}>
+                {" "}· read only, nothing here can change their account · signed in as {viewing.adminName}
+              </span>
+            </span>
+            <form action={stopViewAs}>
+              <button className="btn small" type="submit" style={{ background: "#fff", color: "#7c2d12" }}>
+                ← Back to my own dashboard
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       <section className="container" style={{ paddingTop: 40 }}>
         <span className="badge">🎓 Student dashboard</span>
         <h1 style={{ margin: "14px 0 6px" }}>
           Welcome{profile?.full_name ? `, ${profile.full_name}` : ""} 👋
         </h1>
         <p className="muted">
-          {user.email ?? user.phone} · 🎯 Target attempt:{" "}
+          {viewing ? (viewing.studentEmail || "—") : (user.email ?? user.phone)} · 🎯 Target attempt:{" "}
           {profile?.target_attempt ?? "not set"}
         </p>
 
@@ -292,13 +336,24 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
           </div>
         )}
 
-        <div style={{ marginTop: 20 }}>
-          <SetPassword />
-        </div>
+        {/* NOTHING THAT WRITES, WHILE VIEWING.
+            Each of these acts on the person who is signed in, so on a student's
+            dashboard they would either change the admin's own account or offer
+            an admin a button that looks like it belongs to the student. There is
+            no disabled state to get wrong because they are not drawn at all.
+            TodayPlan reads the plan of whoever is signed in, so it is left out
+            for the same reason as the watch-time figure above. */}
+        {!viewing && (
+          <>
+            <div style={{ marginTop: 20 }}>
+              <SetPassword />
+            </div>
 
-        <ConnectTelegram />
+            <ConnectTelegram />
 
-        <TodayPlan />
+            <TodayPlan />
+          </>
+        )}
 
         <WellnessTip />
 
@@ -380,9 +435,18 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
           </>
         )}
 
-        {showVerifyPhone && <VerifyPhone phone={(profile?.phone as string | null) ?? ""} />}
+        {showVerifyPhone && !viewing && <VerifyPhone phone={(profile?.phone as string | null) ?? ""} />}
 
-        {needsSetup && (
+        {viewing && (needsSetup || showVerifyPhone) && (
+          <div className="notice" style={{ marginTop: 16, fontSize: ".88rem", lineHeight: 1.7 }}>
+            <strong>What this student is still being asked for.</strong>{" "}
+            {needsSetup && "Their first-visit setup is not finished — until it is, the wizard is the only thing they see here and the learn area stays locked. "}
+            {showVerifyPhone && "Their phone number is not yet verified, so they are being shown the verification prompt. "}
+            The forms themselves are not drawn here, because filling them in from this screen would write to their account.
+          </div>
+        )}
+
+        {needsSetup && !viewing && (
           <OnboardingWizard
             courses={(courses ?? []).map((c) => ({ id: c.id, title: c.title }))}
             subjectsByCourse={subjectsByCourse}
@@ -392,10 +456,12 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
         )}
 
         {/* Sponsor view: the students they've gifted a subscription to. */}
-        {isSponsor && !needsSetup && <SponsoredStudents gifterId={user.id} />}
+        {isSponsor && !needsSetup && <SponsoredStudents gifterId={studentId} />}
 
 
-        {!isSponsor && <MyCourses courses={myCourses.map((c) => ({ id: c.id, title: c.title }))} />}
+        {!isSponsor && (
+          <MyCourses courses={myCourses.map((c) => ({ id: c.id, title: c.title }))} readOnly={Boolean(viewing)} />
+        )}
 
         <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link className="btn small secondary" href="/gift">🎁 Sponsor a Student · Gift a subscription</Link>
@@ -427,7 +493,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
           </p>
         )}
 
-        {isAdminUser && otherCourses.length > 0 && (
+        {isAdminUser && !viewing && otherCourses.length > 0 && (
           <details style={{ marginTop: 16 }}>
             <summary className="btn small">＋ Add a course</summary>
             <div className="card" style={{ marginTop: 10 }}>

@@ -7,7 +7,13 @@ import { removeMyCourse } from "@/app/learn/mycourses";
 // The student's "My courses" shelf. Remove buttons are hidden by default and
 // only appear in "Manage" mode, so the normal view stays clean. Adding courses
 // is handled separately (the "＋ Add a course" expander below this).
-export default function MyCourses({ courses }: { courses: { id: string; title: string }[] }) {
+// `readOnly` is set when an admin is looking at this student's dashboard. The
+// Manage button is what it hides: removeMyCourse acts on whoever is signed in,
+// so pressing it there would strike a course off the ADMIN's own shelf while
+// appearing to edit the student's.
+export default function MyCourses({
+  courses, readOnly = false,
+}: { courses: { id: string; title: string }[]; readOnly?: boolean }) {
   const [managingIds, setManagingIds] = useState<Set<string>>(new Set());
   const toggle = (id: string) =>
     setManagingIds((prev) => {
@@ -38,7 +44,7 @@ export default function MyCourses({ courses }: { courses: { id: string; title: s
                   Tap the name above to open subjects, topics &amp; classes.
                 </p>
                 <div style={{ marginTop: "auto", paddingTop: 10 }}>
-                  {managing ? (
+                  {readOnly ? null : managing ? (
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <form action={removeMyCourse}>
                         <input type="hidden" name="course_id" value={c.id} />

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
 import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan, resetStudentTests } from "../actions";
+import { startViewAs } from "@/app/dashboard/viewAsActions";
 import { ADMIN_AREAS } from "@/lib/adminAccess";
 
 function fmt(s: string | null): string {
@@ -94,6 +95,19 @@ export default async function UserDetail(
         subtitle={`${u.email ?? u.phone ?? ""}${levelLabel ? ` · 📘 ${levelLabel}` : ""}${u.target_attempt ? ` · 🎯 ${u.target_attempt}` : ""} · joined ${fmt(u.created_at)} · role: ${u.role}`}
         back={{ href: "/admin/users", label: "Users" }}
       />
+
+      {/* SEE WHAT THEY SEE — WITHOUT ASKING FOR THEIR PASSWORD.
+          "It's showing error" is nearly impossible to act on from a table of
+          rows; the same fault is usually obvious on the student's own screen.
+          Read-only, and every look is recorded in admin_view_as_log. */}
+      <form action={startViewAs} style={{ marginTop: 16 }}>
+        <input type="hidden" name="student_id" value={params.id} />
+        <SubmitButton className="btn">👁️ Open this student&apos;s dashboard</SubmitButton>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 0" }}>
+          Exactly what they see when they sign in — read only, and no password needed. Nothing on that
+          screen can change their account. The look is recorded, and it ends by itself after an hour.
+        </p>
+      </form>
 
       {searchParams.pwset && (
         <div className="notice ok" style={{ marginTop: 16 }}>

@@ -31,6 +31,17 @@ export default async function SubjectiveSection({
   const ai = await aiConfigured();
 
   const initialAttempt = paperMode && user ? await getMyPaperAttempt(section.id) : null;
+
+  // THEY CAME BACK AND READ THE MARKS.
+  //
+  // Only once the examiner has released the copy — before that the screen says
+  // "being checked" and there is nothing to read, so counting it would flatter
+  // the number. Once per student per paper per day, because a student reading
+  // their feedback refreshes, and that is one reading.
+  if (user && initialAttempt?.status === "graded" && initialAttempt.report) {
+    const { recordPaperViewOnce } = await import("@/lib/paperEvents");
+    await recordPaperViewOnce({ kind: "result_viewed", studentId: user.id, source: "portal" });
+  }
   const { data: prof } = user ? await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle() : { data: null };
   const isAdmin = prof?.role === "admin";
 

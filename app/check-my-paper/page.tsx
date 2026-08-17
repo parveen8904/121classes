@@ -62,6 +62,29 @@ export default async function CheckMyPaperPage(props: {
     .order("submitted_at", { ascending: false })
     .limit(20);
 
+  // THEY CAME BACK AND READ THEIR MARKS.
+  //
+  // Counted only for copies the examiner has actually released — before that
+  // the row says "being checked" and there is nothing to read. Once per student
+  // per paper per day, so somebody refreshing while they read counts once.
+  try {
+    const released = (mine ?? []).filter(
+      (a) => (a as { review_status?: string; awarded_marks?: number | null }).review_status === "checked"
+        && (a as { awarded_marks?: number | null }).awarded_marks != null,
+    );
+    if (released.length) {
+      const { recordPaperViewOnce } = await import("@/lib/paperEvents");
+      for (const a of released) {
+        await recordPaperViewOnce({
+          kind: "result_viewed",
+          studentId: user.id,
+          attemptId: String((a as { id: string }).id),
+          source: "paper_check",
+        });
+      }
+    }
+  } catch { /* a count must never break the page */ }
+
   const titleById = new Map<string, string>([
     ...tests.map((t) => [t.id, t.title] as [string, string]),
     ...mocks.map((m) => [m.id, m.title] as [string, string]),

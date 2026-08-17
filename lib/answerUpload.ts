@@ -90,6 +90,29 @@ export async function shrinkPdf(file: Blob, onProgress?: (msg: string) => void):
   }
 }
 
+
+/**
+ * Tell the server an upload failed.
+ *
+ * A refusal happens between the browser and the storage bucket, so nothing on
+ * our side ever hears about it — which is precisely why /check-my-paper could
+ * turn away every student and still look healthy from the admin panel. This is
+ * the only way that number can exist.
+ *
+ * Fire-and-forget: it must never delay or break the retry the student is
+ * waiting on.
+ */
+function reportFailure(source: "portal" | "paper_check", detail: string): void {
+  try {
+    void fetch("/api/paper-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "upload_failed", source, detail }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch { /* nothing here is worth an exception */ }
+}
+
 /** Everything a file chooser should accept for an answer book. */
 export const ANSWER_ACCEPT = "application/pdf,.pdf,image/*";
 
@@ -145,12 +168,16 @@ export async function uploadAnswerPdf(
   path: string,
   onProgress?: (msg: string) => void,
 ): Promise<UploadResult> {
+  // Which screen this is, taken from the folder the file is going to, so the
+  // report can separate a timed portal test from the free checking page.
+  const source: "portal" | "paper_check" = path.startsWith("paper-check/") ? "paper_check" : "portal";
   const supabase = createClient();
 
   // An expired login is the failure that looks most like a broken upload: the
   // page works, the file is chosen, and storage answers 401.
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) {
+    reportFailure(source, "login expired before the upload started");
     return { error: "Your login has expired. Open the site again and sign in, then come back — nothing you have done is lost." };
   }
 
@@ -171,9 +198,11 @@ export async function uploadAnswerPdf(
     console.error(`[answer-upload] attempt ${n}/${attempts}:`, lastDetail, "bytes:", blob.size);
 
     if (/jwt|expired|401|unauthor/i.test(lastDetail)) {
+      reportFailure(source, `login expired mid-upload: ${lastDetail}`);
       return { error: "Your login expired while you were writing. Sign in again and come straight back." };
     }
     if (/exceed|too large|size|413/i.test(lastDetail)) {
+      reportFailure(source, `too large (${(bytes / 1048576).toFixed(1)} MB): ${lastDetail}`);
       return { error: "That PDF is too large to send. Scan it again in black and white, or at a lower quality." };
     }
   }
@@ -182,9 +211,11 @@ export async function uploadAnswerPdf(
   // reads like a fault in the site and is almost always the line.
   if (/failed to fetch|network|load failed|timeout|aborted/i.test(lastDetail)) {
     const mb = (bytes / 1048576).toFixed(1);
+    reportFailure(source, `connection dropped after ${attempts} tries, ${mb} MB`);
     return {
       error: `Your connection dropped while sending ${mb} MB — we tried ${attempts} times. Move somewhere with better signal, or switch off Wi-Fi and use mobile data, then try again. Your file is still chosen.`,
     };
   }
+  reportFailure(source, `refused: ${lastDetail}`);
   return { error: `The upload was refused: ${lastDetail}` };
 }

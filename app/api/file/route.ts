@@ -22,6 +22,25 @@ export async function GET(req: NextRequest) {
   const bucket = req.nextUrl.searchParams.get("b") || "";
   const path = req.nextUrl.searchParams.get("p") || "";
 
+  // DID THEY ACTUALLY OPEN THE CHECKED COPY?
+  //
+  // Every marked paper costs an AI call to grade, a second call for the margin
+  // notes, and a PDF drawn page by page — and until now nobody knew whether a
+  // single student opened one. A checked copy is written to
+  // "…-checked.pdf", which is the only file this proxy serves that means "the
+  // marking, drawn on their own pages".
+  //
+  // Counted once per student per paper per day: a PDF viewer re-requests a file
+  // as it pages through, and ten range requests are one reading, not ten.
+  try {
+    const asked = raw || path;
+    if (/-checked\.pdf$/i.test(asked)) {
+      const attemptId = asked.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-checked\.pdf$/i)?.[1] ?? null;
+      const { recordPaperViewOnce } = await import("@/lib/paperEvents");
+      await recordPaperViewOnce({ kind: "copy_viewed", studentId: user.id, attemptId });
+    }
+  } catch { /* a count must never stop a student opening their own paper */ }
+
   // bucket + path: the storage address is assembled HERE, from the server's own
   // configuration, so nothing in the link a student sees names the project or
   // opens without a login. This is the normal case now; ?u= is the old form.

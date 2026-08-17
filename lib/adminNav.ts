@@ -71,6 +71,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     tagline: "Accounts, access, doubts, tickets, moderation — and their successes.",
     panels: [
       { icon: "👥", title: "Users", desc: "View, edit & manage every account — roles, attempts, contact details, staff rights.", href: "/admin/users" },
+      { icon: "🤝", title: "Mentoring desk", desc: "Who needs a word today, one student at a time, with their own figures in front of you — never signed in, went quiet, studying but not testing, marks slipping, validity running out. Nothing sends by itself: every message is drafted and waits for you, and every call outcome is logged so nobody is chased twice.", href: "/admin/mentoring" },
       { icon: "🎟️", title: "Enrolment", desc: "Grant course access (single or bulk) for any tier/duration; revoke & extend.", href: "/admin/enrolment" },
       { icon: "✉️", title: "Emails", desc: "The words in every email the site sends — welcome, verify, reset, granted access, coupons, tickets. Edit any of them; see it as the student gets it.", href: "/admin/emails" },
       // Three tiles for one job — read what students asked and answer it —

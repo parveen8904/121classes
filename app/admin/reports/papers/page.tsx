@@ -20,8 +20,10 @@ export const metadata = { title: "Paper report — Admin" };
 
 type Row = {
   day: string;
-  portal: number;
-  paperCheck: number;
+  files: number;       // scans that reached the bucket
+  paperCheck: number;  // of those, sent through the free checking page
+  topic: number;       // handed in against a topic's own test
+  mock: number;        // handed in against a full mock paper
   failed: number;
   resultsRead: number;
   copiesOpened: number;
@@ -48,26 +50,33 @@ export default async function PaperReport() {
   // up here is what made the AI spend page stop moving past a thousand rows.
   const { data: raw } = await svc.rpc("paper_report_days", { days: 30 });
   const days: Row[] = ((raw ?? []) as {
-    day: string; portal_uploads: number; paper_check_uploads: number;
+    day: string; files_uploaded: number; paper_check_uploads: number;
+    topic_tests: number; mock_tests: number;
     failed: number; results_read: number; copies_opened: number;
   }[]).map((r) => ({
     day: String(r.day),
-    portal: Number(r.portal_uploads) || 0,
+    files: Number(r.files_uploaded) || 0,
     paperCheck: Number(r.paper_check_uploads) || 0,
+    topic: Number(r.topic_tests) || 0,
+    mock: Number(r.mock_tests) || 0,
     failed: Number(r.failed) || 0,
     resultsRead: Number(r.results_read) || 0,
     copiesOpened: Number(r.copies_opened) || 0,
   }));
   const total = days.reduce(
     (t, d) => ({
-      portal: t.portal + d.portal, paperCheck: t.paperCheck + d.paperCheck,
+      files: t.files + d.files, paperCheck: t.paperCheck + d.paperCheck,
+      topic: t.topic + d.topic, mock: t.mock + d.mock,
       failed: t.failed + d.failed, resultsRead: t.resultsRead + d.resultsRead,
       copiesOpened: t.copiesOpened + d.copiesOpened,
     }),
-    { portal: 0, paperCheck: 0, failed: 0, resultsRead: 0, copiesOpened: 0 },
+    { files: 0, paperCheck: 0, topic: 0, mock: 0, failed: 0, resultsRead: 0, copiesOpened: 0 },
   );
-  const arrived = total.portal + total.paperCheck;
-  const tried = arrived + total.failed;
+  const handedIn = total.topic + total.mock;
+  const tried = total.files + total.failed;
+  // A scan that reached us with no paper behind it: the student got the file up
+  // and then did not finish. Worth naming rather than leaving in the arithmetic.
+  const unfinished = Math.max(0, total.files - handedIn);
 
   const th: React.CSSProperties = { textAlign: "right", padding: "8px 10px", fontSize: ".76rem", textTransform: "uppercase", letterSpacing: ".04em", borderBottom: "2px solid var(--accent)" };
   const td: React.CSSProperties = { textAlign: "right", padding: "7px 10px", borderBottom: "1px solid var(--border)", fontVariantNumeric: "tabular-nums" };
@@ -82,7 +91,8 @@ export default async function PaperReport() {
       />
 
       <div className="card" style={{ marginTop: 16, display: "flex", gap: 26, flexWrap: "wrap" }}>
-        <Fig n={arrived} label="papers arrived" note="last 30 days" />
+        <Fig n={handedIn} label="papers handed in" note={`last 30 days · ${total.topic} topic, ${total.mock} mock`} />
+        <Fig n={unfinished} label="uploaded, never handed in" note={total.files ? `of ${total.files} scans received` : ""} warn={unfinished > 0} />
         <Fig n={total.failed} label="tried and failed" note={tried ? `${Math.round((total.failed / tried) * 100)}% of all attempts` : ""} warn={total.failed > 0} />
         <Fig n={total.resultsRead} label="read their marks" />
         <Fig n={total.copiesOpened} label="opened the checked copy" />
@@ -101,8 +111,10 @@ export default async function PaperReport() {
           <thead>
             <tr>
               <th style={{ ...th, textAlign: "left" }}>Day</th>
-              <th style={th}>Portal tests</th>
-              <th style={th}>Paper checking</th>
+              <th style={th}>Topic tests</th>
+              <th style={th}>Mock tests</th>
+              <th style={th}>Scans received</th>
+              <th style={th}>Of those, free page</th>
               <th style={th}>Failed</th>
               <th style={th}>Marks read</th>
               <th style={th}>Copies opened</th>
@@ -110,12 +122,14 @@ export default async function PaperReport() {
           </thead>
           <tbody>
             {days.length === 0 && (
-              <tr><td colSpan={6} style={{ ...td, textAlign: "left", color: "var(--muted)" }}>Nothing in the last 30 days.</td></tr>
+              <tr><td colSpan={8} style={{ ...td, textAlign: "left", color: "var(--muted)" }}>Nothing in the last 30 days.</td></tr>
             )}
             {days.map((d) => (
               <tr key={d.day}>
                 <td style={{ ...td, textAlign: "left", whiteSpace: "nowrap" }}>{dmy(d.day)}</td>
-                <td style={td}>{d.portal || "—"}</td>
+                <td style={{ ...td, fontWeight: d.topic ? 700 : undefined }}>{d.topic || "—"}</td>
+                <td style={{ ...td, fontWeight: d.mock ? 700 : undefined }}>{d.mock || "—"}</td>
+                <td style={{ ...td, color: d.files > d.topic + d.mock ? "#b45309" : undefined }}>{d.files || "—"}</td>
                 <td style={td}>{d.paperCheck || "—"}</td>
                 <td style={{ ...td, color: d.failed ? "#b91c1c" : undefined, fontWeight: d.failed ? 700 : undefined }}>
                   {d.failed || "—"}
@@ -131,8 +145,15 @@ export default async function PaperReport() {
       <div className="card" style={{ marginTop: 14, fontSize: ".86rem", lineHeight: 1.75, color: "var(--muted)" }}>
         <p style={{ marginTop: 0 }}><strong>How each column is counted.</strong></p>
         <p style={{ margin: "0 0 8px" }}>
-          <strong>Portal tests</strong> and <strong>Paper checking</strong> are counted from the files themselves in
-          the storage bucket, not from anything the site records about itself — a file either arrived or it did not.
+          <strong>Topic tests</strong> are papers handed in against a chapter&apos;s own test; <strong>Mock
+          tests</strong> are the full 100-mark papers. The split comes from the paper itself, not from the screen it
+          was sent through — a mock can arrive through the timed portal or the free checking page.
+        </p>
+        <p style={{ margin: "0 0 8px" }}>
+          <strong>Scans received</strong> counts the files that actually reached the bucket. It is normally higher than
+          the two columns before it, and the gap is the useful part: a scan with no paper behind it is a student who
+          got their file up and then did not finish — a retry, or an attempt abandoned. Amber means there were more
+          scans than papers that day.
         </p>
         <p style={{ margin: "0 0 8px" }}>
           <strong>Failed</strong> is reported by the student&apos;s own browser when an upload gives up. It cannot be

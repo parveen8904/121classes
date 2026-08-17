@@ -181,7 +181,12 @@ export const BOARDS: Board[] = [
     caption: (e) =>
       `${e.test_score} of ${e.test_marks} — ${Math.round((e.test_score / (e.test_marks || 1)) * 100)}%` +
       ` across ${e.tests_marked} marked paper${e.tests_marked === 1 ? "" : "s"}`,
-    minMarks: 20,
+    // 15, not 20. The floor exists to stop a single lucky 5-mark exercise
+    // topping a percentage board — but the chapter tests here are written out of
+    // 17 to 20 marks, so a floor of 20 quietly excluded any student whose one
+    // marked paper was out of 17. Krishi Bhatia scored 13 of 17, a real paper
+    // marked by an examiner, and did not appear on the board at all.
+    minMarks: 15,
   },
   {
     key: "cases", label: "Case study toppers", icon: "🧩",

@@ -2,7 +2,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
-import { replyOnWhatsApp, draftWhatsAppReply, saveWhatsAppAutoReply, answerOpenConversations, toggleFreeLimit } from "./actions";
+import { replyOnWhatsApp, draftWhatsAppReply, saveWhatsAppAutoReply, answerOpenConversations, toggleFreeLimit, setWhatsAppProfilePhoto } from "./actions";
 import { getAutoReply } from "@/lib/whatsappAutoReply";
 
 // The WhatsApp inbox. A Cloud API number cannot use the WhatsApp app and does
@@ -32,7 +32,7 @@ function textOf(p: Record<string, unknown> | null): string {
 }
 
 export default async function AdminWhatsAppPage(props: {
-  searchParams: Promise<{ sent?: string; saved?: string; answered?: string; left?: string; limit?: string }>;
+  searchParams: Promise<{ sent?: string; saved?: string; answered?: string; left?: string; limit?: string; photo?: string; photoerr?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
@@ -134,6 +134,32 @@ export default async function AdminWhatsAppPage(props: {
           Free-question limit is now <strong>{searchParams.limit}</strong>.
         </div>
       )}
+
+      {searchParams.photo && (
+        <div className="notice ok" style={{ marginTop: 14 }}>✅ {searchParams.photo}</div>
+      )}
+      {searchParams.photoerr && (
+        <div className="notice err" style={{ marginTop: 14 }}>❌ {searchParams.photoerr}</div>
+      )}
+
+      {/* WHY A STUDENT SEES A BARE NUMBER.
+          The profile has the about line, the description, the address, the
+          website and the EDU category — everything except a picture. So a message
+          from 98100 79162 arrives beside a grey circle and reads as an unknown
+          caller. Meta's green tick (an Official Business Account) is what puts
+          the NAME in place of the number, and that is theirs to grant; the photo
+          is ours, and it is the half we can fix. */}
+      <form action={setWhatsAppProfilePhoto} className="card" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <strong>🖼️ Set the WhatsApp profile photo</strong>
+          <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0", lineHeight: 1.65 }}>
+            There is <strong>no picture on the profile</strong> right now, which is why the number looks like a
+            stranger&apos;s. This puts the 512&times;512 logo on it. Students who tap the number see the photo, the
+            name and the description together.
+          </p>
+        </div>
+        <SubmitButton className="btn small">Set the photo</SubmitButton>
+      </form>
 
       {/* THE SWITCH. Off means anybody who finds the number gets answered, which
           is the cheapest marketing there is. On means five a day for anyone

@@ -186,3 +186,74 @@ export async function toggleFreeLimit(formData: FormData) {
   revalidatePath("/admin/whatsapp");
   redirect(`/admin/whatsapp?limit=${on ? "on" : "off"}`);
 }
+
+// THE MISSING PROFILE PHOTO.
+//
+// A student who gets a message from 98100 79162 sees a bare number and a grey
+// circle — so it reads as an unknown caller, and only after tapping through does
+// anyone learn it is CA Parveen Sharma Classes. Everything else on the profile
+// was already filled in properly: the about line, the description, the address,
+// the website, the EDU category. There was simply no picture, and a business with
+// no picture looks like a stranger.
+//
+// Setting one is a three-step dance with Meta and none of it belongs in a browser:
+//   1. open a resumable upload session against the APP  → an upload id
+//   2. send the bytes with an OAuth header              → a file handle
+//   3. attach the handle to the phone number's profile
+//
+// Done here so the token never leaves the server.
+export async function setWhatsAppProfilePhoto(): Promise<void> {
+  const { requireArea } = await import("@/lib/adminAccess");
+  if (!(await requireArea("students"))) redirect(`/admin/whatsapp?photoerr=${encodeURIComponent("Not allowed.")}`);
+
+  const { getSecret } = await import("@/lib/secrets");
+  const token = (await getSecret("WHATSAPP_CLOUD_TOKEN")).trim();
+  const phoneId = (await getSecret("WHATSAPP_PHONE_NUMBER_ID")).trim();
+  if (!token || !phoneId) redirect(`/admin/whatsapp?photoerr=${encodeURIComponent("WhatsApp is not configured.")}`);
+
+  // The 512×512 app icon: WhatsApp wants a square, and this is the only square
+  // brand image we have. A wide logo is letterboxed into a circle and looks
+  // broken.
+  const { readFile } = await import("node:fs/promises");
+  const path = await import("node:path");
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(path.join(process.cwd(), "public", "icon-512.png"));
+  } catch {
+    redirect(`/admin/whatsapp?photoerr=${encodeURIComponent("Could not read public/icon-512.png.")}`);
+  }
+
+  // The upload session is opened against the APP, not the phone number.
+  const appId = "1046220921739398";
+  const start = await fetch(
+    `https://graph.facebook.com/v21.0/${appId}/uploads?file_length=${bytes.length}&file_type=image/png&access_token=${encodeURIComponent(token)}`,
+    { method: "POST" },
+  );
+  const startBody = (await start.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
+  if (!startBody.id) redirect(`/admin/whatsapp?photoerr=${encodeURIComponent(`Could not start the upload: ${startBody.error?.message ?? start.status}`)}`);
+
+  const put = await fetch(`https://graph.facebook.com/v21.0/${startBody.id}`, {
+    method: "POST",
+    headers: {
+      // Deliberately "OAuth", not "Bearer" — the resumable upload endpoint is the
+      // one place in this API that insists on it, and rejects Bearer outright.
+      Authorization: `OAuth ${token}`,
+      file_offset: "0",
+      "Content-Type": "application/octet-stream",
+    },
+    body: new Uint8Array(bytes),
+  });
+  const putBody = (await put.json().catch(() => ({}))) as { h?: string; error?: { message?: string } };
+  if (!putBody.h) redirect(`/admin/whatsapp?photoerr=${encodeURIComponent(`Upload failed: ${putBody.error?.message ?? put.status}`)}`);
+
+  const set = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/whatsapp_business_profile`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ messaging_product: "whatsapp", profile_picture_handle: putBody.h }),
+  });
+  const setBody = (await set.json().catch(() => ({}))) as { success?: boolean; error?: { message?: string } };
+  if (!set.ok || setBody.error) redirect(`/admin/whatsapp?photoerr=${encodeURIComponent(`Could not set it: ${setBody.error?.message ?? set.status}`)}`);
+
+  revalidatePath("/admin/whatsapp");
+  redirect(`/admin/whatsapp?photo=${encodeURIComponent("Photo set. It shows on the profile students see when they tap the number.")}`);
+}

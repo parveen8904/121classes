@@ -59,5 +59,35 @@ export async function groupAiAnswer(
   // reads even though nobody asked it privately.
   const { logAiExchange } = await import("@/lib/aiAnswerLog");
   await logAiExchange({ channel, question, answer });
-  return `🤖 ${answer}\n\n— AI assistant, under CA Parveen Sharma's guidance`;
+  return `🤖 ${answer}\n\n${signOff(material)}`;
+}
+
+// DO NOT SIGN HIS NAME TO SOMETHING HE DID NOT SAY.
+//
+// Every group answer used to end "— AI assistant, under CA Parveen Sharma's
+// guidance", whether or not a single line of his material was in front of the
+// model. On 18 August a student asked in the Financial Reporting group whether
+// an FCCB convertible into a fixed number of shares is a derivative. The answer
+// given was the IAS 32 one: fails fixed-for-fixed, derivative liability. Ind AS
+// 32 carries an India carve-out — the option is EQUITY — and the carve-out is in
+// his own repository. So the room was told the IFRS position, over his name, in
+// his own group, on a point examined precisely because India differs.
+//
+// The model's general knowledge will always be fuller than any one teacher's
+// notes, and that is exactly the danger: on a carve-out, fuller is wrong. When
+// there is nothing of his to lean on, the answer must say so instead of
+// borrowing his authority.
+//
+// This is a signal, not a proof. Material being present does not guarantee the
+// model used it — the sign-off says the answer was PREPARED FROM his material,
+// which is what we can honestly claim, and the training lesson does the rest by
+// telling the model his treatment governs where the two differ.
+function signOff(material: string): string {
+  // A few hundred characters is a heading and a stray line, not a teaching.
+  const grounded = (material ?? "").trim().length > 800;
+  return grounded
+    ? "— AI assistant, answering from CA Parveen Sharma's own class material"
+    : "— AI assistant. ⚠️ Nothing from Sir's material covered this, so this is general knowledge, "
+      + "not his teaching. Ind AS carries India-specific carve-outs where the IFRS answer is the "
+      + "wrong one, so please confirm this with Sir before you rely on it in the exam.";
 }

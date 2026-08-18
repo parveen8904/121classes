@@ -274,6 +274,32 @@ export async function gradeMcqAttempt(input: {
     /* email failure must not fail the submission */
   }
 
+  // AND ON WHATSAPP, WHERE THEY WILL ACTUALLY SEE IT.
+  //
+  // The report email above is good and is read by a minority. This is the same
+  // news in the place a student looks within the minute — the score, and a
+  // button to the report that names the weak concepts and the class to redo.
+  //
+  // UTILITY template on a real event, so no opt-in and no marketing limit.
+  // Best-effort and last: a WhatsApp failure must never cost a student their
+  // marked test.
+  try {
+    const { data: me } = await createServiceClient()
+      .from("profiles").select("full_name, phone").eq("id", user.id).maybeSingle();
+    const phone = String((me as { phone?: string } | null)?.phone ?? "").trim();
+    if (phone) {
+      const { data: sec2 } = await supabase.from("sections").select("title").eq("id", input.sectionId).maybeSingle();
+      const { sendWhatsApp } = await import("@/lib/notify");
+      const first = String((me as { full_name?: string } | null)?.full_name ?? "").split(" ")[0] || "there";
+      await sendWhatsApp(phone, "test_report_ready", [
+        first,
+        String(sec2?.title ?? "your test"),
+        String(res.score),
+        String(res.total),
+      ]);
+    }
+  } catch { /* the email has gone; this is the second attempt to reach them */ }
+
   return { ...res, late };
 }
 

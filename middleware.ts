@@ -36,6 +36,45 @@ export async function middleware(request: NextRequest) {
   // Expose the current path to server layouts (the admin layout uses it to gate
   // operators/faculty to their permitted areas).
   request.headers.set("x-pathname", request.nextUrl.pathname);
+
+  // NOBODY SIGNED IN? THEN THERE IS NOTHING TO ASK SUPABASE.
+  //
+  // Everything below verifies a session over the network — a hop to Mumbai on
+  // every page a visitor opens. A visitor with no auth cookie has no session to
+  // verify: getUser() can only ever answer "no user", after the round-trip.
+  //
+  // Two costs, both paid on every public page. The obvious one is the wait. The
+  // expensive one is that touching the session makes the response private and
+  // uncacheable, so the homepage — which declares revalidate = 300 and should
+  // be served from the edge in milliseconds — was rebuilt for every visitor,
+  // every time. It reported x-vercel-cache: MISS on every request.
+  //
+  // With no cookie the answer is known without asking: a protected path goes to
+  // the login page, and everything else is public and passes straight through.
+  // Signed-in requests are untouched below — same client, same checks.
+  const hasSession = request.cookies
+    .getAll()
+    .some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
+
+  const publicPath = request.nextUrl.pathname;
+  const guarded =
+    publicPath.startsWith("/dashboard") ||
+    publicPath.startsWith("/admin") ||
+    publicPath.startsWith("/learn") ||
+    publicPath.startsWith("/live");
+
+  if (!hasSession) {
+    if (guarded) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("next", publicPath);
+      return NextResponse.redirect(url);
+    }
+    // A public page for a signed-out visitor: leave the response alone so it
+    // stays cacheable.
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

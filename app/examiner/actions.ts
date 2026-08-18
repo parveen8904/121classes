@@ -144,7 +144,10 @@ export async function submitCheck(formData: FormData) {
           String(finalMarks ?? "—"),
           String(row.total_marks ?? "—"),
         ],
-        { headerImageUrl: "https://caparveensharma.com/hero-banner.png" },
+        // No headerImageUrl: the approved template carries a TEXT header, so a
+        // header component here would be rejected. The banner version is a
+        // separate template once the image upload works — see the note in
+        // createCheckedCopyTemplate.
       );
     }
   } catch { /* the email has gone; this is the second attempt to reach them */ }

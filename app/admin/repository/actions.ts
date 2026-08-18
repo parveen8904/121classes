@@ -107,3 +107,60 @@ export async function toggleRepositoryItem(formData: FormData) {
   await createServiceClient().from("repository_items").update({ is_active: active }).eq("id", id);
   revalidatePath("/admin/repository");
 }
+
+// REFRESH THE SEARCH INDEX.
+//
+// The AI does not read his books any more — it looks them up. Their text is cut
+// into passages, indexed with full-text search, tagged with level, topic, kind
+// and attempt, and every numbered question is recorded with where it starts and
+// ends. That index is built from the material as it stood when it was last
+// built, so material added since is INVISIBLE to the AI until this is pressed.
+//
+// Kept as a button rather than something automatic on upload because a rebuild
+// walks every item; doing it once after a batch of uploads is right, doing it
+// eleven times during the batch is waste. The page tells him when it is stale.
+export async function refreshRepositoryIndex(): Promise<void> {
+  if (!(await requireAdmin())) return;
+  const svc = createServiceClient();
+  await svc.rpc("rebuild_repository_index_full");
+  revalidatePath("/admin/repository");
+}
+
+// READ THE SCANS.
+//
+// Thirteen past exam papers — every CA Final and CA Inter paper we hold — carry
+// no text at all. They are photographs of pages, so the ordinary PDF reader
+// found nothing and stamped them "__unreadable__", and they have been invisible
+// to the AI ever since. A student asking about the May 2024 paper gets nothing,
+// however good the index is.
+//
+// The same vision model that reads handwritten class notes can read them. It is
+// slower and it costs, so this runs a few at a time and can be pressed again;
+// each press picks up where the last left off.
+export async function readUnreadableFiles(): Promise<void> {
+  if (!(await requireAdmin())) return;
+  const svc = createServiceClient();
+  const { data: stuck } = await svc
+    .from("repository_items")
+    .select("id, title, file_url")
+    .eq("is_active", true)
+    .not("file_url", "is", null)
+    .or("content.eq.__unreadable__,content.is.null")
+    .limit(4);
+
+  const { transcribeHandwriting } = await import("@/lib/ai");
+  for (const it of stuck ?? []) {
+    const url = String((it as { file_url?: string }).file_url ?? "");
+    if (!url) continue;
+    // The plain text reader first — cheap, and some of these may simply have
+    // failed once on a network blip rather than being true scans.
+    let text = await extractPdfText(url).catch(() => "");
+    if (!text || text.trim().length < 200) {
+      text = (await transcribeHandwriting(url, { force: true }).catch(() => null)) ?? "";
+    }
+    if (text && text.trim().length > 200) {
+      await svc.from("repository_items").update({ content: text }).eq("id", (it as { id: string }).id);
+    }
+  }
+  revalidatePath("/admin/repository");
+}

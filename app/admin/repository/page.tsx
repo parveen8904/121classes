@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { formatDateTime } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 import { aiConfigured } from "@/lib/ai";
 import SubmitButton from "@/app/components/SubmitButton";
 import AdminHero from "../_components/AdminHero";
 import PdfUpload from "../_components/PdfUpload";
-import { addRepositoryItem, deleteRepositoryItem, toggleRepositoryItem, extractItemText, runIngestNow } from "./actions";
+import { addRepositoryItem, deleteRepositoryItem, toggleRepositoryItem, extractItemText, runIngestNow, refreshRepositoryIndex, readUnreadableFiles } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "AI Repository — Admin" };
@@ -127,6 +128,72 @@ export default async function RepositoryPage() {
           );
         })()}
       </div>
+
+      {/* THE SEARCH INDEX.
+          The AI no longer reads these books — it looks them up. Material added
+          since the last build is invisible to it until this is pressed, so the
+          panel says plainly whether it is behind. */}
+      {await (async () => {
+        const svc2 = createServiceClient();
+        const [{ count: passages }, { count: questions }, { data: newest }, { count: unreadable }] = await Promise.all([
+          svc2.from("repository_passages").select("id", { count: "exact", head: true }),
+          svc2.from("repository_questions").select("id", { count: "exact", head: true }),
+          svc2.from("repository_passages").select("built_at").order("built_at", { ascending: false }).limit(1).maybeSingle(),
+          svc2.from("repository_items").select("id", { count: "exact", head: true })
+            .eq("is_active", true).not("file_url", "is", null).or("content.eq.__unreadable__,content.is.null"),
+        ]);
+        const builtAt = (newest as { built_at?: string } | null)?.built_at ?? null;
+        // Anything added after the index was built is not in it.
+        const { count: added } = builtAt
+          ? await svc2.from("repository_items").select("id", { count: "exact", head: true })
+              .eq("is_active", true).gt("created_at", builtAt)
+          : { count: 0 };
+        const stale = (added ?? 0) > 0;
+        return (
+          <div className="card" style={{ marginTop: 16, border: stale ? "2px solid #b45309" : undefined }}>
+            <strong>🔎 Search index</strong>
+            <p className="muted" style={{ fontSize: ".86rem", lineHeight: 1.7, margin: "6px 0 0" }}>
+              The AI does not read these books end to end — it looks them up. Everything above is cut into
+              passages and indexed by <strong>level, topic, kind and attempt</strong>, and every numbered question is
+              recorded so &ldquo;question 42 of the Financial Instruments bank&rdquo; can be fetched exactly.
+            </p>
+            <p style={{ fontSize: ".88rem", margin: "8px 0 0", fontVariantNumeric: "tabular-nums" }}>
+              {(passages ?? 0).toLocaleString("en-IN")} passages · {(questions ?? 0).toLocaleString("en-IN")} numbered
+              questions{builtAt ? ` · built ${formatDateTime(builtAt)}` : ""}
+            </p>
+            {stale && (
+              <p className="notice err" style={{ fontSize: ".86rem", marginTop: 8 }}>
+                ⚠️ {added} item{added === 1 ? " has" : "s have"} been added since the index was built.
+                Until you refresh, the AI cannot see {added === 1 ? "it" : "them"}.
+              </p>
+            )}
+            <form action={refreshRepositoryIndex} style={{ marginTop: 8 }}>
+              <SubmitButton className="btn small" savedLabel="✓ Index rebuilt">
+                🔄 Refresh index
+              </SubmitButton>
+              <p className="muted" style={{ fontSize: ".76rem", marginTop: 4 }}>
+                Press this after uploading material. It walks every item, so do it once at the end of a batch
+                rather than after each file.
+              </p>
+            </form>
+
+            {(unreadable ?? 0) > 0 && (
+              <form action={readUnreadableFiles} style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+                <strong style={{ fontSize: ".92rem" }}>📄 {unreadable} file{unreadable === 1 ? "" : "s"} with no text</strong>
+                <p className="muted" style={{ fontSize: ".8rem", lineHeight: 1.65, margin: "4px 0 8px" }}>
+                  These are scans — photographs of pages — so the ordinary PDF reader found nothing in them and the
+                  AI cannot see them at all, however good the index is. This reads them with the same vision model
+                  that reads handwritten class notes. It is slow and it costs, so it does four at a time; press it
+                  again to continue.
+                </p>
+                <SubmitButton className="btn small secondary" savedLabel="✓ Read — refresh to see">
+                  Read the scans (4 at a time)
+                </SubmitButton>
+              </form>
+            )}
+          </div>
+        );
+      })()}
 
       {!ai && (
         <div className="notice" style={{ marginTop: 16, background: "var(--bg-soft)" }}>

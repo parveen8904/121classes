@@ -214,14 +214,12 @@ export async function setWhatsAppProfilePhoto(): Promise<void> {
   // The 512×512 app icon: WhatsApp wants a square, and this is the only square
   // brand image we have. A wide logo is letterboxed into a circle and looks
   // broken.
-  const { readFile } = await import("node:fs/promises");
-  const path = await import("node:path");
-  let bytes: Buffer;
-  try {
-    bytes = await readFile(path.join(process.cwd(), "public", "icon-512.png"));
-  } catch {
-    redirect(`/admin/whatsapp?photoerr=${encodeURIComponent("Could not read public/icon-512.png.")}`);
+  // Same fault as the template below had: public/ is not on the lambda's disk.
+  const iconRes = await fetch("https://caparveensharma.com/icon-512.png", { cache: "no-store" });
+  if (!iconRes.ok) {
+    redirect(`/admin/whatsapp?photoerr=${encodeURIComponent(`Could not fetch the logo (${iconRes.status}).`)}`);
   }
+  const bytes = Buffer.from(await iconRes.arrayBuffer());
 
   // The upload session is opened against the APP, not the phone number.
   const appId = "1046220921739398";
@@ -298,18 +296,23 @@ export async function createCheckedCopyTemplate(): Promise<void> {
 
   // 1,702 x 630 — close to the 1.91:1 WhatsApp renders a header at, so it is not
   // cropped to nonsense.
-  const { readFile } = await import("node:fs/promises");
-  const path = await import("node:path");
-  let bytes: Buffer;
-  try {
-    bytes = await readFile(path.join(process.cwd(), "public", "hero-banner.png"));
-  } catch {
-    redirect(`/admin/whatsapp?tplerr=${encodeURIComponent("Could not read public/hero-banner.png.")}`);
+  // FETCHED, NOT READ FROM DISK.
+  //
+  // public/ is served by the CDN and is NOT present in the serverless function's
+  // filesystem, so readFile() there always fails. That is why the profile photo
+  // button reported "cannot be set" and told us nothing useful: it never reached
+  // Meta at all, it could not find its own image. The file is public — fetch it
+  // over HTTP like anyone else would.
+  const bannerUrl = "https://caparveensharma.com/hero-banner.png";
+  const imgRes = await fetch(bannerUrl, { cache: "no-store" });
+  if (!imgRes.ok) {
+    redirect(`/admin/whatsapp?tplerr=${encodeURIComponent(`Could not fetch the banner (${imgRes.status}).`)}`);
   }
+  const bytes = Buffer.from(await imgRes.arrayBuffer());
 
   const appId = "1046220921739398";
   const start = await fetch(
-    `https://graph.facebook.com/v21.0/${appId}/uploads?file_length=${bytes!.length}&file_type=image/png&access_token=${encodeURIComponent(token)}`,
+    `https://graph.facebook.com/v21.0/${appId}/uploads?file_length=${bytes.length}&file_type=image/png&access_token=${encodeURIComponent(token)}`,
     { method: "POST" },
   );
   const startBody = (await start.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
@@ -321,7 +324,7 @@ export async function createCheckedCopyTemplate(): Promise<void> {
   const put = await fetch(`https://graph.facebook.com/v21.0/${startBody.id}`, {
     method: "POST",
     headers: { Authorization: `OAuth ${token}`, file_offset: "0", "Content-Type": "application/octet-stream" },
-    body: new Uint8Array(bytes!),
+    body: new Uint8Array(bytes),
   });
   const putText = await put.text().catch(() => "");
   let handle = "";

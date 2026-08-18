@@ -215,6 +215,24 @@ export async function clearSupporterSiteByHand(formData: FormData) {
   redirect("/admin/supporters?vouched=1");
 }
 
+/**
+ * Tell the cleared sellers where they stand — the one outbound note, sent by
+ * a person pressing a button, never by a schedule.
+ *
+ * Each letter is assembled from what is true of that account: the two who were
+ * fined in error are apologised to, those who can order are told to go ahead,
+ * those with the terms still to accept are told that instead, and anyone with a
+ * finding still waiting to be read is left out entirely.
+ */
+export async function sendAllClear() {
+  await assertArea("store");
+  const { sendAllClearNotes } = await import("@/lib/supporterAllClear");
+  const r = await sendAllClearNotes();
+
+  revalidatePath("/admin/supporters");
+  redirect(`/admin/supporters?allclear=${r.sent.length}&held_back=${r.skipped.length}`);
+}
+
 // WHAT THE NIGHTLY READ FOUND, DECIDED BY A PERSON.
 //
 // The founder's instruction of 18 August: the machine tells us the fault, we

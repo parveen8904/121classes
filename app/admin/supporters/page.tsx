@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireArea } from "@/lib/adminAccess";
 import SubmitButton from "@/app/components/SubmitButton";
-import { holdSupporter, releaseSupporter, decideComplaint, recheckSupporterSite, clearSupporterSiteByHand, approveWarning, rejectWarning } from "./actions";
+import { holdSupporter, releaseSupporter, decideComplaint, recheckSupporterSite, clearSupporterSiteByHand, approveWarning, rejectWarning, sendAllClear } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Supporter compliance — Admin" };
@@ -47,7 +47,7 @@ const PROBLEM_LABEL: Record<string, string> = {
 };
 
 export default async function AdminSupporters(props: {
-  searchParams: Promise<{ held?: string; released?: string; complaint?: string; checked?: string; err?: string; vouched?: string; warned?: string; dismissed?: string; noemail?: string }>;
+  searchParams: Promise<{ held?: string; released?: string; complaint?: string; checked?: string; err?: string; vouched?: string; warned?: string; dismissed?: string; noemail?: string; allclear?: string; held_back?: string }>;
 }) {
   if (!(await requireArea("store"))) redirect("/admin");
   const sp = await props.searchParams;
@@ -58,7 +58,7 @@ export default async function AdminSupporters(props: {
       .select("id, ref, raised_by, against_url, against_id, what_happened, evidence_url, status, reviewed_at, outcome_note, created_at")
       .order("created_at", { ascending: false }).limit(200),
     svc.from("profiles")
-      .select("id, full_name, business_name, designation, email, phone, supporter_site, supporter_site_ok_at, supporter_site_proof, supporter_blocked_at, supporter_block_reason, supporter_hold_auto, supporter_hold_evidence")
+      .select("id, full_name, business_name, designation, email, phone, supporter_site, supporter_site_ok_at, supporter_site_proof, supporter_allclear_sent_at, supporter_blocked_at, supporter_block_reason, supporter_hold_auto, supporter_hold_evidence")
       .eq("is_supporter", true).limit(1000),
     svc.from("supporter_site_checks")
       .select("id, supporter_id, url, checked_at, ok, problem, detail, evidence")
@@ -90,6 +90,12 @@ export default async function AdminSupporters(props: {
     if (s(w.status) !== "sent") continue;
     sentCount.set(s(w.supporter_id), (sentCount.get(s(w.supporter_id)) ?? 0) + 1);
   }
+
+  // Cleared, not held, and never told. The button below writes to exactly these.
+  const pendingIds = new Set(pending.map((w) => s(w.supporter_id)));
+  const allClearOwed = sellers.filter(
+    (x) => x.supporter_site_ok_at && !x.supporter_blocked_at && !x.supporter_allclear_sent_at && !pendingIds.has(s(x.id)),
+  );
 
   const byId = new Map(sellers.map((x) => [s(x.id), x]));
   const byHost = new Map(sellers.filter((x) => x.supporter_site).map((x) => [host(s(x.supporter_site)), x]));
@@ -136,6 +142,12 @@ export default async function AdminSupporters(props: {
               : `Read their site just now — ${PROBLEM_LABEL[sp.checked] ?? sp.checked}. It is listed below.`}
           </div>
         )}
+        {sp.allclear && (
+          <div className="notice ok" style={{ marginTop: 14 }}>
+            Told {sp.allclear} seller{sp.allclear === "1" ? "" : "s"} their site is cleared and where they stand.
+            {sp.held_back && sp.held_back !== "0" ? ` ${sp.held_back} held back — listed below.` : ""}
+          </div>
+        )}
         {sp.warned && <div className="notice ok" style={{ marginTop: 14 }}>Warning {sp.warned} sent to the seller{sp.noemail === "1" ? " — but the email did not go out; no address on file" : "."}</div>}
         {sp.dismissed === "1" && <div className="notice ok" style={{ marginTop: 14 }}>Thrown away. Nothing was sent and it is not counted against them.</div>}
         {sp.vouched === "1" && <div className="notice ok" style={{ marginTop: 14 }}>Marked as their website on your word. They can trade; the nightly read will not fine them over a page nobody proved is theirs.</div>}
@@ -154,6 +166,21 @@ export default async function AdminSupporters(props: {
               : ""}
           </p>
         </div>
+
+        {allClearOwed.length > 0 && (
+          <div className="card" style={{ marginTop: 14 }}>
+            <strong>{allClearOwed.length} seller{allClearOwed.length === 1 ? " has" : "s have"} not been told where they stand.</strong>
+            <p className="muted" style={{ margin: "6px 0 10px", lineHeight: 1.7, fontSize: ".88rem" }}>
+              Their sites are cleared and nothing stands against them, but nobody has written to them. This sends
+              one note each: site verified, no hold, no penalty — and then either “you can order now” or the one
+              step they still owe us. The two who were fined in error on 15 August are apologised to by name.
+              Anyone with a finding waiting above is left out. Nobody is written to twice.
+            </p>
+            <form action={sendAllClear}>
+              <SubmitButton className="btn" savedLabel="sent">✉️ Tell them where they stand</SubmitButton>
+            </form>
+          </div>
+        )}
 
         {/* ── Waiting for you ─────────────────────────────────────────────── */}
         {pending.length > 0 && (

@@ -47,13 +47,13 @@ const PROBLEM_LABEL: Record<string, string> = {
 };
 
 export default async function AdminSupporters(props: {
-  searchParams: Promise<{ held?: string; released?: string; complaint?: string; checked?: string; err?: string }>;
+  searchParams: Promise<{ held?: string; released?: string; complaint?: string; checked?: string; err?: string; vouched?: string }>;
 }) {
   if (!(await requireArea("store"))) redirect("/admin");
   const sp = await props.searchParams;
   const svc = createServiceClient();
 
-  const [{ data: complaintRows }, { data: sellerRows }, { data: checkRows }] = await Promise.all([
+  const [{ data: complaintRows }, { data: sellerRows }, { data: checkRows }, { data: warnRows }, { data: graceRow }] = await Promise.all([
     svc.from("supporter_complaints")
       .select("id, ref, raised_by, against_url, against_id, what_happened, evidence_url, status, reviewed_at, outcome_note, created_at")
       .order("created_at", { ascending: false }).limit(200),
@@ -63,11 +63,24 @@ export default async function AdminSupporters(props: {
     svc.from("supporter_site_checks")
       .select("id, supporter_id, url, checked_at, ok, problem, detail, evidence")
       .order("checked_at", { ascending: false }).limit(400),
+    svc.from("supporter_warnings")
+      .select("id, supporter_id, number, problem, url, detail, evidence, emailed, escalated_at, sent_at")
+      .order("sent_at", { ascending: false }).limit(200),
+    svc.from("site_settings").select("value").eq("key", "supporter_grace_until").maybeSingle(),
   ]);
 
   const complaints = (complaintRows ?? []) as Row[];
   const sellers = (sellerRows ?? []) as Row[];
   const checks = (checkRows ?? []) as Row[];
+  const warnings = (warnRows ?? []) as Row[];
+
+  // The month in which nothing is held. While it runs, the nightly read writes
+  // warnings instead of taking ₹5,000 off anybody.
+  const graceRaw = s((graceRow as { value?: string } | null)?.value);
+  const graceEnds = graceRaw ? new Date(`${graceRaw}T23:59:59+05:30`) : null;
+  const graceOn = Boolean(graceEnds && graceEnds.getTime() > Date.now());
+  const warnCount = new Map<string, number>();
+  for (const w of warnings) warnCount.set(s(w.supporter_id), (warnCount.get(s(w.supporter_id)) ?? 0) + 1);
 
   const byId = new Map(sellers.map((x) => [s(x.id), x]));
   const byHost = new Map(sellers.filter((x) => x.supporter_site).map((x) => [host(s(x.supporter_site)), x]));
@@ -114,7 +127,52 @@ export default async function AdminSupporters(props: {
               : `Read their site just now — ${PROBLEM_LABEL[sp.checked] ?? sp.checked}. It is listed below.`}
           </div>
         )}
+        {sp.vouched === "1" && <div className="notice ok" style={{ marginTop: 14 }}>Marked as their website on your word. They can trade; the nightly read will not fine them over a page nobody proved is theirs.</div>}
         {sp.err && <div className="notice err" style={{ marginTop: 14 }}>⚠️ {sp.err}</div>}
+
+        {/* THE MONTH. Said here because every other sentence on this page is
+            about holds and penalties, and while this runs, none of them apply. */}
+        {graceOn && graceEnds && (
+          <div className="card" style={{ marginTop: 16, borderLeft: "3px solid var(--accent)" }}>
+            <strong>Nobody is being held until {graceEnds.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" })}.</strong>
+            <p className="muted" style={{ margin: "6px 0 0", lineHeight: 1.7, fontSize: ".88rem" }}>
+              What the nightly read finds is put to the seller as a warning — first, second, third — saying we
+              have seen it, that nothing is being charged, and that the ₹5,000 applies after that date. A third
+              warning comes to you as a question; it never blocks anybody on its own. You can still hold an
+              account yourself at any time from the list below.
+            </p>
+          </div>
+        )}
+
+        {warnings.length > 0 && (
+          <>
+            <h2 style={{ fontSize: "1.1rem", marginTop: 26 }}>Warnings sent</h2>
+            <div className="card" style={{ padding: 0 }}>
+              {warnings.slice(0, 25).map((w) => {
+                const x = byId.get(s(w.supporter_id));
+                return (
+                  <div key={s(w.id)} style={{ padding: "12px 14px", borderTop: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                      <strong>{name(x) || s(w.supporter_id)}</strong>
+                      <span className="badge">warning {String(w.number)}</span>
+                      {w.escalated_at ? <span className="badge">your decision</span> : null}
+                      {w.emailed === false ? <span className="badge">not emailed</span> : null}
+                      <span className="muted" style={{ fontSize: ".8rem" }}>{when(w.sent_at)}</span>
+                    </div>
+                    <p className="muted" style={{ margin: "4px 0 0", fontSize: ".85rem", lineHeight: 1.6 }}>
+                      {PROBLEM_LABEL[s(w.problem)] ?? s(w.problem)} — {s(w.detail)}
+                      <br />
+                      <a href={s(w.url)} target="_blank" rel="noopener noreferrer">{s(w.url)}</a>
+                    </p>
+                    {w.evidence ? (
+                      <p style={{ margin: "6px 0 0", fontSize: ".82rem", fontStyle: "italic" }}>“{s(w.evidence)}”</p>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "18px 0 6px" }}>
           <span className="badge">{open.length} complaint{open.length === 1 ? "" : "s"} waiting</span>
@@ -314,6 +372,9 @@ export default async function AdminSupporters(props: {
                     <td style={TD}>
                       {who(x)}
                       {x.supporter_blocked_at ? <span className="badge" style={{ marginLeft: 6 }}>on hold</span> : null}
+                      {(warnCount.get(s(x.id)) ?? 0) > 0
+                        ? <span className="badge" style={{ marginLeft: 6 }}>{warnCount.get(s(x.id))} warning{warnCount.get(s(x.id)) === 1 ? "" : "s"}</span>
+                        : null}
                     </td>
                     <td style={{ ...TD, wordBreak: "break-all", maxWidth: 260 }}>
                       {x.supporter_site

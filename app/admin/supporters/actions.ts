@@ -215,6 +215,42 @@ export async function clearSupporterSiteByHand(formData: FormData) {
   redirect("/admin/supporters?vouched=1");
 }
 
+// WHAT THE NIGHTLY READ FOUND, DECIDED BY A PERSON.
+//
+// The founder's instruction of 18 August: the machine tells us the fault, we
+// check the fault, and only then does the mail go. These two actions are that
+// sentence. Sending is deliberately the plainer of the two — dismissing needs
+// nothing typed, because the easy path must be the one that sends nothing.
+
+/** Send a drafted warning: somebody has opened the page and agrees. */
+export async function approveWarning(formData: FormData) {
+  await assertArea("store");
+  const id = str(formData.get("id"));
+  if (!id) return;
+
+  const { data: { user } } = await createClient().auth.getUser();
+  const { sendDraftedWarning } = await import("@/lib/supporterWarn");
+  const outcome = await sendDraftedWarning(id, user?.id ?? null);
+
+  revalidatePath("/admin/supporters");
+  if (!outcome.sent) redirect(`/admin/supporters?err=${encodeURIComponent(`Not sent — ${outcome.reason}`)}`);
+  redirect(`/admin/supporters?warned=${outcome.number}${outcome.emailed ? "" : "&noemail=1"}`);
+}
+
+/** Throw a drafted warning away: the page is fine, or the machine misread it. */
+export async function rejectWarning(formData: FormData) {
+  await assertArea("store");
+  const id = str(formData.get("id"));
+  if (!id) return;
+
+  const { data: { user } } = await createClient().auth.getUser();
+  const { dismissDraftedWarning } = await import("@/lib/supporterWarn");
+  await dismissDraftedWarning(id, user?.id ?? null, str(formData.get("reason")));
+
+  revalidatePath("/admin/supporters");
+  redirect("/admin/supporters?dismissed=1");
+}
+
 /** Read one supporter's site again, now, rather than waiting for tonight. */
 export async function recheckSupporterSite(formData: FormData) {
   await assertArea("store");

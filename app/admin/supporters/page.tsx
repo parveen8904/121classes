@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireArea } from "@/lib/adminAccess";
 import SubmitButton from "@/app/components/SubmitButton";
-import { holdSupporter, releaseSupporter, decideComplaint, recheckSupporterSite, clearSupporterSiteByHand } from "./actions";
+import { holdSupporter, releaseSupporter, decideComplaint, recheckSupporterSite, clearSupporterSiteByHand, approveWarning, rejectWarning } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Supporter compliance — Admin" };
@@ -47,7 +47,7 @@ const PROBLEM_LABEL: Record<string, string> = {
 };
 
 export default async function AdminSupporters(props: {
-  searchParams: Promise<{ held?: string; released?: string; complaint?: string; checked?: string; err?: string; vouched?: string }>;
+  searchParams: Promise<{ held?: string; released?: string; complaint?: string; checked?: string; err?: string; vouched?: string; warned?: string; dismissed?: string; noemail?: string }>;
 }) {
   if (!(await requireArea("store"))) redirect("/admin");
   const sp = await props.searchParams;
@@ -64,7 +64,7 @@ export default async function AdminSupporters(props: {
       .select("id, supporter_id, url, checked_at, ok, problem, detail, evidence")
       .order("checked_at", { ascending: false }).limit(400),
     svc.from("supporter_warnings")
-      .select("id, supporter_id, number, problem, url, detail, evidence, emailed, escalated_at, sent_at")
+      .select("id, supporter_id, number, problem, url, detail, evidence, emailed, escalated_at, sent_at, status, decided_at, decided_by, dismissed_reason")
       .order("sent_at", { ascending: false }).limit(200),
     svc.from("site_settings").select("value").eq("key", "supporter_grace_until").maybeSingle(),
   ]);
@@ -79,8 +79,17 @@ export default async function AdminSupporters(props: {
   const graceRaw = s((graceRow as { value?: string } | null)?.value);
   const graceEnds = graceRaw ? new Date(`${graceRaw}T23:59:59+05:30`) : null;
   const graceOn = Boolean(graceEnds && graceEnds.getTime() > Date.now());
-  const warnCount = new Map<string, number>();
-  for (const w of warnings) warnCount.set(s(w.supporter_id), (warnCount.get(s(w.supporter_id)) ?? 0) + 1);
+
+  // Waiting on a person, versus already dealt with. Only the sent ones count
+  // towards a seller's warning number — a finding we threw away was never a
+  // warning and must not be held against them.
+  const pending = warnings.filter((w) => s(w.status) === "pending");
+  const decided = warnings.filter((w) => s(w.status) !== "pending");
+  const sentCount = new Map<string, number>();
+  for (const w of warnings) {
+    if (s(w.status) !== "sent") continue;
+    sentCount.set(s(w.supporter_id), (sentCount.get(s(w.supporter_id)) ?? 0) + 1);
+  }
 
   const byId = new Map(sellers.map((x) => [s(x.id), x]));
   const byHost = new Map(sellers.filter((x) => x.supporter_site).map((x) => [host(s(x.supporter_site)), x]));
@@ -127,46 +136,94 @@ export default async function AdminSupporters(props: {
               : `Read their site just now — ${PROBLEM_LABEL[sp.checked] ?? sp.checked}. It is listed below.`}
           </div>
         )}
+        {sp.warned && <div className="notice ok" style={{ marginTop: 14 }}>Warning {sp.warned} sent to the seller{sp.noemail === "1" ? " — but the email did not go out; no address on file" : "."}</div>}
+        {sp.dismissed === "1" && <div className="notice ok" style={{ marginTop: 14 }}>Thrown away. Nothing was sent and it is not counted against them.</div>}
         {sp.vouched === "1" && <div className="notice ok" style={{ marginTop: 14 }}>Marked as their website on your word. They can trade; the nightly read will not fine them over a page nobody proved is theirs.</div>}
         {sp.err && <div className="notice err" style={{ marginTop: 14 }}>⚠️ {sp.err}</div>}
 
-        {/* THE MONTH. Said here because every other sentence on this page is
-            about holds and penalties, and while this runs, none of them apply. */}
-        {graceOn && graceEnds && (
-          <div className="card" style={{ marginTop: 16, borderLeft: "3px solid var(--accent)" }}>
-            <strong>Nobody is being held until {graceEnds.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" })}.</strong>
-            <p className="muted" style={{ margin: "6px 0 0", lineHeight: 1.7, fontSize: ".88rem" }}>
-              What the nightly read finds is put to the seller as a warning — first, second, third — saying we
-              have seen it, that nothing is being charged, and that the ₹5,000 applies after that date. A third
-              warning comes to you as a question; it never blocks anybody on its own. You can still hold an
-              account yourself at any time from the list below.
-            </p>
-          </div>
-        )}
+        {/* NOTHING HERE HAS HAPPENED TO ANYONE. Said plainly, because this page
+            used to describe a machine that had already acted by the time it was
+            read. It no longer acts at all. */}
+        <div className="card" style={{ marginTop: 16, borderLeft: "3px solid var(--accent)" }}>
+          <strong>The nightly read decides nothing and sends nothing.</strong>
+          <p className="muted" style={{ margin: "6px 0 0", lineHeight: 1.7, fontSize: ".88rem" }}>
+            It puts what it found below. Open the page yourself, then send the note or throw it away — no seller
+            hears from us until you press send, and no account is ever held except by you.
+            {graceOn && graceEnds
+              ? ` Until ${graceEnds.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" })} the notes say plainly that nothing is being charged.`
+              : ""}
+          </p>
+        </div>
 
-        {warnings.length > 0 && (
+        {/* ── Waiting for you ─────────────────────────────────────────────── */}
+        {pending.length > 0 && (
           <>
-            <h2 style={{ fontSize: "1.1rem", marginTop: 26 }}>Warnings sent</h2>
+            <h2 style={{ fontSize: "1.1rem", marginTop: 26 }}>
+              To check — {pending.length} finding{pending.length === 1 ? "" : "s"}, nothing sent
+            </h2>
             <div className="card" style={{ padding: 0 }}>
-              {warnings.slice(0, 25).map((w) => {
+              {pending.map((w) => {
                 const x = byId.get(s(w.supporter_id));
+                const already = sentCount.get(s(w.supporter_id)) ?? 0;
                 return (
-                  <div key={s(w.id)} style={{ padding: "12px 14px", borderTop: "1px solid var(--border)" }}>
+                  <div key={s(w.id)} style={{ padding: "14px", borderTop: "1px solid var(--border)" }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
                       <strong>{name(x) || s(w.supporter_id)}</strong>
-                      <span className="badge">warning {String(w.number)}</span>
-                      {w.escalated_at ? <span className="badge">your decision</span> : null}
-                      {w.emailed === false ? <span className="badge">not emailed</span> : null}
-                      <span className="muted" style={{ fontSize: ".8rem" }}>{when(w.sent_at)}</span>
+                      <span className="badge">{PROBLEM_LABEL[s(w.problem)] ?? s(w.problem)}</span>
+                      {already > 0 ? <span className="badge">would be warning {already + 1}</span> : null}
+                      <span className="muted" style={{ fontSize: ".8rem" }}>found {when(w.sent_at)}</span>
                     </div>
-                    <p className="muted" style={{ margin: "4px 0 0", fontSize: ".85rem", lineHeight: 1.6 }}>
-                      {PROBLEM_LABEL[s(w.problem)] ?? s(w.problem)} — {s(w.detail)}
-                      <br />
-                      <a href={s(w.url)} target="_blank" rel="noopener noreferrer">{s(w.url)}</a>
-                    </p>
+                    <p style={{ margin: "6px 0 0", fontSize: ".88rem", lineHeight: 1.6 }}>{s(w.detail)}</p>
                     {w.evidence ? (
-                      <p style={{ margin: "6px 0 0", fontSize: ".82rem", fontStyle: "italic" }}>“{s(w.evidence)}”</p>
+                      <p style={{ margin: "6px 0 0", fontSize: ".82rem", fontStyle: "italic", color: "var(--muted)" }}>
+                        “{s(w.evidence)}”
+                      </p>
                     ) : null}
+                    <p style={{ margin: "6px 0 10px", fontSize: ".85rem", wordBreak: "break-all" }}>
+                      <a href={s(w.url)} target="_blank" rel="noopener noreferrer">{s(w.url)} ↗</a>
+                    </p>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      <form action={approveWarning}>
+                        <input type="hidden" name="id" value={s(w.id)} />
+                        <SubmitButton className="btn small" savedLabel="sent">✉️ Send this note</SubmitButton>
+                      </form>
+                      <form action={rejectWarning} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input type="hidden" name="id" value={s(w.id)} />
+                        <input name="reason" placeholder="why not (optional)" style={{ fontSize: ".82rem", padding: "6px 8px", maxWidth: 200 }} />
+                        <SubmitButton className="btn small secondary" savedLabel="dropped">Throw away</SubmitButton>
+                      </form>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="muted" style={{ fontSize: ".8rem", marginTop: 8 }}>
+              The reader was wrong three times in August — twice about discounts that belonged to other faculty.
+              Read the page before you send.
+            </p>
+          </>
+        )}
+
+        {decided.length > 0 && (
+          <>
+            <h2 style={{ fontSize: "1.1rem", marginTop: 26 }}>Already decided</h2>
+            <div className="card" style={{ padding: 0 }}>
+              {decided.slice(0, 20).map((w) => {
+                const x = byId.get(s(w.supporter_id));
+                const sent = s(w.status) === "sent";
+                return (
+                  <div key={s(w.id)} style={{ padding: "10px 14px", borderTop: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                      <strong>{name(x) || s(w.supporter_id)}</strong>
+                      <span className="badge">{sent ? `warning ${String(w.number)} sent` : "thrown away"}</span>
+                      {sent && w.emailed === false ? <span className="badge">email failed</span> : null}
+                      {w.escalated_at ? <span className="badge">third warning — worth a call</span> : null}
+                      <span className="muted" style={{ fontSize: ".8rem" }}>{when(w.decided_at ?? w.sent_at)}</span>
+                    </div>
+                    <p className="muted" style={{ margin: "3px 0 0", fontSize: ".82rem" }}>
+                      {PROBLEM_LABEL[s(w.problem)] ?? s(w.problem)}
+                      {w.dismissed_reason ? ` — ${s(w.dismissed_reason)}` : ""}
+                    </p>
                   </div>
                 );
               })}
@@ -372,8 +429,8 @@ export default async function AdminSupporters(props: {
                     <td style={TD}>
                       {who(x)}
                       {x.supporter_blocked_at ? <span className="badge" style={{ marginLeft: 6 }}>on hold</span> : null}
-                      {(warnCount.get(s(x.id)) ?? 0) > 0
-                        ? <span className="badge" style={{ marginLeft: 6 }}>{warnCount.get(s(x.id))} warning{warnCount.get(s(x.id)) === 1 ? "" : "s"}</span>
+                      {(sentCount.get(s(x.id)) ?? 0) > 0
+                        ? <span className="badge" style={{ marginLeft: 6 }}>{sentCount.get(s(x.id))} warning{sentCount.get(s(x.id)) === 1 ? "" : "s"} sent</span>
                         : null}
                     </td>
                     <td style={{ ...TD, wordBreak: "break-all", maxWidth: 260 }}>

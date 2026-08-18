@@ -55,79 +55,20 @@ export function ruleBroken(problem: string | undefined): string {
   return "A term of the seller agreement";
 }
 
-export type HoldOutcome = { held: boolean; already?: boolean; reason?: string };
-
-/**
- * Hold an account for something found on its own shopfront.
- *
- * Idempotent: a site read again tomorrow will find the same page and must not
- * stack a second penalty on a vendor who has not yet had a chance to fix it.
- */
-export async function autoHoldForBreach(
-  supporterId: string,
-  url: string,
-  r: SiteResult,
-): Promise<HoldOutcome> {
-  if (!isHoldable(r)) return { held: false, reason: "not a holdable finding" };
-
-  const svc = createServiceClient();
-  const { data: who } = await svc
-    .from("profiles")
-    .select("full_name, business_name, email, supporter_blocked_at")
-    .eq("id", supporterId).maybeSingle();
-  if (!who) return { held: false, reason: "no such account" };
-  if (who.supporter_blocked_at) return { held: false, already: true };
-
-  const rule = ruleBroken(r.problem);
-  const reason = `${rule}. ${r.detail ?? ""}`.trim();
-
-  await svc.from("profiles").update({
-    supporter_blocked_at: new Date().toISOString(),
-    supporter_block_reason: reason,
-    supporter_hold_auto: true,
-    supporter_hold_evidence: r.evidence ?? null,
-    supporter_penalty_inr: PENALTY_INR,
-    supporter_penalty_paid_at: null,
-    supporter_penalty_order_id: null,
-  }).eq("id", supporterId);
-
-  await svc.from("supporter_holds").insert({
-    supporter_id: supporterId, auto: true,
-    problem: r.problem ?? null, reason, evidence: r.evidence ?? null,
-    url, penalty_inr: PENALTY_INR,
-  });
-
-  // TOLD, IMMEDIATELY. A vendor who discovers a hold by failing to place an
-  // order has been treated badly whether or not the finding was right.
-  const email = String(who.email ?? "").trim();
-  if (email) {
-    const { sendEmail, emailShell } = await import("@/lib/notify");
-    const name = String(who.business_name || who.full_name || "").trim();
-    const html = emailShell(
-      "Your seller account is on hold",
-      `<p>${name ? `Dear ${name},` : "Hello,"}</p>
-       <p>We check the sites our sellers advertise from. On <strong>${url}</strong> we found something that does not
-          match the agreement, and your account has been put on hold — you cannot place new orders until it is settled.
-          Everything else is untouched: you can sign in, see your orders and invoices, and the students you have
-          already sold to are unaffected.</p>
-       <div style="border-left:3px solid #b91c1c;padding:2px 0 2px 14px;margin:14px 0;line-height:1.7">
-         <p style="margin:0 0 8px"><strong>What was found:</strong> ${rule}.</p>
-         ${r.detail ? `<p style="margin:0 0 8px">${r.detail}</p>` : ""}
-         ${r.evidence ? `<p style="margin:0 0 8px"><strong>On the page:</strong> “${r.evidence}”</p>` : ""}
-       </div>
-       <p>To lift the hold: correct the page, then pay the penalty of
-          <strong>Rs. ${PENALTY_INR.toLocaleString("en-IN")}</strong> (inclusive of GST) from
-          <a href="https://caparveensharma.com/supporter">your desk</a>. Orders reopen as soon as the payment goes
-          through.</p>
-       <p><strong>If you believe this is wrong, reply to this email and say so — it is read by a person, and a hold
-          made in error is lifted without any payment.</strong> This one was decided automatically from what was on
-          the page, and a machine reading a shop page can misread it.</p>`,
-    );
-    await sendEmail(email, "Your seller account is on hold", html).catch(() => false);
-  }
-
-  return { held: true };
-}
+// THE FUNCTION THAT USED TO HOLD ACCOUNTS BY ITSELF IS GONE.
+//
+// `autoHoldForBreach` lived here. It read a shop page, stopped the account,
+// booked a ₹5,000 penalty and emailed the vendor an accusation, all without a
+// person seeing any of it. On 15 August it did that to three vendors over
+// discounts belonging to other teachers, and one of the three was the founder's
+// own company.
+//
+// His instruction of 18 August: do not hold on your own, and do not write to a
+// vendor without asking first. Deleted rather than left unused, because an
+// unused function that fines people is a loaded gun in a drawer — the nightly
+// reader now drafts findings for the office (lib/supporterWarn.ts), and holding
+// an account is `holdSupporter` in app/admin/supporters/actions.ts: a button, a
+// typed reason, and a person's name against it.
 
 /**
  * Lift the hold once the penalty is paid.

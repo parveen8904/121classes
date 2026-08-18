@@ -85,9 +85,11 @@ export async function groupAiAnswer(
 function signOff(material: string): string {
   // A few hundred characters is a heading and a stray line, not a teaching.
   const grounded = (material ?? "").trim().length > 800;
+  // NO DISCLAIMER TO THE STUDENT. His instruction: "there is no need to put any
+  // disclaimer" — a student wants the answer, not a note about where it came
+  // from. So the ungrounded case simply does not claim him. His name is earned
+  // by his material being there, and withheld quietly when it is not.
   return grounded
     ? "— AI assistant, answering from CA Parveen Sharma's own class material"
-    : "— AI assistant. ⚠️ Nothing from Sir's material covered this, so this is general knowledge, "
-      + "not his teaching. Ind AS carries India-specific carve-outs where the IFRS answer is the "
-      + "wrong one, so please confirm this with Sir before you rely on it in the exam.";
+    : "— AI assistant";
 }

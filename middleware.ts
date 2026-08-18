@@ -33,10 +33,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
-  // Expose the current path to server layouts (the admin layout uses it to gate
-  // operators/faculty to their permitted areas).
-  request.headers.set("x-pathname", request.nextUrl.pathname);
-
   // NOBODY SIGNED IN? THEN THERE IS NOTHING TO ASK SUPABASE.
   //
   // Everything below verifies a session over the network — a hop to Mumbai on
@@ -70,11 +66,21 @@ export async function middleware(request: NextRequest) {
       url.searchParams.set("next", publicPath);
       return NextResponse.redirect(url);
     }
-    // A public page for a signed-out visitor: leave the response alone so it
-    // stays cacheable.
-    return NextResponse.next({ request });
+    // A public page for a signed-out visitor. Returned BARE — no `{ request }`.
+    //
+    // That detail is the whole fix. Handing the modified request back tells Next
+    // the request was rewritten, so it re-renders at the origin and the
+    // prerendered page is never served: the homepage builds as static with a
+    // five-minute revalidate and still reported MISS on every request. Nothing
+    // downstream needs a header on a public page anyway — x-pathname exists for
+    // the admin layout, which a signed-out visitor cannot reach.
+    return NextResponse.next();
   }
 
+  // Expose the current path to server layouts (the admin layout uses it to gate
+  // operators/faculty to their permitted areas). Only from here on, where the
+  // response is per-user and uncacheable regardless.
+  request.headers.set("x-pathname", request.nextUrl.pathname);
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

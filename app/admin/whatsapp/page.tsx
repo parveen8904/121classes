@@ -2,7 +2,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import AdminHero from "../_components/AdminHero";
-import { replyOnWhatsApp, draftWhatsAppReply, saveWhatsAppAutoReply, answerOpenConversations, toggleFreeLimit, setWhatsAppProfilePhoto } from "./actions";
+import { replyOnWhatsApp, draftWhatsAppReply, saveWhatsAppAutoReply, answerOpenConversations, toggleFreeLimit, setWhatsAppProfilePhoto, createCheckedCopyTemplate } from "./actions";
 import { getAutoReply } from "@/lib/whatsappAutoReply";
 
 // The WhatsApp inbox. A Cloud API number cannot use the WhatsApp app and does
@@ -32,7 +32,7 @@ function textOf(p: Record<string, unknown> | null): string {
 }
 
 export default async function AdminWhatsAppPage(props: {
-  searchParams: Promise<{ sent?: string; saved?: string; answered?: string; left?: string; limit?: string; photo?: string; photoerr?: string }>;
+  searchParams: Promise<{ sent?: string; saved?: string; answered?: string; left?: string; limit?: string; photo?: string; photoerr?: string; tpl?: string; tplerr?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
@@ -135,12 +135,38 @@ export default async function AdminWhatsAppPage(props: {
         </div>
       )}
 
+      {searchParams.tpl && (
+        <div className="notice ok" style={{ marginTop: 14 }}>✅ {searchParams.tpl}</div>
+      )}
+      {searchParams.tplerr && (
+        <div className="notice err" style={{ marginTop: 14 }}>❌ {searchParams.tplerr}</div>
+      )}
+
       {searchParams.photo && (
         <div className="notice ok" style={{ marginTop: 14 }}>✅ {searchParams.photo}</div>
       )}
       {searchParams.photoerr && (
         <div className="notice err" style={{ marginTop: 14 }}>❌ {searchParams.photoerr}</div>
       )}
+
+      {/* A MESSAGE THAT LOOKS LIKE A BUSINESS SENT IT.
+          He saw a publisher's WhatsApp with a banner, bold text and a button and
+          asked why our students only get a phone number. Nothing was stopping
+          us — all three of our templates are plain text because no one had built
+          one with a header or a button. This is the message students most want,
+          which is also why it is UTILITY and not subject to marketing limits. */}
+      <form action={createCheckedCopyTemplate} className="card" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <strong>🖼️ Build the &ldquo;your copy is checked&rdquo; message</strong>
+          <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0", lineHeight: 1.65 }}>
+            A banner across the top, the paper and marks in bold, and a button that opens their checked copy —
+            the same shape as the message you were shown. Sent for a real event, not a sale, so it is a UTILITY
+            template: no marketing limits and no opt-in needed. Meta usually approves within the hour, and nothing
+            reaches a student until you send it.
+          </p>
+        </div>
+        <SubmitButton className="btn small">Create the template</SubmitButton>
+      </form>
 
       {/* WHY A STUDENT SEES A BARE NUMBER.
           The profile has the about line, the description, the address, the

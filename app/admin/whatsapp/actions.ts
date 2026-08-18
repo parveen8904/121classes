@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { assertArea } from "@/lib/adminAccess";
+import { assertArea, requireArea } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendWhatsAppText } from "@/lib/notify";
 import { str } from "../_lib/util";
@@ -269,4 +269,105 @@ export async function setWhatsAppProfilePhoto(): Promise<void> {
 
   revalidatePath("/admin/whatsapp");
   redirect(`/admin/whatsapp?photo=${encodeURIComponent("Photo set. It shows on the profile students see when they tap the number.")}`);
+}
+
+// THE FIRST RICH TEMPLATE — a banner, bold text, and a button.
+//
+// He saw a publisher's WhatsApp message with a picture across the top, bold
+// headings and a "Checkout Here" button, and asked why our students only ever
+// see a phone number. Nothing was stopping us: all three of our templates are
+// plain text because nobody had ever built one with a header or a button.
+//
+// This one is deliberately NOT a sale. His own standing rule is that campaigns
+// run on a passive rhythm with no sales voice anywhere, so the format is copied
+// and the tone is not. It carries the message students most want — your paper is
+// marked — which is also why it qualifies as UTILITY rather than MARKETING, and
+// so is not subject to marketing limits or opt-in.
+//
+// Creating an image header needs an uploaded EXAMPLE, which is the same
+// three-step resumable upload Meta uses for a profile photo: open a session
+// against the app, send the bytes with an "OAuth" authorization header (not
+// "Bearer" — that endpoint rejects it), then quote the returned handle.
+export async function createCheckedCopyTemplate(): Promise<void> {
+  if (!(await requireArea("students"))) redirect(`/admin/whatsapp?tplerr=${encodeURIComponent("Not allowed.")}`);
+
+  const { getSecret } = await import("@/lib/secrets");
+  const token = (await getSecret("WHATSAPP_CLOUD_TOKEN")).trim();
+  const waba = (await getSecret("WHATSAPP_WABA_ID")).trim();
+  if (!token || !waba) redirect(`/admin/whatsapp?tplerr=${encodeURIComponent("WhatsApp is not configured.")}`);
+
+  // 1,702 x 630 — close to the 1.91:1 WhatsApp renders a header at, so it is not
+  // cropped to nonsense.
+  const { readFile } = await import("node:fs/promises");
+  const path = await import("node:path");
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(path.join(process.cwd(), "public", "hero-banner.png"));
+  } catch {
+    redirect(`/admin/whatsapp?tplerr=${encodeURIComponent("Could not read public/hero-banner.png.")}`);
+  }
+
+  const appId = "1046220921739398";
+  const start = await fetch(
+    `https://graph.facebook.com/v21.0/${appId}/uploads?file_length=${bytes!.length}&file_type=image/png&access_token=${encodeURIComponent(token)}`,
+    { method: "POST" },
+  );
+  const startBody = (await start.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
+  console.log("[wa-template] step 1:", start.status, JSON.stringify(startBody).slice(0, 200));
+  if (!startBody.id) {
+    redirect(`/admin/whatsapp?tplerr=${encodeURIComponent(`Step 1 (upload session) failed — ${startBody.error?.message ?? start.status}`)}`);
+  }
+
+  const put = await fetch(`https://graph.facebook.com/v21.0/${startBody.id}`, {
+    method: "POST",
+    headers: { Authorization: `OAuth ${token}`, file_offset: "0", "Content-Type": "application/octet-stream" },
+    body: new Uint8Array(bytes!),
+  });
+  const putText = await put.text().catch(() => "");
+  let handle = "";
+  try { handle = (JSON.parse(putText) as { h?: string }).h ?? ""; } catch { /* reported below */ }
+  console.log("[wa-template] step 2:", put.status, putText.slice(0, 200));
+  if (!handle) {
+    redirect(`/admin/whatsapp?tplerr=${encodeURIComponent(`Step 2 (sending the banner) failed — HTTP ${put.status}: ${putText.slice(0, 140)}`)}`);
+  }
+
+  const body = {
+    name: "checked_copy_ready",
+    category: "UTILITY",
+    language: "en_US",
+    components: [
+      { type: "HEADER", format: "IMAGE", example: { header_handle: [handle] } },
+      {
+        type: "BODY",
+        text:
+          "Hello {{1}}, your answer book has been checked.\n\n" +
+          "*Paper:* {{2}}\n" +
+          "*Marks:* {{3}} out of {{4}}\n\n" +
+          "The marking is written in the margin of your own pages, the way Sir marks a paper, " +
+          "with the concepts to go back over listed at the end.",
+        example: { body_text: [["Manvi", "Mock Test Paper 1", "72", "100"]] },
+      },
+      { type: "FOOTER", text: "CA Parveen Sharma Classes" },
+      {
+        type: "BUTTONS",
+        buttons: [{ type: "URL", text: "See my checked copy", url: "https://caparveensharma.com/check-my-paper" }],
+      },
+    ],
+  };
+
+  const res = await fetch(`https://graph.facebook.com/v21.0/${waba}/message_templates`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text().catch(() => "");
+  console.log("[wa-template] create:", res.status, text.slice(0, 300));
+  let parsed: { id?: string; status?: string; error?: { message?: string } } = {};
+  try { parsed = JSON.parse(text) as typeof parsed; } catch { /* reported below */ }
+  if (!res.ok || parsed.error) {
+    redirect(`/admin/whatsapp?tplerr=${encodeURIComponent(`Meta refused the template — ${parsed.error?.message ?? text.slice(0, 160)}`)}`);
+  }
+
+  revalidatePath("/admin/whatsapp");
+  redirect(`/admin/whatsapp?tpl=${encodeURIComponent(`Template submitted (${parsed.status ?? "PENDING"}). Approval is usually within the hour.`)}`);
 }

@@ -171,6 +171,50 @@ export async function decideComplaint(formData: FormData) {
   redirect(`/admin/supporters?complaint=${verdict}`);
 }
 
+/**
+ * Vouch for a vendor's website yourself, without waiting for the code.
+ *
+ * Publishing a token is proof, and proof is better. But it is also a vendor
+ * being asked to edit a footer before they may sell anything, and for a vendor
+ * the office has known for years that is a queue for no reason — so a person
+ * can simply say "this is their site" and let them trade.
+ *
+ * Recorded as `admin` rather than `code`, because it is a DIFFERENT CLAIM: one
+ * says the site answered with our token, the other says somebody vouched for
+ * it. The nightly reader treats them differently on purpose — it will not take
+ * ₹5,000 off anybody over a page we were only told belongs to them.
+ */
+export async function clearSupporterSiteByHand(formData: FormData) {
+  await assertArea("store");
+  const id = str(formData.get("id"));
+  if (!id) return;
+
+  const svc = createServiceClient();
+  const { data: s } = await svc
+    .from("profiles").select("supporter_site").eq("id", id).maybeSingle();
+  const site = String(s?.supporter_site ?? "").trim();
+  if (!site) redirect("/admin/supporters?err=Add their website first — there is nothing to vouch for");
+
+  const { data: { user } } = await createClient().auth.getUser();
+
+  await svc.from("profiles").update({
+    supporter_site_ok_at: new Date().toISOString(),
+    supporter_site_proof: "admin",
+    supporter_site_ok_by: user?.id ?? null,
+  }).eq("id", id);
+
+  // The site checks are the record of how each vendor came to be trusted, so
+  // this belongs in the same place as every automatic reading.
+  const { recordCheck } = await import("@/lib/supporterSite");
+  await recordCheck(id, site, {
+    ok: true,
+    detail: "Cleared by the office without the code — vouched for by a person, not proved by the site.",
+  });
+
+  revalidatePath("/admin/supporters");
+  redirect("/admin/supporters?vouched=1");
+}
+
 /** Read one supporter's site again, now, rather than waiting for tonight. */
 export async function recheckSupporterSite(formData: FormData) {
   await assertArea("store");

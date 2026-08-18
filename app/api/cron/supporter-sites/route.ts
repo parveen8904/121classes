@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
   // rather than the same twenty-five being read for ever.
   const { data: sellers } = await svc
     .from("profiles")
-    .select("id, full_name, business_name, supporter_site, supporter_site_ok_at")
+    .select("id, full_name, business_name, supporter_site, supporter_site_ok_at, supporter_site_proof")
     .eq("is_supporter", true)
     .not("supporter_site", "is", null)
     .is("supporter_blocked_at", null)
@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
   const list = (sellers ?? []) as {
     id: string; full_name: string | null; business_name: string | null;
     supporter_site: string; supporter_site_ok_at: string | null;
+    supporter_site_proof: string | null;
   }[];
   if (!list.length) return NextResponse.json({ ok: true, checked: 0 });
 
@@ -82,13 +83,27 @@ export async function GET(req: NextRequest) {
     await recordCheck(seller.id, seller.supporter_site, r);
     if (!isHoldable(r)) continue;
 
-    const outcome = await autoHoldForBreach(seller.id, seller.supporter_site, r);
+    // A PENALTY NEEDS THE SITE TO BE PROVED, NOT MERELY DECLARED.
+    //
+    // Where the vendor published our token, the address is theirs beyond
+    // argument and what is on it is their doing. Where the office simply
+    // vouched for the address, nobody has confirmed the two belong together —
+    // and taking ₹5,000 off somebody for a page that might not even be theirs
+    // is not a mistake that can be undone with an apology. Those are reported
+    // for a person to read instead.
+    const proved = seller.supporter_site_proof === "code";
+    const outcome = proved
+      ? await autoHoldForBreach(seller.id, seller.supporter_site, r)
+      : { held: false, already: false };
     if (outcome.held) heldCount++;
     const who = seller.business_name || seller.full_name || seller.id;
     found.push(
       `${who}\n  ${seller.supporter_site}\n  ${r.problem}: ${r.detail}` +
       (r.evidence ? `\n  On the page: “${r.evidence}”` : "") +
-      `\n  → ${outcome.held ? `ON HOLD, penalty Rs.${PENALTY_INR}` : outcome.already ? "already on hold" : "not held"}`,
+      `\n  → ${outcome.held ? `ON HOLD, penalty Rs.${PENALTY_INR}`
+             : outcome.already ? "already on hold"
+             : proved ? "not held"
+             : "NOT HELD — this site was vouched for, never proved by the code. Read it yourself."}`,
     );
   }
 

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireArea } from "@/lib/adminAccess";
 import SubmitButton from "@/app/components/SubmitButton";
-import { holdSupporter, releaseSupporter, decideComplaint, recheckSupporterSite } from "./actions";
+import { holdSupporter, releaseSupporter, decideComplaint, recheckSupporterSite, clearSupporterSiteByHand } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Supporter compliance — Admin" };
@@ -58,7 +58,7 @@ export default async function AdminSupporters(props: {
       .select("id, ref, raised_by, against_url, against_id, what_happened, evidence_url, status, reviewed_at, outcome_note, created_at")
       .order("created_at", { ascending: false }).limit(200),
     svc.from("profiles")
-      .select("id, full_name, business_name, designation, email, phone, supporter_site, supporter_site_ok_at, supporter_blocked_at, supporter_block_reason, supporter_hold_auto, supporter_hold_evidence")
+      .select("id, full_name, business_name, designation, email, phone, supporter_site, supporter_site_ok_at, supporter_site_proof, supporter_blocked_at, supporter_block_reason, supporter_hold_auto, supporter_hold_evidence")
       .eq("is_supporter", true).limit(1000),
     svc.from("supporter_site_checks")
       .select("id, supporter_id, url, checked_at, ok, problem, detail, evidence")
@@ -320,7 +320,17 @@ export default async function AdminSupporters(props: {
                         ? <a href={s(x.supporter_site)} target="_blank" rel="noopener noreferrer">{s(x.supporter_site)}</a>
                         : <span className="muted">none on file</span>}
                     </td>
-                    <td style={TD}>{x.supporter_site_ok_at ? "✓" : <span className="muted">no</span>}</td>
+                    {/* HOW they came to be verified, not merely whether. A site
+                        the office vouched for is trusted; a site that answered
+                        with our code is proved, and only that one can cost the
+                        vendor a penalty on what the nightly read finds. */}
+                    <td style={TD}>
+                      {x.supporter_site_ok_at
+                        ? s(x.supporter_site_proof) === "admin"
+                          ? <>✓ <span className="muted" style={{ fontSize: ".8rem" }}>vouched</span></>
+                          : <>✓ <span className="muted" style={{ fontSize: ".8rem" }}>code</span></>
+                        : <span className="muted">no</span>}
+                    </td>
                     <td style={{ ...TD, fontSize: ".82rem" }}>
                       {last
                         ? <>{when(last.checked_at)}<br /><span className="muted">{last.ok ? "clean" : (PROBLEM_LABEL[s(last.problem)] ?? s(last.problem))}</span></>
@@ -328,10 +338,21 @@ export default async function AdminSupporters(props: {
                     </td>
                     <td style={TD}>
                       {x.supporter_site ? (
-                        <form action={recheckSupporterSite}>
-                          <input type="hidden" name="id" value={s(x.id)} />
-                          <SubmitButton className="btn small secondary" savedLabel="done">Read now</SubmitButton>
-                        </form>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          <form action={recheckSupporterSite}>
+                            <input type="hidden" name="id" value={s(x.id)} />
+                            <SubmitButton className="btn small secondary" savedLabel="done">Read now</SubmitButton>
+                          </form>
+                          {/* For the vendor you know perfectly well, who should
+                              not be kept from selling while somebody at their
+                              end works out how to edit a footer. */}
+                          {!x.supporter_site_ok_at && (
+                            <form action={clearSupporterSiteByHand}>
+                              <input type="hidden" name="id" value={s(x.id)} />
+                              <SubmitButton className="btn small" savedLabel="cleared">This is their site</SubmitButton>
+                            </form>
+                          )}
+                        </div>
                       ) : null}
                     </td>
                   </tr>

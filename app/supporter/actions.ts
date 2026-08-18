@@ -154,8 +154,14 @@ export async function verifySupporterSite() {
     redirect(`/supporter/profile?err=${encodeURIComponent(r.detail ?? "Could not verify the site")}`);
   }
 
+  // Proved by the site itself, not vouched for by anybody — which is what
+  // lets the nightly reader act on what it finds there.
   await svc.from("profiles")
-    .update({ supporter_site_ok_at: new Date().toISOString() })
+    .update({
+      supporter_site_ok_at: new Date().toISOString(),
+      supporter_site_proof: "code",
+      supporter_site_ok_by: null,
+    })
     .eq("id", supporterId);
   revalidatePath("/supporter/profile");
   redirect("/supporter/profile?verified=1");

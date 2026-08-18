@@ -43,6 +43,15 @@ export type SiteResult = {
 
 const MAX_DISCOUNT = 5;
 
+/**
+ * The only thing on a reseller's page that identifies OUR course.
+ *
+ * Not the subject: "Advanced Accounting" and "Financial Reporting" are taught
+ * by every faculty going, and treating those words as ours is what turned
+ * other teachers' offers into fines.
+ */
+const OUR_NAME = /parveen\s*sharma/i;
+
 /** Fetch a page as text, politely and with a limit. */
 async function readPage(url: string): Promise<string | null> {
   try {
@@ -277,18 +286,33 @@ async function inspectOnePage(url: string): Promise<SiteResult> {
   const text = await readPage(url);
   if (text === null) return { ok: false, problem: "unreachable", detail: `${url} did not answer.` };
 
-  // ── Discount, read arithmetically ────────────────────────────────────────
+  // ── Discount, read arithmetically, and only where it is OURS ─────────────
+  //
+  // This used to hold an account for any "N% off" anywhere on the page. A
+  // reseller's store lists thirty courses by a dozen teachers, so there is
+  // always some discount on it — and on 15 August three vendors were fined
+  // ₹5,000 each for other people's offers. One was held for "CA Inter Audit
+  // Regular By CA Rishabh Jain 10% off"; another for a DT/IDT combo by CA
+  // Aarish Khan; the third was Aldine, the founder's own company.
+  //
+  // The agreement is about OUR price, so the discount must be near OUR course
+  // — and the only thing that identifies it is HIS NAME. A subject line will
+  // not do it: every faculty in the country sells "Advanced Accounting", and
+  // one of those three pages said "Advanced Accounts by CA Anand Bhangariya"
+  // a few words from the offer that got its vendor fined.
+  const NEAR = 600;
   for (const m of text.matchAll(/(\d{1,2})\s*%\s*(off|discount|less|छूट)/gi)) {
     const pct = Number(m[1]);
-    if (pct > MAX_DISCOUNT) {
-      const at = m.index ?? 0;
-      return {
-        ok: false,
-        problem: "discount",
-        detail: `${pct}% off is more than the ${MAX_DISCOUNT}% allowed.`,
-        evidence: text.slice(Math.max(0, at - 120), at + 120).trim(),
-      };
-    }
+    if (pct <= MAX_DISCOUNT) continue;
+    const at = m.index ?? 0;
+    const around = text.slice(Math.max(0, at - NEAR), at + NEAR);
+    if (!OUR_NAME.test(around)) continue;   // somebody else's offer is not ours to police
+    return {
+      ok: false,
+      problem: "discount",
+      detail: `${pct}% off is more than the ${MAX_DISCOUNT}% allowed.`,
+      evidence: text.slice(Math.max(0, at - 120), at + 120).trim(),
+    };
   }
 
   // ── Bundled with another faculty ─────────────────────────────────────────

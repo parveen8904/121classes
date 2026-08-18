@@ -202,24 +202,36 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // WHAT THIS COSTS WHEN IT RUNS ON THE WRONG THING.
+  // RUN ONLY WHERE A SESSION CHANGES THE ANSWER.
   //
-  // This middleware asks Supabase to verify the session — a network hop to
-  // Mumbai, with a four-second timeout — on every request it matches. The old
-  // list excluded eight image extensions and nothing else, so it also ran on:
+  // The previous matcher took every page and excluded only files. That was a
+  // big improvement on what came before it — nineteen thousand session checks a
+  // day were going on a manifest and some photographs — but it left the
+  // middleware running on every PUBLIC page too, and that had a second cost
+  // nobody had measured.
   //
-  //   /manifest.webmanifest   10,690 requests a day
-  //   /media/*.jfif            ~8,000 requests a day across a handful of files
+  // A route this middleware matches is served by the function, not from the
+  // edge cache. So the homepage — which builds as static with a five-minute
+  // revalidate and exists precisely so most visitors never touch the database —
+  // reported "x-vercel-cache: MISS" on every single request, and was rebuilt for
+  // each of roughly 2,800 visitors a week. Measured at ~0.7s to first byte for a
+  // page that should come back in milliseconds. Skipping the auth call for
+  // signed-out visitors was not enough; the page has to stop being matched.
   //
-  // Nineteen thousand session checks a day, none of which could ever change
-  // what was served: a manifest and a photograph do not have a logged-in
-  // version. That is the largest avoidable line on the bill, and it is not the
-  // crons — those are barely two per cent of traffic.
+  // What is left is exactly what the code above acts on, and nothing else:
+  //   /dashboard, /admin, /learn, /live — guarded; signed-out users redirected
+  //   /login                            — signed-in users bounced onward
   //
-  // So: everything that is a file rather than a page is excluded, by extension,
-  // along with the media folder itself. A page has no extension, which is what
-  // makes this safe — no route the portal actually guards can match it.
+  // Everything else was already falling through to `return response` untouched,
+  // so no behaviour changes. Public pages carry no per-user content — the root
+  // layout deliberately reads no cookies, which is what makes them cacheable —
+  // and every guarded page re-verifies the user server-side regardless, so this
+  // is not the only lock on the door.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|media/|.*\\.(?:html|css|js|mjs|json|txt|xml|webmanifest|map|png|jpg|jpeg|jfif|svg|gif|webp|avif|ico|bmp|mp3|mp4|webm|ogg|wav|pdf|zip|woff|woff2|ttf|otf|eot)).*)",
+    "/dashboard/:path*",
+    "/admin/:path*",
+    "/learn/:path*",
+    "/live/:path*",
+    "/login",
   ],
 };

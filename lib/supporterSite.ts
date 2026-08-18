@@ -66,18 +66,120 @@ async function readPage(url: string): Promise<string | null> {
   }
 }
 
+// LOOKING FOR THE TOKEN IN THE PAGE AS IT WAS SENT, NOT AS IT READS.
+//
+// This used to search the same stripped-down text the compliance check reads —
+// scripts removed, then every tag removed. Two vendors published their code
+// exactly as the screen told them to and were refused for a week: one put it in
+// an HTML comment ("or an HTML comment", says our own instruction — and
+// `<!-- … -->` is removed by the tag stripper), the other's shop keeps its
+// footer inside the page's data payload, which the script stripper removed.
+// Sixty-two presses of Check between them, every one a lie.
+//
+// A token is not prose. It is seventeen characters nobody could guess, so
+// finding it ANYWHERE in what the site sent — comment, meta tag, footer,
+// payload — is the proof. The stripping stays where it belongs: on the
+// compliance reader below, which is about what a student can actually read.
+
+/** The page exactly as sent. No stripping: a token may live in any of it. */
+async function fetchRaw(url: string, bustCache = false): Promise<string | null> {
+  try {
+    const u = new URL(url);
+    // A code published two minutes ago is often still invisible behind a CDN
+    // serving this morning's copy — which is what happened to dreamca.co.in.
+    if (bustCache) u.searchParams.set("_cps", String(Date.now()));
+    const res = await fetch(u.toString(), {
+      redirect: "follow",
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+      headers: {
+        "user-agent": "caparveensharma-partner-check",
+        "cache-control": "no-cache",
+        pragma: "no-cache",
+      },
+    });
+    if (!res.ok) return null;
+    return (await res.text()).slice(0, 500_000);
+  } catch {
+    return null;
+  }
+}
+
+/** Letters and digits only — how the token survives markup and stray dashes. */
+const compact = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+/**
+ * Is our token in what the site sent?
+ *
+ * Forgiving on purpose, because every way a real CMS mangles a pasted code is
+ * still somebody having published it: escaped inside a data payload, wrapped in
+ * markup mid-word, its hyphen turned into a dash by smart typography, an
+ * invisible character carried in from a copy-paste, or simply capitalised.
+ */
+function carriesToken(html: string, token: string): boolean {
+  const decoded = html
+    .replace(/\\u003c/gi, "<")
+    .replace(/\\u003e/gi, ">")
+    .replace(/\\\//g, "/")
+    .replace(/\\"/g, '"')
+    .replace(/&amp;/gi, "&")
+    .replace(/&#(\d{1,6});/g, (_, d) => String.fromCharCode(Number(d)))
+    .replace(/[\u200b-\u200d\u2060\ufeff]/g, "");   // zero-width junk from a copy-paste
+  const both = `${html} ${decoded}`;
+
+  // The page is searched BOTH as sent and with its tags taken out — as sent, so
+  // a code in a comment or a meta tag counts; tags out, so a code an editor has
+  // split down the middle (`<span>cps-</span><b>…</b>`) reads as one piece
+  // again. Neither copy replaces the other; a token found in either is proof.
+  const hay = `${both} ${both.replace(/<[^>]*>/g, "")}`.toLowerCase();
+  if (hay.includes(token.toLowerCase())) return true;
+  return compact(hay).includes(compact(token));
+}
+
+/** www or not, page or root — the same site by any of its ordinary spellings. */
+function urlVariants(url: string): string[] {
+  const out = [url];
+  try {
+    const u = new URL(url);
+    out.push(`${u.origin}/`);
+    const swapped = u.hostname.startsWith("www.") ? u.hostname.slice(4) : `www.${u.hostname}`;
+    out.push(`${u.protocol}//${swapped}/`);
+  } catch { /* the fetch below reports a malformed address */ }
+  return [...new Set(out)];
+}
+
 /** Does the declared site carry our token? */
 export async function verifyOwnership(url: string, token: string): Promise<SiteResult> {
-  const text = await readPage(url);
-  if (text === null) return { ok: false, problem: "unreachable", detail: `${url} did not answer.` };
-  if (!text.includes(token)) {
-    return {
-      ok: false,
-      problem: "ownership",
-      detail: `The verification code ${token} was not found on ${url}.`,
-    };
+  let reached = false;
+
+  const carries = async (target: string, bustCache: boolean) => {
+    const html = await fetchRaw(target, bustCache);
+    if (html === null) return false;
+    reached = true;
+    return carriesToken(html, token);
+  };
+
+  // The address they gave, and the ordinary variants of it.
+  for (const target of urlVariants(url)) if (await carries(target, false)) return { ok: true };
+
+  // Again, past their cache, for the vendor who published it a minute ago.
+  for (const target of urlVariants(url)) if (await carries(target, true)) return { ok: true };
+
+  // We ask for it "anywhere on the site", so honour that: a few more pages.
+  if (reached) {
+    for (const target of (await pagesToRead(url)).slice(1, 6)) {
+      if (await carries(target, false)) return { ok: true };
+    }
   }
-  return { ok: true };
+
+  if (!reached) return { ok: false, problem: "unreachable", detail: `${url} did not answer.` };
+  return {
+    ok: false,
+    problem: "ownership",
+    detail:
+      `The verification code ${token} was not found on ${url}. ` +
+      `If you have just published it, give the site a minute to refresh and press Check again.`,
+  };
 }
 
 /** The pages worth reading on a coaching shop, in the order worth reading them. */

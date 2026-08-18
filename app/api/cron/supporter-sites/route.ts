@@ -48,6 +48,10 @@ export async function GET(req: NextRequest) {
     .eq("is_supporter", true)
     .not("supporter_site", "is", null)
     .is("supporter_blocked_at", null)
+    // The founder's own businesses are not resellers. Aldine was held, fined
+    // and emailed an accusation on 15 August for selling his own courses in
+    // his own combos, on his own site.
+    .eq("supporter_compliance_exempt", false)
     .limit(400);
 
   const list = (sellers ?? []) as {

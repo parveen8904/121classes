@@ -51,24 +51,69 @@ export async function getRepositoryContext(
   const svc = createServiceClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  // --- Source 1: repository_items ---
-  // Scoped at the QUERY level: this runs on every AI doubt, and fetching the
-  // whole site's content to keep 40k chars was starving the database.
-  let itemsQ = svc
-    .from("repository_items")
-    .select("title, content, subject_id, topic_id, valid_from, valid_to")
-    .eq("is_active", true)
-    .not("content", "is", null)
-    .order("created_at", { ascending: false });
-  if (subjectId) itemsQ = itemsQ.or(`subject_id.eq.${subjectId},subject_id.is.null`);
-  const { data: items } = await itemsQ;
+  // --- Source 1: his written material, THROUGH THE INDEX ---
+  //
+  // This used to fetch every active repository item's full CONTENT — his books
+  // among them, one of which is 1.6 million characters — on every single student
+  // doubt, then score whole documents by counting words and slice the winner at
+  // the character budget. Two things were wrong with that. It shipped megabytes
+  // out of the database to answer one question. And because a book scored as ONE
+  // thing, what got handed to the model was the book's FIRST 12,000 characters:
+  // its opening pages, whatever the question.
+  //
+  // That is why a room of Final students was told the IFRS answer on FCCBs while
+  // the Ind AS carve-out sat at character 46,201 of a file we owned.
+  //
+  // Now the material is cut into passages once, indexed with Postgres full-text
+  // search, and a question is a LOOKUP: level first (an Inter student is never
+  // answered out of a Final book), then the topic if we know it, then the
+  // passages that actually discuss what was asked.
+  const itemChunksFromIndex: { subject_id: string | null; topic_id: string | null; text: string }[] = [];
+  let usedIndex = false;
+  if (opts.query && opts.query.trim().length > 2) {
+    // Enough passages to fill the budget with a little to spare, since the
+    // ranking decides which survive the character cut below.
+    const want = Math.min(40, Math.max(6, Math.ceil(maxChars / 2000) + 3));
+    const { data: hits, error } = await svc.rpc("search_repository", {
+      p_query: opts.query,
+      p_subject: subjectId ?? null,
+      p_limit: want,
+      p_topic: opts.topicId ?? null,
+    });
+    if (!error && hits) {
+      for (const h of hits as { title: string; body: string; topic_id: string | null }[]) {
+        itemChunksFromIndex.push({
+          subject_id: subjectId ?? null,
+          topic_id: h.topic_id ?? null,
+          text: `### ${h.title}\n${h.body}`,
+        });
+      }
+      usedIndex = true;
+    }
+  }
 
-  const itemRows = (items ?? []).filter((r) => {
-    if (!r.content || r.content === "__unreadable__") return false;
-    if (r.valid_from && r.valid_from > today) return false;
-    if (r.valid_to && r.valid_to < today) return false;
-    return true;
-  });
+  // Fallback for the rare call with no question to search on (a general context
+  // build). Titles only — never the full content of every book again.
+  let itemRows: { title: string; content: string; subject_id: string | null; topic_id?: string | null }[] = [];
+  if (!usedIndex) {
+    let itemsQ = svc
+      .from("repository_items")
+      .select("title, content, subject_id, topic_id, valid_from, valid_to")
+      .eq("is_active", true)
+      .not("content", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(40);
+    if (subjectId) itemsQ = itemsQ.or(`subject_id.eq.${subjectId},subject_id.is.null`);
+    const { data: items } = await itemsQ;
+    itemRows = ((items ?? []) as typeof itemRows & { valid_from?: string; valid_to?: string }[]).filter((r) => {
+      if (!r.content || r.content === "__unreadable__") return false;
+      const vf = (r as { valid_from?: string }).valid_from;
+      const vt = (r as { valid_to?: string }).valid_to;
+      if (vf && vf > today) return false;
+      if (vt && vt < today) return false;
+      return true;
+    });
+  }
 
   // --- Source 2: structured topics + their classes ---
   // Topics are scoped to the subject (or focus topic) in the DB; the per-class
@@ -128,30 +173,14 @@ export async function getRepositoryContext(
   type Chunk = { subject_id: string | null; topic_id: string | null; text: string };
   const chunks: Chunk[] = [];
 
-  // A BOOK IS NOT ONE CHUNK, AND THAT IS WHY HIS MATERIAL WENT UNREAD.
-  //
-  // Every repository item used to enter the pool whole. His Financial Reporting
-  // book is 1.6 MILLION characters; the AI's budget for a group doubt is 12,000.
-  // So when that book ranked first, the loop at the bottom of this function
-  // sliced its FIRST 12,000 characters — the opening pages — and that was the
-  // "material" the model saw. Anything deeper never travelled.
-  //
-  // On 18 August a student asked whether an FCCB is a derivative. The Ind AS 32
-  // carve-out is in these books, in six different items. None of it reached the
-  // model, which answered from its own IFRS knowledge and got it wrong in front
-  // of a room of Final students.
-  //
-  // Ranking only works on pieces small enough to be kept. So a long item is cut
-  // into passages and each passage is ranked on its own; the paragraph about
-  // FCCBs now competes as itself instead of being buried inside a book whose
-  // first page is about something else.
-  //
-  // Overlapping windows, because a rule split across a boundary would otherwise
-  // be found in neither half.
-  for (const r of itemRows) {
-    const topicId = (r as { topic_id?: string | null }).topic_id ?? null;
-    for (const piece of passages(String(r.content))) {
-      chunks.push({ subject_id: r.subject_id, topic_id: topicId, text: `### ${r.title}\n${piece}` });
+  // The written material, already narrowed by the index above.
+  if (usedIndex) {
+    chunks.push(...itemChunksFromIndex);
+  } else {
+    for (const r of itemRows) {
+      for (const piece of passages(String(r.content))) {
+        chunks.push({ subject_id: r.subject_id, topic_id: r.topic_id ?? null, text: `### ${r.title}\n${piece}` });
+      }
     }
   }
 

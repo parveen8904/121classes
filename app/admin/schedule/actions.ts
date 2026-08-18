@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { str } from "../_lib/util";
@@ -112,4 +113,41 @@ export async function markDone(formData: FormData) {
   const id = str(formData.get("id"));
   await createServiceClient().from("class_schedule").update({ status: "done" }).eq("id", id);
   revalidatePath("/admin/schedule");
+}
+
+// ONE LINK, THE WHOLE BATCH.
+//
+// The join link could only ever be set while GENERATING a schedule. The 22
+// Financial Instruments classes were created without one, and the only way to
+// add it was to delete all 22 and build them again — so they simply stayed
+// empty, and every one of them would have sent a student to a door that does
+// not open.
+//
+// A live batch almost always runs on ONE recurring Zoom link, so pasting it once
+// and applying it to every upcoming class is the shape that matches reality.
+// Classes already marked done are left alone: their link is history.
+export async function setJoinLinkForBatch(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const subjectId = str(formData.get("subject_id"));
+  const url = str(formData.get("join_url")).trim();
+  if (!subjectId) return;
+
+  // Empty is allowed — it clears a wrong link. Anything else must look like a
+  // link, because a half-pasted "zoom.us/j/123" is the kind of thing that is
+  // only discovered by a student at 6:30 on the evening of the class.
+  if (url && !/^https?:\/\/\S+$/i.test(url)) {
+    redirect("/admin/schedule?linkerr=" + encodeURIComponent("That does not look like a full link — it should start with https://"));
+  }
+
+  const svc = createServiceClient();
+  const { data: updated } = await svc
+    .from("class_schedule")
+    .update({ join_url: url || null })
+    .eq("subject_id", subjectId)
+    .eq("status", "scheduled")
+    .gte("scheduled_at", new Date().toISOString())
+    .select("id");
+
+  revalidatePath("/admin/schedule");
+  redirect("/admin/schedule?linkset=" + encodeURIComponent(String((updated ?? []).length)));
 }

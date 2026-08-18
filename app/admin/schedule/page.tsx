@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import DeleteButton from "../_components/DeleteButton";
-import { generateSchedule, deleteScheduled, clearUpcoming, markDone } from "./actions";
+import { generateSchedule, deleteScheduled, clearUpcoming, markDone, setJoinLinkForBatch } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Class schedule — Admin" };
@@ -23,6 +23,12 @@ export default async function SchedulePage() {
   const ist = (iso: string) => formatDateTime(iso);
   const istDate = (iso: string) => formatDate(iso);
   const todayIST = formatDate(new Date());
+
+  // How many upcoming classes still have no join link — the thing that makes a
+  // punctual reminder useless.
+  const missingLinks = (upcoming ?? []).filter(
+    (r) => r.status !== "done" && !String((r as { join_url?: string }).join_url ?? "").trim(),
+  ).length;
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 900 }}>
@@ -92,6 +98,37 @@ export default async function SchedulePage() {
           <SubmitButton className="btn small secondary">🗑 Clear all upcoming</SubmitButton>
         </form>
       </div>
+      {/* THE LINK COULD ONLY BE SET WHILE GENERATING THE SCHEDULE.
+          So the 22 Financial Instruments classes were created without one and
+          there was no way to add it short of deleting and rebuilding all 22.
+          Every one of them would have sent a student to a door that does not
+          open. A live batch runs on one recurring Zoom link, so it is pasted
+          once here and applied to every upcoming class in the subject. */}
+      <div className="card" style={{ marginBottom: 12, border: missingLinks > 0 ? "2px solid #b45309" : undefined }}>
+        <strong>🔗 Zoom link for the batch</strong>
+        {missingLinks > 0 && (
+          <p className="notice err" style={{ fontSize: ".86rem", margin: "6px 0 0" }}>
+            ⚠️ {missingLinks} upcoming class{missingLinks === 1 ? " has" : "es have"} no join link. Students will be
+            reminded on time and have nowhere to go.
+          </p>
+        )}
+        <form action={setJoinLinkForBatch} style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <select name="subject_id" defaultValue={(upcoming ?? [])[0]?.subject_id as string ?? ""} style={{ marginBottom: 0, maxWidth: 260 }}>
+            {[...subjTitle.entries()].map(([id, title]) => <option key={id} value={id}>{title}</option>)}
+          </select>
+          <input
+            name="join_url"
+            placeholder="https://us02web.zoom.us/j/…"
+            style={{ marginBottom: 0, flex: 1, minWidth: 240 }}
+          />
+          <SubmitButton className="btn small">Apply to all upcoming classes</SubmitButton>
+        </form>
+        <p className="muted" style={{ fontSize: ".78rem", margin: "6px 0 0" }}>
+          Sets the same link on every upcoming class of that subject. Classes already marked played are left alone.
+          Leave the box empty and press it to clear a wrong link.
+        </p>
+      </div>
+
       <div style={{ display: "grid", gap: 6 }}>
         {(upcoming ?? []).length === 0 && <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing scheduled yet.</p></div>}
         {(upcoming ?? []).map((r) => {

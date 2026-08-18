@@ -251,11 +251,27 @@ export async function sendWhatsApp(
   phone: string,
   templateName: string,
   bodyValues: string[],
-  opts?: { lang?: string; buttonSubType?: "url" | "quick_reply" | "copy_code"; buttonIndex?: string; buttonParam?: string },
+  opts?: {
+    lang?: string;
+    buttonSubType?: "url" | "quick_reply" | "copy_code";
+    buttonIndex?: string;
+    buttonParam?: string;
+    /**
+     * A template whose header is an IMAGE must be given that image on EVERY
+     * send — the picture uploaded when the template was created is only an
+     * example for Meta's reviewer, not the picture students receive. Leaving
+     * this out is rejected with "header component missing", which reads like the
+     * template is broken when it is only unfed.
+     */
+    headerImageUrl?: string;
+  },
 ): Promise<boolean> {
   const to = waNumber(phone);
   if (to.length < 11 || !templateName) return false;
   const components: Record<string, unknown>[] = [];
+  if (opts?.headerImageUrl) {
+    components.push({ type: "header", parameters: [{ type: "image", image: { link: opts.headerImageUrl } }] });
+  }
   if (bodyValues.length) {
     components.push({ type: "body", parameters: bodyValues.map((t) => ({ type: "text", text: t })) });
   }

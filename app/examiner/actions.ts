@@ -93,7 +93,7 @@ export async function submitCheck(formData: FormData) {
     .eq("id", id);
 
   // Tell the student their checked copy is ready.
-  const { data: student } = await svc.from("profiles").select("email").eq("id", row.student_id).maybeSingle();
+  const { data: student } = await svc.from("profiles").select("email, full_name, phone").eq("id", row.student_id).maybeSingle();
   const { data: section } = await svc.from("sections").select("title, topic_id").eq("id", row.section_id).maybeSingle();
   await notifyByEmail({
     studentId: row.student_id as string,
@@ -117,6 +117,37 @@ export async function submitCheck(formData: FormData) {
     template: "copy_checked",
     payload: { sectionId: row.section_id },
   }).catch(() => null);
+
+  // AND ON WHATSAPP, WHICH IS WHERE THEY ACTUALLY LOOK.
+  //
+  // The email above has always gone out and is easy to miss. This is the same
+  // news in the place a student reads within the minute: a banner, the paper and
+  // marks in bold, and a button that opens their copy.
+  //
+  // It is a UTILITY template tied to a real event, so it needs no opt-in and is
+  // not subject to marketing limits. The banner must be supplied on every send —
+  // the image given when the template was created was only Meta's sample.
+  //
+  // Best-effort and last: a WhatsApp that fails must never cost the examiner
+  // their release or the student their email.
+  try {
+    const phone = String((student as { phone?: string } | null)?.phone ?? "").trim();
+    if (phone) {
+      const { sendWhatsApp } = await import("@/lib/notify");
+      const first = String((student as { full_name?: string } | null)?.full_name ?? "").split(" ")[0] || "there";
+      await sendWhatsApp(
+        phone,
+        "checked_copy_ready",
+        [
+          first,
+          String(section?.title ?? "your paper"),
+          String(finalMarks ?? "—"),
+          String(row.total_marks ?? "—"),
+        ],
+        { headerImageUrl: "https://caparveensharma.com/hero-banner.png" },
+      );
+    }
+  } catch { /* the email has gone; this is the second attempt to reach them */ }
 
   revalidatePath("/examiner");
   redirect("/examiner?done=1");

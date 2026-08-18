@@ -209,7 +209,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
       subjMaterials.get(sid)!.add(k);
     }
   }
-  const MAT_LABEL: Record<string, string> = { book: "📕 Book", question_bank: "📚 Question bank", icai: "🏛️ ICAI material", rtp: "📝 RTP", mtp: "📝 MTP", past_papers: "🗂️ Past exam papers", notes: "✍️ Handwritten notes/book", custom: "✨ Additional resources" };
+  const MAT_LABEL: Record<string, string> = { book: "📕 Book", question_bank: "📚 Question bank", icai: "🏛️ ICAI material", rtp: "📝 RTP", mtp: "📝 MTP", past_papers: "🗂️ Past exam papers", suggested_answers: "🗂️ ICAI Suggested Answers", notes: "✍️ Handwritten notes/book", custom: "✨ Additional resources" };
   // "Subject resources" tiles — display order + icon/short label per type.
   const RES_ORDER: { kind: string; icon: string; label: string }[] = [
     { kind: "notes", icon: "✍️", label: "Handwritten" },

@@ -14,6 +14,16 @@ const KIND_LABEL: Record<string, string> = {
   transcript: "🎙️ Class transcript",
   book: "📕 Book PDF",
   icai: "🏛️ ICAI material",
+  // ICAI's Suggested Answers carry the QUESTION AND the official solution, which
+  // is strictly better material than a bare question paper: a student asking how
+  // to do Q3 of May 2024 gets the Institute's own treatment rather than the AI's
+  // reconstruction of it. Named for what it is, because "past paper" would tell
+  // both the student and the index that there are no answers inside.
+  suggested_answers: "🗂️ ICAI Suggested Answers (questions + solutions)",
+  question_bank: "📚 Question bank",
+  rtp: "📄 RTP (Revision Test Paper)",
+  mtp: "📝 MTP (Mock Test Paper)",
+  past_papers: "🗒️ Past exam paper (questions only)",
   notes: "📝 Notes",
   important_qs: "📌 Important questions (master list)",
   revision_qs: "🔁 Revision questions list",

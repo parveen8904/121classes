@@ -50,6 +50,7 @@ const TYPE_LABEL: Record<string, string> = {
   pdf: "PDF",
   rich_text: "Notes",
   past_papers: "Past papers",
+  suggested_answers: "ICAI Suggested Answers",
   live_class: "Live class",
   ask_doubt: "Ask a doubt",
   mcq_test: "MCQ test",
@@ -64,7 +65,7 @@ const TYPE_ICON: Record<string, string> = {
   homework: "📚",
   pdf: "📑",
   rich_text: "📝",
-  past_papers: "🗂️",
+  past_papers: "🗂️", suggested_answers: "🗂️",
   live_class: "📡",
   ask_doubt: "💬",
   mcq_test: "🧠",
@@ -225,7 +226,7 @@ function SectionBody({
     );
   }
 
-  if (type === "pdf" || type === "past_papers") {
+  if (type === "pdf" || type === "past_papers" || type === "suggested_answers") {
     return (
       <div style={{ marginTop: 14 }}>
         {c.pdf_url ? (
@@ -460,7 +461,7 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
 
   // Topic materials (question bank / ICAI / RTP / past papers / book) — the SAME
   // PDFs that train the AI are offered to students here. One upload, both uses.
-  const MAT_LABEL: Record<string, string> = { question_bank: "📚 Question bank", icai: "🏛️ ICAI material", rtp: "📄 RTP", past_papers: "🗂️ Past papers", book: "📕 Book", notes: "📝 Notes", revision_notes: "🔁 Revision notes", transcript: "🎙️ Transcript", other: "📄 Material" };
+  const MAT_LABEL: Record<string, string> = { question_bank: "📚 Question bank", icai: "🏛️ ICAI material", rtp: "📄 RTP", past_papers: "🗂️ Past papers", suggested_answers: "🗂️ ICAI Suggested Answers", book: "📕 Book", notes: "📝 Notes", revision_notes: "🔁 Revision notes", transcript: "🎙️ Transcript", other: "📄 Material" };
 
   // Amendments & updates for THIS topic, filtered to the student's attempt.
   const myAttemptRank = attemptRank(wmProfile?.target_attempt ?? null);
@@ -585,6 +586,7 @@ export default async function LearnTopic(props: { params: Promise<{ topicId: str
       case "homework":
         return "📚 Homework";
       case "pdf":
+      case "suggested_answers":
       case "past_papers":
       case "rich_text":
         return "📑 Notes & PDFs";

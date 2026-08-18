@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 // could finish, so the attempt was left permanently "being prepared".
 export const maxDuration = 300;
 
-const KIND_LABEL: Record<string, string> = { mtp: "MTP", rtp: "RTP", past_papers: "Past exam paper" };
+const KIND_LABEL: Record<string, string> = { mtp: "MTP", rtp: "RTP", past_papers: "Past exam paper", suggested_answers: "ICAI Suggested Answers" };
 
 type Grade = {
   awarded: number; total: number; summary: string;
@@ -33,7 +33,7 @@ export default async function PaperPage(props: { params: Promise<{ itemId: strin
     .select("id, kind, title, file_url, solution_url, subject_id, is_active, student_visible, subjects(title, course_id)")
     .eq("id", params.itemId)
     .maybeSingle();
-  if (!item || !item.is_active || !item.student_visible || !["mtp", "rtp", "past_papers"].includes(item.kind)) notFound();
+  if (!item || !item.is_active || !item.student_visible || !["mtp", "rtp", "past_papers", "suggested_answers"].includes(item.kind)) notFound();
 
   const { data: attempts } = await svc
     .from("paper_attempts")

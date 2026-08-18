@@ -18,6 +18,31 @@ const ASKING_WORDS = new Set([
   "konsi", "kaha", "kahan", "bata", "batao", "samjha", "samjhaya", "padhaya",
 ]);
 
+/**
+ * Cut a long document into overlapping passages so each can be ranked on its own.
+ *
+ * PASSAGE and OVERLAP are chosen against the 12,000-character budget a group
+ * doubt gets: four or five passages of real teaching fit, which is enough to
+ * answer from and small enough that the ranking above decides WHICH four.
+ * The overlap exists so a rule broken across a boundary is still found whole in
+ * one of the two halves.
+ */
+const PASSAGE = 2500;
+const OVERLAP = 400;
+
+function passages(content: string): string[] {
+  const text = (content ?? "").trim();
+  if (text.length <= PASSAGE) return text ? [text] : [];
+  const out: string[] = [];
+  for (let i = 0; i < text.length; i += PASSAGE - OVERLAP) {
+    out.push(text.slice(i, i + PASSAGE));
+    // A guard, not a limit anyone should hit: 4,000 passages is ten million
+    // characters from a single item.
+    if (out.length >= 4000) break;
+  }
+  return out;
+}
+
 export async function getRepositoryContext(
   subjectId?: string | null,
   maxChars = 40000,
@@ -103,7 +128,32 @@ export async function getRepositoryContext(
   type Chunk = { subject_id: string | null; topic_id: string | null; text: string };
   const chunks: Chunk[] = [];
 
-  for (const r of itemRows) chunks.push({ subject_id: r.subject_id, topic_id: (r as { topic_id?: string | null }).topic_id ?? null, text: `### ${r.title}\n${r.content}` });
+  // A BOOK IS NOT ONE CHUNK, AND THAT IS WHY HIS MATERIAL WENT UNREAD.
+  //
+  // Every repository item used to enter the pool whole. His Financial Reporting
+  // book is 1.6 MILLION characters; the AI's budget for a group doubt is 12,000.
+  // So when that book ranked first, the loop at the bottom of this function
+  // sliced its FIRST 12,000 characters — the opening pages — and that was the
+  // "material" the model saw. Anything deeper never travelled.
+  //
+  // On 18 August a student asked whether an FCCB is a derivative. The Ind AS 32
+  // carve-out is in these books, in six different items. None of it reached the
+  // model, which answered from its own IFRS knowledge and got it wrong in front
+  // of a room of Final students.
+  //
+  // Ranking only works on pieces small enough to be kept. So a long item is cut
+  // into passages and each passage is ranked on its own; the paragraph about
+  // FCCBs now competes as itself instead of being buried inside a book whose
+  // first page is about something else.
+  //
+  // Overlapping windows, because a rule split across a boundary would otherwise
+  // be found in neither half.
+  for (const r of itemRows) {
+    const topicId = (r as { topic_id?: string | null }).topic_id ?? null;
+    for (const piece of passages(String(r.content))) {
+      chunks.push({ subject_id: r.subject_id, topic_id: topicId, text: `### ${r.title}\n${piece}` });
+    }
+  }
 
   // --- Source 3: published amendments (their body IS teaching text) ---
   const { data: amends } = await svc

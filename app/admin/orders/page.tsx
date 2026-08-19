@@ -5,7 +5,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { formatINR } from "@/lib/pricing";
 import { viaProxy } from "@/lib/fileProxy";
 import AdminHero from "../_components/AdminHero";
-import { setOrderStatus, sendDispatchEmail, generateInvoice, reissueInvoice, adminConfirmPayment } from "./actions";
+import { setOrderStatus, sendDispatchEmail, generateInvoice, reissueInvoice, reissueBookInvoice, adminConfirmPayment } from "./actions";
 import SelectAll from "./SelectAll";
 import FilterReset from "./FilterReset";
 import { inChunks } from "@/lib/pageAll";
@@ -206,6 +206,18 @@ export default async function AdminOrdersPage(
 
   // Folded into the payment list rather than shown apart: the founder reads one
   // register, and a sale is a sale whoever keyed it in.
+  // WHICH BOOKS. "1 item" told the office nothing — it could not see whether a
+  // parcel was Inter or Final without opening the invoice. The titles carry the
+  // level, so they are joined here and printed on the card.
+  const bookIds = [...new Set(
+    ((data ?? []) as { items?: { book_id?: string }[] | null }[])
+      .flatMap((o) => (o.items ?? []).map((i) => i.book_id).filter(Boolean) as string[]),
+  )];
+  const { data: bookRows } = bookIds.length
+    ? await svc.from("books").select("id, title").in("id", bookIds)
+    : { data: [] as { id: string; title: string }[] };
+  const bookTitle = new Map((bookRows ?? []).map((b) => [b.id as string, b.title as string]));
+
   const giftRows = ((giftData ?? []) as unknown as GiftRow[]).map((g): PayRow & { viaSupporter: string; viaDesignation: string | null; source: "vendor" | "sponsored"; discount: number | null; coupon: string | null; tier?: string | null; months?: number | null } => ({
     id: g.id,
     kind: "supporter",
@@ -483,10 +495,20 @@ export default async function AdminOrdersPage(
                     <strong>
                       {o.order_no != null ? `#${o.order_no} · ` : ""}{o.guest_contact?.name ?? ship.name ?? "Customer"} · {formatINR(o.amount_inr)}
                     </strong>
+                    <p style={{ fontSize: ".84rem", marginTop: 4, fontWeight: 600 }}>
+                      📚 {(o.items ?? []).map((i) => {
+                        const t = bookTitle.get(String(i.book_id ?? "")) ?? "Book";
+                        return (i.qty ?? 1) > 1 ? `${t} × ${i.qty}` : t;
+                      }).join(" · ") || "—"}
+                    </p>
                     <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
                       {qty} item{qty === 1 ? "" : "s"} · {STATUS_EMOJI[o.status] ?? o.status} · {fmt(o.created_at)}
                       {o.tracking_code && <> · 🚚 {o.tracking_code}</>}
                       {o.invoice_url && <> · <a className="grad" href={viaProxy(o.invoice_url)} target="_blank" rel="noopener noreferrer">🧾 {o.invoice_no ?? "Invoice"} ↓</a></>}
+                      {o.invoice_url && <> · <span style={{ display: "inline-block" }}><form action={reissueBookInvoice} style={{ margin: 0, display: "inline" }}>
+                        <input type="hidden" name="id" value={o.id} />
+                        <SubmitButton className="btn small secondary" savedLabel="✓ Reissued">♻️ Reissue with address</SubmitButton>
+                      </form></span></>}
                     </p>
                     <p className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>
                       📍 {ship.line1}

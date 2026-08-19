@@ -172,3 +172,15 @@ export async function adminConfirmPayment(formData: FormData): Promise<void> {
   revalidatePath("/admin/orders");
   redirect(`/admin/orders?${r.ok ? `confirmed=${encodeURIComponent(r.did ?? "done")}` : `confirmerr=${encodeURIComponent(r.reason ?? "could not confirm")}`}`);
 }
+
+// Reissue a BOOK order's invoice under the same number — used when one went out
+// without the address, which every book order has in ship_to.
+export async function reissueBookInvoice(formData: FormData): Promise<void> {
+  if (!(await requireArea("store"))) return;
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const { reissueBookOrderInvoice } = await import("@/lib/orderInvoice");
+  const r = await reissueBookOrderInvoice(id, true);
+  revalidatePath("/admin/orders");
+  redirect(`/admin/orders?${r.ok ? `confirmed=${encodeURIComponent(`invoice ${r.invoiceNo} reissued with the address`)}` : `confirmerr=${encodeURIComponent(r.reason ?? "could not reissue")}`}`);
+}

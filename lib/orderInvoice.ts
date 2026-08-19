@@ -28,7 +28,7 @@ export async function issueOrderInvoice(opts: {
     const svc = createServiceClient();
     const table = opts.table ?? "orders";
     const { data: ord } = await svc
-      .from(table).select("id, invoice_no, order_no" + (table === "orders" ? ", subject_id" : ""))
+      .from(table).select("id, invoice_no, order_no" + (table === "orders" ? ", subject_id" : ", ship_to, guest_contact"))
       .eq("razorpay_order_id", opts.razorpayOrderId).maybeSingle();
     if (!ord || (ord as { invoice_no?: string | null }).invoice_no) return; // unknown / already invoiced
     const orderNo = (ord as { order_no?: number | null }).order_no;
@@ -52,6 +52,27 @@ export async function issueOrderInvoice(opts: {
       address = [p?.address_line1, p?.address_line2, [p?.city, p?.pincode].filter(Boolean).join(" ")]
         .filter(Boolean).join("\n") || null;
       regNo = (p?.registration_no as number) ?? null;
+    }
+
+    // A BOOK ORDER CARRIES ITS OWN ADDRESS, AND THE INVOICE NEVER READ IT.
+    //
+    // The address block above comes from the buyer's PROFILE — which a guest
+    // buying books does not have, and which plenty of logged-in buyers never
+    // filled in. But every book order stores the full postal address in
+    // ship_to, because the courier needs it: the same order whose invoice went
+    // out blank was delivered to the right door. Repeatedly reported, finally
+    // read. The state matters twice over — it also decides CGST+SGST vs IGST,
+    // so a missing one didn't just blank a box, it could mis-split the tax.
+    if (table === "book_orders") {
+      const ship = ((ord as { ship_to?: Record<string, string> | null }).ship_to ?? null);
+      const guest = ((ord as { guest_contact?: Record<string, string> | null }).guest_contact ?? null);
+      if (!address && ship) {
+        address = [ship.line1, ship.line2, [ship.city, ship.state, ship.pincode].filter(Boolean).join(" ")]
+          .filter(Boolean).join("\n") || null;
+      }
+      if (!state && ship?.state) state = String(ship.state);
+      if (!name) name = String(ship?.name || guest?.name || "");
+      if (!email) email = String(guest?.email || "");
     }
 
     // Receipt line: the exact validity window this payment created.
@@ -240,6 +261,89 @@ export async function reissueOrderInvoice(orderId: string, notify = true): Promi
     await sendEmailWithAttachment(email, `Corrected invoice ${invoiceNo} — CA Parveen Sharma`, html, {
       filename: `${invoiceNo.replace(/[^\w-]/g, "_")}.pdf`, content: Buffer.from(pdf), contentType: "application/pdf",
     }).catch(() => false);
+  }
+  return { ok: true, invoiceNo };
+}
+
+/**
+ * Re-issue a BOOK order's invoice under the SAME number — the book-shaped twin
+ * of reissueOrderInvoice above.
+ *
+ * Book invoices went out blank where the class invoices did, and for a worse
+ * reason: their address never depended on the profile at all. Every book order
+ * carries the full postal address in ship_to — the courier delivers by it — and
+ * the invoice simply never read it. Hilary Gaurea's CAPS/26-27/0026 went to the
+ * right door with the wrong paper.
+ *
+ * Same number, same date, same amount; only the address, the buyer name and the
+ * tax split are put right, from the order's own shipping record.
+ */
+export async function reissueBookOrderInvoice(orderId: string, notify = true): Promise<{ ok: boolean; reason?: string; invoiceNo?: string }> {
+  const svc = createServiceClient();
+  const { data: ord } = await svc
+    .from("book_orders")
+    .select("id, invoice_no, order_no, receipt_no, amount_inr, razorpay_order_id, razorpay_payment_id, created_at, ship_to, guest_contact, items")
+    .eq("id", orderId).maybeSingle();
+  if (!ord) return { ok: false, reason: "book order not found" };
+  const invoiceNo = (ord as { invoice_no?: string | null }).invoice_no;
+  if (!invoiceNo) return { ok: false, reason: "this order has no invoice yet — use Generate instead" };
+
+  const ship = ((ord as { ship_to?: Record<string, string> | null }).ship_to ?? {}) as Record<string, string>;
+  const guest = ((ord as { guest_contact?: Record<string, string> | null }).guest_contact ?? {}) as Record<string, string>;
+  const state = String(ship.state ?? "").trim();
+  if (!state) return { ok: false, reason: "the order's shipping record has no state — the tax cannot be worked out" };
+  const address = [ship.line1, ship.line2, [ship.city, state, ship.pincode].filter(Boolean).join(" ")]
+    .filter(Boolean).join("\n") || null;
+
+  // The books themselves, by name — the invoice should say WHAT was bought,
+  // and the titles carry the level (Inter or Final) the office asked to see.
+  const items = ((ord as { items?: { book_id?: string; qty?: number }[] | null }).items ?? []);
+  const ids = items.map((i) => i.book_id).filter(Boolean) as string[];
+  const { data: bookRows } = ids.length
+    ? await svc.from("books").select("id, title").in("id", ids)
+    : { data: [] as { id: string; title: string }[] };
+  const titleOf = new Map((bookRows ?? []).map((b) => [b.id as string, b.title as string]));
+  const description = items
+    .map((i) => `${titleOf.get(String(i.book_id ?? "")) ?? "Book"}${(i.qty ?? 1) > 1 ? ` × ${i.qty}` : ""}`)
+    .join("; ") || "Printed books";
+
+  const amount = Number((ord as { amount_inr: number }).amount_inr) || 0;
+  const s = await getGstSettings();
+  const gst = computeGst(amount, state, s);
+  const date = new Date((ord as { created_at: string }).created_at);
+
+  const pdf = await buildInvoicePdf({
+    invoiceNo, date, s, gst,
+    buyerName: String(ship.name || guest.name || "Customer"),
+    buyerGstin: null,
+    buyerAddress: address,
+    buyerState: state,
+    itemDescription: description,
+    itemHsn: "4901",   // printed books are goods, not the coaching SAC
+    paymentRef: (ord as { razorpay_payment_id?: string | null }).razorpay_payment_id
+      ?? (ord as { razorpay_order_id?: string | null }).razorpay_order_id ?? null,
+    paymentMode: "Online Payment [Razorpay]",
+    receiptDetail: null,
+    receiptNo: (ord as { receipt_no?: number | null }).receipt_no ?? null,
+    orderId: (ord as { order_no?: number | null }).order_no ?? null,
+  });
+
+  const path = `invoices/${invoiceNo.replace(/[^\w-]/g, "_")}.pdf`;
+  const up = await svc.storage.from("secure").upload(path, Buffer.from(pdf), { contentType: "application/pdf", upsert: true });
+  if (up.error) return { ok: false, reason: `could not store the PDF: ${up.error.message}` };
+  await svc.from("book_orders").update({ invoice_url: `secure:${path}` }).eq("id", orderId);
+
+  const email = notify ? String(guest.email ?? "") : "";
+  if (email) {
+    const { sendEmailWithAttachment, emailShell } = await import("@/lib/notify");
+    const html = emailShell(
+      "Your corrected invoice 🧾",
+      `<p>We have corrected the invoice for your book order of <strong>Rs. ${Math.round(amount).toLocaleString("en-IN")}</strong>.</p>
+       <p>The earlier copy was missing your address. The corrected invoice (<strong>${invoiceNo}</strong>) is attached — the number, the date and the amount are unchanged, and nothing about your order or delivery alters. Please use this copy and discard the earlier one.</p>`,
+    );
+    await sendEmailWithAttachment(email, `Corrected invoice ${invoiceNo} — CA Parveen Sharma`, html, {
+      filename: `${invoiceNo.replace(/[^\w-]/g, "_")}.pdf`, content: Buffer.from(pdf), contentType: "application/pdf",
+    }).catch(() => null);
   }
   return { ok: true, invoiceNo };
 }

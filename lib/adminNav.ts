@@ -22,7 +22,6 @@ export const REPORTS: AdminPanel[] = [
   { icon: "📱", title: "Who is using the app", desc: "Everyone who has opened the phone app and signed in — by name, with phone and email, iPhone or Android, and whether notifications are on. Explains why this will always be lower than Apple's download count.", href: "/admin/reports/app-users" },
   { icon: "📝", title: "Feedback", desc: "What students say about us — the complaints first, in their own words, with a way to reach them. Averages underneath, worst question first.", href: "/admin/reports/feedback" },
   { icon: "💬", title: "Doubt report", desc: "Every doubt on every channel: how many were answered, how many are still waiting and for how long, then the full question-and-answer record. The only doubt list there is.", href: "/admin/doubt-log" },
-  { icon: "✉️", title: "Email report", desc: "Did our email actually arrive? Mailgun's own delivered and failed counts, and which kinds of message the site is sending.", href: "/admin/reports/email" },
   { icon: "🎓", title: "Subscriber report", desc: "Who holds a live plan right now — tier, subject, dates, amount and full contact details, ready to export.", href: "/admin/reports/subscribers" },
   { icon: "🧾", title: "Orders report", desc: "Every payment received — subscriptions, extensions and books — with buyer details, GST invoices and dispatch state.", href: "/admin/orders" },
   { icon: "💚", title: "Supporters & their orders", desc: "Who sponsors students here, how many each has paid for, and every sponsorship order with its invoice and GST split.", href: "/admin/reports/supporters" },
@@ -73,7 +72,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { icon: "👥", title: "Users", desc: "View, edit & manage every account — roles, attempts, contact details, staff rights.", href: "/admin/users" },
       { icon: "🤝", title: "Mentoring desk", desc: "Who needs a word today, one student at a time, with their own figures in front of you — never signed in, went quiet, studying but not testing, marks slipping, validity running out. Nothing sends by itself: every message is drafted and waits for you, and every call outcome is logged so nobody is chased twice.", href: "/admin/mentoring" },
       { icon: "🎟️", title: "Enrolment", desc: "Grant course access (single or bulk) for any tier/duration; revoke & extend.", href: "/admin/enrolment" },
-      { icon: "✉️", title: "Emails", desc: "The words in every email the site sends — welcome, verify, reset, granted access, coupons, tickets. Edit any of them; see it as the student gets it.", href: "/admin/emails" },
+      { icon: "✉️", title: "Emails", desc: "Everything email in one place: how many went out and whether they arrived (Mailgun's own counts), what triggers every message, and the words of each — edit any of them.", href: "/admin/emails" },
       // Three tiles for one job — read what students asked and answer it —
       // meant guessing which of them held the message you were looking for.
       // One door now; the three desks are inside it.

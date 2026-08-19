@@ -4,7 +4,7 @@ import { assertArea } from "@/lib/adminAccess";
 import { formatDate } from "@/lib/dates";
 import { accountRows, ACCOUNT_STATES } from "@/lib/accountsExport";
 import SubmitButton from "@/app/components/SubmitButton";
-import { approveDayForZoho, approveSelectedForZoho } from "../orders/actions";
+import { approveDayForZoho, approveSelectedForZoho, approveForZoho, holdForZoho } from "../orders/actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -176,7 +176,39 @@ export default async function AccountsPage(props: {
                 <td style={{ ...td, fontFamily: "ui-monospace,monospace", fontSize: ".76rem" }}>
                   {r.razorpayPaymentId || <span className="muted">—</span>}
                 </td>
-                <td style={td}>{r.zohoStatus || <span className="muted">—</span>}</td>
+                <td style={{ ...td, whiteSpace: "nowrap" }}>
+                  {/* Approve and Hold live HERE now — the office asked for them
+                      beside the rest of the Zoho work, not on the sales register. */}
+                  {r.zohoStatus === "posted" ? "✅ posted"
+                    : r.zohoStatus === "approved" ? "⏳ tonight"
+                    : r.zohoStatus === "skipped" ? (
+                      <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                        🚫 held
+                        <form action={holdForZoho} style={{ margin: 0, display: "inline" }}>
+                          <input type="hidden" name="id" value={r.id} />
+                          <input type="hidden" name="table" value={r.table} />
+                          <input type="hidden" name="to" value="pending" />
+                          <SubmitButton className="btn small secondary" savedLabel="✓">Undo</SubmitButton>
+                        </form>
+                      </span>
+                    )
+                    : r.zohoStatus === "pending" && r.table !== "gift_orders" ? (
+                      <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                        <form action={approveForZoho} style={{ margin: 0, display: "inline" }}>
+                          <input type="hidden" name="id" value={r.id} />
+                          <input type="hidden" name="table" value={r.table} />
+                          <SubmitButton className="btn small secondary" savedLabel="✓">Approve</SubmitButton>
+                        </form>
+                        <form action={holdForZoho} style={{ margin: 0, display: "inline" }} title="Fishy? Hold it — excluded from day approval, never posts">
+                          <input type="hidden" name="id" value={r.id} />
+                          <input type="hidden" name="table" value={r.table} />
+                          <input type="hidden" name="to" value="skipped" />
+                          <SubmitButton className="btn small secondary" savedLabel="✓">✋ Hold</SubmitButton>
+                        </form>
+                      </span>
+                    )
+                    : <span className="muted">{r.zohoStatus || "—"}</span>}
+                </td>
               </tr>
             ))}
           </tbody>

@@ -136,3 +136,14 @@ export async function testRazorpay(): Promise<{ ok: boolean; message: string }> 
     return { ok: false, message: "❌ Couldn't reach Razorpay: " + String(e) };
   }
 }
+
+/** The payments made against ONE order — how a stuck order proves it was paid. */
+export async function fetchRazorpayOrderPayments(orderId: string): Promise<RazorpayPayment[]> {
+  const res = await fetch(`https://api.razorpay.com/v1/orders/${orderId}/payments`, {
+    headers: { Authorization: await authHeader() },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Razorpay fetch order payments failed: ${res.status}`);
+  const j = (await res.json()) as { items?: RazorpayPayment[] };
+  return j.items ?? [];
+}

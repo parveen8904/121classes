@@ -148,3 +148,27 @@ export async function reissueInvoice(formData: FormData): Promise<void> {
   await reissueOrderInvoice(orderId);
   revalidatePath("/admin/orders");
 }
+
+// CONFIRM A PAYMENT THE BROWSER DROPPED.
+//
+// Money with Razorpay, order stuck at "created", student not enrolled — the
+// office types the Razorpay payment id from the Razorpay dashboard and presses
+// confirm. NOTHING is taken on trust: the id must match a CAPTURED payment on
+// this very order at Razorpay, or nothing happens. On success the same code
+// path as a normal checkout finishes the job — enrolment, invoice (allocated
+// the NEXT serial in the running series, never reused, never backdated) and
+// the emails.
+export async function adminConfirmPayment(formData: FormData): Promise<void> {
+  if (!(await requireArea("store"))) return;
+  const id = str(formData.get("id"));
+  const table = str(formData.get("table")) === "gift_orders" ? "gift_orders" as const : "orders" as const;
+  const paymentId = str(formData.get("payment_id")).trim();
+  if (!id) return;
+  if (!/^pay_[A-Za-z0-9]+$/.test(paymentId)) {
+    redirect(`/admin/orders?confirmerr=${encodeURIComponent("Enter the Razorpay payment id — it looks like pay_XXXXXXXXXXXX, on the payment in the Razorpay dashboard.")}`);
+  }
+  const { reconcileStuckPayment } = await import("@/lib/paymentReconcile");
+  const r = await reconcileStuckPayment(table, id, { paymentId });
+  revalidatePath("/admin/orders");
+  redirect(`/admin/orders?${r.ok ? `confirmed=${encodeURIComponent(r.did ?? "done")}` : `confirmerr=${encodeURIComponent(r.reason ?? "could not confirm")}`}`);
+}

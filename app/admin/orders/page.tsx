@@ -5,7 +5,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { formatINR } from "@/lib/pricing";
 import { viaProxy } from "@/lib/fileProxy";
 import AdminHero from "../_components/AdminHero";
-import { setOrderStatus, sendDispatchEmail, approveForZoho, holdForZoho, generateInvoice, reissueInvoice } from "./actions";
+import { setOrderStatus, sendDispatchEmail, generateInvoice, reissueInvoice, adminConfirmPayment } from "./actions";
 import SelectAll from "./SelectAll";
 import FilterReset from "./FilterReset";
 import { inChunks } from "@/lib/pageAll";
@@ -14,37 +14,14 @@ import { ORDER_STATES, chosenStates, matchesState } from "@/lib/orderStatus";
 // Zoho posting state → what the admin sees in the register. Normal flow is
 // the one-click DAY approval above the table; per-row buttons are for
 // exceptions (hold something fishy, or approve one sale early).
-function ZohoCell({ id, table, status }: { id: string; table: string; status: string | null }) {
+function ZohoCell({ status }: { id?: string; table?: string; status: string | null }) {
+  // READ-ONLY here — the office asked for Approve and Hold to live on the
+  // Accounts page with the rest of the Zoho work. This register just says
+  // where a sale stands.
   if (status === "posted") return <span title="Posted to Zoho Books">✅ in Zoho</span>;
   if (status === "approved") return <span className="muted" title="Will post to Zoho Books tonight">⏳ posts tonight</span>;
-  if (status === "skipped") {
-    return (
-      <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-        <span title="Held — will never post to Zoho">🚫 held</span>
-        <form action={holdForZoho} style={{ margin: 0, display: "inline" }}>
-          <input type="hidden" name="id" value={id} />
-          <input type="hidden" name="table" value={table} />
-          <input type="hidden" name="to" value="pending" />
-          <SubmitButton className="btn small secondary" savedLabel="✓">Undo</SubmitButton>
-        </form>
-      </span>
-    );
-  }
-  return (
-    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-      <form action={approveForZoho} style={{ margin: 0, display: "inline" }}>
-        <input type="hidden" name="id" value={id} />
-        <input type="hidden" name="table" value={table} />
-        <SubmitButton className="btn small secondary" savedLabel="✓">Approve</SubmitButton>
-      </form>
-      <form action={holdForZoho} style={{ margin: 0, display: "inline" }} title="Fishy? Hold it — excluded from day approval, never posts">
-        <input type="hidden" name="id" value={id} />
-        <input type="hidden" name="table" value={table} />
-        <input type="hidden" name="to" value="skipped" />
-        <SubmitButton className="btn small secondary" savedLabel="✓">✋ Hold</SubmitButton>
-      </form>
-    </span>
-  );
+  if (status === "skipped") return <span title="Held on the Accounts page — will not post">🚫 held</span>;
+  return <span className="muted" title="Approve or hold it on the Accounts page">— pending</span>;
 }
 
 type Ship = { name?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string; phone?: string };
@@ -109,7 +86,7 @@ function monthsBetween(a: string | null, b: string | null): number | null {
 
 export default async function AdminOrdersPage(
   props: {
-    searchParams: Promise<{ dispatch?: string; q?: string; from?: string; to?: string; status?: string }>;
+    searchParams: Promise<{ confirmed?: string; confirmerr?: string; dispatch?: string; q?: string; from?: string; to?: string; status?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -229,7 +206,7 @@ export default async function AdminOrdersPage(
 
   // Folded into the payment list rather than shown apart: the founder reads one
   // register, and a sale is a sale whoever keyed it in.
-  const giftRows = ((giftData ?? []) as unknown as GiftRow[]).map((g): PayRow & { viaSupporter: string; viaDesignation: string | null; source: "vendor" | "sponsored"; discount: number | null; coupon: string | null } => ({
+  const giftRows = ((giftData ?? []) as unknown as GiftRow[]).map((g): PayRow & { viaSupporter: string; viaDesignation: string | null; source: "vendor" | "sponsored"; discount: number | null; coupon: string | null; tier?: string | null; months?: number | null } => ({
     id: g.id,
     kind: "supporter",
     amount_inr: g.amount_inr,
@@ -258,6 +235,11 @@ export default async function AdminOrdersPage(
     source: g.gifter?.is_supporter ? "vendor" : "sponsored",
     discount: g.discount_inr ?? null,
     coupon: g.coupon_code ?? null,
+    // WHAT WAS BOUGHT. The office could not tell Gold from Silver on a vendor
+    // sale, because these rows have no subscription to look tier up from — the
+    // gift order itself is the record.
+    tier: g.tier,
+    months: g.months,
   }));
 
   const match = (parts: (string | null | undefined)[]) => !q || parts.some((p) => (p ?? "").toLowerCase().includes(q));
@@ -335,6 +317,9 @@ export default async function AdminOrdersPage(
 
       {/* Website payments register — OUR sales only (from our own database).
           Card layout on purpose: every detail visible, NO horizontal scrolling. */}
+            {searchParams.confirmed && <div className="notice ok" style={{ marginTop: 12 }}>✅ Payment confirmed — {searchParams.confirmed}.</div>}
+      {searchParams.confirmerr && <div className="notice err" style={{ marginTop: 12 }}>❌ {searchParams.confirmerr}</div>}
+
       <h2 className="admin-section-title" style={{ marginTop: 22 }}>💳 Website payments — subscriptions, extensions &amp; supporter sales ({payments.length})</h2>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center", margin: "10px 0" }}>
         <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>
@@ -399,9 +384,18 @@ export default async function AdminOrdersPage(
                       )}
                     </p>
                     <p className="muted" style={{ fontSize: ".82rem", margin: "3px 0 0" }}>
-                      {dates?.tier ? `${TIER_ICON[dates.tier] ?? ""} ${cap(dates.tier)}` : ""}
-                      {dates?.months ? ` · ${dates.months} month${dates.months === 1 ? "" : "s"}` : ""}
-                      {dates?.tier || dates?.months ? " · " : ""}
+                      {(() => {
+                        // A vendor sale has no subscription row until it is
+                        // provisioned, so the plan comes from the gift order
+                        // itself — the office could not tell Gold from Silver.
+                        const tier = dates?.tier ?? (p as { tier?: string | null }).tier ?? null;
+                        const months = dates?.months ?? (p as { months?: number | null }).months ?? null;
+                        return <>
+                          {tier ? `${TIER_ICON[tier] ?? ""} ${cap(tier)}` : ""}
+                          {months ? ` · ${months} month${months === 1 ? "" : "s"}` : ""}
+                          {tier || months ? " · " : ""}
+                        </>;
+                      })()}
                       🗓️ {dates?.starts_at ? fmt(dates.starts_at) : "—"} → {dates?.ends_at ? fmt(dates.ends_at) : "—"}
                       {" · "}✉️ {pr?.email ?? "—"}{pr?.phone ? ` · 📞 ${pr.phone}` : ""}
                     </p>
@@ -428,6 +422,21 @@ export default async function AdminOrdersPage(
                       <input type="hidden" name="id" value={p.id} />
                       <input type="hidden" name="table" value="orders" />
                       <SubmitButton className="btn small" savedLabel="✓ Generated">🧾 Generate invoice</SubmitButton>
+                    </form>
+                  ) : p.status === "created" && p.razorpay_order_id ? (
+                    /* MONEY AT RAZORPAY, ORDER STUCK HERE. The office types the
+                       payment id from the Razorpay dashboard; it must match a
+                       CAPTURED payment on this very order or nothing happens.
+                       On success the student is enrolled, the invoice takes the
+                       NEXT serial in the series (never reused, never backdated)
+                       and the emails go — the same path a normal checkout uses.
+                       The quarter-hourly sweep does this automatically too;
+                       this button is for the student on the phone right now. */
+                    <form action={adminConfirmPayment} style={{ margin: 0, display: "flex", gap: 6, alignItems: "center" }}>
+                      <input type="hidden" name="id" value={p.id} />
+                      <input type="hidden" name="table" value={p.kind === "supporter" ? "gift_orders" : "orders"} />
+                      <input name="payment_id" placeholder="pay_…" style={{ marginBottom: 0, width: 150, fontSize: ".8rem" }} />
+                      <SubmitButton className="btn small" savedLabel="✓">✅ Confirm payment</SubmitButton>
                     </form>
                   ) : <span className="muted" style={{ fontSize: ".8rem" }}>—</span>}
                   <ZohoCell id={p.id} table="orders" status={p.zoho_status} />

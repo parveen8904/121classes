@@ -101,7 +101,7 @@ export default async function EmailsAdmin(props: {
           gets it, and whether its words can be edited on this page or live in
           code. */}
       <details style={{ marginTop: 16 }} open>
-        <summary className="btn small secondary as-btn">🗺️ What triggers what — every automatic email ({EMAIL_CATALOGUE.reduce((n, g) => n + g.entries.length, 0)})</summary>
+        <summary className="btn small secondary as-btn">🗺️ What triggers what — every automatic email, WhatsApp & Telegram message ({EMAIL_CATALOGUE.reduce((n, g) => n + g.entries.length, 0)})</summary>
         <div className="card" style={{ marginTop: 10 }}>
           <p className="muted" style={{ fontSize: ".84rem", lineHeight: 1.7, marginTop: 0 }}>
             <strong>✏️ editable</strong> means the wording is a template on this page — change it below and the next
@@ -131,9 +131,13 @@ export default async function EmailsAdmin(props: {
                           {e.channelNote && <div className="muted" style={{ fontSize: ".76rem" }}>💬 {e.channelNote}</div>}
                         </td>
                         <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-                          {e.template
-                            ? <a href={`#${e.template.split(" ")[0]}`} title={e.file}>✏️ editable below</a>
-                            : <span className="muted" title={e.file}>🔒 fixed · {e.file.split("·")[0].trim().split("/").pop()}</span>}
+                          {e.template?.startsWith("editable in") ? (
+                            <a href="/admin/whatsapp" title={e.file}>✏️ {e.template}</a>
+                          ) : e.template ? (
+                            <a href={`#${e.template.split(" ")[0]}`} title={e.file}>✏️ editable below</a>
+                          ) : (
+                            <span className="muted" title={e.file}>🔒 fixed · {e.file.split("·")[0].trim().split("/").pop()}</span>
+                          )}
                         </td>
                       </tr>
                     ))}

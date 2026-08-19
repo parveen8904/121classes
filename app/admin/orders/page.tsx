@@ -5,7 +5,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { formatINR } from "@/lib/pricing";
 import { viaProxy } from "@/lib/fileProxy";
 import AdminHero from "../_components/AdminHero";
-import { setOrderStatus, sendDispatchEmail, approveForZoho, approveDayForZoho, holdForZoho, approveSelectedForZoho, generateInvoice, reissueInvoice } from "./actions";
+import { setOrderStatus, sendDispatchEmail, approveForZoho, holdForZoho, generateInvoice, reissueInvoice } from "./actions";
 import SelectAll from "./SelectAll";
 import FilterReset from "./FilterReset";
 import { inChunks } from "@/lib/pageAll";
@@ -323,25 +323,17 @@ export default async function AdminOrdersPage(
         </div>
       </form>
 
-      {/* One-click day approval for Zoho — review the day's rows below, hold
-          anything fishy, then send the whole calendar date in one press. */}
-      <div className="card" style={{ marginTop: 18, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between" }}>
-        <div style={{ minWidth: 240, flex: 1 }}>
-          <strong>🧾 Send a whole day to Zoho Books</strong>
-          <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
-            Check the rows below first. Something fishy? Press <strong>✋ Hold</strong> on that row — held sales are
-            excluded and never post. Then approve the date here; it posts to Zoho tonight automatically.
-          </p>
-        </div>
-        <form action={approveDayForZoho} style={{ display: "flex", gap: 8, alignItems: "center", margin: 0 }}>
-          <input type="date" name="day" defaultValue={new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10)} required style={{ marginBottom: 0 }} />
-          <SubmitButton className="btn small" savedLabel="✓ Approved">✅ Approve this date → Zoho</SubmitButton>
-        </form>
+      {/* THE ZOHO CONTROLS LIVE ON /admin/accounts NOW — moved 19 Aug on the
+          office's instruction: the person who approves sales for Zoho works on
+          the Accounts page, so here they were furniture. The per-row ✋ Hold
+          stays, because holding something fishy is part of READING the register. */}
+      <div className="notice" style={{ marginTop: 18, fontSize: ".85rem" }}>
+        🧾 Approving days and pushing sales to Zoho Books is done on the{" "}
+        <a href="/admin/accounts" style={{ fontWeight: 700 }}>Accounts &amp; Zoho page</a>, together with the
+        invoice and payment exports.
       </div>
 
       {/* Website payments register — OUR sales only (from our own database).
-          Razorpay account data lives on its own page: the same Razorpay key is
-          used by other businesses too, so it is NOT our sales register.
           Card layout on purpose: every detail visible, NO horizontal scrolling. */}
       <h2 className="admin-section-title" style={{ marginTop: 22 }}>💳 Website payments — subscriptions, extensions &amp; supporter sales ({payments.length})</h2>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center", margin: "10px 0" }}>
@@ -359,20 +351,9 @@ export default async function AdminOrdersPage(
             ⬇️ Download Excel
             {chosen.length ? ` (${chosen.join(", ")})` : fromDay || toDay ? " (filtered range)" : " (everything)"}
           </a>
-          <a className="btn small secondary" href="/admin/orders/razorpay">📈 Razorpay account data</a>
         </span>
       </div>
 
-      {/* Accountant's Zoho push: tick sales below (form= links the boxes here,
-          so nothing nests inside the per-row action forms). */}
-      <form id="zoho-bulk" action={approveSelectedForZoho} className="card" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-          <strong>🧾 Push to Zoho Books</strong>
-          <SelectAll />
-          <span className="muted" style={{ fontSize: ".78rem" }}>Tick the sales below, then push — they post to Zoho tonight automatically.</span>
-        </div>
-        <SubmitButton className="btn small" savedLabel="✓ Pushed">✅ Push selected → Zoho</SubmitButton>
-      </form>
 
       <div style={{ display: "grid", gap: 10 }}>
         {payments.length === 0 && (
@@ -388,9 +369,6 @@ export default async function AdminOrdersPage(
             <div className="card" key={p.id}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", gap: 10, minWidth: 260, flex: 1 }}>
-                  {p.zoho_status === "pending" && (
-                    <input type="checkbox" name="zoho_ids" value={`orders:${p.id}`} form="zoho-bulk" style={{ marginTop: 4 }} title="Tick to include in the Zoho push" />
-                  )}
                   <div>
                     <strong style={{ fontSize: ".98rem" }}>
                       {p.order_no != null ? `#${p.order_no} · ` : ""}{pr?.full_name ?? "—"} · {formatINR(p.amount_inr)}
@@ -492,9 +470,6 @@ export default async function AdminOrdersPage(
               <div className="card" key={o.id}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div style={{ display: "flex", gap: 10 }}>
-                  {o.zoho_status === "pending" && (
-                    <input type="checkbox" name="zoho_ids" value={`book_orders:${o.id}`} form="zoho-bulk" style={{ marginTop: 4 }} title="Tick to include in the Zoho push" />
-                  )}
                   <div>
                     <strong>
                       {o.order_no != null ? `#${o.order_no} · ` : ""}{o.guest_contact?.name ?? ship.name ?? "Customer"} · {formatINR(o.amount_inr)}

@@ -383,3 +383,134 @@ export async function submitPaperForStudent(formData: FormData): Promise<{ ok: b
   revalidatePath(`/admin/users/${studentId}`);
   return { ok: true };
 }
+
+// RESET ONE TEST, NOT THE STUDENT'S WHOLE RECORD.
+//
+// The only reset the desk had was the sledgehammer above — every descriptive
+// attempt, or every MCQ, gone at once. The office asked for the obvious thing:
+// a student re-sitting ONE chapter test should lose that attempt and nothing
+// else. Deleting the row is the reset: the portal treats a missing attempt as
+// "never sat", so the test opens fresh.
+export async function resetOneAttempt(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const id = str(formData.get("id"));            // the student
+  const kind = str(formData.get("kind"));        // descriptive | mcq
+  const attemptId = str(formData.get("attempt_id"));
+  if (!id || !attemptId) return;
+
+  const svc = createServiceClient();
+  let label = "";
+  if (kind === "mcq") {
+    await svc.from("mcq_attempts").delete().eq("id", attemptId).eq("student_id", id);
+    label = "1 MCQ attempt";
+  } else {
+    await svc.from("descriptive_attempts").delete().eq("id", attemptId).eq("student_id", id);
+    label = "1 descriptive attempt";
+  }
+  revalidatePath(`/admin/users/${id}`);
+  redirect(`/admin/users/${id}?testsreset=${encodeURIComponent(label)}`);
+}
+
+// RE-EVALUATE ONE PAPER WITH THE AI.
+//
+// When the AI marking of a particular paper is wrong, the admin needs to run it
+// again — against the CURRENT answer key and the current marking rules — without
+// touching the student's other work. gradeSubmittedPaper refuses a paper that
+// already carries a report (rightly, for the normal path), so the old marking is
+// cleared first: report, marks, margin copy, examiner state, the lot. The
+// student's own scan is untouched; it is the only input worth keeping.
+export async function regradeAttempt(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const id = str(formData.get("id"));
+  const attemptId = str(formData.get("attempt_id"));
+  if (!id || !attemptId) return;
+
+  const svc = createServiceClient();
+  const { data: row } = await svc
+    .from("descriptive_attempts")
+    .select("id, student_id, file_url")
+    .eq("id", attemptId).eq("student_id", id).maybeSingle();
+  if (!row || !row.file_url) {
+    redirect(`/admin/users/${id}?pwerr=${encodeURIComponent("That attempt has no answer book to re-evaluate.")}`);
+  }
+
+  await svc.from("descriptive_attempts").update({
+    report: null,
+    awarded_marks: null,
+    annotated_url: null,
+    status: "submitted",
+    review_status: "pending",
+    examiner_id: null,
+    examiner_name: null,
+    examiner_started_at: null,
+    examiner_checked_at: null,
+    examiner_marks: null,
+    examiner_remarks: null,
+    grade_tries: 0,
+    grade_error: null,
+  }).eq("id", attemptId);
+
+  // Mark it now rather than waiting for the sweep; failure falls back to the
+  // nightly cron, exactly like a fresh submission.
+  try {
+    const { waitUntil } = await import("@vercel/functions");
+    const { gradeSubmittedPaper } = await import("@/app/learn/section/[sectionId]/paperActions");
+    waitUntil(gradeSubmittedPaper(attemptId).catch(() => undefined));
+  } catch { /* cron will pick it up */ }
+
+  revalidatePath(`/admin/users/${id}`);
+  redirect(`/admin/users/${id}?testsreset=${encodeURIComponent("re-evaluation started — the fresh marking lands on the examiner desk in a few minutes")}`);
+}
+
+// SIGN IN AS THIS USER — the real interface, not a picture of it.
+//
+// The read-only dashboard view answers "what do they see"; it cannot answer
+// "why does their upload fail", because uploads, storage rules and quotas all
+// run under the STUDENT'S own session. The office asked for exactly this after
+// AnyDesk failed on a student's network: open the vendor or student interface
+// as them, without their password.
+//
+// A one-time sign-in link is minted (the same machinery as "forgot password" —
+// generateLink sends nothing, we hold the token) and shown to the admin with
+// one loud instruction: OPEN IT IN AN INCOGNITO WINDOW. In a normal window it
+// would replace the admin's own session, and the next thing pressed would be
+// pressed as the student.
+//
+// Every minting is recorded in admin_view_as_log — the same ledger as the
+// read-only look, because it is the same act at greater strength.
+export async function makeLoginLink(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const id = str(formData.get("id"));
+  if (!id) return;
+
+  const svc = createServiceClient();
+  const { data: who } = await svc.from("profiles").select("email, full_name").eq("id", id).maybeSingle();
+  const email = String(who?.email ?? "").trim();
+  if (!email) {
+    redirect(`/admin/users/${id}?pwerr=${encodeURIComponent("This account has no email address, so no sign-in link can be made.")}`);
+  }
+
+  const { data, error } = await svc.auth.admin.generateLink({ type: "magiclink", email });
+  const tokenHash = data?.properties?.hashed_token;
+  if (error || !tokenHash) {
+    redirect(`/admin/users/${id}?pwerr=${encodeURIComponent(`Could not make the link: ${error?.message ?? "no token"}`)}`);
+  }
+
+  // Recorded before it is shown. A sign-in link that leaves no trace is the
+  // kind of power that quietly becomes a habit.
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: me } = user ? await svc.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle() : { data: null };
+    const hour = new Date(); hour.setMinutes(0, 0, 0);
+    await svc.from("admin_view_as_log").upsert({
+      admin_id: user?.id ?? null,
+      admin_name: String(me?.full_name ?? me?.email ?? "admin") + " (full sign-in link)",
+      student_id: id,
+      hour_bucket: hour.toISOString(),
+    }, { onConflict: "admin_id,student_id,hour_bucket", ignoreDuplicates: true });
+  } catch { /* the link still works; the log is best-effort */ }
+
+  const link = `https://caparveensharma.com/auth/confirm?token_hash=${tokenHash}&type=magiclink&next=/dashboard`;
+  redirect(`/admin/users/${id}?loginlink=${encodeURIComponent(link)}`);
+}

@@ -3,6 +3,8 @@ import AdminHero from "../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
 import { formatDate } from "@/lib/dates";
 import { accountRows, ACCOUNT_STATES } from "@/lib/accountsExport";
+import SubmitButton from "@/app/components/SubmitButton";
+import { approveDayForZoho, approveSelectedForZoho } from "../orders/actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -98,6 +100,38 @@ export default async function AccountsPage(props: {
         <div className="admin-tile"><div className="tile-ic">📤</div><h3 style={{ fontSize: "1.4rem" }}>{notInZoho.length}</h3><p>paid, not yet in Zoho</p></div>
       </div>
 
+      {/* ── THE ZOHO CONTROLS, WHERE THE ACCOUNTS OPERATOR ACTUALLY WORKS ──
+          These lived on the Sales page. The person who sends sales to Zoho
+          works on THIS page, so on the sales page they were furniture. Moved on
+          the office's instruction, 19 Aug; the actions themselves are the same
+          ones, imported — one approval path, two doors closed to one. */}
+      <div className="card" style={{ marginTop: 14, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between" }}>
+        <div style={{ minWidth: 240, flex: 1 }}>
+          <strong>🧾 Send a whole day to Zoho Books</strong>
+          <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
+            Approves every pending paid sale on that date; it posts to Zoho tonight automatically. Anything held on
+            the Sales page stays excluded.
+          </p>
+        </div>
+        <form action={approveDayForZoho} style={{ display: "flex", gap: 8, alignItems: "center", margin: 0 }}>
+          <input type="date" name="day" defaultValue={new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10)} required style={{ marginBottom: 0 }} />
+          <SubmitButton className="btn small" savedLabel="✓ Approved">✅ Approve this date → Zoho</SubmitButton>
+        </form>
+      </div>
+
+      <form id="zoho-bulk" action={approveSelectedForZoho} className="card" style={{ marginTop: 10, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+          <strong>🧾 Push to Zoho Books</strong>
+          <span className="muted" style={{ fontSize: ".78rem" }}>
+            Tick the pending sales in the table below, then push — they post to Zoho tonight automatically.
+          </span>
+        </div>
+        <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+          <a className="btn small secondary" href="/admin/orders/razorpay">📈 Razorpay account data</a>
+          <SubmitButton className="btn small" savedLabel="✓ Pushed">✅ Push selected → Zoho</SubmitButton>
+        </span>
+      </form>
+
       {/* ── The two files ───────────────────────────────────────────────── */}
       <div className="card" style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <a className="btn small" href={`/admin/accounts/export?what=invoices${qs ? `&${qs}` : ""}`}>⬇️ Export Invoice</a>
@@ -114,6 +148,7 @@ export default async function AccountsPage(props: {
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr>
+            <th style={th}>Zoho ✓</th>
             <th style={th}>Date</th><th style={th}>Order</th><th style={th}>Invoice</th><th style={th}>Receipt</th>
             <th style={th}>Customer</th><th style={th}>What</th>
             <th style={{ ...th, textAlign: "right" }}>Amount</th>
@@ -121,10 +156,15 @@ export default async function AccountsPage(props: {
           </tr></thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td style={td} colSpan={10}><span className="muted">Nothing matches those filters.</span></td></tr>
+              <tr><td style={td} colSpan={11}><span className="muted">Nothing matches those filters.</span></td></tr>
             )}
             {rows.slice(0, 500).map((r) => (
               <tr key={`${r.table}-${r.id}`} style={{ borderTop: "1px solid var(--border)" }}>
+                <td style={td}>
+                  {r.zohoStatus === "pending" && r.table !== "gift_orders" ? (
+                    <input type="checkbox" name="zoho_ids" value={`${r.table}:${r.id}`} form="zoho-bulk" title="Tick to include in the Zoho push" />
+                  ) : null}
+                </td>
                 <td style={td}>{formatDate(r.date)}</td>
                 <td style={td}>{r.orderNo || "—"}</td>
                 <td style={td}>{r.invoiceNo || <span style={{ color: "var(--bad)" }}>none</span>}</td>

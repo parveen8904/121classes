@@ -4,7 +4,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
-import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan, resetStudentTests } from "../actions";
+import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan, resetStudentTests, resetOneAttempt, regradeAttempt, makeLoginLink } from "../actions";
 import { startViewAs } from "@/app/dashboard/viewAsActions";
 import PaperForStudent from "./PaperForStudent";
 import { ADMIN_AREAS } from "@/lib/adminAccess";
@@ -27,7 +27,7 @@ type SubRow = {
 export default async function UserDetail(
   props: {
     params: Promise<{ id: string }>;
-    searchParams: Promise<{ pwset?: string; pwerr?: string; testsreset?: string }>;
+    searchParams: Promise<{ pwset?: string; pwerr?: string; testsreset?: string; loginlink?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -95,6 +95,21 @@ export default async function UserDetail(
     .from("mock_papers").select("id, title").eq("status", "approved").order("paper_no");
   const markableMocks = ((mockRows2 ?? []) as { id: string; title: string }[]);
 
+  // Every test this student has sat, for the per-test reset and the AI
+  // re-evaluation — the office asked to stop using the everything-at-once reset.
+  const { data: descAttempts } = await svc2
+    .from("descriptive_attempts")
+    .select("id, section_id, mock_paper_id, submitted_at, status, review_status, awarded_marks, total_marks, sections:section_id(title), mock_papers:mock_paper_id(title)")
+    .eq("student_id", u.id)
+    .order("submitted_at", { ascending: false })
+    .limit(40);
+  const { data: mcqAttempts } = await svc2
+    .from("mcq_attempts")
+    .select("id, section_id, score, total, created_at, sections:section_id(title)")
+    .eq("student_id", u.id)
+    .order("created_at", { ascending: false })
+    .limit(40);
+
   const watchRows = (watch ?? []) as unknown as WatchRow[];
   const actRows = (activity ?? []) as unknown as ActRow[];
 
@@ -117,6 +132,26 @@ export default async function UserDetail(
         <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 0" }}>
           Exactly what they see when they sign in — read only, and no password needed. Nothing on that
           screen can change their account. The look is recorded, and it ends by itself after an hour.
+        </p>
+      </form>
+
+      {searchParams.loginlink && (
+        <div className="notice" style={{ marginTop: 14, fontSize: ".88rem", lineHeight: 1.75 }}>
+          <strong>🔑 One-time sign-in link made.</strong> Open it in an <strong>incognito / private window</strong> —
+          in this window it would sign <em>you</em> out and put you inside their account here.
+          It works once and expires shortly.
+          <div style={{ marginTop: 8, wordBreak: "break-all", fontFamily: "monospace", fontSize: ".78rem", background: "var(--bg-soft)", padding: "8px 10px", borderRadius: 8 }}>
+            {searchParams.loginlink}
+          </div>
+        </div>
+      )}
+
+      <form action={makeLoginLink} style={{ marginTop: 10 }}>
+        <input type="hidden" name="id" value={params.id} />
+        <SubmitButton className="btn small secondary">🔑 Sign in as this user (one-time link)</SubmitButton>
+        <p className="muted" style={{ fontSize: ".8rem", margin: "6px 0 0" }}>
+          For faults the read-only view cannot reproduce — uploads, quotas, vendor screens — because those run under
+          the user&apos;s own session. Open the link in an incognito window. Every use is recorded.
         </p>
       </form>
 
@@ -345,6 +380,62 @@ export default async function UserDetail(
           Save user
         </SubmitButton>
       </form>
+
+      {/* ONE TEST AT A TIME. Reset removes only the chosen attempt, so the rest
+          of the record stands; re-evaluate clears one paper's marking and runs
+          the AI again against the current key. The old buttons above still do
+          the sweep when a whole record genuinely needs clearing. */}
+      <h2 className="admin-section-title">🧪 Tests — reset or re-evaluate one</h2>
+      <div className="card" style={{ overflowX: "auto" }}>
+        {((descAttempts ?? []).length + (mcqAttempts ?? []).length) === 0 ? (
+          <p className="muted" style={{ margin: 0 }}>No tests sat yet.</p>
+        ) : (
+          <table style={{ borderCollapse: "collapse", width: "100%", fontSize: ".86rem" }}>
+            <tbody>
+              {(descAttempts ?? []).map((a) => {
+                const ttl = ((a as { mock_papers?: { title?: string } | null }).mock_papers?.title)
+                  ?? ((a as { sections?: { title?: string } | null }).sections?.title) ?? "Descriptive test";
+                return (
+                  <tr key={a.id as string} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={{ padding: "8px 6px" }}>✍️ {ttl}</td>
+                    <td style={{ padding: "8px 6px", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                      {a.awarded_marks != null ? `${a.awarded_marks}/${a.total_marks ?? "—"}` : (a.status as string)}
+                      {a.review_status === "checked" ? " · released" : ""}
+                    </td>
+                    <td style={{ padding: "8px 6px", whiteSpace: "nowrap" }}>
+                      <form action={regradeAttempt} style={{ display: "inline" }}>
+                        <input type="hidden" name="id" value={u.id} />
+                        <input type="hidden" name="attempt_id" value={a.id as string} />
+                        <SubmitButton className="btn small secondary">🤖 Re-evaluate with AI</SubmitButton>
+                      </form>{" "}
+                      <form action={resetOneAttempt} style={{ display: "inline" }}>
+                        <input type="hidden" name="id" value={u.id} />
+                        <input type="hidden" name="kind" value="descriptive" />
+                        <input type="hidden" name="attempt_id" value={a.id as string} />
+                        <SubmitButton className="btn small secondary">↺ Reset this test</SubmitButton>
+                      </form>
+                    </td>
+                  </tr>
+                );
+              })}
+              {(mcqAttempts ?? []).map((a) => (
+                <tr key={a.id as string} style={{ borderBottom: "1px solid var(--border)" }}>
+                  <td style={{ padding: "8px 6px" }}>✅ {((a as { sections?: { title?: string } | null }).sections?.title) ?? "MCQ test"}</td>
+                  <td style={{ padding: "8px 6px", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{a.score as number}/{a.total as number}</td>
+                  <td style={{ padding: "8px 6px", whiteSpace: "nowrap" }}>
+                    <form action={resetOneAttempt} style={{ display: "inline" }}>
+                      <input type="hidden" name="id" value={u.id} />
+                      <input type="hidden" name="kind" value="mcq" />
+                      <input type="hidden" name="attempt_id" value={a.id as string} />
+                      <SubmitButton className="btn small secondary">↺ Reset this test</SubmitButton>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       <h2 className="admin-section-title">📺 Watch progress ({watchRows.length})</h2>
       <p className="muted" style={{ fontSize: ".85rem" }}>Per class: how far through the video vs the real time spent. A real time much bigger than the video length means breaks / gaps.</p>

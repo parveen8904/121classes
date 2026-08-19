@@ -2762,13 +2762,17 @@ export async function draftGrowthIdeas(): Promise<
       " Never invent results, ranks or student counts. No discounts, no sales lines, no urgency. " +
       "Hooks must be concrete and specific — name the standard, the mistake, the moment — never generic " +
       "motivation.\n" +
-      'Reply as JSON: [{"hook":"the on-screen opening line","format":"concept|strategy|personality|lead-magnet",' +
-      '"outline":"2-3 sentences: what he says/does in the 60 seconds"}]',
+      // An OBJECT, not a bare array: parseLooseJson slices to the first "{",
+      // so a top-level array comes back as unparseable soup. Found the hard
+      // way on this page's first live press.
+      'Reply as JSON: {"ideas":[{"hook":"the on-screen opening line","format":"concept|strategy|personality|lead-magnet",' +
+      '"outline":"2-3 sentences: what he says/does in the 60 seconds"}]}',
     "Draft today's 10.",
     2400,
     { model: await fastModel(), feature: "other" },
   );
-  const j = parseLooseJson(String(out ?? ""));
+  const parsed = parseLooseJson(String(out ?? ""));
+  const j = Array.isArray(parsed) ? parsed : parsed?.ideas;
   if (!Array.isArray(j)) return null;
   return j
     .filter((r) => r && typeof r.hook === "string" && r.hook.trim())

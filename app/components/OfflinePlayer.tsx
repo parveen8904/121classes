@@ -198,10 +198,24 @@ export default function OfflinePlayer({
   // Turn the picture a quarter turn so a 16:9 class fills an upright phone,
   // instead of sitting as a strip between two black bands. On a phone already
   // held sideways there is nothing to turn.
+  const overlayRef = useRef<HTMLDivElement>(null);
+
   const toggleTurn = () => {
     const next = !turned;
     setTurned(next);
     showChrome();
+    // TRUE fullscreen as well, where the platform allows it. The old faults came
+    // from fullscreening a CHILD of this overlay — the close button and control
+    // bar lived outside it and vanished. The overlay itself holds every control,
+    // so fullscreening the overlay loses nothing; on Android it retires the
+    // status and navigation bars, which is the strip students still saw around
+    // a "fullscreen" class. iOS refuses the request and the quarter-turn below
+    // covers it, exactly as before.
+    try {
+      const el = overlayRef.current as (HTMLDivElement & { requestFullscreen?: () => Promise<void> }) | null;
+      if (next && el?.requestFullscreen) el.requestFullscreen().catch(() => {});
+      else if (!next && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    } catch { /* a refused fullscreen must never break the player */ }
     if (next) {
       // Ask the phone to rotate as well — Android obliges, iOS refuses, and the
       // turn above covers iOS either way.
@@ -218,7 +232,7 @@ export default function OfflinePlayer({
   const btn: React.CSSProperties = { background: "rgba(255,255,255,.14)", color: "#fff", border: 0, borderRadius: 8, padding: "8px 12px", fontSize: "1rem", fontWeight: 700, cursor: "pointer", minWidth: 44 };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 1000, display: "flex", flexDirection: "column" }}>
+    <div ref={overlayRef} style={{ position: "fixed", inset: 0, background: "#000", zIndex: 1000, display: "flex", flexDirection: "column" }}>
       {/* The close button belongs to the CHROME, and fades with it. It used to
           sit outside the element that went fullscreen, so it was either always
           on top of the class or gone entirely. */}

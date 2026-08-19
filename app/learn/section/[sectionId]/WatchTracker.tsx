@@ -49,6 +49,12 @@ export default function WatchTracker({
   const playerRef = useRef<{ getCurrentTime?: (cb: (t: number) => void) => void; setCurrentTime?: (t: number) => void } | null>(null);
   const [seekMsg, setSeekMsg] = useState<string | null>(null);
   const maxPos = useRef(0);
+  // The player's ACTUAL position, refreshed ~4×/second by timeupdate. Kept for
+  // the seek buttons: asking the player for its time through the async callback
+  // sometimes answered stale, so "current + 10" landed one or two seconds ahead
+  // of where the video truly was — the exact glitch students reported.
+  const livePos = useRef(0);
+  const livePosAt = useRef(0);
   const realAccum = useRef(0);
   const playing = useRef(false);
   // When the last position arrived. Positions stop the moment a video is
@@ -138,6 +144,8 @@ export default function WatchTracker({
           player.on("timeupdate", (d: any) => {
             const s = Number(d?.seconds) || 0;
             if (s > maxPos.current) maxPos.current = s;
+            livePos.current = s;
+            livePosAt.current = Date.now();
             playing.current = true;
             lastTick.current = Date.now();
           });
@@ -182,15 +190,28 @@ export default function WatchTracker({
   // Ten seconds, the way every player a student has ever used behaves.
   const seekBy = useCallback((delta: number) => {
     const p = playerRef.current;
-    if (!p?.getCurrentTime || !p?.setCurrentTime) return;
-    try {
-      p.getCurrentTime((t: number) => {
-        const to = Math.max(0, (Number(t) || 0) + delta);
-        p.setCurrentTime!(to);
-        setSeekMsg(`${delta > 0 ? "⏩" : "⏪"} ${Math.abs(delta)}s`);
-        window.setTimeout(() => setSeekMsg(null), 700);
-      });
-    } catch { /* a player that will not seek must not break the page */ }
+    if (!p?.setCurrentTime) return;
+    const jump = (from: number) => {
+      const to = Math.max(0, from + delta);
+      try { p.setCurrentTime!(to); } catch { /* a player that will not seek must not break the page */ }
+      // The seek itself moves the clock; keep our copy honest so a second press
+      // within the same second stacks (+20) instead of re-adding to the old spot.
+      livePos.current = to;
+      livePosAt.current = Date.now();
+      setSeekMsg(`${delta > 0 ? "⏩" : "⏪"} ${Math.abs(delta)}s`);
+      window.setTimeout(() => setSeekMsg(null), 700);
+    };
+    // The timeupdate stream is the truth: it arrives ~4×/second while playing.
+    // The async getCurrentTime callback is the fallback for a paused player,
+    // where timeupdates have stopped and the last one may be stale.
+    if (livePosAt.current && Date.now() - livePosAt.current < 1500) {
+      jump(livePos.current);
+    } else if (p.getCurrentTime) {
+      try { p.getCurrentTime((t: number) => jump(Number(t) || livePos.current || 0)); }
+      catch { jump(livePos.current || 0); }
+    } else {
+      jump(livePos.current || 0);
+    }
   }, []);
 
   // Arrow keys, when the focus is anywhere on our page rather than inside the

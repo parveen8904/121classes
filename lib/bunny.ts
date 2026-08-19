@@ -86,7 +86,19 @@ const LIBRARY_ID = process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID || "682810";
 // standard, non-DRM class (plain embed, no signed token).
 export function bunnyEmbedUrl(videoId: string, drm = true): string {
   const base = `https://iframe.mediadelivery.net/embed/${LIBRARY_ID}/${videoId}`;
-  const params = "preload=false&responsive=true";
+  // HIS INSTRUCTION, 19 AUG: these features exist in Bunny's player — take them
+  // from Bunny, build nothing of our own on top.
+  //
+  //  rememberPosition — Bunny stores where the student stopped and resumes
+  //    there on the next visit. Students were starting every class from zero
+  //    and scrubbing to find their place.
+  //  showHeatmap — a band on the progress bar showing which parts of the class
+  //    are most watched. The "which part do students replay" line he asked for,
+  //    straight from the player.
+  //
+  // Neither touches the token: it signs key+videoId+expires only, so extra
+  // query parameters never invalidate a signed URL.
+  const params = "preload=false&responsive=true&rememberPosition=true&showHeatmap=true";
   const key = process.env.BUNNY_STREAM_TOKEN_KEY;
   if (!drm || !key) return `${base}?${params}`;
   const expires = Math.floor(Date.now() / 1000) + 6 * 3600; // 6 hours

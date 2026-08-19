@@ -83,7 +83,7 @@ export default async function CostsPage() {
       <AdminHero
         badge="💰 Costs & usage"
         title="What each service is costing you"
-        subtitle="AI is tracked exactly here. For Bunny, Cloudflare & Supabase, see the usage we can measure plus a one-tap link to the provider's own bill."
+        subtitle="Two kinds of number live here and they must not be confused: AI and Bunny are MEASURED; Supabase, Vercel and Cloudflare are the flat plan prices set in settings — usage overages appear only on the provider's own bill, which is the truth."
         back={{ href: "/admin", label: "Admin" }}
       />
 
@@ -92,7 +92,7 @@ export default async function CostsPage() {
         <div style={{ fontSize: ".85rem", opacity: 0.92 }}>Estimated total for {monthLabel}</div>
         <div style={{ fontSize: "2rem", fontWeight: 800, margin: "4px 0" }}>{money(totalMonth)}</div>
         <div style={{ fontSize: ".8rem", opacity: 0.92 }}>
-          AI {money(aiMonth)} (exact) · Bunny {money(bunnyMonth)} (live) · Supabase {money(supabasePlan)} + Vercel {money(vercelPlan)} (plan base) · R2 free
+          AI {money(aiMonth)} (exact) · Bunny {money(bunnyMonth)} (live) · Supabase {money(supabasePlan)} + Vercel {money(vercelPlan)} — <strong>these two are the plan prices you told us, not measured</strong> · R2 free tier assumed
         </div>
       </div>
 

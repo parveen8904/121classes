@@ -144,7 +144,12 @@ export async function reachStats(): Promise<Channel[]> {
   });
   out.push({
     key: "whatsapp", label: "WhatsApp", count: phoneable.count ?? 0, people: [],
-    note: "Students with a phone number. Meta caps an unverified business at 250 messages a day.",
+    // Business verification cleared on 17 Aug 2026 — Aldine CA is verified, and
+    // Meta's own account_mode reads LIVE. A verified business starts at 1,000
+    // business-initiated conversations per 24 hours and Meta raises the tier
+    // automatically as volume grows with a GREEN quality rating. The old 250
+    // figure was the unverified cap and outlived its truth by two days.
+    note: "Students with a phone number. Verified business: at least 1,000 conversations per day, and Meta raises it automatically while quality stays green.",
   });
 
   return out;

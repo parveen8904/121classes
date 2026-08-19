@@ -1,5 +1,7 @@
 import AdminHero from "../_components/AdminHero";
 import { EMAIL_CATALOGUE } from "@/lib/emailCatalogue";
+import { createServiceClient } from "@/lib/supabase/service";
+import { getSecret } from "@/lib/secrets";
 import SubmitButton from "@/app/components/SubmitButton";
 import { EMAIL_EVENTS, GENERATED_EMAILS, loadTemplate, renderTemplate, type EmailEventDef } from "@/lib/emailTemplates";
 import { saveEmailTemplate, restoreEmailDefault, sendTestEmail } from "./actions";
@@ -93,6 +95,67 @@ export default async function EmailsAdmin(props: {
         subtitle="Write the words once, here. Each one goes out on its own event — nothing is buried in the code. 📮"
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {/* HOW MUCH ACTUALLY WENT OUT. Email counted by MAILGUN itself — our own
+          log misses the sends that bypass it (114 vs 13 on the day this was
+          built). WhatsApp and Telegram from our notifications log, plus the
+          bot's group replies, with the gap named rather than papered over. */}
+      {await (async () => {
+        const svc = createServiceClient();
+        const istMidnight = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+        istMidnight.setHours(0, 0, 0, 0);
+        const midnightIso = new Date(istMidnight.getTime() - (istMidnight.getTimezoneOffset() - (-330)) * 60000);
+        // count helper against notifications
+        const cnt = async (channel: string, sinceIso: string) => {
+          const { count } = await svc.from("notifications").select("id", { count: "exact", head: true })
+            .eq("channel", channel).gte("sent_at", sinceIso);
+          return count ?? 0;
+        };
+        const d30 = new Date(Date.now() - 30 * 864e5).toISOString();
+        const dToday = midnightIso.toISOString();
+        let mailToday = 0, mail30 = 0;
+        try {
+          const key = await getSecret("MAILGUN_API_KEY");
+          const dom = await getSecret("MAILGUN_DOMAIN");
+          const res = await fetch(`https://api.eu.mailgun.net/v3/${dom}/stats/total?event=accepted&duration=30d`, {
+            headers: { Authorization: "Basic " + Buffer.from(`api:${key}`).toString("base64") }, cache: "no-store",
+          });
+          const j = (await res.json()) as { stats?: { time: string; accepted?: { total?: number } }[] };
+          const today = new Date().toISOString().slice(0, 10);
+          for (const st of j.stats ?? []) {
+            const n = Number(st.accepted?.total) || 0;
+            mail30 += n;
+            if (String(st.time).slice(0, 10) === today || String(st.time).startsWith(today)) mailToday = n;
+          }
+        } catch { /* the panel shows a dash rather than a guess */ }
+        const [waT, wa30, tgT, tg30] = await Promise.all([
+          cnt("whatsapp", dToday), cnt("whatsapp", d30), cnt("telegram", dToday), cnt("telegram", d30),
+        ]);
+        const { count: botT } = await svc.from("group_messages").select("id", { count: "exact", head: true })
+          .eq("sender_name", "🤖 AI assistant").gte("created_at", dToday);
+        const { count: bot30 } = await svc.from("group_messages").select("id", { count: "exact", head: true })
+          .eq("sender_name", "🤖 AI assistant").gte("created_at", d30);
+        const box: React.CSSProperties = { flex: 1, minWidth: 150 };
+        return (
+          <div className="card" style={{ marginTop: 16, display: "flex", gap: 20, flexWrap: "wrap" }}>
+            <div style={box}>
+              <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--accent)" }}>{mailToday || "—"}<span className="muted" style={{ fontSize: ".85rem", fontWeight: 400 }}> today</span></div>
+              <div style={{ fontSize: ".85rem", fontWeight: 600 }}>✉️ Emails</div>
+              <div className="muted" style={{ fontSize: ".76rem" }}>{mail30.toLocaleString("en-IN")} in 30 days · counted by Mailgun itself</div>
+            </div>
+            <div style={box}>
+              <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--accent)" }}>{waT}<span className="muted" style={{ fontSize: ".85rem", fontWeight: 400 }}> today</span></div>
+              <div style={{ fontSize: ".85rem", fontWeight: 600 }}>💬 WhatsApp</div>
+              <div className="muted" style={{ fontSize: ".76rem" }}>{wa30.toLocaleString("en-IN")} in 30 days</div>
+            </div>
+            <div style={box}>
+              <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--accent)" }}>{tgT + (botT ?? 0)}<span className="muted" style={{ fontSize: ".85rem", fontWeight: 400 }}> today</span></div>
+              <div style={{ fontSize: ".85rem", fontWeight: 600 }}>✈️ Telegram</div>
+              <div className="muted" style={{ fontSize: ".76rem" }}>{(tg30 + (bot30 ?? 0)).toLocaleString("en-IN")} in 30 days · direct messages + the bot&apos;s group answers</div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* THE FULL MAP FIRST — his ask, 19 Aug: one screen that says what
           triggers what mail. The editable templates below were only half the

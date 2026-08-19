@@ -78,6 +78,10 @@ export const SECRET_KEYS = [
   // reason).
   "INSTAGRAM_ACCESS_TOKEN",
   "INSTAGRAM_USER_ID",
+  // The founder's MAIN account (@ca_parveen_sharma, 19.5K) — on the API since
+  // 19 Aug 2026, when its page was partner-shared to the Aldine CA business and
+  // assigned to the Portal Bot system user. Same token reaches both accounts.
+  "INSTAGRAM_USER_ID_MAIN",
   "FACEBOOK_PAGE_ID",
   "FACEBOOK_PAGE_TOKEN",
   "LINKEDIN_ACCESS_TOKEN",

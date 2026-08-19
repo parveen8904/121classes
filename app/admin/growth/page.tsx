@@ -37,7 +37,7 @@ const CHECKLIST = [
   { id: "stories", label: "One Story a day", detail: "A poll, a doubt box, one class moment. Stories keep the existing followers warm — and warm followers are who new reels are shown to first." },
   { id: "collab", label: "Post trend reels as Collabs with the other faculty", detail: "A Collab lands in both accounts' audiences at once. The 1.6M reel was exactly this format." },
   { id: "cadence", label: "Hold a 5-posts-a-week rhythm", detail: "2 concept explainers, 1 exam-strategy talk, 1 personality/trend reel, 1 comment-trigger lead magnet. 51 posts total on a 19.4K account is an under-fed machine." },
-  { id: "handle", label: "Decide the two-account question", detail: "The API posts to @caparveensharmaclasses (2.3K) while the audience sits on @ca_parveen_sharma (19.4K). Either connect the big account to the API too, or make the personal account the only stage and let the classes account repost." },
+  { id: "handle", label: "Decide which account campaigns post to", detail: "Both accounts are on the API since 19 Aug (the main account's page was shared to the Portal Bot). Campaigns currently post reels to @caparveensharmaclasses; say the word and they can target @ca_parveen_sharma instead — where the audience is." },
 ];
 
 type Idea = { hook: string; format: string; outline: string };
@@ -65,19 +65,24 @@ export default async function GrowthPage(props: { searchParams: Promise<{ err?: 
   let done: Record<string, string> = {};
   try { done = JSON.parse(map.get("growth_checklist") || "{}"); } catch { /* none ticked */ }
 
-  // Live snapshot of the API-connected account. The 19.4K personal account has
-  // no API access, so its figures here would be guesses — and we don't guess.
-  let live: { username: string; followers: number; media: number } | null = null;
+  // Live snapshot of EVERY Instagram account the token can reach. Since 19 Aug
+  // that is both of them — the main account's page was partner-shared to the
+  // Portal Bot system user, so one token reads (and could post to) both.
+  let live: { username: string; followers: number; media: number }[] = [];
   try {
-    const [uid, token] = await Promise.all([getSecret("INSTAGRAM_USER_ID"), getSecret("INSTAGRAM_ACCESS_TOKEN")]);
-    if (uid && token) {
+    const token = await getSecret("INSTAGRAM_ACCESS_TOKEN");
+    if (token) {
       const res = await fetch(
-        `https://graph.facebook.com/v21.0/${uid}?fields=username,followers_count,media_count&access_token=${token}`,
+        `https://graph.facebook.com/v21.0/me/accounts?fields=instagram_business_account{username,followers_count,media_count}&access_token=${token}`,
         { cache: "no-store" },
       );
       if (res.ok) {
-        const j = (await res.json()) as { username?: string; followers_count?: number; media_count?: number };
-        if (j.username) live = { username: j.username, followers: j.followers_count ?? 0, media: j.media_count ?? 0 };
+        const j = (await res.json()) as { data?: { instagram_business_account?: { username?: string; followers_count?: number; media_count?: number } }[] };
+        live = (j.data ?? [])
+          .map((p) => p.instagram_business_account)
+          .filter((a): a is NonNullable<typeof a> => Boolean(a?.username))
+          .map((a) => ({ username: a.username!, followers: a.followers_count ?? 0, media: a.media_count ?? 0 }))
+          .sort((a, b) => b.followers - a.followers);
       }
     }
   } catch { /* the panel shows nothing rather than a guess */ }
@@ -95,17 +100,18 @@ export default async function GrowthPage(props: { searchParams: Promise<{ err?: 
 
       {sp.err && <div className="notice err" style={{ marginTop: 16 }}>The idea draft failed — try again in a minute.</div>}
 
-      {live && (
-        <div className="card" style={{ marginTop: 16, display: "flex", gap: 24, flexWrap: "wrap", alignItems: "baseline" }}>
-          <div>
-            <div style={{ fontSize: "1.4rem", fontWeight: 800 }}>@{live.username}</div>
-            <div className="muted" style={{ fontSize: ".8rem" }}>the account the API posts to</div>
-          </div>
-          <div><strong style={{ fontSize: "1.2rem" }}>{live.followers.toLocaleString("en-IN")}</strong> <span className="muted" style={{ fontSize: ".82rem" }}>followers</span></div>
-          <div><strong style={{ fontSize: "1.2rem" }}>{live.media.toLocaleString("en-IN")}</strong> <span className="muted" style={{ fontSize: ".82rem" }}>posts</span></div>
-          <div className="muted" style={{ fontSize: ".78rem", flexBasis: "100%" }}>
-            Your main audience sits on <strong>@ca_parveen_sharma</strong> (19.4K at the 19 Aug review), which is not
-            API-connected — see the last item on the checklist.
+      {live.length > 0 && (
+        <div className="card" style={{ marginTop: 16, display: "grid", gap: 10 }}>
+          {live.map((a) => (
+            <div key={a.username} style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "baseline" }}>
+              <div style={{ fontSize: "1.2rem", fontWeight: 800, minWidth: 260 }}>@{a.username}</div>
+              <div><strong style={{ fontSize: "1.1rem" }}>{a.followers.toLocaleString("en-IN")}</strong> <span className="muted" style={{ fontSize: ".82rem" }}>followers</span></div>
+              <div><strong style={{ fontSize: "1.1rem" }}>{a.media.toLocaleString("en-IN")}</strong> <span className="muted" style={{ fontSize: ".82rem" }}>posts</span></div>
+            </div>
+          ))}
+          <div className="muted" style={{ fontSize: ".78rem" }}>
+            Live from Instagram, both on the API since 19 Aug. Campaigns post to @caparveensharmaclasses today; the
+            main account is ready whenever you say so.
           </div>
         </div>
       )}

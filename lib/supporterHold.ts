@@ -51,7 +51,7 @@ export function isHoldable(r: SiteResult): boolean {
 /** What the vendor is told they did — in the words of the agreement. */
 export function ruleBroken(problem: string | undefined): string {
   if (problem === "discount") return "Selling at more than the 5% discount the agreement allows";
-  if (problem === "combo") return "Offering our subject bundled with another faculty's course";
+  if (problem === "combo") return "Offering CA Parveen Sharma's own course bundled with another faculty's course";
   return "A term of the seller agreement";
 }
 

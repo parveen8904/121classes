@@ -316,9 +316,13 @@ async function inspectOnePage(url: string): Promise<SiteResult> {
   }
 
   // ── Bundled with another faculty ─────────────────────────────────────────
-  // Only asked when our name is on the page at all; a shop selling nothing of
-  // ours is not our business.
-  const mentionsUs = /parveen\s*sharma|financial reporting|advanced accounting/i.test(text);
+  // Only asked when HIS NAME is on the page. This gate used to accept the
+  // subject names too — and on 19 August that flagged LLA for an "Adv.
+  // Accounts & DT" combo taught entirely by Kandoi and Borana. The founder's
+  // ruling: other faculty may bundle whatever they like, even our subjects
+  // under their own teaching; the rule is only about bundling HIS course. A
+  // subject name identifies nothing — his name does.
+  const mentionsUs = OUR_NAME.test(text);
   if (!mentionsUs) return { ok: true };
 
   try {

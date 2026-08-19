@@ -1327,11 +1327,15 @@ export async function judgeSupporterPage(
   const out = await callClaude(
     "You are reading a coaching reseller's web page. They are allowed to sell CA Parveen Sharma's " +
       "Financial Reporting and Advanced Accounting on their own site.\n" +
-      "Answer ONE question: is a CA Parveen Sharma subject being sold BUNDLED or COMBINED with a " +
-      "DIFFERENT teacher's course — a combo, a package, 'buy both', two faculty in one price?\n" +
+      "Answer ONE question: is a course TAUGHT BY CA PARVEEN SHARMA HIMSELF being sold BUNDLED or " +
+      "COMBINED with a DIFFERENT teacher's course — a combo, a package, 'buy both', one price for " +
+      "his course plus somebody else's?\n" +
+      "The subject alone proves nothing: many faculties teach Financial Reporting and Advanced " +
+      "Accounting, and a combo of THEIR courses — whatever the subjects — is entirely allowed. " +
+      "Answer NO unless the bundle names CA Parveen Sharma (or plainly contains his course).\n" +
       "Answer NO if his courses are merely listed on the same page as other teachers' courses. A " +
       "catalogue is not a bundle. Answer NO if you are unsure at all.\n" +
-      "Answer YES only when one price plainly buys his subject together with another teacher's.\n" +
+      "Answer YES only when one price plainly buys HIS course together with another teacher's.\n" +
       'Reply as JSON: {"combo": true|false, "why": "one sentence", "evidence": "the exact words on ' +
       'the page that show it"}',
     text,

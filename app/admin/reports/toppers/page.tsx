@@ -114,6 +114,21 @@ export default async function ToppersPage(props: {
         back={{ href: "/admin/reports", label: "Reports" }}
       />
 
+      {/* Counted afresh on every open — never cached. Said out loud, with the
+          clock to prove it, because boards that rank ALL-TIME totals move
+          slowly: an unchanged leader looks like a page that stopped
+          refreshing, when it is a lead that has not been overtaken. */}
+      <p className="muted" style={{ fontSize: ".8rem", margin: "10px 2px 0" }}>
+        Counted afresh just now —{" "}
+        {new Date().toLocaleString("en-IN", {
+          day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
+          hour12: true, timeZone: "Asia/Kolkata",
+        })}{" "}
+        IST. Every open recalculates from the raw watching and test records; a class watched a minute
+        ago is already in these figures. These are all-time totals, so the top of a board changes only
+        when somebody is actually overtaken.
+      </p>
+
       {/* ── Filters ──────────────────────────────────────────────────────── */}
       <div className="card" style={{ marginTop: 16, display: "grid", gap: 10 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>

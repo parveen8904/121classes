@@ -93,9 +93,25 @@ async function fromSerpApi(): Promise<Raw[]> {
     console.error("[jobs] SerpAPI has no searches left this month — skipping until it renews.");
     return [];
   }
+
+  // EVERY ALTERNATE DAY, WITH A DOUBLE SHARE — his instruction, repeated twice.
+  //
+  // The same 250-a-month allowance, spent in fewer, deeper pulls: on its day
+  // the feed takes ~16 searches and covers the query list properly; on the off
+  // day it takes none and the RSS sources carry the page. The month still
+  // cannot be eaten early, and each pull actually finishes what it starts
+  // instead of sipping eight and stopping mid-list.
+  const istDay = Math.floor(
+    (Date.now() + 5.5 * 3600 * 1000) / 86_400_000,
+  );
+  if (istDay % 2 === 1) {
+    console.log("[jobs] SerpAPI rests today (alternate-day schedule) — RSS sources still run.");
+    return [];
+  }
+
   const cap = Math.max(0, Number(await getSecret("SERP_MONTHLY_CAP")) || 250);
-  const perDay = Math.max(1, Math.floor(cap / 31));
-  const budget = left === null ? perDay : Math.min(perDay, left);
+  const perRun = Math.max(2, Math.floor(cap / 31) * 2);
+  const budget = left === null ? perRun : Math.min(perRun, left);
 
   const out: Raw[] = [];
   for (const { q, loc } of combos.slice(0, budget)) {

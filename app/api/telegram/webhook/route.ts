@@ -166,6 +166,35 @@ export async function POST(req: NextRequest) {
       const botUser = ((await getSecret("TELEGRAM_BOT_USERNAME")) || "").replace(/^@/, "").toLowerCase();
       const mentioned = !!botUser && text.toLowerCase().includes(`@${botUser}`);
       const repliedToBot = !!botUser && String(msg?.reply_to_message?.from?.username ?? "").toLowerCase() === botUser;
+
+      // /courses — THE COMMAND THE STUDENTS INVENTED.
+      //
+      // Nobody built it and nothing registered it. One student typed
+      // "/courses@caparveensharmabot" in the Financial Reporting group hoping
+      // for a course list, got silence, and others copied — four of them inside
+      // twelve hours, and then the founder himself, also to silence. The
+      // mention detector saw the @botname, handed "/courses" to the AI judge,
+      // which found no question in it and said nothing. A command that LOOKS
+      // like a feature and answers nothing reads as a broken bot to the whole
+      // room.
+      //
+      // So it is a feature now. Answered directly, before the AI, with the two
+      // places courses actually live — and threaded to the asker so the group
+      // is not spammed when four people press it in a night.
+      if (!mod.flagged && /^\/courses\b/i.test(text.trim())) {
+        await tgSendGroupReply(
+          chatId,
+          "📚 CA Parveen Sharma's courses:\n\n" +
+          "• CA Final — Financial Reporting\n" +
+          "• CA Inter — Advanced Accounting\n" +
+          "• Financial Instruments — Live Batch\n\n" +
+          "Details, demos and fees: caparveensharma.com/courses\n" +
+          "Your own classes after buying: caparveensharma.com/dashboard",
+          msg.message_id,
+        );
+        return NextResponse.json({ ok: true });
+      }
+
       if (!mod.flagged && subj?.id && (mentioned || repliedToBot)) {
         try {
           // Remove the tag itself so the AI sees a clean question.
@@ -249,6 +278,20 @@ export async function POST(req: NextRequest) {
     await sendTelegramMessage(
       chatId,
       "👋 Welcome to CA Parveen Sharma! To connect your account, open the “Connect Telegram” button on your dashboard. You can also just type any doubt and I'll help.",
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  // /courses in a private chat — same answer as in the groups, same reason.
+  if (/^\/courses\b/i.test(text.trim())) {
+    await sendTelegramMessage(
+      chatId,
+      "📚 CA Parveen Sharma's courses:\n\n" +
+      "• CA Final — Financial Reporting\n" +
+      "• CA Inter — Advanced Accounting\n" +
+      "• Financial Instruments — Live Batch\n\n" +
+      "Details, demos and fees: caparveensharma.com/courses\n" +
+      "Your own classes after buying: caparveensharma.com/dashboard",
     );
     return NextResponse.json({ ok: true });
   }

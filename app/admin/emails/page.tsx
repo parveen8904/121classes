@@ -171,11 +171,15 @@ export default async function EmailsAdmin(props: {
             headers: { Authorization: "Basic " + Buffer.from(`api:${key}`).toString("base64") }, cache: "no-store",
           });
           const j = (await res.json()) as { stats?: { time: string; accepted?: { total?: number } }[] };
+          // Mailgun writes the bucket time as "Wed, 19 Aug 2026 00:00:00 UTC",
+          // not ISO — matching it against an ISO date silently never fires and
+          // the panel showed a dash for "today". Parse it properly.
           const today = new Date().toISOString().slice(0, 10);
           for (const st of j.stats ?? []) {
             const n = Number(st.accepted?.total) || 0;
             mail30 += n;
-            if (String(st.time).slice(0, 10) === today || String(st.time).startsWith(today)) mailToday = n;
+            const bucket = new Date(String(st.time));
+            if (!Number.isNaN(bucket.getTime()) && bucket.toISOString().slice(0, 10) === today) mailToday = n;
           }
         } catch { /* the panel shows a dash rather than a guess */ }
         const [waT, wa30, tgT, tg30] = await Promise.all([

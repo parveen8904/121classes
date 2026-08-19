@@ -85,6 +85,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { icon: "💚", title: "Scholarships", desc: "Merit & need-based applications; approve to auto-issue an emailed discount coupon.", href: "/admin/scholarships" },
       { icon: "🏆", title: "Results", desc: "Showcase rank-holders & toppers — the #1 trust signal for CA students.", href: "/admin/results" },
       { icon: "🎖️", title: "Result awards", desc: "Students claiming an award with marksheet + photo — verify & approve; a feed of success stories.", href: "/admin/awards" },
+      { icon: "📇", title: "Student CV bank", desc: "Profiles and resumes students keep at /career/profile — tick candidates and send them to an employer with resumes attached. Only students who ticked the sharing consent are offered.", href: "/admin/cvs" },
       { icon: "🎓", title: "Student placement", desc: "Auto-pulled CA openings — categorise & approve to publish on the Career page.", href: "/admin/placement" },
       { icon: "🧭", title: "Career corner", desc: "Career-page content — interviews, CV tips, guidance articles.", href: "/admin/content" },
     ],

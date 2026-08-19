@@ -73,7 +73,8 @@ export default async function CareerPage(props: { searchParams: Promise<{ city?:
 
       {/* Tools */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-        <Link className="btn" href="/career/cv">📄 Build my CV</Link>
+        <Link className="btn" href="/career/profile">💼 My placement profile — get sent to employers</Link>
+        <Link className="btn secondary" href="/career/cv">📄 Build my CV</Link>
         <Link className="btn secondary" href="/career/interview">🎤 AI mock interview</Link>
       </div>
 

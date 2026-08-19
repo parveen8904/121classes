@@ -343,31 +343,12 @@ export default function WatchTracker({
       {watermark && <span className="vwm">{watermark}</span>}
       {/* A BUTTON WORKS WHATEVER HAS FOCUS. Keys do not: once a student has
           clicked the video, the keystrokes belong to Bunny and this page never
-          hears them. These are the reliable way back ten seconds. */}
-      <div
-        style={{
-          position: "absolute", bottom: 8, left: 8, zIndex: 4, display: "flex", gap: 6,
-          opacity: isFull && !showChrome ? 0 : 1,
-          pointerEvents: isFull && !showChrome ? "none" : "auto",
-          transition: "opacity .25s ease",
-        }}
-      >
-        {[-10, 10].map((d) => (
-          <button
-            key={d}
-            type="button"
-            onClick={() => seekBy(d)}
-            aria-label={d < 0 ? "Back 10 seconds" : "Forward 10 seconds"}
-            title={d < 0 ? "Back 10s (← or J · hold Shift for a minute)" : "Forward 10s (→ or L · hold Shift for a minute)"}
-            style={{
-              background: "rgba(0,0,0,.55)", color: "#fff", border: 0, borderRadius: 8,
-              padding: "6px 10px", fontSize: ".95rem", cursor: "pointer",
-            }}
-          >
-            {d < 0 ? "⏪ 10" : "10 ⏩"}
-          </button>
-        ))}
-      </div>
+          hears them. */}
+      {/* The visible ⏪/⏩ buttons are gone — his instruction, 19 Aug: Bunny's
+          own player carries the same controls at the bottom of the picture, and
+          two sets of seek buttons on one video is one set too many. The arrow
+          keys above stay, because the keyboard cannot reach Bunny's player from
+          outside the iframe and costs nothing on screen. */}
 
       {seekMsg && (
         <span

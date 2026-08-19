@@ -155,7 +155,9 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
       date: str(r.created_at),
       customer: str(r.billing_name || r.recipient_name), email: str(r.recipient_email), phone: str(r.recipient_phone),
       gstin: str(r.billing_gstin), state: str(r.billing_state),
-      description: `${str((r.subjects as unknown as { title?: string } | null)?.title) || "Subject"} — ${str(r.tier) || "Gold"} (${str(r.months)} months)`,
+      // NEVER THE WORD "GIFT" ON A BOOKS DOCUMENT — his instruction. The line
+      // names what was sold and whom it serves: "Classes for <student>".
+      description: `${str((r.subjects as unknown as { title?: string } | null)?.title) || "Subject"} — ${str(r.tier) || "Gold"} (${str(r.months)} months) — Classes for ${str(r.recipient_name) || "student"}`,
       // A vendor sale is the only one that already stores its own tax split,
       // worked out at the moment of sale. Where it exists it is used rather
       // than recomputed, so the report agrees with the invoice that was issued.
@@ -241,7 +243,16 @@ export function invoicesCsv(rows: AccountRow[]): string {
       esc(r.gstin ? "business_gst" : "consumer"), esc(r.gstin), esc(zohoStateCode(r.state)),
       esc(r.orderNo.replace(/^#/, "")), esc(r.account),
       esc(r.description), esc(""), esc("Service"), esc(r.hsn), esc(1), esc(r.total),
-      esc("TRUE"), esc("GST18"), esc("Tax Group"), esc(18), esc("Taxable"),
+      // THE TAX COLUMNS FOLLOW THE PLACE OF SUPPLY. Delhi is intra-state, so
+      // CGST+SGST under Zoho's "GST18" group; anywhere else is inter-state,
+      // IGST18 as a plain item amount. The strings are Zoho's own vocabulary,
+      // copied letter-for-letter from the file their import accepts: "Tax
+      // Group" carries one space, "ItemAmount" carries none — get either wrong
+      // and every non-Delhi invoice imports with Delhi's tax split.
+      esc("TRUE"),
+      esc(zohoStateCode(r.state) === "DL" ? "GST18" : "IGST18"),
+      esc(zohoStateCode(r.state) === "DL" ? "Tax Group" : "ItemAmount"),
+      esc(18), esc("Taxable"),
       esc("item_level"), esc(""), esc(""), esc("Spreadsheet Template"),
       esc("Thanks for your business."), esc(TERMS),
       esc(r.razorpayPaymentId), esc(r.customer), esc(r.email), esc(r.phone),
@@ -276,8 +287,13 @@ export function paymentsCsv(rows: AccountRow[], startFrom = 1): string {
     .slice().sort((a, b) => a.date.localeCompare(b.date));
   let n = Math.max(1, Math.floor(startFrom));
   for (const r of paid) {
+    // THE PAYMENT NUMBER IS THE RECEIPT NUMBER. The office matches a payment to
+    // its paper trail by the receipt printed on the invoice, so the suffix
+    // carries that (a plain integer like 20014). The running counter remains
+    // only as a fallback for a paid sale that somehow has no receipt — a blank
+    // suffix would make Zoho reject the whole import.
     lines.push([
-      esc(fyPrefix(r.date)), esc(String(n).padStart(6, "0")), esc(r.customer),
+      esc(fyPrefix(r.date)), esc(r.receiptNo || String(n).padStart(6, "0")), esc(r.customer),
       esc(zohoStateCode(r.state)), esc(r.gstin ? "business_gst" : "consumer"), esc(r.gstin),
       esc("Invoice Payment"), esc(r.description), esc(dmy(r.date)), esc("Razorpay"),
       esc(money(r.total)), esc(""), esc(""), esc(""), esc("Razorpay Clearing"),

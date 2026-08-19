@@ -297,6 +297,39 @@ function putWithProgress(
     }
     const started = Date.now();
     let slowWarned = false;
+    let settled = false;
+    let verifyTimer: ReturnType<typeof setTimeout> | null = null;
+    const settle = (r: { ok: true } | { error: string }) => {
+      if (settled) return;
+      settled = true;
+      if (verifyTimer) clearTimeout(verifyTimer);
+      resolve(r);
+    };
+
+    // THE UPLOAD THAT SUCCEEDED AND NEVER SAID SO.
+    //
+    // Students reported the screen stuck on "Uploading…" with Send never
+    // enabled — while the file had actually arrived in the bucket. The bytes
+    // went up; the RESPONSE was lost (a proxy, a network handover, a WebView
+    // quirk), so onload never fired and this promise never resolved.
+    //
+    // So the moment the last byte has left, a watchdog starts. If no reply has
+    // come after eight seconds, we stop waiting for the browser and ask the
+    // bucket directly: does the file exist now? Existence IS success — the
+    // student's paper is there, whatever happened to the acknowledgement.
+    const verifyUploaded = async () => {
+      if (settled) return;
+      try {
+        const info = await fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/info/authenticated/secure/${path}`,
+          { headers: { Authorization: `Bearer ${token}`, apikey: String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "") }, cache: "no-store" },
+        );
+        if (info.ok) { onProgress?.("Sent ✓"); settle({ ok: true }); return; }
+      } catch { /* fall through to one more wait */ }
+      // Not there yet (or the check itself failed) — look again shortly rather
+      // than giving up on a paper that may be a second from landing.
+      if (!settled) verifyTimer = setTimeout(verifyUploaded, 5000);
+    };
 
     xhr.upload.onprogress = (e) => {
       if (!e.lengthComputable) return;
@@ -331,12 +364,15 @@ function putWithProgress(
         `Sending your paper — ${pct}% of ${mb(total)} MB${left}` +
         (slowWarned ? " · your connection is slow, so this will take a while — please leave this page open, it is working" : ""),
       );
+      if (e.loaded >= e.total && !verifyTimer) {
+        verifyTimer = setTimeout(verifyUploaded, 8000);
+      }
     };
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         onProgress?.("Sent ✓");
-        resolve({ ok: true });
+        settle({ ok: true });
         return;
       }
       let msg = `HTTP ${xhr.status}`;
@@ -347,11 +383,11 @@ function putWithProgress(
       // Keep the words the retry logic above matches on.
       if (xhr.status === 401 || xhr.status === 403) msg = `unauthorized: ${msg}`;
       if (xhr.status === 413) msg = `too large: ${msg}`;
-      resolve({ error: msg });
+      settle({ error: msg });
     };
-    xhr.onerror = () => resolve({ error: "failed to fetch — the connection dropped" });
-    xhr.ontimeout = () => resolve({ error: "timeout — the connection was too slow" });
-    xhr.onabort = () => resolve({ error: "aborted" });
+    xhr.onerror = () => settle({ error: "failed to fetch — the connection dropped" });
+    xhr.ontimeout = () => settle({ error: "timeout — the connection was too slow" });
+    xhr.onabort = () => settle({ error: "aborted" });
 
     try {
       xhr.open("POST", url, true);
@@ -366,7 +402,7 @@ function putWithProgress(
       // the student can now see it moving.
       xhr.send(blob);
     } catch (e) {
-      resolve({ error: `could not start the upload: ${e instanceof Error ? e.message : e}` });
+      settle({ error: `could not start the upload: ${e instanceof Error ? e.message : e}` });
     }
   });
 }

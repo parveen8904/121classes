@@ -244,7 +244,10 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
   const now = new Date();
   const invoiceNo = await nextInvoiceNo(s.prefix, now);
   const { data: subj } = await svc.from("subjects").select("title").eq("id", g.subject_id).maybeSingle();
-  const desc = `${subj?.title ?? "Subject"} — ${g.tier} (${g.months} months) — gift for ${g.recipient_name}`;
+  // "Classes for <student>", never "gift" — his instruction, 19 Aug. The person
+  // paying may be an employer or a relative; the invoice should read as tuition
+  // for the named student, not as a present.
+  const desc = `${subj?.title ?? "Subject"} — ${g.tier} (${g.months} months) — Classes for ${g.recipient_name}`;
   let invoiceRef: string | null = null;
   // Reserved outside the try so the row can record it: a receipt number that is
   // printed but not stored cannot be reprinted, and a reissue would burn a new
@@ -257,7 +260,7 @@ export async function verifyGiftPayment(input: { razorpay_order_id: string; razo
       itemDescription: desc,
       paymentRef: input.razorpay_payment_id,
       paymentMode: "Online Payment [Razorpay]",
-      receiptDetail: `Gift for ${g.recipient_name} · ${g.months} months`,
+      receiptDetail: `Classes for ${g.recipient_name} · ${g.months} months`,
       receiptNo,
       orderId: (g as { order_no?: number | null }).order_no ?? null,
     });

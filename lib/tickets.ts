@@ -51,8 +51,31 @@ export async function logTicketEvent(
 // ---- Notifications -----------------------------------------------------------
 export async function notifyStaffNewTicket(svc: SupabaseClient, t: { ref: string; title: string; description?: string | null; student_name?: string | null; source: string }) {
   const { sendEmail, emailShell } = await import("@/lib/notify");
-  const staff = await staffList(svc);
-  const admins = staff.filter((s) => s.email);
+  // WHO A TICKET BELONGS TO. Every new ticket used to go to the first five
+  // staff by name — which put the warehouse operator on every password reset
+  // and video complaint on the site. His instruction, 19 Aug: only BOOK
+  // tickets go to the warehouse.
+  //
+  // A warehouse-only operator (permissions carry "warehouse" and not
+  // "tickets") is emailed only when the ticket reads like a book matter —
+  // books, couriers, parcels, delivery, tracking. Admins and ticket-desk staff
+  // still see everything; the desk itself shows every ticket regardless, so
+  // nothing is hidden, only the inbox noise is routed.
+  const looksLikeBooks = /\b(book|books|courier|parcel|deliver|dispatch|shipment|shipping|tracking|docket)\b/i
+    .test(`${t.title} ${t.description ?? ""}`);
+  const { data: staffRows } = await svc
+    .from("profiles")
+    .select("id, full_name, email, role, permissions")
+    .in("role", ["admin", "operator", "faculty"])
+    .order("full_name");
+  const admins = (staffRows ?? [])
+    .filter((p) => p.email)
+    .filter((p) => {
+      const perms = ((p as { permissions?: string[] }).permissions ?? []);
+      const warehouseOnly = perms.includes("warehouse") && !perms.includes("tickets") && p.role !== "admin";
+      return warehouseOnly ? looksLikeBooks : true;
+    })
+    .map((p) => ({ email: p.email as string }));
   const html = emailShell(`🎫 New ticket ${t.ref}`,
     `<p>A new ${t.source} ticket has been raised.</p>
      <p><strong>${t.title}</strong></p>

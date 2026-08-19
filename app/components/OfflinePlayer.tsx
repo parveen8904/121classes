@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { noteOfflineWatch, offlineAllowance } from "@/lib/offlineWatch";
 
 // Full-screen secure player for a DOWNLOADED (decrypted) class. Custom controls
 // so we can (a) keep the moving watermark visible even in fullscreen — we
@@ -25,12 +26,15 @@ export default function OfflinePlayer({
   watermark,
   onClose,
   classId,
+  sectionId,
 }: {
   src: string;
   watermark?: string;
   onClose: () => void;
   /** Which class this is, so the student can be put back where they stopped. */
   classId?: string;
+  /** The section behind it — what watch records and the fair-use cap key on. */
+  sectionId?: string;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const vidRef = useRef<HTMLVideoElement>(null);
@@ -68,6 +72,14 @@ export default function OfflinePlayer({
   const posKey = classId ? `watch.pos.${classId}` : null;
 
   useEffect(() => {
+    if (sectionId) {
+      const left = offlineAllowance(sectionId);
+      if (left !== null && left <= 0) setCapHit(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionId]);
+
+  useEffect(() => {
     const v = vidRef.current;
     if (!v || !posKey) return;
     const saved = Number(localStorage.getItem(posKey) || 0);
@@ -90,6 +102,26 @@ export default function OfflinePlayer({
     // rare enough not to write to storage on every frame.
     const save = () => {
       if (v.currentTime > 5) localStorage.setItem(posKey, String(Math.floor(v.currentTime)));
+      // THE LEDGER. Five real seconds of actual playback are queued for the
+      // server; everything the site knows about offline study flows from here.
+      // Counted only while playing — a paused screen is not watching.
+      if (sectionId && !v.paused && !v.ended) {
+        noteOfflineWatch(sectionId, {
+          videoSeconds: v.currentTime,
+          deltaRealSeconds: 5,
+          durationSeconds: v.duration || 0,
+        });
+        // THE 2× CAP, OFFLINE. Counts down from the last figure the server gave
+        // us; when the subject's allowance is spent the class pauses and says
+        // why. Approximate by nature — trued up at every sync — and a class
+        // with NO cached allowance is never blocked: punishing the unknown
+        // would lock out students on old downloads.
+        const left = offlineAllowance(sectionId);
+        if (left !== null && left <= 0) {
+          v.pause();
+          setCapHit(true);
+        }
+      }
     };
     const t = setInterval(save, 5000);
     // Closing the player is the moment most worth catching.
@@ -162,6 +194,9 @@ export default function OfflinePlayer({
   // back. ⛶ turns the picture a quarter turn when the phone is upright, which
   // is what fills the screen on a phone nobody wants to rotate.
   const [chrome, setChrome] = useState(true);
+  // The fair-use cap has been reached for this subject — playback stays paused
+  // and the reason is on screen instead of a player that mysteriously stops.
+  const [capHit, setCapHit] = useState(false);
   const [turned, setTurned] = useState(false);
   const [portrait, setPortrait] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -283,6 +318,28 @@ export default function OfflinePlayer({
             </div>
           )}
         </div>
+
+        {capHit && (
+          <div style={{
+            position: "absolute", inset: 0, zIndex: 7, display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(0,0,0,.88)", padding: 24,
+          }}>
+            <div style={{ maxWidth: 460, textAlign: "center", color: "#fff", lineHeight: 1.7 }}>
+              <div style={{ fontSize: "2rem" }}>⏱️</div>
+              <strong style={{ fontSize: "1.05rem", display: "block", margin: "8px 0" }}>
+                Watch time for this subject is used up
+              </strong>
+              <p style={{ fontSize: ".92rem", margin: 0, opacity: .9 }}>
+                Every subject carries 2× its class hours of watch time, and downloads count the same as streaming.
+                Revision videos stay open till your validity ends — or extend your plan at caparveensharma.com.
+              </p>
+              <button type="button" onClick={onClose} style={{ marginTop: 14, background: "#fff", color: "#111",
+                border: 0, borderRadius: 8, padding: "8px 16px", fontWeight: 700, cursor: "pointer" }}>
+                Close
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Custom control bar (lives INSIDE the fullscreened container). */}
         {/* The bar FLOATS over the picture rather than sitting under it.

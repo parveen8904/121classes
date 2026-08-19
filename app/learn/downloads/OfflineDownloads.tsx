@@ -22,6 +22,7 @@ function forgetDownloaded(id: string) {
   try { localStorage.removeItem(DL_AT(id)); } catch { /* no-op */ }
 }
 import OfflinePlayer from "@/app/components/OfflinePlayer";
+import { flushOfflineWatch } from "@/lib/offlineWatch";
 
 type Klass = {
   id: string;
@@ -96,10 +97,25 @@ export default function OfflineDownloads({
   const [ready, setReady] = useState<Record<string, boolean>>({});
   // Mobile plays inline in this overlay (desktop opens its own player window).
   const [playerId, setPlayerId] = useState<string | null>(null);
+  // The SECTION the playing class belongs to — what watch records are keyed by.
+  const [playerSection, setPlayerSection] = useState<string | null>(null);
   const [playerSrc, setPlayerSrc] = useState<string | null>(null);
   // Which of the three views. "Downloaded" is the one students need most and
   // the one that was hardest to get at, so it leads.
   const [view, setView] = useState<"downloaded" | "pending" | "all">("all");
+
+  // SYNC THE OFFLINE LEDGER whenever this page has a connection: what was
+  // watched on downloads is posted to the server (so reports, the leaderboard
+  // and the 2× fair-use meter finally see it), and each subject's remaining
+  // allowance comes back and is cached for the player to enforce offline.
+  useEffect(() => {
+    const ids = classes.map((c) => c.section_id ?? c.id).filter(Boolean);
+    void flushOfflineWatch(ids);
+    const onBack = () => void flushOfflineWatch(ids);
+    window.addEventListener("online", onBack);
+    return () => window.removeEventListener("online", onBack);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let stopped = false;
@@ -204,6 +220,7 @@ export default function OfflineDownloads({
         return;
       }
       setLabels((l) => ({ ...l, [c.id]: "Preparing… ⏳ (first play only — replays start instantly)" }));
+      setPlayerSection(c.section_id ?? c.id);
       await native.play(c.id, lic.key, c.iv_b64, c.alg, watermark);
       setLabels((l) => ({ ...l, [c.id]: "Downloaded ✓" }));
     } catch (e) {
@@ -426,7 +443,15 @@ export default function OfflineDownloads({
       )}
 
       {/* Secure offline player: custom controls, watermark survives fullscreen. */}
-      {playerSrc && <OfflinePlayer src={playerSrc} classId={playerId ?? undefined} watermark={watermark} onClose={() => setPlayerSrc(null)} />}
+      {playerSrc && (
+        <OfflinePlayer
+          src={playerSrc}
+          classId={playerId ?? undefined}
+          sectionId={playerSection ?? undefined}
+          watermark={watermark}
+          onClose={() => { setPlayerSrc(null); void flushOfflineWatch(); }}
+        />
+      )}
     </>
   );
 }

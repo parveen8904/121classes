@@ -1,4 +1,5 @@
 import AdminHero from "../_components/AdminHero";
+import { EMAIL_CATALOGUE } from "@/lib/emailCatalogue";
 import SubmitButton from "@/app/components/SubmitButton";
 import { EMAIL_EVENTS, GENERATED_EMAILS, loadTemplate, renderTemplate, type EmailEventDef } from "@/lib/emailTemplates";
 import { saveEmailTemplate, restoreEmailDefault, sendTestEmail } from "./actions";
@@ -92,6 +93,57 @@ export default async function EmailsAdmin(props: {
         subtitle="Write the words once, here. Each one goes out on its own event — nothing is buried in the code. 📮"
         back={{ href: "/admin", label: "Admin" }}
       />
+
+      {/* THE FULL MAP FIRST — his ask, 19 Aug: one screen that says what
+          triggers what mail. The editable templates below were only half the
+          truth; a large share of the mail carries fixed wording at its
+          send-site. Every automatic email is listed here: when it fires, who
+          gets it, and whether its words can be edited on this page or live in
+          code. */}
+      <details style={{ marginTop: 16 }} open>
+        <summary className="btn small secondary as-btn">🗺️ What triggers what — every automatic email ({EMAIL_CATALOGUE.reduce((n, g) => n + g.entries.length, 0)})</summary>
+        <div className="card" style={{ marginTop: 10 }}>
+          <p className="muted" style={{ fontSize: ".84rem", lineHeight: 1.7, marginTop: 0 }}>
+            <strong>✏️ editable</strong> means the wording is a template on this page — change it below and the next
+            send uses your words. <strong>🔒 fixed</strong> means the words are written where the mail is sent; changing
+            them is a code change, so ask for it. Some carry a WhatsApp copy alongside, noted where they do.
+          </p>
+          {EMAIL_CATALOGUE.map((g) => (
+            <div key={g.group} style={{ marginTop: 14 }}>
+              <strong style={{ fontSize: ".95rem" }}>{g.group}</strong>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ borderCollapse: "collapse", width: "100%", marginTop: 6, fontSize: ".83rem" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--muted)" }}>When</th>
+                      <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--muted)" }}>To</th>
+                      <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--muted)" }}>Subject</th>
+                      <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--muted)" }}>Wording</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.entries.map((e, i) => (
+                      <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                        <td style={{ padding: "6px 8px", minWidth: 220 }}>{e.trigger}</td>
+                        <td style={{ padding: "6px 8px" }}>{e.to}</td>
+                        <td style={{ padding: "6px 8px" }}>
+                          {e.subject}
+                          {e.channelNote && <div className="muted" style={{ fontSize: ".76rem" }}>💬 {e.channelNote}</div>}
+                        </td>
+                        <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
+                          {e.template
+                            ? <a href={`#${e.template.split(" ")[0]}`} title={e.file}>✏️ editable below</a>
+                            : <span className="muted" title={e.file}>🔒 fixed · {e.file.split("·")[0].trim().split("/").pop()}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+      </details>
 
       {sp.saved && <div className="notice ok" style={{ marginTop: 16 }}>✓ Saved — the next one sent uses this wording.</div>}
       {sp.restored && <div className="notice ok" style={{ marginTop: 16 }}>✓ Back to the standard wording.</div>}

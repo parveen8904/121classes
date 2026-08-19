@@ -2738,3 +2738,44 @@ export async function gradeDescriptivePaperAgainstText(
     return null;
   }
 }
+
+// ── Growth desk: fresh reel/content ideas on demand ──────────────────────────
+//
+// The founder asked for one place in Admin that hands him content ideas for
+// Instagram. Drafts only — nothing here posts anything. The rules baked in are
+// his standing ones: only the two subjects actually taught, no false claims,
+// no sales voice, and the formats are the ones HIS OWN account's numbers
+// rewarded (his 19 Aug review: personality reels 1.6M, strategy talks 12.9K,
+// posters ~5K).
+export async function draftGrowthIdeas(): Promise<
+  { hook: string; format: string; outline: string }[] | null
+> {
+  const out = await callClaude(
+    "You draft Instagram Reel ideas for CA Parveen Sharma — Financial Reporting (CA Final) and " +
+      "Advanced Accounting (CA Inter) faculty, 36 years of teaching. His audience is CA students.\n" +
+      "His own account data: personality/trend reels with his face performed 300x better than posters; " +
+      "exam-strategy talking heads did well; designed graphics and event photos went nowhere.\n" +
+      "Draft 10 reel ideas. Mix: 4 concept explainers (a specific FR/Adv Accounting point students get " +
+      "wrong), 3 exam-strategy talking heads, 2 personality/relatable-teacher formats, 1 comment-trigger " +
+      "lead magnet (comment a word, get study material).\n" +
+      NOT_TAUGHT +
+      " Never invent results, ranks or student counts. No discounts, no sales lines, no urgency. " +
+      "Hooks must be concrete and specific — name the standard, the mistake, the moment — never generic " +
+      "motivation.\n" +
+      'Reply as JSON: [{"hook":"the on-screen opening line","format":"concept|strategy|personality|lead-magnet",' +
+      '"outline":"2-3 sentences: what he says/does in the 60 seconds"}]',
+    "Draft today's 10.",
+    2400,
+    { model: await fastModel(), feature: "other" },
+  );
+  const j = parseLooseJson(String(out ?? ""));
+  if (!Array.isArray(j)) return null;
+  return j
+    .filter((r) => r && typeof r.hook === "string" && r.hook.trim())
+    .slice(0, 10)
+    .map((r) => ({
+      hook: String(r.hook).slice(0, 200),
+      format: String(r.format ?? "concept").slice(0, 20),
+      outline: String(r.outline ?? "").slice(0, 600),
+    }));
+}

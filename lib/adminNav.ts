@@ -53,6 +53,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     tagline: "Every way you reach students and the world — campaigns, contacts, content, announcements.",
     panels: [
       { icon: "📣", title: "Marketing & campaigns", desc: "Everything that goes out: build a campaign from a news item, an article, an event or a festival; the weekly autopilot; articles & SEO; and what your team still has to post by hand.", href: "/admin/campaigns" },
+      { icon: "📈", title: "Growth desk", desc: "How to grow the channels and what to post: what your own numbers proved, the account changes still pending (tickable), and fresh reel ideas drafted on demand. Posts nothing itself.", href: "/admin/growth" },
       { icon: "🗂️", title: "A run of posts", desc: "Several posts to one place, each on its own day — seven for X across a week, four for LinkedIn across a month. Different wording each time, unlike a campaign, which puts one message everywhere at once.", href: "/admin/campaigns/series" },
       { icon: "🗓️", title: "The posting week", desc: "Next week's recommended plan — LinkedIn/Medium/Substack on Wednesday and Friday, Instagram and Facebook every other day, a line on X daily, video on Monday, Thursday and Saturday, and the fortnightly Nova Seed voice call. Every slot arrives with a subject; amend what you like and send the rest to the queue.", href: "/admin/social-plan" },
       { icon: "📄", title: "Free downloads (SEO)", desc: "Which PDFs get a public page on caparveensharma.com so Google credits us — and the title it shows for each.", href: "/admin/notes" },

@@ -44,7 +44,7 @@ export default async function CostsPage() {
 
   // --- Bunny live billing (this month's charges) + cap settings ---
   const bunnyBill = await getBunnyBilling();
-  const { data: costCfg } = await svc.from("site_settings").select("key, value").in("key", ["bunny_cap_usd", "supabase_storage_cap_mb", "cost_alert_email", "supabase_plan_usd", "vercel_plan_usd"]);
+  const { data: costCfg } = await svc.from("site_settings").select("key, value").in("key", ["bunny_cap_usd", "supabase_storage_cap_mb", "cost_alert_email", "supabase_plan_usd", "vercel_plan_usd", "cloudflare_bill_usd"]);
   const cfg = new Map((costCfg ?? []).map((r) => [r.key, r.value as string]));
   const bunnyCap = Number(cfg.get("bunny_cap_usd")) || 0;
   const bunnyOver = bunnyBill && bunnyCap > 0 && bunnyBill.thisMonth >= bunnyCap;
@@ -57,6 +57,7 @@ export default async function CostsPage() {
   // match the founder's current plans.
   const supabasePlan = cfg.get("supabase_plan_usd") != null ? Number(cfg.get("supabase_plan_usd")) : 25;
   const vercelPlan = cfg.get("vercel_plan_usd") != null ? Number(cfg.get("vercel_plan_usd")) : 20;
+  const cloudflareBill = cfg.get("cloudflare_bill_usd") != null ? Number(cfg.get("cloudflare_bill_usd")) : 0;
   const bunnyMonth = bunnyBill?.thisMonth ?? 0;
   const totalMonth = aiMonth + bunnyMonth + supabasePlan + vercelPlan;
 
@@ -83,7 +84,7 @@ export default async function CostsPage() {
       <AdminHero
         badge="💰 Costs & usage"
         title="What each service is costing you"
-        subtitle="Two kinds of number live here and they must not be confused: AI and Bunny are MEASURED; Supabase, Vercel and Cloudflare are the flat plan prices set in settings — usage overages appear only on the provider's own bill, which is the truth."
+        subtitle="AI and Bunny are MEASURED live. Supabase, Vercel and Cloudflare show the LATEST REAL BILLS, entered below — synced from the providers' own invoices on 20 Aug 2026; update them when a new invoice lands."
         back={{ href: "/admin", label: "Admin" }}
       />
 
@@ -92,7 +93,7 @@ export default async function CostsPage() {
         <div style={{ fontSize: ".85rem", opacity: 0.92 }}>Estimated total for {monthLabel}</div>
         <div style={{ fontSize: "2rem", fontWeight: 800, margin: "4px 0" }}>{money(totalMonth)}</div>
         <div style={{ fontSize: ".8rem", opacity: 0.92 }}>
-          AI {money(aiMonth)} (exact) · Bunny {money(bunnyMonth)} (live) · Supabase {money(supabasePlan)} + Vercel {money(vercelPlan)} — <strong>these two are the plan prices you told us, not measured</strong> · R2 free tier assumed
+          AI {money(aiMonth)} (exact) · Bunny {money(bunnyMonth)} (live) · Supabase {money(supabasePlan)} · Vercel {money(vercelPlan)} · Cloudflare {money(cloudflareBill)} — <strong>the last three are the latest real invoices, entered below</strong>
         </div>
       </div>
 
@@ -186,7 +187,8 @@ export default async function CostsPage() {
             <span className="badge" style={{ color: r2On ? "#16a34a" : "var(--muted)", borderColor: r2On ? "#16a34a" : "var(--border)" }}>{r2On ? "connected" : "not set"}</span>
           </div>
           <div style={stat}>{r2Files} files</div>
-          <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>Free up to 10 GB storage + free egress. Exact usage is on Cloudflare.</p>
+          <div style={stat}>{money(cloudflareBill)}<span className="muted" style={{ fontSize: ".8rem", fontWeight: 400 }}>/mo latest bill</span></div>
+          <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>First 10 GB free, then $0.015/GB-month — the store grows with every installer and paper, so this bill rises slowly. Update the figure below when an invoice lands.</p>
           <a className="btn small secondary" href="https://dash.cloudflare.com/?to=/:account/r2/overview" target="_blank" rel="noopener noreferrer" style={{ marginTop: 10 }}>View R2 usage ↗</a>
         </div>
 
@@ -209,12 +211,16 @@ export default async function CostsPage() {
             <input name="cost_alert_email" type="email" defaultValue={cfg.get("cost_alert_email") ?? ""} placeholder="you@example.com" />
           </div>
           <div>
-            <label>Supabase plan (USD/mo)</label>
-            <input name="supabase_plan_usd" type="number" min={0} step={1} defaultValue={cfg.get("supabase_plan_usd") ?? "25"} placeholder="25" />
+            <label>Supabase — latest invoice (USD)</label>
+            <input name="supabase_plan_usd" type="number" min={0} step={0.01} defaultValue={cfg.get("supabase_plan_usd") ?? "25"} placeholder="25" />
           </div>
           <div>
-            <label>Vercel plan (USD/mo)</label>
-            <input name="vercel_plan_usd" type="number" min={0} step={1} defaultValue={cfg.get("vercel_plan_usd") ?? "20"} placeholder="20" />
+            <label>Vercel — latest invoice (USD)</label>
+            <input name="vercel_plan_usd" type="number" min={0} step={0.01} defaultValue={cfg.get("vercel_plan_usd") ?? "20"} placeholder="30.58" />
+          </div>
+          <div>
+            <label>Cloudflare — latest invoice (USD)</label>
+            <input name="cloudflare_bill_usd" type="number" min={0} step={0.01} defaultValue={cfg.get("cloudflare_bill_usd") ?? "0"} placeholder="8.12" />
           </div>
         </div>
         <SubmitButton className="btn" style={{ marginTop: 10 }}>Save budget alerts</SubmitButton>

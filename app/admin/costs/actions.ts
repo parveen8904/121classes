@@ -20,6 +20,7 @@ export async function saveCostSettings(formData: FormData) {
     { key: "cost_alert_email", value: String(formData.get("cost_alert_email") || "").trim() },
     { key: "supabase_plan_usd", value: String(Number(formData.get("supabase_plan_usd")) || 0) },
     { key: "vercel_plan_usd", value: String(Number(formData.get("vercel_plan_usd")) || 0) },
+    { key: "cloudflare_bill_usd", value: String(Number(formData.get("cloudflare_bill_usd")) || 0) },
   ];
   await createServiceClient().from("site_settings").upsert(rows, { onConflict: "key" });
   revalidatePath("/admin/costs");

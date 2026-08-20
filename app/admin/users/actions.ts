@@ -24,6 +24,44 @@ async function requireAdmin(): Promise<boolean> {
   return data?.role === "admin";
 }
 
+// THE FOUNDER'S ACCOUNT CANNOT BE SEIZED BY ANOTHER ADMIN.
+//
+// Ravi is also an admin, and an admin holds the keys to every account: a
+// sign-in link, a password reset, a role change. Any one of those, aimed at
+// the founder's account, is a way to BECOME the founder — and then the
+// founder-only asset register, and everything else, is open. So every action
+// that could take over an account refuses when its target is the founder and
+// the caller is not the founder himself.
+const FOUNDER_EMAIL = "ps.smay@gmail.com";
+
+/** Is the signed-in admin the founder? */
+async function callerIsFounder(): Promise<boolean> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data } = await supabase.from("profiles").select("email").eq("id", user.id).maybeSingle();
+  return String(data?.email ?? "").toLowerCase() === FOUNDER_EMAIL;
+}
+
+/** True when this target account is the founder's — by id or by email. */
+async function targetIsFounder(opts: { id?: string; email?: string }): Promise<boolean> {
+  if (opts.email && opts.email.toLowerCase() === FOUNDER_EMAIL) return true;
+  if (opts.id) {
+    const { data } = await createServiceClient().from("profiles").select("email").eq("id", opts.id).maybeSingle();
+    return String(data?.email ?? "").toLowerCase() === FOUNDER_EMAIL;
+  }
+  return false;
+}
+
+/**
+ * Guard for any account-takeover action. Returns true (blocked) when the
+ * target is the founder and the caller is not — the caller should stop.
+ */
+async function foundersAccountIsProtected(opts: { id?: string; email?: string }): Promise<boolean> {
+  if (!(await targetIsFounder(opts))) return false;
+  return !(await callerIsFounder());
+}
+
 // The "your account is ready" email.
 //
 // This used to send Supabase's own action_link — an address on
@@ -80,6 +118,7 @@ export async function sendSetPasswordEmail(formData: FormData) {
   if (!(await requireAdmin())) return;
   const email = str(formData.get("email"));
   const name = str(formData.get("name"));
+  if (await foundersAccountIsProtected({ email })) redirect("/admin/users?invited=0");
   if (email) await emailSetPasswordLink(email, name);
   redirect("/admin/users?invited=1");
 }
@@ -100,6 +139,9 @@ export async function adminSetPassword(formData: FormData) {
   const id = str(formData.get("id"));
   const password = str(formData.get("password"));
   if (!id) return;
+  if (await foundersAccountIsProtected({ id })) {
+    redirect(`/admin/users/${id}?pwerr=${encodeURIComponent("This account is protected — its password can only be changed by its owner.")}`);
+  }
 
   const problem = passwordProblem(password);
   if (problem) redirect(`/admin/users/${id}?pwerr=${encodeURIComponent(problem)}`);
@@ -132,6 +174,11 @@ export async function updateUser(formData: FormData) {
   if (!(await requireAdmin())) return; // only the super admin manages users & rights
   const id = str(formData.get("id"));
   if (!id) return;
+  // Another admin cannot edit the founder's account — not his role, not his
+  // rights, not his details. Only he may.
+  if (await foundersAccountIsProtected({ id })) {
+    redirect(`/admin/users/${id}?pwerr=${encodeURIComponent("This account is protected and can only be edited by its owner.")}`);
+  }
   const role = str(formData.get("role"));
   const safeRole = ROLES.includes(role) ? role : "student";
   // Rights apply to operator/faculty; admins have everything, students nothing.
@@ -482,6 +529,10 @@ export async function makeLoginLink(formData: FormData) {
   if (!(await requireAdmin())) return;
   const id = str(formData.get("id"));
   if (!id) return;
+  // Nobody signs in AS the founder but the founder.
+  if (await foundersAccountIsProtected({ id })) {
+    redirect(`/admin/users/${id}?pwerr=${encodeURIComponent("This account is protected. Only its owner can sign in to it.")}`);
+  }
 
   const svc = createServiceClient();
   const { data: who } = await svc.from("profiles").select("email, full_name").eq("id", id).maybeSingle();

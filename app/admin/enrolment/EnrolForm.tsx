@@ -84,14 +84,24 @@ export default function EnrolForm({
           </select>
         </div>
         <div>
-          <label>Duration</label>
-          <select name="months" defaultValue="3">
-            {DURATIONS.map((m) => (
-              <option key={m} value={m}>
-                {durationLabel(m)}
-              </option>
-            ))}
-          </select>
+          <label>Duration (months)</label>
+          {/* A free number, not a fixed 1/3/6/12 dropdown — the founder's ask,
+              20 Aug: a student who paid for 10 months (or any odd term because
+              of a part payment) must be enrollable for exactly that. Common
+              terms are offered as a datalist; any value up to 36 is accepted,
+              and the grant action already reads whatever number is sent. */}
+          <input
+            name="months"
+            type="number"
+            min={1}
+            max={36}
+            defaultValue={12}
+            list="enrol-month-presets"
+            required
+          />
+          <datalist id="enrol-month-presets">
+            {DURATIONS.map((m) => <option key={m} value={m}>{durationLabel(m)}</option>)}
+          </datalist>
         </div>
       </div>
 

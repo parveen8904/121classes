@@ -86,7 +86,7 @@ export async function reconcileStuckPayment(
     } catch {
       endsAt = new Date(Date.now() + months * 30 * 864e5).toISOString();
     }
-    await svc.from("subscriptions").insert({
+    const { error: subErr } = await svc.from("subscriptions").insert({
       student_id: n.userId,
       course_id: n.courseId,
       subject_id: n.subjectId ?? null,
@@ -97,6 +97,9 @@ export async function reconcileStuckPayment(
       auto_renew: true,
       months_total: months,
     });
+    // Same lesson as the gift path: never let this fail quietly and then mark
+    // the order done. A rejected insert must stop the flow so the sweep retries.
+    if (subErr) throw new Error(`reconcile subscription insert failed: ${subErr.message}`);
     if (n.courseId) await svc.from("my_courses").upsert({ student_id: n.userId, course_id: n.courseId }, { onConflict: "student_id,course_id" });
     if (n.subjectId) await svc.from("my_subjects").upsert({ student_id: n.userId, subject_id: n.subjectId }, { onConflict: "student_id,subject_id" });
     await svc.from(table).update({ status: "paid", store_txn_id: paymentId }).eq("id", id);

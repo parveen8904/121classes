@@ -69,11 +69,19 @@ export async function provisionPaidGiftOrder(
       }
     }
 
-    await svc.from("subscriptions").insert({
+    // THE ERROR THAT MUST NEVER BE SWALLOWED. This insert used to be fire-and-
+    // forget. When `channel: "gift"` was not yet a valid sub_channel enum value,
+    // every vendor/gift subscription was REJECTED here — silently — while
+    // my_courses below still ran and the order was later stamped "provisioned".
+    // The result: a paid student with a course tile, no subscription, no
+    // validity, and no access. Now a failure throws, so the order stays unpaid/
+    // unprovisioned and the reconcile sweep retries it instead of hiding it.
+    const { error: subErr } = await svc.from("subscriptions").insert({
       student_id: recipientId, course_id: g.course_id, subject_id: g.subject_id, plan_id: g.plan_id,
       channel: "gift", starts_at: win.paid.startsAt.toISOString(), ends_at: win.paid.endsAt.toISOString(),
       status: "active", auto_renew: false,
     });
+    if (subErr) throw new Error(`gift subscription insert failed: ${subErr.message}`);
     provisionStarts = win.paid.startsAt; provisionEnds = win.paid.endsAt;
     await svc.from("my_courses").upsert({ student_id: recipientId, course_id: g.course_id }, { onConflict: "student_id,course_id" });
     if (g.subject_id) await svc.from("my_subjects").upsert({ student_id: recipientId, subject_id: g.subject_id }, { onConflict: "student_id,subject_id" });

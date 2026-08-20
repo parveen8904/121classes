@@ -30,6 +30,12 @@ export const ADMIN_AREAS: AdminArea[] = [
   { key: "career", label: "🎓 Career & placement", prefixes: ["/admin/content", "/admin/placement"] },
   { key: "planner", label: "🗓️ Study planner settings", prefixes: ["/admin/planner"] },
   { key: "repository", label: "📚 AI repository", prefixes: ["/admin/repository"] },
+  // The founder's asset register (20 Aug 2026). Two distinct grants because two
+  // distinct jobs: a handler works only the assets assigned to them; accounts
+  // verifies every transaction. Ownership, valuations and returns render for
+  // the founder alone — that rule lives in the pages, keyed off role=admin.
+  { key: "assets", label: "🏠 Assets — handler (assigned assets & their tasks)", prefixes: ["/admin/assets"] },
+  { key: "assets_accounts", label: "🧾 Assets — accounts (verify transactions & pendency)", prefixes: ["/admin/assets"] },
 ];
 
 // Everything NOT covered above (integrations, telegram, users, enrolment, plans,

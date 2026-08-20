@@ -116,6 +116,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     title: "Sales & money",
     tagline: "Pricing, discounts, the book store, invoices and revenue.",
     panels: [
+      { icon: "🏠", title: "Assets", desc: "The asset register: properties, deposits, investments — owners & shares, documents & photos, transactions with GST/TDS and accounts verification, standing tasks (rent, house tax) with email reminders, letters, contract-vs-actual XIRR returns and owner statements.", href: "/admin/assets" },
       { icon: "💳", title: "Plans & pricing", desc: "The tiers themselves: names, on/off, Silver's flat price, gift pricing. Gold AMOUNTS live on each subject's Duration price ladder.", href: "/admin/plans" },
       { icon: "🔑", title: "Access & limits", desc: "Set per plan how much of each thing a student can use (classes, tests, doubts…). Free-trial caps, upgrade locks — mark it yourself.", href: "/admin/access" },
       { icon: "🏷️", title: "Coupons", desc: "Run % or flat-amount discount codes applied at checkout — create, edit, email to sponsors.", href: "/admin/coupons" },

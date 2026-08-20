@@ -86,6 +86,8 @@ export const EMAIL_CATALOGUE: CatalogueGroup[] = [
     group: "🏭 Reports & machinery (to the office, not students)",
     entries: [
       { trigger: "Nightly warehouse dispatch list", to: "Pawan ji (warehouse)", subject: "Orders to dispatch — with addresses", fixed: true, file: "lib/warehouse.ts · app/api/cron/day-orders/route.ts" },
+      { trigger: "Asset task due today, and again every 3rd day while overdue (nightly 03:00)", to: "the staff member the task is assigned to", subject: "Asset work — N items due", fixed: true, file: "app/api/cron/asset-tasks/route.ts" },
+      { trigger: "Rent agreement expiring within 60 days (once per agreement)", to: "the rent task's assignee", subject: "Rent agreement expiring — {asset}", fixed: true, file: "app/api/cron/asset-tasks/route.ts" },
       { trigger: "AI news digest for approval", to: "the founder", subject: "News digest", fixed: true, file: "app/api/cron/ai-digest/route.ts" },
       { trigger: "Placement feed digest", to: "the founder", subject: "New CA openings", fixed: true, file: "lib/jobsfeed.ts · lib/govtfeed.ts" },
       { trigger: "Nightly database backup", to: "backup mailbox", subject: "DB backup", fixed: true, file: "app/api/cron/backup-email/route.ts" },

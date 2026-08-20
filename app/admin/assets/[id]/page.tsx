@@ -9,8 +9,8 @@ import {
 } from "@/lib/assets";
 import {
   addLetter, addOwner, addTask, addTxn, closeAsset, closeLetter, deleteAssetFile,
-  removeOwner, saveTenancy, setHandler, setTaskAssignee, toggleTask, updateAsset,
-  uploadAssetFile, verifyTxn,
+  editLetter, editTask, removeOwner, saveTenancy, setHandler, toggleTask,
+  updateAsset, updateOwner, uploadAssetFile, verifyTxn,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -150,16 +150,20 @@ export default async function AssetFilePage(props: {
           <strong>👥 Owners</strong>
           <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
             {(owners ?? []).map((o) => (
-              <div className="list-row" key={String(o.id)}>
-                <span className="row-title">{String(o.owner_name)}</span>
-                <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <strong>{Number(o.share_pct)}%</strong>
-                  <form action={removeOwner}>
-                    <input type="hidden" name="id" value={String(o.id)} />
-                    <input type="hidden" name="asset_id" value={id} />
-                    <button className="btn small ghost" type="submit">✕</button>
-                  </form>
-                </span>
+              <div className="list-row" key={String(o.id)} style={{ flexWrap: "wrap" }}>
+                <form action={updateOwner} style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, flexWrap: "wrap" }}>
+                  <input type="hidden" name="id" value={String(o.id)} />
+                  <input type="hidden" name="asset_id" value={id} />
+                  <input name="owner_name" defaultValue={String(o.owner_name)} style={{ maxWidth: 220 }} />
+                  <input name="share_pct" inputMode="decimal" defaultValue={String(Number(o.share_pct))} style={{ width: 70 }} />
+                  <span className="muted">%</span>
+                  <SubmitButton className="btn small secondary" savedLabel="✓">Save</SubmitButton>
+                </form>
+                <form action={removeOwner}>
+                  <input type="hidden" name="id" value={String(o.id)} />
+                  <input type="hidden" name="asset_id" value={id} />
+                  <button className="btn small ghost" type="submit">✕</button>
+                </form>
               </div>
             ))}
             {(owners ?? []).length === 0 && <p className="muted" style={{ margin: 0, fontSize: ".84rem" }}>No owners recorded — add them so the owner statements can split income and expenses.</p>}
@@ -250,12 +254,27 @@ export default async function AssetFilePage(props: {
               )}
             </div>
             {isAdmin && (
-              <form action={setTaskAssignee} style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "end" }}>
-                <input type="hidden" name="id" value={String(t.id)} />
-                <input type="hidden" name="asset_id" value={id} />
-                <div><label style={{ fontSize: ".76rem" }}>Assigned to</label>{staffSelect("assigned_to", t.assigned_to ? String(t.assigned_to) : null)}</div>
-                <SubmitButton className="btn small secondary">Set</SubmitButton>
-              </form>
+              <details style={{ marginTop: 8 }}>
+                <summary className="muted" style={{ cursor: "pointer", fontSize: ".82rem" }}>✏️ Edit this task</summary>
+                <form action={editTask} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 8, marginTop: 8 }}>
+                  <input type="hidden" name="id" value={String(t.id)} />
+                  <input type="hidden" name="asset_id" value={id} />
+                  <div><label>Task</label><input name="title" defaultValue={String(t.title)} /></div>
+                  <div>
+                    <label>Transaction nature</label>
+                    <select name="nature" defaultValue={String(t.nature)}>
+                      {[...TXN_NATURES_IN, ...TXN_NATURES_OUT].map((n) => <option key={n}>{n}</option>)}
+                    </select>
+                  </div>
+                  <div><label>Money</label><select name="direction" defaultValue={String(t.direction)}><option value="in">comes in</option><option value="out">goes out</option></select></div>
+                  <div><label>Rhythm</label><select name="cadence" defaultValue={String(t.cadence)}><option>monthly</option><option>annual</option><option>once</option></select></div>
+                  <div><label>Monthly: due by day</label><input name="due_day" inputMode="numeric" defaultValue={t.due_day != null ? String(t.due_day) : ""} /></div>
+                  <div><label>Annual/once: the date</label><input type="date" name="anchor_date" defaultValue={String(t.anchor_date ?? "")} /></div>
+                  <div><label>Expected amount (₹)</label><input name="expected_amount" inputMode="numeric" defaultValue={t.expected_amount != null ? String(t.expected_amount) : ""} /></div>
+                  <div><label>Assigned to</label>{staffSelect("assigned_to", t.assigned_to ? String(t.assigned_to) : null)}</div>
+                  <SubmitButton className="btn small">Save — pending dates are redrawn to the new rhythm</SubmitButton>
+                </form>
+              </details>
             )}
           </div>
         ))}
@@ -365,6 +384,21 @@ export default async function AssetFilePage(props: {
               </span>
             </div>
             {l.action_plan && <p style={{ fontSize: ".86rem", margin: "6px 0 0" }}>{String(l.action_plan)}</p>}
+            {l.status === "open" && (
+              <details style={{ marginTop: 6 }}>
+                <summary className="muted" style={{ cursor: "pointer", fontSize: ".82rem" }}>✏️ Edit this letter</summary>
+                <form action={editLetter} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 8, marginTop: 8 }}>
+                  <input type="hidden" name="id" value={String(l.id)} />
+                  <input type="hidden" name="asset_id" value={id} />
+                  <div><label>What is it</label><input name="title" defaultValue={String(l.title)} /></div>
+                  <div><label>Received on</label><input type="date" name="received_on" defaultValue={String(l.received_on ?? "")} /></div>
+                  <div><label>Act by</label><input type="date" name="due_on" defaultValue={String(l.due_on ?? "")} /></div>
+                  <div><label>Assigned to</label>{staffSelect("assigned_to", l.assigned_to ? String(l.assigned_to) : null)}</div>
+                  <div style={{ gridColumn: "1 / -1" }}><label>Action plan</label><textarea name="action_plan" rows={2} defaultValue={String(l.action_plan ?? "")} /></div>
+                  <SubmitButton className="btn small">Save</SubmitButton>
+                </form>
+              </details>
+            )}
             {l.status === "open" && (
               <form action={closeLetter} style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "end", flexWrap: "wrap" }}>
                 <input type="hidden" name="id" value={String(l.id)} />

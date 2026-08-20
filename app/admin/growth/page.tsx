@@ -156,6 +156,9 @@ export default async function GrowthPage(props: { searchParams: Promise<{ err?: 
         <form action={refreshIdeas}>
           <SubmitButton className="btn" savedLabel="✓ Drafted">Draft 10 fresh ideas</SubmitButton>
         </form>
+        {ideas.length > 0 && (
+          <a className="btn small secondary" href="/admin/export?what=ideas">⬇️ Export all (Word)</a>
+        )}
         {ideasAt && (
           <span className="muted" style={{ fontSize: ".8rem" }}>
             last drafted {new Date(ideasAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" })} IST
@@ -177,6 +180,7 @@ export default async function GrowthPage(props: { searchParams: Promise<{ err?: 
                 <span title={i.format}>{FMT_ICON[i.format] ?? "🎬"}</span>
                 <strong>&ldquo;{i.hook}&rdquo;</strong>
                 <span className="muted" style={{ fontSize: ".76rem" }}>{i.format}</span>
+                <a href={`/admin/export?what=ideas&ids=${n}`} title="Export this idea (Word)" style={{ marginLeft: "auto", textDecoration: "none" }}>⬇️</a>
               </div>
               <p className="muted" style={{ margin: "6px 0 0", fontSize: ".86rem" }}>{i.outline}</p>
             </div>

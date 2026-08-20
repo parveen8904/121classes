@@ -341,3 +341,54 @@ export async function closeLetter(formData: FormData): Promise<void> {
   }).eq("id", id);
   revalidatePath(back);
 }
+
+// ── Edits (founder's ask, 20 Aug evening: everything must be editable) ──────
+
+/** Rewrite a standing task. Future pending occurrences are re-dated. */
+export async function editTask(formData: FormData): Promise<void> {
+  await admin();
+  const id = str(formData, "id"), assetId = str(formData, "asset_id");
+  if (!id) return;
+  const cadence = ["monthly", "annual", "once"].includes(str(formData, "cadence")) ? str(formData, "cadence") : "monthly";
+  const svc = createServiceClient();
+  await svc.from("asset_tasks").update({
+    title: str(formData, "title") || undefined,
+    nature: str(formData, "nature") || undefined,
+    direction: str(formData, "direction") === "out" ? "out" : "in",
+    cadence,
+    due_day: cadence === "monthly" ? Math.min(28, Math.max(1, num(formData, "due_day") ?? 5)) : null,
+    anchor_date: cadence !== "monthly" ? (dateOrNull(formData, "anchor_date") ?? istToday()) : null,
+    expected_amount: num(formData, "expected_amount"),
+    assigned_to: str(formData, "assigned_to") || null,
+  }).eq("id", id);
+  // The schedule changed, so the dated copies not yet worked are wrong:
+  // drop the untouched pending ones and regenerate from the new rhythm.
+  await svc.from("asset_occurrences").delete().eq("task_id", id).eq("status", "pending").is("txn_id", null);
+  await generateOccurrences();
+  revalidatePath(`/admin/assets/${assetId}`);
+}
+
+export async function updateOwner(formData: FormData): Promise<void> {
+  await admin();
+  const id = str(formData, "id"), assetId = str(formData, "asset_id");
+  const name = str(formData, "owner_name");
+  const pct = num(formData, "share_pct");
+  if (!id || !name || pct == null || pct <= 0 || pct > 100) return;
+  await createServiceClient().from("asset_owners").update({ owner_name: name, share_pct: pct }).eq("id", id);
+  revalidatePath(`/admin/assets/${assetId}`);
+}
+
+export async function editLetter(formData: FormData): Promise<void> {
+  const assetId = str(formData, "asset_id");
+  await mayWork(assetId);
+  const id = str(formData, "id");
+  if (!id) return;
+  await createServiceClient().from("asset_letters").update({
+    title: str(formData, "title") || undefined,
+    received_on: dateOrNull(formData, "received_on"),
+    due_on: dateOrNull(formData, "due_on"),
+    action_plan: str(formData, "action_plan") || null,
+    assigned_to: str(formData, "assigned_to") || null,
+  }).eq("id", id);
+  revalidatePath(`/admin/assets/${assetId}`);
+}

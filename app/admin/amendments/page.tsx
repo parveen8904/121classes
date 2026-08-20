@@ -37,7 +37,10 @@ export default async function AdminAmendmentsPage() {
         </div>
       </details>
 
-      <h2 className="admin-section-title">📋 Amendments ({(amendments ?? []).length})</h2>
+      <h2 className="admin-section-title">
+        📋 Amendments ({(amendments ?? []).length}){" "}
+        <a className="btn small secondary" style={{ marginLeft: 10, verticalAlign: "middle" }} href="/admin/export?what=amendments">⬇️ Export all (Word)</a>
+      </h2>
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
         {amendments && amendments.length > 0 ? (
           (amendments as AmendmentRow[]).map((a) => (
@@ -52,7 +55,8 @@ export default async function AdminAmendmentsPage() {
               </summary>
               <div style={{ marginTop: 12 }}>
                 <AmendmentForm action={updateAmendment} courses={courseList} subjects={subjectList} topics={topicList} amendment={a} submitLabel="Save changes" />
-                <div style={{ marginTop: 10 }}>
+                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <a className="btn small secondary" href={`/admin/export?what=amendments&ids=${a.id}`}>⬇️ Export this one (Word)</a>
                   <DeleteButton action={deleteAmendment} id={a.id} message="Delete this amendment?" />
                 </div>
               </div>

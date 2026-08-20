@@ -91,6 +91,11 @@ export default function PostsManager({ posts, actions }: { posts: Post[]; action
         <span className="muted" style={{ fontSize: ".82rem" }}>{sel.size} selected →</span>
         <button className="btn small" type="submit" formAction={actions.bulkPublish} onClick={guard}>✅ Publish</button>
         <button className="btn small secondary" type="submit" formAction={actions.bulkUnpublish} onClick={guard}>⬜ Unpublish</button>
+        {/* Export is a plain link, not an action: the route streams a Word
+            file, which a server action cannot. Selection rides in the URL. */}
+        <a className="btn small secondary" href={`/admin/export?what=announcements${sel.size ? `&ids=${[...sel].join(",")}` : ""}`}>
+          ⬇️ Export {sel.size ? `${sel.size} selected` : "all"} (Word)
+        </a>
         <button className="btn small secondary" type="submit" formAction={actions.bulkDelete} onClick={confirmDelete} style={{ marginLeft: "auto", color: "#b91c1c" }}>🗑️ Delete selected</button>
       </form>
 

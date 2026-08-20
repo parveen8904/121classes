@@ -87,7 +87,10 @@ export default async function AdminArticlesPage() {
       </details>
 
       {/* Articles list */}
-      <h2 className="admin-section-title" style={{ marginTop: 24 }}>📄 Written articles</h2>
+      <h2 className="admin-section-title" style={{ marginTop: 24 }}>
+        📄 Written articles{" "}
+        <a className="btn small secondary" style={{ marginLeft: 10, verticalAlign: "middle" }} href="/admin/export?what=articles">⬇️ Export all (Word)</a>
+      </h2>
       {total > (articles ?? []).length && (
         <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 10px" }}>
           Showing the latest {(articles ?? []).length} of <strong>{total}</strong> — every article (old and new) stays
@@ -105,6 +108,7 @@ export default async function AdminArticlesPage() {
               </p>
             </div>
             <div className="row-actions">
+              <a className="btn small secondary" href={`/admin/export?what=articles&ids=${a.id}`} title="Export this article (Word)">⬇️</a>
               <Link className="btn small secondary" href={`/articles/${a.slug}`} target="_blank">View</Link>
               <form action={toggleArticle} style={{ margin: 0 }}>
                 <input type="hidden" name="id" value={a.id} />

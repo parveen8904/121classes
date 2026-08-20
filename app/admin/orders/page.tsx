@@ -86,7 +86,7 @@ function monthsBetween(a: string | null, b: string | null): number | null {
 
 export default async function AdminOrdersPage(
   props: {
-    searchParams: Promise<{ confirmed?: string; confirmerr?: string; dispatch?: string; q?: string; from?: string; to?: string; status?: string }>;
+    searchParams: Promise<{ confirmed?: string; confirmerr?: string; dispatch?: string; q?: string; from?: string; to?: string; status?: string; source?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -113,8 +113,12 @@ export default async function AdminOrdersPage(
   const rangeQs = new URLSearchParams();
   if (fromDay) rangeQs.set("from", fromDay);
   if (toDay) rangeQs.set("to", toDay);
+  // "Show me only what the vendors sold" — the office ask of 20 August. The
+  // toggle rides into the download too, so screen and spreadsheet agree.
+  const vendorOnly = searchParams.source === "vendor";
   const exportQs = new URLSearchParams(rangeQs);
   if (chosen.length) exportQs.set("status", chosen.join(","));
+  if (vendorOnly) exportQs.set("source", "vendor");
   const supabase = createClient();
   const svc = createServiceClient();
 
@@ -263,6 +267,7 @@ export default async function AdminOrdersPage(
     // Each table in its own words: a supporter sale that went through is
     // "provisioned", so ticking Paid must keep it.
     .filter((p) => matchesState(p.kind === "supporter" ? "gift_orders" : "orders", chosen, p.status))
+    .filter((p) => !vendorOnly || (p as { source?: string }).source === "vendor")
     .filter((p) => match([p.profiles?.full_name, p.profiles?.email, p.profiles?.phone, p.invoice_no, p.razorpay_order_id, p.subjects?.title, p.order_no != null ? String(p.order_no) : null, (p as { viaSupporter?: string }).viaSupporter]));
 
   return (
@@ -293,8 +298,12 @@ export default async function AdminOrdersPage(
               {st}
             </label>
           ))}
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 5, marginBottom: 0, fontSize: ".82rem", fontWeight: 700 }}>
+            <input type="checkbox" name="source" value="vendor" defaultChecked={vendorOnly} />
+            💚 Vendor orders only
+          </label>
           <span className="muted" style={{ fontSize: ".76rem" }}>
-            {chosen.length ? "Press Search to apply — the list below and the download both follow this." : "Nothing ticked = everything."}
+            {chosen.length || vendorOnly ? "Press Search to apply — the list below and the download both follow this." : "Nothing ticked = everything."}
           </span>
           {chosen.length > 0 && <a className="btn small secondary" href="/admin/orders">Show all</a>}
         </div>

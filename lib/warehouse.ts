@@ -52,9 +52,13 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       .eq("books_due", true).eq("status", "paid")
       .order("created_at", { ascending: false }).limit(200),
     // Gifted 9+ month Gold also ships books — to the RECIPIENT's address.
+    // A vendor/gift order's lifecycle is created → PROVISIONED (never "paid"):
+    // filtering on "paid" here meant no vendor sale ever reached the warehouse,
+    // even with books_due set and the address on file — the office complaint of
+    // 20 August. Same trap the orders page hit; see lib/orderStatus.ts.
     svc.from("gift_orders")
       .select("id, order_no, created_at, tracking_code, recipient_name, recipient_email, recipient_phone, recipient_address, courier_name, invoice_no, invoice_url, subjects:subject_id(title)")
-      .eq("books_due", true).eq("status", "paid")
+      .eq("books_due", true).in("status", ["paid", "provisioned", "dispatched"])
       .order("created_at", { ascending: false }).limit(200),
   ]);
 
@@ -135,10 +139,11 @@ export async function runWarehouseDispatch(): Promise<{ ok: boolean; count: numb
       .eq("books_due", true).eq("status", "paid")
       .is("warehouse_notified_at", null)
       .order("created_at", { ascending: true }),
-    // …and gifted 9+ month Gold, shipped to the recipient.
+    // …and gifted 9+ month Gold, shipped to the recipient. "provisioned" is
+    // the vendor sale's paid state — see the note on the queue query above.
     svc.from("gift_orders")
       .select("id, order_no, recipient_name, recipient_phone, recipient_address, subjects:subject_id(title)")
-      .eq("books_due", true).eq("status", "paid")
+      .eq("books_due", true).in("status", ["paid", "provisioned"])
       .is("warehouse_notified_at", null)
       .order("created_at", { ascending: true }),
   ]);

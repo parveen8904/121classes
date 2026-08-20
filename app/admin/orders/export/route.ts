@@ -60,6 +60,9 @@ export async function GET(req: NextRequest) {
   // "provisioned", never "paid", so ticking Paid used to exclude every vendor
   // order in the business. See lib/orderStatus.ts.
   const chosen = chosenStates(sp.get("status"));
+  // The page's "vendor orders only" toggle rides into the file, so what the
+  // screen shows and what the office opens in Excel are the same list.
+  const vendorOnly = sp.get("source") === "vendor";
   const applyStatus = <T extends { in: (col: string, v: string[]) => T }>(q: T, table: OrderTable): T =>
     chosen.length ? q.in("status", statusesFor(table, chosen)) : q;
 
@@ -74,7 +77,7 @@ export async function GET(req: NextRequest) {
     })(),
     (() => {
       let q = svc.from("book_orders")
-        .select("amount_inr, status, created_at, guest_contact, ship_to, invoice_no, order_no");
+        .select("amount_inr, status, created_at, guest_contact, ship_to, invoice_no, order_no, items");
       if (fromIso) q = q.gte("created_at", fromIso);
       if (toIso) q = q.lte("created_at", toIso);
       return q.order("created_at", { ascending: false }).limit(5000);
@@ -82,7 +85,7 @@ export async function GET(req: NextRequest) {
     // Supporter sales belong in the register, and so in the download.
     (() => {
       let q = svc.from("gift_orders")
-        .select("amount_inr, discount_inr, coupon_code, status, created_at, invoice_no, order_no, months, tier, recipient_name, recipient_email, recipient_phone, billing_state, subjects:subject_id(title, courses(title)), gifter:gifter_id(full_name, email, business_name, designation, is_supporter)");
+        .select("amount_inr, discount_inr, coupon_code, status, created_at, invoice_no, order_no, months, tier, subject_id, recipient_name, recipient_email, recipient_phone, billing_state, subjects:subject_id(title, courses(title)), gifter:gifter_id(full_name, email, business_name, designation, is_supporter)");
       if (fromIso) q = q.gte("created_at", fromIso);
       if (toIso) q = q.lte("created_at", toIso);
       q = applyStatus(q as never, "gift_orders") as never;
@@ -124,6 +127,44 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // VENDOR/GIFT ROWS: the student's address and validity live on the STUDENT
+  // account (found by recipient email) and on the subscription provisioning
+  // created — not on the gift order row. The export used to print "" for both,
+  // which is the office complaint of 20 August: vendor orders with no address
+  // and no validity in the Excel.
+  const giftEmails = [...new Set(((giftRows ?? []) as unknown as { recipient_email: string | null }[])
+    .map((g) => String(g.recipient_email ?? "").toLowerCase()).filter(Boolean))];
+  const giftRecip = new Map<string, OrderProf>();
+  if (giftEmails.length) {
+    const recips = await inChunks<OrderProf>(giftEmails, (b) =>
+      svc.from("profiles").select("id, full_name, email, phone, state, gstin, address_line1, address_line2, city, pincode").in("email", b) as never);
+    const recipIds: string[] = [];
+    for (const p of recips) {
+      if (p.email) { giftRecip.set(String(p.email).toLowerCase(), p); recipIds.push(p.id); }
+    }
+    if (recipIds.length) {
+      const subRows = await inChunks<{ student_id: string; subject_id: string | null; starts_at: string | null; ends_at: string | null; created_at: string; plans?: { tier?: string } | null }>(recipIds, (b) =>
+        svc.from("subscriptions").select("student_id, subject_id, starts_at, ends_at, created_at, plans(tier)").in("student_id", b).order("created_at") as never);
+      for (const s of subRows ?? []) {
+        subDates.set(`${s.student_id}:${s.subject_id}`, {
+          starts_at: s.starts_at as string | null,
+          ends_at: s.ends_at as string | null,
+          tier: ((s as { plans?: { tier?: string } | null }).plans?.tier ?? null) as string | null,
+        });
+      }
+    }
+  }
+
+  // BOOK ROWS: the Subject column was blank for book orders — resolve each
+  // order's book ids to their titles so the office can see WHAT was bought.
+  const bookIds = [...new Set(((bookRows ?? []) as unknown as { items?: { book_id?: string }[] | null }[])
+    .flatMap((b) => (b.items ?? []).map((i) => i.book_id)).filter(Boolean))] as string[];
+  const bookTitle = new Map<string, string>();
+  if (bookIds.length) {
+    const { data: bks } = await svc.from("books").select("id, title").in("id", bookIds);
+    for (const bk of bks ?? []) bookTitle.set(String(bk.id), String(bk.title ?? ""));
+  }
+
   const courseLevel = (subj: { courses?: { title?: string } | { title?: string }[] | null } | null): string => {
     const c = subj?.courses;
     const t = ((Array.isArray(c) ? c[0]?.title : c?.title) ?? "").toLowerCase();
@@ -156,7 +197,7 @@ export async function GET(req: NextRequest) {
     "Amount without GST", "GST amount", "Total paid (Rs)", "Sold by", "Coupon", "Discount (Rs)",
   ].join(",")];
 
-  for (const o of subs) {
+  for (const o of vendorOnly ? [] : subs) {
     const pr = o.profiles;
     const gst = computeGst(o.amount_inr ?? 0, pr?.state ?? "", s);
     const address = pr ? [pr.address_line1, pr.address_line2, [pr.city, pr.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
@@ -180,14 +221,19 @@ export async function GET(req: NextRequest) {
     ].join(","));
   }
 
-  for (const b of ((bookRows ?? []) as unknown as { amount_inr: number; status: string; created_at: string; guest_contact: Contact | null; ship_to: Ship | null; invoice_no: string | null; order_no: number | null }[])
-    .filter((b) => matchesState("book_orders", chosen, b.status))) {
+  for (const b of (vendorOnly ? [] : ((bookRows ?? []) as unknown as { amount_inr: number; status: string; created_at: string; guest_contact: Contact | null; ship_to: Ship | null; invoice_no: string | null; order_no: number | null; items?: { book_id?: string; qty?: number }[] | null }[])
+    .filter((b) => matchesState("book_orders", chosen, b.status)))) {
     const ship = b.ship_to ?? {};
     const gst = computeGst(b.amount_inr ?? 0, ship.state ?? "", s);
     const address = [ship.line1, ship.line2, [ship.city, ship.state, ship.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+    // The Subject column carries WHAT was bought — the book titles, with
+    // quantity where more than one. It used to be blank for every book order.
+    const titles = (b.items ?? [])
+      .map((i) => `${bookTitle.get(String(i.book_id)) || "Book"}${(i.qty ?? 1) > 1 ? ` ×${i.qty}` : ""}`)
+      .join(" + ");
     rows.push([
       esc(b.order_no != null ? `#${b.order_no}` : ""),
-      esc(dt(b.created_at)), esc("Direct student order"), esc("book order"), esc(""), esc(""), esc(""), esc(b.status), esc(b.invoice_no ?? ""),
+      esc(dt(b.created_at)), esc("Direct student order"), esc("book order"), esc(titles), esc(""), esc(""), esc(b.status), esc(b.invoice_no ?? ""),
       esc(b.guest_contact?.name ?? ship.name ?? ""), esc(""),
       esc(b.guest_contact?.phone ?? ship.phone ?? ""), esc(b.guest_contact?.email ?? ""),
       esc(address), esc(""), esc(""), esc(""),
@@ -202,11 +248,19 @@ export async function GET(req: NextRequest) {
     status: string; created_at: string; invoice_no: string | null; order_no: number | null;
     months: number | null; tier: string | null; billing_state: string | null;
     recipient_name: string | null; recipient_email: string | null; recipient_phone: string | null;
+    subject_id: string | null;
     subjects: { title: string; courses?: { title?: string } | { title?: string }[] | null } | null;
     gifter: { full_name: string | null; email: string | null; business_name: string | null; designation: string | null; is_supporter: boolean | null } | null;
   };
-  for (const g of (giftRows ?? []) as unknown as GiftExport[]) {
+  for (const g of ((giftRows ?? []) as unknown as GiftExport[]).filter((g) => !vendorOnly || g.gifter?.is_supporter)) {
     const gst = computeGst(g.amount_inr ?? 0, g.billing_state ?? "", s);
+    // The STUDENT the vendor bought for: their account's address, and the
+    // validity of the subscription the payment provisioned.
+    const recip = giftRecip.get(String(g.recipient_email ?? "").toLowerCase());
+    const gAddress = recip
+      ? [recip.address_line1, recip.address_line2, [recip.city, recip.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ")
+      : "";
+    const gDates = recip && g.subject_id ? subDates.get(`${recip.id}:${g.subject_id}`) : undefined;
     rows.push([
       esc(g.order_no != null ? `#${g.order_no}` : ""),
       esc(dt(g.created_at)), esc(sourceOfGift(g)),
@@ -217,7 +271,7 @@ export async function GET(req: NextRequest) {
       esc(g.status), esc(g.invoice_no ?? ""),
       esc(g.recipient_name ?? ""), esc(courseLevel(g.subjects)),
       esc(g.recipient_phone ?? ""), esc(g.recipient_email ?? ""),
-      esc(""), esc(""), esc(""), esc(""),
+      esc(gAddress), esc(recip?.gstin ?? ""), esc(d(gDates?.starts_at)), esc(d(gDates?.ends_at)),
       esc(gst.taxable.toFixed(2)), esc((gst.cgst + gst.sgst + gst.igst).toFixed(2)),
       esc((g.amount_inr ?? 0).toFixed(2)),
       esc([g.gifter?.business_name || g.gifter?.full_name || g.gifter?.email || "", g.gifter?.designation].filter(Boolean).join(" · ")),

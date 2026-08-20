@@ -150,7 +150,7 @@ export default async function CostsPage() {
           </div>
           <div style={stat}>{money(supabasePlan)}<span className="muted" style={{ fontSize: ".8rem", fontWeight: 400 }}>/mo latest invoice</span></div>
           <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>
-            $25 Pro base includes 8 GB DB, 100 GB storage and 250 GB egress. It only rises above $25 if you cross those (extra egress $0.09/GB, storage $0.021/GB) or add compute — the &quot;View bill&quot; page shows any overage. {storageFiles >= 0 ? `Now: ${storageFiles} files · ${mb(storageBytes)} stored.` : ""} Enter the real total from the bill below.
+            NOT flat $25. The Aug invoice is ~$42: $25 Pro base + ~$17 compute, because <strong>four projects share this one billing org</strong> — 121classes-mumbai ($9.89, this website), plus control-erp, valuation-platform and Microradar. Only the first counts as the site; the other three are your separate projects. To cut it: pause or downsize the projects you are not using. {storageFiles >= 0 ? `Site storage now: ${storageFiles} files · ${mb(storageBytes)}.` : ""} Real total entered below.
           </p>
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
             <a className="btn small secondary" href={`https://supabase.com/dashboard/org/${SUPABASE_ORG}/billing`} target="_blank" rel="noopener noreferrer">View bill ↗</a>

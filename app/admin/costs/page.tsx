@@ -59,7 +59,25 @@ export default async function CostsPage() {
   const vercelPlan = cfg.get("vercel_plan_usd") != null ? Number(cfg.get("vercel_plan_usd")) : 20;
   const cloudflareBill = cfg.get("cloudflare_bill_usd") != null ? Number(cfg.get("cloudflare_bill_usd")) : 0;
   const bunnyMonth = bunnyBill?.thisMonth ?? 0;
-  const totalMonth = aiMonth + bunnyMonth + supabasePlan + vercelPlan;
+  const totalMonth = aiMonth + bunnyMonth + supabasePlan + vercelPlan + cloudflareBill;
+
+  // --- Payment history: what each provider has actually taken, month by month.
+  // Written by the monthly cron (/api/cron/costs-snapshot); seeded with the real
+  // invoices read on 20 Aug 2026. Answers "how much have they already taken?".
+  const { data: histRows } = await svc
+    .from("cost_history")
+    .select("month, provider, amount_usd, source")
+    .order("month", { ascending: false });
+  type Hist = { month: string; provider: string; amount_usd: number | string; source: string };
+  const hist = (histRows ?? []) as Hist[];
+  const PROVIDERS = ["ai", "bunny", "supabase", "vercel", "cloudflare"] as const;
+  const provLabel: Record<string, string> = { ai: "AI", bunny: "Bunny", supabase: "Supabase", vercel: "Vercel", cloudflare: "Cloudflare" };
+  const months = [...new Set(hist.map((h) => h.month))].sort().reverse();
+  const cell = new Map<string, number>();
+  for (const h of hist) cell.set(`${h.month}|${h.provider}`, Number(h.amount_usd) || 0);
+  const provTotal = (p: string) => hist.filter((h) => h.provider === p).reduce((s, h) => s + (Number(h.amount_usd) || 0), 0);
+  const grandTotal = hist.reduce((s, h) => s + (Number(h.amount_usd) || 0), 0);
+  const monthTotal = (m: string) => PROVIDERS.reduce((s, p) => s + (cell.get(`${m}|${p}`) ?? 0), 0);
 
   // --- Bunny videos vs YouTube (usage proxy) ---
   const { data: secs } = await svc.from("sections_meta").select("bunny_video_id, youtube_url").limit(5000);
@@ -130,9 +148,9 @@ export default async function CostsPage() {
             <strong>🗄️ Supabase (database + files)</strong>
             <span className="badge">Pro · plan base</span>
           </div>
-          <div style={stat}>{money(supabasePlan)}</div>
+          <div style={stat}>{money(supabasePlan)}<span className="muted" style={{ fontSize: ".8rem", fontWeight: 400 }}>/mo latest invoice</span></div>
           <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>
-            Flat with spend cap on. {storageFiles >= 0 ? `${storageFiles} files · ${mb(storageBytes)} stored.` : ""} No public live-cost API — see bill for exact.
+            $25 Pro base includes 8 GB DB, 100 GB storage and 250 GB egress. It only rises above $25 if you cross those (extra egress $0.09/GB, storage $0.021/GB) or add compute — the &quot;View bill&quot; page shows any overage. {storageFiles >= 0 ? `Now: ${storageFiles} files · ${mb(storageBytes)} stored.` : ""} Enter the real total from the bill below.
           </p>
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
             <a className="btn small secondary" href={`https://supabase.com/dashboard/org/${SUPABASE_ORG}/billing`} target="_blank" rel="noopener noreferrer">View bill ↗</a>
@@ -146,8 +164,8 @@ export default async function CostsPage() {
             <strong>▲ Vercel (hosting)</strong>
             <span className="badge">Pro · plan base</span>
           </div>
-          <div style={stat}>{money(vercelPlan)}</div>
-          <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>Flat Pro base. Set a spending limit in Vercel → Settings → Billing. No public live-cost API — see bill for exact.</p>
+          <div style={stat}>{money(vercelPlan)}<span className="muted" style={{ fontSize: ".8rem", fontWeight: 400 }}>/mo latest invoice</span></div>
+          <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>$20 Pro base + on-demand usage. The Aug bill&apos;s biggest overage line is <strong>Observability Events ($11.20)</strong> — the &quot;Observability Plus&quot; add-on; turn it off in Vercel → Settings → Observability if you don&apos;t use the dashboard and the bill drops to roughly $19. Cap the rest in Settings → Billing → Spend Management.</p>
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
             <a className="btn small secondary" href="https://vercel.com/dashboard/usage" target="_blank" rel="noopener noreferrer">Usage ↗</a>
             <a className="btn small secondary" href="https://vercel.com/account/billing" target="_blank" rel="noopener noreferrer">Billing ↗</a>
@@ -188,11 +206,49 @@ export default async function CostsPage() {
           </div>
           <div style={stat}>{r2Files} files</div>
           <div style={stat}>{money(cloudflareBill)}<span className="muted" style={{ fontSize: ".8rem", fontWeight: 400 }}>/mo latest bill</span></div>
-          <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>First 10 GB free, then $0.015/GB-month — the store grows with every installer and paper, so this bill rises slowly. Update the figure below when an invoice lands.</p>
+          <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>Was free while the store was under 10 GB; it now holds ~25 GB (installers, papers, backups), so ~15 GB bills at $0.015/GB-month → about $8/mo. Egress stays free. To stop it rising: delete old desktop-app installers and stale backups you no longer keep on R2. Update the figure below when an invoice lands.</p>
           <a className="btn small secondary" href="https://dash.cloudflare.com/?to=/:account/r2/overview" target="_blank" rel="noopener noreferrer" style={{ marginTop: 10 }}>View R2 usage ↗</a>
         </div>
 
       </div>
+
+      {/* Payment history — what they've actually taken, month by month */}
+      <h2 className="admin-section-title" style={{ marginTop: 28 }}>🧾 What they&apos;ve taken so far</h2>
+      <p className="muted" style={{ fontSize: ".84rem", marginTop: 4 }}>
+        A running ledger — one row per month, filled automatically on the 1st. AI and Bunny are measured; Vercel, Supabase and Cloudflare freeze the real-invoice figures from the box below (those three have no billing API to read). <strong>Total taken to date: {money(grandTotal)}</strong>.
+      </p>
+      {months.length === 0 ? (
+        <div style={card}><p className="muted" style={{ margin: 0 }}>No history yet — the first monthly snapshot writes on the 1st.</p></div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".86rem" }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>Month</th>
+                {PROVIDERS.map((p) => <th key={p} style={{ textAlign: "right", padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>{provLabel[p]}</th>)}
+                <th style={{ textAlign: "right", padding: "6px 8px", borderBottom: "1px solid var(--border)", fontWeight: 800 }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {months.map((m) => (
+                <tr key={m}>
+                  <td style={{ padding: "6px 8px", borderBottom: "0.5px solid var(--border)" }}>{formatMonth(new Date(m))}</td>
+                  {PROVIDERS.map((p) => {
+                    const v = cell.get(`${m}|${p}`);
+                    return <td key={p} style={{ textAlign: "right", padding: "6px 8px", borderBottom: "0.5px solid var(--border)", color: v == null ? "var(--muted)" : "inherit" }}>{v == null ? "—" : `$${v.toFixed(2)}`}</td>;
+                  })}
+                  <td style={{ textAlign: "right", padding: "6px 8px", borderBottom: "0.5px solid var(--border)", fontWeight: 700 }}>${monthTotal(m).toFixed(2)}</td>
+                </tr>
+              ))}
+              <tr>
+                <td style={{ padding: "8px", fontWeight: 800 }}>Total taken</td>
+                {PROVIDERS.map((p) => <td key={p} style={{ textAlign: "right", padding: "8px", fontWeight: 700 }}>${provTotal(p).toFixed(2)}</td>)}
+                <td style={{ textAlign: "right", padding: "8px", fontWeight: 800 }}>${grandTotal.toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Budget caps + alerts */}
       <h2 className="admin-section-title" style={{ marginTop: 28 }}>🔔 Budget alerts</h2>

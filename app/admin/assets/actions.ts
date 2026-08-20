@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/service";
-import { assetViewer, BUCKET, generateOccurrences, handledAssetIds } from "@/lib/assets";
+import { assetViewer, BUCKET, generateOccurrences, handledAssetIds, istToday } from "@/lib/assets";
 
 // Every write on the assets desk. Each action re-resolves the caller's role —
 // the founder decided who may do what, and a form is not a permission.
@@ -224,7 +224,10 @@ export async function addTask(formData: FormData): Promise<void> {
     direction: str(formData, "direction") === "out" ? "out" : "in",
     cadence,
     due_day: cadence === "monthly" ? Math.min(28, Math.max(1, num(formData, "due_day") ?? 5)) : null,
-    anchor_date: cadence !== "monthly" ? dateOrNull(formData, "anchor_date") : null,
+    // A once/annual task WITHOUT a date used to save fine and then never
+    // become an occurrence — invisible on every work list (the founder's
+    // "seepage" task, day one). No date now means due today.
+    anchor_date: cadence !== "monthly" ? (dateOrNull(formData, "anchor_date") ?? istToday()) : null,
     expected_amount: num(formData, "expected_amount"),
     assigned_to: str(formData, "assigned_to") || null,
   });

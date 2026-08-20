@@ -62,10 +62,14 @@ export async function GET(req: NextRequest) {
     rows.push({ month: monthStr, provider: "ai", amount_usd: Number(ai.toFixed(2)), source: "measured", note: "from ai_usage log" });
   } catch { /* skip AI if the RPC is unavailable */ }
 
-  // Bunny — live from Bunny's own billing API, only if the account key is set.
+  // Bunny — live from Bunny's own billing API if the account key is set;
+  // otherwise the real usage figure entered on the costs page.
   const bunny = await getBunnyBilling();
   if (bunny) {
     rows.push({ month: monthStr, provider: "bunny", amount_usd: Number(bunny.thisMonth.toFixed(2)), source: "live", note: "Bunny ThisMonthCharges" });
+  } else {
+    const manual = await num(svc, "bunny_bill_usd", 0);
+    if (manual > 0) rows.push({ month: monthStr, provider: "bunny", amount_usd: manual, source: "invoice", note: "figure on costs page (add API key for live)" });
   }
 
   // The three no-API providers — freeze the current real-invoice figures.

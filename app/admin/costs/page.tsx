@@ -44,7 +44,7 @@ export default async function CostsPage() {
 
   // --- Bunny live billing (this month's charges) + cap settings ---
   const bunnyBill = await getBunnyBilling();
-  const { data: costCfg } = await svc.from("site_settings").select("key, value").in("key", ["bunny_cap_usd", "supabase_storage_cap_mb", "cost_alert_email", "supabase_plan_usd", "vercel_plan_usd", "cloudflare_bill_usd"]);
+  const { data: costCfg } = await svc.from("site_settings").select("key, value").in("key", ["bunny_cap_usd", "supabase_storage_cap_mb", "cost_alert_email", "supabase_plan_usd", "vercel_plan_usd", "cloudflare_bill_usd", "bunny_bill_usd"]);
   const cfg = new Map((costCfg ?? []).map((r) => [r.key, r.value as string]));
   const bunnyCap = Number(cfg.get("bunny_cap_usd")) || 0;
   const bunnyOver = bunnyBill && bunnyCap > 0 && bunnyBill.thisMonth >= bunnyCap;
@@ -58,7 +58,10 @@ export default async function CostsPage() {
   const supabasePlan = cfg.get("supabase_plan_usd") != null ? Number(cfg.get("supabase_plan_usd")) : 25;
   const vercelPlan = cfg.get("vercel_plan_usd") != null ? Number(cfg.get("vercel_plan_usd")) : 20;
   const cloudflareBill = cfg.get("cloudflare_bill_usd") != null ? Number(cfg.get("cloudflare_bill_usd")) : 0;
-  const bunnyMonth = bunnyBill?.thisMonth ?? 0;
+  // Bunny live from its API if the account key is set; otherwise the real
+  // figure entered from the dashboard (dash.bunny.net → Account → Billing).
+  const bunnyManual = cfg.get("bunny_bill_usd") != null ? Number(cfg.get("bunny_bill_usd")) : 0;
+  const bunnyMonth = bunnyBill?.thisMonth ?? bunnyManual;
   const totalMonth = aiMonth + bunnyMonth + supabasePlan + vercelPlan + cloudflareBill;
 
   // --- Payment history: what each provider has actually taken, month by month.
@@ -111,7 +114,7 @@ export default async function CostsPage() {
         <div style={{ fontSize: ".85rem", opacity: 0.92 }}>Estimated total for {monthLabel}</div>
         <div style={{ fontSize: "2rem", fontWeight: 800, margin: "4px 0" }}>{money(totalMonth)}</div>
         <div style={{ fontSize: ".8rem", opacity: 0.92 }}>
-          AI {money(aiMonth)} (exact) · Bunny {money(bunnyMonth)} (live) · Supabase {money(supabasePlan)} · Vercel {money(vercelPlan)} · Cloudflare {money(cloudflareBill)} — <strong>the last three are the latest real invoices, entered below</strong>
+          AI {money(aiMonth)} (exact) · Bunny {money(bunnyMonth)} {bunnyBill ? "(live)" : "(entered)"} · Supabase {money(supabasePlan)} · Vercel {money(vercelPlan)} · Cloudflare {money(cloudflareBill)} — <strong>all real figures; add the Bunny account key to make Bunny live too</strong>
         </div>
       </div>
 
@@ -188,8 +191,8 @@ export default async function CostsPage() {
             </>
           ) : (
             <>
-              <div style={stat}>{bunnyVideos} videos</div>
-              <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>Classes on Bunny ({youtubeVideos} on free YouTube). Add your Bunny <strong>Account API key</strong> in Integrations to show live ₹ charges here.</p>
+              <div style={stat}>{money(bunnyManual)}<span className="muted" style={{ fontSize: ".8rem", fontWeight: 400 }}>/mo latest usage</span></div>
+              <p className="muted" style={{ fontSize: ".82rem", margin: 0 }}>YOUR BIGGEST CLOUD BILL, and it is <strong>storage, not video streaming</strong> — Aug $88 was Storage ~$80 + CDN ~$3; July was $121. {bunnyVideos} videos on Bunny ({youtubeVideos} on free YouTube). To cut it: the Bunny <em>storage zone</em> replicates every file across regions — drop unused regions, and delete class recordings/originals you no longer serve. Add the Bunny <strong>Account API key</strong> in Integrations to make this live.</p>
             </>
           )}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
@@ -277,6 +280,10 @@ export default async function CostsPage() {
           <div>
             <label>Cloudflare — latest invoice (USD)</label>
             <input name="cloudflare_bill_usd" type="number" min={0} step={0.01} defaultValue={cfg.get("cloudflare_bill_usd") ?? "0"} placeholder="8.12" />
+          </div>
+          <div>
+            <label>Bunny — latest usage (USD) — used until the API key is added</label>
+            <input name="bunny_bill_usd" type="number" min={0} step={0.01} defaultValue={cfg.get("bunny_bill_usd") ?? "0"} placeholder="88.03" />
           </div>
         </div>
         <SubmitButton className="btn" style={{ marginTop: 10 }}>Save budget alerts</SubmitButton>

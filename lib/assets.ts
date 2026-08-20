@@ -37,12 +37,26 @@ export const TXN_NATURES_OUT = [
 
 export type Viewer = { staff: Staff; role: "admin" | "accounts" | "handler" };
 
+// THE REGISTER BELONGS TO ONE PERSON, NOT ONE ROLE. Ravi also carries the
+// site's admin role — and on 20 August the founder found him seeing every
+// asset. "Admin" on this desk therefore means THE FOUNDER'S ACCOUNT, not the
+// role: any other staff member, whatever their site role, enters only through
+// an explicit handler or accounts grant.
+const FOUNDER_EMAIL = "ps.smay@gmail.com";
+
 /** Resolve what the signed-in staff member may do on the assets desk. */
 export async function assetViewer(): Promise<Viewer | null> {
   const staff = await currentStaff();
   if (!staff) return null;
-  if (staff.role === "admin") return { staff, role: "admin" };
-  if (staff.role !== "operator" && staff.role !== "faculty") return null;
+  if (staff.role === "admin") {
+    const { data } = await createServiceClient()
+      .from("profiles").select("email").eq("id", staff.id).maybeSingle();
+    if (String(data?.email ?? "").toLowerCase() === FOUNDER_EMAIL) return { staff, role: "admin" };
+    // A non-founder admin falls through to the grant checks below, same as
+    // any operator — full site rights buy nothing here.
+  } else if (staff.role !== "operator" && staff.role !== "faculty") {
+    return null;
+  }
   // Accounts outranks handler when somebody holds both grants.
   if (staff.permissions.includes("assets_accounts")) return { staff, role: "accounts" };
   if (staff.permissions.includes("assets")) return { staff, role: "handler" };

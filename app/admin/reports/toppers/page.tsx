@@ -46,7 +46,12 @@ export default async function ToppersPage(props: {
   // selectAll pages until the rows run out, which is what the limit was
   // always meant to say.
   const [effortRows, { data: courseRows }] = await Promise.all([
-    selectAll<Effort>((from, to) => svc.from("student_effort").select("*").range(from, to) as never),
+    // student_effort is an UNORDERED view. Paginating an unordered result with
+    // .range() lets Postgres return the same row on two pages and drop others —
+    // which is why Krishi Bhatia appeared at both rank 1 and rank 2 with
+    // identical figures while somebody else vanished. A stable, unique sort
+    // (one row per student+course) makes every page deterministic.
+    selectAll<Effort>((from, to) => svc.from("student_effort").select("*").order("student_id", { ascending: true }).order("course_id", { ascending: true }).range(from, to) as never),
     svc.from("courses").select("id, title"),
   ]);
 

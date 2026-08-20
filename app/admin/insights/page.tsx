@@ -1,5 +1,6 @@
 import AdminHero from "../_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
+import { inChunks } from "@/lib/pageAll";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Student insights — Admin" };
@@ -28,9 +29,13 @@ export default async function InsightsPage() {
   const { data: subjTitles } = await svc.from("subjects").select("id, title");
   const subjTitle = new Map((subjTitles ?? []).map((s) => [s.id as string, s.title as string]));
   const planIds = (planRows ?? []).map((p) => p.user_id as string);
-  const { data: planProfiles } = planIds.length
-    ? await svc.from("profiles").select("id, full_name, email").in("id", planIds)
-    : { data: [] as { id: string; full_name: string | null; email: string | null }[] };
+  // 705 plan-holders — passing all their ids to a single .in() builds a URL too
+  // long for PostgREST to accept, so the whole lookup silently returned nothing
+  // and EVERY row read "(no name)" / "—" even though all 705 have a name and an
+  // email. inChunks asks 200 at a time, which is what the numbers needed.
+  const planProfiles = await inChunks<{ id: string; full_name: string | null; email: string | null }>(
+    planIds, (batch) => svc.from("profiles").select("id, full_name, email").in("id", batch) as never,
+  );
   const profById = new Map((planProfiles ?? []).map((p) => [p.id as string, p]));
   const plans = (planRows ?? []).map((p) => {
     const s = (p.setup ?? {}) as { subjectId?: string; examDate?: string };

@@ -182,7 +182,20 @@ export async function updateUser(formData: FormData) {
   const role = str(formData.get("role"));
   const safeRole = ROLES.includes(role) ? role : "student";
   // Rights apply to operator/faculty; admins have everything, students nothing.
-  const perms = safeRole === "operator" || safeRole === "faculty" ? formData.getAll("perm").map(String) : [];
+  let perms = safeRole === "operator" || safeRole === "faculty" ? formData.getAll("perm").map(String) : [];
+
+  // ONLY THE FOUNDER GRANTS ACCESS TO THE ASSET REGISTER. Another admin could
+  // otherwise hand the "assets"/"assets_accounts" rights to anyone — including
+  // themselves — and see the money. So when the actor is not the founder, these
+  // two grants are stripped from any change, unless the target already held
+  // them (an admin editing an existing handler must not silently revoke them).
+  const ASSET_GRANTS = ["assets", "assets_accounts"];
+  if (!(await callerIsFounder()) && perms.some((p) => ASSET_GRANTS.includes(p))) {
+    const { data: before } = await createServiceClient()
+      .from("profiles").select("permissions").eq("id", id).maybeSingle();
+    const had = new Set(((before?.permissions as string[]) ?? []));
+    perms = perms.filter((p) => !ASSET_GRANTS.includes(p) || had.has(p));
+  }
   const supabase = createClient();
   await supabase
     .from("profiles")

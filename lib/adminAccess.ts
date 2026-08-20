@@ -36,6 +36,11 @@ export const ADMIN_AREAS: AdminArea[] = [
   // the founder alone — that rule lives in the pages, keyed off role=admin.
   { key: "assets", label: "🏠 Assets — handler (assigned assets & their tasks)", prefixes: ["/admin/assets"] },
   { key: "assets_accounts", label: "🧾 Assets — accounts (verify transactions & pendency)", prefixes: ["/admin/assets"] },
+  // Data entry for the whole register: create assets, fill every form, upload
+  // every paper. Sees what he enters; never the computed returns, the owner
+  // statements, or the close-asset act. Meant to be narrowed once the initial
+  // entry is done — the founder revokes this one grant and it is gone.
+  { key: "assets_editor", label: "✏️ Assets — editor (enter & edit everything; no returns/statements)", prefixes: ["/admin/assets"] },
 ];
 
 // Everything NOT covered above (integrations, telegram, users, enrolment, plans,

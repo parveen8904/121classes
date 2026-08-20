@@ -183,6 +183,14 @@ export async function updateUser(formData: FormData) {
   const safeRole = ROLES.includes(role) ? role : "student";
   // Rights apply to operator/faculty; admins have everything, students nothing.
   let perms = safeRole === "operator" || safeRole === "faculty" ? formData.getAll("perm").map(String) : [];
+  // EXCEPT the asset grants, which matter even on an admin: since 20 Aug an
+  // admin's asset access comes from these grants, not the role. Blanking an
+  // admin's permissions on every profile edit would silently revoke asset
+  // access the founder set up — so an admin target keeps what they hold.
+  if (safeRole === "admin") {
+    const { data: keep } = await createServiceClient().from("profiles").select("permissions").eq("id", id).maybeSingle();
+    perms = ((keep?.permissions as string[]) ?? []);
+  }
 
   // ONLY THE FOUNDER GRANTS ACCESS TO THE ASSET REGISTER. Another admin could
   // otherwise hand the "assets"/"assets_accounts" rights to anyone — including

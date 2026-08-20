@@ -20,6 +20,9 @@ export default async function AssetsPage(props: { searchParams: Promise<{ err?: 
   const sp = await props.searchParams;
   const svc = createServiceClient();
   const isAdmin = v.role === "admin";
+  // The editor enters the data, so he sees what he enters (owners, invested,
+  // contract) — but the computed actual return stays the founder's alone.
+  const canEdit = isAdmin || v.role === "editor";
 
   let q = svc.from("assets").select("*").order("status").order("name");
   if (v.role === "handler") {
@@ -39,7 +42,7 @@ export default async function AssetsPage(props: { searchParams: Promise<{ err?: 
 
   const today = istToday();
   const [{ data: owners }, { data: pend }, { data: photos }, { data: txns }] = await Promise.all([
-    isAdmin && assetIds.length
+    canEdit && assetIds.length
       ? svc.from("asset_owners").select("asset_id, owner_name, share_pct").in("asset_id", assetIds)
       : Promise.resolve({ data: [] as { asset_id: string; owner_name: string; share_pct: number }[] }),
     assetIds.length
@@ -86,7 +89,7 @@ export default async function AssetsPage(props: { searchParams: Promise<{ err?: 
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "14px 0" }}>
         <Link className="btn small secondary" href="/admin/assets/work">📋 My work — due & overdue</Link>
-        {(isAdmin || v.role === "accounts") && (
+        {(isAdmin || v.role === "accounts" || v.role === "editor") && (
           <Link className="btn small secondary" href="/admin/assets/accounts">🧾 Accounts — verify & pendency</Link>
         )}
         {isAdmin && <Link className="btn small secondary" href="/admin/assets/owners">👥 Owner statements</Link>}
@@ -112,15 +115,15 @@ export default async function AssetsPage(props: { searchParams: Promise<{ err?: 
                 <span className="muted" style={{ fontSize: ".8rem" }}>· {String(a.type)}{a.status === "closed" ? ` · closed (${a.closed_kind}, ${dmy(a.closed_on as string)})` : ""}</span>
                 <div className="muted" style={{ fontSize: ".8rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {String(a.address ?? "")}
-                  {isAdmin && ownersBy.has(id) ? ` · ${ownersBy.get(id)!.join(", ")}` : ""}
+                  {canEdit && ownersBy.has(id) ? ` · ${ownersBy.get(id)!.join(", ")}` : ""}
                 </div>
               </div>
-              {isAdmin && (
+              {canEdit && (
                 <div style={{ textAlign: "right", fontSize: ".82rem", flexShrink: 0 }}>
                   <div>{inr(a.invested_amount as number)} invested</div>
                   <div className="muted">
-                    contract {a.contractual_return != null ? `${a.contractual_return}%` : "—"} · actual{" "}
-                    {x?.rate != null ? `${(x.rate * 100).toFixed(1)}%` : "—"}
+                    contract {a.contractual_return != null ? `${a.contractual_return}%` : "—"}
+                    {isAdmin ? ` · actual ${x?.rate != null ? `${(x.rate * 100).toFixed(1)}%` : "—"}` : ""}
                   </div>
                 </div>
               )}
@@ -135,7 +138,7 @@ export default async function AssetsPage(props: { searchParams: Promise<{ err?: 
         {list.length === 0 && <div className="card"><p className="muted" style={{ margin: 0 }}>No assets yet.</p></div>}
       </div>
 
-      {isAdmin && (
+      {canEdit && (
         <details className="form-card" style={{ marginTop: 20 }}>
           <summary style={{ cursor: "pointer", fontWeight: 700 }}>➕ New asset</summary>
           <form action={createAsset} style={{ marginTop: 10, display: "grid", gap: 8 }}>

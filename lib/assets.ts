@@ -35,7 +35,7 @@ export const TXN_NATURES_OUT = [
   "Brokerage / legal fees", "Further investment", "Other expense",
 ] as const;
 
-export type Viewer = { staff: Staff; role: "admin" | "accounts" | "handler" };
+export type Viewer = { staff: Staff; role: "admin" | "editor" | "accounts" | "handler" };
 
 // THE REGISTER BELONGS TO ONE PERSON, NOT ONE ROLE. Ravi also carries the
 // site's admin role — and on 20 August the founder found him seeing every
@@ -57,6 +57,12 @@ export async function assetViewer(): Promise<Viewer | null> {
   } else if (staff.role !== "operator" && staff.role !== "faculty") {
     return null;
   }
+  // EDITOR (20 Aug): Pradeep enters every asset — creates them, fills the
+  // forms, uploads the papers — because he holds all the data today. He sees
+  // and edits everything EXCEPT the founder's computed views (actual returns,
+  // owner statements) and cannot close an asset. The founder's stated plan is
+  // to narrow this once the data entry is done; revoking one grant does it.
+  if (staff.permissions.includes("assets_editor")) return { staff, role: "editor" };
   // Accounts outranks handler when somebody holds both grants.
   if (staff.permissions.includes("assets_accounts")) return { staff, role: "accounts" };
   if (staff.permissions.includes("assets")) return { staff, role: "handler" };
@@ -218,11 +224,22 @@ export async function generateOccurrences(): Promise<number> {
   return made;
 }
 
-/** Staff who can be assigned work: admins, operators, faculty. */
+/**
+ * Staff who can be assigned asset work: ONLY people holding an asset role,
+ * plus the founder. This list used to be every admin/operator/faculty in the
+ * business — which put Pawan ji (the warehouse contractor) on the handler
+ * buttons of every asset. The founder's instruction, 20 Aug: a contractor is
+ * not an asset handler; only asset people appear here.
+ */
 export async function assignableStaff(): Promise<{ id: string; name: string }[]> {
   const { data } = await createServiceClient()
-    .from("profiles").select("id, full_name, email, role")
+    .from("profiles").select("id, full_name, email, role, permissions")
     .in("role", ["admin", "operator", "faculty"])
     .order("full_name");
-  return (data ?? []).map((p) => ({ id: String(p.id), name: String(p.full_name || p.email || "staff") }));
+  const GRANTS = ["assets", "assets_accounts", "assets_editor"];
+  return (data ?? [])
+    .filter((p) =>
+      String(p.email ?? "").toLowerCase() === FOUNDER_EMAIL ||
+      ((p.permissions as string[]) ?? []).some((g) => GRANTS.includes(g)))
+    .map((p) => ({ id: String(p.id), name: String(p.full_name || p.email || "staff") }));
 }

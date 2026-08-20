@@ -19,7 +19,7 @@ export default async function AssetWorkPage() {
   if (!v) redirect("/admin");
   const svc = createServiceClient();
   const today = istToday();
-  const mine = v.role !== "admin";
+  const mine = v.role === "handler";
 
   let occQ = svc
     .from("asset_occurrences")

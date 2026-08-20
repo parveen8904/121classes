@@ -16,7 +16,7 @@ export const metadata = { title: "Assets — accounts desk" };
 
 export default async function AssetsAccountsPage() {
   const v = await assetViewer();
-  if (!v || (v.role !== "admin" && v.role !== "accounts")) redirect("/admin/assets");
+  if (!v || (v.role !== "admin" && v.role !== "accounts" && v.role !== "editor")) redirect("/admin/assets");
   const svc = createServiceClient();
   const today = istToday();
   const in60 = new Date(Date.now() + 60 * 86400_000).toISOString().slice(0, 10);

@@ -27,6 +27,14 @@ async function admin() {
   return v;
 }
 
+
+/** Founder or the data-entry editor — creating and correcting records. */
+async function mayEdit() {
+  const v = await assetViewer();
+  if (!v || (v.role !== "admin" && v.role !== "editor")) throw new Error("Not authorised to edit assets.");
+  return v;
+}
+
 /** handler on THIS asset, or accounts, or admin — for recording work. */
 async function mayWork(assetId: string) {
   const v = await assetViewer();
@@ -55,7 +63,7 @@ async function putFile(file: unknown, prefix: string): Promise<string | null> {
 // ── Assets ───────────────────────────────────────────────────────────────────
 
 export async function createAsset(formData: FormData): Promise<void> {
-  await admin();
+  await mayEdit();
   const name = str(formData, "name");
   if (!name) redirect("/admin/assets?err=name");
   const { data } = await createServiceClient().from("assets").insert({
@@ -72,7 +80,7 @@ export async function createAsset(formData: FormData): Promise<void> {
 }
 
 export async function updateAsset(formData: FormData): Promise<void> {
-  await admin();
+  await mayEdit();
   const id = str(formData, "id");
   await createServiceClient().from("assets").update({
     name: str(formData, "name") || undefined,
@@ -90,7 +98,7 @@ export async function updateAsset(formData: FormData): Promise<void> {
 }
 
 export async function closeAsset(formData: FormData): Promise<void> {
-  await admin();
+  await admin(); // closing an asset stays the founder's act alone
   const id = str(formData, "id");
   const kind = str(formData, "closed_kind");
   const closedOn = dateOrNull(formData, "closed_on");
@@ -121,7 +129,7 @@ export async function closeAsset(formData: FormData): Promise<void> {
 // ── Owners & handlers (founder only) ─────────────────────────────────────────
 
 export async function addOwner(formData: FormData): Promise<void> {
-  await admin();
+  await mayEdit();
   const assetId = str(formData, "asset_id");
   const name = str(formData, "owner_name");
   const pct = num(formData, "share_pct");
@@ -131,14 +139,14 @@ export async function addOwner(formData: FormData): Promise<void> {
 }
 
 export async function removeOwner(formData: FormData): Promise<void> {
-  await admin();
+  await mayEdit();
   const id = str(formData, "id"), assetId = str(formData, "asset_id");
   await createServiceClient().from("asset_owners").delete().eq("id", id);
   revalidatePath(`/admin/assets/${assetId}`);
 }
 
 export async function setHandler(formData: FormData): Promise<void> {
-  await admin();
+  await mayEdit();
   const assetId = str(formData, "asset_id"), userId = str(formData, "user_id");
   const on = str(formData, "on") === "1";
   if (!assetId || !userId) return;
@@ -164,7 +172,7 @@ export async function uploadAssetFile(formData: FormData): Promise<void> {
 }
 
 export async function deleteAssetFile(formData: FormData): Promise<void> {
-  await admin();
+  await mayEdit();
   const id = str(formData, "id"), assetId = str(formData, "asset_id");
   const svc = createServiceClient();
   const { data } = await svc.from("asset_docs").select("path").eq("id", id).maybeSingle();
@@ -176,7 +184,7 @@ export async function deleteAssetFile(formData: FormData): Promise<void> {
 // ── Tenancy ──────────────────────────────────────────────────────────────────
 
 export async function saveTenancy(formData: FormData): Promise<void> {
-  await admin();
+  await mayEdit();
   const assetId = str(formData, "asset_id");
   if (!assetId) return;
   const svc = createServiceClient();
@@ -213,7 +221,7 @@ export async function saveTenancy(formData: FormData): Promise<void> {
 // ── Tasks ────────────────────────────────────────────────────────────────────
 
 export async function addTask(formData: FormData): Promise<void> {
-  await admin();
+  await mayEdit();
   const assetId = str(formData, "asset_id");
   const title = str(formData, "title");
   const cadence = ["monthly", "annual", "once"].includes(str(formData, "cadence")) ? str(formData, "cadence") : "monthly";
@@ -236,7 +244,7 @@ export async function addTask(formData: FormData): Promise<void> {
 }
 
 export async function setTaskAssignee(formData: FormData): Promise<void> {
-  await admin();
+  await mayEdit();
   const id = str(formData, "id"), assetId = str(formData, "asset_id");
   await createServiceClient().from("asset_tasks")
     .update({ assigned_to: str(formData, "assigned_to") || null }).eq("id", id);
@@ -244,7 +252,7 @@ export async function setTaskAssignee(formData: FormData): Promise<void> {
 }
 
 export async function toggleTask(formData: FormData): Promise<void> {
-  await admin();
+  await mayEdit();
   const id = str(formData, "id"), assetId = str(formData, "asset_id");
   const { data } = await createServiceClient().from("asset_tasks").select("active").eq("id", id).maybeSingle();
   await createServiceClient().from("asset_tasks").update({ active: !data?.active }).eq("id", id);
@@ -291,7 +299,7 @@ export async function addTxn(formData: FormData): Promise<void> {
 
 export async function verifyTxn(formData: FormData): Promise<void> {
   const v = await assetViewer();
-  if (!v || (v.role !== "admin" && v.role !== "accounts")) throw new Error("Accounts only.");
+  if (!v || (v.role !== "admin" && v.role !== "accounts" && v.role !== "editor")) throw new Error("Accounts only.");
   const id = str(formData, "id");
   const back = str(formData, "back") || "/admin/assets/accounts";
   await createServiceClient().from("asset_txns").update({
@@ -302,7 +310,7 @@ export async function verifyTxn(formData: FormData): Promise<void> {
 
 export async function queryTxn(formData: FormData): Promise<void> {
   const v = await assetViewer();
-  if (!v || (v.role !== "admin" && v.role !== "accounts")) throw new Error("Accounts only.");
+  if (!v || (v.role !== "admin" && v.role !== "accounts" && v.role !== "editor")) throw new Error("Accounts only.");
   const id = str(formData, "id");
   const back = str(formData, "back") || "/admin/assets/accounts";
   const q = str(formData, "query");
@@ -346,7 +354,7 @@ export async function closeLetter(formData: FormData): Promise<void> {
 
 /** Rewrite a standing task. Future pending occurrences are re-dated. */
 export async function editTask(formData: FormData): Promise<void> {
-  await admin();
+  await mayEdit();
   const id = str(formData, "id"), assetId = str(formData, "asset_id");
   if (!id) return;
   const cadence = ["monthly", "annual", "once"].includes(str(formData, "cadence")) ? str(formData, "cadence") : "monthly";
@@ -369,7 +377,7 @@ export async function editTask(formData: FormData): Promise<void> {
 }
 
 export async function updateOwner(formData: FormData): Promise<void> {
-  await admin();
+  await mayEdit();
   const id = str(formData, "id"), assetId = str(formData, "asset_id");
   const name = str(formData, "owner_name");
   const pct = num(formData, "share_pct");

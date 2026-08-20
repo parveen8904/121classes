@@ -29,7 +29,8 @@ export default async function AssetFilePage(props: {
   const { id } = await props.params;
   const sp = await props.searchParams;
   const isAdmin = v.role === "admin";
-  const canVerify = isAdmin || v.role === "accounts";
+  const canEdit = isAdmin || v.role === "editor";      // data entry
+  const canVerify = isAdmin || v.role === "accounts" || v.role === "editor";
 
   if (v.role === "handler") {
     const ids = await handledAssetIds(v.staff.id);
@@ -44,14 +45,14 @@ export default async function AssetFilePage(props: {
     { data: owners }, { data: docs }, { data: tenancy }, { data: tasks },
     { data: occs }, { data: txns }, { data: letters }, { data: handlers }, staff,
   ] = await Promise.all([
-    isAdmin ? svc.from("asset_owners").select("*").eq("asset_id", id).order("share_pct", { ascending: false }) : Promise.resolve({ data: [] }),
+    canEdit ? svc.from("asset_owners").select("*").eq("asset_id", id).order("share_pct", { ascending: false }) : Promise.resolve({ data: [] }),
     svc.from("asset_docs").select("*").eq("asset_id", id).order("created_at", { ascending: false }),
     svc.from("asset_tenancy").select("*").eq("asset_id", id).maybeSingle(),
     svc.from("asset_tasks").select("*").eq("asset_id", id).order("created_at"),
     svc.from("asset_occurrences").select("*").eq("asset_id", id).order("due_on", { ascending: false }).limit(60),
     svc.from("asset_txns").select("*").eq("asset_id", id).order("on_date", { ascending: false }).limit(200),
     svc.from("asset_letters").select("*").eq("asset_id", id).order("created_at", { ascending: false }),
-    isAdmin ? svc.from("asset_handlers").select("user_id").eq("asset_id", id) : Promise.resolve({ data: [] }),
+    canEdit ? svc.from("asset_handlers").select("user_id").eq("asset_id", id) : Promise.resolve({ data: [] }),
     assignableStaff(),
   ]);
 
@@ -131,7 +132,7 @@ export default async function AssetFilePage(props: {
       {/* ── The facts, and (founder only) the returns ──────────────────── */}
       <div className="card" style={{ marginTop: 14, display: "flex", gap: 24, flexWrap: "wrap", fontSize: ".88rem" }}>
         <div>📅 Invested {dmy(a.invested_on as string)}{a.matures_on ? ` · matures ${dmy(a.matures_on as string)}` : ""}</div>
-        {isAdmin && <div>💰 {inr(a.invested_amount as number)} invested</div>}
+        {canEdit && <div>💰 {inr(a.invested_amount as number)} invested</div>}
         {isAdmin && (
           <div>
             📈 Contract: <strong>{a.contractual_return != null ? `${a.contractual_return}% p.a.` : "—"}</strong>
@@ -145,7 +146,7 @@ export default async function AssetFilePage(props: {
       </div>
 
       {/* ── Owners (founder only) ──────────────────────────────────────── */}
-      {isAdmin && (
+      {canEdit && (
         <div className="card" style={{ marginTop: 12 }}>
           <strong>👥 Owners</strong>
           <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
@@ -180,7 +181,7 @@ export default async function AssetFilePage(props: {
       )}
 
       {/* ── Handlers (founder only) ────────────────────────────────────── */}
-      {isAdmin && (
+      {canEdit && (
         <div className="card" style={{ marginTop: 12 }}>
           <strong>🧑‍💼 Who handles this asset</strong>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
@@ -200,7 +201,7 @@ export default async function AssetFilePage(props: {
       )}
 
       {/* ── Tenancy (rental machinery) ─────────────────────────────────── */}
-      {(isAdmin || tenancy) && (
+      {(canEdit || tenancy) && (
         <div className="card" style={{ marginTop: 12 }}>
           <strong>🔑 Tenancy</strong>
           {tenancy ? (
@@ -212,7 +213,7 @@ export default async function AssetFilePage(props: {
           ) : (
             <p className="muted" style={{ fontSize: ".84rem", margin: "6px 0 0" }}>No tenancy recorded.</p>
           )}
-          {isAdmin && !closed && (
+          {canEdit && !closed && (
             <details style={{ marginTop: 8 }}>
               <summary className="muted" style={{ cursor: "pointer", fontSize: ".84rem" }}>✏️ {tenancy ? "Edit tenancy" : "Add tenancy"} — the monthly rent task maintains itself from this</summary>
               <form action={saveTenancy} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 8, marginTop: 8 }}>
@@ -245,7 +246,7 @@ export default async function AssetFilePage(props: {
               <span style={{ marginLeft: "auto", fontSize: ".8rem" }}>
                 {t.assigned_to ? `👤 ${staffName.get(String(t.assigned_to)) ?? "?"}` : <span style={{ color: "#b45309", fontWeight: 700 }}>unassigned</span>}
               </span>
-              {isAdmin && (
+              {canEdit && (
                 <form action={toggleTask}>
                   <input type="hidden" name="id" value={String(t.id)} />
                   <input type="hidden" name="asset_id" value={id} />
@@ -253,7 +254,7 @@ export default async function AssetFilePage(props: {
                 </form>
               )}
             </div>
-            {isAdmin && (
+            {canEdit && (
               <details style={{ marginTop: 8 }}>
                 <summary className="muted" style={{ cursor: "pointer", fontSize: ".82rem" }}>✏️ Edit this task</summary>
                 <form action={editTask} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 8, marginTop: 8 }}>
@@ -280,7 +281,7 @@ export default async function AssetFilePage(props: {
         ))}
         {(tasks ?? []).length === 0 && <div className="card"><p className="muted" style={{ margin: 0 }}>No standing tasks.</p></div>}
       </div>
-      {isAdmin && !closed && (
+      {canEdit && !closed && (
         <details className="form-card" style={{ marginTop: 10 }}>
           <summary style={{ cursor: "pointer", fontWeight: 600 }}>➕ New standing task</summary>
           <form action={addTask} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 8, marginTop: 8 }}>
@@ -435,7 +436,7 @@ export default async function AssetFilePage(props: {
             <span className="row-title"><a href={signed.get(String(d.path))} target="_blank" rel="noreferrer">📄 {String(d.title || d.path).split("/").pop()}</a></span>
             <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <span className="muted" style={{ fontSize: ".78rem" }}>{dmy(String(d.created_at).slice(0, 10))}</span>
-              {isAdmin && (
+              {canEdit && (
                 <form action={deleteAssetFile}>
                   <input type="hidden" name="id" value={String(d.id)} />
                   <input type="hidden" name="asset_id" value={id} />
@@ -457,7 +458,7 @@ export default async function AssetFilePage(props: {
       )}
 
       {/* ── Edit & close (founder only) ────────────────────────────────── */}
-      {isAdmin && !closed && (
+      {canEdit && !closed && (
         <>
           <details className="form-card" style={{ marginTop: 20 }}>
             <summary style={{ cursor: "pointer", fontWeight: 600 }}>✏️ Edit details & valuation</summary>
@@ -477,7 +478,7 @@ export default async function AssetFilePage(props: {
             </form>
           </details>
 
-          <details className="form-card" style={{ marginTop: 10 }}>
+          {isAdmin && <details className="form-card" style={{ marginTop: 10 }}>
             <summary style={{ cursor: "pointer", fontWeight: 600, color: "#b45309" }}>🏁 Close the asset — maturity / sale / settlement</summary>
             <form action={closeAsset} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 8, marginTop: 8 }}>
               <input type="hidden" name="id" value={id} />
@@ -487,7 +488,7 @@ export default async function AssetFilePage(props: {
               <div><label>For how much (₹)</label><input name="sale_amount" inputMode="numeric" /></div>
               <SubmitButton className="btn small">Close it — the proceeds enter the ledger, tasks stop, history stays</SubmitButton>
             </form>
-          </details>
+          </details>}
         </>
       )}
 

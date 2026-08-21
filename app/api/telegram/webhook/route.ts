@@ -13,21 +13,19 @@ import { handleAbuse } from "@/lib/abuseEscalation";
 
 export const dynamic = "force-dynamic";
 
-// THE /amendments ANSWER — the founder's own words, approved verbatim.
+// THE /amendments ANSWER IS NOT A SCRIPT.
 //
-// The AI, reading his class material, once gave a student this exact rundown and
-// he called it "perfect", so it is fixed here rather than left to the AI to
-// reproduce (and to the daily cap that could leave it silent). One place, used
-// for the command in the group and in a private chat alike. Update this string
-// when he says the position has changed — nothing else references the facts.
-const AMENDMENTS_MSG =
-  "📝 Amendments for CA Final Financial Reporting — where things stand:\n\n" +
-  "• The amendments applicable to your exam are already covered in your classes and study material.\n" +
-  "• For the last two years there has been no amendment relevant to Financial Reporting as a subject, and as of now ICAI has not notified any new amendment.\n" +
-  "• ICAI has added some new questions — all of them are covered in our study material.\n" +
-  "• GSR 549(E) dated 13 August 2025 covers two things: Lack of Exchangeability (Ind AS 21) and Classification of Liabilities as current/non-current. Both are covered in our classes and material.\n" +
-  "• Ind AS 118 is a probable upcoming amendment — we are keeping an eye on it.\n\n" +
-  "So you are well covered: go through the material and don't worry about tracking amendments separately. The latest applicable list for your attempt is always at caparveensharma.com/amendments.";
+// The founder wants it worded freshly each time, not a fixed paragraph — but
+// grounded in the facts he approved. Those facts live as a standing correction
+// in ai_lessons ("no new amendment notified; GSR 549(E) → Ind AS 21 Lack of
+// Exchangeability + current/non-current, all covered; Ind AS 118 upcoming"),
+// so the AI weaves them into a natural reply on every channel. The command just
+// asks the AI this question. The fallback is used only if the AI is switched
+// off or over its daily cap — a one-liner, never a substitute for the answer.
+const AMENDMENTS_Q =
+  "What are the latest amendments applicable for CA Final Financial Reporting, and are they already covered in the classes and study material?";
+const AMENDMENTS_FALLBACK =
+  "📝 For your attempt, the latest applicable amendments are listed here: caparveensharma.com/amendments — and they are covered in your classes. Ask me in your own words if you want the detail.";
 
 // Telegram calls this when a student messages the bot. Two jobs:
 //  1) /start <code>  → link the student's account to their Telegram chat id
@@ -211,11 +209,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // /amendments — the SAME story as /courses. A student (Yash, CA Final
-      // group) typed "/amendments@caparveensharmabot" expecting the latest
-      // updates, got silence, and it spread. Answered directly, threaded.
+      // /amendments — a command students type expecting the amendments position.
+      // NOT a fixed script (the founder wants it worded freshly each time): it is
+      // routed to the AI, which answers from his class material and the standing
+      // amendments lesson (ai_lessons), threaded so repeats don't spam the room.
       if (!mod.flagged && /^\/amendments\b/i.test(text.trim())) {
-        await tgSendGroupReply(chatId, AMENDMENTS_MSG, msg.message_id);
+        const body = subj?.id ? await groupAiAnswer(subj.id, AMENDMENTS_Q) : null;
+        await tgSendGroupReply(chatId, body || AMENDMENTS_FALLBACK, msg.message_id);
         return NextResponse.json({ ok: true });
       }
 
@@ -340,9 +340,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // /amendments in a private chat — same answer as in the groups.
+  // /amendments in a private chat — routed to the AI (fresh wording each time),
+  // grounded in the class material and the standing amendments lesson.
   if (/^\/amendments\b/i.test(text.trim())) {
-    await sendTelegramMessage(chatId, AMENDMENTS_MSG);
+    let ans: string | null = null;
+    if (await aiConfigured()) {
+      const material = await getRepositoryContext(null, 12000, { query: AMENDMENTS_Q });
+      const raw = await answerDoubtFromMaterial(AMENDMENTS_Q, material, "doubt", {});
+      if (raw && raw.trim() !== NEED_FACULTY) ans = raw;
+    }
+    await sendTelegramMessage(chatId, ans || AMENDMENTS_FALLBACK);
     return NextResponse.json({ ok: true });
   }
 

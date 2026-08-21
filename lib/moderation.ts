@@ -98,3 +98,47 @@ export async function getBlockedTerms(): Promise<string[]> {
 export async function moderateMessageDyn(text: string): Promise<ModerationResult> {
   return moderateMessage(text, await getBlockedTerms());
 }
+
+// ── AI VISION: is this image explicit? ──────────────────────────────────────
+//
+// The text moderator cannot see a picture. A student posted pornography in a
+// subject group as a photo with no caption, so nothing flagged it. This runs
+// the image through Claude's vision on a fast model and answers one question:
+// is it pornographic / sexually explicit / nudity / graphic gore. Zero
+// tolerance in a students' group — a true answer gets the message deleted and
+// the poster removed.
+export async function imageIsExplicit(b64: string, mediaType: string): Promise<{ explicit: boolean; reason: string }> {
+  const { getSecret } = await import("@/lib/secrets");
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey) return { explicit: false, reason: "no-ai" };
+  const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+  const mt = allowed.includes(mediaType) ? mediaType : "image/jpeg";
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 60,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: mt, data: b64 } },
+            { type: "text", text: "You are a safety filter for a students' study group on Chartered Accountancy. Does this image contain pornography, sexual content, nudity, or graphic gore/violence? A normal photo of notes, a question paper, a screenshot, a person clothed, or study material is NOT explicit. Answer ONLY compact JSON: {\"explicit\":true or false,\"reason\":\"a few words\"}." },
+          ],
+        }],
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(9000),
+    });
+    if (!res.ok) return { explicit: false, reason: `http-${res.status}` };
+    const data = await res.json();
+    const txt = (data?.content?.[0]?.text ?? "") as string;
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) return { explicit: false, reason: "unparsed" };
+    const j = JSON.parse(m[0]);
+    return { explicit: j.explicit === true, reason: String(j.reason || "").slice(0, 120) };
+  } catch {
+    return { explicit: false, reason: "error" };
+  }
+}

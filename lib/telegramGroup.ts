@@ -66,3 +66,50 @@ export async function tgRestrictUser(chatId: string, tgUserId: string, ban = fal
   });
   return !!j?.ok;
 }
+
+// ── Media moderation helpers ────────────────────────────────────────────────
+//
+// The group moderator was text-only: an explicit PHOTO or VIDEO with no caption
+// slipped straight through. These let the webhook pull the image bytes (or a
+// video/sticker's thumbnail) so it can be checked by AI vision.
+
+/** Any media on this message that could hide explicit content. */
+export function messageHasMedia(msg: unknown): boolean {
+  const m = msg as Record<string, unknown>;
+  return !!(m?.photo || m?.sticker || m?.video || m?.animation || m?.document || m?.video_note);
+}
+
+/** The file_id of a still image to moderate — the photo itself, or a video /
+ *  animation / sticker's thumbnail. Null when there's nothing image-like. */
+export function moderatableImageId(msg: unknown): string | null {
+  const m = msg as Record<string, any>;
+  if (Array.isArray(m?.photo) && m.photo.length) return m.photo[m.photo.length - 1]?.file_id ?? null;
+  if (m?.sticker) return m.sticker.thumbnail?.file_id || m.sticker.thumb?.file_id || ((m.sticker.is_animated || m.sticker.is_video) ? null : m.sticker.file_id) || null;
+  if (m?.video) return m.video.thumbnail?.file_id || m.video.thumb?.file_id || null;
+  if (m?.video_note) return m.video_note.thumbnail?.file_id || m.video_note.thumb?.file_id || null;
+  if (m?.animation) return m.animation.thumbnail?.file_id || m.animation.thumb?.file_id || null;
+  if (m?.document) {
+    const mime = String(m.document.mime_type || "");
+    if (/^image\//.test(mime)) return m.document.file_id;
+    if (/^video\//.test(mime)) return m.document.thumbnail?.file_id || m.document.thumb?.file_id || null;
+  }
+  return null;
+}
+
+/** Download a Telegram file by id → base64 + an image media type for AI vision. */
+export async function tgGetImageB64(fileId: string): Promise<{ b64: string; mediaType: string } | null> {
+  const token = await getSecret("TELEGRAM_BOT_TOKEN");
+  if (!token) return null;
+  try {
+    const meta = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`, { cache: "no-store" }).then((r) => r.json());
+    const path = meta?.result?.file_path as string | undefined;
+    if (!path) return null;
+    const res = await fetch(`https://api.telegram.org/file/bot${token}/${path}`, { cache: "no-store", signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > 8 * 1024 * 1024) return null; // moderation runs on thumbnails; skip anything huge
+    const ext = (path.split(".").pop() || "jpg").toLowerCase();
+    const mediaType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "gif" ? "image/gif" : "image/jpeg";
+    return { b64: buf.toString("base64"), mediaType };
+  } catch { return null; }
+}

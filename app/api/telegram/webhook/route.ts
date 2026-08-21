@@ -4,8 +4,8 @@ import { sendTelegramMessage, notifyFaculty } from "@/lib/notify";
 import { answerDoubtFromMaterial, aiConfigured, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getSecret } from "@/lib/secrets";
-import { moderateMessageDyn } from "@/lib/moderation";
-import { tgDeleteMessage, tgSendGroupReply, tgApproveJoin, tgDeclineJoin } from "@/lib/telegramGroup";
+import { moderateMessageDyn, imageIsExplicit } from "@/lib/moderation";
+import { tgDeleteMessage, tgSendGroupReply, tgApproveJoin, tgDeclineJoin, tgRestrictUser, messageHasMedia, moderatableImageId, tgGetImageB64 } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
 import { groupAiAnswer } from "@/lib/groupDoubt";
 import { judgeStudentMessage } from "@/lib/ai";
@@ -100,16 +100,57 @@ export async function POST(req: NextRequest) {
       { chat_id: chatId, title: msg.chat.title ?? "Group", last_seen_at: new Date().toISOString() },
       { onConflict: "chat_id" },
     );
-    if (msg?.message_id && text) {
+    const caption = String(msg?.caption ?? "").trim();
+    const hasMedia = messageHasMedia(msg);
+    if (msg?.message_id && (text || caption || hasMedia)) {
       const { data: subj } = await svc.from("subjects").select("id, discord_channel_id").eq("telegram_group_chat_id", chatId).maybeSingle();
       const fromId = msg?.from?.id ? String(msg.from.id) : null;
       const fromName = [msg?.from?.first_name, msg?.from?.last_name].filter(Boolean).join(" ") || msg?.from?.username || "Member";
-      const mod = await moderateMessageDyn(text);
+
+      // TEXT / CAPTION moderation (blocked terms, spam) — as before, now also
+      // covering a photo's caption.
+      const combined = (text || caption).trim();
+      const mod = combined ? await moderateMessageDyn(combined) : { flagged: false, reasons: [] as string[] };
+
+      // IMAGE / VIDEO moderation — the gap that let porn through. Any picture,
+      // video, GIF or sticker is checked by AI vision; explicit content is
+      // deleted AND the poster is removed on the spot (zero tolerance in a
+      // students' group), and the founder is alerted.
+      let mediaExplicit = false;
+      let mediaReason = "";
+      if (hasMedia) {
+        const fileId = moderatableImageId(msg);
+        if (fileId) {
+          const img = await tgGetImageB64(fileId);
+          if (img) {
+            const verdict = await imageIsExplicit(img.b64, img.mediaType);
+            if (verdict.explicit) { mediaExplicit = true; mediaReason = verdict.reason || "explicit image"; }
+          }
+        }
+      }
+
       let status = "visible";
-      if (mod.flagged) {
+      if (mod.flagged || mediaExplicit) {
         await tgDeleteMessage(chatId, msg.message_id); // bot must be group admin
         status = "hidden";
       }
+      // Explicit media is a removable offence at once — not a warning.
+      if (mediaExplicit && fromId) {
+        await tgRestrictUser(chatId, fromId, true).catch(() => false);
+        try {
+          await svc.from("banned_group_users").upsert(
+            { chat_id: chatId, user_id: null, tg_user_id: fromId, kind: "ban", reason: `Removed automatically: explicit image (${mediaReason})`, banned_by: null },
+            { onConflict: "chat_id,tg_user_id" },
+          );
+        } catch { /* the Telegram removal already happened; the record is best-effort */ }
+        try {
+          await notifyFaculty(
+            "🚫 Explicit image auto-removed from a Telegram group",
+            `The poster (${fromName}) was removed on the spot.\nReason: ${mediaReason}\nGroup chat: ${chatId}`,
+          );
+        } catch { /* alert is best-effort */ }
+      }
+      if (mediaExplicit) { mod.flagged = true; mod.reasons = [...mod.reasons, `explicit_media:${mediaReason}`]; }
       const { data: gm } = await svc
         .from("group_messages")
         .upsert(
@@ -120,7 +161,7 @@ export async function POST(req: NextRequest) {
             source: "telegram",
             sender_tg_id: fromId,
             sender_name: fromName,
-            body: text,
+            body: text || caption || (hasMedia ? "[media]" : ""),
             reply_to_tg_id: msg?.reply_to_message?.message_id ?? null,
             flagged: mod.flagged,
             flag_reasons: mod.reasons,

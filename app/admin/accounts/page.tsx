@@ -21,8 +21,12 @@ export const metadata = { title: "Accounts & Zoho — Admin" };
 // existing "Download Excel — everything" works and is relied on; the surest way
 // to break a working report is to keep adding to it.
 
-const th: React.CSSProperties = { padding: "7px 9px", textAlign: "left", color: "var(--muted)", whiteSpace: "nowrap", fontWeight: 700 };
-const td: React.CSSProperties = { padding: "7px 9px", verticalAlign: "top", fontSize: ".84rem" };
+// Compact + wrapping so the eleven-column sale table FITS the page instead of
+// running off the side. Headers may wrap (no nowrap), long values (emails,
+// Razorpay ids) break rather than push the table wide, and the overflow wrapper
+// stays as a safety net on very narrow phones.
+const th: React.CSSProperties = { padding: "6px 7px", textAlign: "left", color: "var(--muted)", fontWeight: 700, fontSize: ".74rem" };
+const td: React.CSSProperties = { padding: "6px 7px", verticalAlign: "top", fontSize: ".8rem", wordBreak: "break-word" };
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 
 export default async function AccountsPage(props: {

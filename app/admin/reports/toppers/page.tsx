@@ -26,7 +26,7 @@ const PER_BOARD = 50;
 export default async function ToppersPage(props: {
   searchParams: Promise<{ attempt?: string; course?: string }>;
 }) {
-  if (!(await requireArea("store")) && !(await requireArea("results"))) redirect("/admin");
+  if (!(await requireArea("store")) && !(await requireArea("results")) && !(await requireArea("reports"))) redirect("/admin");
   const sp = await props.searchParams;
   const svc = createServiceClient();
 

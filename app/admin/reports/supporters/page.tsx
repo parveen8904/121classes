@@ -37,7 +37,7 @@ const td: React.CSSProperties = { padding: "7px 9px", verticalAlign: "top" };
 export default async function SupportersReport(props: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-  await assertArea(null);
+  await assertArea("reports");
   const sp = await props.searchParams;
   const from = (sp.from ?? "").trim();
   const to = (sp.to ?? "").trim();

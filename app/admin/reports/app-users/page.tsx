@@ -23,7 +23,7 @@ const th: React.CSSProperties = { padding: "8px 10px", textAlign: "left", color:
 const td: React.CSSProperties = { padding: "8px 10px", verticalAlign: "top", fontSize: ".86rem" };
 
 export default async function AppUsersReport() {
-  await assertArea(null);
+  await assertArea("reports");
   const svc = createServiceClient();
 
   const [{ data: sessions }, { data: pushes }] = await Promise.all([

@@ -20,7 +20,7 @@ const dayIst = (v: string) =>
   new Date(v).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: IST });
 
 export default async function OtpReportPage() {
-  await assertArea(null);
+  await assertArea("reports");
   const svc = createServiceClient();
   const since14 = new Date(Date.now() - 14 * 86400_000).toISOString();
 

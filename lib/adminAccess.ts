@@ -12,6 +12,12 @@ import { createClient } from "@/lib/supabase/server";
 export type AdminArea = { key: string; label: string; prefixes: string[] };
 
 export const ADMIN_AREAS: AdminArea[] = [
+  // READ-ONLY REPORTS. The accounts team needs the business reports — sales,
+  // subscribers, leads, papers, OTP, supporters — without super-admin. This one
+  // grant opens the Reports hub and everything under /admin/reports. It does NOT
+  // reach costs, health, backups, AI usage or the security check — those live on
+  // their own paths and stay super-admin only.
+  { key: "reports", label: "📊 Reports (read-only — sales, subscribers, leads, papers…)", prefixes: ["/admin/reports"] },
   { key: "announcements", label: "📣 Announcements & broadcasts", prefixes: ["/admin/announcements", "/admin/notifications", "/admin/amendments"] },
   // The panel moved: doubts now open through the /admin/messages hub, with the
   // WhatsApp desk and the doubt log inside it. The grant kept authorising only

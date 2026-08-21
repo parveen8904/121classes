@@ -30,7 +30,7 @@ const th: React.CSSProperties = { padding: "7px 9px", textAlign: "left", color: 
 const td: React.CSSProperties = { padding: "7px 9px", verticalAlign: "top" };
 
 export default async function EncodingReport() {
-  await assertArea(null);
+  await assertArea("reports");
   const svc = createServiceClient();
 
   const [{ data: jobRows }, { data: secRows }, { data: doneVideos }] = await Promise.all([

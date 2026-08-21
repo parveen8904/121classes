@@ -1,7 +1,8 @@
 import { formatDateTime } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../../_components/AdminHero";
-import { assertArea } from "@/lib/adminAccess";
+import { requireArea } from "@/lib/adminAccess";
+import { redirect } from "next/navigation";
 import { FEEDBACK_RATINGS, ALL_RATING_KEYS } from "@/lib/feedbackQuestions";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,7 @@ const colour = (avg: number) => (avg >= 4 ? "#16a34a" : avg >= 3 ? "#b45309" : "
 export default async function FeedbackReport(props: {
   searchParams: Promise<{ days?: string }>;
 }) {
-  await assertArea("inbox");
+  if (!(await requireArea("inbox")) && !(await requireArea("reports"))) redirect("/admin");
   const { days } = await props.searchParams;
   const windowDays = Math.min(365, Math.max(7, Number(days) || 90));
 

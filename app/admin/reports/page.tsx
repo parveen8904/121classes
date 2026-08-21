@@ -1,6 +1,6 @@
 import Link from "next/link";
 import AdminHero from "../_components/AdminHero";
-import { assertArea } from "@/lib/adminAccess";
+import { assertArea, currentStaff, pathAllowed } from "@/lib/adminAccess";
 import { REPORTS } from "@/lib/adminNav";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,15 @@ export const metadata = { title: "Reports — Admin" };
 // them, and the panel that used to carry them no longer does.
 
 export default async function ReportsHub() {
-  await assertArea(null);
+  await assertArea("reports");
+
+  // Show only the reports this person may actually open. The accounts team has
+  // the "reports" grant (business reports under /admin/reports); the infra
+  // reports (costs, health, backups, AI usage, security) live on other paths
+  // and stay super-admin — so their tiles are hidden here rather than shown as
+  // dead links that bounce.
+  const staff = await currentStaff();
+  const visible = staff ? REPORTS.filter((r) => pathAllowed(r.href, staff)) : [];
 
   return (
     <section className="container" style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 900 }}>
@@ -31,7 +39,7 @@ export default async function ReportsHub() {
       />
 
       <div className="admin-cards" style={{ marginTop: 20 }}>
-        {REPORTS.map((r) => (
+        {visible.map((r) => (
           <Link className="admin-tile" key={r.href} href={r.href} style={{ textDecoration: "none", color: "inherit" }}>
             <div className="tile-ic">{r.icon}</div>
             <h3>{r.title}</h3>

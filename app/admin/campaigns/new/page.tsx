@@ -1,6 +1,7 @@
 import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 import VideoUpload from "../../_components/VideoUpload";
+import DocUpload from "../../_components/DocUpload";
 import AdminHero from "../../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import ToggleAllChannels from "../../broadcasts/_components/ToggleAllChannels";
@@ -181,9 +182,10 @@ export default async function NewCampaignPage(props: { searchParams: Promise<{ k
           )}
         </div>
 
-        <h3 style={step}>3. The video (optional)</h3>
+        <h3 style={step}>3. The video or PDF (optional)</h3>
         <div className="form-card">
           <VideoUpload name="video_url" />
+          <DocUpload name="pdf_url" />
         </div>
 
         {/* Every question below this line exists ONLY to steer the writer. When

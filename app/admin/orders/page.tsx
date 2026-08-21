@@ -170,9 +170,29 @@ export default async function AdminOrdersPage(
     return "";
   };
 
+  // VENDOR/GIFT VALIDITY. A gift/vendor order provisions the subscription under
+  // the RECIPIENT's own student account (found by email), not under the buyer.
+  // The row was built with a synthetic profile id of "", so the start→end lookup
+  // — keyed by the real student id — never matched and the validity read
+  // "— → —". Resolve each recipient's real id here so their dates are found.
+  const giftEmails = [...new Set(((giftData ?? []) as { recipient_email: string | null }[])
+    .map((g) => String(g.recipient_email ?? "").toLowerCase()).filter(Boolean))];
+  const giftRecipByEmail = new Map<string, string>(); // lower(email) → student id
+  if (giftEmails.length) {
+    const recips = await inChunks<{ id: string; email: string | null }>(
+      giftEmails, (b) => svc.from("profiles").select("id, email").in("email", b) as never,
+    );
+    for (const r of recips) if (r.email) giftRecipByEmail.set(String(r.email).toLowerCase(), String(r.id));
+  }
+
   // The exact subscription dates each payment created.
   const payRowsRaw = (payData ?? []) as unknown as PayRow[];
-  const payerIds = [...new Set(payRowsRaw.map((p) => p.profiles?.id).filter(Boolean))] as string[];
+  // Payer ids from the direct orders PLUS the gift/vendor recipients, so the
+  // subscription-date fetch below covers the students a vendor bought for.
+  const payerIds = [...new Set([
+    ...payRowsRaw.map((p) => p.profiles?.id).filter(Boolean) as string[],
+    ...giftRecipByEmail.values(),
+  ])];
   const levelByUser = new Map<string, string>();
   // Tier and length travel with the dates now: "Gold · 12 months" answers
   // "what did they actually buy" without opening the invoice.
@@ -236,7 +256,10 @@ export default async function AdminOrdersPage(
     order_no: g.order_no,
     subjects: g.subjects,
     profiles: {
-      id: "", full_name: g.recipient_name, email: g.recipient_email, phone: g.recipient_phone,
+      // The recipient's REAL id (by email) so the subscription-date lookup below
+      // matches; "" only if we truly cannot find their account.
+      id: giftRecipByEmail.get(String(g.recipient_email ?? "").toLowerCase()) ?? "",
+      full_name: g.recipient_name, email: g.recipient_email, phone: g.recipient_phone,
       address_line1: null, address_line2: null, city: null, state: null, pincode: null,
     },
     viaSupporter: g.gifter?.business_name || g.gifter?.full_name || g.gifter?.email || "a supporter",

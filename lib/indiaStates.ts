@@ -186,7 +186,11 @@ export function parsePostalParts(address: string | null | undefined): {
 // These are Zoho's abbreviations, which are not always the ones you would
 // guess: Odisha is OD, Uttarakhand is UK, Telangana is TS.
 const ZOHO_STATE: Record<string, string> = {
-  "andaman and nicobar islands": "AN", "andhra pradesh": "AP", "arunachal pradesh": "AR",
+  // Andhra Pradesh's GST code became 37 after the Telangana split, and its
+  // abbreviation is AD (the old 28 was AP). The founder's instruction: the Zoho
+  // upload must carry AD, because that is what the Zoho import expects for the
+  // data he files. Overrides the earlier "leave as AP".
+  "andaman and nicobar islands": "AN", "andhra pradesh": "AD", "arunachal pradesh": "AR",
   "assam": "AS", "bihar": "BR", "chandigarh": "CH", "chhattisgarh": "CG",
   "dadra and nagar haveli and daman and diu": "DN", "dadra and nagar haveli": "DN",
   "daman and diu": "DD", "delhi": "DL", "goa": "GA", "gujarat": "GJ", "haryana": "HR",

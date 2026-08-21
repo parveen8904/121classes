@@ -81,13 +81,19 @@ export async function draftCampaign(formData: FormData) {
     : new Date(Date.now() + 2 * 3600e3);
 
   const campaignId = randomUUID();
+  // A PDF attached to the campaign — appended to each post as a tappable link so
+  // it reaches WhatsApp, Telegram and email recipients. Drafts stay editable, so
+  // it can be trimmed from any single channel before sending.
+  const pdfUrl = str(formData.get("pdf_url")) || null;
   const rows = fields.map((field) => {
     const voice = FIELD_TO_VOICE[field];
-    const body = written!.posts[voice] ?? Object.values(written!.posts)[0];
+    const baseBody = written!.posts[voice] ?? Object.values(written!.posts)[0];
+    const body = pdfUrl ? `${baseBody}\n\n📄 ${pdfUrl}` : baseBody;
     return {
       ...ALL_CHANNEL_FLAGS,
       [field]: true,
       body,
+      pdf_url: pdfUrl,
       campaign: name || (kind === "own" ? "My own post" : written!.focus.slice(0, 120)),
       campaign_id: campaignId,
       status: "draft",

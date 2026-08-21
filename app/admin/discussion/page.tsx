@@ -2,7 +2,7 @@ import { formatDateTime } from "@/lib/dates";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { restoreMessage, hideMessage, banSender, unbanUser, saveBlockedTerms } from "./actions";
+import { restoreMessage, hideMessage, banSender, unbanUser, saveBlockedTerms, makeStudentsOnlyLink } from "./actions";
 import { botGroupStatus } from "@/lib/telegramGroup";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export const metadata = { title: "Group moderation — Admin" };
 
 type Msg = { id: string; chat_id: string; sender_name: string | null; body: string | null; created_at: string; source: string; status: string; flagged: boolean; flag_reasons: string[] };
 
-export default async function DiscussionAdmin(props: { searchParams: Promise<{ q?: string; group?: string }> }) {
+export default async function DiscussionAdmin(props: { searchParams: Promise<{ q?: string; group?: string; linked?: string; linkerr?: string }> }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
   const q = (searchParams.q ?? "").trim();
@@ -18,11 +18,11 @@ export default async function DiscussionAdmin(props: { searchParams: Promise<{ q
 
   const [{ data: groups }, { data: subjects }] = await Promise.all([
     svc.from("telegram_groups").select("chat_id, title").order("title"),
-    svc.from("subjects").select("title, telegram_group_chat_id"),
+    svc.from("subjects").select("title, telegram_group_chat_id, telegram_group_url"),
   ]);
   const subjByChat = new Map((subjects ?? []).filter((s) => s.telegram_group_chat_id).map((s) => [s.telegram_group_chat_id as string, s.title as string]));
   // Can the bot actually police each group? (admin + delete + ban rights)
-  const groupChats = (subjects ?? []).filter((s) => s.telegram_group_chat_id).map((s) => ({ chat: s.telegram_group_chat_id as string, name: s.title as string }));
+  const groupChats = (subjects ?? []).filter((s) => s.telegram_group_chat_id).map((s) => ({ chat: s.telegram_group_chat_id as string, name: s.title as string, url: (s as { telegram_group_url?: string | null }).telegram_group_url ?? "" }));
   const botStatus = await botGroupStatus(groupChats.map((g) => g.chat));
   const groupName = (chat: string) => subjByChat.get(chat) || (groups ?? []).find((g) => g.chat_id === chat)?.title || chat;
 
@@ -82,6 +82,9 @@ export default async function DiscussionAdmin(props: { searchParams: Promise<{ q
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 920 }}>
       <AdminHero badge="🛡️ Group moderation" title="Discussion moderation" subtitle="Review flagged messages, search across all groups, hide messages and ban/mute users. Your DB is the record; Telegram is kept in sync." back={{ href: "/admin", label: "Admin" }} />
 
+      {searchParams.linked === "1" && <div className="notice ok" style={{ marginTop: 12 }}>✅ A students-only join link was created and saved for the website. You can now safely make that group Private and delete its public link.</div>}
+      {searchParams.linkerr === "1" && <div className="notice err" style={{ marginTop: 12 }}>Couldn&apos;t create the link — the bot must be an admin with &ldquo;Invite users via link&rdquo; permission in that group. Fix that, then try again.</div>}
+
       {/* Can the bot actually enforce the rules? It can only delete a message
           and remove a user if it is an ADMIN with those rights in the group. */}
       <h2 className="admin-section-title" style={{ marginTop: 18 }}>🤖 Bot rights per group</h2>
@@ -99,6 +102,23 @@ export default async function DiscussionAdmin(props: { searchParams: Promise<{ q
                       {s?.note || "cannot verify"}{s?.present && s?.admin ? ` — missing: ${[!s.canDelete && "Delete messages", !s.canBan && "Ban users"].filter(Boolean).join(", ")}` : ""}.
                       {" "}<strong>Add the bot as an admin with &ldquo;Delete messages&rdquo; and &ldquo;Ban users&rdquo; turned on, or it cannot remove bad content.</strong>
                     </span>}
+              </div>
+              {/* The link the website hands students. If it is a public
+                  "anyone can join" link, generate a private approval link so the
+                  public one can be safely removed. */}
+              <div style={{ fontSize: ".82rem", marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+                <div>
+                  Website join link:{" "}
+                  {g.url
+                    ? <code style={{ wordBreak: "break-all" }}>{g.url}</code>
+                    : <span className="muted">none set</span>}
+                  {g.url && !/\/\+|joinchat/.test(g.url) && <span style={{ color: "#b45309", fontWeight: 700 }}> · ⚠️ this is a PUBLIC link (anyone can join)</span>}
+                  {g.url && /\/\+|joinchat/.test(g.url) && <span style={{ color: "#16a34a", fontWeight: 700 }}> · ✅ private (approval)</span>}
+                </div>
+                <form action={makeStudentsOnlyLink} style={{ marginTop: 8 }}>
+                  <input type="hidden" name="chat_id" value={g.chat} />
+                  <SubmitButton className="btn small" savedLabel="Creating…">🔗 Generate students-only join link (approval required)</SubmitButton>
+                </form>
               </div>
             </div>
           );

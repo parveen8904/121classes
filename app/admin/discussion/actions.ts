@@ -3,6 +3,7 @@
 import { currentStaff, staffCanArea, assertArea } from "@/lib/adminAccess";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { tgDeleteMessage, tgRestrictUser } from "@/lib/telegramGroup";
@@ -84,4 +85,22 @@ export async function unbanUser(formData: FormData) {
   const banId = str(formData.get("ban_id"));
   await createServiceClient().from("banned_group_users").delete().eq("id", banId);
   revalidatePath("/admin/discussion");
+}
+
+// Generate a students-only (approval-required) join link for a group and store
+// it where the website hands it to students — so the public "anyone can join"
+// link can then be safely removed.
+export async function makeStudentsOnlyLink(formData: FormData) {
+  await assertArea("moderation");
+  const chatId = str(formData.get("chat_id"));
+  if (!chatId) return;
+  const { tgCreateApprovalInviteLink } = await import("@/lib/telegramGroup");
+  const link = await tgCreateApprovalInviteLink(chatId);
+  const svc = createServiceClient();
+  if (link) {
+    await svc.from("subjects").update({ telegram_group_url: link }).eq("telegram_group_chat_id", chatId);
+    revalidatePath("/admin/discussion");
+    redirect(`/admin/discussion?linked=1`);
+  }
+  redirect(`/admin/discussion?linkerr=1`);
 }

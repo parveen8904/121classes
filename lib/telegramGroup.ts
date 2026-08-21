@@ -159,3 +159,22 @@ export async function tgIsGroupAdmin(chatId: string, userId: string): Promise<bo
     return st === "administrator" || st === "creator";
   } catch { return false; }
 }
+
+// Create a PRIVATE, approval-required invite link for a group. Anyone who opens
+// it must REQUEST to join, which routes through the students-only gate — the bot
+// approves linked students and declines everyone else. Replaces the public
+// "anyone can join" link the website used to hand out. Needs the bot to be an
+// admin with "invite users" rights.
+export async function tgCreateApprovalInviteLink(chatId: string, name = "Website — students only"): Promise<string | null> {
+  const token = await getSecret("TELEGRAM_BOT_TOKEN");
+  if (!token) return null;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/createChatInviteLink`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, name, creates_join_request: true }),
+      cache: "no-store",
+    }).then((r) => r.json());
+    return res?.ok ? (res.result?.invite_link as string) : null;
+  } catch { return null; }
+}

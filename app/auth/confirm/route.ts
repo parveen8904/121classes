@@ -19,7 +19,20 @@ export async function GET(request: NextRequest) {
   if (tokenHash && type) {
     const supabase = createClient();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
+    if (!error) {
+      // Clicking any of our email links proves they control the address — so it
+      // also clears the "verify your email" banner from the phone-first signup.
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { createServiceClient } = await import("@/lib/supabase/service");
+          await createServiceClient().from("profiles")
+            .update({ email_verified_at: new Date().toISOString() })
+            .eq("id", user.id).is("email_verified_at", null);
+        }
+      } catch { /* never block the redirect on the flag write */ }
+      return NextResponse.redirect(`${origin}${next}`);
+    }
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth`);

@@ -299,7 +299,7 @@ export default async function Home() {
           guidance</strong>. Top-notch teaching that clears the clutter.
         </p>
         <div className="cta-row">
-          <Link prefetch={false} className="btn" href="/login">Get started — it&apos;s free to join</Link>
+          <Link prefetch={false} className="btn" href="/signup">Get started — it&apos;s free to join</Link>
           <Link prefetch={false} className="btn" href="/#mentor" style={{ background: "var(--accent-2)" }}>Meet CA Parveen Sharma</Link>
         </div>
         {/* App downloads — direct store links when live, else the download page. */}

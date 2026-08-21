@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SetPassword from "./set-password";
 import ConnectTelegram from "./ConnectTelegram";
+import EmailVerifyBanner from "../components/EmailVerifyBanner";
 import MyCourses from "./MyCourses";
 import { announcementKindLabel } from "@/lib/announcements";
 import WellnessTip from "@/app/components/WellnessTip";
@@ -41,7 +42,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
 
   const { data: profile } = await db
     .from("profiles")
-    .select("full_name, role, permissions, target_attempt, telegram_chat_id, phone, account_type, welcome_sent_at, phone_verified_at, email")
+    .select("full_name, role, permissions, target_attempt, telegram_chat_id, phone, account_type, welcome_sent_at, phone_verified_at, email_verified_at, email")
     .eq("id", studentId)
     .single();
 
@@ -264,6 +265,9 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
       )}
 
       <section className="container" style={{ paddingTop: 40 }}>
+        {!viewing && profile && profile.email_verified_at == null && (user.email || profile.email) && (
+          <EmailVerifyBanner email={String(user.email || profile.email)} />
+        )}
         <span className="badge">🎓 Student dashboard</span>
         <h1 style={{ margin: "14px 0 6px" }}>
           Welcome{profile?.full_name ? `, ${profile.full_name}` : ""} 👋

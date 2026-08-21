@@ -22,10 +22,13 @@ export default function LoginForm() {
   // it simply sat in the inbox too long. Say so plainly and open the form that
   // sends a fresh one, rather than a bare "authentication error".
   const linkFailed = params.get("error") === "auth";
+  // The phone-first /signup sends people here with ?signup=1 when WhatsApp OTP
+  // is unavailable, so they land straight on the email sign-up as a fallback.
+  const wantSignup = params.get("signup") === "1";
 
-  const [mode, setMode] = useState<Mode>(linkFailed ? "forgot" : "login");
+  const [mode, setMode] = useState<Mode>(linkFailed ? "forgot" : wantSignup ? "signup" : "login");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(params.get("email") || "");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -179,7 +182,13 @@ export default function LoginForm() {
                   type="button"
                   role="tab"
                   aria-selected={mode === m}
-                  onClick={() => { setMode(m); setMsg(null); }}
+                  onClick={() => {
+                    // "Create account" now opens the phone-first sign-up. The
+                    // inline email flow stays as a fallback (reached via
+                    // /login?signup=1 when WhatsApp OTP is unavailable).
+                    if (m === "signup") { window.location.assign("/signup"); return; }
+                    setMode(m); setMsg(null);
+                  }}
                   className={mode === m ? "btn" : "btn secondary"}
                   style={{ width: "100%", padding: "10px 8px", fontSize: ".95rem" }}
                 >

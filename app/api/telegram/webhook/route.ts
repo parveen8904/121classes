@@ -13,6 +13,22 @@ import { handleAbuse } from "@/lib/abuseEscalation";
 
 export const dynamic = "force-dynamic";
 
+// THE /amendments ANSWER — the founder's own words, approved verbatim.
+//
+// The AI, reading his class material, once gave a student this exact rundown and
+// he called it "perfect", so it is fixed here rather than left to the AI to
+// reproduce (and to the daily cap that could leave it silent). One place, used
+// for the command in the group and in a private chat alike. Update this string
+// when he says the position has changed — nothing else references the facts.
+const AMENDMENTS_MSG =
+  "📝 Amendments for CA Final Financial Reporting — where things stand:\n\n" +
+  "• The amendments applicable to your exam are already covered in your classes and study material.\n" +
+  "• For the last two years there has been no amendment relevant to Financial Reporting as a subject, and as of now ICAI has not notified any new amendment.\n" +
+  "• ICAI has added some new questions — all of them are covered in our study material.\n" +
+  "• GSR 549(E) dated 13 August 2025 covers two things: Lack of Exchangeability (Ind AS 21) and Classification of Liabilities as current/non-current. Both are covered in our classes and material.\n" +
+  "• Ind AS 118 is a probable upcoming amendment — we are keeping an eye on it.\n\n" +
+  "So you are well covered: go through the material and don't worry about tracking amendments separately. The latest applicable list for your attempt is always at caparveensharma.com/amendments.";
+
 // Telegram calls this when a student messages the bot. Two jobs:
 //  1) /start <code>  → link the student's account to their Telegram chat id
 //  2) any other text → answer the doubt (AI, repository-grounded later); if AI
@@ -199,12 +215,7 @@ export async function POST(req: NextRequest) {
       // group) typed "/amendments@caparveensharmabot" expecting the latest
       // updates, got silence, and it spread. Answered directly, threaded.
       if (!mod.flagged && /^\/amendments\b/i.test(text.trim())) {
-        await tgSendGroupReply(
-          chatId,
-          "📝 The amendments applicable to your exam are already covered in your classes. As of now, ICAI has not notified any new amendments.\n\n" +
-          "Whenever something is notified, it will be posted here: caparveensharma.com/amendments — the same list is in the Amendments tab on your dashboard.",
-          msg.message_id,
-        );
+        await tgSendGroupReply(chatId, AMENDMENTS_MSG, msg.message_id);
         return NextResponse.json({ ok: true });
       }
 
@@ -331,11 +342,7 @@ export async function POST(req: NextRequest) {
 
   // /amendments in a private chat — same answer as in the groups.
   if (/^\/amendments\b/i.test(text.trim())) {
-    await sendTelegramMessage(
-      chatId,
-      "📝 The amendments applicable to your exam are already covered in your classes. As of now, ICAI has not notified any new amendments.\n\n" +
-      "Whenever something is notified, it will be posted here: caparveensharma.com/amendments — the same list is in the Amendments tab on your dashboard.",
-    );
+    await sendTelegramMessage(chatId, AMENDMENTS_MSG);
     return NextResponse.json({ ok: true });
   }
 

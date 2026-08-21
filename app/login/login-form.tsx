@@ -239,7 +239,7 @@ export default function LoginForm() {
             {mode === "signup"
               ? "Just your email — we'll send a verification link. Click it to verify, then you choose your password."
               : mode === "forgot"
-              ? "Enter your email and we'll send you a link to set a new password."
+              ? "Reset your password two ways — by an email link, or by a WhatsApp code to your registered mobile. Use whichever you can access."
               : "Already registered? Log in below. If you have never made an account here, use Create account above — it takes a minute."}
           </p>
 
@@ -320,25 +320,32 @@ export default function LoginForm() {
           )}
 
           {mode === "forgot" && waStep === "" && (
-            <form onSubmit={forgot}>
-              <label htmlFor="femail">Email address</label>
-              <input id="femail" name="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-              <button className="btn block" disabled={loading} type="submit">{loading ? "Sending…" : "Send reset link"}</button>
+            <>
+              {/* Two equal ways to reset — email link OR WhatsApp code. */}
+              <form onSubmit={forgot}>
+                <label htmlFor="femail">📧 Reset by email</label>
+                <input id="femail" name="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+                <button className="btn block" disabled={loading} type="submit">{loading ? "Sending…" : "Send reset link"}</button>
+              </form>
 
-              {/* Can't get the email — a wrong or unverified address? The mobile
-                  is proven, so reset through WhatsApp instead. */}
-              <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
-                <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
-                  Can&apos;t get the email, or used a wrong address? Reset with your registered mobile:
-                </p>
-                <button type="button" className="btn secondary block" onClick={() => { setWaStep("send"); setMsg(null); }}>
-                  📱 Reset with WhatsApp instead
-                </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0" }}>
+                <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
+                <span className="muted" style={{ fontSize: ".8rem" }}>or</span>
+                <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
               </div>
-              <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".82rem" }}>
+
+              <label>📱 Reset by WhatsApp</label>
+              <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 8px" }}>
+                A code to your registered mobile — handy if you can&apos;t reach your email.
+              </p>
+              <button type="button" className="btn block" onClick={() => { setWaStep("send"); setMsg(null); }}>
+                Reset with WhatsApp →
+              </button>
+
+              <p className="muted" style={{ textAlign: "center", marginTop: 16, fontSize: ".82rem" }}>
                 <button type="button" style={linkBtn} onClick={() => { setMode("login"); setMsg(null); }}>← Back to login</button>
               </p>
-            </form>
+            </>
           )}
 
           {mode === "forgot" && waStep === "send" && (

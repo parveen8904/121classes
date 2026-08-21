@@ -1,5 +1,6 @@
 import { formatDate, formatDateTime } from "@/lib/dates";
 import Link from "next/link";
+import { announcementHref } from "@/lib/announcements";
 import { lightImg } from "@/lib/img";
 import AnnouncementSplash from "./components/AnnouncementSplash";
 import NotifyButton from "./components/NotifyButton";
@@ -311,7 +312,7 @@ export default async function Home() {
         {hitlists.length > 0 && (
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 14 }}>
             {hitlists.map((h) => (
-              <a key={h.id} className="btn small" href={h.link_url as string} target="_blank" rel="noopener noreferrer" style={{ background: "#b45309" }}>
+              <a key={h.id} className="btn small" href={announcementHref(h)} target="_blank" rel="noopener noreferrer" style={{ background: "#b45309" }}>
                 📄 {h.title.replace(/^📌\s*/, "").replace(/\s+is released$/i, "")}
               </a>
             ))}
@@ -609,7 +610,7 @@ export default async function Home() {
       {/* HIGHLIGHT BANNER — latest announcement / course */}
       {latestHighlight && (
         <div className="container" style={{ marginTop: -10, marginBottom: 10, maxWidth: 1140 }}>
-          <Link prefetch={false} href={latestHighlight.link_url || "/#whats-new"} style={{ display: "block" }}>
+          <Link prefetch={false} href={announcementHref(latestHighlight) || "/#whats-new"} style={{ display: "block" }}>
             <div className="leadline" style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "flex-start", textAlign: "left", flexWrap: "wrap", maxWidth: "none", width: "100%", border: "1px solid var(--accent)" }}>
               <span className="badge">📣 {KIND_LABEL[latestHighlight.kind] ?? "Latest"}</span>
               <span>{latestHighlight.title}</span>
@@ -641,7 +642,7 @@ export default async function Home() {
                   <span style={{ fontWeight: 600 }}>{a.title}</span>
                   {a.link_url && (
                     <a
-                      href={a.link_url}
+                      href={announcementHref(a)}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".88rem" }}
@@ -906,7 +907,7 @@ export default async function Home() {
                   {a.body && <p>{a.body}</p>}
                   {a.link_url && (
                     <a
-                      href={a.link_url}
+                      href={announcementHref(a)}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".9rem" }}

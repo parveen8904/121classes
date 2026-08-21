@@ -17,3 +17,15 @@ export const ANNOUNCEMENT_KIND_LABEL: Record<string, string> = Object.fromEntrie
 export function announcementKindLabel(kind: string): string {
   return ANNOUNCEMENT_KIND_LABEL[kind] ?? "Update";
 }
+
+// The href for an announcement's attached file, safe for a public page.
+//   - an external link (Google Drive, any https) is used as-is (free, no login)
+//   - an uploaded/secure file is served through the PUBLIC announcement proxy,
+//     which only ever serves files attached to a PUBLISHED announcement.
+// Empty string when there is no link.
+export function announcementHref(a: { id: string; link_url?: string | null }): string {
+  const u = String(a.link_url ?? "").trim();
+  if (!u) return "";
+  if (/^https?:\/\//.test(u)) return u;
+  return `/api/announcement-file?a=${a.id}`;
+}

@@ -6,7 +6,7 @@ import SetPassword from "./set-password";
 import ConnectTelegram from "./ConnectTelegram";
 import EmailVerifyBanner from "../components/EmailVerifyBanner";
 import MyCourses from "./MyCourses";
-import { announcementKindLabel } from "@/lib/announcements";
+import { announcementKindLabel, announcementHref } from "@/lib/announcements";
 import WellnessTip from "@/app/components/WellnessTip";
 import TodayPlan from "@/app/components/TodayPlan";
 import { addMyCourse } from "@/app/learn/mycourses";
@@ -429,7 +429,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
                     </p>
                   )}
                   {a.link_url && (
-                    <a href={a.link_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".88rem" }}>
+                    <a href={announcementHref(a)} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".88rem" }}>
                       Read more →
                     </a>
                   )}

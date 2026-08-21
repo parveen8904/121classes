@@ -445,7 +445,7 @@ export default async function AdminSupporters(props: {
           <table style={{ minWidth: 720, width: "100%", borderCollapse: "collapse", fontSize: ".88rem" }}>
             <thead>
               <tr>
-                <th style={TH}>Supporter</th><th style={TH}>Website</th><th style={TH}>Verified</th><th style={TH}>Last read</th><th style={TH}></th>
+                <th style={TH}>Supporter</th><th style={TH}>Email</th><th style={TH}>Website</th><th style={TH}>Verified</th><th style={TH}>Last read</th><th style={TH}></th>
               </tr>
             </thead>
             <tbody>
@@ -459,6 +459,14 @@ export default async function AdminSupporters(props: {
                       {(sentCount.get(s(x.id)) ?? 0) > 0
                         ? <span className="badge" style={{ marginLeft: 6 }}>{sentCount.get(s(x.id))} warning{sentCount.get(s(x.id)) === 1 ? "" : "s"} sent</span>
                         : null}
+                    </td>
+                    {/* Email (and phone) so a vendor can be found by their address,
+                        not only by a name that may be spelt a dozen ways. */}
+                    <td style={{ ...TD, fontSize: ".82rem", wordBreak: "break-all", maxWidth: 220 }}>
+                      {x.email
+                        ? <a href={`mailto:${s(x.email)}`}>{s(x.email)}</a>
+                        : <span className="muted">no email</span>}
+                      {x.phone ? <><br /><span className="muted">{s(x.phone)}</span></> : null}
                     </td>
                     <td style={{ ...TD, wordBreak: "break-all", maxWidth: 260 }}>
                       {x.supporter_site

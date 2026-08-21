@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -26,4 +27,13 @@ export async function saveCostSettings(formData: FormData) {
   ];
   await createServiceClient().from("site_settings").upsert(rows, { onConflict: "key" });
   revalidatePath("/admin/costs");
+}
+
+// Manual paper cleanup — the founder presses this; nothing deletes on its own.
+export async function runPaperCleanup() {
+  if (!(await isAdmin())) return;
+  const { purgeOldPapers } = await import("@/lib/paperCleanup");
+  const r = await purgeOldPapers();
+  revalidatePath("/admin/costs");
+  redirect(`/admin/costs?purged=${r.attempts}&files=${r.files}`);
 }

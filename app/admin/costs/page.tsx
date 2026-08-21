@@ -5,7 +5,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import { getBunnyBilling } from "@/lib/bunny";
 import SubmitButton from "@/app/components/SubmitButton";
-import { saveCostSettings } from "./actions";
+import { saveCostSettings, runPaperCleanup } from "./actions";
+import { countOldPapers } from "@/lib/paperCleanup";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Costs & usage — Admin" };
@@ -18,7 +19,9 @@ const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 const SUPABASE_PROJECT = "xmeltwyfvzhhurtcjfiu";
 const SUPABASE_ORG = "rnrmaxczwrbrcxoqimaa";
 
-export default async function CostsPage() {
+export default async function CostsPage(props: { searchParams: Promise<{ purged?: string; files?: string }> }) {
+  const sp = await props.searchParams;
+  const oldPapers = await countOldPapers();
   const svc = createServiceClient();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -286,7 +289,7 @@ export default async function CostsPage() {
             <input name="bunny_bill_usd" type="number" min={0} step={0.01} defaultValue={cfg.get("bunny_bill_usd") ?? "0"} placeholder="88.03" />
           </div>
           <div>
-            <label>Keep student papers for (months) — then auto-delete the PDFs</label>
+            <label>Keep student papers for (months) — used by the cleanup button below</label>
             <input name="paper_retention_months" type="number" min={1} step={1} defaultValue={cfg.get("paper_retention_months") ?? "6"} placeholder="6" />
           </div>
         </div>
@@ -295,6 +298,28 @@ export default async function CostsPage() {
           One email the first time each crosses its cap (checked daily). Bunny needs the Account API key in Integrations. AI has its own cap in <Link href="/admin/ai-usage" style={{ color: "var(--accent)" }}>AI usage</Link>. Cloudflare R2 is free to 10 GB — watched on Cloudflare.
         </p>
       </form>
+
+      {/* MANUAL paper cleanup — nothing deletes on its own; the founder presses
+          this when he decides to free the storage. */}
+      <h2 className="admin-section-title" style={{ marginTop: 28 }}>🧹 Clean up old student papers</h2>
+      {sp.purged != null && (
+        <div className="notice ok" style={{ marginTop: 8 }}>Removed {sp.purged} paper(s) — {sp.files ?? 0} PDF file(s) freed. Marks and feedback were kept.</div>
+      )}
+      <div style={card}>
+        <p style={{ margin: "0 0 8px", fontSize: ".9rem" }}>
+          <strong>{oldPapers.attempts}</strong> paper attempt(s) — <strong>{oldPapers.files}</strong> PDF file(s) — are older than <strong>{oldPapers.months} months</strong> and can be removed to free storage. The attempt record (marks, status, feedback) is kept; only the heavy PDFs go.
+        </p>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 12px" }}>
+          Nothing deletes automatically. This runs only when you press the button, and it cannot be undone.
+        </p>
+        {oldPapers.attempts > 0 ? (
+          <form action={runPaperCleanup}>
+            <SubmitButton className="btn" style={{ background: "#b91c1c" }} savedLabel="Removing…">🗑️ Delete these {oldPapers.attempts} papers now</SubmitButton>
+          </form>
+        ) : (
+          <p className="muted" style={{ margin: 0, fontSize: ".85rem" }}>Nothing is older than {oldPapers.months} months yet — nothing to remove.</p>
+        )}
+      </div>
 
       <p className="muted" style={{ fontSize: ".8rem", marginTop: 18 }}>
         💡 Want live ₹ figures for Bunny / Cloudflare / Supabase pulled into this page automatically? That needs each provider&apos;s billing API token — tell me and I&apos;ll wire it up. The AI monthly cap &amp; alert are set in <Link href="/admin/ai-usage" style={{ color: "var(--accent)" }}>AI usage</Link>.

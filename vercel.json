@@ -134,10 +134,6 @@
     {
       "path": "/api/cron/costs-snapshot",
       "schedule": "0 5 1 * *"
-    },
-    {
-      "path": "/api/cron/paper-cleanup",
-      "schedule": "0 4 2 * *"
     }
   ]
 }

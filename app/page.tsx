@@ -68,6 +68,7 @@ const HOMEPAGE_SETTINGS = [
   "splash_banner", "splash_link", "splash_seconds",
   "career_jobs", "career_cities",
   "homepage_yt_videos", "homepage_yt_v",
+  "hitlist_final_url", "hitlist_inter_url",
 ];
 
 export default async function Home() {
@@ -302,6 +303,22 @@ export default async function Home() {
           <Link prefetch={false} className="btn" href="/signup">Get started — it&apos;s free to join</Link>
           <Link prefetch={false} className="btn" href="/#mentor" style={{ background: "var(--accent-2)" }}>Meet CA Parveen Sharma</Link>
         </div>
+        {/* Hitlist PDFs — set the links in Admin → Content; each button shows
+            only when its link is filled, so anybody can open the PDF, no login. */}
+        {(siteImg.get("hitlist_final_url") || siteImg.get("hitlist_inter_url")) && (
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 14 }}>
+            {siteImg.get("hitlist_final_url") && (
+              <a className="btn small" href={siteImg.get("hitlist_final_url") as string} target="_blank" rel="noopener noreferrer" style={{ background: "#b45309" }}>
+                📄 CA Final Nov-26 Hitlist
+              </a>
+            )}
+            {siteImg.get("hitlist_inter_url") && (
+              <a className="btn small" href={siteImg.get("hitlist_inter_url") as string} target="_blank" rel="noopener noreferrer" style={{ background: "#b45309" }}>
+                📄 CA Inter Sep-26 Hitlist
+              </a>
+            )}
+          </div>
+        )}
         {/* App downloads — direct store links when live, else the download page. */}
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 16 }}>
           <span className="muted" style={{ fontSize: ".88rem", alignSelf: "center" }}>📲 Get the app:</span>

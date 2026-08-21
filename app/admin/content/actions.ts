@@ -24,6 +24,9 @@ export async function saveContent(formData: FormData) {
     { key: "career_jobs", value: str(formData.get("career_jobs")) },
     { key: "career_links", value: str(formData.get("career_links")) },
     { key: "career_cities", value: str(formData.get("career_cities")) },
+    // Hitlist PDF links — shown as buttons in the homepage hero when filled.
+    { key: "hitlist_final_url", value: str(formData.get("hitlist_final_url")) },
+    { key: "hitlist_inter_url", value: str(formData.get("hitlist_inter_url")) },
   ];
   for (const r of rows) await svc.from("site_settings").upsert(r, { onConflict: "key" });
   redirect("/admin/content?saved=1");

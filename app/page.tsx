@@ -68,7 +68,6 @@ const HOMEPAGE_SETTINGS = [
   "splash_banner", "splash_link", "splash_seconds",
   "career_jobs", "career_cities",
   "homepage_yt_videos", "homepage_yt_v",
-  "hitlist_final_url", "hitlist_inter_url",
 ];
 
 export default async function Home() {
@@ -229,6 +228,8 @@ export default async function Home() {
   // email "Notify me" flow as everyone else on the public homepage.
   const signedIn = false;
   const latestHighlight = announcements?.[0] ?? null;
+  // Hitlist announcements that carry a PDF link → shown as hero download buttons.
+  const hitlists = (announcements ?? []).filter((a) => /hitlist/i.test(a.title) && a.link_url);
   // Never show the SAME item twice: whatever is already in the highlight
   // banner is excluded from the amendments strip below it.
   const amendments = (announcements ?? []).filter((a) => a.kind === "amendment" && a.id !== latestHighlight?.id).slice(0, 3);
@@ -303,20 +304,17 @@ export default async function Home() {
           <Link prefetch={false} className="btn" href="/signup">Get started — it&apos;s free to join</Link>
           <Link prefetch={false} className="btn" href="/#mentor" style={{ background: "var(--accent-2)" }}>Meet CA Parveen Sharma</Link>
         </div>
-        {/* Hitlist PDFs — set the links in Admin → Content; each button shows
-            only when its link is filled, so anybody can open the PDF, no login. */}
-        {(siteImg.get("hitlist_final_url") || siteImg.get("hitlist_inter_url")) && (
+        {/* Hitlist download buttons — driven straight from the Announcements:
+            any published announcement whose title says "Hitlist" and has a Link
+            set (in Admin → Announcements → posts) shows here as an open-the-PDF
+            button. No separate setting; the announcement IS the source. */}
+        {hitlists.length > 0 && (
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 14 }}>
-            {siteImg.get("hitlist_final_url") && (
-              <a className="btn small" href={siteImg.get("hitlist_final_url") as string} target="_blank" rel="noopener noreferrer" style={{ background: "#b45309" }}>
-                📄 CA Final Nov-26 Hitlist
+            {hitlists.map((h) => (
+              <a key={h.id} className="btn small" href={h.link_url as string} target="_blank" rel="noopener noreferrer" style={{ background: "#b45309" }}>
+                📄 {h.title.replace(/^📌\s*/, "").replace(/\s+is released$/i, "")}
               </a>
-            )}
-            {siteImg.get("hitlist_inter_url") && (
-              <a className="btn small" href={siteImg.get("hitlist_inter_url") as string} target="_blank" rel="noopener noreferrer" style={{ background: "#b45309" }}>
-                📄 CA Inter Sep-26 Hitlist
-              </a>
-            )}
+            ))}
           </div>
         )}
         {/* App downloads — direct store links when live, else the download page. */}

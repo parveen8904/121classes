@@ -38,17 +38,7 @@ export default async function ContentPage(props: { searchParams: Promise<{ saved
         <label style={{ marginTop: 12 }}>📍 Cities for the &ldquo;CA jobs by city&rdquo; filter (comma-separated; blank = default list)</label>
         <input name="career_cities" defaultValue={m.get("career_cities") || ""} placeholder="Delhi, Gurgaon, Mumbai, Pune, Bengaluru, Hyderabad, Chennai, Kolkata" />
 
-        <hr style={{ margin: "20px 0", border: 0, borderTop: "1px solid var(--border)" }} />
-        <h3 style={{ margin: "0 0 4px" }}>📄 Hitlist PDF links (homepage)</h3>
-        <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
-          Paste a public PDF link and a &ldquo;Download Hitlist&rdquo; button appears in the homepage hero. Leave blank to hide it.
-        </p>
-        <label>CA Final — November 2026 Hitlist PDF link</label>
-        <input name="hitlist_final_url" type="url" defaultValue={m.get("hitlist_final_url") || ""} placeholder="https://…/ca-final-nov26-hitlist.pdf" />
-        <label>CA Intermediate — September 2026 Hitlist PDF link</label>
-        <input name="hitlist_inter_url" type="url" defaultValue={m.get("hitlist_inter_url") || ""} placeholder="https://…/ca-inter-sep26-hitlist.pdf" />
-
-        <SubmitButton className="btn" style={{ marginTop: 12 }}>Save</SubmitButton>
+        <SubmitButton className="btn" style={{ marginTop: 12 }}>Save career corner</SubmitButton>
       </form>
     </section>
   );

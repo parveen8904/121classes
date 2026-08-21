@@ -6,6 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { claimDevice } from "../auth/session-actions";
 import { registerWithVerification, sendPasswordReset, requestLoginHelp, autoLoginRescue } from "../auth/email-actions";
+import { resetSendOtp, resetVerifyAndSet } from "../auth/reset-actions";
+import { PASSWORD_RULE } from "@/lib/passwordRule";
 
 type Mode = "login" | "signup" | "forgot";
 
@@ -32,6 +34,9 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [showPw, setShowPw] = useState(false);
+  // WhatsApp password reset (for students who can't get the email link).
+  const [waStep, setWaStep] = useState<"" | "send" | "verify">("");
+  const [code, setCode] = useState("");
   // After 2 failed logins, offer a human call-back (name + WhatsApp → admin inbox).
   const [failCount, setFailCount] = useState(0);
   const [helpName, setHelpName] = useState("");
@@ -153,6 +158,35 @@ export default function LoginForm() {
     if (!r.ok) return err(r.error || "Could not send reset link.");
     setMode("login");
     ok("If an account exists for that email, we've sent a password-reset link. Check your inbox.");
+  }
+
+  async function waSendCode(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true); setMsg(null);
+    const fd = new FormData();
+    fd.set("phone", phone);
+    const r = await resetSendOtp(fd);
+    setLoading(false);
+    if (!r.ok) return err(r.error);
+    setWaStep("verify");
+    ok(r.hint);
+  }
+
+  async function waSetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true); setMsg(null);
+    const fd = new FormData();
+    fd.set("phone", phone); fd.set("code", code); fd.set("password", password);
+    const r = await resetVerifyAndSet(fd);
+    if (!r.ok) { setLoading(false); return err(r.error); }
+    // New password set — sign them straight in with it.
+    const { error } = await supabase.auth.signInWithPassword({ email: r.email, password });
+    if (error) {
+      setLoading(false);
+      setMode("login");
+      return ok("Your password is reset — please log in with your email and the new password.");
+    }
+    window.location.assign(next);
   }
 
   const linkBtn = { background: "none", border: 0, color: "var(--accent)", cursor: "pointer", padding: 0, font: "inherit" } as const;
@@ -285,13 +319,49 @@ export default function LoginForm() {
             </form>
           )}
 
-          {mode === "forgot" && (
+          {mode === "forgot" && waStep === "" && (
             <form onSubmit={forgot}>
               <label htmlFor="femail">Email address</label>
               <input id="femail" name="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
               <button className="btn block" disabled={loading} type="submit">{loading ? "Sending…" : "Send reset link"}</button>
+
+              {/* Can't get the email — a wrong or unverified address? The mobile
+                  is proven, so reset through WhatsApp instead. */}
+              <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
+                <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
+                  Can&apos;t get the email, or used a wrong address? Reset with your registered mobile:
+                </p>
+                <button type="button" className="btn secondary block" onClick={() => { setWaStep("send"); setMsg(null); }}>
+                  📱 Reset with WhatsApp instead
+                </button>
+              </div>
               <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".82rem" }}>
                 <button type="button" style={linkBtn} onClick={() => { setMode("login"); setMsg(null); }}>← Back to login</button>
+              </p>
+            </form>
+          )}
+
+          {mode === "forgot" && waStep === "send" && (
+            <form onSubmit={waSendCode}>
+              <label htmlFor="waphone">Registered mobile number</label>
+              <input id="waphone" name="phone" inputMode="numeric" required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10-digit mobile" autoComplete="tel" />
+              <button className="btn block" disabled={loading} type="submit">{loading ? "Sending…" : "Send WhatsApp code →"}</button>
+              <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".82rem" }}>
+                <button type="button" style={linkBtn} onClick={() => { setWaStep(""); setMsg(null); }}>← Use email instead</button>
+              </p>
+            </form>
+          )}
+
+          {mode === "forgot" && waStep === "verify" && (
+            <form onSubmit={waSetPassword}>
+              <label htmlFor="wacode">WhatsApp code</label>
+              <input id="wacode" name="code" inputMode="numeric" required value={code} onChange={(e) => setCode(e.target.value)} placeholder="6-digit code" autoFocus />
+              <label htmlFor="wapw">New password</label>
+              <input id="wapw" name="password" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              <p className="muted" style={{ fontSize: ".78rem", marginTop: 4 }}>{PASSWORD_RULE}</p>
+              <button className="btn block" disabled={loading} type="submit">{loading ? "Setting…" : "Set new password & sign in →"}</button>
+              <p className="muted" style={{ textAlign: "center", marginTop: 14, fontSize: ".82rem" }}>
+                <button type="button" style={linkBtn} onClick={() => { setWaStep("send"); setCode(""); setMsg(null); }}>← Resend / change number</button>
               </p>
             </form>
           )}

@@ -195,6 +195,40 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      // /amendments — the SAME story as /courses. A student (Yash, CA Final
+      // group) typed "/amendments@caparveensharmabot" expecting the latest
+      // updates, got silence, and it spread. Answered directly, threaded.
+      if (!mod.flagged && /^\/amendments\b/i.test(text.trim())) {
+        await tgSendGroupReply(
+          chatId,
+          "📝 The latest amendments & updates for your exam are always here:\n" +
+          "caparveensharma.com/amendments\n\n" +
+          "Open it any time for the newest notifications and syllabus changes — the same list is in the Amendments tab on your dashboard.",
+          msg.message_id,
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      // ANY OTHER SLASH-COMMAND STUDENTS INVENT. A bare "/something@botname" we
+      // don't handle used to fall through to the AI judge, which found no
+      // question and said nothing — so students posted it again and again into
+      // the silence. Now a bare command aimed at us (or with no bot named) that
+      // we don't recognise gets ONE short, threaded reply telling them what IS
+      // here, so the void stops inviting repeats.
+      const bareCmd = text.trim().match(/^\/([a-z0-9_]+)(?:@([a-z0-9_]+))?\s*$/i);
+      const cmdForUs = bareCmd && (!bareCmd[2] || bareCmd[2].toLowerCase() === botUser);
+      if (!mod.flagged && cmdForUs) {
+        await tgSendGroupReply(
+          chatId,
+          "🤖 Please don't type commands like this — I don't run them, so they just fill the group.\n\n" +
+          "Instead, tell me clearly in your own words what you need" +
+          (botUser ? ` (tag me @${botUser})` : "") +
+          " — for example: \"What are the latest FR amendments?\" or \"Explain Ind AS 109 briefly.\" — and I'll answer.",
+          msg.message_id,
+        );
+        return NextResponse.json({ ok: true });
+      }
+
       if (!mod.flagged && subj?.id && (mentioned || repliedToBot)) {
         try {
           // Remove the tag itself so the AI sees a clean question.
@@ -292,6 +326,28 @@ export async function POST(req: NextRequest) {
       "• Financial Instruments — Live Batch\n\n" +
       "Details, demos and fees: caparveensharma.com/courses\n" +
       "Your own classes after buying: caparveensharma.com/dashboard",
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  // /amendments in a private chat — same answer as in the groups.
+  if (/^\/amendments\b/i.test(text.trim())) {
+    await sendTelegramMessage(
+      chatId,
+      "📝 The latest amendments & updates for your exam are always here:\n" +
+      "caparveensharma.com/amendments\n\n" +
+      "Open it any time for the newest notifications and syllabus changes — the same list is in the Amendments tab on your dashboard.",
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  // Any OTHER bare slash-command in a private chat — don't leave it silent, or
+  // the student keeps trying. One short reply pointing at what actually works.
+  if (/^\/[a-z0-9_]+(@[a-z0-9_]+)?\s*$/i.test(text.trim())) {
+    await sendTelegramMessage(
+      chatId,
+      "🤖 Please don't type commands like this — I don't run them.\n\n" +
+      "Just tell me clearly, in your own words, what you need — for example: \"What are the latest FR amendments?\" or \"Explain Ind AS 109 briefly.\" — and I'll answer.",
     );
     return NextResponse.json({ ok: true });
   }

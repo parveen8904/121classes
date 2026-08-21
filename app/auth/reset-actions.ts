@@ -27,18 +27,24 @@ export async function resetSendOtp(formData: FormData): Promise<ResetSend> {
   }
 
   const svc = createServiceClient();
-  const { data: prof } = await svc
-    .from("profiles").select("id")
-    .eq("phone_e164", e164).not("phone_verified_at", "is", null).maybeSingle();
-
+  // Any student with this mobile ON FILE — verified or not. Completing the code
+  // (which only reaches the real phone) is itself the proof, so a grandfathered
+  // student who never verified their number can still recover this way.
+  const { data: rows } = await svc
+    .from("profiles").select("id").eq("phone_e164", e164).eq("role", "student");
+  const list = rows ?? [];
+  if (list.length > 1) {
+    // A shared number can't be disambiguated safely — send them to email.
+    return { ok: false, error: "This number is linked to more than one account — please reset by email, or contact support." };
+  }
   // Don't reveal whether a number is registered; only actually send if it is.
-  if (prof?.id) {
-    const sent = await sendPhoneOtp(String(prof.id), mobile);
+  if (list.length === 1) {
+    const sent = await sendPhoneOtp(String(list[0].id), mobile);
     if (!sent.ok && sent.reason === "cooldown") {
       return { ok: false, error: "A code was just sent — please wait a minute before asking for another." };
     }
   }
-  return { ok: true, hint: "If that number is on a verified account, we've sent a WhatsApp code to it. Enter the code and choose a new password." };
+  return { ok: true, hint: "If that mobile is on an account, we've sent a WhatsApp code to it. Enter the code and choose a new password." };
 }
 
 export type ResetDone = { ok: true; email: string } | { ok: false; error: string };
@@ -66,15 +72,26 @@ export async function resetVerifyAndSet(formData: FormData): Promise<ResetDone> 
   }
 
   const svc = createServiceClient();
-  const { data: prof } = await svc
-    .from("profiles").select("id, email")
-    .eq("phone_e164", e164).not("phone_verified_at", "is", null).maybeSingle();
-  if (!prof?.id || !prof.email) {
-    return { ok: false, error: "We couldn't find a verified account for that number. Please use email reset or contact support." };
+  const { data: rows } = await svc
+    .from("profiles").select("id, email").eq("phone_e164", e164).eq("role", "student");
+  const list = rows ?? [];
+  if (list.length !== 1 || !list[0].email) {
+    return {
+      ok: false,
+      error: list.length > 1
+        ? "This number is linked to more than one account — please reset by email or contact support."
+        : "We couldn't find an account for that number. Please use email reset or contact support.",
+    };
   }
+  const target = list[0];
 
-  const { error } = await svc.auth.admin.updateUserById(String(prof.id), { password });
+  const { error } = await svc.auth.admin.updateUserById(String(target.id), { password });
   if (error) return { ok: false, error: "Couldn't set the new password. Please try again." };
 
-  return { ok: true, email: String(prof.email) };
+  // They just proved the number by reading the code — record it as verified.
+  await svc.from("profiles")
+    .update({ phone_verified_at: new Date().toISOString() })
+    .eq("id", target.id).is("phone_verified_at", null);
+
+  return { ok: true, email: String(target.email) };
 }

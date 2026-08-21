@@ -36,10 +36,10 @@ export default function VerifyPhone({ phone }: { phone: string }) {
 
   return (
     <div className="card" style={{ marginTop: 14, border: "2px solid var(--accent)" }}>
-      <strong>📱 Confirm your WhatsApp number</strong>
+      <strong>📱 Confirm your WhatsApp number — recover your account if you forget your password</strong>
       <p className="muted" style={{ fontSize: ".85rem", margin: "6px 0 10px" }}>
-        We send class alerts, test reports and account help on WhatsApp. Confirm your number once so nothing important is
-        missed.
+        Confirm your number once and you can always get back in by a WhatsApp code — even if you lose access to your
+        email. It also means class alerts, test reports and important updates reach you here. Takes a few seconds.
       </p>
 
       {!awaitingCode ? (

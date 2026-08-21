@@ -31,6 +31,34 @@ export async function broadcast(formData: FormData) {
   const chEmail = formData.get("ch_email") === "on";
   const chPush = formData.get("ch_push") === "on";
 
+  // WHO GETS IT. "All students", or a segment: a course (CA Final / Inter), a
+  // subject/batch (Financial Reporting, Advanced Accounting, Financial
+  // Instruments — by active enrolment), or one named student by email.
+  // audienceIds === null means everyone; a list means only those students.
+  const audience = str(formData.get("audience")) || "all";
+  const audienceEmail = str(formData.get("audience_email")).trim().toLowerCase();
+  const asvc = createServiceClient();
+  let audienceIds: string[] | null = null;
+  if (audienceEmail) {
+    const { data } = await asvc.from("profiles").select("id").eq("email", audienceEmail).maybeSingle();
+    audienceIds = data?.id ? [String(data.id)] : [];
+  } else if (audience.startsWith("course:")) {
+    const { data: subj } = await asvc.from("subjects").select("id").eq("course_id", audience.slice(7));
+    const sids = (subj ?? []).map((s) => String(s.id));
+    const { data } = sids.length
+      ? await asvc.from("subscriptions").select("student_id").in("subject_id", sids).eq("status", "active")
+      : { data: [] as { student_id: string }[] };
+    audienceIds = [...new Set((data ?? []).map((r) => String(r.student_id)).filter(Boolean))];
+  } else if (audience.startsWith("subject:")) {
+    const { data } = await asvc.from("subscriptions").select("student_id").eq("subject_id", audience.slice(8)).eq("status", "active");
+    audienceIds = [...new Set((data ?? []).map((r) => String(r.student_id)).filter(Boolean))];
+  }
+  const segmented = audienceIds !== null;
+  // A segment with nobody in it sends nothing, rather than silently reaching all.
+  if (segmented && audienceIds!.length === 0) {
+    redirect("/admin/notifications?sent=0&note=nobody-in-that-audience");
+  }
+
   let tgOk = false;
   let dmSent = 0;
   let dmTotal = 0;
@@ -39,12 +67,13 @@ export async function broadcast(formData: FormData) {
   let pushSent = 0;
   let pushTotal = 0;
 
-  if (chTelegram) {
+  // The public Telegram channel and Discord reach EVERYONE — they cannot be
+  // narrowed to a segment, so they are only used for an "all students" send.
+  if (chTelegram && !segmented) {
     tgOk = await sendTelegramChannel(`📢 ${title}\n\n${body}`, link || undefined);
   }
 
-  // Post to the Discord server channel too (parity with Telegram).
-  if (chDiscord) {
+  if (chDiscord && !segmented) {
     const { postToDiscord } = await import("@/lib/discord");
     await postToDiscord(`📢 ${title}\n\n${body}`, link || undefined);
   }
@@ -52,12 +81,13 @@ export async function broadcast(formData: FormData) {
   // Mass *individual* Telegram messages to students who connected the bot.
   if (chTelegramDm && (await telegramConfigured())) {
     const svc = createServiceClient();
-    const { data: linked } = await svc
+    let q = svc
       .from("profiles")
       .select("telegram_chat_id")
       .eq("role", "student")
-      .not("telegram_chat_id", "is", null)
-      .limit(TG_DM_CAP);
+      .not("telegram_chat_id", "is", null);
+    if (segmented) q = q.in("id", audienceIds!);
+    const { data: linked } = await q.limit(TG_DM_CAP);
     const ids = (linked ?? []).map((s) => s.telegram_chat_id as string).filter(Boolean);
     dmTotal = ids.length;
     const text = `📢 ${title}\n\n${body}`;
@@ -70,12 +100,13 @@ export async function broadcast(formData: FormData) {
 
   if (chEmail && (await emailConfigured())) {
     const svc = createServiceClient();
-    const { data: students } = await svc
+    let q = svc
       .from("profiles")
       .select("email")
       .eq("role", "student")
-      .not("email", "is", null)
-      .limit(EMAIL_CAP);
+      .not("email", "is", null);
+    if (segmented) q = q.in("id", audienceIds!);
+    const { data: students } = await q.limit(EMAIL_CAP);
     const list = (students ?? []).map((s) => s.email as string).filter(Boolean);
     emailTotal = list.length;
     const html = emailShell(
@@ -105,7 +136,19 @@ export async function broadcast(formData: FormData) {
       });
     }
     if (ready) {
-      const r = await pushToEveryone({ title, body, link: link || undefined });
+      let r;
+      if (segmented) {
+        // Push only to the chosen students, one by one.
+        const { pushToUser } = await import("@/lib/push");
+        let sent = 0, failed = 0;
+        for (const uid of audienceIds!) {
+          const one = await pushToUser(uid, { title, body, link: link || undefined });
+          sent += one.sent; failed += one.failed;
+        }
+        r = { sent, failed, byPlatform: null as null | { android: { sent: number; failed: number }; ios: { sent: number; failed: number } } };
+      } else {
+        r = await pushToEveryone({ title, body, link: link || undefined });
+      }
       pushSent = r.sent;
       pushTotal = r.sent + r.failed;
 

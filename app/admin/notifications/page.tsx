@@ -27,6 +27,15 @@ export default async function NotificationsPage(
     .select("id", { count: "exact", head: true })
     .eq("role", "student");
 
+  // Audience options: send to everyone, a whole course, a single subject/batch,
+  // or one named student.
+  const [{ data: courseRows }, { data: subjectRows }] = await Promise.all([
+    svc.from("courses").select("id, title").order("title"),
+    svc.from("subjects").select("id, title, courses(title)").order("title"),
+  ]);
+  const courses = (courseRows ?? []) as { id: string; title: string }[];
+  const subjects = (subjectRows ?? []) as { id: string; title: string; courses?: { title?: string } | null }[];
+
   const { count: deviceCount } = await svc
     .from("push_devices")
     .select("token", { count: "exact", head: true })
@@ -82,6 +91,26 @@ export default async function NotificationsPage(
           <textarea name="body" rows={4} placeholder="Write your update…" />
           <label>Link (optional)</label>
           <input name="link" placeholder="https://caparveensharma.com/…" />
+
+          <label style={{ marginTop: 12 }}>👥 Who should get it?</label>
+          <select name="audience" defaultValue="all">
+            <option value="all">All students</option>
+            {courses.map((c) => (
+              <option key={c.id} value={`course:${c.id}`}>Course — {c.title} (everyone enrolled)</option>
+            ))}
+            {subjects.map((s) => (
+              <option key={s.id} value={`subject:${s.id}`}>
+                Batch — {s.title}{s.courses?.title ? ` (${s.courses.title})` : ""} — enrolled only
+              </option>
+            ))}
+          </select>
+          <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
+            A course or batch reaches only students with an <strong>active enrolment</strong> in it. Or send to one student:
+          </p>
+          <input name="audience_email" type="email" placeholder="…or a single student's email (overrides the choice above)" style={{ marginTop: 6 }} />
+          <p className="muted" style={{ fontSize: ".78rem", margin: "4px 0 0" }}>
+            Note: the public <strong>Telegram channel</strong> and <strong>Discord</strong> reach everyone, so they are skipped when you pick a course, batch or single student — the message then goes only by personal Telegram, email and app notification.
+          </p>
 
           <p className="muted" style={{ fontSize: ".85rem", margin: "12px 0 6px" }}>Send via:</p>
           <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>

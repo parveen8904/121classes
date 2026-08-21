@@ -146,3 +146,16 @@ export async function botGroupStatus(chatIds: string[]): Promise<Record<string, 
   }
   return out;
 }
+
+// Is this Telegram user an admin/creator of the group? Used so the students-only
+// backstop never touches the founder or a faculty member running the group,
+// even if they have not linked their account on the website.
+export async function tgIsGroupAdmin(chatId: string, userId: string): Promise<boolean> {
+  const token = await getSecret("TELEGRAM_BOT_TOKEN");
+  if (!token) return false;
+  try {
+    const m = await fetch(`https://api.telegram.org/bot${token}/getChatMember?chat_id=${encodeURIComponent(chatId)}&user_id=${encodeURIComponent(userId)}`, { cache: "no-store", signal: AbortSignal.timeout(5000) }).then((r) => r.json());
+    const st = m?.result?.status;
+    return st === "administrator" || st === "creator";
+  } catch { return false; }
+}

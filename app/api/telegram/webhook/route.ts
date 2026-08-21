@@ -5,7 +5,7 @@ import { answerDoubtFromMaterial, aiConfigured, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getSecret } from "@/lib/secrets";
 import { moderateMessageDyn, imageIsExplicit, containsLink } from "@/lib/moderation";
-import { tgDeleteMessage, tgSendGroupReply, tgApproveJoin, tgDeclineJoin, tgRestrictUser, messageHasMedia, moderatableImageId, tgGetImageB64 } from "@/lib/telegramGroup";
+import { tgDeleteMessage, tgSendGroupReply, tgApproveJoin, tgDeclineJoin, tgRestrictUser, messageHasMedia, moderatableImageId, tgGetImageB64, tgIsGroupAdmin } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
 import { groupAiAnswer } from "@/lib/groupDoubt";
 import { judgeStudentMessage } from "@/lib/ai";
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
       const senderProf = fromId && !msg?.from?.is_bot
         ? (await svc.from("profiles").select("id, role").eq("telegram_chat_id", fromId).maybeSingle()).data
         : null;
-      if (fromId && !msg?.from?.is_bot && !senderProf?.id) {
+      if (fromId && !msg?.from?.is_bot && !senderProf?.id && !(await tgIsGroupAdmin(chatId, fromId))) {
         await tgDeleteMessage(chatId, msg.message_id).catch(() => false);
         await tgRestrictUser(chatId, fromId, true).catch(() => false);
         try {

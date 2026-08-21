@@ -201,9 +201,8 @@ export async function POST(req: NextRequest) {
       if (!mod.flagged && /^\/amendments\b/i.test(text.trim())) {
         await tgSendGroupReply(
           chatId,
-          "📝 The latest amendments & updates for your exam are always here:\n" +
-          "caparveensharma.com/amendments\n\n" +
-          "Open it any time for the newest notifications and syllabus changes — the same list is in the Amendments tab on your dashboard.",
+          "📝 The amendments applicable to your exam are already covered in your classes. As of now, ICAI has not notified any new amendments.\n\n" +
+          "Whenever something is notified, it will be posted here: caparveensharma.com/amendments — the same list is in the Amendments tab on your dashboard.",
           msg.message_id,
         );
         return NextResponse.json({ ok: true });
@@ -334,9 +333,8 @@ export async function POST(req: NextRequest) {
   if (/^\/amendments\b/i.test(text.trim())) {
     await sendTelegramMessage(
       chatId,
-      "📝 The latest amendments & updates for your exam are always here:\n" +
-      "caparveensharma.com/amendments\n\n" +
-      "Open it any time for the newest notifications and syllabus changes — the same list is in the Amendments tab on your dashboard.",
+      "📝 The amendments applicable to your exam are already covered in your classes. As of now, ICAI has not notified any new amendments.\n\n" +
+      "Whenever something is notified, it will be posted here: caparveensharma.com/amendments — the same list is in the Amendments tab on your dashboard.",
     );
     return NextResponse.json({ ok: true });
   }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { isStaffRole, pathAllowed, areaForPath, type Staff } from "@/lib/adminAccess";
+import { isStaffRole, pathAllowed, type Staff } from "@/lib/adminAccess";
 import { ADMIN_GROUPS } from "@/lib/adminNav";
 import PortalHeader from "@/app/components/PortalHeader";
 import PortalFooter from "@/app/components/PortalFooter";
@@ -82,10 +82,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   // Staff see only the groups containing at least one area they can open.
+  // pathAllowed checks EVERY grant they hold — areaForPath returned only the
+  // first area for a shared path (/admin/assets), so an "assets_editor"-only
+  // operator lost the Assets link even though the page let them in.
   const canPath = (href: string) => {
     if (role === "admin") return true;
-    const area = areaForPath(href);
-    return area !== null && staff.permissions.includes(area);
+    return pathAllowed(href, staff);
   };
   const visibleLinks: [string, string][] = [
     ["🏠 Dashboard", "/admin"],

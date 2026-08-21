@@ -1,7 +1,7 @@
 import Link from "next/link";
 import AdminHero from "./_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
-import { currentStaff, areaForPath } from "@/lib/adminAccess";
+import { currentStaff, pathAllowed } from "@/lib/adminAccess";
 import { ADMIN_GROUPS } from "@/lib/adminNav";
 import { getBunnyBilling } from "@/lib/bunny";
 
@@ -49,10 +49,14 @@ export default async function AdminHome() {
   // Operators/faculty see only their granted areas (stats + tiles); admin sees all.
   const staff = await currentStaff();
   const isSuper = staff?.role === "admin";
+  // Use pathAllowed, not areaForPath+includes. /admin/assets is shared by three
+  // grants (assets, assets_accounts, assets_editor); areaForPath returns only
+  // the FIRST ("assets"), so a person holding just "assets_editor" — Pradeep —
+  // had the Assets tile hidden though the page itself let him in by URL.
+  // pathAllowed checks EVERY grant the staff member holds.
   const canPath = (href?: string) => {
     if (isSuper || !href) return isSuper;
-    const area = areaForPath(href);
-    return area !== null && (staff?.permissions ?? []).includes(area);
+    return !!staff && pathAllowed(href, staff);
   };
   const s = await loadStats();
   const inr = (usd: number) => `₹${Math.round(usd * INR)}`;

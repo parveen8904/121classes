@@ -3,6 +3,7 @@ import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import { restoreMessage, hideMessage, banSender, unbanUser, saveBlockedTerms } from "./actions";
+import { botGroupStatus } from "@/lib/telegramGroup";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Group moderation — Admin" };
@@ -20,6 +21,9 @@ export default async function DiscussionAdmin(props: { searchParams: Promise<{ q
     svc.from("subjects").select("title, telegram_group_chat_id"),
   ]);
   const subjByChat = new Map((subjects ?? []).filter((s) => s.telegram_group_chat_id).map((s) => [s.telegram_group_chat_id as string, s.title as string]));
+  // Can the bot actually police each group? (admin + delete + ban rights)
+  const groupChats = (subjects ?? []).filter((s) => s.telegram_group_chat_id).map((s) => ({ chat: s.telegram_group_chat_id as string, name: s.title as string }));
+  const botStatus = await botGroupStatus(groupChats.map((g) => g.chat));
   const groupName = (chat: string) => subjByChat.get(chat) || (groups ?? []).find((g) => g.chat_id === chat)?.title || chat;
 
   // Flagged / hidden — needs review.
@@ -77,6 +81,30 @@ export default async function DiscussionAdmin(props: { searchParams: Promise<{ q
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 920 }}>
       <AdminHero badge="🛡️ Group moderation" title="Discussion moderation" subtitle="Review flagged messages, search across all groups, hide messages and ban/mute users. Your DB is the record; Telegram is kept in sync." back={{ href: "/admin", label: "Admin" }} />
+
+      {/* Can the bot actually enforce the rules? It can only delete a message
+          and remove a user if it is an ADMIN with those rights in the group. */}
+      <h2 className="admin-section-title" style={{ marginTop: 18 }}>🤖 Bot rights per group</h2>
+      <div style={{ display: "grid", gap: 8 }}>
+        {groupChats.map((g) => {
+          const s = botStatus[g.chat];
+          const ok = s?.admin && s?.canDelete && s?.canBan;
+          return (
+            <div key={g.chat} style={{ ...card, borderLeft: `4px solid ${ok ? "#16a34a" : "#b91c1c"}` }}>
+              <strong>{ok ? "✅" : "⚠️"} {g.name}</strong>
+              <div style={{ fontSize: ".84rem", marginTop: 3 }}>
+                {ok
+                  ? "Bot is an admin and can delete messages & remove users. Fully protected."
+                  : <span style={{ color: "#b91c1c" }}>
+                      {s?.note || "cannot verify"}{s?.present && s?.admin ? ` — missing: ${[!s.canDelete && "Delete messages", !s.canBan && "Ban users"].filter(Boolean).join(", ")}` : ""}.
+                      {" "}<strong>Add the bot as an admin with &ldquo;Delete messages&rdquo; and &ldquo;Ban users&rdquo; turned on, or it cannot remove bad content.</strong>
+                    </span>}
+              </div>
+            </div>
+          );
+        })}
+        {groupChats.length === 0 && <div style={card}><span className="muted">No subject group is linked yet.</span></div>}
+      </div>
 
       {/* Extra blocked words/phrases — competitor names, banned topics. */}
       <details className="card" style={{ marginTop: 14 }}>

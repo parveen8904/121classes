@@ -142,3 +142,12 @@ export async function imageIsExplicit(b64: string, mediaType: string): Promise<{
     return { explicit: false, reason: "error" };
   }
 }
+
+// A link of any kind — students may share notes and images, but NOT links
+// (a common route for scams and spam in a study group). Catches http(s)://,
+// www., t.me/ and bare domains with a common TLD. Deliberately does not trip on
+// "B.Com" / "M.Com" (needs 2+ characters before the dot) or a bare "file.pdf".
+const LINK_RE = /(https?:\/\/\S+|www\.\S+|t\.me\/\S+|\b[a-z0-9][a-z0-9-]{1,}\.(?:com|in|net|org|io|co|me|edu|gov|app|xyz|info|biz|link|ly|shop|store|online|site|club|live|tel|fun)\b(?:\/\S*)?)/i;
+export function containsLink(text: string): boolean {
+  return LINK_RE.test(text || "");
+}

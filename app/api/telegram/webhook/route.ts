@@ -4,7 +4,7 @@ import { sendTelegramMessage, notifyFaculty } from "@/lib/notify";
 import { answerDoubtFromMaterial, aiConfigured, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getSecret } from "@/lib/secrets";
-import { moderateMessageDyn, imageIsExplicit } from "@/lib/moderation";
+import { moderateMessageDyn, imageIsExplicit, containsLink } from "@/lib/moderation";
 import { tgDeleteMessage, tgSendGroupReply, tgApproveJoin, tgDeclineJoin, tgRestrictUser, messageHasMedia, moderatableImageId, tgGetImageB64 } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
 import { groupAiAnswer } from "@/lib/groupDoubt";
@@ -107,10 +107,40 @@ export async function POST(req: NextRequest) {
       const fromId = msg?.from?.id ? String(msg.from.id) : null;
       const fromName = [msg?.from?.first_name, msg?.from?.last_name].filter(Boolean).join(" ") || msg?.from?.username || "Member";
 
-      // TEXT / CAPTION moderation (blocked terms, spam) — as before, now also
-      // covering a photo's caption.
+      // STUDENTS ONLY — the real lock. The join gate approves only linked
+      // students, but if anyone slips in (an old public invite link, added
+      // before the gate), their FIRST message removes them: a sender whose
+      // Telegram id is not a linked portal account is deleted and banned on the
+      // spot. Linked staff (admin/faculty/operator) are exempt.
+      const senderProf = fromId && !msg?.from?.is_bot
+        ? (await svc.from("profiles").select("id, role").eq("telegram_chat_id", fromId).maybeSingle()).data
+        : null;
+      if (fromId && !msg?.from?.is_bot && !senderProf?.id) {
+        await tgDeleteMessage(chatId, msg.message_id).catch(() => false);
+        await tgRestrictUser(chatId, fromId, true).catch(() => false);
+        try {
+          await svc.from("banned_group_users").upsert(
+            { chat_id: chatId, user_id: null, tg_user_id: fromId, kind: "ban", reason: `Not a linked student (${fromName})` },
+            { onConflict: "chat_id,tg_user_id" },
+          );
+        } catch { /* the Telegram removal already happened */ }
+        await sendTelegramMessage(
+          fromId,
+          "🔒 This group is only for CA Parveen Sharma students. Please log in at caparveensharma.com, tap “Connect Telegram” on your dashboard, then request to join again — you'll be approved automatically.",
+        ).catch(() => false);
+        return NextResponse.json({ ok: true });
+      }
+      const isStaffSender = !!senderProf && senderProf.role !== "student";
+
+      // TEXT / CAPTION moderation (blocked terms, spam, links) — now also
+      // covering a photo's caption. Students may not post links; staff may.
       const combined = (text || caption).trim();
       const mod = combined ? await moderateMessageDyn(combined) : { flagged: false, reasons: [] as string[] };
+      // Students may not post links (scam/spam route); staff may.
+      if (!isStaffSender && combined && containsLink(combined)) {
+        mod.flagged = true;
+        mod.reasons = [...mod.reasons, "link"];
+      }
 
       // IMAGE / VIDEO moderation — the gap that let porn through. Any picture,
       // video, GIF or sticker is checked by AI vision; explicit content is

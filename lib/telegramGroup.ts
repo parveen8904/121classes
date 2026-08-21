@@ -113,3 +113,36 @@ export async function tgGetImageB64(fileId: string): Promise<{ b64: string; medi
     return { b64: buf.toString("base64"), mediaType };
   } catch { return null; }
 }
+
+// Is the bot actually able to police a group? It needs to be an ADMINISTRATOR
+// with delete + restrict rights, or it can detect bad content but not remove it.
+// Checks each chat via getChatMember on the bot's own id.
+export async function botGroupStatus(chatIds: string[]): Promise<Record<string, { present: boolean; admin: boolean; canDelete: boolean; canBan: boolean; note: string }>> {
+  const token = await getSecret("TELEGRAM_BOT_TOKEN");
+  const out: Record<string, { present: boolean; admin: boolean; canDelete: boolean; canBan: boolean; note: string }> = {};
+  const blank = (note: string) => ({ present: false, admin: false, canDelete: false, canBan: false, note });
+  if (!token) { for (const c of chatIds) out[c] = blank("bot token not set"); return out; }
+  let botId: number | null = null;
+  try {
+    const me = await fetch(`https://api.telegram.org/bot${token}/getMe`, { cache: "no-store" }).then((r) => r.json());
+    botId = me?.result?.id ?? null;
+  } catch { /* handled below */ }
+  if (!botId) { for (const c of chatIds) out[c] = blank("could not reach Telegram"); return out; }
+  for (const chat of chatIds) {
+    try {
+      const m = await fetch(`https://api.telegram.org/bot${token}/getChatMember?chat_id=${encodeURIComponent(chat)}&user_id=${botId}`, { cache: "no-store", signal: AbortSignal.timeout(6000) }).then((r) => r.json());
+      if (!m?.ok) { out[chat] = blank(m?.description || "not in group"); continue; }
+      const st = m.result?.status as string;
+      const present = st !== "left" && st !== "kicked";
+      const admin = st === "administrator" || st === "creator";
+      out[chat] = {
+        present,
+        admin,
+        canDelete: admin && (st === "creator" || m.result?.can_delete_messages === true),
+        canBan: admin && (st === "creator" || m.result?.can_restrict_members === true),
+        note: !present ? "bot is NOT in this group" : !admin ? "bot is in the group but NOT an admin" : "",
+      };
+    } catch { out[chat] = blank("check failed"); }
+  }
+  return out;
+}

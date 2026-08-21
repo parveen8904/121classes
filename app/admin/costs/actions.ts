@@ -22,6 +22,7 @@ export async function saveCostSettings(formData: FormData) {
     { key: "vercel_plan_usd", value: String(Number(formData.get("vercel_plan_usd")) || 0) },
     { key: "cloudflare_bill_usd", value: String(Number(formData.get("cloudflare_bill_usd")) || 0) },
     { key: "bunny_bill_usd", value: String(Number(formData.get("bunny_bill_usd")) || 0) },
+    { key: "paper_retention_months", value: String(Math.max(1, Number(formData.get("paper_retention_months")) || 6)) },
   ];
   await createServiceClient().from("site_settings").upsert(rows, { onConflict: "key" });
   revalidatePath("/admin/costs");

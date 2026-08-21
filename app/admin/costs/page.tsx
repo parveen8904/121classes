@@ -44,7 +44,7 @@ export default async function CostsPage() {
 
   // --- Bunny live billing (this month's charges) + cap settings ---
   const bunnyBill = await getBunnyBilling();
-  const { data: costCfg } = await svc.from("site_settings").select("key, value").in("key", ["bunny_cap_usd", "supabase_storage_cap_mb", "cost_alert_email", "supabase_plan_usd", "vercel_plan_usd", "cloudflare_bill_usd", "bunny_bill_usd"]);
+  const { data: costCfg } = await svc.from("site_settings").select("key, value").in("key", ["bunny_cap_usd", "supabase_storage_cap_mb", "cost_alert_email", "supabase_plan_usd", "vercel_plan_usd", "cloudflare_bill_usd", "bunny_bill_usd", "paper_retention_months"]);
   const cfg = new Map((costCfg ?? []).map((r) => [r.key, r.value as string]));
   const bunnyCap = Number(cfg.get("bunny_cap_usd")) || 0;
   const bunnyOver = bunnyBill && bunnyCap > 0 && bunnyBill.thisMonth >= bunnyCap;
@@ -284,6 +284,10 @@ export default async function CostsPage() {
           <div>
             <label>Bunny — latest usage (USD) — used until the API key is added</label>
             <input name="bunny_bill_usd" type="number" min={0} step={0.01} defaultValue={cfg.get("bunny_bill_usd") ?? "0"} placeholder="88.03" />
+          </div>
+          <div>
+            <label>Keep student papers for (months) — then auto-delete the PDFs</label>
+            <input name="paper_retention_months" type="number" min={1} step={1} defaultValue={cfg.get("paper_retention_months") ?? "6"} placeholder="6" />
           </div>
         </div>
         <SubmitButton className="btn" style={{ marginTop: 10 }}>Save budget alerts</SubmitButton>

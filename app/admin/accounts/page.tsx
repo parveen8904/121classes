@@ -3,6 +3,7 @@ import AdminHero from "../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
 import { formatDate } from "@/lib/dates";
 import { accountRows, ACCOUNT_STATES } from "@/lib/accountsExport";
+import { viaProxy } from "@/lib/fileProxy";
 import SubmitButton from "@/app/components/SubmitButton";
 import { approveDayForZoho, approveSelectedForZoho, approveForZoho, holdForZoho } from "../orders/actions";
 
@@ -167,7 +168,13 @@ export default async function AccountsPage(props: {
                 </td>
                 <td style={td}>{formatDate(r.date)}</td>
                 <td style={td}>{r.orderNo || "—"}</td>
-                <td style={td}>{r.invoiceNo || <span style={{ color: "var(--bad)" }}>none</span>}</td>
+                <td style={td}>
+                  {r.invoiceNo
+                    ? (r.invoiceUrl
+                        ? <a href={viaProxy(r.invoiceUrl)} target="_blank" rel="noopener noreferrer" className="grad" title="Open the invoice PDF">🧾 {r.invoiceNo} ↓</a>
+                        : r.invoiceNo)
+                    : <span style={{ color: "var(--bad)" }}>none</span>}
+                </td>
                 <td style={td}>{r.receiptNo || "—"}</td>
                 <td style={td}>{r.customer || "—"}<br /><span className="muted" style={{ fontSize: ".78rem" }}>{r.email}</span></td>
                 <td style={td}>{r.description}</td>

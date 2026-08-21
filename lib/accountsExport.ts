@@ -21,6 +21,8 @@ export type AccountRow = {
   id: string;
   orderNo: string;
   invoiceNo: string;
+  /** Private storage URL of the invoice PDF, for the clickable invoice number. */
+  invoiceUrl: string;
   receiptNo: string;
   date: string;
   customer: string;
@@ -91,13 +93,13 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
 
   const [subs, books, gifts] = await Promise.all([
     range(svc.from("orders")
-      .select("id, order_no, invoice_no, receipt_no, amount_inr, status, created_at, razorpay_order_id, razorpay_payment_id, zoho_status, zoho_invoice_id, kind, subjects:subject_id(title), profiles:student_id(full_name, business_name, email, phone, gstin, state)")
+      .select("id, order_no, invoice_no, invoice_url, receipt_no, amount_inr, status, created_at, razorpay_order_id, razorpay_payment_id, zoho_status, zoho_invoice_id, kind, subjects:subject_id(title), profiles:student_id(full_name, business_name, email, phone, gstin, state)")
       .order("created_at", { ascending: false }).limit(2000) as never) as never,
     range(svc.from("book_orders")
-      .select("id, order_no, invoice_no, receipt_no, amount_inr, status, created_at, razorpay_order_id, razorpay_payment_id, zoho_status, zoho_invoice_id, guest_contact, ship_to, items")
+      .select("id, order_no, invoice_no, invoice_url, receipt_no, amount_inr, status, created_at, razorpay_order_id, razorpay_payment_id, zoho_status, zoho_invoice_id, guest_contact, ship_to, items")
       .order("created_at", { ascending: false }).limit(2000) as never) as never,
     range(svc.from("gift_orders")
-      .select("id, order_no, invoice_no, receipt_no, amount_inr, taxable_value, cgst, sgst, igst, status, created_at, razorpay_order_id, razorpay_payment_id, billing_name, billing_gstin, billing_state, recipient_name, recipient_email, recipient_phone, months, tier, subjects:subject_id(title)")
+      .select("id, order_no, invoice_no, invoice_url, receipt_no, amount_inr, taxable_value, cgst, sgst, igst, status, created_at, razorpay_order_id, razorpay_payment_id, billing_name, billing_gstin, billing_state, recipient_name, recipient_email, recipient_phone, months, tier, subjects:subject_id(title)")
       .order("created_at", { ascending: false }).limit(2000) as never) as never,
   ]) as unknown as { data: Record<string, never>[] | null }[];
 
@@ -110,7 +112,7 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
     out.push({
       table: "orders", id: str(r.id),
       orderNo: r.order_no ? `#${r.order_no}` : "",
-      invoiceNo: str(r.invoice_no), receiptNo: r.receipt_no ? String(r.receipt_no) : "",
+      invoiceNo: str(r.invoice_no), invoiceUrl: str(r.invoice_url), receiptNo: r.receipt_no ? String(r.receipt_no) : "",
       date: str(r.created_at),
       customer: str(p?.business_name || p?.full_name), email: str(p?.email), phone: str(p?.phone),
       gstin: str(p?.gstin), state: str(p?.state),
@@ -132,7 +134,7 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
     out.push({
       table: "book_orders", id: str(r.id),
       orderNo: r.order_no ? `#${r.order_no}` : "",
-      invoiceNo: str(r.invoice_no), receiptNo: r.receipt_no ? String(r.receipt_no) : "",
+      invoiceNo: str(r.invoice_no), invoiceUrl: str(r.invoice_url), receiptNo: r.receipt_no ? String(r.receipt_no) : "",
       date: str(r.created_at),
       customer: str(s.name || g.name), email: str(s.email || g.email), phone: str(s.phone || g.phone),
       gstin: "", state: str(s.state),
@@ -151,7 +153,7 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
     out.push({
       table: "gift_orders", id: str(r.id),
       orderNo: r.order_no ? `#${r.order_no}` : "",
-      invoiceNo: str(r.invoice_no), receiptNo: r.receipt_no ? String(r.receipt_no) : "",
+      invoiceNo: str(r.invoice_no), invoiceUrl: str(r.invoice_url), receiptNo: r.receipt_no ? String(r.receipt_no) : "",
       date: str(r.created_at),
       customer: str(r.billing_name || r.recipient_name), email: str(r.recipient_email), phone: str(r.recipient_phone),
       gstin: str(r.billing_gstin), state: str(r.billing_state),

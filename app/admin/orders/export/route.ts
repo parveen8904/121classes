@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
     // Supporter sales belong in the register, and so in the download.
     (() => {
       let q = svc.from("gift_orders")
-        .select("amount_inr, discount_inr, coupon_code, status, created_at, invoice_no, order_no, months, tier, subject_id, recipient_name, recipient_email, recipient_phone, billing_state, subjects:subject_id(title, courses(title)), gifter:gifter_id(full_name, email, business_name, designation, is_supporter)");
+        .select("amount_inr, discount_inr, coupon_code, status, created_at, invoice_no, order_no, months, tier, subject_id, recipient_name, recipient_email, recipient_phone, recipient_address, billing_state, subjects:subject_id(title, courses(title)), gifter:gifter_id(full_name, email, business_name, designation, is_supporter)");
       if (fromIso) q = q.gte("created_at", fromIso);
       if (toIso) q = q.lte("created_at", toIso);
       q = applyStatus(q as never, "gift_orders") as never;
@@ -190,19 +190,24 @@ export async function GET(req: NextRequest) {
       : `Student sponsored${who ? ` — ${who}` : ""}`;
   };
 
-  const rows = [[
+  const header = [
     "Order no", "Date", "Order source", "Sale type", "Subject", "Plan", "Months", "Status", "Invoice no",
     "Name", "Level", "Phone", "Email",
     "Address", "GSTIN", "Subscription start", "Subscription end",
     "Amount without GST", "GST amount", "Total paid (Rs)", "Sold by", "Coupon", "Discount (Rs)",
-  ].join(",")];
+  ].join(",");
+  // SERIAL ORDER. The file used to be three blocks stacked — every subscription,
+  // then every book order, then every vendor sale — each newest-first, so the
+  // order numbers jumped around and the office could not read it down the page.
+  // Every row now carries its order number and the whole file is sorted by it.
+  const dataRows: { n: number; line: string }[] = [];
 
   for (const o of vendorOnly ? [] : subs) {
     const pr = o.profiles;
     const gst = computeGst(o.amount_inr ?? 0, pr?.state ?? "", s);
     const address = pr ? [pr.address_line1, pr.address_line2, [pr.city, pr.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
     const dates = pr && o.subject_id ? subDates.get(`${pr.id}:${o.subject_id}`) : undefined;
-    rows.push([
+    dataRows.push({ n: o.order_no ?? 0, line: [
       esc(o.order_no != null ? `#${o.order_no}` : ""),
       esc(dt(o.created_at)), esc("Direct student order"), esc(o.kind), esc(o.subjects?.title ?? ""),
       // Gold / Silver / Bronze — the thing the plan column exists for.
@@ -218,7 +223,7 @@ export async function GET(req: NextRequest) {
       esc(d(dates?.starts_at)), esc(d(dates?.ends_at)),
       esc(gst.taxable.toFixed(2)), esc((gst.cgst + gst.sgst + gst.igst).toFixed(2)),
       esc((o.amount_inr ?? 0).toFixed(2)), esc(""), esc(""), esc(""),
-    ].join(","));
+    ].join(",") });
   }
 
   for (const b of (vendorOnly ? [] : ((bookRows ?? []) as unknown as { amount_inr: number; status: string; created_at: string; guest_contact: Contact | null; ship_to: Ship | null; invoice_no: string | null; order_no: number | null; items?: { book_id?: string; qty?: number }[] | null }[])
@@ -231,7 +236,7 @@ export async function GET(req: NextRequest) {
     const titles = (b.items ?? [])
       .map((i) => `${bookTitle.get(String(i.book_id)) || "Book"}${(i.qty ?? 1) > 1 ? ` ×${i.qty}` : ""}`)
       .join(" + ");
-    rows.push([
+    dataRows.push({ n: b.order_no ?? 0, line: [
       esc(b.order_no != null ? `#${b.order_no}` : ""),
       esc(dt(b.created_at)), esc("Direct student order"), esc("book order"), esc(titles), esc(""), esc(""), esc(b.status), esc(b.invoice_no ?? ""),
       esc(b.guest_contact?.name ?? ship.name ?? ""), esc(""),
@@ -239,7 +244,7 @@ export async function GET(req: NextRequest) {
       esc(address), esc(""), esc(""), esc(""),
       esc(gst.taxable.toFixed(2)), esc((gst.cgst + gst.sgst + gst.igst).toFixed(2)),
       esc((b.amount_inr ?? 0).toFixed(2)), esc(""), esc(""), esc(""),
-    ].join(","));
+    ].join(",") });
   }
 
   // Supporter sales — the same columns, plus who sold it and what they took off.
@@ -248,6 +253,7 @@ export async function GET(req: NextRequest) {
     status: string; created_at: string; invoice_no: string | null; order_no: number | null;
     months: number | null; tier: string | null; billing_state: string | null;
     recipient_name: string | null; recipient_email: string | null; recipient_phone: string | null;
+    recipient_address: string | null;
     subject_id: string | null;
     subjects: { title: string; courses?: { title?: string } | { title?: string }[] | null } | null;
     gifter: { full_name: string | null; email: string | null; business_name: string | null; designation: string | null; is_supporter: boolean | null } | null;
@@ -257,11 +263,17 @@ export async function GET(req: NextRequest) {
     // The STUDENT the vendor bought for: their account's address, and the
     // validity of the subscription the payment provisioned.
     const recip = giftRecip.get(String(g.recipient_email ?? "").toLowerCase());
-    const gAddress = recip
-      ? [recip.address_line1, recip.address_line2, [recip.city, recip.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ")
-      : "";
+    // The vendor typed the shipping address ONTO THE ORDER (recipient_address) —
+    // that is the delivery address and it was being ignored, so every vendor row
+    // exported a blank address while the address sat right there. Use it first,
+    // and fall back to the student account only if the order carried none.
+    const gAddress = (g.recipient_address && g.recipient_address.trim())
+      ? g.recipient_address.trim()
+      : recip
+        ? [recip.address_line1, recip.address_line2, [recip.city, recip.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ")
+        : "";
     const gDates = recip && g.subject_id ? subDates.get(`${recip.id}:${g.subject_id}`) : undefined;
-    rows.push([
+    dataRows.push({ n: g.order_no ?? 0, line: [
       esc(g.order_no != null ? `#${g.order_no}` : ""),
       esc(dt(g.created_at)), esc(sourceOfGift(g)),
       esc(g.gifter?.is_supporter ? "vendor sale" : "sponsorship"),
@@ -276,8 +288,12 @@ export async function GET(req: NextRequest) {
       esc((g.amount_inr ?? 0).toFixed(2)),
       esc([g.gifter?.business_name || g.gifter?.full_name || g.gifter?.email || "", g.gifter?.designation].filter(Boolean).join(" · ")),
       esc(g.coupon_code ?? ""), esc(g.discount_inr != null ? g.discount_inr.toFixed(2) : ""),
-    ].join(","));
+    ].join(",") });
   }
+
+  // Serial order — smallest order number first, all three kinds interleaved.
+  dataRows.sort((a, b) => a.n - b.n);
+  const rows = [header, ...dataRows.map((r) => r.line)];
 
   return new NextResponse("﻿" + rows.join("\r\n"), {
     headers: {

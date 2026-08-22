@@ -7,10 +7,11 @@ import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
-import { rule115Rate } from "@/lib/forexRates";
+import { rule115Rate, ttBuyRate } from "@/lib/forexRates";
+import { fySnapshot, indiaAdvanceTax, usEstimatedTax, taxAssumptions } from "@/lib/taxEngine";
 import type { SalePayload } from "@/lib/zohoPosting";
 import { formatINR } from "@/lib/pricing";
 
@@ -41,7 +42,8 @@ const PHASE_PLAN: { name: string; what: string; state: "done" | "building" | "wa
   { name: "Petty cash (advances)", what: "Record advances, per-person balances, bill uploads on /admin/petty, approve → posts to Zoho — section below.", state: "done" },
   { name: "Rule-115 rates", what: "SBI TT buying rates auto-fetched from officialforexrates.com (the founder's sole authority), stored with provenance, holiday walk-back — card below.", state: "done" },
   { name: "Rent roll & GST/TDS", what: "Co-owned commercial rent (two invoices, TDS per PAN), residential rent.", state: "planned" },
-  { name: "Cards, brokerage & tax engines", what: "Card statements, US brokerage at cost with FIFO gains, India advance-tax + US 1040-ES projections, CPA packs, all reconciliations.", state: "planned" },
+  { name: "Brokerage engine", what: "US brokerage statements → Rule-115-converted queue: dividends/interest/fees/buys pre-proposed, sells ask their cost — section below. (Cards run through Bank statements.)", state: "done" },
+  { name: "Tax worksheets", what: "India advance-tax ladder from the live books + US 1040-ES safe-harbour calendar — founder-only section below. CPA packs & reconciliation reports follow.", state: "done" },
 ];
 
 const STATE_BADGE: Record<string, { text: string; colour: string }> = {
@@ -153,6 +155,46 @@ export default async function ZohoHubPage(props: {
       const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
       r115 = await rule115Rate(today, "USD");
     } catch { /* card simply hides on a source hiccup */ }
+  }
+
+  // Brokerage queue.
+  type BrokRow = { id: string; account_name: string; line_date: string; kind: string; symbol: string | null; usd_amount: number; rate: number | null; rate_date: string | null; inr_amount: number | null; description: string | null; status: string; proposal: { account?: string } | null; error: string | null };
+  const { data: brokData } = hubConnected
+    ? await createServiceClient().from("brokerage_lines")
+        .select("id, account_name, line_date, kind, symbol, usd_amount, rate, rate_date, inr_amount, description, status, proposal, error")
+        .in("status", ["ask", "auto", "failed"]).order("line_date").limit(200)
+    : { data: [] as never[] };
+  const brokLines = (brokData ?? []) as unknown as BrokRow[];
+  const bAsk = brokLines.filter((l) => l.status === "ask");
+  const bAuto = brokLines.filter((l) => l.status === "auto");
+  const bFailed = brokLines.filter((l) => l.status === "failed");
+  const { count: bDone } = hubConnected
+    ? await createServiceClient().from("brokerage_lines").select("id", { count: "exact", head: true }).eq("status", "posted")
+    : { count: 0 };
+  const brokerageChoices = zohoAccounts.filter((a) => a.type === "bank" && /brokerage|thinkorswim|tasty/i.test(a.name)).map((a) => a.name);
+
+  // Rule 115 panel: last 5 month-end USD rates (DB-first; auto-fetch fills gaps).
+  const monthEnds: { keyDate: string; rate: number | null; rateDate: string | null }[] = [];
+  if (hubConnected) {
+    const now = new Date();
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 0));
+      const key = d.toISOString().slice(0, 10);
+      try {
+        const r = await ttBuyRate(key, "USD");
+        monthEnds.push({ keyDate: key, rate: r?.rate ?? null, rateDate: r?.rateDate ?? null });
+      } catch { monthEnds.push({ keyDate: key, rate: null, rateDate: null }); }
+    }
+  }
+
+  // Tax worksheets (founder-only).
+  let taxData: { snap: Awaited<ReturnType<typeof fySnapshot>>; india: ReturnType<typeof indiaAdvanceTax>; us: ReturnType<typeof usEstimatedTax>; assume: Awaited<ReturnType<typeof taxAssumptions>> } | null = null;
+  if (isFounder && hubConnected) {
+    try {
+      const assume = await taxAssumptions();
+      const snap = await fySnapshot();
+      taxData = { snap, india: indiaAdvanceTax(snap, assume.effRatePct), us: usEstimatedTax(assume.usPriorYearTaxUsd), assume };
+    } catch { /* worksheet hides on a hiccup */ }
   }
 
   const { data: docs } = isFounder
@@ -463,14 +505,35 @@ export default async function ZohoHubPage(props: {
         </div>
       )}
 
-      {/* ── Rule 115 rate card ──────────────────────────────────────── */}
-      {r115 && (
-        <div className="card" style={{ marginTop: 18, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <strong>💱 Rule 115 — USD rate for income arising this month:</strong>
-          <span style={{ fontSize: "1.1rem", fontWeight: 800 }}>₹{r115.rate.toFixed(2)}</span>
-          <span className="muted" style={{ fontSize: ".8rem" }}>
-            SBI TT buying rate of {r115.rateDate}{r115.rateDate !== r115.keyDate ? ` (nearest published day before ${r115.keyDate})` : ""} · source: officialforexrates.com — every conversion stores its rate, date and rule.
-          </span>
+      {/* ── Rule 115 panel: rates + a concise summary of the rule ───── */}
+      {hubConnected && (
+        <div className="card" style={{ marginTop: 18 }} id="rule115">
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <strong>💱 Rule 115 — SBI TT buying rates</strong>
+            {r115 && <span style={{ fontSize: "1.1rem", fontWeight: 800 }}>this month: ₹{r115.rate.toFixed(2)}/USD</span>}
+            <span className="muted" style={{ fontSize: ".78rem" }}>source: officialforexrates.com (the designated authority)</span>
+          </div>
+          {monthEnds.length > 0 && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+              {monthEnds.map((m) => (
+                <div key={m.keyDate} style={{ background: "var(--bg-soft)", borderRadius: 8, padding: "6px 12px", fontSize: ".82rem" }}>
+                  <div className="muted" style={{ fontSize: ".72rem" }}>{m.keyDate}</div>
+                  <strong>{m.rate ? `₹${m.rate.toFixed(2)}` : "—"}</strong>
+                  {m.rate && m.rateDate !== m.keyDate && <span className="muted" style={{ fontSize: ".7rem" }}> ({m.rateDate})</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {/* The rule itself, said once, plainly — beside the numbers it governs. */}
+          <p className="muted" style={{ fontSize: ".8rem", lineHeight: 1.7, margin: "10px 0 0" }}>
+            <strong>Rule 115, Income-tax Rules 1962 — in short:</strong> foreign income is converted to rupees at the
+            <strong> SBI telegraphic-transfer BUYING rate</strong> on a specified date — for interest, dividends and
+            most income: the <strong>last day of the month before</strong> the month the income arose; for capital
+            gains: the last day of the month before the <strong>transfer</strong>; for salary: before the month it was
+            due. If SBI published nothing that day (holiday), the nearest earlier published rate applies. Every
+            conversion this desk makes stores its dollar amount, the rate used, the rate&apos;s date and this rule —
+            so any figure can be traced years later.
+          </p>
         </div>
       )}
 
@@ -581,6 +644,176 @@ export default async function ZohoHubPage(props: {
               ))}
             </>
           )}
+        </div>
+      )}
+
+      {/* ── Brokerage statements ────────────────────────────────────── */}
+      {hubConnected && (
+        <div id="brokerage">
+          <h2 className="admin-section-title" style={{ marginTop: 26 }}>📈 US brokerage statements</h2>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
+            Upload each brokerage&apos;s statement (PDF or CSV). Every transaction is converted at its
+            <strong> Rule-115 rate</strong> (shown per line). Dividends, interest, fees and buys come pre-proposed in
+            your own account style — this closes the books&apos; one gap: US dividend/interest income. A
+            <strong> sell</strong> asks for its INR cost, and the gain/loss books itself.
+            ✅ posted so far: {bDone ?? 0}
+          </p>
+
+          <form action={uploadBrokerageAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div style={{ minWidth: 240 }}>
+              <label style={{ fontSize: ".75rem" }}>Brokerage account</label>
+              <select name="account_name" required style={{ marginBottom: 0 }}>
+                <option value="">— pick —</option>
+                {brokerageChoices.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: ".75rem" }}>Statement (PDF / CSV)</label>
+              <input type="file" name="file" required accept=".csv,.pdf" style={{ marginBottom: 0 }} />
+            </div>
+            <SubmitButton className="btn small" savedLabel="✓ Read">📥 Upload &amp; read</SubmitButton>
+          </form>
+
+          {bAuto.length > 0 && (
+            <>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
+                <strong>⚡ Pre-proposed ({bAuto.length})</strong>
+                <form action={approveAllBrokerageAction} style={{ margin: 0 }}>
+                  <SubmitButton className="btn small" savedLabel="✓ Posted">✅ Approve all</SubmitButton>
+                </form>
+              </div>
+              {bAuto.map((l) => (
+                <div className="card" key={l.id} style={{ marginTop: 6, padding: "10px 14px" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: ".8rem" }}>{l.line_date}</span>
+                    <span className="badge">{l.kind}{l.symbol ? ` · ${l.symbol}` : ""}</span>
+                    <strong>${Number(l.usd_amount).toFixed(2)}</strong>
+                    <span className="muted" style={{ fontSize: ".78rem" }}>
+                      {l.rate ? `@ ₹${Number(l.rate).toFixed(2)} (${l.rate_date}) = ${formatINR(Number(l.inr_amount))}` : "rate pending"}
+                    </span>
+                    <span style={{ flex: 1, minWidth: 140, fontSize: ".8rem" }} className="muted">{l.description}</span>
+                    <span className="badge">→ {l.proposal?.account}</span>
+                    <form action={postBrokerageLineAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={l.id} />
+                      <SubmitButton className="btn small" savedLabel="✓">✅ Post</SubmitButton>
+                    </form>
+                    <form action={skipBrokerageLineAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={l.id} />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">Skip</SubmitButton>
+                    </form>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {bAsk.length > 0 && (
+            <>
+              <strong style={{ display: "block", marginTop: 14 }}>❓ Needs an answer ({bAsk.length})</strong>
+              {bAsk.map((l) => (
+                <div className="card" key={l.id} style={{ marginTop: 6, padding: "10px 14px" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: ".8rem" }}>{l.line_date}</span>
+                    <span className="badge">{l.kind}{l.symbol ? ` · ${l.symbol}` : ""}</span>
+                    <strong>${Number(l.usd_amount).toFixed(2)}</strong>
+                    <span className="muted" style={{ fontSize: ".78rem" }}>{l.rate ? `@ ₹${Number(l.rate).toFixed(2)} = ${formatINR(Number(l.inr_amount))}` : ""}</span>
+                    <span style={{ flex: 1, minWidth: 140, fontSize: ".8rem" }} className="muted">{l.description}</span>
+                    <form action={skipBrokerageLineAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={l.id} />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">Skip</SubmitButton>
+                    </form>
+                  </div>
+                  <form action={postBrokerageLineAction} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+                    <input type="hidden" name="id" value={l.id} />
+                    {l.kind === "sell" ? (
+                      <>
+                        <input name="cost_inr" type="number" step="0.01" min="0" required placeholder="INR cost of the lot sold" style={{ marginBottom: 0, width: 200, fontSize: ".84rem" }} />
+                        <input name="pl_account" list="acct-names" placeholder="P&L account (default: Profit on Sale of Shares-…)" style={{ marginBottom: 0, flex: 1, minWidth: 220, fontSize: ".84rem" }} />
+                      </>
+                    ) : (
+                      <input name="account" list="acct-names" required placeholder="Which account? (start typing…)" style={{ marginBottom: 0, flex: 1, minWidth: 220, fontSize: ".84rem" }} />
+                    )}
+                    <SubmitButton className="btn small" savedLabel="✓">✅ Post</SubmitButton>
+                  </form>
+                </div>
+              ))}
+            </>
+          )}
+
+          {bFailed.length > 0 && bFailed.map((l) => (
+            <div className="card" key={l.id} style={{ marginTop: 6, padding: "10px 14px", borderLeft: "4px solid #b91c1c" }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: ".8rem" }}>{l.line_date} · {l.kind}{l.symbol ? ` ${l.symbol}` : ""} · ${Number(l.usd_amount).toFixed(2)}</span>
+                <span style={{ flex: 1, fontSize: ".78rem", color: "#b91c1c" }}>{l.error}</span>
+                <form action={retryBrokerageLineAction} style={{ margin: 0 }}>
+                  <input type="hidden" name="id" value={l.id} />
+                  <SubmitButton className="btn small secondary" savedLabel="✓">↻ Back to queue</SubmitButton>
+                </form>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Tax worksheets (the founder's alone) ────────────────────── */}
+      {isFounder && taxData && (
+        <div id="tax">
+          <h2 className="admin-section-title" style={{ marginTop: 26 }}>🧾 Tax worksheets — projections, working shown</h2>
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))" }}>
+            <div className="card">
+              <strong>🇮🇳 Advance tax — FY 2026-27 (A.Y. 2027-28)</strong>
+              <div style={{ fontSize: ".84rem", lineHeight: 1.9, marginTop: 8 }}>
+                <div>FY-to-date profit (live from Zoho): <strong>{formatINR(taxData.snap.pbt)}</strong> <span className="muted">({taxData.snap.monthsElapsed} months: income {formatINR(taxData.snap.income)} − expenses {formatINR(taxData.snap.expenses)})</span></div>
+                <div>Annualised: <strong>{formatINR(taxData.india.annualisedPbt)}</strong> × {taxData.india.effRate}% = est. tax <strong>{formatINR(taxData.india.estTax)}</strong></div>
+                <div>Less TDS suffered: {formatINR(taxData.india.tds)} · advance paid: {formatINR(taxData.india.paidSoFar)}</div>
+                <div style={{ marginTop: 6 }}>
+                  {taxData.india.instalments.map((i) => (
+                    <span key={i.due} style={{ display: "inline-block", background: "var(--bg-soft)", borderRadius: 6, padding: "2px 8px", margin: "2px 6px 2px 0", fontSize: ".78rem" }}>
+                      {i.due.slice(5)} → {i.cumPct}% = {formatINR(i.cumRequired)}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ marginTop: 6, fontWeight: 800 }}>
+                  Suggested by {taxData.india.nextDue}: {formatINR(taxData.india.nextRequired)}
+                </div>
+                <p className="muted" style={{ fontSize: ".74rem", margin: "6px 0 0" }}>A projection for your judgment — capital gains join the ladder in the instalment after they arise.</p>
+              </div>
+            </div>
+
+            <div className="card">
+              <strong>🇺🇸 US estimated tax (1040-ES) — safe harbour</strong>
+              <div style={{ fontSize: ".84rem", lineHeight: 1.9, marginTop: 8 }}>
+                {taxData.assume.usPriorYearTaxUsd > 0 ? (
+                  <>
+                    <div>Prior-year total tax: <strong>${taxData.us.priorYearTaxUsd.toLocaleString()}</strong> × 110% = <strong>${taxData.us.safeHarbourUsd.toLocaleString()}</strong></div>
+                    <div>Per quarter: <strong>${Math.round(taxData.us.quarterlyUsd).toLocaleString()}</strong></div>
+                    <div style={{ marginTop: 6 }}>
+                      {taxData.us.quarters.map((q) => (
+                        <span key={q.due} style={{ display: "inline-block", background: "var(--bg-soft)", borderRadius: 6, padding: "2px 8px", margin: "2px 6px 2px 0", fontSize: ".78rem" }}>{q.label}: {q.due}</span>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 6, fontWeight: 800 }}>Next due: {taxData.us.nextDue}</div>
+                    <p className="muted" style={{ fontSize: ".74rem", margin: "6px 0 0" }}>Paying 110% of last year&apos;s tax in equal quarters avoids penalty regardless of this year&apos;s income. Your CPA files; this is the calendar and the arithmetic.</p>
+                  </>
+                ) : (
+                  <p className="muted" style={{ fontSize: ".82rem" }}>Enter last year&apos;s total US tax below and the safe-harbour schedule appears.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <form action={saveTaxAssumptionsAction} className="card" style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div>
+              <label style={{ fontSize: ".75rem" }}>Assumed effective Indian tax rate (%)</label>
+              <input name="eff_rate" type="number" step="0.1" min="1" max="60" defaultValue={taxData.assume.effRatePct} style={{ marginBottom: 0, width: 130 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: ".75rem" }}>Prior-year US total tax (USD)</label>
+              <input name="us_py_tax" type="number" step="1" min="0" defaultValue={taxData.assume.usPriorYearTaxUsd || ""} style={{ marginBottom: 0, width: 150 }} />
+            </div>
+            <SubmitButton className="btn small" savedLabel="✓ Saved">💾 Save assumptions</SubmitButton>
+            <span className="muted" style={{ fontSize: ".76rem" }}>Only you see this section.</span>
+          </form>
         </div>
       )}
 

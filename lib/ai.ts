@@ -2803,3 +2803,25 @@ export async function parseBankStatementText(text: string): Promise<BankStmtLine
   const j = parseLooseJson(out);
   return Array.isArray(j) ? (j as BankStmtLine[]) : null;
 }
+
+// ---- Brokerage statement → structured transactions (accounting hub) ---------
+// Transcription only — categorising into Zoho accounts happens in the queue.
+export type BrokerageLine = {
+  date: string; kind: "buy" | "sell" | "dividend" | "interest" | "fee" | "tax" | "deposit" | "withdrawal" | "other";
+  symbol?: string; qty?: number; price?: number; amount: number; description: string;
+};
+export async function parseBrokerageStatementText(text: string): Promise<BrokerageLine[] | null> {
+  const out = await callClaude(
+    "You transcribe US brokerage statement text (Fidelity/IBKR/Robinhood/Schwab-style) into JSON. Return ONLY a JSON array; each element " +
+    '{"date":"YYYY-MM-DD","kind":"buy|sell|dividend|interest|fee|tax|deposit|withdrawal|other","symbol":"ticker optional",' +
+    '"qty":number optional,"price":number optional,"amount":number,"description":"string"}. ' +
+    "Rules: every transaction exactly once; amount is the positive USD magnitude; kind tax = tax withheld; " +
+    "deposits/withdrawals are cash transfers in/out; skip headers, summaries and balance rows; description verbatim but short.",
+    text.slice(0, 180_000),
+    16_000,
+    { model: await fastModel(), feature: "brokerage" },
+  );
+  if (!out) return null;
+  const j = parseLooseJson(out);
+  return Array.isArray(j) ? (j as BrokerageLine[]) : null;
+}

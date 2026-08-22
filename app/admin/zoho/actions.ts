@@ -285,6 +285,90 @@ export async function retryBillAction(formData: FormData) {
   revalidatePath("/admin/zoho");
 }
 
+// ---- Brokerage engine -------------------------------------------------------
+
+export async function uploadBrokerageAction(formData: FormData) {
+  await assertArea("zoho");
+  const accountName = str(formData.get("account_name"));
+  const file = formData.get("file") as File | null;
+  if (!accountName || !file || !file.size) {
+    redirect(`/admin/zoho?scan=${encodeURIComponent("Pick the brokerage account and choose a statement file.")}#brokerage`);
+  }
+  const safe = (file!.name || "statement").replace(/[^\w.\-]+/g, "_").slice(-80);
+  const path = `zoho-brokerage/${Date.now()}-${safe}`;
+  const svc = createServiceClient();
+  const buf = Buffer.from(await file!.arrayBuffer());
+  const { error } = await svc.storage.from("secure").upload(path, buf, {
+    contentType: file!.type || "application/octet-stream", upsert: false,
+  });
+  if (error) redirect(`/admin/zoho?scan=${encodeURIComponent(`Upload failed: ${error.message}`)}#brokerage`);
+  const { ingestBrokerageStatement } = await import("@/lib/brokerage");
+  let note: string;
+  try { note = await ingestBrokerageStatement(accountName, `secure:${path}`, file!.name); }
+  catch (e) { note = `Statement failed: ${e instanceof Error ? e.message : "unknown"}`; }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#brokerage`);
+}
+
+export async function postBrokerageLineAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const account = str(formData.get("account"));
+  const costInr = Number(formData.get("cost_inr")) || 0;
+  const plAccount = str(formData.get("pl_account"));
+  const { postBrokerageLine } = await import("@/lib/brokerage");
+  try {
+    await postBrokerageLine(id, {
+      ...(account ? { account } : {}),
+      ...(costInr > 0 ? { costInr } : {}),
+      ...(plAccount ? { plAccount } : {}),
+    });
+  } catch { /* the row carries status=failed + the reason */ }
+  revalidatePath("/admin/zoho");
+}
+
+export async function approveAllBrokerageAction() {
+  await assertArea("zoho");
+  const svc = createServiceClient();
+  const { data: autos } = await svc.from("brokerage_lines").select("id").eq("status", "auto").order("line_date");
+  const { postBrokerageLine } = await import("@/lib/brokerage");
+  for (const a of autos ?? []) {
+    try { await postBrokerageLine(a.id, {}); } catch { /* continue */ }
+  }
+  revalidatePath("/admin/zoho");
+}
+
+export async function skipBrokerageLineAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("brokerage_lines")
+    .update({ status: "skipped", updated_at: new Date().toISOString() }).eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
+export async function retryBrokerageLineAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("brokerage_lines")
+    .update({ status: "ask", error: null, updated_at: new Date().toISOString() }).eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
+// ---- Tax assumptions (founder-only) ----------------------------------------
+
+export async function saveTaxAssumptionsAction(formData: FormData) {
+  await assertArea(null); // the tax worksheets are the founder's alone
+  const rate = Number(formData.get("eff_rate"));
+  const usTax = Number(formData.get("us_py_tax"));
+  const svc = createServiceClient();
+  if (rate > 0 && rate <= 60) await svc.from("site_settings").upsert({ key: "adv_tax_eff_rate", value: String(rate) }, { onConflict: "key" });
+  if (usTax >= 0) await svc.from("site_settings").upsert({ key: "us_py_tax_usd", value: String(usTax) }, { onConflict: "key" });
+  revalidatePath("/admin/zoho");
+}
+
 export async function retryPostingAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));

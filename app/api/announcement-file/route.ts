@@ -24,11 +24,13 @@ export async function GET(req: NextRequest) {
     .from("announcements").select("link_url, is_published, title").eq("id", id).maybeSingle();
   if (!ann || !ann.is_published) return new NextResponse("Not found", { status: 404 });
 
-  // Gate hitlists: must be logged in AND have a WhatsApp number on file.
+  // THE RULE: anything downloaded from the site needs a login. So every
+  // announcement file requires a signed-in user. A HITLIST additionally requires
+  // a WhatsApp number on file (it is a lead magnet).
+  const back = `/api/announcement-file?a=${id}`;
+  const { data: { user } } = await createClient().auth.getUser();
+  if (!user) return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(back)}`, req.url));
   if (/hitlist/i.test(String(ann.title ?? ""))) {
-    const back = `/api/announcement-file?a=${id}`;
-    const { data: { user } } = await createClient().auth.getUser();
-    if (!user) return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(back)}`, req.url));
     const { data: prof } = await svc.from("profiles").select("phone").eq("id", user.id).maybeSingle();
     if (String(prof?.phone ?? "").replace(/\D/g, "").length < 10) {
       return NextResponse.redirect(new URL(`/dashboard?wa=hitlist`, req.url));

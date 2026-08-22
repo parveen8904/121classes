@@ -1012,7 +1012,7 @@ export default async function ZohoHubPage(props: {
           <div>
             <label>Type</label>
             <select name="doc_type" style={{ marginBottom: 0 }}>
-              {["Bank statement", "Credit-card statement", "Brokerage statement", "ITR / Return", "Tax computation", "US 1040", "GST challan / return", "TDS challan", "Invoice / bill", "Agreement", "Other"].map((t) => <option key={t} value={t}>{t}</option>)}
+              {["Bank statement", "Credit-card statement", "Brokerage statement", "26AS", "AIS / TIS", "ITR / Return", "Tax computation", "US 1040", "GST challan / return", "TDS challan", "Invoice / bill", "Agreement", "Other"].map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div>

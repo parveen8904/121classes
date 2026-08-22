@@ -67,6 +67,60 @@ export async function skipPostingAction(formData: FormData) {
   revalidatePath("/admin/zoho");
 }
 
+// ---- Razorpay settlements queue --------------------------------------------
+
+export async function scanSettlementsAction() {
+  await assertArea("zoho");
+  const { scanSettlements } = await import("@/lib/zohoSettlements");
+  let note: string;
+  try { note = await scanSettlements(); } catch (e) { note = `Settlement scan failed: ${e instanceof Error ? e.message : "unknown"}`; }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#settlements`);
+}
+
+export async function approveSettlementAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const staff = await currentStaff();
+  const svc = createServiceClient();
+  await svc.from("zoho_settlements").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", id);
+  const { postSettlement } = await import("@/lib/zohoSettlements");
+  try { await postSettlement(id); } catch { /* row carries status=failed + error */ }
+  revalidatePath("/admin/zoho");
+}
+
+export async function approveAllSettlementsAction() {
+  await assertArea("zoho");
+  const staff = await currentStaff();
+  const svc = createServiceClient();
+  const { data: rows } = await svc.from("zoho_settlements").select("id").eq("status", "draft").order("settled_on");
+  const { postSettlement } = await import("@/lib/zohoSettlements");
+  for (const r of rows ?? []) {
+    await svc.from("zoho_settlements").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", r.id);
+    try { await postSettlement(r.id); } catch { /* continue */ }
+  }
+  revalidatePath("/admin/zoho");
+}
+
+export async function skipSettlementAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("zoho_settlements")
+    .update({ status: "skipped", updated_at: new Date().toISOString() }).eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
+export async function retrySettlementAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("zoho_settlements")
+    .update({ status: "draft", error: null, updated_at: new Date().toISOString() }).eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
 export async function retryPostingAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));

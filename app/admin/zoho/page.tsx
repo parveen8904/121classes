@@ -7,7 +7,7 @@ import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction } from "./actions";
 import type { SalePayload } from "@/lib/zohoPosting";
 import { formatINR } from "@/lib/pricing";
 
@@ -33,7 +33,7 @@ const PHASE_PLAN: { name: string; what: string; state: "done" | "building" | "wa
   { name: "Zoho connection", what: "The portal's own Self-Client key — connected to ALDINECA.", state: "done" },
   { name: "Rulebook", what: "Learned from the office's own FY26-27 entries and locked: same series, same accounts, same style — automatically.", state: "done" },
   { name: "Sales posting", what: "Every paid portal sale becomes a draft in the queue below; approving posts the CAPS invoice + payment to Zoho.", state: "done" },
-  { name: "Razorpay settlements", what: "Settlement lands in the bank → net to Axis, fees to Payment Gateway Charges (AI), clearing squared — automatically.", state: "planned" },
+  { name: "Razorpay settlements", what: "Fetched from Razorpay, one journal each: net to Axis, fee+GST to Payment Gateway Charges (AI), gross out of clearing — queue below.", state: "done" },
   { name: "Bank statements & bills", what: "Statement uploads with continuity checks; the three queues — auto, confirm, ask-me. Months cannot close with unexplained lines.", state: "planned" },
   { name: "Petty cash (advances)", what: "Advance → invoices with purpose → accounts approval → running balance per person.", state: "planned" },
   { name: "Rent roll & GST/TDS", what: "Co-owned commercial rent (two invoices, TDS per PAN), residential rent, Rule-115 rates table.", state: "planned" },
@@ -77,6 +77,21 @@ export default async function ZohoHubPage(props: {
   const failed = byStatus("failed");
   const posted = byStatus("posted");
   const matchedRows = byStatus("matched");
+
+  type SettleRow = {
+    id: string; settlement_id: string; utr: string | null; settled_on: string;
+    net_inr: number; fees_inr: number; tax_inr: number; gross_inr: number;
+    status: string; error: string | null;
+  };
+  const { data: settleData } = hubConnected
+    ? await createServiceClient().from("zoho_settlements")
+        .select("id, settlement_id, utr, settled_on, net_inr, fees_inr, tax_inr, gross_inr, status, error")
+        .order("settled_on", { ascending: false })
+    : { data: [] as SettleRow[] };
+  const settles = (settleData ?? []) as SettleRow[];
+  const sBy = (s: string) => settles.filter((x) => x.status === s);
+  const sDrafts = sBy("draft"); const sFailed = sBy("failed");
+  const sPosted = sBy("posted"); const sMatched = sBy("matched");
 
   const { data: docs } = isFounder
     ? await createServiceClient().from("zoho_vault_docs").select("id, title, note, created_at").order("created_at", { ascending: false })
@@ -175,6 +190,81 @@ export default async function ZohoHubPage(props: {
                     <span>{r.status === "posted" ? "✅" : "🤝"} #{r.order_no}</span>
                     <span style={{ flex: 1, minWidth: 160 }}>{r.payload.customer} · {formatINR(r.payload.amountInr)}</span>
                     <span className="muted">{r.zoho_invoice_number ?? r.payload.invoiceNo}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+
+      {/* ── Razorpay settlements → Zoho ─────────────────────────────── */}
+      {hubConnected && (
+        <div id="settlements">
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 26 }}>
+            <h2 className="admin-section-title" style={{ margin: 0 }}>🏦 Razorpay settlements → Zoho</h2>
+            <form action={scanSettlementsAction} style={{ margin: 0 }}>
+              <SubmitButton className="btn small secondary" savedLabel="Scanned">🔄 Fetch settlements</SubmitButton>
+            </form>
+            {sDrafts.length > 0 && (
+              <form action={approveAllSettlementsAction} style={{ margin: 0 }}>
+                <SubmitButton className="btn small" savedLabel="✓ Posted">✅ Approve &amp; post all {sDrafts.length}</SubmitButton>
+              </form>
+            )}
+            <span className="muted" style={{ fontSize: ".8rem" }}>✅ posted {sPosted.length} · 🤝 matched {sMatched.length}</span>
+          </div>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 10px" }}>
+            Fetched straight from Razorpay (from 1 April 2026). Each settlement posts one journal — net to Axis
+            Current, fee + GST to Payment Gateway Charges (AI), gross out of Razorpay Clearing — reference = the bank
+            UTR. A settlement the office already booked (same UTR on a journal) is recognised and left alone.
+            Approve against the Razorpay dashboard figures the first few times.
+          </p>
+
+          {sDrafts.length === 0 && sFailed.length === 0 && (
+            <div className="card"><p className="muted" style={{ margin: 0 }}>No settlements waiting. 🔄 Fetch pulls the latest from Razorpay.</p></div>
+          )}
+
+          {[...sFailed, ...sDrafts].map((r) => (
+            <div className="card" key={r.id} style={{ marginTop: 8, borderLeft: `4px solid ${r.status === "failed" ? "#b91c1c" : "var(--accent)"}` }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <strong>{r.settled_on}</strong>
+                <span style={{ flex: 1, minWidth: 240, fontSize: ".88rem" }}>
+                  net <strong>{formatINR(Number(r.net_inr))}</strong> to Axis · fee+GST {formatINR(Number(r.fees_inr) + Number(r.tax_inr))} · gross {formatINR(Number(r.gross_inr))}
+                  <span className="muted"> · UTR {r.utr || "—"} · {r.settlement_id}</span>
+                </span>
+                {r.status === "draft" ? (
+                  <span style={{ display: "inline-flex", gap: 6 }}>
+                    <form action={approveSettlementAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <SubmitButton className="btn small" savedLabel="✓ Posted">✅ Approve &amp; post</SubmitButton>
+                    </form>
+                    <form action={skipSettlementAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">Skip</SubmitButton>
+                    </form>
+                  </span>
+                ) : (
+                  <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ fontSize: ".78rem", color: "#b91c1c" }}>{r.error}</span>
+                    <form action={retrySettlementAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">↻ Retry</SubmitButton>
+                    </form>
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {(sPosted.length > 0 || sMatched.length > 0) && (
+            <details style={{ marginTop: 10 }}>
+              <summary className="btn small secondary as-btn">📗 Done ({sPosted.length + sMatched.length})</summary>
+              <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
+                {[...sPosted, ...sMatched].map((r) => (
+                  <div key={r.id} style={{ display: "flex", gap: 10, fontSize: ".82rem", padding: "4px 10px", background: "var(--bg-soft)", borderRadius: 6, flexWrap: "wrap" }}>
+                    <span>{r.status === "posted" ? "✅" : "🤝"} {r.settled_on}</span>
+                    <span style={{ flex: 1, minWidth: 160 }}>net {formatINR(Number(r.net_inr))} · gross {formatINR(Number(r.gross_inr))}</span>
+                    <span className="muted">UTR {r.utr || "—"}</span>
                   </div>
                 ))}
               </div>

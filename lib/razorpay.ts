@@ -147,3 +147,33 @@ export async function fetchRazorpayOrderPayments(orderId: string): Promise<Razor
   const j = (await res.json()) as { items?: RazorpayPayment[] };
   return j.items ?? [];
 }
+
+// ---- Settlements (for the Zoho accounting hub) ------------------------------
+// A settlement = one bank credit: gross collections minus Razorpay's fee and
+// the GST on that fee. `amount` is the NET paise credited; fees and tax are
+// reported separately.
+export type RazorpaySettlement = {
+  id: string;          // setl_…
+  amount: number;      // paise, net credited to the bank
+  fees: number;        // paise
+  tax: number;         // paise (GST on the fee)
+  status: string;      // processed | created | failed
+  utr: string;
+  created_at: number;  // unix seconds
+};
+
+export async function fetchRazorpaySettlements(fromUnix: number, toUnix: number): Promise<RazorpaySettlement[]> {
+  const out: RazorpaySettlement[] = [];
+  for (let skip = 0; skip < 2000; skip += 100) {
+    const res = await fetch(
+      `https://api.razorpay.com/v1/settlements?from=${fromUnix}&to=${toUnix}&count=100&skip=${skip}`,
+      { headers: { Authorization: await authHeader() }, cache: "no-store" },
+    );
+    if (!res.ok) throw new Error(`Razorpay settlements failed: ${res.status}`);
+    const j = (await res.json()) as { items?: RazorpaySettlement[] };
+    const items = j.items ?? [];
+    out.push(...items);
+    if (items.length < 100) break;
+  }
+  return out;
+}

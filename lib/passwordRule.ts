@@ -17,11 +17,14 @@
 // So the rule is stated in one place, checked before we ask the server, and
 // reported one missing piece at a time in words a person can act on.
 
-export const PASSWORD_MIN = 8;
+export const PASSWORD_MIN = 6;
 
-/** What is actually required, for showing on the form before they type. */
+/** What is actually required, for showing on the form before they type.
+ * The founder's rule (22 Aug): keep it simple — 6 characters with a capital, a
+ * number and a special character. We do NOT judge whether a password is "common"
+ * or "strong"; if it meets these four things, it is accepted. */
 export const PASSWORD_RULE =
-  "At least 8 characters, with a capital letter, a small letter, a number and a symbol (like ! or @).";
+  "At least 6 characters, with one CAPITAL letter, one number and one special character (like ! or @).";
 
 /**
  * What is missing from this password, or null when it will be accepted.
@@ -33,7 +36,7 @@ export function passwordProblem(pw: string): string | null {
   const p = pw ?? "";
   if (p.length < PASSWORD_MIN) return `Use at least ${PASSWORD_MIN} characters — yours has ${p.length}.`;
   if (p.length > 72) return "That is too long — please keep it under 72 characters.";
-  if (!/[a-z]/.test(p)) return "Add a small letter (a–z).";
+  // No lowercase requirement — the founder's rule is capital + number + special.
   if (!/[A-Z]/.test(p)) return "Add a CAPITAL letter (A–Z).";
   if (!/[0-9]/.test(p)) return "Add a number (0–9).";
   if (!/[^A-Za-z0-9]/.test(p)) return "Add a symbol, such as ! @ # or $.";

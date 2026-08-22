@@ -111,18 +111,14 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
     .eq("student_visible", true)
     .or(`subject_id.eq.${subject.id},topic_id.in.(${topicIds.join(",") || "00000000-0000-0000-0000-000000000000"})`);
   const kinds = new Map<string, number>();
-  const materialsByKind = new Map<string, string[]>();
   for (const r of repoRows ?? []) {
     if (r.kind === "transcript") continue;
-    // Do NOT advertise ICAI-branded copyright material by name on the PUBLIC
-    // course page. A logged-in student still sees it inside their topic (that
-    // page is a different query); it just isn't listed to a visitor who has not
-    // signed in. (Team request, 22 Aug.)
-    if (/icai/i.test(String(r.title ?? ""))) continue;
+    // COUNT the materials by category, but do NOT collect their individual
+    // titles: the public explore page shows "what's included" as a category +
+    // count only. The per-file names are topic-specific (e.g. each IND AS's
+    // notes) and belong inside the topic for a logged-in student, not listed on
+    // the shop window. (Founder, 22 Aug.)
     kinds.set(r.kind as string, (kinds.get(r.kind as string) ?? 0) + 1);
-    const arr = materialsByKind.get(r.kind as string) ?? [];
-    arr.push((r.title as string) || (r.kind as string).toUpperCase());
-    materialsByKind.set(r.kind as string, arr);
   }
   // Same category tiles (order + icon + label) the student dashboard shows.
   const RES_ORDER: { kind: string; icon: string; label: string }[] = [
@@ -253,28 +249,21 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
           </p>
           <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
             {RES_ORDER.map((cat) => {
-              const titles = materialsByKind.get(cat.kind) ?? [];
-              if (titles.length === 0) return null;
+              const count = kinds.get(cat.kind) ?? 0;
+              if (count === 0) return null;
+              // A category + count only — a link into the login, but NOT a list
+              // of the individual topic-specific file names.
               return (
-                <details key={cat.kind} className="res-tile" style={{ border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", overflow: "hidden" }}>
-                  <summary style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", fontWeight: 700 }}>
-                    <span style={{ fontSize: "1.4rem", lineHeight: 1 }}>{cat.icon}</span>
-                    <span style={{ flex: 1, fontSize: ".9rem" }}>{cat.label}</span>
-                    <span style={{ background: "var(--accent)", color: "#fff", borderRadius: 999, padding: "1px 10px", fontSize: ".8rem" }}>{titles.length}</span>
-                  </summary>
-                  <div style={{ display: "grid", gap: 6, padding: "0 12px 12px" }}>
-                    {titles.map((t, i) => (
-                      <a
-                        key={i}
-                        href={`/login?next=${loginNext}`}
-                        style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", background: "var(--card)", borderRadius: 8, padding: "8px 12px", color: "var(--text)" }}
-                      >
-                        <span style={{ fontSize: ".88rem" }}><strong>{t}</strong></span>
-                        <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap", fontSize: ".82rem" }}>🔒 Login →</span>
-                      </a>
-                    ))}
-                  </div>
-                </details>
+                <a
+                  key={cat.kind}
+                  href={`/login?next=${loginNext}`}
+                  className="res-tile"
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", fontWeight: 700, border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", color: "var(--text)", textDecoration: "none" }}
+                >
+                  <span style={{ fontSize: "1.4rem", lineHeight: 1 }}>{cat.icon}</span>
+                  <span style={{ flex: 1, fontSize: ".9rem" }}>{cat.label}</span>
+                  <span style={{ background: "var(--accent)", color: "#fff", borderRadius: 999, padding: "1px 10px", fontSize: ".8rem" }}>{count}</span>
+                </a>
               );
             })}
           </div>

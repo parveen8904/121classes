@@ -122,6 +122,11 @@ export default async function AdminOrdersPage(
   const supabase = createClient();
   const svc = createServiceClient();
 
+  // A search should find an order however old it is, not just within the recent
+  // screenful. So when there is a search term we scan far more history; the
+  // normal, unsearched view stays capped for speed.
+  const rowCap = q ? 20000 : 500;
+
   const [{ data }, { data: payData }, { data: giftData }] = await Promise.all([
     (() => {
       let qy = supabase
@@ -129,7 +134,7 @@ export default async function AdminOrdersPage(
         .select("id, amount_inr, status, created_at, guest_contact, ship_to, items, invoice_no, invoice_url, zoho_status, order_no, tracking_code");
       if (fromIso) qy = qy.gte("created_at", fromIso);
       if (toIso) qy = qy.lte("created_at", toIso);
-      return qy.order("created_at", { ascending: false }).limit(500);
+      return qy.order("created_at", { ascending: false }).limit(rowCap);
     })(),
     // ALL website payments (subscriptions / extensions / gifts) — OUR sales register.
     (() => {
@@ -138,7 +143,7 @@ export default async function AdminOrdersPage(
         .select("id, kind, amount_inr, status, created_at, razorpay_order_id, invoice_no, invoice_url, zoho_status, subject_id, order_no, subjects:subject_id(title, courses(title)), profiles:student_id(id, full_name, email, phone, address_line1, address_line2, city, state, pincode)");
       if (fromIso) qy = qy.gte("created_at", fromIso);
       if (toIso) qy = qy.lte("created_at", toIso);
-      return qy.order("created_at", { ascending: false }).limit(500);
+      return qy.order("created_at", { ascending: false }).limit(rowCap);
     })(),
     // SUPPORTER ORDERS. A supporter selling from their own desk writes to
     // gift_orders, which this page never read — so an order placed through the
@@ -150,7 +155,7 @@ export default async function AdminOrdersPage(
         .select("id, amount_inr, discount_inr, coupon_code, status, created_at, razorpay_order_id, invoice_no, invoice_url, order_no, months, tier, subject_id, recipient_name, recipient_email, recipient_phone, billing_name, subjects:subject_id(title, courses(title)), gifter:gifter_id(full_name, email, business_name, designation, is_supporter)");
       if (fromIso) qy = qy.gte("created_at", fromIso);
       if (toIso) qy = qy.lte("created_at", toIso);
-      return qy.order("created_at", { ascending: false }).limit(500);
+      return qy.order("created_at", { ascending: false }).limit(rowCap);
     })(),
   ]);
 
@@ -281,7 +286,18 @@ export default async function AdminOrdersPage(
     months: g.months,
   }));
 
-  const match = (parts: (string | null | undefined)[]) => !q || parts.some((p) => (p ?? "").toLowerCase().includes(q));
+  // Plain text match, plus a digits-only pass so a phone/order/invoice typed
+  // without its "+91", spaces or dashes still matches what is stored with them.
+  const qDigits = q.replace(/\D/g, "");
+  const match = (parts: (string | null | undefined)[]) => {
+    if (!q) return true;
+    return parts.some((p) => {
+      const s = (p ?? "").toLowerCase();
+      if (s.includes(q)) return true;
+      if (qDigits.length >= 4 && s.replace(/\D/g, "").includes(qDigits)) return true;
+      return false;
+    });
+  };
   const orders = ((data ?? []) as unknown as (OrderRow & { invoice_no?: string | null; invoice_url?: string | null })[])
     .filter((o) => matchesState("book_orders", chosen, o.status))
     .filter((o) => match([o.guest_contact?.name, o.guest_contact?.email, o.guest_contact?.phone, o.ship_to?.name, o.ship_to?.phone, o.invoice_no, o.order_no != null ? String(o.order_no) : null, o.tracking_code]));

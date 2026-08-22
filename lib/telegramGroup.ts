@@ -124,14 +124,16 @@ export async function botGroupStatus(chatIds: string[]): Promise<Record<string, 
   if (!token) { for (const c of chatIds) out[c] = blank("bot token not set"); return out; }
   let botId: number | null = null;
   try {
-    const me = await fetch(`https://api.telegram.org/bot${token}/getMe`, { cache: "no-store" }).then((r) => r.json());
+    const me = await fetch(`https://api.telegram.org/bot${token}/getMe`, { cache: "no-store", signal: AbortSignal.timeout(3000) }).then((r) => r.json());
     botId = me?.result?.id ?? null;
   } catch { /* handled below */ }
   if (!botId) { for (const c of chatIds) out[c] = blank("could not reach Telegram"); return out; }
-  for (const chat of chatIds) {
+  // All groups checked IN PARALLEL with a short timeout — a sequential loop with
+  // a 6s timeout each made the moderation page hang for many seconds.
+  await Promise.all(chatIds.map(async (chat) => {
     try {
-      const m = await fetch(`https://api.telegram.org/bot${token}/getChatMember?chat_id=${encodeURIComponent(chat)}&user_id=${botId}`, { cache: "no-store", signal: AbortSignal.timeout(6000) }).then((r) => r.json());
-      if (!m?.ok) { out[chat] = blank(m?.description || "not in group"); continue; }
+      const m = await fetch(`https://api.telegram.org/bot${token}/getChatMember?chat_id=${encodeURIComponent(chat)}&user_id=${botId}`, { cache: "no-store", signal: AbortSignal.timeout(3000) }).then((r) => r.json());
+      if (!m?.ok) { out[chat] = blank(m?.description || "not in group"); return; }
       const st = m.result?.status as string;
       const present = st !== "left" && st !== "kicked";
       const admin = st === "administrator" || st === "creator";
@@ -143,7 +145,7 @@ export async function botGroupStatus(chatIds: string[]): Promise<Record<string, 
         note: !present ? "bot is NOT in this group" : !admin ? "bot is in the group but NOT an admin" : "",
       };
     } catch { out[chat] = blank("check failed"); }
-  }
+  }));
   return out;
 }
 

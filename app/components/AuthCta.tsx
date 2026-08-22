@@ -1,16 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
+// useLayoutEffect on the client, useEffect on the server (it would warn during
+// SSR). Lets us correct the button BEFORE the browser paints, so a signed-in
+// visitor never sees a "Log in" flash.
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+// Is the Supabase auth cookie present? A synchronous, instant read of
+// document.cookie — unlike getSession(), which is async and is what caused the
+// visible "Log in" flash on the cached landing page (worst in the app webview).
+// Matches sb-<project-ref>-auth-token, including the chunked .0/.1 variants.
+function hasAuthCookie(): boolean {
+  if (typeof document === "undefined") return false;
+  return /(?:^|;\s*)sb-[^=;]*-auth-token(?:\.\d+)?=/.test(document.cookie);
+}
+
 // Tracks whether the visitor is signed in — starts from the server-rendered
-// value, then keeps itself correct on the client. Crucially it re-checks on the
+// value, then corrects itself on the client. It seeds from the auth cookie
+// synchronously (before paint) so the button reads "My dashboard" instantly for
+// a signed-in person, then confirms with getSession. It re-checks on the
 // `pageshow` event, which fires when the browser restores a page from the
-// back/forward cache — so pressing Back to the landing page reflects the real
-// (still-signed-in) state instead of a stale "Log in".
+// back/forward cache — so pressing Back to the landing page (or the app
+// reopening a stored page) reflects the real state, not a stale "Log in".
 export function useSignedIn(initial: boolean): boolean {
   const [signedIn, setSignedIn] = useState(initial);
+
+  useIsoLayoutEffect(() => {
+    if (hasAuthCookie()) setSignedIn(true);
+  }, []);
+
   useEffect(() => {
     const supabase = createClient();
     let active = true;
@@ -20,7 +41,10 @@ export function useSignedIn(initial: boolean): boolean {
     };
     check();
     const { data: sub } = supabase.auth.onAuthStateChange(() => check());
-    const onShow = () => check();
+    const onShow = () => {
+      if (hasAuthCookie()) setSignedIn(true);
+      check();
+    };
     window.addEventListener("pageshow", onShow);
     return () => {
       active = false;

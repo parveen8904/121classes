@@ -2783,3 +2783,23 @@ export async function draftGrowthIdeas(): Promise<
       outline: String(r.outline ?? "").slice(0, 600),
     }));
 }
+
+// ---- Bank statement PDF → structured lines (accounting hub) -----------------
+// CSV/Excel statements are parsed by CODE (free); only a PDF's extracted text
+// comes here, on the fast model. The engine never guesses categories — this is
+// pure transcription of the tabular lines.
+export type BankStmtLine = { date: string; narration: string; ref?: string; debit?: number; credit?: number; balance?: number };
+export async function parseBankStatementText(text: string): Promise<BankStmtLine[] | null> {
+  const out = await callClaude(
+    "You transcribe Indian bank/credit-card statement text into JSON. Return ONLY a JSON array; each element " +
+    '{"date":"YYYY-MM-DD","narration":"string","ref":"string optional","debit":number optional,"credit":number optional,"balance":number optional}. ' +
+    "Rules: every transaction row exactly once, in statement order; dates converted to YYYY-MM-DD; amounts as plain numbers " +
+    "(no commas/₹); debit = money OUT, credit = money IN; narration verbatim; skip headers, footers, totals and opening-balance rows.",
+    text.slice(0, 180_000),
+    16_000,
+    { model: await fastModel(), feature: "bankstmt" },
+  );
+  if (!out) return null;
+  const j = parseLooseJson(out);
+  return Array.isArray(j) ? (j as BankStmtLine[]) : null;
+}

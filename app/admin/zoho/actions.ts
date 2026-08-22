@@ -121,6 +121,90 @@ export async function retrySettlementAction(formData: FormData) {
   revalidatePath("/admin/zoho");
 }
 
+// ---- Bank statements & the three queues ------------------------------------
+
+export async function uploadStatementAction(formData: FormData) {
+  await assertArea("zoho");
+  const accountName = str(formData.get("account_name"));
+  const file = formData.get("file") as File | null;
+  if (!accountName || !file || !file.size) {
+    redirect(`/admin/zoho?scan=${encodeURIComponent("Pick the account and choose a statement file.")}#bank`);
+  }
+  const safe = (file!.name || "statement").replace(/[^\w.\-]+/g, "_").slice(-80);
+  const path = `zoho-bank/${Date.now()}-${safe}`;
+  const svc = createServiceClient();
+  const buf = Buffer.from(await file!.arrayBuffer());
+  const { error } = await svc.storage.from("secure").upload(path, buf, {
+    contentType: file!.type || "application/octet-stream", upsert: false,
+  });
+  if (error) redirect(`/admin/zoho?scan=${encodeURIComponent(`Upload failed: ${error.message}`)}#bank`);
+  const { ingestStatement } = await import("@/lib/bankStatements");
+  let note: string;
+  try { note = await ingestStatement(accountName, `secure:${path}`, file!.name); }
+  catch (e) { note = `Statement failed: ${e instanceof Error ? e.message : "unknown"}`; }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bank`);
+}
+
+export async function answerLineAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  const account = str(formData.get("account"));
+  const rulePattern = str(formData.get("rule_pattern"));
+  const remember = str(formData.get("remember")) === "on";
+  if (!id || !account) return;
+  const { postBankLine, saveMerchantRule } = await import("@/lib/bankStatements");
+  if (remember && rulePattern) {
+    try { await saveMerchantRule(rulePattern, account); } catch { /* the posting still proceeds */ }
+  }
+  try { await postBankLine(id, account); } catch { /* row carries failed + error */ }
+  revalidatePath("/admin/zoho");
+}
+
+export async function approveAutoLineAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  const { data: l } = await svc.from("bank_lines").select("proposal").eq("id", id).maybeSingle();
+  const account = String((l?.proposal as { account?: string } | null)?.account ?? "").trim();
+  if (!account) return;
+  const { postBankLine } = await import("@/lib/bankStatements");
+  try { await postBankLine(id, account); } catch { /* recorded */ }
+  revalidatePath("/admin/zoho");
+}
+
+export async function approveAllAutoAction() {
+  await assertArea("zoho");
+  const svc = createServiceClient();
+  const { data: autos } = await svc.from("bank_lines").select("id, proposal").eq("status", "auto").order("line_date");
+  const { postBankLine } = await import("@/lib/bankStatements");
+  for (const a of autos ?? []) {
+    const account = String((a.proposal as { account?: string } | null)?.account ?? "").trim();
+    if (!account) continue;
+    try { await postBankLine(a.id, account); } catch { /* continue */ }
+  }
+  revalidatePath("/admin/zoho");
+}
+
+export async function skipLineAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("bank_lines")
+    .update({ status: "skipped", updated_at: new Date().toISOString() }).eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
+export async function retryLineAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("bank_lines")
+    .update({ status: "ask", error: null, updated_at: new Date().toISOString() }).eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
 export async function retryPostingAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));

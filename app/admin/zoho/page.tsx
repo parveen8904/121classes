@@ -7,7 +7,8 @@ import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction } from "./actions";
+import { listZohoAccounts } from "@/lib/bankStatements";
 import type { SalePayload } from "@/lib/zohoPosting";
 import { formatINR } from "@/lib/pricing";
 
@@ -34,7 +35,7 @@ const PHASE_PLAN: { name: string; what: string; state: "done" | "building" | "wa
   { name: "Rulebook", what: "Learned from the office's own FY26-27 entries and locked: same series, same accounts, same style — automatically.", state: "done" },
   { name: "Sales posting", what: "Every paid portal sale becomes a draft in the queue below; approving posts the CAPS invoice + payment to Zoho.", state: "done" },
   { name: "Razorpay settlements", what: "Fetched from Razorpay, one journal each: net to Axis, fee+GST to Payment Gateway Charges (AI), gross out of clearing — queue below.", state: "done" },
-  { name: "Bank statements & bills", what: "Statement uploads with continuity checks; the three queues — auto, confirm, ask-me. Months cannot close with unexplained lines.", state: "planned" },
+  { name: "Bank statements", what: "Upload per account (CSV/Excel/PDF) → matched / rule-proposed / ask-once queues, continuity checks — section below.", state: "done" },
   { name: "Petty cash (advances)", what: "Advance → invoices with purpose → accounts approval → running balance per person.", state: "planned" },
   { name: "Rent roll & GST/TDS", what: "Co-owned commercial rent (two invoices, TDS per PAN), residential rent, Rule-115 rates table.", state: "planned" },
   { name: "Cards, brokerage & tax engines", what: "Card statements, US brokerage at cost with FIFO gains, India advance-tax + US 1040-ES projections, CPA packs, all reconciliations.", state: "planned" },
@@ -92,6 +93,37 @@ export default async function ZohoHubPage(props: {
   const sBy = (s: string) => settles.filter((x) => x.status === s);
   const sDrafts = sBy("draft"); const sFailed = sBy("failed");
   const sPosted = sBy("posted"); const sMatched = sBy("matched");
+
+  // Bank statements + the three queues.
+  type StmtRow = { id: string; account_name: string; file_name: string | null; period_start: string | null; period_end: string | null; opening_balance: number | null; closing_balance: number | null; continuity_ok: boolean | null; note: string | null; status: string; lines_total: number };
+  type LineRow = { id: string; account_name: string; line_date: string; narration: string; ref: string | null; debit: number; credit: number; status: string; proposal: { account?: string } | null; matched_note: string | null; error: string | null };
+  const [{ data: stmtData }, { data: lineData }] = hubConnected
+    ? await Promise.all([
+        createServiceClient().from("bank_statements").select("id, account_name, file_name, period_start, period_end, opening_balance, closing_balance, continuity_ok, note, status, lines_total").order("created_at", { ascending: false }).limit(20),
+        createServiceClient().from("bank_lines").select("id, account_name, line_date, narration, ref, debit, credit, status, proposal, matched_note, error").in("status", ["ask", "auto", "failed"]).order("line_date").limit(200),
+      ])
+    : [{ data: [] as StmtRow[] }, { data: [] as LineRow[] }];
+  const stmts = (stmtData ?? []) as StmtRow[];
+  const bankLines = (lineData ?? []) as LineRow[];
+  const askLines = bankLines.filter((l) => l.status === "ask");
+  const autoLines = bankLines.filter((l) => l.status === "auto");
+  const failedLines = bankLines.filter((l) => l.status === "failed");
+  const { count: postedLineCount } = hubConnected
+    ? await createServiceClient().from("bank_lines").select("id", { count: "exact", head: true }).in("status", ["posted", "matched"])
+    : { count: 0 };
+
+  // Account choices: bank/credit-card accounts for the upload picker; every
+  // active account name for the ask-form datalist. Cached 10 min in the lib.
+  let zohoAccounts: { name: string; type: string }[] = [];
+  if (hubConnected) { try { zohoAccounts = await listZohoAccounts(); } catch { /* section degrades gracefully */ } }
+  const bankChoices = zohoAccounts.filter((a) => a.type === "bank" || a.type === "credit_card").map((a) => a.name);
+  const allAccountNames = zohoAccounts.map((a) => a.name);
+  // A sensible rule-pattern suggestion: the narration's most merchant-ish token.
+  const suggestPattern = (narration: string) => {
+    const cleaned = narration.replace(/^(UPI|INB|NEFT|IMPS|RTGS|POS|ATM)[\/ -]*/i, "").replace(/^(P2M|P2A|IFT|NEFT|IMPS)[\/ -]*/i, "");
+    const seg = cleaned.split("/").map((s) => s.trim()).filter((s) => s.length >= 4 && !/^\d+$/.test(s));
+    return (seg[0] ?? cleaned).slice(0, 40);
+  };
 
   const { data: docs } = isFounder
     ? await createServiceClient().from("zoho_vault_docs").select("id, title, note, created_at").order("created_at", { ascending: false })
@@ -269,6 +301,131 @@ export default async function ZohoHubPage(props: {
                 ))}
               </div>
             </details>
+          )}
+        </div>
+      )}
+
+      {/* ── Bank statements & the three queues ──────────────────────── */}
+      {hubConnected && (
+        <div id="bank">
+          <h2 className="admin-section-title" style={{ marginTop: 26 }}>🏧 Bank &amp; card statements</h2>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
+            Upload each account&apos;s statement (CSV, Excel or PDF). Every line ends in one of three places:
+            <strong> matched</strong> (already in Zoho — left alone), <strong>auto</strong> (a taught rule proposes
+            the account; one tick posts it), or <strong>ask</strong> (name the account once — the answer becomes a
+            rule and that merchant never asks again). Openings must tie to the previous closing, so a missing
+            statement cannot hide. ✅ posted/matched so far: {postedLineCount ?? 0}
+          </p>
+
+          <form action={uploadStatementAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div style={{ minWidth: 260 }}>
+              <label style={{ fontSize: ".75rem" }}>Account</label>
+              <select name="account_name" required style={{ marginBottom: 0 }}>
+                <option value="">— pick the bank / card —</option>
+                {bankChoices.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: ".75rem" }}>Statement file (CSV / Excel / PDF)</label>
+              <input type="file" name="file" required accept=".csv,.txt,.xls,.xlsx,.pdf" style={{ marginBottom: 0 }} />
+            </div>
+            <SubmitButton className="btn small" savedLabel="✓ Read">📥 Upload &amp; read</SubmitButton>
+          </form>
+
+          {stmts.length > 0 && (
+            <details style={{ marginTop: 8 }}>
+              <summary className="btn small secondary as-btn">🗂️ Statements uploaded ({stmts.length})</summary>
+              <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
+                {stmts.map((s) => (
+                  <div key={s.id} style={{ display: "flex", gap: 10, fontSize: ".82rem", padding: "5px 10px", background: "var(--bg-soft)", borderRadius: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 700, minWidth: 180 }}>{s.account_name}</span>
+                    <span>{s.period_start} → {s.period_end}</span>
+                    <span className="muted">{s.lines_total} lines</span>
+                    <span>{s.status === "failed" ? "❌ failed" : s.continuity_ok === false ? "⚠️ continuity break" : s.continuity_ok ? "🔗 continuity ✓" : "· first statement"}</span>
+                    {s.note && <span style={{ color: "#b45309", fontSize: ".78rem" }}>{s.note}</span>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {autoLines.length > 0 && (
+            <>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
+                <strong>⚡ Rule-proposed — one tick posts ({autoLines.length})</strong>
+                <form action={approveAllAutoAction} style={{ margin: 0 }}>
+                  <SubmitButton className="btn small" savedLabel="✓ Posted">✅ Approve all</SubmitButton>
+                </form>
+              </div>
+              {autoLines.map((l) => (
+                <div className="card" key={l.id} style={{ marginTop: 6, padding: "10px 14px" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: ".8rem", whiteSpace: "nowrap" }}>{l.line_date}</span>
+                    <span style={{ flex: 1, minWidth: 220, fontSize: ".84rem" }}>{l.narration}</span>
+                    <strong style={{ whiteSpace: "nowrap" }}>{l.debit > 0 ? `− ${formatINR(Number(l.debit))}` : `+ ${formatINR(Number(l.credit))}`}</strong>
+                    <span className="badge">→ {l.proposal?.account}</span>
+                    <form action={approveAutoLineAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={l.id} />
+                      <SubmitButton className="btn small" savedLabel="✓">✅ Post</SubmitButton>
+                    </form>
+                    <form action={skipLineAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={l.id} />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">Skip</SubmitButton>
+                    </form>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {askLines.length > 0 && (
+            <>
+              <strong style={{ display: "block", marginTop: 14 }}>❓ Needs an answer ({askLines.length}) — answer once, it becomes a rule</strong>
+              <datalist id="acct-names">
+                {allAccountNames.map((n) => <option key={n} value={n} />)}
+              </datalist>
+              {askLines.map((l) => (
+                <div className="card" key={l.id} style={{ marginTop: 6, padding: "10px 14px" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: ".8rem", whiteSpace: "nowrap" }}>{l.line_date}</span>
+                    <span style={{ flex: 1, minWidth: 220, fontSize: ".84rem" }}>{l.narration}</span>
+                    <strong style={{ whiteSpace: "nowrap" }}>{l.debit > 0 ? `− ${formatINR(Number(l.debit))}` : `+ ${formatINR(Number(l.credit))}`}</strong>
+                    <form action={skipLineAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={l.id} />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">Skip</SubmitButton>
+                    </form>
+                  </div>
+                  <form action={answerLineAction} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+                    <input type="hidden" name="id" value={l.id} />
+                    <input name="account" list="acct-names" required placeholder="Which account? (start typing…)" style={{ marginBottom: 0, flex: 1, minWidth: 220, fontSize: ".84rem" }} />
+                    <label className="remember" style={{ margin: 0, fontSize: ".78rem", display: "inline-flex", gap: 5, alignItems: "center" }}>
+                      <input type="checkbox" name="remember" defaultChecked /> remember rule for
+                    </label>
+                    <input name="rule_pattern" defaultValue={suggestPattern(l.narration)} style={{ marginBottom: 0, width: 170, fontSize: ".8rem" }} />
+                    <SubmitButton className="btn small" savedLabel="✓">✅ Post</SubmitButton>
+                  </form>
+                </div>
+              ))}
+            </>
+          )}
+
+          {failedLines.length > 0 && (
+            <>
+              <strong style={{ display: "block", marginTop: 14, color: "#b91c1c" }}>❌ Failed ({failedLines.length})</strong>
+              {failedLines.map((l) => (
+                <div className="card" key={l.id} style={{ marginTop: 6, padding: "10px 14px", borderLeft: "4px solid #b91c1c" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: ".8rem" }}>{l.line_date}</span>
+                    <span style={{ flex: 1, minWidth: 200, fontSize: ".84rem" }}>{l.narration}</span>
+                    <span style={{ fontSize: ".78rem", color: "#b91c1c" }}>{l.error}</span>
+                    <form action={retryLineAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={l.id} />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">↻ Back to queue</SubmitButton>
+                    </form>
+                  </div>
+                </div>
+              ))}
+            </>
           )}
         </div>
       )}

@@ -7,7 +7,7 @@ import AdminHero from "../../_components/AdminHero";
 import SectionForm from "./SectionForm";
 import TopicMetaForm, { type TopicMeta } from "./TopicMetaForm";
 import { SECTION_TYPES } from "./sectionTypes";
-import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, addTopicMaterial, deleteTopicMaterial, createTopicGroup, renameTopicGroup, deleteTopicGroup, moveTopicGroup, applyStandardSections } from "./actions";
+import { createSection, updateSection, deleteSection, toggleSectionPublish, updateTopicMeta, summarizeClassSection, addTopicMaterial, deleteTopicMaterial, updateTopicMaterial, createTopicGroup, renameTopicGroup, deleteTopicGroup, moveTopicGroup, applyStandardSections } from "./actions";
 import PdfUpload from "../../_components/PdfUpload";
 import SubmitButton from "@/app/components/SubmitButton";
 import { fmtMins } from "../../_lib/util";
@@ -45,7 +45,7 @@ export default async function TopicDetail(
   // itself is already admin-gated by the layout.
   const { data: materials } = await createServiceClient()
     .from("repository_items")
-    .select("id, title, kind, file_url, content")
+    .select("id, title, kind, file_url, content, student_visible")
     .eq("topic_id", topicId)
     .order("created_at", { ascending: false });
 
@@ -155,11 +155,46 @@ export default async function TopicDetail(
             {materials && materials.length > 0 && (
               <div style={{ display: "grid", gap: 6, marginTop: 12 }}>
                 {materials.map((mt) => (
-                  <div key={mt.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", padding: "6px 10px", background: "var(--bg-soft)", borderRadius: 8 }}>
-                    <span style={{ minWidth: 0, fontSize: ".85rem" }}>
-                      <strong>{mt.title}</strong> <span className="muted">· {mt.kind} · {(mt.content as string | null) ? `${Math.round(String(mt.content).length / 1000)}k chars read ✓` : "⚠️ no text extracted"}</span>
-                    </span>
-                    <DeleteButton action={deleteTopicMaterial} id={mt.id} parentId={topic.id} message="Remove this training material?" />
+                  <div key={mt.id} style={{ padding: "6px 10px", background: "var(--bg-soft)", borderRadius: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                      <span style={{ minWidth: 0, fontSize: ".85rem" }}>
+                        <strong>{mt.title}</strong> <span className="muted">· {mt.kind} · {(mt.content as string | null) ? `${Math.round(String(mt.content).length / 1000)}k chars read ✓` : "⚠️ no text extracted"}{(mt as { student_visible?: boolean }).student_visible === false ? " · 🔒 AI only" : ""}</span>
+                      </span>
+                      <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                        <DeleteButton action={deleteTopicMaterial} id={mt.id} parentId={topic.id} message="Remove this training material?" />
+                      </span>
+                    </div>
+                    {/* Rename / re-type / show-hide WITHOUT re-uploading (the
+                        extracted text is kept). The team asked for an edit
+                        option — only Delete existed before. */}
+                    <details style={{ marginTop: 6 }}>
+                      <summary className="btn small secondary as-btn" style={{ fontSize: ".78rem" }}>✏️ Edit / rename</summary>
+                      <form action={updateTopicMaterial} style={{ marginTop: 8, display: "grid", gap: 8 }}>
+                        <input type="hidden" name="id" value={mt.id} />
+                        <input type="hidden" name="topicId" value={topic.id} />
+                        <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr" }}>
+                          <div>
+                            <label style={{ fontSize: ".75rem" }}>Name</label>
+                            <input name="title" defaultValue={mt.title as string} style={{ marginBottom: 0 }} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: ".75rem" }}>Type</label>
+                            <select name="kind" defaultValue={mt.kind as string} style={{ marginBottom: 0 }}>
+                              <option value="question_bank">📚 Question bank</option>
+                              <option value="rtp">📄 RTP</option>
+                              <option value="mtp">📄 MTP</option>
+                              <option value="past_papers">🗂️ Past exam papers</option>
+                              <option value="book">📕 Book</option>
+                              <option value="notes">📝 Notes</option>
+                            </select>
+                          </div>
+                        </div>
+                        <label className="remember" style={{ fontSize: ".8rem" }}>
+                          <input type="checkbox" name="ai_only" defaultChecked={(mt as { student_visible?: boolean }).student_visible === false} /> 🔒 AI only — feed the AI but <strong>don&apos;t show students</strong>
+                        </label>
+                        <SubmitButton className="btn small" savedLabel="✓ Saved" closeDetails>Save changes</SubmitButton>
+                      </form>
+                    </details>
                   </div>
                 ))}
               </div>

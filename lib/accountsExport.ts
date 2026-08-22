@@ -192,6 +192,9 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
     if (r.email.toLowerCase().includes(q)) return true;
     if (r.orderNo.toLowerCase().includes(q)) return true;
     if (r.orderNo.replace(/^#/, "").toLowerCase().includes(q)) return true;
+    // Razorpay references — the accounts team reconciles by these too (pay_… / order_…).
+    if (r.razorpayPaymentId.toLowerCase().includes(q)) return true;
+    if (r.razorpayOrderId.toLowerCase().includes(q)) return true;
     if (qDigits.length >= 4 && r.phone.replace(/\D/g, "").includes(qDigits)) return true;
     return false;
   };

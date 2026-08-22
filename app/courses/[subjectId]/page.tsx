@@ -114,6 +114,11 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
   const materialsByKind = new Map<string, string[]>();
   for (const r of repoRows ?? []) {
     if (r.kind === "transcript") continue;
+    // Do NOT advertise ICAI-branded copyright material by name on the PUBLIC
+    // course page. A logged-in student still sees it inside their topic (that
+    // page is a different query); it just isn't listed to a visitor who has not
+    // signed in. (Team request, 22 Aug.)
+    if (/icai/i.test(String(r.title ?? ""))) continue;
     kinds.set(r.kind as string, (kinds.get(r.kind as string) ?? 0) + 1);
     const arr = materialsByKind.get(r.kind as string) ?? [];
     arr.push((r.title as string) || (r.kind as string).toUpperCase());

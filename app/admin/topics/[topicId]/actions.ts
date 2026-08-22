@@ -54,6 +54,25 @@ export async function deleteTopicMaterial(formData: FormData) {
   revalidatePath(`/admin/topics/${topicId}`);
 }
 
+// Rename / re-type an already-uploaded training material, and flip whether
+// students see it — WITHOUT deleting and re-uploading (which would re-extract
+// the PDF text). Only the metadata changes; the extracted content is untouched.
+export async function updateTopicMaterial(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  const topicId = str(formData.get("topicId"));
+  const title = str(formData.get("title"));
+  const kind = str(formData.get("kind")) || "other";
+  const aiOnly = str(formData.get("ai_only")) === "on";
+  if (!id) return;
+  await createServiceClient().from("repository_items").update({
+    title: title || kind,
+    kind,
+    student_visible: !aiOnly,
+  }).eq("id", id);
+  revalidatePath(`/admin/topics/${topicId}`);
+}
+
 function readConfig(formData: FormData): Record<string, string> {
   const config: Record<string, string> = {};
   for (const f of ALL_CONFIG_FIELDS) {

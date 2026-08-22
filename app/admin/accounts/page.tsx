@@ -65,12 +65,12 @@ export default async function AccountsPage(props: {
       {/* ── Filters ─────────────────────────────────────────────────────── */}
       <form className="card" style={{ marginTop: 14, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
         <div style={{ flex: 1, minWidth: 240 }}>
-          <label style={{ fontSize: ".75rem" }}>🔎 Search — order no, invoice no, email or phone</label>
+          <label style={{ fontSize: ".75rem" }}>🔎 Search — order no, invoice no, email, phone or Razorpay ID</label>
           <input
             type="search"
             name="q"
             defaultValue={sp.q ?? ""}
-            placeholder="e.g. 20014, ORD-… , name@email.com, 9810012674"
+            placeholder="e.g. 20014, name@email.com, 9810012674, pay_Nx…"
             style={{ marginBottom: 0, width: "100%" }}
           />
         </div>

@@ -160,6 +160,10 @@ export async function addSubjectMaterial(formData: FormData) {
     student_visible: kind !== "icai" && !aiOnly, // ICAI copyright → AI only
     valid_from_attempt: str(formData.get("valid_from_attempt")) || null,
     valid_to_attempt: str(formData.get("valid_to_attempt")) || null,
+    // One-line description under the tile name; highlight = the brand-colour
+    // tile at the TOP of the subject (after the community buttons).
+    description: str(formData.get("description")) || null,
+    is_highlight: str(formData.get("is_highlight")) === "on",
   });
   revalidatePath(`/admin/subjects/${subjectId}`);
   redirect(`/admin/subjects/${subjectId}?added=material#subject-content`);
@@ -299,6 +303,13 @@ export async function editSubjectMaterial(formData: FormData) {
   // its edit form has no such checkbox and it can never be a public sample.
   if (existing?.kind && existing.kind !== "icai") {
     update.public_sample = formData.get("public_sample") === "on";
+  }
+
+  // Description + highlight — only the custom form carries these fields, so
+  // only touch them there (an RTP edit must not silently clear a highlight).
+  if (existing?.kind === "custom") {
+    if (formData.get("description") !== null) update.description = str(formData.get("description")) || null;
+    update.is_highlight = formData.get("is_highlight") === "on";
   }
 
   if (Object.keys(update).length > 0) {

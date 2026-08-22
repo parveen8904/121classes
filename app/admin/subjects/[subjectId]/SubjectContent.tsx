@@ -5,7 +5,7 @@ import DeleteButton from "../../_components/DeleteButton";
 import { saveSubjectMIQ, saveSubjectWeightage, addSubjectMaterial, deleteSubjectMaterial, editSubjectMaterial } from "./actions";
 
 type Topic = { id: string; title: string; weightage_marks: number | null };
-type Material = { id: string; kind: string; title: string; file_url?: string | null; valid_from_attempt: string | null; valid_to_attempt: string | null; solution_url?: string | null; public_sample?: boolean };
+type Material = { id: string; kind: string; title: string; file_url?: string | null; valid_from_attempt: string | null; valid_to_attempt: string | null; solution_url?: string | null; public_sample?: boolean; description?: string | null; is_highlight?: boolean };
 
 // MTP / RTP / past papers become full "practice papers": question + suggested
 // answers, and students can upload their own answers for AI evaluation.
@@ -159,6 +159,8 @@ export default function SubjectContent({
                     <div><label>Name (what students see)</label><input name="title" defaultValue={m.title} /></div>
                     <div><label>For which attempt (optional)</label><AttemptPicker name="valid_from_attempt" defaultValue={m.valid_from_attempt ?? ""} allowNone /></div>
                   </div>
+                  <label>Description (one line under the name — optional)</label>
+                  <input name="description" defaultValue={m.description ?? ""} placeholder="e.g. How to study this subject — watch before you begin" />
                   <PdfUpload
                     name="file_url"
                     folder="repository"
@@ -168,6 +170,9 @@ export default function SubjectContent({
                   <label style={{ marginTop: 8 }}>🎬 Replace video link (leave blank to keep)</label>
                   <input name="video_url" placeholder="https://youtu.be/…" />
                   <label className="remember" style={{ marginTop: 8 }}>
+                    <input type="checkbox" name="is_highlight" defaultChecked={m.is_highlight} /> ⭐ Highlight — brand-colour tile at the TOP of the subject
+                  </label>
+                  <label className="remember" style={{ marginTop: 4 }}>
                     <input type="checkbox" name="public_sample" defaultChecked={m.public_sample} /> 🌐 Free sample — downloadable by verified visitors on the public try page (lead magnet)
                   </label>
                   <SubmitButton className="btn small" savedLabel="✓ Saved" style={{ marginTop: 8 }}>Save changes</SubmitButton>
@@ -183,10 +188,15 @@ export default function SubjectContent({
             <div><label>Name (what students see)</label><input name="title" placeholder="e.g. Ind AS summary charts" required /></div>
             <div><label>For which attempt (optional)</label><AttemptPicker name="valid_from_attempt" allowNone /></div>
           </div>
+          <label>Description (one line under the name — optional)</label>
+          <input name="description" placeholder="e.g. How to study this subject — watch before you begin" />
           <PdfUpload name="file_url" folder="repository" label="PDF (optional — or give a video link below)" />
           <label style={{ marginTop: 8 }}>🎬 Video link (optional — YouTube / any video URL)</label>
           <input name="video_url" placeholder="https://youtu.be/…" />
           <label className="remember" style={{ marginTop: 8 }}>
+            <input type="checkbox" name="is_highlight" /> ⭐ Highlight — show as a brand-colour tile at the TOP of the subject (after the community buttons)
+          </label>
+          <label className="remember" style={{ marginTop: 4 }}>
             <input type="checkbox" name="ai_only" /> 🔒 AI only — train the AI but don&apos;t show students
           </label>
           <SubmitButton className="btn small" savedLabel="✓ Added" style={{ marginTop: 8 }}>Add content</SubmitButton>

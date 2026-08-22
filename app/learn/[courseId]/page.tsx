@@ -144,7 +144,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
         // there, NOT in file_url. Filtering on file_url alone silently hid every
         // ICAI Suggested Answers paper from students (they had solution_url set
         // but file_url null).
-        .select("id, subject_id, kind, title, file_url, solution_url, valid_from_attempt, valid_to_attempt")
+        .select("id, subject_id, kind, title, file_url, solution_url, valid_from_attempt, valid_to_attempt, description, is_highlight")
         .in("subject_id", subjectIds)
         .is("topic_id", null)
         .eq("is_active", true)
@@ -152,8 +152,9 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
         .or("file_url.not.is.null,solution_url.not.is.null")
         .order("created_at", { ascending: false })
     : { data: [] as never[] };
-  const subjResources = new Map<string, { id: string; kind: string; title: string; file_url: string | null; solution_url: string | null; valid_from_attempt: string | null; valid_to_attempt: string | null }[]>();
-  for (const r of (subjResRows ?? []) as { id: string; subject_id: string; kind: string; title: string; file_url: string | null; solution_url: string | null; valid_from_attempt: string | null; valid_to_attempt: string | null }[]) {
+  type SubjRes = { id: string; kind: string; title: string; file_url: string | null; solution_url: string | null; valid_from_attempt: string | null; valid_to_attempt: string | null; description: string | null; is_highlight: boolean | null };
+  const subjResources = new Map<string, SubjRes[]>();
+  for (const r of (subjResRows ?? []) as (SubjRes & { subject_id: string })[]) {
     const arr = subjResources.get(r.subject_id) ?? [];
     arr.push(r); subjResources.set(r.subject_id, arr);
   }
@@ -554,6 +555,30 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                     )}
                   </div>
                 )}
+                {/* ⭐ HIGHLIGHTED CONTENT — brand-colour tile(s) right after the
+                    community buttons. Uploaded in Admin → Subject → Custom
+                    content with the Highlight box ticked: a name, a one-line
+                    description, and a video or PDF. */}
+                {(subjResources.get(s.id) ?? []).filter((r) => r.is_highlight).map((r) => {
+                  const fileRef = r.file_url || r.solution_url || "";
+                  const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(fileRef);
+                  return (
+                    <a
+                      key={r.id}
+                      href={viaProxy(fileRef)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: "flex", alignItems: "center", gap: 12, margin: "0 0 14px", padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,#0d9488,#10b981)", color: "#fff", textDecoration: "none", boxShadow: "0 10px 30px -12px rgba(13,148,136,.55)" }}
+                    >
+                      <span style={{ fontSize: "1.6rem", lineHeight: 1 }}>{isVideo ? "🎬" : "📄"}</span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: "block", fontWeight: 800, fontSize: ".98rem" }}>{r.title}</span>
+                        {r.description && <span style={{ display: "block", fontSize: ".82rem", opacity: 0.95, marginTop: 2 }}>{r.description}</span>}
+                      </span>
+                      <span style={{ fontWeight: 800, whiteSpace: "nowrap", fontSize: ".88rem" }}>{isVideo ? "Watch →" : "Open →"}</span>
+                    </a>
+                  );
+                })}
                 {(() => {
                   const subjAll = (topics ?? []).filter((t) => t.subject_id === s.id);
                   const hasRev1 = subjAll.some((t) => ((t as { important_qs_rev1?: string | null }).important_qs_rev1 ?? "").trim());
@@ -618,23 +643,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                     </div>
                   );
                 })()}
-                {(subjCaseSets.get(s.id) ?? []).length > 0 && (
-                  <div className="card" style={{ margin: "0 0 14px" }}>
-                    <strong style={{ fontSize: ".95rem" }}>
-                      🧩 Case scenarios (new exam pattern)
-                      {parentSubj && <span className="muted" style={{ fontWeight: 400, fontSize: ".8rem" }}> · shared with {parentSubj.title}</span>}
-                    </strong>
-                    <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-                      {(subjCaseSets.get(s.id) ?? []).map((cset) => (
-                        <Link key={cset.id} href={`/learn/cases/${cset.id}`} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, color: "var(--text)", border: "2px solid var(--accent)" }}>
-                          <span style={{ fontWeight: 700 }}>🧩 {cset.title}</span>
-                          <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap" }}>Practise cases →</span>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {(subjResources.get(s.id) ?? []).length > 0 && (
+                {((subjResources.get(s.id) ?? []).length > 0 || (subjCaseSets.get(s.id) ?? []).length > 0) && (
                   <div style={{ margin: "0 0 14px" }}>
                     <strong style={{ fontSize: ".95rem" }}>
                       📚 Subject resources
@@ -678,15 +687,30 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                           </details>
                         );
                       })}
-                      {/* Custom content → each item is its OWN tile, named exactly as uploaded. */}
-                      {(subjResources.get(s.id) ?? []).filter((r) => r.kind === "custom").map((r) => {
+                      {/* Case scenarios — part of Subject resources (same tile
+                          shape as every other category), one tile per set. */}
+                      {(subjCaseSets.get(s.id) ?? []).map((cset) => (
+                        <Link key={cset.id} href={`/learn/cases/${cset.id}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", fontWeight: 700, border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", color: "var(--text)", textDecoration: "none" }}>
+                          <span style={{ fontSize: "1.4rem", lineHeight: 1 }}>🧩</span>
+                          <span style={{ flex: 1, fontSize: ".9rem" }}>{cset.title}</span>
+                          <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap", fontSize: ".82rem" }}>Practise →</span>
+                        </Link>
+                      ))}
+                      {/* Custom content → each item is its OWN tile, named exactly
+                          as uploaded — same size/shape as the category tiles.
+                          Highlighted items are excluded: they already show as the
+                          brand-colour tile at the top of the subject. */}
+                      {(subjResources.get(s.id) ?? []).filter((r) => r.kind === "custom" && !r.is_highlight).map((r) => {
                         const fileRef = r.file_url || r.solution_url || "";
                         const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(fileRef);
                         return (
-                          <a key={r.id} href={viaProxy(fileRef)} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", gap: 6, border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", padding: "12px 14px", color: "var(--text)", minHeight: 84 }}>
+                          <a key={r.id} href={viaProxy(fileRef)} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", fontWeight: 700, border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", color: "var(--text)", textDecoration: "none" }}>
                             <span style={{ fontSize: "1.4rem", lineHeight: 1 }}>{isVideo ? "🎬" : "📄"}</span>
-                            <span style={{ fontSize: ".9rem", fontWeight: 700, lineHeight: 1.25 }}>{r.title}</span>
-                            <span style={{ marginTop: "auto", color: "var(--accent)", fontWeight: 700, fontSize: ".82rem" }}>{isVideo ? "Watch →" : "Open →"}</span>
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ display: "block", fontSize: ".9rem", lineHeight: 1.25 }}>{r.title}</span>
+                              {r.description && <span className="muted" style={{ display: "block", fontSize: ".78rem", fontWeight: 400, marginTop: 2 }}>{r.description}</span>}
+                            </span>
+                            <span style={{ color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap", fontSize: ".82rem" }}>{isVideo ? "Watch →" : "Open →"}</span>
                           </a>
                         );
                       })}

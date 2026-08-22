@@ -33,7 +33,7 @@ export const metadata = { title: "Zoho accounting hub — Admin" };
 // vault below renders for role=admin ALONE — the area grant does not reach it.
 
 const PHASE_PLAN: { name: string; what: string; state: "done" | "building" | "waiting" | "planned" }[] = [
-  { name: "Hub & founder's vault", what: "This page, the access grant, and the founder-only document vault.", state: "done" },
+  { name: "Hub & document vault", what: "This page, the access grant, and the indexed document vault (year → institution → files; whole desk reads, founder deletes).", state: "done" },
   { name: "Zoho connection", what: "The portal's own Self-Client key — connected to ALDINECA.", state: "done" },
   { name: "Rulebook", what: "Learned from the office's own FY26-27 entries and locked: same series, same accounts, same style — automatically.", state: "done" },
   { name: "Sales posting", what: "Every paid portal sale becomes a draft in the queue below; approving posts the CAPS invoice + payment to Zoho.", state: "done" },
@@ -197,9 +197,21 @@ export default async function ZohoHubPage(props: {
     } catch { /* worksheet hides on a hiccup */ }
   }
 
-  const { data: docs } = isFounder
-    ? await createServiceClient().from("zoho_vault_docs").select("id, title, note, created_at").order("created_at", { ascending: false })
-    : { data: [] as { id: string; title: string; note: string | null; created_at: string }[] };
+  type VaultDoc = { id: string; title: string; note: string | null; institution: string | null; doc_type: string | null; year_label: string | null; is_processed: boolean; created_at: string };
+  const { data: docsData } = await createServiceClient()
+    .from("zoho_vault_docs")
+    .select("id, title, note, institution, doc_type, year_label, is_processed, created_at")
+    .order("year_label", { ascending: false }).order("institution").order("created_at", { ascending: false });
+  const docs = (docsData ?? []) as VaultDoc[];
+  // Grouped index: year → institution → files.
+  const docGroups = new Map<string, Map<string, VaultDoc[]>>();
+  for (const d of docs) {
+    const y = d.year_label || "Unfiled";
+    const inst = d.institution || "General";
+    if (!docGroups.has(y)) docGroups.set(y, new Map());
+    const g = docGroups.get(y)!;
+    g.set(inst, [...(g.get(inst) ?? []), d]);
+  }
 
   return (
     <section className="container" style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 980 }}>
@@ -727,7 +739,7 @@ export default async function ZohoHubPage(props: {
                     <input type="hidden" name="id" value={l.id} />
                     {l.kind === "sell" ? (
                       <>
-                        <input name="cost_inr" type="number" step="0.01" min="0" required placeholder="INR cost of the lot sold" style={{ marginBottom: 0, width: 200, fontSize: ".84rem" }} />
+                        <input name="cost_usd" type="number" step="0.01" min="0" required placeholder="USD cost of the lot sold" style={{ marginBottom: 0, width: 200, fontSize: ".84rem" }} />
                         <input name="pl_account" list="acct-names" placeholder="P&L account (default: Profit on Sale of Shares-…)" style={{ marginBottom: 0, flex: 1, minWidth: 220, fontSize: ".84rem" }} />
                       </>
                     ) : (
@@ -867,56 +879,90 @@ export default async function ZohoHubPage(props: {
               </p>
             </div>
           )}
-          <h2 className="admin-section-title" style={{ marginTop: 28 }}>🔐 Founder&apos;s document vault</h2>
-          <p className="muted" style={{ fontSize: ".85rem", marginTop: 4 }}>
-            For the papers the tax engines calibrate from: latest India ITR + computation, latest US 1040, and the
-            Rule-115 rates source. <strong>Only you see this section</strong> — the Zoho area grant does not reach
-            it, and files open through a founder-checked route, never the general file proxy.
-          </p>
-
-          <form action={addVaultDoc} className="card" style={{ marginTop: 10 }}>
-            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
-              <div>
-                <label>Document name</label>
-                <input name="title" required placeholder="e.g. India ITR AY 2026-27 — computation" />
-              </div>
-              <div>
-                <label>Note (optional)</label>
-                <input name="note" placeholder="e.g. filed 28 Jul 2026" />
-              </div>
-            </div>
-            <PdfUpload name="file_url" folder="zoho-vault" label="The document (PDF)" />
-            <SubmitButton className="btn small" savedLabel="✓ Stored" style={{ marginTop: 8 }}>🔐 Store in the vault</SubmitButton>
-          </form>
-
-          {docs && docs.length > 0 && (
-            <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
-              {docs.map((d) => (
-                <div className="card" key={d.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
-                  <a href={`/api/zoho-vault?d=${d.id}`} target="_blank" rel="noopener noreferrer" className="grad" style={{ fontWeight: 700 }}>
-                    📄 {d.title}
-                  </a>
-                  {d.note && <span className="muted" style={{ fontSize: ".8rem" }}>{d.note}</span>}
-                  <span className="muted" style={{ fontSize: ".78rem", marginLeft: "auto" }}>{formatDate(d.created_at)}</span>
-                  <DeleteButton action={deleteVaultDoc} id={d.id} message="Remove this document from the vault? (The stored file itself is kept.)" />
-                </div>
-              ))}
-            </div>
-          )}
         </>
       )}
 
-      {/* ── For the accounts operator ───────────────────────────────── */}
-      {!isFounder && (
-        <div className="card" style={{ marginTop: 24 }}>
-          <strong>👋 This desk is being built for you</strong>
-          <p className="muted" style={{ fontSize: ".88rem", margin: "6px 0 0", lineHeight: 1.7 }}>
-            When it goes live you will work only here: statements come in, the system prepares the entries, you
-            approve them, and they post to Zoho Books by themselves. Until then there is nothing for you to do on
-            this page.
-          </p>
+      {/* ── The document vault — the whole zoho area (founder + Pradeep) ── */}
+      <h2 className="admin-section-title" style={{ marginTop: 28 }}>🗄️ Document vault</h2>
+      <p className="muted" style={{ fontSize: ".85rem", marginTop: 4 }}>
+        Every paper the desk works from — statements, ITRs, computations, challans — indexed by
+        <strong> year → institution</strong>, with its type and whether it is the raw file or a processed one.
+        Files open through this desk&apos;s own guarded route, never the general file proxy. Deleting is the
+        founder&apos;s alone.
+      </p>
+
+      <form action={addVaultDoc} className="card" style={{ marginTop: 10 }}>
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
+          <div>
+            <label>Document name</label>
+            <input name="title" required placeholder="e.g. IBKR statement — July 2026" style={{ marginBottom: 0 }} />
+          </div>
+          <div>
+            <label>Institution</label>
+            <input name="institution" list="inst-names" placeholder="e.g. IBKR / Axis Bank / Income Tax / IRS" style={{ marginBottom: 0 }} />
+            <datalist id="inst-names">
+              {["Axis Bank", "SBI", "Kotak", "Bank of America", "DATCU", "IBKR", "Fidelity", "Robinhood", "ThinkorSwim", "Tasty Trade", "Citi", "Amex", "Income Tax (India)", "IRS (US)", "GST", "Razorpay", "Zoho"].map((n) => <option key={n} value={n} />)}
+            </datalist>
+          </div>
+          <div>
+            <label>Type</label>
+            <select name="doc_type" style={{ marginBottom: 0 }}>
+              {["Bank statement", "Credit-card statement", "Brokerage statement", "ITR / Return", "Tax computation", "US 1040", "GST challan / return", "TDS challan", "Invoice / bill", "Agreement", "Other"].map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label>Year</label>
+            <input name="year_label" list="year-labels" placeholder="FY 2026-27 or CY 2026" style={{ marginBottom: 0 }} />
+            <datalist id="year-labels">
+              {["FY 2026-27", "FY 2025-26", "FY 2024-25", "CY 2026", "CY 2025", "CY 2024"].map((y) => <option key={y} value={y} />)}
+            </datalist>
+          </div>
+          <div>
+            <label>Raw or processed</label>
+            <select name="is_processed" style={{ marginBottom: 0 }}>
+              <option value="raw">Raw (as received)</option>
+              <option value="processed">Processed (worked / annotated)</option>
+            </select>
+          </div>
+          <div>
+            <label>Description (optional)</label>
+            <input name="note" placeholder="e.g. filed 28 Jul 2026" style={{ marginBottom: 0 }} />
+          </div>
+        </div>
+        <PdfUpload name="file_url" folder="zoho-vault" label="The document (PDF)" />
+        <SubmitButton className="btn small" savedLabel="✓ Stored" style={{ marginTop: 8 }}>🗄️ Store in the vault</SubmitButton>
+      </form>
+
+      {docGroups.size > 0 && (
+        <div style={{ marginTop: 10 }}>
+          {[...docGroups.entries()].map(([year, insts]) => (
+            <details key={year} open style={{ marginTop: 8 }}>
+              <summary style={{ cursor: "pointer", fontWeight: 800, fontSize: ".95rem" }}>📅 {year} ({[...insts.values()].reduce((s, a) => s + a.length, 0)})</summary>
+              {[...insts.entries()].map(([inst, files]) => (
+                <div key={inst} style={{ margin: "8px 0 0 14px" }}>
+                  <strong style={{ fontSize: ".85rem" }}>🏛️ {inst}</strong>
+                  <div style={{ display: "grid", gap: 4, marginTop: 4 }}>
+                    {files.map((d) => (
+                      <div key={d.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "6px 10px", background: "var(--bg-soft)", borderRadius: 8 }}>
+                        <a href={`/api/zoho-vault?d=${d.id}`} target="_blank" rel="noopener noreferrer" className="grad" style={{ fontWeight: 700, fontSize: ".85rem" }}>
+                          📄 {d.title}
+                        </a>
+                        {d.doc_type && <span className="badge" style={{ fontSize: ".7rem" }}>{d.doc_type}</span>}
+                        <span className="badge" style={{ fontSize: ".7rem", background: d.is_processed ? "#16a34a" : "var(--muted)", color: "#fff" }}>{d.is_processed ? "processed" : "raw"}</span>
+                        {d.note && <span className="muted" style={{ fontSize: ".78rem" }}>{d.note}</span>}
+                        <span className="muted" style={{ fontSize: ".74rem", marginLeft: "auto" }}>{formatDate(d.created_at)}</span>
+                        {isFounder && <DeleteButton action={deleteVaultDoc} id={d.id} message="Remove this document from the vault? (The stored file itself is kept.)" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </details>
+          ))}
         </div>
       )}
+
+
     </section>
   );
 }

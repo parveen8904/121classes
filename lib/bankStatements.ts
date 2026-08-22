@@ -377,14 +377,14 @@ export async function saveMerchantRule(pattern: string, accountName: string): Pr
 }
 
 // ---- account lists for the UI (cached — 3 Zoho calls per 10 minutes max) ----
-let acctList: { names: { name: string; type: string }[]; at: number } | null = null;
-export async function listZohoAccounts(): Promise<{ name: string; type: string }[]> {
+let acctList: { names: { name: string; type: string; currency: string }[]; at: number } | null = null;
+export async function listZohoAccounts(): Promise<{ name: string; type: string; currency: string }[]> {
   if (acctList && Date.now() - acctList.at < 10 * 60_000) return acctList.names;
-  const names: { name: string; type: string }[] = [];
+  const names: { name: string; type: string; currency: string }[] = [];
   for (let page = 1; page <= 3; page++) {
-    const r = await zohoFetch<{ chartofaccounts?: { account_name: string; account_type: string }[]; page_context?: { has_more_page?: boolean } }>(
+    const r = await zohoFetch<{ chartofaccounts?: { account_name: string; account_type: string; currency_code?: string }[]; page_context?: { has_more_page?: boolean } }>(
       "/chartofaccounts", { query: { filter_by: "AccountType.Active", per_page: "200", page: String(page) } });
-    for (const a of r.chartofaccounts ?? []) names.push({ name: a.account_name, type: a.account_type });
+    for (const a of r.chartofaccounts ?? []) names.push({ name: a.account_name, type: a.account_type, currency: a.currency_code || "INR" });
     if (!r.page_context?.has_more_page) break;
   }
   acctList = { names, at: Date.now() };

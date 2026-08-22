@@ -4,6 +4,23 @@ import { zohoAccountId, listZohoAccounts } from "@/lib/bankStatements";
 import { rule115Rate } from "@/lib/forexRates";
 import { resolveFileUrl, isSecureRef } from "@/lib/storage";
 
+// Foreign-currency journals: the broker ledgers are USD-DENOMINATED in Zoho
+// (the founder confirmed, and his team's card entries prove it), so journals
+// post IN USD with the Rule-115 rate as the exchange rate — the ledger stays
+// in dollars, the books convert.
+let currencyCache: Map<string, string> | null = null;
+async function currencyId(code: string): Promise<string | null> {
+  if (!currencyCache) {
+    const r = await zohoFetch<{ currencies?: { currency_id: string; currency_code: string }[] }>("/settings/currencies");
+    currencyCache = new Map((r.currencies ?? []).map((c) => [c.currency_code, c.currency_id]));
+  }
+  return currencyCache.get(code) ?? null;
+}
+async function accountCurrency(name: string): Promise<string> {
+  const hit = (await listZohoAccounts()).find((a) => a.name === name);
+  return hit?.currency ?? "INR";
+}
+
 // US BROKERAGE → ZOHO, at cost, every rupee via Rule 115.
 //
 // A statement uploads per brokerage account. The fast model TRANSCRIBES the
@@ -115,11 +132,22 @@ export async function ingestBrokerageStatement(accountName: string, fileUrl: str
 
     let proposal: Record<string, unknown> | null = null;
     let status = "ask";
-    if (["dividend", "interest", "fee", "tax", "buy"].includes(l.kind)) {
+    // OPTIONS (the founder's own treatment, learned from his chart): premium
+    // received on writing → "Option Premium Received" (income); premium paid —
+    // buying or buying back — → "Option Premium Paid" (expense). An EXPIRED
+    // option never appears here (no cash moves; the premium already sits in
+    // the P&L). Assignments/exercises fall through to the ask queue.
+    const looksOption = /\b(CALL|PUT)\b|\d{1,2}\/\d{1,2}\/\d{2,4}\s*[CP]\s*\d|OPTION/i.test(`${str(l.symbol)} ${str(l.description)}`);
+    if (looksOption && (l.kind === "sell" || l.kind === "buy")) {
+      proposal = l.kind === "sell"
+        ? { account: "Option Premium Received", side: "credit", option: true }
+        : { account: "Option Premium Paid", side: "debit", option: true };
+      status = "auto";
+    } else if (["dividend", "interest", "fee", "tax", "buy"].includes(l.kind)) {
       const d = await defaultAccountFor(l.kind, broker, str(l.symbol).toUpperCase(), accountName);
       if (d.account) { proposal = { account: d.account, side: d.side }; status = "auto"; }
     }
-    // sells, deposits, withdrawals, other → ask (a sell needs its cost).
+    // share sells, deposits, withdrawals, other → ask (a share sell needs its cost).
 
     await svc.from("brokerage_lines").insert({
       statement_id: stmt.id, account_name: accountName,
@@ -147,7 +175,7 @@ async function ensureScripAccount(name: string): Promise<string> {
 /** Post one approved brokerage line as an INR journal (Rule-115 converted). */
 export async function postBrokerageLine(
   lineId: string,
-  opts: { account?: string; costInr?: number; plAccount?: string } = {},
+  opts: { account?: string; costUsd?: number; plAccount?: string } = {},
 ): Promise<void> {
   const svc = createServiceClient();
   const { data: l } = await svc.from("brokerage_lines").select("*").eq("id", lineId).maybeSingle();
@@ -167,16 +195,23 @@ export async function postBrokerageLine(
       if (!r) return fail("no Rule-115 rate available for this date yet");
       rate = r.rate; rateDate = r.rateDate;
     }
-    const inr = Number((Number(l.usd_amount) * rate).toFixed(2));
+    const usd = Number(l.usd_amount);
+    const inr = Number((usd * rate).toFixed(2));
     const brokerId = await zohoAccountId(String(l.account_name));
+    // FCY: broker ledgers are USD accounts → the journal is a USD journal at
+    // the Rule-115 rate. (If ever an INR broker account appears, amounts fall
+    // back to INR with no journal currency.)
+    const acctCur = await accountCurrency(String(l.account_name));
+    const usdId = acctCur === "USD" ? await currencyId("USD") : null;
+    const amt = (v: number) => (usdId ? Number(v.toFixed(2)) : Number((v * rate!).toFixed(2)));
     const refNo = `BRK-${String(l.id).slice(0, 8)}`;
     const notes = `${String(l.kind).toUpperCase()}${l.symbol ? ` ${l.symbol}` : ""} — $${Number(l.usd_amount).toFixed(2)} @ ₹${rate} (SBI TT buy ${rateDate}, Rule 115) — ${String(l.description ?? "")}`.slice(0, 480);
 
     let lineItems: { account_id: string; debit_or_credit: "debit" | "credit"; amount: number }[] = [];
 
     if (l.kind === "sell") {
-      const cost = Number(opts.costInr) || 0;
-      if (cost <= 0) return fail("a sell needs its INR cost to remove from the scrip account");
+      const cost = Number(opts.costUsd) || 0;
+      if (cost <= 0) return fail("a sell needs its USD cost to remove from the scrip account");
       if (!l.symbol) return fail("a sell needs its symbol");
       const broker = BROKER_SHORT[String(l.account_name)] ?? String(l.account_name).split(/[ -]/)[0];
       const scrip = await ensureScripAccount(`${l.symbol}-${broker}`);
@@ -186,12 +221,12 @@ export async function postBrokerageLine(
         return names.has(plName) ? plName : "Profit on Sale of Shares";
       })());
       const scripId = await zohoAccountId(scrip);
-      const diff = Number((inr - cost).toFixed(2));
+      const diff = Number((usd - cost).toFixed(2));
       lineItems = [
-        { account_id: brokerId, debit_or_credit: "debit", amount: inr },
-        { account_id: scripId, debit_or_credit: "credit", amount: cost },
-        ...(diff > 0 ? [{ account_id: plAcct, debit_or_credit: "credit" as const, amount: diff }]
-          : diff < 0 ? [{ account_id: plAcct, debit_or_credit: "debit" as const, amount: Math.abs(diff) }] : []),
+        { account_id: brokerId, debit_or_credit: "debit", amount: amt(usd) },
+        { account_id: scripId, debit_or_credit: "credit", amount: amt(cost) },
+        ...(diff > 0 ? [{ account_id: plAcct, debit_or_credit: "credit" as const, amount: amt(diff) }]
+          : diff < 0 ? [{ account_id: plAcct, debit_or_credit: "debit" as const, amount: amt(Math.abs(diff)) }] : []),
       ];
     } else {
       const account = str(opts.account || (l.proposal as { account?: string } | null)?.account);
@@ -201,18 +236,21 @@ export async function postBrokerageLine(
       const otherId = l.kind === "buy" ? await zohoAccountId(await ensureScripAccount(account)) : await zohoAccountId(account);
       lineItems = side === "credit"
         ? [ // money INTO the brokerage: Dr broker / Cr chosen (income, transfer source)
-            { account_id: brokerId, debit_or_credit: "debit", amount: inr },
-            { account_id: otherId, debit_or_credit: "credit", amount: inr },
+            { account_id: brokerId, debit_or_credit: "debit", amount: amt(usd) },
+            { account_id: otherId, debit_or_credit: "credit", amount: amt(usd) },
           ]
         : [ // money OUT of the brokerage: Dr chosen (expense, scrip, transfer dest) / Cr broker
-            { account_id: otherId, debit_or_credit: "debit", amount: inr },
-            { account_id: brokerId, debit_or_credit: "credit", amount: inr },
+            { account_id: otherId, debit_or_credit: "debit", amount: amt(usd) },
+            { account_id: brokerId, debit_or_credit: "credit", amount: amt(usd) },
           ];
     }
 
     const j = await zohoFetch<{ journal?: { journal_id: string } }>("/journals", {
       method: "POST",
-      body: { journal_date: l.line_date, reference_number: refNo, notes, line_items: lineItems },
+      body: {
+        journal_date: l.line_date, reference_number: refNo, notes, line_items: lineItems,
+        ...(usdId ? { currency_id: usdId, exchange_rate: rate } : {}),
+      },
     });
     if (!j.journal?.journal_id) return fail("Zoho did not return the created journal");
     await svc.from("brokerage_lines").update({

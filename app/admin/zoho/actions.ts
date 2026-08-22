@@ -315,13 +315,13 @@ export async function postBrokerageLineAction(formData: FormData) {
   const id = str(formData.get("id"));
   if (!id) return;
   const account = str(formData.get("account"));
-  const costInr = Number(formData.get("cost_inr")) || 0;
+  const costUsd = Number(formData.get("cost_usd")) || 0;
   const plAccount = str(formData.get("pl_account"));
   const { postBrokerageLine } = await import("@/lib/brokerage");
   try {
     await postBrokerageLine(id, {
       ...(account ? { account } : {}),
-      ...(costInr > 0 ? { costInr } : {}),
+      ...(costUsd > 0 ? { costUsd } : {}),
       ...(plAccount ? { plAccount } : {}),
     });
   } catch { /* the row carries status=failed + the reason */ }
@@ -458,16 +458,26 @@ export async function connectZoho(formData: FormData) {
 // NOT through the general /api/file proxy, which any logged-in student can use.
 
 export async function addVaultDoc(formData: FormData) {
-  await assertArea(null);
+  // Opened to the zoho AREA on the founder's instruction (23 Aug) — Pradeep
+  // files and reads documents too. Deleting stays founder-only.
+  await assertArea("zoho");
   const title = str(formData.get("title"));
   const fileUrl = str(formData.get("file_url"));
   const note = str(formData.get("note"));
+  const institution = str(formData.get("institution"));
+  const docType = str(formData.get("doc_type"));
+  const yearLabel = str(formData.get("year_label"));
+  const isProcessed = str(formData.get("is_processed")) === "processed";
   if (!title || !fileUrl) return;
   const staff = await currentStaff();
   await createServiceClient().from("zoho_vault_docs").insert({
     title,
     file_url: fileUrl,
     note: note || null,
+    institution: institution || null,
+    doc_type: docType || null,
+    year_label: yearLabel || null,
+    is_processed: isProcessed,
     uploaded_by: staff?.id ?? null,
   });
   revalidatePath("/admin/zoho");

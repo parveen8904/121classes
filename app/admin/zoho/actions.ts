@@ -289,7 +289,9 @@ export async function retryBillAction(formData: FormData) {
 
 export async function uploadBrokerageAction(formData: FormData) {
   await assertArea("zoho");
-  const accountName = str(formData.get("account_name"));
+  // The free "any other account" box wins over the picker — retirement funds,
+  // managed accounts, anything the picker's heuristics didn't list.
+  const accountName = str(formData.get("account_name_other")) || str(formData.get("account_name"));
   const file = formData.get("file") as File | null;
   if (!accountName || !file || !file.size) {
     redirect(`/admin/zoho?scan=${encodeURIComponent("Pick the brokerage account and choose a statement file.")}#brokerage`);

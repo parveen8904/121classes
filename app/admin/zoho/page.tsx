@@ -175,7 +175,12 @@ export default async function ZohoHubPage(props: {
   const { count: bDone } = hubConnected
     ? await createServiceClient().from("brokerage_lines").select("id", { count: "exact", head: true }).eq("status", "posted")
     : { count: 0 };
-  const brokerageChoices = zohoAccounts.filter((a) => a.type === "bank" && /brokerage|thinkorswim|tasty/i.test(a.name)).map((a) => a.name);
+  // Brokerages + retirement funds + managed/investment accounts — and a free
+  // "anything else" choice below, so no account type is ever locked out.
+  const brokerageChoices = zohoAccounts.filter((a) =>
+    (a.type === "bank" && /brokerage|thinkorswim|tasty/i.test(a.name)) ||
+    ((a.type === "other_current_asset" || a.type === "other_asset") && /\bIRA\b|401|retirement|managed|invest|treasury direct/i.test(a.name)),
+  ).map((a) => a.name);
 
   // Rule 115 panel: last 5 month-end USD rates (DB-first; auto-fetch fills gaps).
   const monthEnds: { keyDate: string; rate: number | null; rateDate: string | null }[] = [];
@@ -757,9 +762,10 @@ export default async function ZohoHubPage(props: {
       {/* ── Brokerage statements ────────────────────────────────────── */}
       {hubConnected && (
         <div id="brokerage">
-          <h2 className="admin-section-title" style={{ marginTop: 26 }}>📈 US brokerage statements</h2>
+          <h2 className="admin-section-title" style={{ marginTop: 26 }}>📈 US brokerage, retirement &amp; investment statements</h2>
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
-            Upload each brokerage&apos;s statement (PDF or CSV). Every transaction is converted at its
+            Upload statements from any investment home — brokerages, <strong>retirement accounts (IRA/401k)</strong>,
+            managed funds, Treasury Direct, anything else via the free account box. Every transaction is converted at its
             <strong> Rule-115 rate</strong> (shown per line). Dividends, interest, fees and buys come pre-proposed in
             your own account style — this closes the books&apos; one gap: US dividend/interest income. A
             <strong> sell</strong> asks for its INR cost, and the gain/loss books itself.
@@ -768,11 +774,15 @@ export default async function ZohoHubPage(props: {
 
           <form action={uploadBrokerageAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div style={{ minWidth: 240 }}>
-              <label style={{ fontSize: ".75rem" }}>Brokerage account</label>
-              <select name="account_name" required style={{ marginBottom: 0 }}>
+              <label style={{ fontSize: ".75rem" }}>Brokerage / retirement / managed account</label>
+              <select name="account_name" style={{ marginBottom: 0 }}>
                 <option value="">— pick —</option>
                 {brokerageChoices.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
+            </div>
+            <div style={{ minWidth: 220 }}>
+              <label style={{ fontSize: ".75rem" }}>…or any other account</label>
+              <input name="account_name_other" list="acct-names" placeholder="type any Zoho account" style={{ marginBottom: 0 }} />
             </div>
             <div>
               <label style={{ fontSize: ".75rem" }}>Statement (PDF / CSV)</label>

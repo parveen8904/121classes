@@ -44,6 +44,9 @@ const BROKER_SHORT: Record<string, string> = {
   "Robinhood-Brokerage": "Robinhood",
   "ThinkorSwim": "ThinkorSwim",
   "Tasty Trade INC": "Tasty Trade",
+  "Traditional IRA": "IRA",
+  "Managed Fund": "Managed",
+  "Investment in US Treasury Direct": "TreasuryDirect",
 };
 
 const str = (v: unknown) => String(v ?? "").trim();

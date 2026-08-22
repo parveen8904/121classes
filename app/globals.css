@@ -336,6 +336,34 @@ input[type="radio"], input[type="checkbox"] {
 }
 .flash { animation: flashpulse 1.5s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .flash { animation: none; } }
+
+/* "What's New" attention pill at the top of the hero — a gentle glowing pulse
+   so a first-time visitor notices there is something new, and a click scrolls
+   them to the What's New section. */
+@keyframes whatsNewGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,.55), 0 6px 18px -8px rgba(180,83,9,.6); }
+  50%      { box-shadow: 0 0 0 10px rgba(245,158,11,0), 0 6px 18px -8px rgba(180,83,9,.6); }
+}
+.whats-new-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  max-width: 92vw; margin: 0 auto 6px;
+  background: linear-gradient(120deg, #b45309, #f59e0b);
+  color: #fff; font-weight: 800; font-size: .9rem;
+  padding: 9px 16px; border-radius: 999px; text-decoration: none;
+  animation: whatsNewGlow 1.8s ease-in-out infinite;
+  transition: transform .15s;
+}
+.whats-new-pill:hover { transform: translateY(-2px); }
+.whats-new-pill .wn-tag {
+  background: rgba(255,255,255,.25); border-radius: 999px;
+  padding: 1px 9px; font-size: .74rem; letter-spacing: .02em; white-space: nowrap;
+}
+.whats-new-pill .wn-title {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw;
+}
+@media (prefers-reduced-motion: reduce) { .whats-new-pill { animation: none; } }
+/* Sticky nav is ~65px tall — offset the jump so the heading isn't hidden under it. */
+#whats-new { scroll-margin-top: 84px; }
 .lp-nav-inner {
   max-width: 1140px; margin: 0 auto; padding: 14px 24px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;

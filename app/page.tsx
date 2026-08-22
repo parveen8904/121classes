@@ -290,6 +290,18 @@ export default async function Home() {
 
       {/* HERO */}
       <section className="hero">
+        {/* WHAT'S NEW attention button — top of the page, pulsing so a new
+            visitor notices there is something new; clicking scrolls them down to
+            the What's New section. Only shown when there IS a recent post. */}
+        {latestHighlight && (
+          <div style={{ textAlign: "center", marginBottom: 16 }}>
+            <a href="#whats-new" className="whats-new-pill" aria-label={`What's new: ${latestHighlight.title}`}>
+              <span className="wn-tag">🆕 NEW UPDATE</span>
+              <span className="wn-title">{latestHighlight.title}</span>
+              <span aria-hidden>↓</span>
+            </a>
+          </div>
+        )}
         <h1>
           Learn CA from <span style={{ color: "var(--accent)" }}>CA Parveen Sharma</span> — one of
           India&apos;s most renowned faculty.

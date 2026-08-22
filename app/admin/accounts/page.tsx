@@ -30,11 +30,11 @@ const td: React.CSSProperties = { padding: "6px 7px", verticalAlign: "top", font
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 
 export default async function AccountsPage(props: {
-  searchParams: Promise<{ from?: string; to?: string; state?: string; zoho?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; state?: string; zoho?: string; q?: string }>;
 }) {
   await assertArea("store");
   const sp = await props.searchParams;
-  const filter = { from: sp.from, to: sp.to, state: sp.state, zoho: sp.zoho };
+  const filter = { from: sp.from, to: sp.to, state: sp.state, zoho: sp.zoho, q: sp.q };
   const rows = await accountRows(filter);
 
   const query = new URLSearchParams();
@@ -64,6 +64,16 @@ export default async function AccountsPage(props: {
 
       {/* ── Filters ─────────────────────────────────────────────────────── */}
       <form className="card" style={{ marginTop: 14, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <label style={{ fontSize: ".75rem" }}>🔎 Search — order no, invoice no, email or phone</label>
+          <input
+            type="search"
+            name="q"
+            defaultValue={sp.q ?? ""}
+            placeholder="e.g. 20014, ORD-… , name@email.com, 9810012674"
+            style={{ marginBottom: 0, width: "100%" }}
+          />
+        </div>
         <div>
           <label style={{ fontSize: ".75rem" }}>From (IST)</label>
           <input type="date" name="from" defaultValue={sp.from ?? ""} style={{ marginBottom: 0 }} />

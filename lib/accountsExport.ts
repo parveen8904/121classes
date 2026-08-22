@@ -55,6 +55,8 @@ export type AccountsFilter = {
   state?: string;
   /** pending | approved | posted | skipped — where it stands with Zoho. */
   zoho?: string;
+  /** Free-text search: order no, invoice no, email or phone. */
+  q?: string;
 };
 
 const day = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
@@ -84,6 +86,12 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
   const from = day(f.from) ? new Date(`${day(f.from)}T00:00:00+05:30`).toISOString() : null;
   const to = day(f.to) ? new Date(`${day(f.to)}T23:59:59.999+05:30`).toISOString() : null;
 
+  // A search should find a record however old it is, not just within the recent
+  // screenful — so when searching we scan far more history. The normal view
+  // stays capped for speed.
+  const searching = !!(f.q ?? "").trim();
+  const cap = searching ? 20000 : 2000;
+
   const range = <T extends { gte: (c: string, v: string) => T; lte: (c: string, v: string) => T }>(q: T): T => {
     let out = q;
     if (from) out = out.gte("created_at", from);
@@ -94,13 +102,13 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
   const [subs, books, gifts] = await Promise.all([
     range(svc.from("orders")
       .select("id, order_no, invoice_no, invoice_url, receipt_no, amount_inr, status, created_at, razorpay_order_id, razorpay_payment_id, zoho_status, zoho_invoice_id, kind, subjects:subject_id(title), profiles:student_id(full_name, business_name, email, phone, gstin, state)")
-      .order("created_at", { ascending: false }).limit(2000) as never) as never,
+      .order("created_at", { ascending: false }).limit(cap) as never) as never,
     range(svc.from("book_orders")
       .select("id, order_no, invoice_no, invoice_url, receipt_no, amount_inr, status, created_at, razorpay_order_id, razorpay_payment_id, zoho_status, zoho_invoice_id, guest_contact, ship_to, items")
-      .order("created_at", { ascending: false }).limit(2000) as never) as never,
+      .order("created_at", { ascending: false }).limit(cap) as never) as never,
     range(svc.from("gift_orders")
       .select("id, order_no, invoice_no, invoice_url, receipt_no, amount_inr, taxable_value, cgst, sgst, igst, status, created_at, razorpay_order_id, razorpay_payment_id, billing_name, billing_gstin, billing_state, recipient_name, recipient_email, recipient_phone, months, tier, subjects:subject_id(title)")
-      .order("created_at", { ascending: false }).limit(2000) as never) as never,
+      .order("created_at", { ascending: false }).limit(cap) as never) as never,
   ]) as unknown as { data: Record<string, never>[] | null }[];
 
   const out: AccountRow[] = [];
@@ -172,8 +180,25 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
     });
   }
 
+  // Free-text search across the four handles the accounts team looks a sale up
+  // by: order number, invoice number, email and phone. Case-insensitive; the
+  // order number matches with or without its leading "#"; the phone matches on
+  // digits alone so "+91", spaces or dashes never get in the way.
+  const q = (f.q ?? "").trim().toLowerCase();
+  const qDigits = q.replace(/\D/g, "");
+  const matchesQuery = (r: AccountRow): boolean => {
+    if (!q) return true;
+    if (r.invoiceNo.toLowerCase().includes(q)) return true;
+    if (r.email.toLowerCase().includes(q)) return true;
+    if (r.orderNo.toLowerCase().includes(q)) return true;
+    if (r.orderNo.replace(/^#/, "").toLowerCase().includes(q)) return true;
+    if (qDigits.length >= 4 && r.phone.replace(/\D/g, "").includes(qDigits)) return true;
+    return false;
+  };
+
   const filtered = out.filter((r) => matchesState(r.status, f.state ?? ""))
-    .filter((r) => !f.zoho || (r.zohoStatus || "none") === f.zoho);
+    .filter((r) => !f.zoho || (r.zohoStatus || "none") === f.zoho)
+    .filter(matchesQuery);
   filtered.sort((a, b) => b.date.localeCompare(a.date));
   return filtered;
 }

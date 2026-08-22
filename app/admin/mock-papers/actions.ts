@@ -155,6 +155,23 @@ export async function unapprovePaper(formData: FormData) {
   redirect("/admin/mock-papers?pulled=1");
 }
 
+/** Set (or clear) the announced "coming on <date>" a student sees before the
+ *  paper is live. Announcement only — approving the paper is still what actually
+ *  puts it in front of a student. Blank the field to remove the notice. */
+export async function setPublishDate(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("id"));
+  const raw = str(formData.get("publish_on")).trim();
+  if (!id) return;
+  const publishOn = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+  await createServiceClient()
+    .from("mock_papers")
+    .update({ publish_on: publishOn, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  revalidatePath("/admin/mock-papers");
+  revalidatePath("/mock-tests");
+}
+
 /** Correct anything by hand — his paper, his wording. */
 export async function savePaper(formData: FormData) {
   await assertArea(null);

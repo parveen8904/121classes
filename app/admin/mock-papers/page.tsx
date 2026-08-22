@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
 import AnswerKey from "@/app/components/AnswerKey";
 import AdminHero from "../_components/AdminHero";
-import { createSet, approvePaper, unapprovePaper, savePaper, uploadPaperFiles, removeUploadedPaper, createUploadedPaper, rereadUploadedPdfs } from "./actions";
+import { createSet, approvePaper, unapprovePaper, savePaper, uploadPaperFiles, removeUploadedPaper, createUploadedPaper, rereadUploadedPdfs, setPublishDate } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mock test papers — Admin" };
@@ -14,6 +14,7 @@ type Paper = {
   questions_md: string | null; answers_md: string | null;
   status: string; error: string | null; generated_at: string | null;
   paper_pdf_url: string | null; answers_pdf_url: string | null; source: string | null;
+  publish_on: string | null;
 };
 
 const LABEL: Record<string, { text: string; colour: string }> = {
@@ -147,6 +148,20 @@ export default async function MockPapersPage(props: {
                   </form>
                 )}
               </div>
+
+              {/* Announced date — tell students when this paper will arrive.
+                  Until it is approved, students see a "coming on <date>" card
+                  instead of a bare "coming soon". Approving is still what
+                  actually publishes it. Blank the date to remove the notice. */}
+              <form action={setPublishDate} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+                <input type="hidden" name="id" value={p.id} />
+                <label style={{ fontSize: ".8rem", fontWeight: 700 }}>📅 Tell students it arrives on:</label>
+                <input type="date" name="publish_on" defaultValue={p.publish_on ?? ""} style={{ marginBottom: 0 }} />
+                <SubmitButton className="btn small secondary" savedLabel="✓ Saved">Save date</SubmitButton>
+                {p.status !== "approved" && p.publish_on && (
+                  <span className="muted" style={{ fontSize: ".78rem" }}>Shows as &ldquo;coming on {p.publish_on}&rdquo; until you approve it.</span>
+                )}
+              </form>
 
               {p.questions_md && (
                 <>

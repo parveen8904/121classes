@@ -36,6 +36,21 @@ export default async function MockTestsPage(props: {
     title: string; total_marks: number; duration_min: number; questions_md: string | null;
   }[];
 
+  // Papers not yet live but with an announced date — shown as "coming on <date>"
+  // so students know the schedule instead of a bare "coming soon". Approval is
+  // still what makes a paper actually openable; this is only the announcement.
+  const { data: upData } = await svc
+    .from("mock_papers")
+    .select("id, course, subject, attempt_label, paper_no, title, publish_on")
+    .neq("status", "approved")
+    .not("publish_on", "is", null)
+    .order("publish_on");
+  const upcoming = (upData ?? []) as {
+    id: string; course: string; subject: string; attempt_label: string; paper_no: number; title: string; publish_on: string;
+  }[];
+  const fmtDate = (d: string) =>
+    new Date(`${d}T00:00:00+05:30`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+
   const open = searchParams.paper ? papers.find((p) => p.id === searchParams.paper) : null;
 
   // Reading a paper needs an account — that is the only gate, and it exists so
@@ -61,14 +76,7 @@ export default async function MockTestsPage(props: {
           marks written on your own pages — <strong>back to you within 24 hours, guaranteed</strong>. No plan needed.
         </p>
 
-        {papers.length === 0 ? (
-          <div className="card" style={{ marginTop: 20 }}>
-            <p className="muted">
-              The September 2026 papers are being finalised and will be here shortly. In the meantime you can send in
-              any paper you have written — <Link href="/check-my-paper">get it checked free</Link>.
-            </p>
-          </div>
-        ) : open ? (
+        {open ? (
           <>
             <p className="crumb" style={{ marginTop: 20 }}><Link href="/mock-tests">← All mock papers</Link></p>
             <div className="card" style={{ marginTop: 8 }}>
@@ -120,17 +128,50 @@ export default async function MockTestsPage(props: {
             )}
           </>
         ) : (
-          <div style={{ display: "grid", gap: 12, marginTop: 20 }}>
-            {papers.map((p) => (
-              <Link key={p.id} href={`/mock-tests?paper=${p.id}`} className="card" style={{ display: "block", textDecoration: "none" }}>
-                <strong>📄 Mock Test Paper {p.paper_no} — {p.subject}</strong>
-                <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0" }}>
-                  {p.course} · {p.attempt_label} · {p.total_marks} marks · {Math.round(p.duration_min / 60)} hours
-                  {!user ? " · log in to open" : ""}
+          <>
+            {papers.length > 0 && (
+              <div style={{ display: "grid", gap: 12, marginTop: 20 }}>
+                {papers.map((p) => (
+                  <Link key={p.id} href={`/mock-tests?paper=${p.id}`} className="card" style={{ display: "block", textDecoration: "none" }}>
+                    <strong>📄 Mock Test Paper {p.paper_no} — {p.subject}</strong>
+                    <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0" }}>
+                      {p.course} · {p.attempt_label} · {p.total_marks} marks · {Math.round(p.duration_min / 60)} hours
+                      {!user ? " · log in to open" : ""}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {/* Announced-but-not-yet-live papers — a dated placeholder so a
+                student knows exactly when it opens, not a bare "coming soon". */}
+            {upcoming.length > 0 && (
+              <div style={{ display: "grid", gap: 12, marginTop: papers.length > 0 ? 14 : 20 }}>
+                {papers.length === 0 && (
+                  <p className="muted" style={{ fontSize: ".9rem", margin: 0 }}>
+                    The papers are on the way — here is when each one arrives. Each opens on its date.
+                  </p>
+                )}
+                {upcoming.map((u) => (
+                  <div key={u.id} className="card" style={{ opacity: 0.9, borderStyle: "dashed" }}>
+                    <strong>📄 Mock Test Paper {u.paper_no} — {u.subject}</strong>
+                    <p className="muted" style={{ fontSize: ".85rem", margin: "4px 0 0" }}>
+                      {u.course} · {u.attempt_label} · 🕒 <strong>coming on {fmtDate(u.publish_on)}</strong>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {papers.length === 0 && upcoming.length === 0 && (
+              <div className="card" style={{ marginTop: 20 }}>
+                <p className="muted">
+                  The September 2026 papers are being finalised and will be here shortly. In the meantime you can send in
+                  any paper you have written — <Link href="/check-my-paper">get it checked free</Link>.
                 </p>
-              </Link>
-            ))}
-          </div>
+              </div>
+            )}
+          </>
         )}
 
         <p className="muted" style={{ fontSize: ".85rem", marginTop: 26 }}>

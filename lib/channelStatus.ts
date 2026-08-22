@@ -65,7 +65,7 @@ export async function channelStatus(): Promise<Record<string, ChannelStatus>> {
     to_substack: { state: "manual", note: NO_API },
     to_medium: { state: "manual", note: NO_API },
     to_quora: { state: "manual", note: NO_API },
-    to_google: { state: "manual", note: "Google's posting API needs their approval — until then, by hand." },
+    to_google: { state: "manual", note: "Profile verified ✓ — post the drafted update by hand from your Business Profile → Posts. Automatic posting still needs Google's API approval." },
   };
 }
 

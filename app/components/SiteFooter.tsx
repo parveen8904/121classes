@@ -72,6 +72,21 @@ export default async function SiteFooter() {
           <p className="muted" style={{ marginTop: 4, fontSize: ".82rem" }}>
             📧 <a className="grad" href="mailto:contact@caparveensharma.com">contact@caparveensharma.com</a>
           </p>
+          {/* Google Business Profile review link (the g.page short-link from the
+              verified "CA Parveen Sharma Studio" listing, 133 reviews). Opens the
+              write-a-review box on Google — helps students leave a review and
+              lifts the listing in local Search/Maps. */}
+          <p style={{ marginTop: 12 }}>
+            <a
+              className="btn small"
+              href="https://g.page/r/CaBc4Bqt83Y7EBM/review"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ whiteSpace: "nowrap" }}
+            >
+              ⭐ Review us on Google
+            </a>
+          </p>
           {/* Social media */}
           {hasSocials && (
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14, alignItems: "center" }}>

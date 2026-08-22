@@ -19,8 +19,9 @@ export const metadata = { title: "Zoho accounting hub — Admin" };
 // — posting rulebook, three queues (auto / confirm / ask-me), statement
 // ingestion with continuity checks, petty-cash imprest, rent roll, Rule-115
 // rates, dual India/US tax engines — was agreed with the founder on 22 Aug.
-// Cutover: 1 September 2026. September runs in draft mode (nothing posts
-// without a tick).
+// Cutover: 1 APRIL 2026 (founder, 22 Aug — books locked before that date, so
+// the system owns the whole FY 2026-27; Apr-Aug backfills via the recon queues
+// with match-don't-duplicate). Everything runs as drafts until approved.
 //
 // Access: the "zoho" grant (founder-given; Pradeep at launch). The document
 // vault below renders for role=admin ALONE — the area grant does not reach it.
@@ -62,7 +63,7 @@ export default async function ZohoHubPage(props: {
       <AdminHero
         badge="🧮 Zoho — accounting hub"
         title="The books desk"
-        subtitle="Everything is entered HERE and pushed to Zoho Books — statements, sales, advances, rent. Nobody types in Zoho. Cutover: 1 September 2026; September runs in draft mode, so nothing posts without a tick."
+        subtitle="Everything is entered HERE and pushed to Zoho Books — statements, sales, advances, rent. Nobody types in Zoho. The system owns FY 2026-27 from 1 April 2026 (books locked before that); April–August is backfilled with a strict match-don't-duplicate rule, and everything runs as drafts until approved."
         back={{ href: "/admin", label: "Admin" }}
       />
 

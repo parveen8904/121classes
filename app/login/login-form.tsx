@@ -103,7 +103,16 @@ export default function LoginForm() {
       );
     }
     import("@/app/components/Tracker").then(({ track }) => track("login_success", "/login")).catch(() => {});
-    await claimDevice();
+    // Claim this device (single-session cookie) — but NEVER let it hold the user
+    // on "Please wait…". It does a server-side getUser(), and when that auth call
+    // was momentarily slow the await never resolved, so the button stuck even
+    // though the login had already succeeded (a refresh then worked). Bounded
+    // here: whichever finishes first — the claim or a short timer — we navigate.
+    // Device tracking is best-effort and self-heals on the next successful claim.
+    await Promise.race([
+      claimDevice().catch(() => {}),
+      new Promise((r) => setTimeout(r, 3500)),
+    ]);
     // Full-page navigation so the freshly-set auth cookies are applied before
     // the next page loads. (router.push raced the cookie write and bounced the
     // user back to the login screen.) Keep `loading` true so the button stays

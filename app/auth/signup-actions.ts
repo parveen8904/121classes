@@ -115,12 +115,19 @@ export async function signupComplete(formData: FormData): Promise<CompleteResult
   const phoneE164 = toE164(mobile);
   // Stamp the profile: name, the proven phone, and phone_verified_at. The
   // handle_new_user trigger creates the row; this fills the rest.
+  //
+  // has_password: true — CRUCIAL. The account is created WITH the password the
+  // student just chose, so it must be recorded as having one. Without this the
+  // middleware's "first-timers must set a password" gate (has_password === false
+  // by default) bounced every brand-new signup to /auth/set-password right after
+  // they had set it — the "asked to set the password twice" bug.
   await svc.from("profiles").update({
     full_name: name || null,
     phone: mobile,
     phone_e164: phoneE164,
     phone_verified_at: new Date().toISOString(),
     email_verified_at: null,
+    has_password: true,
   }).eq("id", userId);
 
   // Send the email-verification link (best-effort — it must not block the

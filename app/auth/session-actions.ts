@@ -68,3 +68,59 @@ export async function trustThisDevice(): Promise<void> {
 export async function clearPasswordResetGate(): Promise<void> {
   (await cookies()).delete("pw_reset");
 }
+
+const AUTH_TIMEOUT = Symbol("timeout");
+function withTimeout<T>(p: PromiseLike<T>, ms: number): Promise<T | typeof AUTH_TIMEOUT> {
+  return Promise.race([
+    Promise.resolve(p),
+    new Promise<typeof AUTH_TIMEOUT>((res) => setTimeout(() => res(AUTH_TIMEOUT), ms)),
+  ]);
+}
+
+// EVERYTHING THAT FINISHES A PASSWORD SET/RESET, IN ONE ROUND-TRIP.
+//
+// The set-password screen used to await three separate server actions in a row
+// — markHasPassword, claimDevice, clearPasswordResetGate — and each one
+// validated the session over the network with getUser(). Three chances for a
+// slow auth call to hang; when one did, the client's await never resolved and
+// the button sat on "Saving…" for ever, even though the password had already
+// been changed (a refresh then worked). Folded into one action with a single
+// getUser and a hard timeout, so the caller always gets a clear ok/failed back
+// instead of an unresolved promise.
+//
+//   1. has_password = true — so the middleware never asks for a password again;
+//   2. claim this device (single-session cookie) — best-effort;
+//   3. clear the recovery gate cookie — best-effort.
+//
+// The password itself is what matters, so once has_password is written we report
+// success even if the device claim hiccups.
+export async function finishPasswordSetup(): Promise<{ ok: boolean }> {
+  const supabase = createClient();
+  const res = await withTimeout(supabase.auth.getUser(), 6000);
+  if (res === AUTH_TIMEOUT) return { ok: false };
+  const user = res.data?.user;
+  if (!user) return { ok: false };
+
+  try {
+    await supabase.from("profiles").update({ has_password: true }).eq("id", user.id);
+  } catch {
+    return { ok: false };
+  }
+
+  // Device claim + gate clearing are best-effort — never block a set password.
+  try {
+    const ua = (await headers()).get("user-agent") || "";
+    const kind = deviceKind(ua);
+    const token = randomUUID() + randomUUID();
+    await supabase.from("device_sessions").upsert(
+      { user_id: user.id, device_kind: kind, token, user_agent: ua.slice(0, 300), updated_at: new Date().toISOString() },
+      { onConflict: "user_id,device_kind" },
+    );
+    (await cookies()).set("dsid", token, {
+      httpOnly: true, sameSite: "lax", secure: true, maxAge: 60 * 60 * 24 * 365, path: "/",
+    });
+  } catch { /* device tracking is not worth failing a password set for */ }
+  try { (await cookies()).delete("pw_reset"); } catch { /* nothing to clear */ }
+
+  return { ok: true };
+}

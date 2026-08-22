@@ -47,6 +47,12 @@ export const ADMIN_AREAS: AdminArea[] = [
   // statements, or the close-asset act. Meant to be narrowed once the initial
   // entry is done — the founder revokes this one grant and it is gone.
   { key: "assets_editor", label: "✏️ Assets — editor (enter & edit everything; no returns/statements)", prefixes: ["/admin/assets"] },
+  // The Zoho accounting hub (phase 1 started 22 Aug 2026): the founder's
+  // portal-only books desk — statements, posting queues, petty cash, rent roll,
+  // the push to Zoho Books. Founder-granted exactly like assets; at launch only
+  // Pradeep holds it. The founder-only document vault inside renders for
+  // role=admin alone — that rule lives in the pages.
+  { key: "zoho", label: "🧮 Zoho — accounting hub (books desk: statements, queues, push to Zoho)", prefixes: ["/admin/zoho"] },
 ];
 
 // Everything NOT covered above (integrations, telegram, users, enrolment, plans,

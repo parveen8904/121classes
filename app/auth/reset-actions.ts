@@ -11,9 +11,9 @@ import { sendPhoneOtp, verifyPhoneOtp, toE164, phoneVerifyLive } from "@/lib/pho
 // so they are locked out. But their MOBILE is proven. So they can reset through
 // it: a WhatsApp OTP to the number on file, then a new password. No email needed.
 //
-// Only numbers that were actually verified (phone_verified_at set) can be used,
-// and only someone holding that phone can read the code — the same security as
-// signing up.
+// Works for ANY account (student or staff) with the mobile on file — verified or
+// not, because completing the code (which only reaches the real phone) is itself
+// the proof. A number shared by more than one account is declined.
 
 export type ResetSend = { ok: true; hint: string } | { ok: false; error: string };
 
@@ -31,7 +31,7 @@ export async function resetSendOtp(formData: FormData): Promise<ResetSend> {
   // (which only reaches the real phone) is itself the proof, so a grandfathered
   // student who never verified their number can still recover this way.
   const { data: rows } = await svc
-    .from("profiles").select("id").eq("phone_e164", e164).eq("role", "student");
+    .from("profiles").select("id").eq("phone_e164", e164);
   const list = rows ?? [];
   if (list.length > 1) {
     // A shared number can't be disambiguated safely — send them to email.
@@ -73,7 +73,7 @@ export async function resetVerifyAndSet(formData: FormData): Promise<ResetDone> 
 
   const svc = createServiceClient();
   const { data: rows } = await svc
-    .from("profiles").select("id, email").eq("phone_e164", e164).eq("role", "student");
+    .from("profiles").select("id, email").eq("phone_e164", e164);
   const list = rows ?? [];
   if (list.length !== 1 || !list[0].email) {
     return {

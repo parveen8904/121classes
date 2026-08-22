@@ -988,7 +988,7 @@ export default async function ZohoHubPage(props: {
       )}
 
       {/* ── The document vault — the whole zoho area (founder + Pradeep) ── */}
-      <h2 className="admin-section-title" style={{ marginTop: 28 }}>🗄️ Document vault</h2>
+      <h2 className="admin-section-title" style={{ marginTop: 28 }} id="vault">🗄️ Document vault</h2>
       <p className="muted" style={{ fontSize: ".85rem", marginTop: 4 }}>
         Every paper the desk works from — statements, ITRs, computations, challans — indexed by
         <strong> year → institution</strong>, with its type and whether it is the raw file or a processed one.

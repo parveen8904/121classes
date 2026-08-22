@@ -62,6 +62,35 @@ export async function backlogItems(uptoISO: string): Promise<{ items: BacklogIte
     svc.from("petty_bills").select("id", { count: "exact", head: true }).in("status", ["pending", "failed"]).lte("bill_date", upto),
   ]);
   const [sales, settle, bank, brok, petty] = counts.map((c) => c.count ?? 0);
+
+  // SCHEDULED COMPLIANCE PULLS — 26AS + AIS/TIS, quarterly (agreed 23 Aug).
+  // A window's task appears once its date arrives and clears only when a vault
+  // document of that type, uploaded on/after the window opened, exists.
+  // Windows follow the TDS-filing calendar: Q1 credits land after 31 Jul (pull
+  // from 10 Aug), Q2 after 31 Oct (15 Nov), Q3 after 31 Jan (15 Feb), and the
+  // AUTHORITATIVE pull after Q4 TDS + 31-May SFT filings (15 Jun).
+  const fyStartYear = Number(upto.slice(0, 4)) - (Number(upto.slice(5, 7)) < 4 ? 1 : 0);
+  const fyLabel = `FY ${fyStartYear}-${String((fyStartYear + 1) % 100).padStart(2, "0")}`;
+  const pullWindows = [
+    { start: `${fyStartYear}-08-10`, label: `Q1 pull (${fyLabel})` },
+    { start: `${fyStartYear}-11-15`, label: `Q2 pull (${fyLabel})` },
+    { start: `${fyStartYear + 1}-02-15`, label: `Q3 pull (${fyLabel})` },
+    { start: `${fyStartYear + 1}-06-15`, label: `FINAL pre-ITR pull (${fyLabel})` },
+  ].filter((w) => w.start <= upto);
+  if (pullWindows.length) {
+    const { data: taxDocs } = await svc.from("zoho_vault_docs")
+      .select("doc_type, created_at").in("doc_type", ["26AS", "AIS / TIS"]);
+    const doneAfter = (type: string, start: string) =>
+      (taxDocs ?? []).some((d) => d.doc_type === type && String(d.created_at).slice(0, 10) >= start);
+    for (const w of pullWindows) {
+      if (!doneAfter("26AS", w.start)) {
+        items.push({ part: "Tax forms", task: `26AS — ${w.label}: download from the e-filing portal and file in the vault`, anchor: "#vault" });
+      }
+      if (!doneAfter("AIS / TIS", w.start)) {
+        items.push({ part: "Tax forms", task: `AIS + TIS — ${w.label}: download and file in the vault`, anchor: "#vault" });
+      }
+    }
+  }
   if (sales) items.push({ part: "Sales → Zoho", task: "sales waiting for approval / attention", count: sales, anchor: "#queue" });
   if (settle) items.push({ part: "Settlements", task: "settlements to approve", count: settle, anchor: "#settlements" });
   if (bank) items.push({ part: "Bank lines", task: "statement lines to answer / approve", count: bank, anchor: "#bank" });

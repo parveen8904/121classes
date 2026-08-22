@@ -205,6 +205,86 @@ export async function retryLineAction(formData: FormData) {
   revalidatePath("/admin/zoho");
 }
 
+// ---- Petty cash (managed inside the zoho area) ------------------------------
+
+export async function addPettyPersonAction(formData: FormData) {
+  await assertArea("zoho");
+  const name = str(formData.get("name"));
+  const email = str(formData.get("email")).toLowerCase();
+  let zohoAccount = str(formData.get("zoho_account_name"));
+  if (!name) return;
+  const svc = createServiceClient();
+  // A fresh person gets a fresh "(AI)" advance account unless an existing
+  // account (Arun / Madan / Pradeep / Shripal…) is named.
+  if (!zohoAccount) {
+    const { ensureAdvanceAccount } = await import("@/lib/pettyCash");
+    try { zohoAccount = await ensureAdvanceAccount(name); }
+    catch { redirect(`/admin/zoho?scan=${encodeURIComponent("Could not create the advance account in Zoho.")}#petty`); }
+  }
+  let profileId: string | null = null;
+  if (email) {
+    const { data: prof } = await svc.from("profiles").select("id").eq("email", email).maybeSingle();
+    profileId = prof?.id ?? null;
+  }
+  await svc.from("petty_people").insert({ name, zoho_account_name: zohoAccount, profile_id: profileId });
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(
+    `${name} added (account: ${zohoAccount}).${email && !profileId ? " ⚠️ No portal login found for that email — they can't upload bills until it matches." : ""}${profileId ? " Remember to grant them the 👛 Petty cash area in Admin → Users." : ""}`)}#petty`);
+}
+
+export async function recordAdvanceAction(formData: FormData) {
+  await assertArea("zoho");
+  const personId = str(formData.get("person_id"));
+  const amount = Number(formData.get("amount"));
+  const advDate = str(formData.get("adv_date"));
+  const bank = str(formData.get("bank_account_name"));
+  if (!personId || !amount || amount <= 0 || !advDate || !bank) return;
+  const staff = await currentStaff();
+  const svc = createServiceClient();
+  const { data: row } = await svc.from("petty_advances").insert({
+    person_id: personId, adv_date: advDate, amount, bank_account_name: bank,
+    status: "failed", created_by: staff?.id ?? null,
+  }).select("id").single();
+  if (!row) return;
+  const { postAdvance } = await import("@/lib/pettyCash");
+  try { await postAdvance(row.id); } catch { /* row carries failed + error */ }
+  revalidatePath("/admin/zoho");
+}
+
+export async function approveBillAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  const expenseAccount = str(formData.get("expense_account"));
+  if (!id || !expenseAccount) return;
+  const staff = await currentStaff();
+  await createServiceClient().from("petty_bills").update({ decided_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", id);
+  const { postBill } = await import("@/lib/pettyCash");
+  try { await postBill(id, expenseAccount); } catch { /* row carries failed + error */ }
+  revalidatePath("/admin/zoho");
+  revalidatePath("/admin/petty");
+}
+
+export async function rejectBillAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  const note = str(formData.get("note"));
+  if (!id) return;
+  const staff = await currentStaff();
+  await createServiceClient().from("petty_bills").update({
+    status: "rejected", note: note || "Rejected", decided_by: staff?.id ?? null, updated_at: new Date().toISOString(),
+  }).eq("id", id);
+  revalidatePath("/admin/zoho");
+  revalidatePath("/admin/petty");
+}
+
+export async function retryBillAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("petty_bills").update({ status: "pending", error: null, updated_at: new Date().toISOString() }).eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
 export async function retryPostingAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));

@@ -53,6 +53,10 @@ export const ADMIN_AREAS: AdminArea[] = [
   // Pradeep holds it. The founder-only document vault inside renders for
   // role=admin alone — that rule lives in the pages.
   { key: "zoho", label: "🧮 Zoho — accounting hub (books desk: statements, queues, push to Zoho)", prefixes: ["/admin/zoho"] },
+  // Petty-cash RECIPIENTS: a team member who receives advances sees only their
+  // own ledger — balance, bill upload, history. Managing people/advances and
+  // approving bills stays inside the zoho area.
+  { key: "petty", label: "👛 Petty cash — my advances (see balance, upload bills)", prefixes: ["/admin/petty"] },
 ];
 
 // Everything NOT covered above (integrations, telegram, users, enrolment, plans,

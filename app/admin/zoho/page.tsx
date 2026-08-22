@@ -7,8 +7,9 @@ import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
+import { pettyBalances } from "@/lib/pettyCash";
 import type { SalePayload } from "@/lib/zohoPosting";
 import { formatINR } from "@/lib/pricing";
 
@@ -36,7 +37,7 @@ const PHASE_PLAN: { name: string; what: string; state: "done" | "building" | "wa
   { name: "Sales posting", what: "Every paid portal sale becomes a draft in the queue below; approving posts the CAPS invoice + payment to Zoho.", state: "done" },
   { name: "Razorpay settlements", what: "Fetched from Razorpay, one journal each: net to Axis, fee+GST to Payment Gateway Charges (AI), gross out of clearing — queue below.", state: "done" },
   { name: "Bank statements", what: "Upload per account (CSV/Excel/PDF) → matched / rule-proposed / ask-once queues, continuity checks — section below.", state: "done" },
-  { name: "Petty cash (advances)", what: "Advance → invoices with purpose → accounts approval → running balance per person.", state: "planned" },
+  { name: "Petty cash (advances)", what: "Record advances, per-person balances, bill uploads on /admin/petty, approve → posts to Zoho — section below.", state: "done" },
   { name: "Rent roll & GST/TDS", what: "Co-owned commercial rent (two invoices, TDS per PAN), residential rent, Rule-115 rates table.", state: "planned" },
   { name: "Cards, brokerage & tax engines", what: "Card statements, US brokerage at cost with FIFO gains, India advance-tax + US 1040-ES projections, CPA packs, all reconciliations.", state: "planned" },
 ];
@@ -124,6 +125,22 @@ export default async function ZohoHubPage(props: {
     const seg = cleaned.split("/").map((s) => s.trim()).filter((s) => s.length >= 4 && !/^\d+$/.test(s));
     return (seg[0] ?? cleaned).slice(0, 40);
   };
+
+  // Petty cash: balances + pending bills + failed advances.
+  type BillRow = { id: string; bill_date: string; amount: number; purpose: string; status: string; file_url: string | null; error: string | null; person: { name: string } | null };
+  const pBalances = hubConnected ? await pettyBalances().catch(() => []) : [];
+  const { data: pendingBillData } = hubConnected
+    ? await createServiceClient().from("petty_bills")
+        .select("id, bill_date, amount, purpose, status, file_url, error, person:person_id(name)")
+        .in("status", ["pending", "failed"]).order("created_at")
+    : { data: [] as never[] };
+  const pendingBills = (pendingBillData ?? []) as unknown as BillRow[];
+  const { data: failedAdvData } = hubConnected
+    ? await createServiceClient().from("petty_advances")
+        .select("id, adv_date, amount, error, person:person_id(name)").eq("status", "failed")
+    : { data: [] as never[] };
+  const failedAdvs = (failedAdvData ?? []) as unknown as { id: string; adv_date: string; amount: number; error: string | null; person: { name: string } | null }[];
+  const advanceAccountChoices = zohoAccounts.filter((a) => a.type === "other_current_asset").map((a) => a.name);
 
   const { data: docs } = isFounder
     ? await createServiceClient().from("zoho_vault_docs").select("id, title, note, created_at").order("created_at", { ascending: false })
@@ -305,6 +322,12 @@ export default async function ZohoHubPage(props: {
         </div>
       )}
 
+      {hubConnected && (
+        <datalist id="acct-names">
+          {allAccountNames.map((n) => <option key={n} value={n} />)}
+        </datalist>
+      )}
+
       {/* ── Bank statements & the three queues ──────────────────────── */}
       {hubConnected && (
         <div id="bank">
@@ -381,9 +404,6 @@ export default async function ZohoHubPage(props: {
           {askLines.length > 0 && (
             <>
               <strong style={{ display: "block", marginTop: 14 }}>❓ Needs an answer ({askLines.length}) — answer once, it becomes a rule</strong>
-              <datalist id="acct-names">
-                {allAccountNames.map((n) => <option key={n} value={n} />)}
-              </datalist>
               {askLines.map((l) => (
                 <div className="card" key={l.id} style={{ marginTop: 6, padding: "10px 14px" }}>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -423,6 +443,116 @@ export default async function ZohoHubPage(props: {
                       <SubmitButton className="btn small secondary" savedLabel="✓">↻ Back to queue</SubmitButton>
                     </form>
                   </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Petty cash (imprest) ────────────────────────────────────── */}
+      {hubConnected && (
+        <div id="petty">
+          <h2 className="admin-section-title" style={{ marginTop: 26 }}>👛 Petty cash — advances</h2>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
+            Record an advance <em>after</em> it is paid (it posts to the person&apos;s own Zoho advance account at
+            once). The person uploads bills on their <strong>/admin/petty</strong> page; approving a bill books the
+            expense and reduces their balance. Give a recipient the <strong>👛 Petty cash</strong> area in
+            Admin → Users so they can log their bills.
+          </p>
+
+          {pBalances.length > 0 && (
+            <div style={{ display: "grid", gap: 6 }}>
+              {pBalances.map((p) => (
+                <div className="card" key={p.personId} style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
+                  <strong style={{ minWidth: 130 }}>{p.name}</strong>
+                  <span className="muted" style={{ fontSize: ".78rem", flex: 1, minWidth: 160 }}>{p.zohoAccount}{!p.profileId && " · ⚠️ no portal login linked"}</span>
+                  <span style={{ fontSize: ".82rem" }}>advanced {formatINR(p.advanced)}</span>
+                  <span style={{ fontSize: ".82rem" }}>spent {formatINR(p.spent)}</span>
+                  <strong>👛 {formatINR(p.balance)}</strong>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", marginTop: 10 }}>
+            <form action={recordAdvanceAction} className="card">
+              <strong style={{ fontSize: ".9rem" }}>💸 Record an advance (already paid)</strong>
+              <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr", marginTop: 8 }}>
+                <div>
+                  <label style={{ fontSize: ".75rem" }}>Person</label>
+                  <select name="person_id" required style={{ marginBottom: 0 }}>
+                    <option value="">— pick —</option>
+                    {pBalances.map((p) => <option key={p.personId} value={p.personId}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div><label style={{ fontSize: ".75rem" }}>Amount (₹)</label><input name="amount" type="number" step="0.01" min="1" required style={{ marginBottom: 0 }} /></div>
+                <div><label style={{ fontSize: ".75rem" }}>Date paid</label><input name="adv_date" type="date" required style={{ marginBottom: 0 }} /></div>
+                <div>
+                  <label style={{ fontSize: ".75rem" }}>Paid from</label>
+                  <select name="bank_account_name" required style={{ marginBottom: 0 }}>
+                    {bankChoices.map((n) => <option key={n} value={n}>{n}</option>)}
+                    <option value="Cash In Hand">Cash In Hand</option>
+                    <option value="Petty Cash">Petty Cash</option>
+                  </select>
+                </div>
+              </div>
+              <SubmitButton className="btn small" savedLabel="✓ Posted" style={{ marginTop: 8 }}>💸 Record &amp; post</SubmitButton>
+            </form>
+
+            <form action={addPettyPersonAction} className="card">
+              <strong style={{ fontSize: ".9rem" }}>➕ Add a person</strong>
+              <label style={{ fontSize: ".75rem", marginTop: 8 }}>Name</label>
+              <input name="name" required placeholder="e.g. Shripal" />
+              <label style={{ fontSize: ".75rem" }}>Their portal login email (so they can upload bills)</label>
+              <input name="email" type="email" placeholder="person@example.com" />
+              <label style={{ fontSize: ".75rem" }}>Zoho advance account (blank = create &ldquo;Name — Advance (AI)&rdquo;)</label>
+              <input name="zoho_account_name" list="adv-accts" placeholder="e.g. Pradeep (existing account)" />
+              <datalist id="adv-accts">
+                {advanceAccountChoices.map((n) => <option key={n} value={n} />)}
+              </datalist>
+              <SubmitButton className="btn small" savedLabel="✓ Added" style={{ marginTop: 8 }}>➕ Add</SubmitButton>
+            </form>
+          </div>
+
+          {failedAdvs.length > 0 && failedAdvs.map((a) => (
+            <div className="card" key={a.id} style={{ marginTop: 8, borderLeft: "4px solid #b91c1c", padding: "10px 14px" }}>
+              <span style={{ fontSize: ".84rem" }}>❌ Advance {formatINR(Number(a.amount))} to {a.person?.name} ({a.adv_date}) failed: <span style={{ color: "#b91c1c" }}>{a.error}</span> — record it again once fixed.</span>
+            </div>
+          ))}
+
+          {pendingBills.length > 0 && (
+            <>
+              <strong style={{ display: "block", marginTop: 14 }}>🧾 Bills waiting for approval ({pendingBills.length})</strong>
+              {pendingBills.map((b) => (
+                <div className="card" key={b.id} style={{ marginTop: 6, padding: "10px 14px", borderLeft: b.status === "failed" ? "4px solid #b91c1c" : undefined }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <strong style={{ minWidth: 110 }}>{b.person?.name}</strong>
+                    <span style={{ fontSize: ".82rem" }}>{b.bill_date}</span>
+                    <strong>{formatINR(Number(b.amount))}</strong>
+                    <span style={{ flex: 1, minWidth: 180, fontSize: ".84rem" }}>{b.purpose}</span>
+                    {b.file_url && <a className="grad" href={`/api/file?u=${encodeURIComponent(b.file_url)}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: ".8rem", fontWeight: 700 }}>📎 bill</a>}
+                    {b.status === "failed" && <span style={{ fontSize: ".78rem", color: "#b91c1c" }}>{b.error}</span>}
+                  </div>
+                  {b.status === "pending" ? (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+                      <form action={approveBillAction} style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, minWidth: 260, margin: 0 }}>
+                        <input type="hidden" name="id" value={b.id} />
+                        <input name="expense_account" list="acct-names" required placeholder="Expense account (start typing…)" style={{ marginBottom: 0, flex: 1, fontSize: ".84rem" }} />
+                        <SubmitButton className="btn small" savedLabel="✓">✅ Approve &amp; post</SubmitButton>
+                      </form>
+                      <form action={rejectBillAction} style={{ display: "flex", gap: 6, alignItems: "center", margin: 0 }}>
+                        <input type="hidden" name="id" value={b.id} />
+                        <input name="note" placeholder="reason (optional)" style={{ marginBottom: 0, width: 150, fontSize: ".8rem" }} />
+                        <SubmitButton className="btn small secondary" savedLabel="✓">❌ Reject</SubmitButton>
+                      </form>
+                    </div>
+                  ) : (
+                    <form action={retryBillAction} style={{ marginTop: 8 }}>
+                      <input type="hidden" name="id" value={b.id} />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">↻ Back to pending</SubmitButton>
+                    </form>
+                  )}
                 </div>
               ))}
             </>

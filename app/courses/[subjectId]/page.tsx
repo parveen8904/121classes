@@ -251,8 +251,8 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
             {RES_ORDER.map((cat) => {
               const count = kinds.get(cat.kind) ?? 0;
               if (count === 0) return null;
-              // A category + count only — a link into the login, but NOT a list
-              // of the individual topic-specific file names.
+              // Just the category tile — no count number, and no list of the
+              // individual (topic-specific) file names. It links into the login.
               return (
                 <a
                   key={cat.kind}
@@ -262,7 +262,7 @@ export default async function PublicSubjectPage(props: { params: Promise<{ subje
                 >
                   <span style={{ fontSize: "1.4rem", lineHeight: 1 }}>{cat.icon}</span>
                   <span style={{ flex: 1, fontSize: ".9rem" }}>{cat.label}</span>
-                  <span style={{ background: "var(--accent)", color: "#fff", borderRadius: 999, padding: "1px 10px", fontSize: ".8rem" }}>{count}</span>
+                  <span style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".82rem", whiteSpace: "nowrap" }}>🔒 Login →</span>
                 </a>
               );
             })}

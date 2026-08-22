@@ -97,8 +97,10 @@ export async function issueOrderInvoice(opts: {
       invoiceNo, date: now, s, gst,
       buyerName: name || "Student", buyerGstin: gstin, buyerAddress: address,
       buyerState: state || s.state, itemDescription: opts.description,
-      // Printed books ship as goods (HSN 4901); coaching services use the SAC.
-      itemHsn: table === "book_orders" ? "4901" : undefined,
+      // Books are NOT a separate item — a book sale is a sale like any other,
+      // carrying the SAME SAC as the classes (founder's ruling, 22 Aug 2026).
+      // itemHsn left undefined so the invoice uses the standard coaching SAC.
+      itemHsn: undefined,
       // The PAYMENT, when the caller has it. Falling back to the order
       // reference is a last resort and says nothing about money having moved —
       // it is what used to be printed every time.
@@ -319,7 +321,7 @@ export async function reissueBookOrderInvoice(orderId: string, notify = true): P
     buyerAddress: address,
     buyerState: state,
     itemDescription: description,
-    itemHsn: "4901",   // printed books are goods, not the coaching SAC
+    itemHsn: undefined,   // books carry the SAME SAC as classes (founder, 22 Aug)
     paymentRef: (ord as { razorpay_payment_id?: string | null }).razorpay_payment_id
       ?? (ord as { razorpay_order_id?: string | null }).razorpay_order_id ?? null,
     paymentMode: "Online Payment [Razorpay]",

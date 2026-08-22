@@ -44,7 +44,7 @@ export type AccountRow = {
   zohoInvoiceId: string;
   /** The Zoho ledger this sale is booked to — different for books and classes. */
   account: string;
-  /** Services carry the coaching SAC; printed books are goods with their own HSN. */
+  /** Everything carries the coaching SAC — books included (founder, 22 Aug). */
   hsn: string;
 };
 
@@ -151,9 +151,11 @@ export async function accountRows(f: AccountsFilter): Promise<AccountRow[]> {
       status: str(r.status),
       razorpayOrderId: str(r.razorpay_order_id), razorpayPaymentId: str(r.razorpay_payment_id),
       zohoStatus: str(r.zoho_status), zohoInvoiceId: str(r.zoho_invoice_id),
-      // Books are GOODS, not a service — a different ledger and a different
-      // HSN, and booking them to the coaching account would misstate both.
-      account: "Sales-Books", hsn: "4901",
+      // Books are NOT a separate revenue line (founder's ruling, 22 Aug 2026):
+      // a book sale is a sale like any other — same account as class sales and
+      // the SAME SAC. The one historical book invoice with the goods-HSN is
+      // likewise exported as a proper sale under this SAC.
+      account: "Sales-Classes", hsn: "999293",
     });
   }
 

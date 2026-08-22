@@ -10,6 +10,7 @@ import DeleteButton from "../_components/DeleteButton";
 import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
+import { rule115Rate } from "@/lib/forexRates";
 import type { SalePayload } from "@/lib/zohoPosting";
 import { formatINR } from "@/lib/pricing";
 
@@ -38,7 +39,8 @@ const PHASE_PLAN: { name: string; what: string; state: "done" | "building" | "wa
   { name: "Razorpay settlements", what: "Fetched from Razorpay, one journal each: net to Axis, fee+GST to Payment Gateway Charges (AI), gross out of clearing — queue below.", state: "done" },
   { name: "Bank statements", what: "Upload per account (CSV/Excel/PDF) → matched / rule-proposed / ask-once queues, continuity checks — section below.", state: "done" },
   { name: "Petty cash (advances)", what: "Record advances, per-person balances, bill uploads on /admin/petty, approve → posts to Zoho — section below.", state: "done" },
-  { name: "Rent roll & GST/TDS", what: "Co-owned commercial rent (two invoices, TDS per PAN), residential rent, Rule-115 rates table.", state: "planned" },
+  { name: "Rule-115 rates", what: "SBI TT buying rates auto-fetched from officialforexrates.com (the founder's sole authority), stored with provenance, holiday walk-back — card below.", state: "done" },
+  { name: "Rent roll & GST/TDS", what: "Co-owned commercial rent (two invoices, TDS per PAN), residential rent.", state: "planned" },
   { name: "Cards, brokerage & tax engines", what: "Card statements, US brokerage at cost with FIFO gains, India advance-tax + US 1040-ES projections, CPA packs, all reconciliations.", state: "planned" },
 ];
 
@@ -141,6 +143,17 @@ export default async function ZohoHubPage(props: {
     : { data: [] as never[] };
   const failedAdvs = (failedAdvData ?? []) as unknown as { id: string; adv_date: string; amount: number; error: string | null; person: { name: string } | null }[];
   const advanceAccountChoices = zohoAccounts.filter((a) => a.type === "other_current_asset").map((a) => a.name);
+
+  // Rule 115: the USD rate applicable to income arising THIS month (= SBI TT
+  // buy on the last day of the previous month), auto-fetched from the founder's
+  // designated source and stored with provenance.
+  let r115: { rate: number; rateDate: string; keyDate: string } | null = null;
+  if (hubConnected) {
+    try {
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+      r115 = await rule115Rate(today, "USD");
+    } catch { /* card simply hides on a source hiccup */ }
+  }
 
   const { data: docs } = isFounder
     ? await createServiceClient().from("zoho_vault_docs").select("id, title, note, created_at").order("created_at", { ascending: false })
@@ -447,6 +460,17 @@ export default async function ZohoHubPage(props: {
               ))}
             </>
           )}
+        </div>
+      )}
+
+      {/* ── Rule 115 rate card ──────────────────────────────────────── */}
+      {r115 && (
+        <div className="card" style={{ marginTop: 18, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <strong>💱 Rule 115 — USD rate for income arising this month:</strong>
+          <span style={{ fontSize: "1.1rem", fontWeight: 800 }}>₹{r115.rate.toFixed(2)}</span>
+          <span className="muted" style={{ fontSize: ".8rem" }}>
+            SBI TT buying rate of {r115.rateDate}{r115.rateDate !== r115.keyDate ? ` (nearest published day before ${r115.keyDate})` : ""} · source: officialforexrates.com — every conversion stores its rate, date and rule.
+          </span>
         </div>
       )}
 

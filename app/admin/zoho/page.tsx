@@ -7,7 +7,9 @@ import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction } from "./actions";
+import type { SalePayload } from "@/lib/zohoPosting";
+import { formatINR } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Zoho accounting hub — Admin" };
@@ -26,11 +28,12 @@ export const metadata = { title: "Zoho accounting hub — Admin" };
 // Access: the "zoho" grant (founder-given; Pradeep at launch). The document
 // vault below renders for role=admin ALONE — the area grant does not reach it.
 
-const PHASE_PLAN: { name: string; what: string; state: "building" | "waiting" | "planned" }[] = [
-  { name: "Hub & founder's vault", what: "This page, the access grant, and the founder-only document vault.", state: "building" },
-  { name: "Zoho connection", what: "The one-time Self-Client key (made together with the founder, on screen) so the portal can write to Zoho Books.", state: "waiting" },
-  { name: "Rationalisation & rulebook", what: "Clean-up proposal for account & customer names, and the posting rulebook — every journal written out for one-time approval.", state: "waiting" },
-  { name: "Sales & Razorpay posting", what: "Portal sales and reconciled Razorpay settlements posting into the clean chart. September runs as drafts.", state: "planned" },
+const PHASE_PLAN: { name: string; what: string; state: "done" | "building" | "waiting" | "planned" }[] = [
+  { name: "Hub & founder's vault", what: "This page, the access grant, and the founder-only document vault.", state: "done" },
+  { name: "Zoho connection", what: "The portal's own Self-Client key — connected to ALDINECA.", state: "done" },
+  { name: "Rulebook", what: "Learned from the office's own FY26-27 entries and locked: same series, same accounts, same style — automatically.", state: "done" },
+  { name: "Sales posting", what: "Every paid portal sale becomes a draft in the queue below; approving posts the CAPS invoice + payment to Zoho.", state: "done" },
+  { name: "Razorpay settlements", what: "Settlement lands in the bank → net to Axis, fees to Payment Gateway Charges (AI), clearing squared — automatically.", state: "planned" },
   { name: "Bank statements & bills", what: "Statement uploads with continuity checks; the three queues — auto, confirm, ask-me. Months cannot close with unexplained lines.", state: "planned" },
   { name: "Petty cash (advances)", what: "Advance → invoices with purpose → accounts approval → running balance per person.", state: "planned" },
   { name: "Rent roll & GST/TDS", what: "Co-owned commercial rent (two invoices, TDS per PAN), residential rent, Rule-115 rates table.", state: "planned" },
@@ -38,21 +41,42 @@ const PHASE_PLAN: { name: string; what: string; state: "building" | "waiting" | 
 ];
 
 const STATE_BADGE: Record<string, { text: string; colour: string }> = {
+  done: { text: "✅ live", colour: "#16a34a" },
   building: { text: "🔨 being built", colour: "#b45309" },
   waiting: { text: "⏳ needs the founder", colour: "#2563eb" },
   planned: { text: "🗓️ planned", colour: "var(--muted)" },
 };
 
+type PostingRow = {
+  id: string; source_table: string; order_no: number | null; status: string;
+  payload: SalePayload; zoho_invoice_number: string | null; error: string | null; posted_at: string | null;
+};
+
 export default async function ZohoHubPage(props: {
-  searchParams: Promise<{ zoho_ok?: string; zoho_err?: string }>;
+  searchParams: Promise<{ zoho_ok?: string; zoho_err?: string; scan?: string }>;
 }) {
   await assertArea("zoho");
   const sp = await props.searchParams;
   const staff = await currentStaff();
   const isFounder = staff?.role === "admin";
 
-  const connected = isFounder ? await zohoConfigured() : false;
+  const hubConnected = await zohoConfigured();
+  const connected = isFounder ? hubConnected : false;
   const orgId = connected ? await getSecret("ZOHO_ORG_ID") : "";
+
+  // The sales → Zoho queue (whole zoho area works this, not just the founder).
+  const { data: postingRows } = hubConnected
+    ? await createServiceClient().from("zoho_postings")
+        .select("id, source_table, order_no, status, payload, zoho_invoice_number, error, posted_at")
+        .order("order_no", { ascending: true })
+    : { data: [] as PostingRow[] };
+  const postings = (postingRows ?? []) as PostingRow[];
+  const byStatus = (s: string) => postings.filter((p) => p.status === s);
+  const drafts = byStatus("draft");
+  const needsInfo = byStatus("needs_info");
+  const failed = byStatus("failed");
+  const posted = byStatus("posted");
+  const matchedRows = byStatus("matched");
 
   const { data: docs } = isFounder
     ? await createServiceClient().from("zoho_vault_docs").select("id, title, note, created_at").order("created_at", { ascending: false })
@@ -73,6 +97,91 @@ export default async function ZohoHubPage(props: {
         gets approved here, and is pushed with its portal reference — so nothing ever posts twice, and a correction
         is a fresh entry, never a silent edit. Bank feeds inside Zoho stay <strong>disconnected</strong>.
       </div>
+
+      {/* ── Sales → Zoho queue (the working desk) ───────────────────── */}
+      {hubConnected && (
+        <div id="queue">
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 24 }}>
+            <h2 className="admin-section-title" style={{ margin: 0 }}>📮 Sales → Zoho</h2>
+            <form action={scanSalesAction} style={{ margin: 0 }}>
+              <SubmitButton className="btn small secondary" savedLabel="Scanned">🔄 Scan for new sales</SubmitButton>
+            </form>
+            {drafts.length > 0 && (
+              <form action={approveAllDraftsAction} style={{ margin: 0 }}>
+                <SubmitButton className="btn small" savedLabel="✓ Posted">✅ Approve &amp; post all {drafts.length} draft(s)</SubmitButton>
+              </form>
+            )}
+            <span className="muted" style={{ fontSize: ".8rem" }}>
+              ✅ posted {posted.length} · 🤝 matched to manual entries {matchedRows.length}
+            </span>
+          </div>
+          {sp.scan && <div className="notice ok" style={{ marginTop: 10 }}>🔄 {sp.scan}</div>}
+          <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 10px" }}>
+            Each paid portal sale becomes a draft here. Approving posts it to Zoho exactly as the office does by
+            hand: the portal&apos;s own CAPS invoice number, booked to Sales-Classes (Sales-Validity for extensions),
+            SAC 999293, and the payment into Razorpay Clearing with the E-series receipt. Anything the office has
+            already entered manually is recognised by its order number and left alone.
+          </p>
+
+          {drafts.length === 0 && needsInfo.length === 0 && failed.length === 0 && (
+            <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing waiting — every sale is posted or matched. 🔄 Scan picks up new ones.</p></div>
+          )}
+
+          {[...failed, ...needsInfo, ...drafts].map((r) => (
+            <div className="card" key={r.id} style={{ marginTop: 8, borderLeft: `4px solid ${r.status === "failed" ? "#b91c1c" : r.status === "needs_info" ? "#b45309" : "var(--accent)"}` }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <strong>#{r.order_no}</strong>
+                <span style={{ flex: 1, minWidth: 220, fontSize: ".88rem" }}>
+                  {r.payload.customer} · {formatINR(r.payload.amountInr)} · {r.payload.date}
+                  <span className="muted"> · {r.payload.description}</span>
+                  {r.payload.invoiceNo && <span className="muted"> · {r.payload.invoiceNo}</span>}
+                </span>
+                {r.status === "draft" && (
+                  <span style={{ display: "inline-flex", gap: 6 }}>
+                    <form action={approvePostingAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <SubmitButton className="btn small" savedLabel="✓ Posted">✅ Approve &amp; post</SubmitButton>
+                    </form>
+                    <form action={skipPostingAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">Skip</SubmitButton>
+                    </form>
+                  </span>
+                )}
+                {r.status === "needs_info" && (
+                  <span style={{ fontSize: ".8rem", color: "#b45309", fontWeight: 700 }}>
+                    ⏳ waiting: {!r.payload.invoiceNo ? "portal invoice not generated yet" : "customer state missing"} — 🔄 Scan refreshes it
+                  </span>
+                )}
+                {r.status === "failed" && (
+                  <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ fontSize: ".78rem", color: "#b91c1c" }}>{r.error}</span>
+                    <form action={retryPostingAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">↻ Retry</SubmitButton>
+                    </form>
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {(posted.length > 0 || matchedRows.length > 0) && (
+            <details style={{ marginTop: 10 }}>
+              <summary className="btn small secondary as-btn">📗 Done ({posted.length + matchedRows.length})</summary>
+              <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
+                {[...posted, ...matchedRows].sort((a, b) => (b.order_no ?? 0) - (a.order_no ?? 0)).map((r) => (
+                  <div key={r.id} style={{ display: "flex", gap: 10, fontSize: ".82rem", padding: "4px 10px", background: "var(--bg-soft)", borderRadius: 6, flexWrap: "wrap" }}>
+                    <span>{r.status === "posted" ? "✅" : "🤝"} #{r.order_no}</span>
+                    <span style={{ flex: 1, minWidth: 160 }}>{r.payload.customer} · {formatINR(r.payload.amountInr)}</span>
+                    <span className="muted">{r.zoho_invoice_number ?? r.payload.invoiceNo}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
 
       {/* ── Build state ─────────────────────────────────────────────── */}
       <h2 className="admin-section-title" style={{ marginTop: 24 }}>Where the build stands</h2>

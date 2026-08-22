@@ -22,6 +22,61 @@ async function saveSecret(key: string, value: string) {
   await createServiceClient().from("app_secrets").upsert({ key, value }, { onConflict: "key" });
 }
 
+// ---- The posting queue (the zoho area works these — Pradeep's desk) ---------
+
+export async function scanSalesAction() {
+  await assertArea("zoho");
+  const { scanPortalSales } = await import("@/lib/zohoPosting");
+  let note: string;
+  try { note = await scanPortalSales(); } catch (e) { note = `Scan failed: ${e instanceof Error ? e.message : "unknown"}`; }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#queue`);
+}
+
+export async function approvePostingAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const staff = await currentStaff();
+  const svc = createServiceClient();
+  await svc.from("zoho_postings").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", id);
+  const { postSale } = await import("@/lib/zohoPosting");
+  try { await postSale(id); } catch { /* the row now carries status=failed + the error text */ }
+  revalidatePath("/admin/zoho");
+}
+
+export async function approveAllDraftsAction() {
+  await assertArea("zoho");
+  const staff = await currentStaff();
+  const svc = createServiceClient();
+  const { data: drafts } = await svc.from("zoho_postings").select("id").eq("status", "draft").order("order_no");
+  const { postSale } = await import("@/lib/zohoPosting");
+  for (const d of drafts ?? []) {
+    await svc.from("zoho_postings").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", d.id);
+    try { await postSale(d.id); } catch { /* recorded on the row; continue with the rest */ }
+  }
+  revalidatePath("/admin/zoho");
+}
+
+export async function skipPostingAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("zoho_postings")
+    .update({ status: "skipped", updated_at: new Date().toISOString() }).eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
+export async function retryPostingAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  // Back to draft so the payload refresh + approve path runs again cleanly.
+  await createServiceClient().from("zoho_postings")
+    .update({ status: "draft", error: null, updated_at: new Date().toISOString() }).eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
 async function ensureAiAccount(name: string, accountType: string): Promise<string> {
   // Idempotent: if an account with this exact name exists, do nothing.
   type Row = { account_name: string };

@@ -12,6 +12,7 @@ import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import { rule115Rate, ttBuyRate } from "@/lib/forexRates";
 import { fySnapshot, indiaAdvanceTax, usEstimatedTax, taxAssumptions } from "@/lib/taxEngine";
+import { backlogItems, searchDesk } from "@/lib/zohoDesk";
 import type { SalePayload } from "@/lib/zohoPosting";
 import { formatINR } from "@/lib/pricing";
 
@@ -59,10 +60,13 @@ type PostingRow = {
 };
 
 export default async function ZohoHubPage(props: {
-  searchParams: Promise<{ zoho_ok?: string; zoho_err?: string; scan?: string }>;
+  searchParams: Promise<{ zoho_ok?: string; zoho_err?: string; scan?: string; upto?: string; q?: string; from?: string; to?: string; part?: string }>;
 }) {
   await assertArea("zoho");
   const sp = await props.searchParams;
+  const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+  const upto = sp.upto && /^\d{4}-\d{2}-\d{2}$/.test(sp.upto) ? sp.upto : todayIST;
+  const searching = Boolean((sp.q ?? "").trim() || sp.from || sp.to || (sp.part && sp.part !== "all"));
   const staff = await currentStaff();
   const isFounder = staff?.role === "admin";
 
@@ -198,6 +202,14 @@ export default async function ZohoHubPage(props: {
   }
 
   type VaultDoc = { id: string; title: string; note: string | null; institution: string | null; doc_type: string | null; year_label: string | null; is_processed: boolean; created_at: string };
+  // Backlog + desk-wide search.
+  let backlog: Awaited<ReturnType<typeof backlogItems>> = { items: [], neverUploaded: [] };
+  if (hubConnected) { try { backlog = await backlogItems(upto); } catch { /* section degrades */ } }
+  let searchRows: Awaited<ReturnType<typeof searchDesk>> = [];
+  if (hubConnected && searching) {
+    try { searchRows = await searchDesk({ q: sp.q, from: sp.from, to: sp.to, part: sp.part }); } catch { /* empty */ }
+  }
+
   const { data: docsData } = await createServiceClient()
     .from("zoho_vault_docs")
     .select("id, title, note, institution, doc_type, year_label, is_processed, created_at")
@@ -228,6 +240,89 @@ export default async function ZohoHubPage(props: {
         gets approved here, and is pushed with its portal reference — so nothing ever posts twice, and a correction
         is a fresh entry, never a silent edit. Bank feeds inside Zoho stay <strong>disconnected</strong>.
       </div>
+
+      {/* ── Pradeep's backlog — as-of a chosen date ─────────────────── */}
+      {hubConnected && (
+        <div id="backlog" className="card" style={{ marginTop: 16 }}>
+          <form style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <strong>📋 Task list — what is pending till</strong>
+            <input type="date" name="upto" defaultValue={upto} style={{ marginBottom: 0 }} />
+            <SubmitButton className="btn small secondary" savedLabel="✓">Show backlog</SubmitButton>
+            <span className="muted" style={{ fontSize: ".78rem" }}>Change the date and the backlog recomputes.</span>
+          </form>
+          {backlog.items.length === 0 ? (
+            <p className="muted" style={{ margin: "10px 0 0", fontSize: ".88rem" }}>✅ Nothing pending up to {upto} — statements covered and every queue clear.</p>
+          ) : (
+            <div style={{ display: "grid", gap: 5, marginTop: 10 }}>
+              {backlog.items.map((b, i) => (
+                <a key={i} href={b.anchor} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 10px", background: "var(--bg-soft)", borderRadius: 8, color: "var(--text)", textDecoration: "none" }}>
+                  <span className="badge" style={{ fontSize: ".7rem", minWidth: 110, textAlign: "center" }}>{b.part}</span>
+                  <span style={{ flex: 1, fontSize: ".86rem" }}>{b.task}</span>
+                  {b.count !== undefined && <strong>{b.count}</strong>}
+                  <span style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".8rem" }}>open →</span>
+                </a>
+              ))}
+            </div>
+          )}
+          {backlog.neverUploaded.length > 0 && (
+            <details style={{ marginTop: 8 }}>
+              <summary className="muted" style={{ cursor: "pointer", fontSize: ".8rem" }}>
+                {backlog.neverUploaded.length} account(s) with no statement uploaded yet
+              </summary>
+              <p className="muted" style={{ fontSize: ".78rem", margin: "6px 0 0" }}>{backlog.neverUploaded.join(" · ")}</p>
+            </details>
+          )}
+        </div>
+      )}
+
+      {/* ── Desk-wide search & filter (the reconciliation view) ─────── */}
+      {hubConnected && (
+        <div id="search" className="card" style={{ marginTop: 12 }}>
+          <form style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <label style={{ fontSize: ".72rem" }}>🔎 Search everything</label>
+              <input name="q" defaultValue={sp.q ?? ""} placeholder="narration, customer, UTR, symbol, order no…" style={{ marginBottom: 0 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: ".72rem" }}>From</label>
+              <input type="date" name="from" defaultValue={sp.from ?? ""} style={{ marginBottom: 0 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: ".72rem" }}>To</label>
+              <input type="date" name="to" defaultValue={sp.to ?? ""} style={{ marginBottom: 0 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: ".72rem" }}>Part</label>
+              <select name="part" defaultValue={sp.part ?? "all"} style={{ marginBottom: 0 }}>
+                <option value="all">Everything</option>
+                <option value="sales">Sales</option>
+                <option value="settlements">Settlements</option>
+                <option value="bank">Bank lines</option>
+                <option value="brokerage">Brokerage</option>
+                <option value="petty">Petty cash</option>
+              </select>
+            </div>
+            <SubmitButton className="btn small" savedLabel="✓">Search</SubmitButton>
+            {searching && <a className="btn small secondary" href="/admin/zoho#search">Clear</a>}
+          </form>
+          {searching && (
+            <div style={{ marginTop: 10 }}>
+              <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 6px" }}>{searchRows.length} result(s){searchRows.length === 300 ? " (first 300)" : ""} — every status included, for reconciliation.</p>
+              <div style={{ display: "grid", gap: 4 }}>
+                {searchRows.map((r, i) => (
+                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "5px 10px", background: "var(--bg-soft)", borderRadius: 6, fontSize: ".82rem" }}>
+                    <span style={{ whiteSpace: "nowrap" }}>{r.date}</span>
+                    <span className="badge" style={{ fontSize: ".68rem" }}>{r.part}</span>
+                    <span style={{ flex: 1, minWidth: 200 }}>{r.label}</span>
+                    {r.amount !== null && <strong style={{ whiteSpace: "nowrap" }}>{r.amount < 0 ? `− ${formatINR(Math.abs(r.amount))}` : formatINR(r.amount)}</strong>}
+                    <span className="muted" style={{ fontSize: ".74rem" }}>{r.status}{r.ref ? ` · ${r.ref}` : ""}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Sales → Zoho queue (the working desk) ───────────────────── */}
       {hubConnected && (

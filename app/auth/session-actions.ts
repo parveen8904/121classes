@@ -61,3 +61,10 @@ export async function trustThisDevice(): Promise<void> {
   const c = trustedCookie(user.id);
   (await cookies()).set(c.name, c.value, { httpOnly: true, sameSite: "lax", secure: true, maxAge: c.maxAge, path: "/" });
 }
+
+// Clear the password-reset gate cookie once a NEW password has actually been
+// set (see /auth/confirm + middleware). Until this runs, a recovery session can
+// only reach the reset page.
+export async function clearPasswordResetGate(): Promise<void> {
+  (await cookies()).delete("pw_reset");
+}

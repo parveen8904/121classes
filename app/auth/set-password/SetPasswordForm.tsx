@@ -5,7 +5,7 @@ import { passwordProblem, friendlyPasswordError, PASSWORD_RULE } from "@/lib/pas
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import Logo from "@/app/components/Logo";
-import { markHasPassword, claimDevice } from "../session-actions";
+import { markHasPassword, claimDevice, clearPasswordResetGate } from "../session-actions";
 
 // Password setup / reset. If the account has two-factor on (admins do), Supabase
 // requires a fresh MFA check (AAL2) before changing the password — so we step
@@ -39,7 +39,7 @@ export default function SetPasswordForm({ next }: { next: string }) {
     if (password !== confirm) return setErr("Both passwords must match.");
     setBusy(true);
     const ok = await apply();
-    if (ok) { await markHasPassword(); await claimDevice(); window.location.assign(next); return; }
+    if (ok) { await markHasPassword(); await claimDevice(); await clearPasswordResetGate(); window.location.assign(next); return; }
     setBusy(false);
   }
 
@@ -53,7 +53,7 @@ export default function SetPasswordForm({ next }: { next: string }) {
     const { error: mfaErr } = await supabase.auth.mfa.challengeAndVerify({ factorId: totp.id, code: code.trim() });
     if (mfaErr) { setBusy(false); return setErr("That code didn't match — codes change every 30 seconds; type the newest one from your authenticator."); }
     const ok = await apply();
-    if (ok) { await markHasPassword(); await claimDevice(); window.location.assign(next); return; }
+    if (ok) { await markHasPassword(); await claimDevice(); await clearPasswordResetGate(); window.location.assign(next); return; }
     setBusy(false);
   }
 

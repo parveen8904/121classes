@@ -31,6 +31,18 @@ export async function GET(request: NextRequest) {
             .eq("id", user.id).is("email_verified_at", null);
         }
       } catch { /* never block the redirect on the flag write */ }
+
+      // A RECOVERY link must actually RESULT IN A NEW PASSWORD, not just log the
+      // person in. So it always lands on the reset page and carries a short-lived
+      // gate cookie; the middleware then keeps them on the reset page until they
+      // set a new password (cleared by SetPasswordForm on success). Without this,
+      // clicking the reset link left you signed in with the OLD password still
+      // valid — email access alone, silently, changing nothing.
+      if (type === "recovery") {
+        const res = NextResponse.redirect(`${origin}/auth/reset-password`);
+        res.cookies.set("pw_reset", "1", { httpOnly: true, sameSite: "lax", path: "/", maxAge: 1200 });
+        return res;
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

@@ -110,6 +110,17 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
 
+  // PASSWORD-RESET GATE. A recovery link sets pw_reset=1 (see /auth/confirm). Until
+  // a new password is actually set (SetPasswordForm clears the cookie), the
+  // session may go ONLY to the reset page — so a reset link can never be a silent
+  // login that leaves the old password working. Applies to every matched app page.
+  if (user && request.cookies.get("pw_reset")?.value === "1") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/reset-password";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   // Already signed in but landed on /login (e.g. pressed Back) — send them
   // straight to where they were going, so it never looks like a logout.
   if (user && path === "/login") {

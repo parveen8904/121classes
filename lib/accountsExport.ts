@@ -304,7 +304,7 @@ export function invoicesCsv(rows: AccountRow[]): string {
  * different thing again from our invoice number, our order number and our
  * receipt number — it belongs to the books, not to us.
  */
-export function paymentsCsv(rows: AccountRow[], startFrom = 1): string {
+export function paymentsCsv(rows: AccountRow[], startFrom = 1, depositTo = "Razorpay Clearing"): string {
   const head = [
     "Payment Number Prefix", "Payment Number Suffix", "Customer Name", "Place of Supply",
     "GST Treatment", "GST Identification Number (GSTIN)", "Payment Type",
@@ -328,7 +328,9 @@ export function paymentsCsv(rows: AccountRow[], startFrom = 1): string {
       esc(fyPrefix(r.date)), esc(r.receiptNo || String(n).padStart(6, "0")), esc(r.customer),
       esc(zohoStateCode(r.state)), esc(r.gstin ? "business_gst" : "consumer"), esc(r.gstin),
       esc("Invoice Payment"), esc(r.description), esc(dmy(r.date)), esc("Razorpay"),
-      esc(money(r.total)), esc(""), esc(""), esc(""), esc("Razorpay Clearing"),
+      // Deposit To follows the connected desk's clearing account — once Zoho is
+      // connected on /admin/zoho this becomes "Razorpay Clearing (AI)".
+      esc(money(r.total)), esc(""), esc(""), esc(""), esc(depositTo),
       esc(r.razorpayPaymentId), esc(r.invoiceNo), esc(r.orderNo.replace(/^#/, "")),
       esc(money(r.total)), esc(money(r.total)),
     ].join(","));

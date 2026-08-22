@@ -4,6 +4,12 @@
 // again exist on the page while its value is silently thrown away on save
 // (16 social keys sat in exactly that state).
 export const SECRET_KEYS = [
+  // Zoho Books (the accounting hub's own line — set up on /admin/zoho).
+  "ZOHO_CLIENT_ID",
+  "ZOHO_CLIENT_SECRET",
+  "ZOHO_REFRESH_TOKEN",
+  "ZOHO_ORG_ID",
+  "ZOHO_DEPOSIT_TO",
   "TELEGRAM_BOT_TOKEN",
   "TELEGRAM_BOT_USERNAME",
   "TELEGRAM_CHANNEL_ID",

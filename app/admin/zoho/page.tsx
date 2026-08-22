@@ -2,10 +2,12 @@ import AdminHero from "../_components/AdminHero";
 import { assertArea, currentStaff } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
 import { formatDate } from "@/lib/dates";
+import { getSecret } from "@/lib/secrets";
+import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Zoho accounting hub — Admin" };
@@ -40,10 +42,16 @@ const STATE_BADGE: Record<string, { text: string; colour: string }> = {
   planned: { text: "🗓️ planned", colour: "var(--muted)" },
 };
 
-export default async function ZohoHubPage() {
+export default async function ZohoHubPage(props: {
+  searchParams: Promise<{ zoho_ok?: string; zoho_err?: string }>;
+}) {
   await assertArea("zoho");
+  const sp = await props.searchParams;
   const staff = await currentStaff();
   const isFounder = staff?.role === "admin";
+
+  const connected = isFounder ? await zohoConfigured() : false;
+  const orgId = connected ? await getSecret("ZOHO_ORG_ID") : "";
 
   const { data: docs } = isFounder
     ? await createServiceClient().from("zoho_vault_docs").select("id, title, note, created_at").order("created_at", { ascending: false })
@@ -80,9 +88,41 @@ export default async function ZohoHubPage() {
         })}
       </div>
 
-      {/* ── Founder-only vault ──────────────────────────────────────── */}
+      {/* ── Connect Zoho (founder-only) ─────────────────────────────── */}
       {isFounder && (
         <>
+          {sp.zoho_ok && <div className="notice ok" style={{ marginTop: 16 }}>✅ {sp.zoho_ok}</div>}
+          {sp.zoho_err && <div className="notice err" style={{ marginTop: 16 }}>❌ {sp.zoho_err}</div>}
+
+          <h2 className="admin-section-title" style={{ marginTop: 28 }}>
+            🔌 Zoho connection {connected ? <span style={{ color: "#16a34a", fontSize: ".9rem" }}>· ✅ connected (org {orgId})</span> : <span style={{ color: "#b45309", fontSize: ".9rem" }}>· not connected yet</span>}
+          </h2>
+
+          {!connected && (
+            <div className="card" style={{ marginTop: 8 }}>
+              <strong>Five minutes, three pastes — done once, works forever.</strong>
+              <ol style={{ fontSize: ".88rem", lineHeight: 1.9, margin: "10px 0 14px", paddingLeft: 20 }}>
+                <li>Open <a className="grad" href="https://api-console.zoho.in" target="_blank" rel="noopener noreferrer"><strong>api-console.zoho.in</strong></a> and sign in as the account that runs Zoho Books (<strong>ps@aldine.edu.in</strong>).</li>
+                <li>Press <strong>Add Client → Self Client → Create → OK</strong>. Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> into the boxes below.</li>
+                <li>Open the <strong>Generate Code</strong> tab. Scope: <code style={{ userSelect: "all" }}>ZohoBooks.fullaccess.all</code> · Duration: <strong>10 minutes</strong> · any description → <strong>Generate</strong>, copy the code into the third box, and press Connect <em>straight away</em> (the code dies in 10 minutes).</li>
+              </ol>
+              <form action={connectZoho}>
+                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+                  <div><label>Client ID</label><input name="client_id" required autoComplete="off" placeholder="1000.XXXXXXXX…" /></div>
+                  <div><label>Client Secret</label><input name="client_secret" required type="password" autoComplete="off" placeholder="paste the secret" /></div>
+                </div>
+                <label>Generated code (valid 10 minutes)</label>
+                <input name="grant_code" required autoComplete="off" placeholder="1000.xxxx.xxxx…" />
+                <SubmitButton className="btn" savedLabel="Connecting…" style={{ marginTop: 8 }}>🔌 Connect Zoho Books</SubmitButton>
+              </form>
+              <p className="muted" style={{ fontSize: ".78rem", marginTop: 10 }}>
+                The exchange happens on OUR server: console → this page → stored with your other integration keys.
+                On success the desk also creates its own <strong>&ldquo;Razorpay Clearing (AI)&rdquo;</strong> and
+                <strong> &ldquo;Payment Gateway Charges (AI)&rdquo;</strong> accounts — new accounts with the (AI)
+                suffix, no existing account touched.
+              </p>
+            </div>
+          )}
           <h2 className="admin-section-title" style={{ marginTop: 28 }}>🔐 Founder&apos;s document vault</h2>
           <p className="muted" style={{ fontSize: ".85rem", marginTop: 4 }}>
             For the papers the tax engines calibrate from: latest India ITR + computation, latest US 1040, and the

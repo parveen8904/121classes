@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireArea } from "@/lib/adminAccess";
 import { accountRows, invoicesCsv, paymentsCsv } from "@/lib/accountsExport";
+import { getSecret } from "@/lib/secrets";
 
 export const dynamic = "force-dynamic";
 // Reading three tables and composing a file. Well inside a minute, but the
@@ -32,7 +33,8 @@ export async function GET(req: NextRequest) {
   };
 
   const rows = await accountRows(filter);
-  const body = what === "payments" ? paymentsCsv(rows) : invoicesCsv(rows);
+  const depositTo = (await getSecret("ZOHO_DEPOSIT_TO")) || "Razorpay Clearing";
+  const body = what === "payments" ? paymentsCsv(rows, 1, depositTo) : invoicesCsv(rows);
 
   const span = [filter.from, filter.to].filter(Boolean).join("_to_") || new Date().toISOString().slice(0, 10);
   return new NextResponse(body, {

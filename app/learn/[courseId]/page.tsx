@@ -140,16 +140,20 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
   const { data: subjResRows } = subjectIds.length
     ? await svc
         .from("repository_items")
-        .select("id, subject_id, kind, title, file_url, valid_from_attempt, valid_to_attempt")
+        // solution_url matters for "suggested_answers" items — their PDF lives
+        // there, NOT in file_url. Filtering on file_url alone silently hid every
+        // ICAI Suggested Answers paper from students (they had solution_url set
+        // but file_url null).
+        .select("id, subject_id, kind, title, file_url, solution_url, valid_from_attempt, valid_to_attempt")
         .in("subject_id", subjectIds)
         .is("topic_id", null)
         .eq("is_active", true)
         .eq("student_visible", true)
-        .not("file_url", "is", null)
+        .or("file_url.not.is.null,solution_url.not.is.null")
         .order("created_at", { ascending: false })
     : { data: [] as never[] };
-  const subjResources = new Map<string, { id: string; kind: string; title: string; file_url: string; valid_from_attempt: string | null; valid_to_attempt: string | null }[]>();
-  for (const r of (subjResRows ?? []) as { id: string; subject_id: string; kind: string; title: string; file_url: string; valid_from_attempt: string | null; valid_to_attempt: string | null }[]) {
+  const subjResources = new Map<string, { id: string; kind: string; title: string; file_url: string | null; solution_url: string | null; valid_from_attempt: string | null; valid_to_attempt: string | null }[]>();
+  for (const r of (subjResRows ?? []) as { id: string; subject_id: string; kind: string; title: string; file_url: string | null; solution_url: string | null; valid_from_attempt: string | null; valid_to_attempt: string | null }[]) {
     const arr = subjResources.get(r.subject_id) ?? [];
     arr.push(r); subjResources.set(r.subject_id, arr);
   }
@@ -218,6 +222,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
     { kind: "past_papers", icon: "🗂️", label: "Past paper" },
     { kind: "rtp", icon: "📝", label: "RTP" },
     { kind: "mtp", icon: "📝", label: "MTP" },
+    { kind: "suggested_answers", icon: "🗂️", label: "Suggested answers" },
     { kind: "custom", icon: "✨", label: "Resource" },
   ];
   // Fuller category names for the resource drill-down headers.
@@ -651,14 +656,17 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                             </summary>
                             <div style={{ display: "grid", gap: 6, padding: "0 12px 12px" }}>
                               {rows.map((r) => {
-                                const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(r.file_url);
+                                // Suggested-answers papers keep their PDF in
+                                // solution_url, everything else in file_url.
+                                const fileRef = r.file_url || r.solution_url || "";
+                                const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(fileRef);
                                 const isPaper = ["mtp", "rtp", "past_papers"].includes(r.kind);
                                 // A stored file is "secure:<path>", which is not
                                 // a URL — used as an href it opens a blank page.
                                 // Everything not a paper goes through the proxy,
                                 // which is also what keeps the storage address
                                 // out of the student's address bar.
-                                const href = isPaper ? `/learn/paper/${r.id}` : viaProxy(r.file_url);
+                                const href = isPaper ? `/learn/paper/${r.id}` : viaProxy(fileRef);
                                 return (
                                   <a key={r.id} href={href} target={isPaper ? undefined : "_blank"} rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", background: "var(--card)", borderRadius: 8, padding: "8px 12px", color: "var(--text)" }}>
                                     <span style={{ fontSize: ".88rem" }}><strong>{r.title}</strong>{r.valid_from_attempt ? <span className="muted"> · {r.valid_from_attempt}{r.valid_to_attempt ? ` up to ${r.valid_to_attempt}` : ""}</span> : null}</span>
@@ -672,9 +680,10 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                       })}
                       {/* Custom content → each item is its OWN tile, named exactly as uploaded. */}
                       {(subjResources.get(s.id) ?? []).filter((r) => r.kind === "custom").map((r) => {
-                        const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(r.file_url);
+                        const fileRef = r.file_url || r.solution_url || "";
+                        const isVideo = /youtu\.be|youtube\.com|vimeo|\.mp4($|\?)|iframe\.mediadelivery/i.test(fileRef);
                         return (
-                          <a key={r.id} href={viaProxy(r.file_url)} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", gap: 6, border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", padding: "12px 14px", color: "var(--text)", minHeight: 84 }}>
+                          <a key={r.id} href={viaProxy(fileRef)} target="_blank" rel="noopener noreferrer" style={{ display: "flex", flexDirection: "column", gap: 6, border: "2px solid var(--accent)", borderRadius: 12, background: "var(--bg-soft)", padding: "12px 14px", color: "var(--text)", minHeight: 84 }}>
                             <span style={{ fontSize: "1.4rem", lineHeight: 1 }}>{isVideo ? "🎬" : "📄"}</span>
                             <span style={{ fontSize: ".9rem", fontWeight: 700, lineHeight: 1.25 }}>{r.title}</span>
                             <span style={{ marginTop: "auto", color: "var(--accent)", fontWeight: 700, fontSize: ".82rem" }}>{isVideo ? "Watch →" : "Open →"}</span>

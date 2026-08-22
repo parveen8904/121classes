@@ -295,9 +295,11 @@ export default async function Home() {
             the What's New section. Only shown when there IS a recent post. */}
         {latestHighlight && (
           <div style={{ textAlign: "center", marginBottom: 16 }}>
-            <a href="#whats-new" className="whats-new-pill" aria-label={`What's new: ${latestHighlight.title}`}>
-              <span className="wn-tag">🆕 NEW UPDATE</span>
-              <span className="wn-title">{latestHighlight.title}</span>
+            {/* Course-neutral on purpose — this section carries BOTH CA Inter
+                and CA Final updates, so it must not name one attempt's title. */}
+            <a href="#whats-new" className="whats-new-pill" aria-label="New updates — click here">
+              <span className="wn-tag">🆕</span>
+              <span>New Updates — Click Here</span>
               <span aria-hidden>↓</span>
             </a>
           </div>

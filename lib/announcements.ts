@@ -23,9 +23,12 @@ export function announcementKindLabel(kind: string): string {
 //   - an uploaded/secure file is served through the PUBLIC announcement proxy,
 //     which only ever serves files attached to a PUBLISHED announcement.
 // Empty string when there is no link.
-export function announcementHref(a: { id: string; link_url?: string | null }): string {
+export function announcementHref(a: { id: string; link_url?: string | null; title?: string | null }): string {
   const u = String(a.link_url ?? "").trim();
   if (!u) return "";
+  // Hitlists are gated (login + WhatsApp number) — ALWAYS go through the file
+  // route so the gate applies, even when the link is an external one.
+  if (/hitlist/i.test(String(a.title ?? ""))) return `/api/announcement-file?a=${a.id}`;
   if (/^https?:\/\//.test(u)) return u;
   return `/api/announcement-file?a=${a.id}`;
 }

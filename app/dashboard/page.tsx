@@ -16,7 +16,7 @@ import VerifyPhone from "./VerifyPhone";
 import { phoneVerifyLive } from "@/lib/phoneVerify";
 import { stopViewAs } from "./viewAsActions";
 
-export default async function Dashboard(props: { searchParams: Promise<{ saved?: string }> }) {
+export default async function Dashboard(props: { searchParams: Promise<{ saved?: string; wa?: string }> }) {
   const searchParams = await props.searchParams;
   const supabase = createClient();
   const {
@@ -265,6 +265,11 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
       )}
 
       <section className="container" style={{ paddingTop: 40 }}>
+        {!viewing && searchParams.wa === "hitlist" && (
+          <div style={{ background: "#fef9c3", border: "1px solid #eab308", color: "#713f12", borderRadius: 12, padding: "12px 14px", marginBottom: 16, fontSize: ".9rem" }}>
+            📄 <strong>Add your WhatsApp number below to download the hitlist.</strong> Once your number is on your account, open the hitlist again from the homepage and it will download.
+          </div>
+        )}
         {!viewing && profile && profile.email_verified_at == null && (user.email || profile.email) && (
           <EmailVerifyBanner email={String(user.email || profile.email)} />
         )}

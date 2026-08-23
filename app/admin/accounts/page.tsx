@@ -6,6 +6,7 @@ import { accountRows, ACCOUNT_STATES } from "@/lib/accountsExport";
 import { viaProxy } from "@/lib/fileProxy";
 import SubmitButton from "@/app/components/SubmitButton";
 import { approveDayForZoho, approveSelectedForZoho, approveForZoho, holdForZoho } from "../orders/actions";
+import Money from "@/app/components/Money";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -192,7 +193,7 @@ export default async function AccountsPage(props: {
                 <td style={td}>{r.receiptNo || "—"}</td>
                 <td style={td}>{r.customer || "—"}<br /><span className="muted" style={{ fontSize: ".78rem" }}>{r.email}</span></td>
                 <td style={td}>{r.description}</td>
-                <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>{inr(r.total)}</td>
+                <td style={{ ...td, whiteSpace: "nowrap" }}><Money n={r.total} width="100%" /></td>
                 <td style={td}>{r.status}</td>
                 <td style={{ ...td, fontFamily: "ui-monospace,monospace", fontSize: ".76rem" }}>
                   {r.razorpayPaymentId || <span className="muted">—</span>}

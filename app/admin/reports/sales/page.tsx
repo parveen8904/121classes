@@ -5,6 +5,7 @@ import { viaProxy } from "@/lib/fileProxy";
 import { formatINR } from "@/lib/pricing";
 import { matchesState } from "@/lib/accountsExport";
 import AdminHero from "../../_components/AdminHero";
+import Money from "@/app/components/Money";
 
 // READ IT FRESH, EVERY TIME.
 //
@@ -159,16 +160,16 @@ export default async function ReportsPage() {
         <div className="card">
           <h3 style={{ marginBottom: 12 }}>💵 Revenue split</h3>
           <p style={{ display: "flex", justifyContent: "space-between" }}>
-            <span className="muted">📘 Subscriptions</span> <strong>{formatINR(subRevenue)}</strong>
+            <span className="muted">📘 Subscriptions</span> <Money n={subRevenue} width={132} bold />
           </p>
           <p style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-            <span className="muted">🎁 Sponsorships</span> <strong>{formatINR(giftRevenue)}</strong>
+            <span className="muted">🎁 Sponsorships</span> <Money n={giftRevenue} width={132} bold />
           </p>
           <p style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-            <span className="muted">📦 Books</span> <strong>{formatINR(bookRevenue)}</strong>
+            <span className="muted">📦 Books</span> <Money n={bookRevenue} width={132} bold />
           </p>
           <p style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
-            <span>Total</span> <strong>{formatINR(totalRevenue)}</strong>
+            <span>Total</span> <Money n={totalRevenue} width={132} bold />
           </p>
         </div>
         <div className="card">

@@ -5,6 +5,7 @@ import { formatINR } from "@/lib/pricing";
 import { formatDate } from "@/lib/dates";
 import SubmitButton from "@/app/components/SubmitButton";
 import { uploadBillAction } from "./actions";
+import Money from "@/app/components/Money";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My advances — Petty cash" };
@@ -88,7 +89,7 @@ export default async function PettyPage(props: { searchParams: Promise<{ msg?: s
             {(bills ?? []).map((b) => (
               <div className="card" key={b.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
                 <span style={{ fontSize: ".82rem" }}>{formatDate(b.bill_date)}</span>
-                <strong>{formatINR(Number(b.amount))}</strong>
+                <Money n={Number(b.amount)} width={110} bold />
                 <span style={{ flex: 1, minWidth: 160, fontSize: ".85rem" }}>{b.purpose}</span>
                 <span style={{ fontSize: ".8rem", whiteSpace: "nowrap" }}>{STATUS_LABEL[b.status] ?? b.status}</span>
                 {b.status === "rejected" && b.note && <span className="muted" style={{ fontSize: ".78rem" }}>{b.note}</span>}
@@ -105,7 +106,7 @@ export default async function PettyPage(props: { searchParams: Promise<{ msg?: s
             {(advs ?? []).map((a, i) => (
               <div className="card" key={i} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 14px" }}>
                 <span style={{ fontSize: ".82rem" }}>{formatDate(a.adv_date)}</span>
-                <strong>{formatINR(Number(a.amount))}</strong>
+                <Money n={Number(a.amount)} width={110} bold />
               </div>
             ))}
           </div>

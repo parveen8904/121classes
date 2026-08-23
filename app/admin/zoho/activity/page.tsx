@@ -3,6 +3,7 @@ import AdminHero from "../../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
 import { zohoConfigured } from "@/lib/zohoApi";
 import { recentZohoActivity } from "@/lib/zohoActivity";
+import Money from "@/app/components/Money";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -27,8 +28,14 @@ export default async function ZohoActivityPage() {
       hour12: true, timeZone: "Asia/Kolkata",
     }).format(d);
   };
+  // Rupees get the ledger cell; a foreign-currency figure keeps its own code in
+  // front of it, because USD 20.00 under ₹1,745.00 would only pretend to line up.
   const money = (n: number | null, c: string) =>
-    n === null ? "—" : `${c === "INR" ? "₹" : c + " "}${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+    c === "INR" || n === null
+      ? <Money n={n} width={118} />
+      : <span style={{ display: "inline-flex", width: 118, justifyContent: "space-between", gap: 6, fontVariantNumeric: "tabular-nums" }}>
+          <span>{c}</span><span>{n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        </span>;
 
   return (
     <section className="container" style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 980 }}>

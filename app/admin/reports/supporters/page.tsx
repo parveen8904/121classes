@@ -4,6 +4,7 @@ import AdminHero from "../../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
 import { viaProxy } from "@/lib/fileProxy";
+import Money from "@/app/components/Money";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Supporters report — Admin" };
@@ -131,7 +132,7 @@ export default async function SupportersReport(props: {
                   <td style={td}>{p.state || "—"}</td>
                   <td style={td}>{p.gstin || "—"}</td>
                   <td style={{ ...td, fontWeight: 700 }}>{t?.n ?? 0}</td>
-                  <td style={{ ...td, fontWeight: 700 }}>{inr(t?.amount ?? 0)}</td>
+                  <td style={td}><Money n={t?.amount ?? 0} width="100%" bold /></td>
                   <td style={td}>{day(p.created_at)}</td>
                 </tr>
               );
@@ -167,11 +168,11 @@ export default async function SupportersReport(props: {
                 <td style={td}>{o.recipient_attempt || "—"}</td>
                 <td style={td}>{o.tier || "—"}{o.months ? ` · ${o.months}m` : ""}</td>
                 <td style={td}>{o.billing_state || "—"}</td>
-                <td style={td}>{inr(Number(o.taxable_value || 0))}</td>
-                <td style={td}>{inr(Number(o.cgst || 0))}</td>
-                <td style={td}>{inr(Number(o.sgst || 0))}</td>
-                <td style={td}>{inr(Number(o.igst || 0))}</td>
-                <td style={{ ...td, fontWeight: 700 }}>{inr(Number(o.amount_inr || 0))}</td>
+                <td style={td}><Money n={Number(o.taxable_value || 0)} width="100%" /></td>
+                <td style={td}><Money n={Number(o.cgst || 0)} width="100%" /></td>
+                <td style={td}><Money n={Number(o.sgst || 0)} width="100%" /></td>
+                <td style={td}><Money n={Number(o.igst || 0)} width="100%" /></td>
+                <td style={td}><Money n={Number(o.amount_inr || 0)} width="100%" bold /></td>
                 <td style={td}>{o.status}</td>
                 <td style={td}>{o.books_due ? (o.tracking_code ? `📦 ${o.tracking_code}` : "⏳ to dispatch") : "—"}</td>
                 <td style={td}>{o.invoice_url ? <a href={viaProxy(o.invoice_url)} target="_blank" rel="noopener noreferrer">PDF ↓</a> : "—"}</td>

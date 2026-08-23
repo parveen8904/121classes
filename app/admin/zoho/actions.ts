@@ -411,6 +411,13 @@ export async function attachPaperAction(formData: FormData) {
   await svc.from("provider_bills").update({
     paper_note: att.ok ? null : `the invoice is not attached (${att.note})`,
   }).eq("id", id);
+  // ASK ZOHO WHETHER IT ACTUALLY HAS THE FILE, rather than believing our own
+  // upload. Without this the desk forgets: it recorded nothing on success, so
+  // the row went on offering to attach an invoice that was already attached.
+  if (att.ok) {
+    const { refreshBillEcho } = await import("@/lib/providerBills");
+    await refreshBillEcho(id, String(b.zoho_bill_id));
+  }
   revalidatePath("/admin/zoho");
   redirect(`/admin/zoho?scan=${encodeURIComponent(att.ok ? "The invoice is now attached to that bill in Zoho." : `Not attached — ${att.note}`)}#bills`);
 }

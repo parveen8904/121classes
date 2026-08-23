@@ -9,6 +9,7 @@ import { FVD, KNOWN_FOREIGN_VENDORS } from "@/lib/foreignVendorDesk";
 import EntryEditor from "./EntryEditor";
 import RaiseDocument from "./RaiseDocument";
 import SubmitButton from "@/app/components/SubmitButton";
+import Money from "@/app/components/Money";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
 import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
@@ -38,34 +39,6 @@ export const metadata = { title: "Zoho accounting hub — Admin" };
 //
 // Access: the "zoho" grant (founder-given; Pradeep at launch). The document
 // vault below renders for role=admin ALONE — the area grant does not reach it.
-
-/**
- * An amount in a column, set the way a ledger sets one.
- *
- * The rupee sign stays pinned to the left of the cell and the figures run to
- * the right edge, so a column of them reads straight down: units under units,
- * paise under paise. Two decimals always — ₹2,365 beside ₹2,348.75 lines up on
- * nothing, and a money column that does not line up cannot be scanned, which is
- * the only thing it is for.
- *
- * tabular-nums stops the font giving "1" less width than "8", which is what
- * makes proportional digits drift out of column even when they are aligned.
- */
-function Money({ n, width = 104 }: { n: number | null | undefined; width?: number }) {
-  const shell = {
-    display: "inline-flex", width, justifyContent: "space-between", gap: 6,
-    fontVariantNumeric: "tabular-nums" as const,
-  };
-  if (n === null || n === undefined || !Number.isFinite(Number(n))) {
-    return <span style={{ ...shell, justifyContent: "flex-end" }} className="muted">—</span>;
-  }
-  return (
-    <span style={shell}>
-      <span aria-hidden>₹</span>
-      <span>{Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-    </span>
-  );
-}
 
 const PHASE_PLAN: { name: string; what: string; state: "done" | "building" | "waiting" | "planned" }[] = [
   { name: "Hub & document vault", what: "This page, the access grant, and the indexed document vault (year → institution → files; whole desk reads, founder deletes).", state: "done" },
@@ -348,7 +321,8 @@ export default async function ZohoHubPage(props: {
   type PostedBillRow = {
     id: string; institution: string; bill_no: string | null; bill_date: string | null; error: string | null;
     zoho_echo: { currency?: string | null; total?: number | null; exchange_rate?: number | null;
-      tax_total?: number | null; reverse_charge?: boolean | null; zoho_status?: string | null } | null;
+      tax_total?: number | null; reverse_charge?: boolean | null; zoho_status?: string | null;
+      documents?: number | null } | null;
     paper_note: string | null; vault_doc_id: string | null; zoho_bill_id: string | null;
   };
   const { data: billsPostedData } = hubConnected
@@ -357,6 +331,26 @@ export default async function ZohoHubPage(props: {
         .eq("status", "posted").order("bill_date", { ascending: false }).limit(50)
     : { data: [] as never[] };
   const billsPostedRows = (billsPostedData ?? []) as unknown as PostedBillRow[];
+
+  // DOES ZOHO ACTUALLY HOLD THE INVOICE? ASK IT, ONCE, PER BILL.
+  //
+  // He attached the Vercel invoices, Zoho took them, and this page went on
+  // offering to attach them — because a successful attach recorded nothing at
+  // all. Bills posted before the desk started asking have no answer stored, so
+  // they are asked here: a read, changing nothing in the books, capped at a
+  // dozen a page and never repeated once an answer is in. A failure leaves the
+  // row exactly as it was rather than claiming anything either way.
+  const paperUnknown = billsPostedRows.filter(
+    (r) => r.zoho_bill_id && (r.zoho_echo?.documents === undefined || r.zoho_echo?.documents === null),
+  ).slice(0, 12);
+  if (paperUnknown.length) {
+    const { refreshBillEcho } = await import("@/lib/providerBills");
+    await Promise.all(paperUnknown.map(async (r) => {
+      const held = await refreshBillEcho(r.id, String(r.zoho_bill_id));
+      if (held === null) return;
+      r.zoho_echo = { ...(r.zoho_echo ?? {}), documents: held };
+    }));
+  }
   // Bills that are in the books but whose forms are not filed yet.
   type ComplianceRow = { id: string; institution: string; bill_no: string | null; bill_date: string | null;
     form145_part: string | null; form146_required: boolean; form145_filed_at: string | null; form146_filed_at: string | null };
@@ -663,9 +657,7 @@ export default async function ZohoHubPage(props: {
                   <div key={m.id} style={{ padding: "6px 0", borderTop: "1px solid rgba(0,0,0,.06)", fontSize: ".83rem" }}>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
                       <span style={{ minWidth: 88 }}>{m.line_date}</span>
-                      <span style={{ minWidth: 86, fontWeight: 600 }}>
-                        {Number(m.debit) > 0 ? `−₹${Number(m.debit).toLocaleString("en-IN")}` : `+₹${Number(m.credit).toLocaleString("en-IN")}`}
-                      </span>
+                      <Money n={Number(m.debit) > 0 ? -Number(m.debit) : Number(m.credit)} width={116} sign bold />
                       <span className="muted" style={{ flex: "1 1 220px" }}>{String(m.narration).slice(0, 70)}</span>
                       {m.match_confidence === "choose" ? (
                         <form action={chooseMatchAction} style={{ margin: 0, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
@@ -1028,7 +1020,7 @@ export default async function ZohoHubPage(props: {
                     const usd = (x: number) => (x < 0 ? "-" : "") + "$" + Math.abs(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     const inr = (k: string) => {
                       const v = w.inrByHead?.[k];
-                      return v === undefined ? "" : `₹${Math.round(v).toLocaleString("en-IN")}`;
+                      return v === undefined ? "" : `₹${v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                     };
                     const Row = ({ label, amount, inrKey, bold, indent }: { label: string; amount: number; inrKey?: string; bold?: boolean; indent?: boolean }) => (
                       <tr style={{ borderTop: "1px solid rgba(0,0,0,.06)" }}>
@@ -1128,23 +1120,23 @@ export default async function ZohoHubPage(props: {
                             <td style={{ padding: "6px 8px" }}>{b.label}</td>
                             <td className="muted" style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{b.count} txn</td>
                             <td style={{ padding: "6px 8px", textAlign: "right", whiteSpace: "nowrap" }}>${b.usd.toFixed(2)}</td>
-                            <td style={{ padding: "6px 8px", textAlign: "right", whiteSpace: "nowrap", fontWeight: 600 }}>
-                              ₹{Math.round(b.inr).toLocaleString("en-IN")}
+                            <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
+                              <Money n={b.inr} width="100%" bold />
                             </td>
                           </tr>
                         ))}
                         <tr style={{ borderTop: "2px solid rgba(0,0,0,.2)" }}>
                           <td style={{ padding: "6px 8px", fontWeight: 600 }}>Realised gain</td>
                           <td colSpan={2} />
-                          <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, color: "#0e6e52" }}>
-                            ₹{Math.round(Number(n.gain_inr ?? 0)).toLocaleString("en-IN")}
+                          <td style={{ padding: "6px 8px", color: "#0e6e52" }}>
+                            <Money n={Number(n.gain_inr ?? 0)} width="100%" bold />
                           </td>
                         </tr>
                         <tr>
                           <td style={{ padding: "6px 8px", fontWeight: 600 }}>Realised loss</td>
                           <td colSpan={2} />
-                          <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, color: "#b91c1c" }}>
-                            ₹{Math.round(Number(n.loss_inr ?? 0)).toLocaleString("en-IN")}
+                          <td style={{ padding: "6px 8px", color: "#b91c1c" }}>
+                            <Money n={Number(n.loss_inr ?? 0)} width="100%" bold />
                           </td>
                         </tr>
                       </tbody>
@@ -1668,7 +1660,10 @@ export default async function ZohoHubPage(props: {
                   )}
                   {r.error && <span style={{ color: "#b45309" }}>⚠ {r.error}</span>}
                   <span style={{ marginLeft: "auto" }}>
-                    {!r.vault_doc_id || !r.zoho_bill_id ? null
+                    {!r.zoho_bill_id ? null
+                      : Number(r.zoho_echo?.documents ?? 0) > 0
+                        ? <span style={{ color: "#0e6e52", fontSize: ".78rem" }} title="Zoho holds the supplier's own invoice against this bill">📎 invoice attached</span>
+                      : !r.vault_doc_id ? null
                       : r.paper_note
                         ? <span style={{ color: "#b45309", fontSize: ".78rem" }}>📎 {r.paper_note}</span>
                         : (

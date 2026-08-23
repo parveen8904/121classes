@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { formatINR } from "@/lib/pricing";
 import AdminHero from "../../_components/AdminHero";
+import Money from "@/app/components/Money";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Subscribers — Admin" };
@@ -150,7 +151,7 @@ export default async function SubscribersPage(props: { searchParams: Promise<{ t
                       <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{fmt(r.starts_at ?? r.created_at)}</td>
                       <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{fmt(r.ends_at)}</td>
                       <td style={{ padding: "6px 8px", fontWeight: 700, whiteSpace: "nowrap" }}>
-                        {r.channel === "admin_grant" ? <span className="muted">free (admin grant)</span> : formatINR(paid)}
+                        {r.channel === "admin_grant" ? <span className="muted">free (admin grant)</span> : <Money n={paid} width="100%" />}
                       </td>
                       <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{p?.phone ?? "—"}</td>
                       <td style={{ padding: "6px 8px" }}>{p?.email ?? "—"}</td>

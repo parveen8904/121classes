@@ -338,6 +338,9 @@ type ZohoBill = {
   bill_id: string; vendor_name?: string; currency_code?: string; exchange_rate?: number;
   sub_total?: number; tax_total?: number; total?: number; is_reverse_charge_applied?: boolean;
   gst_treatment?: string; status?: string;
+  /** What Zoho itself holds against the bill — the only honest answer to
+      "is the invoice attached?". Our POST returning 200 is not that answer. */
+  documents?: { document_id?: string; file_name?: string }[];
 };
 
 /**
@@ -353,7 +356,25 @@ function echoOf(b: ZohoBill) {
     sub_total: b.sub_total ?? null, tax_total: b.tax_total ?? null, total: b.total ?? null,
     reverse_charge: b.is_reverse_charge_applied ?? null, gst_treatment: b.gst_treatment ?? null,
     zoho_status: b.status ?? null, read_at: new Date().toISOString(),
+    documents: Array.isArray(b.documents) ? b.documents.length : 0,
   };
+}
+
+/**
+ * Ask Zoho what it holds against one bill and record the answer.
+ *
+ * Used after attaching a file, and to fill the answer in for bills posted
+ * before any of this existed. It is a read — it changes nothing in the books —
+ * so it needs no approval, and it must never throw into whatever called it.
+ */
+export async function refreshBillEcho(id: string, zohoBillId: string): Promise<number | null> {
+  try {
+    const r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${zohoBillId}`);
+    if (!r.bill) return null;
+    const echo = echoOf(r.bill);
+    await createServiceClient().from("provider_bills").update({ zoho_echo: echo }).eq("id", id);
+    return echo.documents;
+  } catch { return null; }
 }
 
 /**

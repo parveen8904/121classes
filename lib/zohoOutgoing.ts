@@ -72,6 +72,20 @@ async function findOrCreateCustomer(name: string, gstin: string, state: string):
   return made.contact.contact_id;
 }
 
+/**
+ * The paper behind a document we raised — a voucher, an agreement, a working.
+ *
+ * Its absence never fails the entry: the figures are right whether or not the
+ * PDF uploaded, and a posting reversed for a file would be worse than a posting
+ * whose paper has to be attached again.
+ */
+async function attachPaper(d: Doc, zohoId: string, kind: "invoice" | "creditnote" | "journal"): Promise<string | null> {
+  if (!d.file_url) return null;
+  const { attachToZoho } = await import("@/lib/zohoAttach");
+  const att = await attachToZoho(kind, zohoId, String(d.file_url), String(d.file_name ?? "voucher.pdf"));
+  return att.ok ? null : `posted, but the voucher is not attached (${att.note})`;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    POSTING ONE DOCUMENT
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -160,8 +174,11 @@ export async function postOutgoing(id: string): Promise<void> {
       else { opened = false; why = m; }
     }
 
+    // The voucher behind it, onto the document itself.
+    const paper = await attachPaper(d, zohoId, d.kind === "credit_note" ? "creditnote" : "invoice");
+
     await svc.from("zoho_documents").update({
-      status: "posted", zoho_id: zohoId,
+      status: "posted", zoho_id: zohoId, paper_note: paper,
       zoho_number: made?.invoice_number ?? made?.creditnote_number ?? null,
       inr_amount: inr || null,
       error: (opened ? "" : `raised but still a draft in Zoho — ${why}`) + tdsNote || null,
@@ -211,9 +228,10 @@ export async function postJournal(d: Doc, id: string, svc: ReturnType<typeof cre
       },
     });
     if (!r.journal?.journal_id) return fail("Zoho did not return the created journal");
+    const paper = await attachPaper(d, r.journal.journal_id, "journal");
     await svc.from("zoho_documents").update({
       status: "posted", zoho_id: r.journal.journal_id, zoho_number: r.journal.entry_number ?? null,
-      error: null, updated_at: new Date().toISOString(),
+      paper_note: paper, error: null, updated_at: new Date().toISOString(),
     }).eq("id", id);
   } catch (e) {
     await fail(e instanceof Error ? e.message : "the journal would not post");

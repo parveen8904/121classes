@@ -306,8 +306,22 @@ export async function raiseDocumentAction(formData: FormData) {
     }
   }
 
+  // The voucher, if he attached one — filed in the vault first so it survives
+  // whatever happens to the posting.
+  let paperRef: string | null = null, paperName: string | null = null;
+  const paper = formData.get("paper") as File | null;
+  if (paper && paper.size) {
+    const safe = (paper.name || "voucher.pdf").replace(/[^\w.\-]+/g, "_").slice(-80);
+    const path = `zoho-vouchers/${Date.now()}-${safe}`;
+    const up = await svc.storage.from("secure").upload(path, Buffer.from(await paper.arrayBuffer()), {
+      contentType: paper.type || "application/pdf", upsert: false,
+    });
+    if (!up.error) { paperRef = `secure:${path}`; paperName = paper.name; }
+  }
+
   const { data: made } = await svc.from("zoho_documents").insert({
     kind,
+    file_url: paperRef, file_name: paperName,
     party_name: str(formData.get("party_name")) || null,
     party_gstin: str(formData.get("party_gstin")) || null,
     party_state: str(formData.get("party_state")) || null,
@@ -369,6 +383,36 @@ export async function retryDocumentAction(formData: FormData) {
     await requestApprovalFor("outgoing", "zoho_documents", id, undefined, me?.id ?? null);
   }
   revalidatePath("/admin/zoho");
+}
+
+export async function attachPaperAction(formData: FormData) {
+  // FOR AN ENTRY ALREADY IN THE BOOKS. Bills posted before this existed have
+  // their invoice in the vault and nothing in Zoho pointing at it.
+  await assertArea("zoho");
+  const me = await currentStaff();
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  const { data: b } = await svc.from("provider_bills")
+    .select("institution, bill_no, zoho_bill_id, vault_doc_id").eq("id", id).maybeSingle();
+  if (!b?.zoho_bill_id || !b.vault_doc_id) return;
+  const { data: doc } = await svc.from("zoho_vault_docs").select("file_url").eq("id", b.vault_doc_id).maybeSingle();
+  if (!doc?.file_url) return;
+
+  if (me?.role !== "admin") {
+    revalidatePath("/admin/zoho");
+    redirect("/admin/zoho?scan=" + encodeURIComponent("Attaching a file changes the books, so it needs CA Parveen Sharma.") + "#bills");
+  }
+
+  const { withFounderApproval } = await import("@/lib/zohoGuard");
+  const { attachToZoho } = await import("@/lib/zohoAttach");
+  const att = await withFounderApproval(`attach:${id}`, () =>
+    attachToZoho("bill", String(b.zoho_bill_id), String(doc.file_url), `${b.institution}-${b.bill_no ?? "invoice"}.pdf`));
+  await svc.from("provider_bills").update({
+    paper_note: att.ok ? null : `the invoice is not attached (${att.note})`,
+  }).eq("id", id);
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(att.ok ? "The invoice is now attached to that bill in Zoho." : `Not attached — ${att.note}`)}#bills`);
 }
 
 export async function ingestActivityCsvAction(formData: FormData) {
@@ -539,6 +583,9 @@ export async function approveBrokerageNoteAction(formData: FormData) {
 
   const { data: doc } = await svc.from("zoho_documents").insert({
     kind: "journal", doc_date: n.period_end,
+    // The broker's own file travels with the entry it justifies.
+    file_url: n.source_url ?? null,
+    file_name: `${n.account_name} ${n.period_start} to ${n.period_end}.csv`,
     description: built.narration,
     reference: `${n.account_name} ${n.period_start}..${n.period_end}`,
     amount: built.lines.filter((l) => l.side === "debit").reduce((t, l) => t + l.amount, 0),

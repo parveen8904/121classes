@@ -60,7 +60,7 @@ export async function postAdvance(advanceId: string): Promise<void> {
 export async function postBill(billId: string, expenseAccount: string): Promise<void> {
   const svc = createServiceClient();
   const { data: bill } = await svc.from("petty_bills")
-    .select("id, bill_date, amount, purpose, status, person:person_id(name, zoho_account_name)")
+    .select("id, bill_date, amount, purpose, status, file_url, person:person_id(name, zoho_account_name)")
     .eq("id", billId).maybeSingle();
   if (!bill) throw new Error("bill not found");
   const person = bill.person as unknown as { name: string; zoho_account_name: string } | null;
@@ -81,9 +81,20 @@ export async function postBill(billId: string, expenseAccount: string): Promise<
       },
     });
     if (!j.journal?.journal_id) throw new Error("Zoho did not return the journal");
+
+    // The bill they photographed, onto the entry it became. A petty-cash entry
+    // with no paper is exactly the one an auditor asks about.
+    let paper: string | null = null;
+    if (bill.file_url) {
+      const { attachToZoho } = await import("@/lib/zohoAttach");
+      const att = await attachToZoho("journal", j.journal.journal_id, String(bill.file_url),
+        `${person.name} ${String(bill.bill_date)}.pdf`.replace(/[^\w.\- ]+/g, "_"));
+      if (!att.ok) paper = `posted, but the bill image is not attached (${att.note})`;
+    }
+
     await svc.from("petty_bills").update({
       status: "approved", expense_account: expenseAccount, zoho_journal_id: j.journal.journal_id,
-      error: null, updated_at: new Date().toISOString(),
+      paper_note: paper, error: null, updated_at: new Date().toISOString(),
     }).eq("id", billId);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "posting failed";

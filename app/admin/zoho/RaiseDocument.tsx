@@ -270,6 +270,16 @@ export default function RaiseDocument({ action, accountList, accounts, isFounder
         </>
       )}
 
+      <div style={{ marginTop: 12 }}>
+        <label style={{ fontSize: ".75rem" }}>
+          {kind === "journal" ? "The working or voucher behind this entry (optional)" : "The signed copy or voucher (optional)"}
+        </label>
+        <input type="file" name="paper" accept="application/pdf,image/*" style={{ marginBottom: 0, maxWidth: 320 }} />
+        <div className="muted" style={{ fontSize: ".7rem", marginTop: 2 }}>
+          Filed in the vault and attached to the entry in Zoho, so the two are never a separate hunt.
+        </div>
+      </div>
+
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
         <SubmitButton className="btn small" savedLabel="✓ Done"
           disabled={kind === "journal" && !balanced}>

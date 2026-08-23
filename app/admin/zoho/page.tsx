@@ -11,7 +11,7 @@ import RaiseDocument from "./RaiseDocument";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -321,10 +321,11 @@ export default async function ZohoHubPage(props: {
     id: string; institution: string; bill_no: string | null; bill_date: string | null; error: string | null;
     zoho_echo: { currency?: string | null; total?: number | null; exchange_rate?: number | null;
       tax_total?: number | null; reverse_charge?: boolean | null; zoho_status?: string | null } | null;
+    paper_note: string | null; vault_doc_id: string | null; zoho_bill_id: string | null;
   };
   const { data: billsPostedData } = hubConnected
     ? await createServiceClient().from("provider_bills")
-        .select("id, institution, bill_no, bill_date, zoho_echo, error")
+        .select("id, institution, bill_no, bill_date, zoho_echo, error, paper_note, vault_doc_id, zoho_bill_id")
         .eq("status", "posted").order("bill_date", { ascending: false }).limit(50)
     : { data: [] as never[] };
   const billsPostedRows = (billsPostedData ?? []) as unknown as PostedBillRow[];
@@ -1613,6 +1614,43 @@ export default async function ZohoHubPage(props: {
               </details>
             );
           })}
+
+          {billsPostedRows.length > 0 && (
+            <details className="card" style={{ marginTop: 10 }}>
+              <summary className="btn small secondary as-btn">📗 In the books ({billsPostedRows.length}) — with their paper</summary>
+              <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0" }}>
+                What Zoho holds, and whether the supplier&apos;s own invoice is attached to it there. An entry and the
+                document behind it should never be two separate hunts.
+              </p>
+              {billsPostedRows.map((r) => (
+                <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline", padding: "5px 0", borderTop: "1px solid rgba(0,0,0,.06)", fontSize: ".83rem" }}>
+                  <span style={{ minWidth: 88 }}>{r.bill_date}</span>
+                  <strong style={{ minWidth: 96 }}>{r.institution}</strong>
+                  <span className="muted" style={{ minWidth: 120 }}>{r.bill_no ?? "—"}</span>
+                  {r.zoho_echo && (
+                    <span className="muted">
+                      {r.zoho_echo.currency} {r.zoho_echo.total}
+                      {r.zoho_echo.exchange_rate && r.zoho_echo.currency !== "INR" ? ` @ ₹${r.zoho_echo.exchange_rate}` : ""}
+                      {r.zoho_echo.reverse_charge ? " · RCM" : ""}
+                      {r.zoho_echo.zoho_status ? ` · ${r.zoho_echo.zoho_status}` : ""}
+                    </span>
+                  )}
+                  {r.error && <span style={{ color: "#b45309" }}>⚠ {r.error}</span>}
+                  <span style={{ marginLeft: "auto" }}>
+                    {!r.vault_doc_id || !r.zoho_bill_id ? null
+                      : r.paper_note
+                        ? <span style={{ color: "#b45309", fontSize: ".78rem" }}>📎 {r.paper_note}</span>
+                        : (
+                          <form action={attachPaperAction} style={{ margin: 0 }}>
+                            <input type="hidden" name="id" value={r.id} />
+                            <SubmitButton className="btn small secondary" savedLabel="📎 attached">📎 Attach the invoice</SubmitButton>
+                          </form>
+                        )}
+                  </span>
+                </div>
+              ))}
+            </details>
+          )}
 
           {raised.length > 0 && (
             <details className="card" style={{ marginTop: 10 }}>

@@ -503,8 +503,12 @@ export async function rebuildBrokerageNoteAction(formData: FormData) {
           await svc.from("brokerage_notes").update({ workbook: wb, note: null }).eq("id", r.id);
         }
       }
-      const rates = (r.note as unknown as { ratesUsed?: unknown[] }).ratesUsed?.length ?? 0;
-      note = `Rebuilt from the activity file${rates ? ` — ${rates} Rule 115 rates recorded and shown` : ""}.`;
+      // Read the count back off the saved row: the working note returned here is
+      // the statement, and the rates are recorded alongside it, so asking the
+      // note for them would always have answered none.
+      const { data: saved } = await svc.from("brokerage_notes").select("workbook").eq("id", r.id).maybeSingle();
+      const rates = ((saved?.workbook as { ratesUsed?: unknown[] } | null)?.ratesUsed ?? []).length;
+      note = `Rebuilt from the activity file${rates ? ` — ${rates} Rule 115 rates recorded and shown` : ", but no exchange rate could be found for any of its dates"}.`;
     }
   } catch (e) { note = `It could not be rebuilt — ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");

@@ -32,7 +32,8 @@ export default function Money({
   /** Every cell in one column must be given the same width, or nothing lines up. */
   width?: number | string;
   bold?: boolean;
-  /** Show a leading − / + — for ledgers where direction matters. */
+  /** Also show a leading + on positives — for a column where direction matters.
+      A MINUS IS NEVER OPTIONAL and is shown whether or not this is set. */
   sign?: boolean;
   className?: string;
 }) {
@@ -50,7 +51,13 @@ export default function Money({
 
   if (!known) return <span className={className ?? "muted"} style={shell}>—</span>;
 
-  const lead = sign && v !== 0 ? (v < 0 ? "−" : "+") : "";
+  // A NEGATIVE FIGURE MUST CARRY ITS SIGN, ALWAYS.
+  //
+  // The first version showed the minus only when the caller asked for signs, so
+  // −$2,020.24 of margin interest appeared in the rupee column as ₹1,91,114.70 —
+  // a charge printed as though it were a receipt. Nothing about a money column
+  // is worth more than getting the direction right.
+  const lead = v < 0 ? "−" : sign && v > 0 ? "+" : "";
   return (
     <span className={className} style={shell}>
       <span aria-hidden>{lead}₹</span>

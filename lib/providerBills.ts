@@ -516,11 +516,47 @@ export async function postProviderBill(id: string): Promise<void> {
     const operating = String(b.operating ?? p.operating ?? "operating");
     const { zohoDocument, tdsWorking } = await import("@/lib/postingShape");
     const doc = zohoDocument(nature as never);
-    if (doc === "journal" || doc === "credit_note") {
-      return fail(
-        `this one is ${nature.replace("_", " ")} — it belongs in a ${doc === "journal" ? "journal entry" : "credit note"}, ` +
-        `which this desk does not raise yet. Post it in Zoho by hand, or change what it is.`,
-      );
+
+    // NOT EVERY ARRIVING PAPER IS A BILL. Income and liabilities become a
+    // journal, a credit note we are giving becomes a credit note — each raised
+    // through the same code that raises them from the desk itself, so there is
+    // one way of making each document rather than two that can drift apart.
+    if (doc !== "bill") {
+      const inrNow = rate ? Number((total * rate).toFixed(2)) : total;
+      const { data: made } = await svc.from("zoho_documents").insert({
+        kind: doc === "vendor_credit" ? "vendor_credit" : doc,
+        party_name: String(p.vendor_name ?? b.institution),
+        doc_date: b.bill_date, doc_no: null,
+        reference: str(b.bill_no) || null,
+        description: `${b.institution} ${str(b.bill_no)}`.trim(),
+        amount: total, currency, rate, inr_amount: inrNow,
+        nature, operating, ledger: String(p.expense_account ?? ""),
+        sub_account: b.sub_account ?? null,
+        gst_treatment: p.gst_treatment === "none" ? "none" : "charged",
+        gst_rate: Number(p.gst_rate ?? 18),
+        journal_lines: doc === "journal" ? [
+          // The money side against the head he chose. Which way round depends on
+          // whether this is something earned or something owed.
+          { account: "Razorpay Clearing", side: nature === "income" ? "debit" : "credit", amount: inrNow, note: "to be matched to the bank" },
+          { account: String(p.expense_account ?? ""), side: nature === "income" ? "credit" : "debit", amount: inrNow,
+            note: str(b.bill_no), nature, operating },
+        ] : null,
+      }).select("id").single();
+
+      if (!made?.id) return fail("could not prepare that as a journal or credit note");
+      const { postOutgoing } = await import("@/lib/zohoOutgoing");
+      await postOutgoing(String(made.id));
+      const { data: after } = await svc.from("zoho_documents").select("status, zoho_number, error").eq("id", made.id).maybeSingle();
+      if (after?.status !== "posted") return fail(String(after?.error ?? "it would not post"));
+
+      await svc.from("provider_bills").update({
+        status: "posted", zoho_bill_id: null,
+        rate, inr_amount: inrNow,
+        error: `posted as a ${doc.replace("_", " ")}${after.zoho_number ? ` — ${after.zoho_number}` : ""}`,
+        updated_at: new Date().toISOString(),
+      }).eq("id", id);
+      if (b.vault_doc_id) await svc.from("zoho_vault_docs").update({ is_processed: true }).eq("id", b.vault_doc_id);
+      return;
     }
     const accountId = await ledgerId(String(p.expense_account), nature, operating);
 

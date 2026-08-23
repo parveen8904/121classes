@@ -14,10 +14,13 @@ export default function SubmitButton({
   style,
   name,
   value,
+  disabled = false,
 }: {
   children: React.ReactNode;
   className?: string;
   savedLabel?: string;
+  /** Held closed by the form itself — a journal that does not balance, say. */
+  disabled?: boolean;
   closeDetails?: boolean;
   style?: React.CSSProperties;
   /** Optional form field submitted when THIS button is the one clicked. */
@@ -45,7 +48,7 @@ export default function SubmitButton({
 
   return (
     <>
-      <button ref={ref} className={className} type="submit" disabled={pending} aria-busy={pending} style={style} name={name} value={value}>
+      <button ref={ref} className={className} type="submit" disabled={pending || disabled} aria-busy={pending} style={style} name={name} value={value}>
         {pending ? (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <span className="btn-spinner" aria-hidden="true" /> Saving…

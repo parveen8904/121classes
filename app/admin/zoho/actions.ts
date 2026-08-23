@@ -271,6 +271,106 @@ export async function rejectZohoAction(formData: FormData) {
   redirect("/admin/zoho#approvals");
 }
 
+export async function raiseDocumentAction(formData: FormData) {
+  // WHAT WE RAISE — an invoice, a credit note, or a journal entry.
+  //
+  // Prepared here with the same questions the incoming side asks, then it waits
+  // for him exactly as everything else does. The founder pressing the button IS
+  // the approval and it posts; anyone else is asking.
+  await assertArea("zoho");
+  const me = await currentStaff();
+  const isFounder = me?.role === "admin";
+  const kind = str(formData.get("kind")) || "invoice";
+  const svc = createServiceClient();
+
+  const amount = Number(formData.get("amount")) || 0;
+  const rate = Number(formData.get("rate")) || null;
+  const currency = str(formData.get("currency")) || "INR";
+
+  // A journal carries its own lines; everything else carries a party.
+  const lines: { account: string; side: string; amount: number; note?: string; nature?: string; operating?: string }[] = [];
+  if (kind === "journal") {
+    for (let i = 0; i < 6; i++) {
+      const acc = str(formData.get(`jl_account_${i}`));
+      const amt = Number(formData.get(`jl_amount_${i}`)) || 0;
+      if (!acc || !amt) continue;
+      lines.push({
+        account: acc, side: str(formData.get(`jl_side_${i}`)) === "credit" ? "credit" : "debit",
+        amount: amt, note: str(formData.get(`jl_note_${i}`)) || undefined,
+        nature: str(formData.get(`jl_nature_${i}`)) || "expense",
+        operating: str(formData.get(`jl_operating_${i}`)) || "operating",
+      });
+    }
+    if (lines.length < 2) {
+      redirect("/admin/zoho?scan=" + encodeURIComponent("A journal needs at least two lines with an account and an amount.") + "#raise");
+    }
+  }
+
+  const { data: made } = await svc.from("zoho_documents").insert({
+    kind,
+    party_name: str(formData.get("party_name")) || null,
+    party_gstin: str(formData.get("party_gstin")) || null,
+    party_state: str(formData.get("party_state")) || null,
+    doc_date: str(formData.get("doc_date")) || new Date().toISOString().slice(0, 10),
+    doc_no: str(formData.get("doc_no")) || null,
+    reference: str(formData.get("reference")) || null,
+    description: str(formData.get("description")) || null,
+    amount: kind === "journal" ? lines.filter((l) => l.side === "debit").reduce((t, l) => t + l.amount, 0) : amount,
+    currency, rate,
+    inr_amount: kind === "journal"
+      ? lines.filter((l) => l.side === "debit").reduce((t, l) => t + l.amount, 0)
+      : rate ? Number((amount * rate).toFixed(2)) : amount,
+    nature: str(formData.get("nature")) || "income",
+    operating: str(formData.get("operating")) || "operating",
+    ledger: str(formData.get("ledger")) || null,
+    sub_account: str(formData.get("sub_account")) || null,
+    gst_treatment: str(formData.get("gst_treatment")) || "charged",
+    gst_rate: Number(formData.get("gst_rate")) || 18,
+    tds_rate: Number(formData.get("tds_rate")) || null,
+    tds_section: str(formData.get("tds_section")) || null,
+    journal_lines: kind === "journal" ? lines : null,
+    created_by: me?.id ?? null,
+  }).select("id").single();
+
+  if (!made?.id) {
+    redirect("/admin/zoho?scan=" + encodeURIComponent("That could not be saved — please try again.") + "#raise");
+  }
+
+  if (isFounder) {
+    const { withFounderApproval } = await import("@/lib/zohoGuard");
+    const { postOutgoing } = await import("@/lib/zohoOutgoing");
+    let note: string;
+    try {
+      await withFounderApproval(`inline:${made.id}`, () => postOutgoing(String(made.id)));
+      const { data: after } = await svc.from("zoho_documents").select("status, zoho_number, error").eq("id", made.id).maybeSingle();
+      note = after?.status === "posted"
+        ? `Posted to Zoho${after.zoho_number ? ` as ${after.zoho_number}` : ""}.${after.error ? ` ${after.error}` : ""}`
+        : `Not posted — ${after?.error ?? "see the row"}`;
+    } catch (e) { note = `Not posted — ${e instanceof Error ? e.message : "unknown"}`; }
+    revalidatePath("/admin/zoho");
+    redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#raise`);
+  }
+
+  await requestApprovalFor("outgoing", "zoho_documents", String(made.id), undefined, me?.id ?? null);
+  revalidatePath("/admin/zoho");
+  redirect("/admin/zoho?scan=" + encodeURIComponent("Sent to CA Parveen Sharma for approval.") + "#raise");
+}
+
+export async function retryDocumentAction(formData: FormData) {
+  await assertArea("zoho");
+  const me = await currentStaff();
+  const id = str(formData.get("id"));
+  if (!id) return;
+  if (me?.role === "admin") {
+    const { withFounderApproval } = await import("@/lib/zohoGuard");
+    const { postOutgoing } = await import("@/lib/zohoOutgoing");
+    try { await withFounderApproval(`inline:${id}`, () => postOutgoing(id)); } catch { /* the row keeps its reason */ }
+  } else {
+    await requestApprovalFor("outgoing", "zoho_documents", id, undefined, me?.id ?? null);
+  }
+  revalidatePath("/admin/zoho");
+}
+
 export async function removeBillAction(formData: FormData) {
   // Take an invoice off the list. Nothing is deleted — the PDF stays in the
   // vault and the row stays with its reason, because "why is this not in the

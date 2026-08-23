@@ -19,7 +19,8 @@ export type ApprovalKind =
   | "brokerage_line"   // one brokerage transaction
   | "sale"             // a portal sale → invoice + receipt
   | "petty_bill"       // a petty-cash bill
-  | "petty_advance";   // a petty-cash advance
+  | "petty_advance"    // a petty-cash advance
+  | "outgoing";        // an invoice, credit note or journal WE raise
 
 /** What each kind actually does, once he has released it. */
 const EXECUTORS: Record<ApprovalKind, (refId: string, details: Record<string, unknown>) => Promise<void>> = {
@@ -32,6 +33,7 @@ const EXECUTORS: Record<ApprovalKind, (refId: string, details: Record<string, un
   sale: async (id) => (await import("@/lib/zohoPosting")).postSale(id),
   petty_bill: async (id, d) => (await import("@/lib/pettyCash")).postBill(id, String(d.expenseAccount ?? "")),
   petty_advance: async (id) => (await import("@/lib/pettyCash")).postAdvance(id),
+  outgoing: async (id) => (await import("@/lib/zohoOutgoing")).postOutgoing(id),
 };
 
 export type ApprovalRow = {
@@ -169,6 +171,20 @@ async function describe(kind: ApprovalKind, refId: string): Promise<{ summary: s
   if (kind === "petty_bill") {
     const r = await one("petty_bills", "bill_date, amount, purpose");
     return { summary: r ? `Petty cash ${r.bill_date} — ${r.purpose} · ${money(r.amount)}` : "A petty-cash bill", details: { ...(r ?? {}) } };
+  }
+  if (kind === "outgoing") {
+    const r = await one("zoho_documents", "kind, party_name, doc_date, description, amount, currency, inr_amount, ledger, gst_treatment, gst_rate, tds_rate, journal_lines");
+    if (!r) return { summary: "A document to raise", details: {} };
+    const what = r.kind === "credit_note" ? "Credit note" : r.kind === "journal" ? "Journal entry" : "Invoice";
+    const lines = (r.journal_lines ?? []) as { account: string; side: string; amount: number }[];
+    return {
+      summary: r.kind === "journal"
+        ? `${what} of ${r.doc_date} — ${lines.map((l) => `${l.side === "debit" ? "Dr" : "Cr"} ${l.account} ${money(l.amount)}`).join(", ")}`
+        : `${what} to ${r.party_name} of ${r.doc_date} — ${money(r.inr_amount ?? r.amount)} → ${r.ledger}` +
+          `${r.gst_treatment === "charged" ? ` · GST ${r.gst_rate}%` : " · no GST"}` +
+          `${Number(r.tds_rate) > 0 ? ` · they withhold ${r.tds_rate}% TDS` : ""}`,
+      details: { ...r },
+    };
   }
   if (kind === "petty_advance") {
     const r = await one("petty_advances", "advance_date, amount");

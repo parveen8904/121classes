@@ -7,10 +7,11 @@ import { getSecret } from "@/lib/secrets";
 import { zohoConfigured } from "@/lib/zohoApi";
 import { FVD, KNOWN_FOREIGN_VENDORS } from "@/lib/foreignVendorDesk";
 import EntryEditor from "./EntryEditor";
+import RaiseDocument from "./RaiseDocument";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -248,6 +249,16 @@ export default async function ZohoHubPage(props: {
   type ForeignRule = { institution: string; country: string | null; service_category: string | null;
     billing_frequency: string | null; has_trc: boolean; has_form10f: boolean; has_no_pe: boolean;
     has_395_cert: boolean; expected_annual: number | null };
+
+  type RaisedRow = { id: string; kind: string; status: string; party_name: string | null; doc_date: string;
+    doc_no: string | null; zoho_number: string | null; description: string | null; inr_amount: number | null;
+    ledger: string | null; gst_treatment: string; gst_rate: number | null; tds_rate: number | null; error: string | null };
+  const { data: raisedData } = hubConnected
+    ? await createServiceClient().from("zoho_documents")
+        .select("id, kind, status, party_name, doc_date, doc_no, zoho_number, description, inr_amount, ledger, gst_treatment, gst_rate, tds_rate, error")
+        .order("created_at", { ascending: false }).limit(25)
+    : { data: [] as never[] };
+  const raised = (raisedData ?? []) as unknown as RaisedRow[];
 
   // One list, one card each: everything that still needs a decision.
   const billsWaiting = bills
@@ -1262,6 +1273,54 @@ export default async function ZohoHubPage(props: {
                   )}
                 </div>
               ))}
+            </details>
+          )}
+        </div>
+      )}
+
+      {/* ── What we raise ───────────────────────────────────────────── */}
+      {hubConnected && (
+        <div id="raise">
+          <h2 className="admin-section-title" style={{ marginTop: 26 }}>📤 Invoices, credit notes &amp; journals we raise</h2>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
+            The other half of the books — what goes out, and everything that fits neither a bill nor an invoice.
+            The same questions as an invoice that arrives, with one reversal: on our own invoice the
+            <strong> customer withholds the TDS</strong>, so it is money owed to us, not money we pay.
+          </p>
+
+          <RaiseDocument action={raiseDocumentAction} accountList="acct-names" isFounder={isFounder} />
+
+          {raised.length > 0 && (
+            <details className="card" style={{ marginTop: 10 }}>
+              <summary className="btn small secondary as-btn">📗 Raised so far ({raised.length})</summary>
+              <div style={{ marginTop: 8 }}>
+                {raised.map((r) => (
+                  <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline", padding: "6px 0", borderTop: "1px solid rgba(0,0,0,.06)", fontSize: ".84rem" }}>
+                    <span style={{ minWidth: 88 }}>{r.doc_date}</span>
+                    <span style={{ minWidth: 92 }}>
+                      {r.kind === "credit_note" ? "Credit note" : r.kind === "journal" ? "Journal" : "Invoice"}
+                    </span>
+                    <strong style={{ minWidth: 130 }}>{r.party_name ?? r.description ?? "—"}</strong>
+                    <span style={{ minWidth: 90, fontWeight: 600 }}>
+                      {r.inr_amount !== null ? `₹${Number(r.inr_amount).toLocaleString("en-IN")}` : "—"}
+                    </span>
+                    <span className="muted">{r.ledger ?? ""}{Number(r.tds_rate) > 0 ? ` · TDS ${r.tds_rate}% withheld` : ""}</span>
+                    <span style={{ marginLeft: "auto" }}>
+                      {r.status === "posted"
+                        ? <span style={{ color: "#0e6e52" }}>✅ {r.zoho_number ?? "posted"}</span>
+                        : r.status === "failed"
+                          ? <span style={{ color: "#b91c1c" }}>❌ {r.error}</span>
+                          : <span className="muted">waiting</span>}
+                    </span>
+                    {r.status === "failed" && (
+                      <form action={retryDocumentAction} style={{ margin: 0 }}>
+                        <input type="hidden" name="id" value={r.id} />
+                        <SubmitButton className="btn small secondary" savedLabel="↻">Try again</SubmitButton>
+                      </form>
+                    )}
+                  </div>
+                ))}
+              </div>
             </details>
           )}
         </div>

@@ -283,6 +283,84 @@ export async function rejectZohoAction(formData: FormData) {
   redirect("/admin/zoho#approvals");
 }
 
+export async function decideBillAction(formData: FormData) {
+  // ONE BUTTON FOR THE WHOLE INVOICE.
+  //
+  // Whatever is on the card when it is pressed IS the entry: the account, the
+  // GST position, the TDS, the amount, the date. Anything changed here is
+  // changed here — Zoho is never the place to correct it — and unless told
+  // otherwise the corrected version becomes the rule for that vendor, so the
+  // same question is not asked again next month.
+  //
+  // Who presses it decides what happens next. The founder pressing it IS the
+  // approval, so it posts. Anyone else is asking him, and it waits.
+  await assertArea("zoho");
+  const me = await currentStaff();
+  const isFounder = me?.role === "admin";
+  const id = str(formData.get("id"));
+  if (!id) return;
+
+  const svc = createServiceClient();
+  const { data: bill } = await svc.from("provider_bills").select("*").eq("id", id).maybeSingle();
+  if (!bill) return;
+
+  const expense_account = str(formData.get("expense_account"));
+  const gst_treatment = str(formData.get("gst_treatment")) || "rcm";
+  const gst_tax_name = str(formData.get("gst_tax_name")) || null;
+  const tds_rate = formData.get("tds_rate") === null || str(formData.get("tds_rate")) === ""
+    ? null : Number(formData.get("tds_rate"));
+  const tds_section = str(formData.get("tds_section")) || (tds_rate ? "393(2) Sl.17" : null);
+  const billDate = str(formData.get("bill_date")) || bill.bill_date;
+  const amount = Number(formData.get("amount")) || Number(bill.amount);
+  const rate = Number(formData.get("rate")) || Number(bill.rate) || null;
+  const vendor_name = str(formData.get("vendor_name")) || String(bill.institution);
+
+  const proposal = {
+    ...(bill.proposal as Record<string, unknown> ?? {}),
+    vendor_name, expense_account, gst_treatment, gst_tax_name,
+    gst_rate: Number(formData.get("gst_rate")) || 18,
+    tds_section, tds_rate,
+  };
+
+  await svc.from("provider_bills").update({
+    bill_date: billDate, amount,
+    rate, inr_amount: rate ? Number((amount * rate).toFixed(2)) : amount,
+    proposal, status: "draft", error: null, updated_at: new Date().toISOString(),
+  }).eq("id", id);
+
+  // "When asked, that becomes a rule."
+  if (str(formData.get("as_rule")) !== "no" && expense_account) {
+    const { saveBillRule } = await import("@/lib/providerBills");
+    try {
+      await saveBillRule({
+        institution: String(bill.institution), vendor_name, expense_account,
+        gst_treatment, gst_rate: Number(formData.get("gst_rate")) || 18,
+        tds_section, tds_rate, gst_tax_name,
+      });
+    } catch { /* the entry still stands even if the rule could not be kept */ }
+  }
+
+  if (isFounder) {
+    // His press is the approval. It goes.
+    const { withFounderApproval } = await import("@/lib/zohoGuard");
+    const { postProviderBill } = await import("@/lib/providerBills");
+    let note: string;
+    try {
+      await withFounderApproval(`inline:${id}`, () => postProviderBill(id));
+      const { data: after } = await svc.from("provider_bills").select("status, error").eq("id", id).maybeSingle();
+      note = after?.status === "posted" ? "Posted to Zoho." : `Not posted — ${after?.error ?? "see the row"}`;
+    } catch (e) {
+      note = `Not posted — ${e instanceof Error ? e.message : "unknown"}`;
+    }
+    revalidatePath("/admin/zoho");
+    redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);
+  }
+
+  await requestApprovalFor("provider_bill", "provider_bills", id, undefined, me?.id ?? null);
+  revalidatePath("/admin/zoho");
+  redirect("/admin/zoho?scan=" + encodeURIComponent("Sent to CA Parveen Sharma for approval.") + "#bills");
+}
+
 export async function saveForeignAnswersAction(formData: FormData) {
   // THE ACCOUNTS DESK ANSWERS THESE. They are questions of fact — where the
   // vendor is, what they actually did, which papers are on file — not rulings

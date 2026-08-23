@@ -8,7 +8,7 @@ import { FVD, KNOWN_FOREIGN_VENDORS } from "@/lib/foreignVendorDesk";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, readbackBillsAction, recheckBillDatesAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, readbackBillsAction, recheckBillDatesAction, decideBillAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -220,43 +220,40 @@ export default async function ZohoHubPage(props: {
 
   // Provider invoices waiting to become Zoho BILLS.
   type ProviderBillRow = { id: string; institution: string; bill_no: string | null; bill_date: string | null; currency: string; amount: number | null; inr_amount: number | null; rate: number | null; status: string; proposal: { vendor_name?: string; expense_account?: string; gst_treatment?: string; gst_rate?: number; tds_section?: string | null; tds_rate?: number | null } | null; error: string | null;
-    determination: { tdsLabel?: string; confidence?: string; form145Part?: string | null; form146Required?: boolean; warnings?: string[]; certAdvice?: { why: string; points: string[] } | null; grossedUp?: number | null } | null };
+    determination: { tdsLabel?: string; tdsRate?: number | null; confidence?: string; form145Part?: string | null; form146Required?: boolean; warnings?: string[]; certAdvice?: { why: string; points: string[] } | null; grossedUp?: number | null } | null };
   const { data: billData } = hubConnected
     ? await createServiceClient().from("provider_bills")
         .select("id, institution, bill_no, bill_date, currency, amount, inr_amount, rate, status, proposal, error, determination")
         .in("status", ["needs_info", "draft", "failed"]).order("bill_date")
     : { data: [] as never[] };
   const bills = (billData ?? []) as unknown as ProviderBillRow[];
-  const billsDraft = bills.filter((b) => b.status === "draft");
-  const billsAsk = bills.filter((b) => b.status === "needs_info");
-  const billsFailed = bills.filter((b) => b.status === "failed");
-  // One card per vendor still without a ruling.
   // Everything waiting on him before it can reach Zoho.
   const { listPending } = await import("@/lib/zohoApprovals");
   const pendingApprovals = hubConnected ? await listPending() : [];
 
-  const askVendors = [...new Set(billsAsk.map((b) => b.institution))];
-  // A foreign vendor whose withholding questions have never been answered. The
-  // treatment card cannot help here — without the country and what they did,
-  // there is no way to know what to withhold.
   const { data: ruleRows } = hubConnected
     ? await createServiceClient().from("provider_bill_rules").select("*")
     : { data: [] as never[] };
-  const answered = new Set((ruleRows ?? [])
-    .filter((r) => r.country && r.service_category && r.billing_frequency)
-    .map((r) => String(r.institution)));
-  const foreignAsk = [...new Set(bills
-    .filter((b) => (b.currency || "USD") !== "INR" && !answered.has(b.institution))
-    .map((b) => b.institution))];
-  // Answers already on file. They are not frozen — a residency certificate
-  // arrives, a s.395 certificate is granted, a vendor starts doing bespoke work
-  // — and changing them re-works every invoice of theirs still waiting.
   type ForeignRule = { institution: string; country: string | null; service_category: string | null;
     billing_frequency: string | null; has_trc: boolean; has_form10f: boolean; has_no_pe: boolean;
     has_395_cert: boolean; expected_annual: number | null };
-  const foreignOnFile = ((ruleRows ?? []) as unknown as ForeignRule[])
-    .filter((r) => r.country && r.service_category)
-    .sort((a, b) => a.institution.localeCompare(b.institution));
+
+  // One list, one card each: everything that still needs a decision.
+  const billsWaiting = bills
+    .filter((b) => b.status === "needs_info" || b.status === "draft" || b.status === "failed")
+    .sort((a, b) => String(a.bill_date ?? "").localeCompare(String(b.bill_date ?? "")));
+  const allRules = (ruleRows ?? []) as unknown as (ForeignRule & {
+    vendor_name?: string; expense_account?: string; gst_treatment?: string;
+    gst_rate?: number; tds_section?: string | null; tds_rate?: number | null; gst_tax_name?: string | null })[];
+  const ruleFor = (inst: string) => allRules.find((r) => r.institution === inst);
+  const seedFor = (inst: string) =>
+    Object.entries(KNOWN_FOREIGN_VENDORS).find(([k]) => inst.toLowerCase().includes(k.toLowerCase()))?.[1];
+  const fyNow = (() => {
+    const now = new Date();
+    const y = now.getUTCFullYear(), m = now.getUTCMonth() + 1;
+    const start = m < 4 ? y - 1 : y;
+    return `FY ${start}-${String((start + 1) % 100).padStart(2, "0")}`;
+  })();
   type PostedBillRow = {
     id: string; institution: string; bill_no: string | null; bill_date: string | null; error: string | null;
     zoho_echo: { currency?: string | null; total?: number | null; exchange_rate?: number | null;
@@ -1060,288 +1057,184 @@ export default async function ZohoHubPage(props: {
         </div>
       )}
 
-      {/* ── Provider invoices → Zoho bills ──────────────────────────── */}
+      {/* ── Bills: one card per invoice, and nothing else ───────────── */}
       {hubConnected && (
         <div id="bills">
-          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 26 }}>
-            <h2 className="admin-section-title" style={{ margin: 0 }}>🧾 Provider invoices → Zoho bills</h2>
-            <form action={scanBillsAction} style={{ margin: 0 }}>
-              <SubmitButton className="btn small secondary" savedLabel="Scanned">🔄 Read the vault for new bills</SubmitButton>
-            </form>
-            <form action={recheckBillDatesAction} style={{ margin: 0 }}>
-              <SubmitButton className="btn small secondary" savedLabel="Checked">📅 Check posted dates against the paper</SubmitButton>
-            </form>
-            <form action={readbackBillsAction} style={{ margin: 0 }}>
-              <SubmitButton className="btn small secondary" savedLabel="Checked">🔍 Check &amp; finish in Zoho</SubmitButton>
-            </form>
-            <span className="muted" style={{ fontSize: ".8rem" }}>✅ posted {billsPosted ?? 0}</span>
-          </div>
-          <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 10px" }}>
-            Filing the PDF is not the accounting. Each invoice becomes a <strong>vendor bill</strong> — expense
-            account, GST position and TDS. Those are your calls, so the desk asks <strong>once per vendor</strong>,
-            remembers the answer, and every later invoice from them arrives already proposed. Foreign services post
-            under <strong>reverse charge</strong>; the figures convert at their Rule-115 rate.
+          <h2 className="admin-section-title" style={{ marginTop: 26 }}>🧾 Bills to approve ({billsWaiting.length})</h2>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
+            Put the invoice in, answer what it asks, and it comes back with the entry it proposes — the account,
+            the GST and the TDS. Change anything you disagree with <strong>here</strong>, never in Zoho, and it
+            posts the way you left it. What you change is remembered for that supplier.
           </p>
 
-          {/* The team's own door: supplier + file, and it is both filed and queued. */}
-          <form action={uploadBillAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 10 }}>
-            <div style={{ minWidth: 180 }}>
-              <label style={{ fontSize: ".75rem" }}>📤 Upload a bill — supplier</label>
+          <form action={uploadBillAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
+            <div style={{ minWidth: 190 }}>
+              <label style={{ fontSize: ".75rem" }}>📤 Supplier</label>
               <input name="institution" list="inst-names" required placeholder="e.g. Vercel / HYTONE / BSES" style={{ marginBottom: 0 }} />
             </div>
-            <div style={{ minWidth: 150 }}>
-              <label style={{ fontSize: ".75rem" }}>Description (optional)</label>
-              <input name="title" placeholder="e.g. Aug 2026" style={{ marginBottom: 0 }} />
-            </div>
-            <div>
-              <label style={{ fontSize: ".75rem" }}>Year</label>
-              <input name="year_label" list="year-labels" defaultValue="FY 2026-27" style={{ marginBottom: 0, width: 130 }} />
-            </div>
-            <div>
+            <div style={{ minWidth: 210 }}>
               <label style={{ fontSize: ".75rem" }}>The invoice (PDF)</label>
-              <input type="file" name="file" required accept="application/pdf,image/*" style={{ marginBottom: 0 }} />
+              <input type="file" name="file" required accept="application/pdf" style={{ marginBottom: 0 }} />
             </div>
-            <SubmitButton className="btn small" savedLabel="✓ Filed">📤 File &amp; queue it</SubmitButton>
-            <span className="muted" style={{ fontSize: ".76rem" }}>Goes to the vault and into this queue in one step.</span>
+            <input type="hidden" name="year_label" value={fyNow} />
+            <SubmitButton className="btn small" savedLabel="✓ Read">📥 Add this invoice</SubmitButton>
+            <span className="muted" style={{ fontSize: ".78rem" }}>It is filed in the vault under the supplier and the year, and read here.</span>
           </form>
 
-          {foreignAsk.length > 0 && (
-            <>
-              <strong style={{ display: "block" }}>🌍 Foreign vendors — the withholding questions ({foreignAsk.length})</strong>
-              <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 8px" }}>
-                Answer what you can see on the invoice and in the vendor file. The desk works out the rest —
-                what to withhold, which part of <strong>Form 145</strong>, and whether an accountant&apos;s
-                certificate (<strong>Form 146</strong>) has to come first. Asked <strong>once per vendor</strong>
-                and remembered. These are questions of fact; the tax rulings behind them are the founder&apos;s.
-              </p>
-              {foreignAsk.map((inst) => {
-                const mine = bills.filter((b) => b.institution === inst);
-                const seed = Object.entries(KNOWN_FOREIGN_VENDORS).find(([k]) => inst.toLowerCase().includes(k.toLowerCase()))?.[1];
-                return (
-                  <form action={saveForeignAnswersAction} className="card" key={`fq-${inst}`} style={{ marginTop: 8, borderLeft: "4px solid #2563eb" }}>
-                    <input type="hidden" name="institution" value={inst} />
-                    <strong>{inst}</strong>
-                    <span className="muted" style={{ fontSize: ".8rem" }}> · {mine.length} invoice(s) waiting · {mine.map((m) => `${m.currency} ${m.amount ?? "?"}`).join(", ")}</span>
-                    <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", marginTop: 8 }}>
+          {billsWaiting.length === 0 && (
+            <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing waiting. Every invoice is either posted or skipped.</p></div>
+          )}
+
+          {billsWaiting.map((b) => {
+            const rule = ruleFor(b.institution);
+            const foreign = (b.currency || "USD") !== "INR";
+            const needAnswers = foreign && !(rule?.country && rule?.service_category);
+            const d = b.determination;
+            const p = b.proposal ?? {};
+            const inr = Number(b.inr_amount ?? 0);
+            const tdsRate = d?.tdsRate ?? p.tds_rate ?? null;
+            const tdsAmt = tdsRate ? Math.round(inr * Number(tdsRate)) / 100 * 1 : 0;
+
+            return (
+              <div className="card" key={b.id} style={{ marginTop: 10, borderLeft: `4px solid ${needAnswers ? "#b45309" : "#0e6e52"}` }}>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <div>
+                    <strong style={{ fontSize: "1.02rem" }}>{b.institution}</strong>
+                    <span className="muted" style={{ fontSize: ".82rem" }}>
+                      {" "}· {b.bill_no ?? "no number"} · {b.bill_date ?? "no date"} · {foreign ? "foreign supplier" : "Indian supplier"}
+                    </span>
+                  </div>
+                  <div style={{ fontWeight: 600 }}>
+                    {b.currency} {b.amount ?? "?"}{b.rate ? <span className="muted" style={{ fontWeight: 400 }}> @ ₹{Number(b.rate).toFixed(2)}</span> : null}
+                    {inr ? <> = ₹{inr.toLocaleString("en-IN")}</> : null}
+                  </div>
+                </div>
+
+                {b.error && <p style={{ color: "#b45309", fontSize: ".82rem", margin: "6px 0 0" }}>⚠ {b.error}</p>}
+
+                {needAnswers ? (
+                  <form action={saveForeignAnswersAction} style={{ marginTop: 10 }}>
+                    <input type="hidden" name="institution" value={b.institution} />
+                    <p style={{ fontSize: ".85rem", margin: "0 0 8px" }}>
+                      This supplier is outside India, so two things decide the tax. Answer them once:
+                    </p>
+                    <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
                       <div>
-                        <label style={{ fontSize: ".75rem" }}>Where is the vendor?</label>
-                        <select name="country" defaultValue={seed?.country ?? ""} required style={{ marginBottom: 0 }}>
+                        <label style={{ fontSize: ".75rem" }}>Which country are they in?</label>
+                        <select name="country" required defaultValue={seedFor(b.institution)?.country ?? ""} style={{ marginBottom: 0 }}>
                           <option value="">— pick —</option>
                           {FVD.COUNTRIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label style={{ fontSize: ".75rem" }}>What did they actually do?</label>
-                        <select name="service_category" defaultValue={seed?.category ?? "standardised"} style={{ marginBottom: 0 }}>
-                          <option value="standardised">Ready-made cloud / hosting / software — self-serve</option>
-                          <option value="bespoke">Work done for us — consulting, support, custom build</option>
-                          <option value="advertising">Online advertising</option>
-                          <option value="mixed">A mix of both</option>
+                        <label style={{ fontSize: ".75rem" }}>What did they do for us?</label>
+                        <select name="service_category" defaultValue={seedFor(b.institution)?.category ?? "standardised"} style={{ marginBottom: 0 }}>
+                          <option value="standardised">Ready-made software / hosting we just use</option>
+                          <option value="bespoke">Work done for us by their people</option>
+                          <option value="advertising">Advertising</option>
+                          <option value="mixed">Both</option>
                         </select>
                       </div>
-                      <div>
-                        <label style={{ fontSize: ".75rem" }}>How often do they bill?</label>
-                        <select name="billing_frequency" defaultValue="monthly" style={{ marginBottom: 0 }}>
-                          <option value="monthly">Every month</option>
-                          <option value="annual">Once a year</option>
-                          <option value="one">One-off</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ fontSize: ".75rem" }}>Expected for the year (₹)</label>
-                        <input name="expected_annual" type="number" step="1" placeholder="rough is fine" style={{ marginBottom: 0 }} />
-                      </div>
+                      <input type="hidden" name="billing_frequency" value="monthly" />
                     </div>
-                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10, fontSize: ".85rem" }}>
-                      <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_trc" style={{ width: "auto", marginRight: 6 }} />Tax residency certificate on file</label>
-                      <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_form10f" style={{ width: "auto", marginRight: 6 }} />Form 10F</label>
-                      <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_no_pe" style={{ width: "auto", marginRight: 6 }} />No-PE declaration</label>
-                      <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_395_cert" style={{ width: "auto", marginRight: 6 }} />s.395 certificate held</label>
-                    </div>
-                    <SubmitButton className="btn small" savedLabel="✓ Worked out" style={{ marginTop: 10 }}>🧮 Work out {inst}</SubmitButton>
+                    <SubmitButton className="btn small" savedLabel="✓" style={{ marginTop: 10 }}>Work out the entry</SubmitButton>
                   </form>
-                );
-              })}
-            </>
-          )}
+                ) : (
+                  <form action={decideBillAction} style={{ marginTop: 10 }}>
+                    <input type="hidden" name="id" value={b.id} />
+                    <input type="hidden" name="rate" value={b.rate ?? ""} />
+                    <input type="hidden" name="gst_rate" value={p.gst_rate ?? 18} />
+                    <input type="hidden" name="vendor_name" value={p.vendor_name ?? b.institution} />
 
-          {foreignOnFile.length > 0 && (
-            <details className="card" style={{ marginTop: 8 }}>
-              <summary className="btn small secondary as-btn">🌍 Foreign vendors already worked out ({foreignOnFile.length})</summary>
-              <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0" }}>
-                Change an answer and every invoice of theirs still waiting is worked out again — which is what
-                you do when a residency certificate finally arrives, or a <strong>s.395</strong> certificate is granted.
-              </p>
-              {foreignOnFile.map((r) => (
-                <form action={saveForeignAnswersAction} key={`fo-${r.institution}`} style={{ borderTop: "1px solid var(--line, #eee)", padding: "10px 0" }}>
-                  <input type="hidden" name="institution" value={r.institution} />
-                  <strong>{r.institution}</strong>
-                  <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", marginTop: 6 }}>
-                    <select name="country" defaultValue={r.country ?? ""} style={{ marginBottom: 0 }}>
-                      {FVD.COUNTRIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                    </select>
-                    <select name="service_category" defaultValue={r.service_category ?? "standardised"} style={{ marginBottom: 0 }}>
-                      <option value="standardised">Ready-made</option>
-                      <option value="bespoke">Work done for us</option>
-                      <option value="advertising">Advertising</option>
-                      <option value="mixed">Mixed</option>
-                    </select>
-                    <select name="billing_frequency" defaultValue={r.billing_frequency ?? "monthly"} style={{ marginBottom: 0 }}>
-                      <option value="monthly">Every month</option>
-                      <option value="annual">Once a year</option>
-                      <option value="one">One-off</option>
-                    </select>
-                    <input name="expected_annual" type="number" defaultValue={r.expected_annual ?? undefined} placeholder="expected ₹/yr" style={{ marginBottom: 0 }} />
-                  </div>
-                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8, fontSize: ".82rem" }}>
-                    <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_trc" defaultChecked={r.has_trc} style={{ width: "auto", marginRight: 6 }} />TRC</label>
-                    <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_form10f" defaultChecked={r.has_form10f} style={{ width: "auto", marginRight: 6 }} />Form 10F</label>
-                    <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_no_pe" defaultChecked={r.has_no_pe} style={{ width: "auto", marginRight: 6 }} />No-PE</label>
-                    <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_395_cert" defaultChecked={r.has_395_cert} style={{ width: "auto", marginRight: 6 }} />s.395 certificate</label>
-                    <SubmitButton className="btn small secondary" savedLabel="✓ Re-worked">↻ Work out again</SubmitButton>
-                  </div>
-                </form>
-              ))}
-            </details>
-          )}
-
-          {askVendors.length > 0 && (
-            <>
-              <strong style={{ display: "block" }}>❓ First invoice from these — how should they be treated? ({askVendors.length})</strong>
-              {askVendors.map((inst) => {
-                const mine = billsAsk.filter((b) => b.institution === inst);
-                const foreign = mine.some((b) => (b.currency || "USD") !== "INR");
-                return (
-                  <form action={saveBillRuleAction} className="card" key={inst} style={{ marginTop: 8 }}>
-                    <input type="hidden" name="institution" value={inst} />
-                    <strong>{inst}</strong>
-                    <span className="muted" style={{ fontSize: ".8rem" }}> · {mine.length} invoice(s) waiting · {mine.map((m) => `${m.currency} ${m.amount ?? "?"}`).join(", ")}</span>
-                    <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", marginTop: 8 }}>
-                      <div>
-                        <label style={{ fontSize: ".75rem" }}>Vendor name in Zoho</label>
-                        <input name="vendor_name" defaultValue={inst} style={{ marginBottom: 0 }} />
-                      </div>
+                    <div style={{ fontSize: ".8rem", textTransform: "uppercase", letterSpacing: ".06em", color: "#666", marginBottom: 6 }}>
+                      The entry it proposes — change anything you disagree with
+                    </div>
+                    <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
                       <div>
                         <label style={{ fontSize: ".75rem" }}>Expense account</label>
-                        <input name="expense_account" list="acct-names" required placeholder="start typing…" style={{ marginBottom: 0 }} />
+                        <input name="expense_account" list="acct-names" required defaultValue={p.expense_account ?? ""} style={{ marginBottom: 0 }} />
                       </div>
                       <div>
                         <label style={{ fontSize: ".75rem" }}>GST</label>
-                        <select name="gst_treatment" defaultValue={foreign ? "rcm" : "domestic_itc"} style={{ marginBottom: 0 }}>
-                          <option value="rcm">Reverse charge — import of services</option>
-                          <option value="domestic_itc">Indian vendor charged GST — claim ITC</option>
+                        <select name="gst_treatment" defaultValue={p.gst_treatment ?? (foreign ? "rcm" : "domestic_itc")} style={{ marginBottom: 0 }}>
+                          <option value="rcm">Reverse charge 18% — we pay it, ITC claimable</option>
+                          <option value="domestic_itc">Supplier charged GST — claim ITC</option>
                           <option value="none">No GST</option>
                         </select>
                       </div>
                       <div>
-                        <label style={{ fontSize: ".75rem" }}>GST rate %</label>
-                        <input name="gst_rate" type="number" step="0.01" defaultValue={18} style={{ marginBottom: 0 }} />
+                        <label style={{ fontSize: ".75rem" }}>TDS %</label>
+                        <input name="tds_rate" type="number" step="0.01" defaultValue={tdsRate ?? ""} placeholder="blank = none" style={{ marginBottom: 0 }} />
                       </div>
                       <div>
-                        <label style={{ fontSize: ".75rem" }}>Zoho tax (blank = IGST)</label>
-                        <input name="gst_tax_name" placeholder="GST18 if the supplier is in Delhi" style={{ marginBottom: 0 }} />
+                        <label style={{ fontSize: ".75rem" }}>Invoice date</label>
+                        <input name="bill_date" type="date" defaultValue={b.bill_date ?? ""} style={{ marginBottom: 0 }} />
                       </div>
                       <div>
-                        <label style={{ fontSize: ".75rem" }}>TDS section (blank = none)</label>
-                        <input name="tds_section" placeholder="e.g. 194J / 195" style={{ marginBottom: 0 }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: ".75rem" }}>TDS rate %</label>
-                        <input name="tds_rate" type="number" step="0.01" placeholder="—" style={{ marginBottom: 0 }} />
+                        <label style={{ fontSize: ".75rem" }}>Amount ({b.currency})</label>
+                        <input name="amount" type="number" step="0.01" defaultValue={b.amount ?? ""} style={{ marginBottom: 0 }} />
                       </div>
                     </div>
-                    <SubmitButton className="btn small" savedLabel="✓ Remembered" style={{ marginTop: 8 }}>💾 Save treatment for {inst}</SubmitButton>
+
+                    {d && (
+                      <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0 0" }}>
+                        {d.tdsLabel === "Nil"
+                          ? `No withholding — ${d.confidence === "high" ? "settled position" : "see below"}.`
+                          : `Withhold ${d.tdsLabel}${tdsAmt ? ` ≈ ₹${tdsAmt.toLocaleString("en-IN")}` : ""}.`}
+                        {d.form145Part ? ` Form 145 Part ${d.form145Part}${d.form146Required ? " + Form 146 from your accountant" : ""}.` : ""}
+                        {d.warnings?.length ? ` ${d.warnings[0]}` : ""}
+                      </p>
+                    )}
+
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+                      <SubmitButton className="btn small" savedLabel="✓ Done">
+                        {isFounder ? "✅ Approve & post to Zoho" : "📤 Send for approval"}
+                      </SubmitButton>
+                      <label style={{ fontWeight: 400, fontSize: ".8rem" }}>
+                        <input type="checkbox" name="as_rule" value="yes" defaultChecked style={{ width: "auto", marginRight: 6 }} />
+                        Remember this for {b.institution}
+                      </label>
+                    </div>
                   </form>
-                );
-              })}
-            </>
-          )}
+                )}
+              </div>
+            );
+          })}
 
-          {billsDraft.length > 0 && (
-            <>
-              <strong style={{ display: "block", marginTop: 14 }}>⚡ Ready to post ({billsDraft.length})</strong>
-              <QueuePicker
-                rows={billsDraft.map((b) => ({
-                  id: b.id, date: b.bill_date ?? "",
-                  label: `${b.institution}${b.bill_no ? ` · ${b.bill_no}` : ""} · ${b.currency} ${b.amount ?? "?"}`,
-                  sub: `${b.rate ? `@ ₹${Number(b.rate).toFixed(2)} ` : ""}→ ${b.proposal?.expense_account ?? "?"} · GST ${b.proposal?.gst_treatment ?? "?"}${b.proposal?.tds_section ? ` · TDS ${b.proposal.tds_section}` : ""}` +
-                    (b.determination ? ` · withhold ${b.determination.tdsLabel} (${b.determination.confidence})${b.determination.form145Part ? ` · Form 145 Part ${b.determination.form145Part}` : ""}${b.determination.form146Required ? " + Form 146" : ""}` : ""),
-                  amount: b.inr_amount !== null ? Number(b.inr_amount) : 0,
-                  status: b.status, error: b.error,
-                }))}
-                approveSelected={approveSelectedBillsAction}
-                skipSelected={skipSelectedBillsAction}
-                approveLabel="✅ Post selected as bills"
-              />
-            </>
-          )}
-
-          {billsFailed.length > 0 && billsFailed.map((b) => (
-            <div className="card" key={b.id} style={{ marginTop: 6, padding: "10px 14px", borderLeft: "4px solid #b91c1c" }}>
-              <span style={{ fontSize: ".84rem" }}>❌ {b.institution} {b.bill_no ?? ""} — <span style={{ color: "#b91c1c" }}>{b.error}</span></span>
+          <details className="card" style={{ marginTop: 12 }}>
+            <summary className="btn small secondary as-btn">⚙️ Housekeeping</summary>
+            <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0" }}>
+              Rarely needed. ✅ posted so far: {billsPosted ?? 0}.
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <form action={scanBillsAction} style={{ margin: 0 }}>
+                <SubmitButton className="btn small secondary" savedLabel="Read">Read the vault for invoices filed elsewhere</SubmitButton>
+              </form>
+              <form action={recheckBillDatesAction} style={{ margin: 0 }}>
+                <SubmitButton className="btn small secondary" savedLabel="Checked">Check posted dates against the invoices</SubmitButton>
+              </form>
+              <form action={readbackBillsAction} style={{ margin: 0 }}>
+                <SubmitButton className="btn small secondary" savedLabel="Checked">Check what Zoho holds</SubmitButton>
+              </form>
             </div>
-          ))}
-
-          {bills.length === 0 && (
-            <div className="card"><p className="muted" style={{ margin: 0 }}>No invoices waiting. 🔄 reads the vault for anything not yet booked.</p></div>
-          )}
-
-          {complianceRows.length > 0 && (
-            <div className="card" style={{ marginTop: 10, borderLeft: "4px solid #b45309" }}>
-              <strong>📋 Forms still to file ({complianceRows.length})</strong>
-              <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 8px" }}>
-                A remittance is not finished when the bill is booked. Each of these carries a
-                <strong> Form 145</strong> — and a Part C one carries its own <strong>Form 146</strong>, which
-                cannot be shared with any other remittance.
-              </p>
-              {complianceRows.map((r) => (
-                <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", padding: "5px 0", fontSize: ".85rem", borderTop: "1px solid var(--line, #eee)" }}>
-                  <span style={{ minWidth: 210 }}>{r.bill_date} · <strong>{r.institution}</strong> {r.bill_no ?? ""}</span>
-                  <span>Part {r.form145_part}{r.form146_required ? " + Form 146" : ""}</span>
-                  {!r.form145_filed_at && (
-                    <form action={markFormFiledAction} style={{ margin: 0 }}>
-                      <input type="hidden" name="id" value={r.id} />
-                      <input type="hidden" name="which" value="145" />
-                      <SubmitButton className="btn small secondary" savedLabel="✓">Form 145 filed</SubmitButton>
-                    </form>
-                  )}
-                  {r.form146_required && !r.form146_filed_at && (
-                    <form action={markFormFiledAction} style={{ margin: 0 }}>
-                      <input type="hidden" name="id" value={r.id} />
-                      <input type="hidden" name="which" value="146" />
-                      <SubmitButton className="btn small secondary" savedLabel="✓">Form 146 obtained</SubmitButton>
-                    </form>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {billsPostedRows.length > 0 && (
-            <details className="card" style={{ marginTop: 10 }}>
-              <summary className="btn small secondary as-btn">📗 Posted ({billsPostedRows.length}) — as Zoho holds them</summary>
-              <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0" }}>
-                Not what was sent — what the books actually hold, re-read with <strong>🔍 Check &amp; finish in Zoho</strong>.
-                A foreign bill should show its own currency at the Rule-115 rate and <strong>RCM ✓</strong>, with the
-                supplier charging no tax of their own.
-              </p>
-              {billsPostedRows.map((r) => (
-                <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: ".8rem", padding: "4px 0" }}>
-                  <span>✅ {r.bill_date} · <strong>{r.institution}</strong> · {r.bill_no ?? "—"}</span>
-                  {r.zoho_echo ? (
-                    <span className="muted">
-                      Zoho: {r.zoho_echo.currency ?? "?"} {r.zoho_echo.total ?? "?"}
-                      {r.zoho_echo.exchange_rate && r.zoho_echo.currency !== "INR" ? ` @ ₹${r.zoho_echo.exchange_rate}` : ""}
-                      {" · "}{r.zoho_echo.reverse_charge ? "RCM ✓" : "no reverse charge"}
-                      {" · supplier tax "}{r.zoho_echo.tax_total ?? 0}
-                      {r.zoho_echo.zoho_status ? ` · ${r.zoho_echo.zoho_status}` : ""}
-                    </span>
-                  ) : <span className="muted">not read back yet</span>}
-                  {r.error && <span style={{ color: "#b45309" }}>⚠ {r.error}</span>}
-                </div>
-              ))}
-            </details>
-          )}
+            {complianceRows.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <strong style={{ fontSize: ".85rem" }}>📋 Forms still to file ({complianceRows.length})</strong>
+                {complianceRows.map((r) => (
+                  <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", padding: "4px 0", fontSize: ".82rem" }}>
+                    <span style={{ minWidth: 200 }}>{r.bill_date} · <strong>{r.institution}</strong> {r.bill_no ?? ""}</span>
+                    <span>Part {r.form145_part}{r.form146_required ? " + Form 146" : ""}</span>
+                    {!r.form145_filed_at && (
+                      <form action={markFormFiledAction} style={{ margin: 0 }}>
+                        <input type="hidden" name="id" value={r.id} /><input type="hidden" name="which" value="145" />
+                        <SubmitButton className="btn small secondary" savedLabel="✓">Form 145 filed</SubmitButton>
+                      </form>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </details>
         </div>
       )}
 

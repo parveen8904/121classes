@@ -51,11 +51,22 @@ export async function requestApproval(req: {
   summary: string; details?: Record<string, unknown>; requestedBy?: string | null;
 }): Promise<void> {
   const svc = createServiceClient();
-  await svc.from("zoho_approvals").upsert({
+  // Already on his desk? Then it stays there — asking twice must not queue the
+  // same posting twice. (The unique index behind this is partial, on pending
+  // rows only, which is deliberate: the same bill may be re-requested after a
+  // rejection, but never while one is outstanding.)
+  const { data: already } = await svc.from("zoho_approvals")
+    .select("id").eq("kind", req.kind).eq("ref_id", req.refId).eq("status", "pending").maybeSingle();
+  if (already) return;
+
+  const { error } = await svc.from("zoho_approvals").insert({
     kind: req.kind, ref_table: req.refTable, ref_id: req.refId,
     summary: req.summary, details: req.details ?? null,
     requested_by: req.requestedBy ?? null, status: "pending",
-  }, { onConflict: "kind,ref_id", ignoreDuplicates: true });
+  });
+  // A request that cannot be recorded must be loud: silence here would look
+  // exactly like "approved and posted" to whoever pressed the button.
+  if (error && !/duplicate key/i.test(error.message)) throw new Error(`could not put this to the founder: ${error.message}`);
 }
 
 /** How many things are waiting on him. */

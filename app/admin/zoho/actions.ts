@@ -365,7 +365,6 @@ export async function approveSelectedBillsAction(formData: FormData) {
   await assertArea("zoho");
   const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
   if (!ids.length) return;
-  const { postProviderBill } = await import("@/lib/providerBills");
   for (const id of ids) {
     await requestApprovalFor("provider_bill", "provider_bills", id);
   }

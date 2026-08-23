@@ -283,6 +283,21 @@ export async function rejectZohoAction(formData: FormData) {
   redirect("/admin/zoho#approvals");
 }
 
+export async function removeBillAction(formData: FormData) {
+  // Take an invoice off the list. Nothing is deleted — the PDF stays in the
+  // vault and the row stays with its reason, because "why is this not in the
+  // books" is a question somebody will ask in March.
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("provider_bills").update({
+    status: "skipped",
+    error: str(formData.get("why")) || "removed by hand — not to be booked",
+    updated_at: new Date().toISOString(),
+  }).eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
 export async function decideBillAction(formData: FormData) {
   // ONE BUTTON FOR THE WHOLE INVOICE.
   //
@@ -348,7 +363,20 @@ export async function decideBillAction(formData: FormData) {
     try {
       await withFounderApproval(`inline:${id}`, () => postProviderBill(id));
       const { data: after } = await svc.from("provider_bills").select("status, error").eq("id", id).maybeSingle();
-      note = after?.status === "posted" ? "Posted to Zoho." : `Not posted — ${after?.error ?? "see the row"}`;
+      if (after?.status === "posted") {
+        // Read it straight back out of Zoho and finish it there if it is still a
+        // draft. Proving a posting landed is part of posting it, not a chore to
+        // remember afterwards.
+        const { readbackPostedBills } = await import("@/lib/providerBills");
+        await withFounderApproval(`inline:${id}`, () => readbackPostedBills().then(() => undefined)).catch(() => {});
+        const { data: fin } = await svc.from("provider_bills").select("zoho_echo, error").eq("id", id).maybeSingle();
+        const st = (fin?.zoho_echo as { zoho_status?: string } | null)?.zoho_status;
+        note = st === "open" || st === "overdue" || st === "paid"
+          ? "Posted to Zoho and in the ledgers."
+          : `Posted to Zoho — ${fin?.error ?? "still to be opened there"}`;
+      } else {
+        note = `Not posted — ${after?.error ?? "see the row"}`;
+      }
     } catch (e) {
       note = `Not posted — ${e instanceof Error ? e.message : "unknown"}`;
     }

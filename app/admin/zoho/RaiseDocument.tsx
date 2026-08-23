@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import SubmitButton from "@/app/components/SubmitButton";
-import { NATURES, entrySentence, tdsWorking, type Nature, type Operating } from "@/lib/postingShape";
+import { NATURES, natureClause, type Nature, type Operating } from "@/lib/postingShape";
 
 // RAISING A DOCUMENT — the other half of the books.
 //
@@ -168,13 +168,9 @@ export default function RaiseDocument({ action, accountList, isFounder }: {
           <div className="card" style={{ marginTop: 12, background: "rgba(14,110,82,.06)", padding: "10px 12px" }}>
             <div style={head}>The entry this makes</div>
             <p style={{ margin: "4px 0 0", fontSize: ".88rem", lineHeight: 1.6 }}>
-              {kind === "credit_note" ? "Reverses " : ""}
-              {entrySentence({
-                nature, operating, account: ledger || "— pick a ledger —", subAccount: null,
-                gstTreatment: "none", gstRate: 0,
-                tds: tdsWorking(amt, "none", 0, party || "the customer"),
-                who: party || "the customer",
-              }).replace(" No GST.", "")}
+              {kind === "credit_note"
+                ? `Credit note to ${party || "the customer"}, against ${ledger || "— pick a ledger —"}.`
+                : natureClause(nature, operating, ledger || "— pick a ledger —")}
               {gstTreatment === "charged"
                 ? ` We charge ${gst}% ${intra ? "CGST + SGST" : "IGST"} — ${money(gstAmt)}.`
                 : gstTreatment === "exempt" ? " Exempt from GST."

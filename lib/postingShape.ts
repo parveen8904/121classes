@@ -126,6 +126,25 @@ export function tdsWorking(invoiceInr: number, mode: TdsMode, rate: number, who:
 /* ═══════════════════════════════════════════════════════════════════════════
    THE ENTRY, IN WORDS
    ═══════════════════════════════════════════════════════════════════════════ */
+/**
+ * What the document IS, in one clause — shared by both sides of the books.
+ *
+ * The money clause after it differs: on a supplier bill we pay and may withhold,
+ * on our own invoice we are paid and the customer withholds. Reusing the paying
+ * side's wording on an invoice produced "the customer is paid ₹0.00 and that is
+ * the cost", which is backwards in every particular.
+ */
+export function natureClause(nature: Nature, operating: Operating, account: string, subAccount?: string | null): string {
+  const head = subAccount ? `${account} — ${subAccount}` : account;
+  return nature === "drawings" ? `Drawings: ${head}. Nothing reaches the profit and loss account.`
+    : nature === "asset" ? `Held as an asset: ${head} (${operating === "operating" ? "current" : "fixed"}).`
+    : nature === "income" ? `Income: ${head} (${operating === "operating" ? "operating" : "other"}).`
+    : nature === "liability" ? `A liability: ${head}. No cost until it is incurred.`
+    : nature === "expense_reversal" ? `Reverses an expense already booked to ${head}.`
+    : nature === "income_reversal" ? `Reverses income already booked to ${head}.`
+    : `Expense: ${head} (${operating === "operating" ? "operating" : "non-operating"}).`;
+}
+
 export function entrySentence(p: {
   nature: Nature; operating: Operating; account: string; subAccount?: string | null;
   gstTreatment: string; gstRate: number; tds: TdsWorking; who: string;

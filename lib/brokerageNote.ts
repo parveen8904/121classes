@@ -105,9 +105,16 @@ export async function buildNote(accountName: string, from: string, to: string): 
           put("premium_received");
           break;
         }
-        // A share sale — or an assigned option, which IS a share sale.
+        // A share sale — or an assigned option, which IS part of a share sale.
         put("shares_proceeds");
-        if (isOption) assignedPremium += inr;
+        if (isOption) {
+          // PREMIUM ON AN ASSIGNED CALL HAS NO COST. It was received for writing
+          // the option, not paid for anything, so it is proceeds in full — and
+          // asking for a cost on it would be asking for a figure that does not
+          // exist. The shares themselves carry the cost, on their own line.
+          assignedPremium += inr;
+          break;
+        }
 
         // The gain needs the rupee cost of what was sold, which is asked per
         // sale. Without it the note says so rather than inventing one.

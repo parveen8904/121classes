@@ -103,15 +103,22 @@ export async function scanVaultForBills(limit = 6): Promise<string> {
       } catch { /* conversion retried at posting */ }
     } else if (total) inr = total;
 
+    // A ZERO INVOICE IS A STATEMENT, NOT A BILL. Vercel and Supabase both issue
+    // USD 0.00 documents for a month with nothing to pay; posting one as a
+    // vendor bill would put an empty liability in the books. It is filed and
+    // marked settled, not queued for a treatment.
+    const isZero = total !== null && Number(total) === 0;
     const rule = rules.get(institution);
     await svc.from("provider_bills").insert({
       vault_doc_id: d.id, institution,
       bill_no: str(facts.invoice_no) || null, bill_date: billDate,
       currency, amount: total, tax_amount: Number(facts.tax) || null,
       inr_amount: inr, rate, rate_date: rateDate,
-      status: rule ? "draft" : "needs_info",
+      status: isZero ? "skipped" : rule ? "draft" : "needs_info",
       proposal: rule ? { ...rule } : null,
+      error: isZero ? "zero-value invoice — nothing to book" : null,
     });
+    if (isZero) continue;
     if (rule) added++; else asked++;
   }
   const left = pending.length - batch.length;

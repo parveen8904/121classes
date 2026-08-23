@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { viaProxy } from "@/lib/fileProxy";
 import { formatINR } from "@/lib/pricing";
+import { matchesState } from "@/lib/accountsExport";
 import AdminHero from "../../_components/AdminHero";
 
 // READ IT FRESH, EVERY TIME.
@@ -19,6 +20,7 @@ function fmt(s: string): string {
 }
 
 type SubRow = { status: string; ends_at: string | null; plans: { tier: string } | null };
+type MoneyRow = { amount_inr: number | null; status: string; created_at: string };
 type BookOrderRow = {
   amount_inr: number;
   status: string;
@@ -35,20 +37,21 @@ type BookOrderRow = {
  * short by hundreds and looked perfectly plausible, which is what made it
  * dangerous. The same silence once hid two thirds of the AI bill.
  */
-async function readAllSubscriptions(supabase: Awaited<ReturnType<typeof createClient>>) {
+async function readAll<T>(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  table: string,
+  columns: string,
+): Promise<T[]> {
   const PAGE = 1000;
-  const all: unknown[] = [];
+  const all: T[] = [];
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from("subscriptions")
-      .select("status, ends_at, plans(tier)")
-      .range(from, from + PAGE - 1);
+    const { data, error } = await supabase.from(table).select(columns).range(from, from + PAGE - 1);
     if (error) break;
-    const page = data ?? [];
+    const page = (data ?? []) as unknown as T[];
     all.push(...page);
     if (page.length < PAGE) break;
   }
-  return { data: all };
+  return all;
 }
 
 export default async function ReportsPage() {
@@ -56,30 +59,45 @@ export default async function ReportsPage() {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  const [{ data: subOrders }, { data: bookOrders }, { data: subs }, { count: students }, { data: books }] =
+  const [subOrders, bookOrders, giftOrders, subs, { count: students }, { data: books }] =
     await Promise.all([
-      supabase.from("orders").select("amount_inr, created_at").eq("kind", "subscription").eq("status", "paid"),
-      supabase.from("book_orders").select("amount_inr, status, created_at, items"),
-      readAllSubscriptions(supabase),
+      readAll<MoneyRow>(supabase, "orders", "amount_inr, status, created_at"),
+      readAll<BookOrderRow>(supabase, "book_orders", "amount_inr, status, created_at, items"),
+      readAll<MoneyRow>(supabase, "gift_orders", "amount_inr, status, created_at"),
+      readAll<SubRow>(supabase, "subscriptions", "status, ends_at, plans(tier)"),
       supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "student"),
       supabase.from("books").select("id, title"),
     ]);
 
-  const subRevenue = (subOrders ?? []).reduce((s, o) => s + (o.amount_inr ?? 0), 0);
-  const subRevenueMonth = (subOrders ?? [])
-    .filter((o) => o.created_at >= monthStart)
-    .reduce((s, o) => s + (o.amount_inr ?? 0), 0);
+  // ONE DEFINITION OF A SALE, SHARED WITH THE ACCOUNTS DESK.
+  //
+  // This page said ₹98,000 while Accounts & Zoho said ₹1,33,000 for the same
+  // day, and both were reading the same database. Two reasons, both here:
+  //
+  //   · SPONSORSHIPS WERE NOT COUNTED AT ALL. Five supporters had bought
+  //     ₹35,093 of subscriptions for students. They sat in gift_orders, which
+  //     this report listed in a table further down but never added to revenue.
+  //   · A BOOK ORDER COUNTED UNLESS IT WAS CANCELLED — so an abandoned
+  //     checkout that was never paid would have counted as money.
+  //
+  // Both now use matchesState(), the same function the accounts export uses, so
+  // the two pages cannot drift apart again.
+  const paid = <T extends { status: string }>(rows: T[]) => rows.filter((r) => matchesState(r.status, "paid"));
+  const sum = (rows: { amount_inr?: number | null }[]) => rows.reduce((t, r) => t + Number(r.amount_inr ?? 0), 0);
+  const thisMonth = <T extends { created_at: string }>(rows: T[]) => rows.filter((r) => r.created_at >= monthStart);
 
-  const paidBookOrders = ((bookOrders ?? []) as BookOrderRow[]).filter((o) => o.status !== "cancelled");
-  const bookRevenue = paidBookOrders.reduce((s, o) => s + (o.amount_inr ?? 0), 0);
-  const bookRevenueMonth = paidBookOrders
-    .filter((o) => o.created_at >= monthStart)
-    .reduce((s, o) => s + (o.amount_inr ?? 0), 0);
+  const paidSubOrders = paid(subOrders);
+  const paidBookOrders = paid(bookOrders);
+  const paidGiftOrders = paid(giftOrders);
 
-  const totalRevenue = subRevenue + bookRevenue;
-  const monthRevenue = subRevenueMonth + bookRevenueMonth;
+  const subRevenue = sum(paidSubOrders);
+  const bookRevenue = sum(paidBookOrders);
+  const giftRevenue = sum(paidGiftOrders);
 
-  const subsRows = (subs ?? []) as unknown as SubRow[];
+  const totalRevenue = subRevenue + bookRevenue + giftRevenue;
+  const monthRevenue = sum(thisMonth(paidSubOrders)) + sum(thisMonth(paidBookOrders)) + sum(thisMonth(paidGiftOrders));
+
+  const subsRows = subs;
   const activeSubs = subsRows.filter(
     (s) => s.status === "active" && (!s.ends_at || new Date(s.ends_at) > now),
   );
@@ -139,7 +157,13 @@ export default async function ReportsPage() {
             <span className="muted">📘 Subscriptions</span> <strong>{formatINR(subRevenue)}</strong>
           </p>
           <p style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+            <span className="muted">🎁 Sponsorships</span> <strong>{formatINR(giftRevenue)}</strong>
+          </p>
+          <p style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
             <span className="muted">📦 Books</span> <strong>{formatINR(bookRevenue)}</strong>
+          </p>
+          <p style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+            <span>Total</span> <strong>{formatINR(totalRevenue)}</strong>
           </p>
         </div>
         <div className="card">
@@ -232,8 +256,11 @@ export default async function ReportsPage() {
       })()}
 
       <p className="muted" style={{ fontSize: ".82rem", marginTop: 24 }}>
-        As of {fmt(now.toISOString())} · revenue counts paid online orders (Razorpay). Admin-granted
-        free enrolments don&apos;t add revenue.
+        As of {fmt(now.toISOString())} · revenue counts every paid online order — a student&apos;s own
+        subscription, a supporter&apos;s sponsorship and a book — on the same definition of &ldquo;paid&rdquo;
+        the accounts desk uses, so this total and the one on{" "}
+        <a href="/admin/accounts">Accounts &amp; Zoho</a> are the same figure. Abandoned checkouts and
+        admin-granted free enrolments are not revenue.
       </p>
     </section>
   );

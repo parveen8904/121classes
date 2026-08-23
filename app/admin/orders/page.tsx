@@ -559,15 +559,27 @@ export default async function AdminOrdersPage(
                         return (i.qty ?? 1) > 1 ? `${t} × ${i.qty}` : t;
                       }).join(" · ") || "—"}
                     </p>
-                    <p className="muted" style={{ fontSize: ".8rem", marginTop: 4 }}>
-                      {qty} item{qty === 1 ? "" : "s"} · {STATUS_EMOJI[o.status] ?? o.status} · {fmt(o.created_at)}
-                      {o.tracking_code && <> · 🚚 {o.tracking_code}</>}
-                      {o.invoice_url && <> · <a className="grad" href={viaProxy(o.invoice_url)} target="_blank" rel="noopener noreferrer">🧾 {o.invoice_no ?? "Invoice"} ↓</a></>}
-                      {o.invoice_url && <> · <span style={{ display: "inline-block" }}><form action={reissueBookInvoice} style={{ margin: 0, display: "inline" }}>
-                        <input type="hidden" name="id" value={o.id} />
-                        <SubmitButton className="btn small secondary" savedLabel="✓ Reissued">♻️ Reissue with address</SubmitButton>
-                      </form></span></>}
-                    </p>
+                    {/* A DIV, NOT A PARAGRAPH — AND THE WHOLE ADMIN PANEL WENT DARK OVER IT.
+                        A browser is not allowed to keep a <form> inside a <p>: on meeting the
+                        form tag the parser closes the paragraph and lifts the form out. So the
+                        DOM the browser built could never match the one React sent, hydration
+                        failed on <html> itself (React error #418), and React threw the server's
+                        document away and re-rendered the page from scratch — losing the
+                        data-theme attribute the boot script had set on <html>, which left the
+                        stylesheet on its dark default. Opening the orders report turned the
+                        panel dark, and nothing else did, because this is the only <form> inside
+                        a <p> in the codebase. */}
+                    <div className="muted" style={{ fontSize: ".8rem", marginTop: 4, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                      <span>{qty} item{qty === 1 ? "" : "s"} · {STATUS_EMOJI[o.status] ?? o.status} · {fmt(o.created_at)}</span>
+                      {o.tracking_code && <span>· 🚚 {o.tracking_code}</span>}
+                      {o.invoice_url && <span>· <a className="grad" href={viaProxy(o.invoice_url)} target="_blank" rel="noopener noreferrer">🧾 {o.invoice_no ?? "Invoice"} ↓</a></span>}
+                      {o.invoice_url && (
+                        <form action={reissueBookInvoice} style={{ margin: 0 }}>
+                          <input type="hidden" name="id" value={o.id} />
+                          <SubmitButton className="btn small secondary" savedLabel="✓ Reissued">♻️ Reissue with address</SubmitButton>
+                        </form>
+                      )}
+                    </div>
                     <p className="muted" style={{ fontSize: ".82rem", marginTop: 6 }}>
                       📍 {ship.line1}
                       {ship.line2 ? `, ${ship.line2}` : ""}, {ship.city}, {ship.state} {ship.pincode} ·

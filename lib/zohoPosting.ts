@@ -196,6 +196,14 @@ export async function scanPortalSales(): Promise<string> {
         status: "matched", payload: c.payload,
         zoho_invoice_id: zohoInv.invoice_id, zoho_invoice_number: zohoInv.invoice_number ?? null,
       });
+      // AND TELL THE REGISTER. Finding a sale already in Zoho is the answer to
+      // "is this in the books" — but it was only ever recorded here, so the
+      // orders register went on saying "not in Zoho yet" about sales the team
+      // had entered themselves. Two screens, two answers, and the one he reads
+      // first was the wrong one.
+      await svc.from(c.table).update({
+        zoho_status: "posted", zoho_invoice_id: zohoInv.invoice_id,
+      }).eq("id", c.id);
       matched++;
     } else {
       await svc.from("zoho_postings").insert({
@@ -322,6 +330,11 @@ export async function postSale(postingId: string): Promise<void> {
       posted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", postingId);
+
+    // The register must say the same thing as this desk.
+    await svc.from(String(row.source_table)).update({
+      zoho_status: "posted", zoho_invoice_id: inv.invoice.invoice_id,
+    }).eq("id", String(row.source_id));
   } catch (e) {
     if (e instanceof Error && e.message.includes("status")) throw e;
     await fail(e instanceof Error ? e.message : "posting failed");

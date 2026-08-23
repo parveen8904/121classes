@@ -14,7 +14,11 @@ import { ORDER_STATES, chosenStates, matchesState } from "@/lib/orderStatus";
 // Zoho posting state → what the admin sees in the register. Normal flow is
 // the one-click DAY approval above the table; per-row buttons are for
 // exceptions (hold something fishy, or approve one sale early).
-function ZohoCell({ status }: { id?: string; table?: string; status: string | null }) {
+function ZohoCell({ status, paid = true }: { id?: string; table?: string; status: string | null; paid?: boolean }) {
+  // AN UNPAID ORDER HAS NO BUSINESS IN THE BOOKS. Fifty-four abandoned
+  // checkouts were each carrying a Zoho state, which is noise on rows where no
+  // entry should ever exist.
+  if (!paid) return <span className="muted" title="Nothing was paid, so there is nothing to book">—</span>;
   // WHERE THE SALE STANDS IN THE BOOKS — never where the PAYMENT stands.
   //
   // This column used to say a bare "— pending" beside an order marked paid,
@@ -505,7 +509,7 @@ export default async function AdminOrdersPage(
                       <SubmitButton className="btn small" savedLabel="✓">✅ Confirm payment</SubmitButton>
                     </form>
                   ) : <span className="muted" style={{ fontSize: ".8rem" }}>—</span>}
-                  <ZohoCell id={p.id} table="orders" status={p.zoho_status} />
+                  <ZohoCell id={p.id} table="orders" status={p.zoho_status} paid={["paid", "provisioned"].includes(p.status)} />
                 </div>
               </div>
             </div>
@@ -579,7 +583,7 @@ export default async function AdminOrdersPage(
                         <SubmitButton className="btn small" savedLabel="✓ Generated">🧾 Generate invoice</SubmitButton>
                       </form>
                     )}
-                    <ZohoCell id={o.id} table="book_orders" status={o.zoho_status ?? null} />
+                    <ZohoCell id={o.id} table="book_orders" status={o.zoho_status ?? null} paid={!["created", "cancelled"].includes(o.status)} />
                     {o.status === "paid" && (
                       <form action={setOrderStatus} style={{ margin: 0 }}>
                         <input type="hidden" name="id" value={o.id} />

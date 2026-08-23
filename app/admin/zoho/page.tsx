@@ -1521,7 +1521,10 @@ export default async function ZohoHubPage(props: {
                     <span style={{ minWidth: 92, fontSize: ".85rem" }}>{b.bill_date ?? "no date"}</span>
                     <strong style={{ minWidth: 96 }}>{b.institution}</strong>
                     <span className="muted" style={{ fontSize: ".82rem", minWidth: 130 }}>{b.bill_no ?? "no number"}</span>
-                    <span style={{ fontWeight: 600 }}><Money n={inr} /></span>
+                    {/* An amount of zero here means the reader could not find one, not that the
+                        bill was for nothing — so it stays a dash. ₹0.00 in a money column
+                        is a figure, and it would be a false one. */}
+                    <span style={{ fontWeight: 600 }}><Money n={inr || null} /></span>
                     <span className="muted" style={{ fontSize: ".82rem" }}>{headline}</span>
                     {waitingOnHim && <span style={{ fontSize: ".75rem", color: "#b45309" }}>· sent to you by the desk</span>}
                   </span>

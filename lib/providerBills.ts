@@ -225,14 +225,29 @@ function echoOf(b: ZohoBill) {
 }
 
 /**
- * Move a created bill out of draft, and SAY WHY if it will not go.
+ * Walk a created bill as far towards the ledgers as this org allows.
  *
- * A swallowed failure here is the worst kind: the queue reads "posted" while the
- * bill sits outside the ledgers. So the reason travels back to the row.
+ * A bill that stays a draft is a piece of paper: no expense, no GST return. So
+ * it is submitted and then opened. But his Zoho has BILL APPROVAL switched on,
+ * and that is his control, not ours — the desk never approves in his place. If
+ * approval is what stands in the way, the row says so in plain words.
+ *
+ * A swallowed failure here would be the worst kind: the queue reading "posted"
+ * over a bill sitting outside the books. So every reason travels back.
  */
-async function openBill(billId: string): Promise<{ ok: boolean; why?: string }> {
-  try { await zohoFetch(`/bills/${billId}/status/open`, { method: "POST" }); return { ok: true }; }
-  catch (e) { return { ok: false, why: e instanceof Error ? e.message : "unknown" }; }
+async function advanceBill(billId: string): Promise<{ state: "open" | "awaiting_approval" | "draft"; why?: string }> {
+  const submit = await zohoFetch(`/bills/${billId}/submit`, { method: "POST" })
+    .then(() => null).catch((e: unknown) => (e instanceof Error ? e.message : "unknown"));
+  try {
+    await zohoFetch(`/bills/${billId}/status/open`, { method: "POST" });
+    return { state: "open" };
+  } catch (e) {
+    const why = e instanceof Error ? e.message : "unknown";
+    if (/not been approved|approval/i.test(why)) {
+      return { state: "awaiting_approval", why: "waiting for approval in Zoho — your books have bill approval switched on" };
+    }
+    return { state: "draft", why: submit ? `${why} (submit also failed: ${submit})` : why };
+  }
 }
 
 /**
@@ -248,16 +263,15 @@ export async function readbackPostedBills(): Promise<{ checked: number; opened: 
     try {
       let r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${row.zoho_bill_id}`);
       if (!r.bill) continue;
-      let why: string | undefined;
-      if (r.bill.status === "draft") {
-        const res = await openBill(String(row.zoho_bill_id));
-        why = res.why;
-        if (res.ok) { opened++; r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${row.zoho_bill_id}`); }
+      let moved: { state: string; why?: string } | null = null;
+      if (r.bill.status !== "open" && r.bill.status !== "paid" && r.bill.status !== "partially_paid") {
+        moved = await advanceBill(String(row.zoho_bill_id));
+        if (moved.state === "open") { opened++; r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${row.zoho_bill_id}`); }
       }
       if (r.bill) {
         await svc.from("provider_bills").update({
-          zoho_echo: echoOf(r.bill),
-          ...(why ? { error: `still a draft in Zoho — not in the ledgers. Zoho said: ${why}` } : {}),
+          zoho_echo: { ...echoOf(r.bill), ...(moved && moved.state !== "open" ? { zoho_status: moved.state } : {}) },
+          error: moved && moved.state !== "open" ? `not in the ledgers yet — ${moved.why}` : null,
         }).eq("id", row.id);
       }
       checked++;
@@ -351,13 +365,13 @@ export async function postProviderBill(id: string): Promise<void> {
     // Draft → Open. A draft bill in Zoho is a piece of paper, not an entry: it
     // reaches no ledger, no expense, no GST return. Creating one is only half
     // the posting.
-    const opened = await openBill(r.bill.bill_id);
+    const moved = await advanceBill(r.bill.bill_id);
 
     await svc.from("provider_bills").update({
       status: "posted", zoho_bill_id: r.bill.bill_id, zoho_vendor_id: vendorId,
       rate, inr_amount: rate ? Number((total * rate).toFixed(2)) : total,
-      zoho_echo: { ...echoOf(r.bill), ...(opened.ok ? { zoho_status: "open" } : {}) },
-      error: tdsNote || (opened.ok ? null : `created in Zoho but STILL A DRAFT — not in the ledgers. Zoho said: ${opened.why}`),
+      zoho_echo: { ...echoOf(r.bill), zoho_status: moved.state },
+      error: tdsNote || (moved.state === "open" ? null : `not in the ledgers yet — ${moved.why}`),
       updated_at: new Date().toISOString(),
     }).eq("id", id);
     // The vault copy is now worked, not raw.

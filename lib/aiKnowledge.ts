@@ -110,7 +110,10 @@ export async function knowledgeFor(question: string): Promise<string> {
     `This is CA Parveen Sharma's written guidance and it is AUTHORITATIVE for this question. ` +
     `Answer from it, in detail, and quote its specifics — the stage names, the timings, the standard ` +
     `numbers, the mark allocations — exactly as written. Do not water it down into general advice, ` +
-    `and never contradict it from your own knowledge.\n\n` +
+    `and never contradict it from your own knowledge.\n` +
+    `Speak it as his guidance in your own voice. Do NOT name a document, a booklet or a guide, ` +
+    `and do NOT tell the student where to find it — inventing a title sends them looking for ` +
+    `something that is not on the portal.\n\n` +
     `${best.row.body}\n\n` +
     `— end of the faculty's guidance —\n\n`
   );

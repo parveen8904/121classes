@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
+const str = (v: unknown) => String(v ?? "").trim();
+
 // Teaching, not editing.
 //
 // A reply reworded by hand helps one student. A lesson written down here changes
@@ -127,4 +129,78 @@ export async function tryQuestion(formData: FormData) {
 
   revalidatePath("/admin/ai-training");
   redirect("/admin/ai-training?tried=1#try");
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE FACULTY'S OWN DOCUMENTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+export async function addKnowledgeAction(formData: FormData) {
+  // A LONG DOCUMENT IS NOT A HOUSE RULE.
+  //
+  // The lessons above are one-liners, kept short deliberately. A revision
+  // roadmap or an exam blueprint is teaching: it has to reach the student
+  // quoted, with its stage names, its timings and its mark allocations intact.
+  // So it is stored whole and put in front of the model only when the question
+  // is about it.
+  await requireAdmin();
+  const title = str(formData.get("title"));
+  const subject = str(formData.get("subject")) || null;
+  const triggers = str(formData.get("triggers"))
+    .split(/[,\n]/).map((t) => t.trim().toLowerCase()).filter(Boolean);
+  const file = formData.get("file") as File | null;
+  if (!title || !file || !file.size) {
+    redirect(`/admin/ai-training?err=${encodeURIComponent("A title and the document are both needed.")}`);
+  }
+
+  const svc = createServiceClient();
+  const name = (file!.name || "document").toLowerCase();
+  let body = "";
+
+  if (name.endsWith(".pdf")) {
+    // The PDF is filed first, then read — so the source stays available even if
+    // the reading needs redoing later.
+    const path = `ai-knowledge/${Date.now()}-${name.replace(/[^\w.\-]+/g, "_").slice(-70)}`;
+    const up = await svc.storage.from("secure").upload(path, Buffer.from(await file!.arrayBuffer()), {
+      contentType: "application/pdf", upsert: false,
+    });
+    if (up.error) redirect(`/admin/ai-training?err=${encodeURIComponent(up.error.message)}`);
+    const { extractPdfText } = await import("@/lib/pdf");
+    body = await extractPdfText(`secure:${path}`);
+  } else {
+    body = await file!.text();
+  }
+
+  body = body.trim();
+  if (body.length < 200) {
+    redirect(`/admin/ai-training?err=${encodeURIComponent(
+      "Almost nothing could be read from that file — a scanned PDF has no text in it. Send a text or Word-exported PDF, or paste the text as a .md file.",
+    )}`);
+  }
+
+  await svc.from("ai_knowledge").insert({
+    title, subject, triggers, body,
+    source_file: file!.name,
+    priority: Number(formData.get("priority")) || 0,
+  });
+  revalidatePath("/admin/ai-training");
+  redirect(`/admin/ai-training?ok=${encodeURIComponent(`"${title}" learned — ${body.length.toLocaleString("en-IN")} characters.`)}`);
+}
+
+export async function toggleKnowledgeAction(formData: FormData) {
+  await requireAdmin();
+  const id = str(formData.get("id"));
+  const active = str(formData.get("active")) === "1";
+  if (!id) return;
+  await createServiceClient().from("ai_knowledge")
+    .update({ active, updated_at: new Date().toISOString() }).eq("id", id);
+  revalidatePath("/admin/ai-training");
+}
+
+export async function deleteKnowledgeAction(formData: FormData) {
+  await requireAdmin();
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await createServiceClient().from("ai_knowledge").delete().eq("id", id);
+  revalidatePath("/admin/ai-training");
 }

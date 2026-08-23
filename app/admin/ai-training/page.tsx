@@ -5,7 +5,8 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
 import { assertArea } from "@/lib/adminAccess";
 import type { Lesson } from "@/lib/aiLessons";
-import { addRule, addCorrection, setLessonActive, deleteLesson, tryQuestion } from "./actions";
+import { addRule, addCorrection, setLessonActive, deleteLesson, tryQuestion,
+  addKnowledgeAction, toggleKnowledgeAction, deleteKnowledgeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Teach the AI — Admin" };
@@ -52,6 +53,15 @@ export default async function AiTrainingPage(props: {
 
   let lastTry: LastTry | null = null;
   try { lastTry = setting?.value ? (JSON.parse(setting.value as string) as LastTry) : null; } catch { lastTry = null; }
+
+  const { data: knowledgeRows } = await createServiceClient()
+    .from("ai_knowledge")
+    .select("id, title, subject, triggers, body, source_file, active, priority")
+    .order("priority", { ascending: false });
+  const knowledge = (knowledgeRows ?? []) as unknown as {
+    id: string; title: string; subject: string | null; triggers: string[];
+    body: string; source_file: string | null; active: boolean; priority: number;
+  }[];
 
   return (
     <section className="container" style={{ paddingTop: 24, paddingBottom: 60, maxWidth: 880 }}>
@@ -191,6 +201,85 @@ export default async function AiTrainingPage(props: {
         A lesson applies to the very next answer — there is nothing to deploy. Keep them few and firm: a long list of
         half-relevant instructions makes the AI worse, not better.
       </p>
+
+      {/* ── The faculty's own documents ─────────────────────────────── */}
+      <h2 className="admin-section-title" style={{ marginTop: 32 }}>📘 Your own written guidance</h2>
+      <p className="muted" style={{ fontSize: ".84rem", lineHeight: 1.7, margin: "4px 0 12px" }}>
+        A revision roadmap or an exam blueprint is not a house rule — it is teaching, and a student who asks for it
+        deserves it <strong>quoted</strong>, with the stage names, the timings and the mark allocations intact. Upload
+        the document here and it is put in front of the AI <strong>whenever a student&apos;s question is about it</strong>,
+        above the study material and above its own knowledge. It is not attached to unrelated questions, so it costs
+        nothing on the other ninety per cent.
+      </p>
+
+      <form action={addKnowledgeAction} className="card" style={{ display: "grid", gap: 10 }}>
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))" }}>
+          <div>
+            <label style={{ fontSize: ".75rem" }}>What it is</label>
+            <input name="title" required placeholder="e.g. CA Final FR — revision roadmap" style={{ marginBottom: 0 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: ".75rem" }}>Subject</label>
+            <input name="subject" list="know-subjects" placeholder="Financial Reporting" style={{ marginBottom: 0 }} />
+            <datalist id="know-subjects">
+              <option value="Financial Reporting" />
+              <option value="Advanced Accounting" />
+            </datalist>
+          </div>
+          <div>
+            <label style={{ fontSize: ".75rem" }}>The document (PDF, or .md / .txt)</label>
+            <input type="file" name="file" required accept=".pdf,.md,.txt,.markdown,text/plain" style={{ marginBottom: 0 }} />
+          </div>
+        </div>
+        <div>
+          <label style={{ fontSize: ".75rem" }}>When should it be used? Words a student might say</label>
+          <input name="triggers" required
+                 placeholder="revision, revise, exam pattern, weightage, financial reporting, how to prepare"
+                 style={{ marginBottom: 0 }} />
+          <div className="muted" style={{ fontSize: ".72rem", marginTop: 2 }}>
+            Comma separated. Two of them must appear in the question before the document is used — one word like
+            &ldquo;exam&rdquo; is half of everything a student asks.
+          </div>
+        </div>
+        <div>
+          <SubmitButton className="btn small" savedLabel="✓ Learned">📘 Teach this document</SubmitButton>
+          <span className="muted" style={{ fontSize: ".78rem", marginLeft: 8 }}>
+            A scanned PDF has no text in it and will be refused rather than half-read.
+          </span>
+        </div>
+      </form>
+
+      {knowledge.length > 0 && (
+        <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+          {knowledge.map((k) => (
+            <div className="card" key={k.id} style={{ padding: "10px 14px" }}>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
+                <strong>{k.title}</strong>
+                {k.subject && <span className="muted" style={{ fontSize: ".8rem" }}>{k.subject}</span>}
+                <span className="muted" style={{ fontSize: ".78rem" }}>
+                  {k.body.length.toLocaleString("en-IN")} characters{k.source_file ? ` · from ${k.source_file}` : ""}
+                </span>
+                <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                  <form action={toggleKnowledgeAction} style={{ margin: 0 }}>
+                    <input type="hidden" name="id" value={k.id} />
+                    <input type="hidden" name="active" value={k.active ? "0" : "1"} />
+                    <SubmitButton className="btn small secondary" savedLabel="✓">
+                      {k.active ? "In use — pause it" : "Paused — use it"}
+                    </SubmitButton>
+                  </form>
+                  <form action={deleteKnowledgeAction} style={{ margin: 0 }}>
+                    <input type="hidden" name="id" value={k.id} />
+                    <SubmitButton className="btn small secondary" savedLabel="Removed">Remove</SubmitButton>
+                  </form>
+                </span>
+              </div>
+              <div className="muted" style={{ fontSize: ".76rem", marginTop: 4 }}>
+                Used when a question mentions: {k.triggers.join(" · ")}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

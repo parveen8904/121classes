@@ -477,6 +477,13 @@ export async function answerDoubtFromMaterial(
   const { lessonPrefix } = await import("@/lib/aiLessons");
   const taught = await lessonPrefix(question, feature);
 
+  // AND WHAT HE HAS WRITTEN DOWN AT LENGTH. A revision roadmap or an exam
+  // blueprint is not a house rule — it is teaching, and a student who asks for
+  // it deserves it quoted rather than paraphrased. Attached only when the
+  // question is actually about it.
+  const { knowledgeFor } = await import("@/lib/aiKnowledge");
+  const doctrine = await knowledgeFor(question);
+
   // Enough room to actually SOLVE a numbered question (working notes, journal
   // entries), not just a one-line conceptual reply.
   // The map of the site travels with the study material. A great many messages
@@ -514,7 +521,7 @@ export async function answerDoubtFromMaterial(
   // above the breakpoint invalidates the whole thing.
   const system = `${REPO_SYSTEM}\n\n${where}`;
   const user =
-    `${taught}${history ? `${history}\n\n` : ""}` +
+    `${taught}${doctrine}${history ? `${history}\n\n` : ""}` +
     (found ? `${found}\n\n` : "") +
     `STUDY MATERIAL:\n${material || "(none provided)"}\n\nSTUDENT QUESTION:\n${question}`;
   const raw = await callClaude(system, user, 2000, { model: await teachingModel(), feature, cache: true });

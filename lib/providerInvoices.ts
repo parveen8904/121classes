@@ -30,6 +30,51 @@ export function fyLabelFor(iso: string): string {
 }
 
 /**
+ * Razorpay's OWN monthly tax invoices — the gateway fee, billed separately from
+ * the settlements (proved 23 Aug: settlements carry no fee at all). These carry
+ * GST and are input-credit claimable, so they belong in the vault beside the
+ * other provider bills. Razorpay exposes them on /v1/invoices with type=invoice.
+ */
+export async function fetchRazorpayInvoices(sinceISO = "2026-04-01"): Promise<string> {
+  const id = await getSecret("RAZORPAY_KEY_ID");
+  const key = await getSecret("RAZORPAY_KEY_SECRET");
+  if (!id || !key) return "Razorpay: keys not configured.";
+  const auth = `Basic ${Buffer.from(`${id}:${key}`).toString("base64")}`;
+  const from = Math.floor(new Date(`${sinceISO}T00:00:00+05:30`).getTime() / 1000);
+  const res = await fetch(`https://api.razorpay.com/v1/invoices?type=invoice&from=${from}&count=100`, {
+    headers: { Authorization: auth }, cache: "no-store",
+  });
+  if (!res.ok) return `Razorpay invoices: API returned ${res.status}.`;
+  const j = (await res.json()) as { items?: { id: string; invoice_number?: string; amount?: number; date?: number; status?: string; short_url?: string; description?: string }[] };
+  const items = j.items ?? [];
+  if (!items.length) return "Razorpay: no fee invoices exposed on the API for this period.";
+
+  const svc = createServiceClient();
+  const { data: existing } = await svc.from("zoho_vault_docs").select("note").eq("institution", "Razorpay");
+  const have = (existing ?? []).map((e) => String(e.note ?? ""));
+
+  let filed = 0, skipped = 0;
+  for (const it of items) {
+    const marker = `rzp:${it.id}`;
+    if (have.some((n) => n.includes(marker))) { skipped++; continue; }
+    const when = it.date ? new Date(it.date * 1000) : new Date();
+    // The invoice itself is a hosted page, not a PDF endpoint — file the
+    // reference so the desk can open it; the PDF is one click from there.
+    await svc.from("zoho_vault_docs").insert({
+      title: `Razorpay — ${MONTH[when.getUTCMonth()]} ${when.getUTCFullYear()} (₹${((it.amount ?? 0) / 100).toFixed(2)})${it.invoice_number ? ` — ${it.invoice_number}` : ""}`,
+      file_url: it.short_url || `https://dashboard.razorpay.com/app/invoices/${it.id}`,
+      institution: "Razorpay",
+      doc_type: "Invoice / bill",
+      year_label: fyLabelFor(when.toISOString()),
+      is_processed: false,
+      note: `${marker} · ${it.status ?? ""} · gateway fee invoice (GST — ITC claimable) · pulled by API`,
+    });
+    filed++;
+  }
+  return `Razorpay: ${filed} filed, ${skipped} already in the vault.`;
+}
+
+/**
  * Pull Bunny's billing documents and file any that are not already in the
  * vault. Dedupe is on the record id, carried in the note as "bunny:<id>", so
  * running this every month (or twice in a day) never files a duplicate.

@@ -7,10 +7,11 @@ import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
+import QueuePicker from "./QueuePicker";
 import { rule115Rate, ttBuyRate } from "@/lib/forexRates";
 import { fySnapshot, indiaAdvanceTax, usEstimatedTax, taxAssumptions } from "@/lib/taxEngine";
 import { backlogItems, searchDesk } from "@/lib/zohoDesk";
@@ -520,30 +521,18 @@ export default async function ZohoHubPage(props: {
 
           {autoLines.length > 0 && (
             <>
-              <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
-                <strong>⚡ Rule-proposed — one tick posts ({autoLines.length})</strong>
-                <form action={approveAllAutoAction} style={{ margin: 0 }}>
-                  <SubmitButton className="btn small" savedLabel="✓ Posted">✅ Approve all</SubmitButton>
-                </form>
-              </div>
-              {autoLines.map((l) => (
-                <div className="card" key={l.id} style={{ marginTop: 6, padding: "10px 14px" }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: ".8rem", whiteSpace: "nowrap" }}>{l.line_date}</span>
-                    <span style={{ flex: 1, minWidth: 220, fontSize: ".84rem" }}>{l.narration}</span>
-                    <strong style={{ whiteSpace: "nowrap" }}>{l.debit > 0 ? `− ${formatINR(Number(l.debit))}` : `+ ${formatINR(Number(l.credit))}`}</strong>
-                    <span className="badge">→ {l.proposal?.account}</span>
-                    <form action={approveAutoLineAction} style={{ margin: 0 }}>
-                      <input type="hidden" name="id" value={l.id} />
-                      <SubmitButton className="btn small" savedLabel="✓">✅ Post</SubmitButton>
-                    </form>
-                    <form action={skipLineAction} style={{ margin: 0 }}>
-                      <input type="hidden" name="id" value={l.id} />
-                      <SubmitButton className="btn small secondary" savedLabel="✓">Skip</SubmitButton>
-                    </form>
-                  </div>
-                </div>
-              ))}
+              <strong style={{ display: "block", marginTop: 14 }}>⚡ Rule-proposed — tick what you want posted ({autoLines.length})</strong>
+              <QueuePicker
+                rows={autoLines.map((l) => ({
+                  id: l.id, date: l.line_date,
+                  label: `${l.account_name} · ${String(l.narration).slice(0, 80)}`,
+                  sub: l.proposal?.account ? `→ ${l.proposal.account}` : null,
+                  amount: Number(l.debit) > 0 ? -Number(l.debit) : Number(l.credit),
+                  status: l.status, error: l.error,
+                }))}
+                approveSelected={approveSelectedLinesAction}
+                skipSelected={skipSelectedLinesAction}
+              />
             </>
           )}
 
@@ -772,34 +761,18 @@ export default async function ZohoHubPage(props: {
 
           {bAuto.length > 0 && (
             <>
-              <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
-                <strong>⚡ Pre-proposed ({bAuto.length})</strong>
-                <form action={approveAllBrokerageAction} style={{ margin: 0 }}>
-                  <SubmitButton className="btn small" savedLabel="✓ Posted">✅ Approve all</SubmitButton>
-                </form>
-              </div>
-              {bAuto.map((l) => (
-                <div className="card" key={l.id} style={{ marginTop: 6, padding: "10px 14px" }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: ".8rem" }}>{l.line_date}</span>
-                    <span className="badge">{l.kind}{l.symbol ? ` · ${l.symbol}` : ""}</span>
-                    <strong>${Number(l.usd_amount).toFixed(2)}</strong>
-                    <span className="muted" style={{ fontSize: ".78rem" }}>
-                      {l.rate ? `@ ₹${Number(l.rate).toFixed(2)} (${l.rate_date}) = ${formatINR(Number(l.inr_amount))}` : "rate pending"}
-                    </span>
-                    <span style={{ flex: 1, minWidth: 140, fontSize: ".8rem" }} className="muted">{l.description}</span>
-                    <span className="badge">→ {l.proposal?.account}</span>
-                    <form action={postBrokerageLineAction} style={{ margin: 0 }}>
-                      <input type="hidden" name="id" value={l.id} />
-                      <SubmitButton className="btn small" savedLabel="✓">✅ Post</SubmitButton>
-                    </form>
-                    <form action={skipBrokerageLineAction} style={{ margin: 0 }}>
-                      <input type="hidden" name="id" value={l.id} />
-                      <SubmitButton className="btn small secondary" savedLabel="✓">Skip</SubmitButton>
-                    </form>
-                  </div>
-                </div>
-              ))}
+              <strong style={{ display: "block", marginTop: 14 }}>⚡ Pre-proposed — tick what you want posted ({bAuto.length})</strong>
+              <QueuePicker
+                rows={bAuto.map((l) => ({
+                  id: l.id, date: l.line_date,
+                  label: `${l.account_name} · ${l.kind}${l.symbol ? ` ${l.symbol}` : ""} · $${Number(l.usd_amount).toFixed(2)}`,
+                  sub: `${l.rate ? `@ ₹${Number(l.rate).toFixed(2)} (${l.rate_date})` : "rate pending"}${l.proposal?.account ? ` → ${l.proposal.account}` : ""}`,
+                  amount: l.inr_amount !== null ? Number(l.inr_amount) : 0,
+                  status: l.status, error: l.error,
+                }))}
+                approveSelected={approveSelectedBrokerageAction}
+                skipSelected={skipSelectedBrokerageAction}
+              />
             </>
           )}
 
@@ -976,10 +949,10 @@ export default async function ZohoHubPage(props: {
       </p>
 
       <form action={fetchProviderInvoicesAction} style={{ marginTop: 10 }}>
-        <SubmitButton className="btn small" savedLabel="✓ Pulled">🔄 Pull provider invoices by API (Bunny)</SubmitButton>
+        <SubmitButton className="btn small" savedLabel="✓ Pulled">🔄 Pull provider invoices by API (Bunny + Razorpay)</SubmitButton>
         <span className="muted" style={{ fontSize: ".78rem", marginLeft: 10 }}>
-          Bunny&apos;s billing API hands over the PDFs directly — no login, no duplicates. Anthropic and Mailgun have
-          no invoice API; theirs arrive by email.
+          Bunny hands over the PDFs directly and Razorpay its monthly fee invoices (GST — ITC claimable) — no login, no
+          duplicates. Anthropic and Mailgun have no invoice API; theirs arrive by email.
         </span>
       </form>
 

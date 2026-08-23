@@ -148,10 +148,13 @@ export async function retrySettlementAction(formData: FormData) {
 
 export async function fetchProviderInvoicesAction() {
   await assertArea("zoho");
-  const { fetchBunnyInvoices } = await import("@/lib/providerInvoices");
-  let note: string;
-  try { note = await fetchBunnyInvoices(); }
-  catch (e) { note = `Provider pull failed: ${e instanceof Error ? e.message : "unknown"}`; }
+  const { fetchBunnyInvoices, fetchRazorpayInvoices } = await import("@/lib/providerInvoices");
+  const notes: string[] = [];
+  try { notes.push(await fetchBunnyInvoices()); }
+  catch (e) { notes.push(`Bunny failed: ${e instanceof Error ? e.message : "unknown"}`); }
+  try { notes.push(await fetchRazorpayInvoices()); }
+  catch (e) { notes.push(`Razorpay failed: ${e instanceof Error ? e.message : "unknown"}`); }
+  const note = notes.join(" ");
   revalidatePath("/admin/zoho");
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#vault`);
 }
@@ -219,6 +222,50 @@ export async function approveAllAutoAction() {
     if (!account) continue;
     try { await postBankLine(a.id, account); } catch { /* continue */ }
   }
+  revalidatePath("/admin/zoho");
+}
+
+export async function approveSelectedLinesAction(formData: FormData) {
+  await assertArea("zoho");
+  const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
+  if (!ids.length) return;
+  const svc = createServiceClient();
+  const { postBankLine } = await import("@/lib/bankStatements");
+  const { data: rows } = await svc.from("bank_lines").select("id, proposal").in("id", ids);
+  for (const r of rows ?? []) {
+    const account = String((r.proposal as { account?: string } | null)?.account ?? "").trim();
+    if (!account) continue;
+    try { await postBankLine(r.id, account); } catch { /* the row keeps its reason */ }
+  }
+  revalidatePath("/admin/zoho");
+}
+
+export async function skipSelectedLinesAction(formData: FormData) {
+  await assertArea("zoho");
+  const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
+  if (!ids.length) return;
+  await createServiceClient().from("bank_lines")
+    .update({ status: "skipped", updated_at: new Date().toISOString() }).in("id", ids);
+  revalidatePath("/admin/zoho");
+}
+
+export async function approveSelectedBrokerageAction(formData: FormData) {
+  await assertArea("zoho");
+  const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
+  if (!ids.length) return;
+  const { postBrokerageLine } = await import("@/lib/brokerage");
+  for (const id of ids) {
+    try { await postBrokerageLine(id, {}); } catch { /* the row keeps its reason */ }
+  }
+  revalidatePath("/admin/zoho");
+}
+
+export async function skipSelectedBrokerageAction(formData: FormData) {
+  await assertArea("zoho");
+  const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
+  if (!ids.length) return;
+  await createServiceClient().from("brokerage_lines")
+    .update({ status: "skipped", updated_at: new Date().toISOString() }).in("id", ids);
   revalidatePath("/admin/zoho");
 }
 

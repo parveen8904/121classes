@@ -236,7 +236,7 @@ export default async function ZohoHubPage(props: {
   // treatment card cannot help here — without the country and what they did,
   // there is no way to know what to withhold.
   const { data: ruleRows } = hubConnected
-    ? await createServiceClient().from("provider_bill_rules").select("institution, country, service_category, billing_frequency")
+    ? await createServiceClient().from("provider_bill_rules").select("*")
     : { data: [] as never[] };
   const answered = new Set((ruleRows ?? [])
     .filter((r) => r.country && r.service_category && r.billing_frequency)
@@ -244,6 +244,15 @@ export default async function ZohoHubPage(props: {
   const foreignAsk = [...new Set(bills
     .filter((b) => (b.currency || "USD") !== "INR" && !answered.has(b.institution))
     .map((b) => b.institution))];
+  // Answers already on file. They are not frozen — a residency certificate
+  // arrives, a s.395 certificate is granted, a vendor starts doing bespoke work
+  // — and changing them re-works every invoice of theirs still waiting.
+  type ForeignRule = { institution: string; country: string | null; service_category: string | null;
+    billing_frequency: string | null; has_trc: boolean; has_form10f: boolean; has_no_pe: boolean;
+    has_395_cert: boolean; expected_annual: number | null };
+  const foreignOnFile = ((ruleRows ?? []) as unknown as ForeignRule[])
+    .filter((r) => r.country && r.service_category)
+    .sort((a, b) => a.institution.localeCompare(b.institution));
   type PostedBillRow = {
     id: string; institution: string; bill_no: string | null; bill_date: string | null; error: string | null;
     zoho_echo: { currency?: string | null; total?: number | null; exchange_rate?: number | null;
@@ -1095,6 +1104,46 @@ export default async function ZohoHubPage(props: {
                 );
               })}
             </>
+          )}
+
+          {foreignOnFile.length > 0 && (
+            <details className="card" style={{ marginTop: 8 }}>
+              <summary className="btn small secondary as-btn">🌍 Foreign vendors already worked out ({foreignOnFile.length})</summary>
+              <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0" }}>
+                Change an answer and every invoice of theirs still waiting is worked out again — which is what
+                you do when a residency certificate finally arrives, or a <strong>s.395</strong> certificate is granted.
+              </p>
+              {foreignOnFile.map((r) => (
+                <form action={saveForeignAnswersAction} key={`fo-${r.institution}`} style={{ borderTop: "1px solid var(--line, #eee)", padding: "10px 0" }}>
+                  <input type="hidden" name="institution" value={r.institution} />
+                  <strong>{r.institution}</strong>
+                  <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", marginTop: 6 }}>
+                    <select name="country" defaultValue={r.country ?? ""} style={{ marginBottom: 0 }}>
+                      {FVD.COUNTRIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                    </select>
+                    <select name="service_category" defaultValue={r.service_category ?? "standardised"} style={{ marginBottom: 0 }}>
+                      <option value="standardised">Ready-made</option>
+                      <option value="bespoke">Work done for us</option>
+                      <option value="advertising">Advertising</option>
+                      <option value="mixed">Mixed</option>
+                    </select>
+                    <select name="billing_frequency" defaultValue={r.billing_frequency ?? "monthly"} style={{ marginBottom: 0 }}>
+                      <option value="monthly">Every month</option>
+                      <option value="annual">Once a year</option>
+                      <option value="one">One-off</option>
+                    </select>
+                    <input name="expected_annual" type="number" defaultValue={r.expected_annual ?? undefined} placeholder="expected ₹/yr" style={{ marginBottom: 0 }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8, fontSize: ".82rem" }}>
+                    <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_trc" defaultChecked={r.has_trc} style={{ width: "auto", marginRight: 6 }} />TRC</label>
+                    <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_form10f" defaultChecked={r.has_form10f} style={{ width: "auto", marginRight: 6 }} />Form 10F</label>
+                    <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_no_pe" defaultChecked={r.has_no_pe} style={{ width: "auto", marginRight: 6 }} />No-PE</label>
+                    <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_395_cert" defaultChecked={r.has_395_cert} style={{ width: "auto", marginRight: 6 }} />s.395 certificate</label>
+                    <SubmitButton className="btn small secondary" savedLabel="✓ Re-worked">↻ Work out again</SubmitButton>
+                  </div>
+                </form>
+              ))}
+            </details>
           )}
 
           {askVendors.length > 0 && (

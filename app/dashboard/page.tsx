@@ -59,23 +59,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ saved?:
   // The redirects below send the LOGGED-IN person to their own desk. While
   // viewing, they must not fire: an admin opening a supporter's dashboard wants
   // to see it, not to be bounced to /supporter.
-  //
-  // BUT NOT WHEN THEY ARE ALSO STUDYING HERE. A supporter with a subscription
-  // of their own was being bounced away from their own classes, and a supporter
-  // who merely WANTED to buy could never reach a plans page at all — the
-  // dashboard is the way in, and it turned them around at the door. That is what
-  // stopped SANDEEP MUNDRA HUF from placing an order (TKT-01135): nothing was
-  // broken in checkout, he simply could not get to it.
-  //
-  // The rule is the one already applied to staff a few lines down: somebody with
-  // subjects of their own is left alone, because they may genuinely be studying
-  // here too. Their portal stays one click away — /supporter opens on the
-  // is_supporter tick, not on this role.
-  if (!viewing && profile?.role === "supporter") {
-    const { count: ownSubs } = await db
-      .from("subscriptions").select("id", { count: "exact", head: true }).eq("student_id", studentId);
-    if (!ownSubs) redirect("/supporter");
-  }
+  if (!viewing && profile?.role === "supporter") redirect("/supporter");
 
   // Staff whose only job is one area belong in that area, not on a shelf of
   // subjects they do not have. A supporter is already sent to their own desk

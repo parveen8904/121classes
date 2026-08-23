@@ -116,10 +116,6 @@ export default async function SupporterPage(props: {
           <Link className="btn small secondary" href="/supporter/leads">📇 Leads I have passed on</Link>
           <Link className="btn small secondary" href="/supporter/terms">📋 How this works</Link>
           <Link className="btn small secondary" href="/supporter/complaint">🚩 Report a seller</Link>
-          {/* A supporter may want to study here themselves — and until now there
-              was no way for them to say so: this portal was the only page they
-              could reach, and the dashboard turned them straight back. */}
-          {!viewed && <Link className="btn small secondary" href="/courses">🎓 Study here myself</Link>}
           {/* There was no way out of this portal at all. A supporter selling
               from a shared or shop counter had to clear the browser to end
               their session — on a desk where the next person may be a student. */}

@@ -224,10 +224,15 @@ function echoOf(b: ZohoBill) {
   };
 }
 
-/** Move a created bill out of draft. Returns whether it is now in the books. */
-async function openBill(billId: string): Promise<boolean> {
-  try { await zohoFetch(`/bills/${billId}/status/open`, { method: "POST" }); return true; }
-  catch { return false; }
+/**
+ * Move a created bill out of draft, and SAY WHY if it will not go.
+ *
+ * A swallowed failure here is the worst kind: the queue reads "posted" while the
+ * bill sits outside the ledgers. So the reason travels back to the row.
+ */
+async function openBill(billId: string): Promise<{ ok: boolean; why?: string }> {
+  try { await zohoFetch(`/bills/${billId}/status/open`, { method: "POST" }); return { ok: true }; }
+  catch (e) { return { ok: false, why: e instanceof Error ? e.message : "unknown" }; }
 }
 
 /**
@@ -243,11 +248,18 @@ export async function readbackPostedBills(): Promise<{ checked: number; opened: 
     try {
       let r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${row.zoho_bill_id}`);
       if (!r.bill) continue;
-      if (r.bill.status === "draft" && await openBill(String(row.zoho_bill_id))) {
-        opened++;
-        r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${row.zoho_bill_id}`);
+      let why: string | undefined;
+      if (r.bill.status === "draft") {
+        const res = await openBill(String(row.zoho_bill_id));
+        why = res.why;
+        if (res.ok) { opened++; r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${row.zoho_bill_id}`); }
       }
-      if (r.bill) await svc.from("provider_bills").update({ zoho_echo: echoOf(r.bill) }).eq("id", row.id);
+      if (r.bill) {
+        await svc.from("provider_bills").update({
+          zoho_echo: echoOf(r.bill),
+          ...(why ? { error: `still a draft in Zoho — not in the ledgers. Zoho said: ${why}` } : {}),
+        }).eq("id", row.id);
+      }
       checked++;
     } catch { /* one unreadable bill must not stop the rest */ }
   }
@@ -344,8 +356,8 @@ export async function postProviderBill(id: string): Promise<void> {
     await svc.from("provider_bills").update({
       status: "posted", zoho_bill_id: r.bill.bill_id, zoho_vendor_id: vendorId,
       rate, inr_amount: rate ? Number((total * rate).toFixed(2)) : total,
-      zoho_echo: { ...echoOf(r.bill), ...(opened ? { zoho_status: "open" } : {}) },
-      error: tdsNote || (opened ? null : "created in Zoho but still a draft — press 🔍 to finish it"),
+      zoho_echo: { ...echoOf(r.bill), ...(opened.ok ? { zoho_status: "open" } : {}) },
+      error: tdsNote || (opened.ok ? null : `created in Zoho but STILL A DRAFT — not in the ledgers. Zoho said: ${opened.why}`),
       updated_at: new Date().toISOString(),
     }).eq("id", id);
     // The vault copy is now worked, not raw.

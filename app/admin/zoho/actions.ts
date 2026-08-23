@@ -456,6 +456,61 @@ export async function ingestActivityCsvAction(formData: FormData) {
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#brokerage`);
 }
 
+export async function rebuildBrokerageNoteAction(formData: FormData) {
+  // WORK THE NOTE OUT AGAIN FROM THE FILE IT CAME FROM.
+  //
+  // The activity file is kept, so a note prepared before the desk started
+  // recording its Rule 115 rates can be rebuilt rather than re-uploaded. Draft
+  // only: a note he has approved has been journalled, and rebuilding it would
+  // move figures that are already in the books.
+  //
+  // His own figure for uncosted sales is his, not the file's, so it is carried
+  // across rather than thrown away.
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  const { data: n } = await svc.from("brokerage_notes")
+    .select("account_name, period_start, period_end, status, source_url, workbook").eq("id", id).maybeSingle();
+  if (!n) redirect(`/admin/zoho?scan=${encodeURIComponent("That working note could not be found.")}#brokerage`);
+  if (n!.status !== "draft") {
+    redirect(`/admin/zoho?scan=${encodeURIComponent("That note has already been approved and journalled — it is not rebuilt.")}#brokerage`);
+  }
+  if (!n!.source_url) {
+    redirect(`/admin/zoho?scan=${encodeURIComponent("That note was summarised from statement lines, not from an activity file — upload the CSV to rebuild it.")}#brokerage`);
+  }
+
+  const keptCost = (n!.workbook as { equity?: { uncostedCost?: number | null } } | null)?.equity?.uncostedCost ?? null;
+  const { ingestActivityCsv } = await import("@/lib/brokerageWorkbook");
+  let note: string;
+  try {
+    const r = await ingestActivityCsv({
+      account: String(n!.account_name), from: String(n!.period_start), to: String(n!.period_end),
+      fileRef: String(n!.source_url), fileName: String(n!.source_url).split("/").pop() ?? "activity.csv",
+    });
+    if ("error" in r) note = `It could not be rebuilt — ${r.error}`;
+    else {
+      if (keptCost !== null) {
+        const { data: fresh } = await svc.from("brokerage_notes").select("workbook").eq("id", r.id).maybeSingle();
+        const wb = (fresh?.workbook ?? {}) as Record<string, unknown>;
+        const equity = wb.equity as Record<string, number> | undefined;
+        if (equity) {
+          equity.uncostedCost = keptCost;
+          equity.subTotal = Number(equity.realisedFifo) + (Number(equity.uncostedProceeds) - keptCost);
+          wb.partial = false;
+          wb.netResult = Number(equity.subTotal) + Number((wb.options as { net: number }).net)
+            + Number((wb.income as { subTotal: number }).subTotal) + Number((wb.charges as { subTotal: number }).subTotal);
+          await svc.from("brokerage_notes").update({ workbook: wb, note: null }).eq("id", r.id);
+        }
+      }
+      const rates = (r.note as unknown as { ratesUsed?: unknown[] }).ratesUsed?.length ?? 0;
+      note = `Rebuilt from the activity file${rates ? ` — ${rates} Rule 115 rates recorded and shown` : ""}.`;
+    }
+  } catch (e) { note = `It could not be rebuilt — ${e instanceof Error ? e.message : "unknown"}`; }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#brokerage`);
+}
+
 export async function setUncostedCostAction(formData: FormData) {
   // His figure for shares the file has no purchase price for. Until it is here
   // the equity sub-total leaves those sales out entirely — proceeds without a

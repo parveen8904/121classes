@@ -267,6 +267,9 @@ export type OptionRow = {
 };
 export type Detail = { date: string; scrip: string; description: string; amount: number };
 
+/** One Rule-115 rate, the head it converted and what it converted. */
+export type RateUsed = { head: string; date: string; rate: number; usd: number; inr: number; count: number };
+
 export type WorkingNote = {
   account: string; from: string; to: string;
   equity: {
@@ -371,14 +374,19 @@ export function buildWorkingNote(
  * The rupee value of the note, each head at the Rule-115 rate of its own
  * transaction — never the period's closing rate, and never an average.
  */
-export async function inrOf(txs: Tx[], from: string, to: string): Promise<Record<string, number>> {
+export async function inrOf(
+  txs: Tx[], from: string, to: string,
+): Promise<{ byHead: Record<string, number>; rates: RateUsed[]; missing: string[] }> {
   const inPeriod = txs.filter((t) => t.date >= from && t.date <= to);
   const rates = new Map<string, number>();
+  const used = new Map<string, RateUsed>();
+  const missing = new Set<string>();
   const rateFor = async (date: string) => {
     if (rates.has(date)) return rates.get(date)!;
     const r = await rule115Rate(date, "USD").catch(() => null);
     const v = r?.rate ?? 0;
     rates.set(date, v);
+    if (!v) missing.add(date);
     return v;
   };
   const out: Record<string, number> = {};
@@ -396,8 +404,22 @@ export async function inrOf(txs: Tx[], from: string, to: string): Promise<Record
       : null;
     if (!bucket) continue;
     out[bucket] = (out[bucket] ?? 0) + t.amount * r;
+    // EVERY RATE THE NOTE STANDS ON, KEPT.
+    //
+    // The conversion is per transaction under Rule 115, so "the rate we used"
+    // is not one number — it is one per date, and the note is only checkable if
+    // it says which. Each is recorded against the head it converted, with the
+    // dollars it converted, so a reader can re-perform any line of the note.
+    const key = `${bucket}|${t.date}`;
+    const seen = used.get(key);
+    if (seen) { seen.usd += t.amount; seen.inr += t.amount * r; seen.count += 1; }
+    else used.set(key, { head: bucket, date: t.date, rate: r, usd: t.amount, inr: t.amount * r, count: 1 });
   }
-  return out;
+  return {
+    byHead: out,
+    rates: [...used.values()].sort((a, b) => (a.head === b.head ? a.date.localeCompare(b.date) : a.head.localeCompare(b.head))),
+    missing: [...missing].sort(),
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -428,12 +450,15 @@ export async function ingestActivityCsv(p: {
   }
 
   const note = buildWorkingNote(txs, p.account, p.from, p.to);
-  const inr = await inrOf(txs, p.from, p.to).catch(() => ({} as Record<string, number>));
+  const conv = await inrOf(txs, p.from, p.to)
+    .catch(() => ({ byHead: {} as Record<string, number>, rates: [] as RateUsed[], missing: [] as string[] }));
+  const inr = conv.byHead;
 
   // The rupee value of each equity sale at the rate for ITS OWN date, never one
   // rate for the period.
   let equityInr = 0;
   const rateCache = new Map<string, number>();
+  const equityRates = new Map<string, RateUsed>();
   for (const t of note.equity.trades) {
     let r = rateCache.get(t.saleDate);
     if (r === undefined) {
@@ -442,12 +467,23 @@ export async function ingestActivityCsv(p: {
       rateCache.set(t.saleDate, r);
     }
     equityInr += t.pl * r;
+    const seen = equityRates.get(t.saleDate);
+    if (seen) { seen.usd += t.pl; seen.inr += t.pl * r; seen.count += 1; }
+    else equityRates.set(t.saleDate, { head: "equityRealised", date: t.saleDate, rate: r, usd: t.pl, inr: t.pl * r, count: 1 });
   }
 
   const svc = createServiceClient();
   const row = {
     account_name: p.account, period_start: p.from, period_end: p.to,
-    workbook: { ...note, inrByHead: { ...inr, equityRealised: equityInr } } as unknown as Record<string, unknown>,
+    workbook: {
+      ...note,
+      inrByHead: { ...inr, equityRealised: equityInr },
+      // The rates the whole note stands on, so it can be re-performed and so the
+      // page can show him exactly what was applied instead of asking him to
+      // trust it.
+      ratesUsed: [...conv.rates, ...[...equityRates.values()].sort((a, b) => a.date.localeCompare(b.date))],
+      ratesMissing: conv.missing,
+    } as unknown as Record<string, unknown>,
     buckets: {} as Record<string, unknown>,
     gain_inr: equityInr > 0 ? Number(equityInr.toFixed(2)) : 0,
     loss_inr: equityInr < 0 ? Number(Math.abs(equityInr).toFixed(2)) : 0,

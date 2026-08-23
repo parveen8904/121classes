@@ -12,7 +12,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import Money from "@/app/components/Money";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -137,6 +137,8 @@ export default async function ZohoHubPage(props: {
       netResult: number; partial: boolean;
       excluded: { label: string; amount: number }[];
       inrByHead?: Record<string, number>;
+      ratesUsed?: { head: string; date: string; rate: number; usd: number; inr: number; count: number }[];
+      ratesMissing?: string[];
     } | null };
   const { data: noteData } = hubConnected
     ? await createServiceClient().from("brokerage_notes")
@@ -1066,6 +1068,86 @@ export default async function ZohoHubPage(props: {
                             </tr>
                           </tbody>
                         </table>
+
+                        {/* THE NOTE AS A FILE, AND THE RATES IT STANDS ON.
+                            A working note that lives only inside a web page is
+                            no use at assessment, and a converted figure nobody
+                            can re-perform is worth no more than a guess. */}
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginTop: 10 }}>
+                          <a className="btn small secondary" href={`/admin/zoho/brokerage/${n.id}/export`} download>
+                            ⬇️ Download the working note (Excel)
+                          </a>
+                          <span className="muted" style={{ fontSize: ".75rem" }}>
+                            The same statement as above — A, B, C, D and the net result — with the FIFO trades, the
+                            scrip summary, the option rows, the income and charge detail and every rate on their own sheets.
+                          </span>
+                        </div>
+
+                        {(w.ratesUsed?.length ?? 0) > 0 && (() => {
+                          const rates = w.ratesUsed!;
+                          const lo = Math.min(...rates.map((r) => r.rate));
+                          const hi = Math.max(...rates.map((r) => r.rate));
+                          const HEADS: Record<string, string> = {
+                            equityRealised: "Equity — realised", options: "Options — net premium",
+                            cashDividends: "Cash dividends", manufacturedDividends: "Manufactured dividends",
+                            stockLending: "Stock lending", interest: "Interest",
+                            marginInterest: "Margin interest", fees: "Fees",
+                          };
+                          return (
+                            <details style={{ marginTop: 8 }}>
+                              <summary className="muted" style={{ cursor: "pointer", fontSize: ".78rem" }}>
+                                💱 The rates applied — {rates.length} date-wise rates, ₹{lo.toFixed(2)} to ₹{hi.toFixed(2)} per USD
+                              </summary>
+                              <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0" }}>
+                                Rule 115 converts each receipt at the telegraphic transfer buying rate of <strong>its own
+                                date</strong>, so there is no single rate for the period and no average is used. Every one
+                                is here, against the head it converted.
+                              </p>
+                              <div style={{ overflowX: "auto" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".8rem" }}>
+                                  <thead><tr>
+                                    <th style={{ textAlign: "left", padding: "4px 8px", fontSize: ".7rem", color: "#666" }}>HEAD</th>
+                                    <th style={{ textAlign: "left", padding: "4px 8px", fontSize: ".7rem", color: "#666" }}>DATE</th>
+                                    <th style={{ textAlign: "right", padding: "4px 8px", fontSize: ".7rem", color: "#666" }}>RATE ₹/USD</th>
+                                    <th style={{ textAlign: "right", padding: "4px 8px", fontSize: ".7rem", color: "#666" }}>USD</th>
+                                    <th style={{ textAlign: "left", padding: "4px 8px", fontSize: ".7rem", color: "#666" }}>₹</th>
+                                  </tr></thead>
+                                  <tbody>
+                                    {rates.map((r) => (
+                                      <tr key={`${r.head}-${r.date}`} style={{ borderTop: "1px solid rgba(0,0,0,.06)" }}>
+                                        <td style={{ padding: "4px 8px" }}>{HEADS[r.head] ?? r.head}</td>
+                                        <td style={{ padding: "4px 8px", whiteSpace: "nowrap" }}>{r.date}</td>
+                                        <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.rate.toFixed(4)}</td>
+                                        <td style={{ padding: "4px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{usd(r.usd)}</td>
+                                        <td style={{ padding: "4px 8px" }}><Money n={r.inr} width={120} /></td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </details>
+                          );
+                        })()}
+
+                        {n.status === "draft" && !(w.ratesUsed?.length) && (
+                          <form action={rebuildBrokerageNoteAction} style={{ marginTop: 8 }}>
+                            <input type="hidden" name="id" value={n.id} />
+                            <SubmitButton className="btn small secondary" savedLabel="✓ Rebuilt">
+                              💱 Work it out again and show the rates
+                            </SubmitButton>
+                            <span className="muted" style={{ fontSize: ".75rem", marginLeft: 8 }}>
+                              This note was prepared before the desk kept the rates it used. The activity file is still
+                              here, so it can be worked out again from it — same figures, with every Rule 115 rate shown.
+                            </span>
+                          </form>
+                        )}
+
+                        {(w.ratesMissing?.length ?? 0) > 0 && (
+                          <p style={{ fontSize: ".77rem", marginTop: 6, color: "#b45309" }}>
+                            ⚠ No Rule 115 rate was available for {w.ratesMissing!.join(", ")}. Those transactions carry no
+                            rupee figure — a neighbouring day&apos;s rate is not substituted for a missing one.
+                          </p>
+                        )}
 
                         {w.excluded.length > 0 && (
                           <p className="muted" style={{ fontSize: ".78rem", marginTop: 8 }}>

@@ -48,7 +48,7 @@ async function fetchText(fileUrl: string): Promise<string | null> {
  * a foreign one at its Rule-115 rate, and propose the treatment when the vendor
  * already has a rule. Returns a human summary.
  */
-export async function scanVaultForBills(limit = 6): Promise<string> {
+export async function scanVaultForBills(limit = 3): Promise<string> {
   const svc = createServiceClient();
   const { data: docs } = await svc.from("zoho_vault_docs")
     .select("id, title, institution, file_url, created_at")
@@ -64,7 +64,8 @@ export async function scanVaultForBills(limit = 6): Promise<string> {
   // small AI call; two dozen of those in a single request runs past the
   // serverless limit and the whole scan dies with nothing to show for it —
   // which is exactly what happened on the first press. So it takes a batch,
-  // reports the remainder, and is pressed again.
+  // reports the remainder, and is pressed again. The batch is SMALL because
+  // every invoice is now genuinely read rather than guessed from its title.
   const pending = (docs ?? []).filter((d) => !have.has(String(d.id)));
   const batch = pending.slice(0, limit);
 

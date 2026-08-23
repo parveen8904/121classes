@@ -144,6 +144,9 @@ export async function saveBillRule(rule: BillRule): Promise<number> {
   return (waiting ?? []).length;
 }
 
+// His own state — the destination of every service he imports.
+const HOME_STATE = "DL";
+
 async function currencyIdFor(code: string): Promise<string | null> {
   try {
     const r = await zohoFetch<{ currencies?: { currency_id: string; currency_code: string }[] }>("/settings/currencies");
@@ -243,15 +246,22 @@ export async function postProviderBill(id: string): Promise<void> {
       bill_number: str(b.bill_no) || `${b.institution}-${String(b.id).slice(0, 8)}`,
       date: b.bill_date,
       ...(currency !== "INR" ? { exchange_rate: rate } : {}),
-      // An import of services is supplied INTO his own state; without the
-      // destination Zoho cannot place the reverse charge and rejects the bill.
-      ...(overseas ? { is_reverse_charge_applied: true, destination_of_supply: "DL" } : {}),
+      // Zoho decides the whole GST shape of a bill from these three, and will
+      // refuse the reverse charge outright unless the transaction says it is an
+      // import: the treatment, the flag, and the state supplied INTO.
+      ...(overseas
+        ? { gst_treatment: "overseas", is_reverse_charge_applied: true, destination_of_supply: HOME_STATE }
+        : { gst_treatment: "business_gst" }),
       line_items: [{
         name: `${b.institution} services`,
         account_id: accountId,
         rate: total,
         quantity: 1,
-        ...(taxId ? { tax_id: taxId } : {}),
+        // Under reverse charge the supplier charges NOTHING — Vercel's invoice
+        // carries no GST. The tax is self-assessed, so it goes on the reverse
+        // charge field. Putting it in tax_id would both inflate what he owes the
+        // vendor and misstate the liability.
+        ...(taxId ? (overseas ? { reverse_charge_tax_id: taxId } : { tax_id: taxId }) : {}),
       }],
       notes: `${b.institution} invoice ${str(b.bill_no)} · ${currency} ${total}` +
         (rate ? ` @ ₹${rate} (SBI TT buy ${b.rate_date}, Rule 115)` : "") +

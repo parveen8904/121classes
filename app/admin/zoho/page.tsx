@@ -1205,7 +1205,7 @@ export default async function ZohoHubPage(props: {
                           return (
                             <details className="card" style={{ marginTop: 12, background: "rgba(14,110,82,.05)" }} open={n.status === "draft"}>
                               <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: ".88rem" }}>
-                                🧾 The journal entry this becomes — {j.lines.length} lines, {formatINR(dr)} each side
+                                🧾 The journal entry this becomes — {j.lines.length} lines, ₹{dr.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each side
                               </summary>
                               <p style={{ fontSize: ".8rem", margin: "8px 0 6px" }}>
                                 {n.status === "draft"
@@ -1248,9 +1248,10 @@ export default async function ZohoHubPage(props: {
                                   ? "✅ It balances. Zoho refuses a journal that does not, and this is checked again before it is sent."
                                   : `⚠ It does not balance — debits ${formatINR(dr)} against credits ${formatINR(cr)}. It will not be sent in this state.`}
                                 {missing.length > 0 && (
-                                  <> {missing.length} ledger{missing.length === 1 ? "" : "s"} named here {missing.length === 1 ? "does" : "do"} not exist
-                                    in Zoho yet and will be created with the &ldquo;(AI)&rdquo; suffix, never by renaming or
-                                    merging one of yours: {missing.join(", ")}.</>
+                                  <>{" "}{missing.length} ledger{missing.length === 1 ? "" : "s"} named here{" "}
+                                    {missing.length === 1 ? "does" : "do"}{" "}not exist in Zoho yet and will be created
+                                    with the &ldquo;(AI)&rdquo; suffix, never by renaming or merging one of yours:{" "}
+                                    {missing.join(", ")}.</>
                                 )}
                                 {" "}The broker&apos;s own CSV is attached to the entry in Zoho, so the file that justifies it
                                 travels with it.

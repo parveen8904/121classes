@@ -39,6 +39,34 @@ export const metadata = { title: "Zoho accounting hub — Admin" };
 // Access: the "zoho" grant (founder-given; Pradeep at launch). The document
 // vault below renders for role=admin ALONE — the area grant does not reach it.
 
+/**
+ * An amount in a column, set the way a ledger sets one.
+ *
+ * The rupee sign stays pinned to the left of the cell and the figures run to
+ * the right edge, so a column of them reads straight down: units under units,
+ * paise under paise. Two decimals always — ₹2,365 beside ₹2,348.75 lines up on
+ * nothing, and a money column that does not line up cannot be scanned, which is
+ * the only thing it is for.
+ *
+ * tabular-nums stops the font giving "1" less width than "8", which is what
+ * makes proportional digits drift out of column even when they are aligned.
+ */
+function Money({ n, width = 104 }: { n: number | null | undefined; width?: number }) {
+  const shell = {
+    display: "inline-flex", width, justifyContent: "space-between", gap: 6,
+    fontVariantNumeric: "tabular-nums" as const,
+  };
+  if (n === null || n === undefined || !Number.isFinite(Number(n))) {
+    return <span style={{ ...shell, justifyContent: "flex-end" }} className="muted">—</span>;
+  }
+  return (
+    <span style={shell}>
+      <span aria-hidden>₹</span>
+      <span>{Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+    </span>
+  );
+}
+
 const PHASE_PLAN: { name: string; what: string; state: "done" | "building" | "waiting" | "planned" }[] = [
   { name: "Hub & document vault", what: "This page, the access grant, and the indexed document vault (year → institution → files; whole desk reads, founder deletes).", state: "done" },
   { name: "Zoho connection", what: "The portal's own Self-Client key — connected to ALDINECA.", state: "done" },
@@ -1478,7 +1506,7 @@ export default async function ZohoHubPage(props: {
               ? "needs two answers before it can be worked out"
               : !inr ? "amount could not be read — open and type it in"
               : `${p.gst_treatment === "rcm" ? "RCM 18%" : p.gst_treatment === "none" ? "no GST" : "GST 18% ITC"}` +
-                `${tdsRate ? ` · TDS ${tdsRate}% = ₹${tdsAmt.toLocaleString("en-IN")}` : " · no TDS"}` +
+                `${tdsRate ? ` · TDS ${tdsRate}% = ₹${tdsAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : " · no TDS"}` +
                 ` → ${p.expense_account ?? "account not set"}`;
 
             return (
@@ -1493,7 +1521,7 @@ export default async function ZohoHubPage(props: {
                     <span style={{ minWidth: 92, fontSize: ".85rem" }}>{b.bill_date ?? "no date"}</span>
                     <strong style={{ minWidth: 96 }}>{b.institution}</strong>
                     <span className="muted" style={{ fontSize: ".82rem", minWidth: 130 }}>{b.bill_no ?? "no number"}</span>
-                    <span style={{ fontWeight: 600, minWidth: 96 }}>{inr ? `₹${inr.toLocaleString("en-IN")}` : "—"}</span>
+                    <span style={{ fontWeight: 600 }}><Money n={inr} /></span>
                     <span className="muted" style={{ fontSize: ".82rem" }}>{headline}</span>
                     {waitingOnHim && <span style={{ fontSize: ".75rem", color: "#b45309" }}>· sent to you by the desk</span>}
                   </span>
@@ -1663,9 +1691,7 @@ export default async function ZohoHubPage(props: {
                       {r.kind === "credit_note" ? "Credit note" : r.kind === "journal" ? "Journal" : "Invoice"}
                     </span>
                     <strong style={{ minWidth: 130 }}>{r.party_name ?? r.description ?? "—"}</strong>
-                    <span style={{ minWidth: 90, fontWeight: 600 }}>
-                      {r.inr_amount !== null ? `₹${Number(r.inr_amount).toLocaleString("en-IN")}` : "—"}
-                    </span>
+                    <span style={{ fontWeight: 600 }}><Money n={r.inr_amount === null ? null : Number(r.inr_amount)} width={98} /></span>
                     <span className="muted">{r.ledger ?? ""}{Number(r.tds_rate) > 0 ? ` · TDS ${r.tds_rate}% withheld by them` : ""}</span>
                     <span style={{ marginLeft: "auto" }}>
                       {r.status === "posted"

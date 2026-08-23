@@ -34,6 +34,11 @@ export type BillRule = {
   country?: string | null; service_category?: string | null; billing_frequency?: string | null;
   has_trc?: boolean; has_form10f?: boolean; has_no_pe?: boolean; has_395_cert?: boolean;
   expected_annual?: number | null;
+  /** What the document IS, and how the withholding is met — asked once per
+   *  supplier, and the reason the same invoice can be an expense, an asset or
+   *  his own spending. */
+  nature?: string | null; operating?: string | null; sub_account?: string | null;
+  tds_mode?: string | null; supplier_kind?: string | null;
   /** Zoho tax to apply — "GST18" for an intra-state supplier, "IGST18" for
    *  inter-state or an import. Blank falls back to IGST<rate>. */
   gst_tax_name?: string | null;
@@ -447,6 +452,37 @@ export async function readbackPostedBills(): Promise<{ checked: number; opened: 
   return { checked, opened };
 }
 
+/**
+ * The ledger he chose — created if it is a name Zoho does not yet carry.
+ *
+ * Where it is created matters as much as that it exists: operating or not
+ * decides whether a cost sits in the trading result or below it, and whether an
+ * asset is current or fixed. That answer is only ever available at the moment
+ * he names the ledger, so it is taken then.
+ *
+ * New ledgers carry the "(AI)" suffix, as agreed — nothing the team made by
+ * hand is ever merged, renamed or reused.
+ */
+async function ledgerId(name: string, nature: string, operating: string): Promise<string> {
+  const clean = String(name).trim();
+  const r = await zohoFetch<{ chartofaccounts?: { account_id: string; account_name: string }[] }>(
+    "/chartofaccounts", { query: { search_text: clean, filter_by: "AccountType.All" } });
+  const found = (r.chartofaccounts ?? []).find(
+    (a) => a.account_name.trim().toLowerCase() === clean.toLowerCase());
+  if (found) return found.account_id;
+
+  const { zohoAccountType } = await import("@/lib/postingShape");
+  const made = await zohoFetch<{ chart_of_account?: { account_id: string } }>("/chartofaccounts", {
+    method: "POST",
+    body: {
+      account_name: /\(AI\)$/.test(clean) ? clean : `${clean} (AI)`,
+      account_type: zohoAccountType(nature as never, operating as never),
+    },
+  });
+  if (!made.chart_of_account?.account_id) throw new Error(`could not create the ledger "${clean}"`);
+  return made.chart_of_account.account_id;
+}
+
 /** Post one approved bill to Zoho. Idempotent: a posted row is never re-sent. */
 export async function postProviderBill(id: string): Promise<void> {
   const svc = createServiceClient();
@@ -475,7 +511,18 @@ export async function postProviderBill(id: string): Promise<void> {
     }
 
     const vendorId = await findOrCreateVendor(String(p.vendor_name), overseas, currency);
-    const accountId = await zohoAccountId(String(p.expense_account));
+    // WHAT THIS DOCUMENT IS decides everything below it.
+    const nature = String(b.nature ?? p.nature ?? "expense");
+    const operating = String(b.operating ?? p.operating ?? "operating");
+    const { zohoDocument, tdsWorking } = await import("@/lib/postingShape");
+    const doc = zohoDocument(nature as never);
+    if (doc === "journal" || doc === "credit_note") {
+      return fail(
+        `this one is ${nature.replace("_", " ")} — it belongs in a ${doc === "journal" ? "journal entry" : "credit note"}, ` +
+        `which this desk does not raise yet. Post it in Zoho by hand, or change what it is.`,
+      );
+    }
+    const accountId = await ledgerId(String(p.expense_account), nature, operating);
 
     // GST: reverse charge for an import of services; the charged tax for a
     // domestic bill; nothing when the vendor charges none.
@@ -485,6 +532,17 @@ export async function postProviderBill(id: string): Promise<void> {
       ? null
       : (str(p.gst_tax_name) || `IGST${Number(p.gst_rate ?? 18)}`);
     const taxId = taxName ? await taxIdByName(taxName) : null;
+
+    // DEDUCTED OR BORNE. Where the tax is borne, the supplier must still receive
+    // their full invoice, so the bill is raised at the grossed-up figure and the
+    // withholding comes out of that — leaving the vendor exactly their amount.
+    const tdsMode = String(b.tds_mode ?? p.tds_mode ?? (p.tds_section ? "deduct" : "none"));
+    const work = tdsWorking(
+      rate ? Number((total * rate).toFixed(2)) : total,
+      tdsMode as never, Number(p.tds_rate ?? 0), String(p.vendor_name ?? b.institution),
+    );
+    // Back into the invoice currency for the line, so Zoho converts it itself.
+    const lineRate = tdsMode === "gross_up" && rate ? Number((work.bookedAmount / rate).toFixed(2)) : total;
 
     const body: Record<string, unknown> = {
       vendor_id: vendorId,
@@ -500,7 +558,7 @@ export async function postProviderBill(id: string): Promise<void> {
       line_items: [{
         name: `${b.institution} services`,
         account_id: accountId,
-        rate: total,
+        rate: lineRate,
         quantity: 1,
         // Under reverse charge the supplier charges NOTHING — Vercel's invoice
         // carries no GST. The tax is self-assessed, so it goes on the reverse
@@ -553,6 +611,7 @@ export async function postProviderBill(id: string): Promise<void> {
     await svc.from("provider_bills").update({
       status: "posted", zoho_bill_id: r.bill.bill_id, zoho_vendor_id: vendorId,
       rate, inr_amount: rate ? Number((total * rate).toFixed(2)) : total,
+      booked_amount: work.bookedAmount, tds_amount: work.tds, vendor_gets: work.vendorGets,
       zoho_echo: { ...echoOf(r.bill), zoho_status: moved.state },
       error: tdsNote || (moved.state === "open" ? null : `not in the ledgers yet — ${moved.why}`),
       updated_at: new Date().toISOString(),

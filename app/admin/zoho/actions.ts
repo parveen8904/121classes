@@ -310,24 +310,38 @@ export async function decideBillAction(formData: FormData) {
   const expense_account = str(formData.get("expense_account"));
   const gst_treatment = str(formData.get("gst_treatment")) || "rcm";
   const gst_tax_name = str(formData.get("gst_tax_name")) || null;
+  const gst_rate = Number(formData.get("gst_rate")) || 18;
   const tds_rate = formData.get("tds_rate") === null || str(formData.get("tds_rate")) === ""
     ? null : Number(formData.get("tds_rate"));
+  const tds_mode = str(formData.get("tds_mode")) || (tds_rate ? "deduct" : "none");
   const tds_section = str(formData.get("tds_section")) || (tds_rate ? "393(2) Sl.17" : null);
   const billDate = str(formData.get("bill_date")) || bill.bill_date;
   const amount = Number(formData.get("amount")) || Number(bill.amount);
   const rate = Number(formData.get("rate")) || Number(bill.rate) || null;
   const vendor_name = str(formData.get("vendor_name")) || String(bill.institution);
+  const bill_no = str(formData.get("bill_no")) || bill.bill_no;
+  // What the document IS — an expense, an asset, his own spending, income, a
+  // liability, or a reversal of one of those.
+  const nature = str(formData.get("nature")) || "expense";
+  const operating = str(formData.get("operating")) || "operating";
+  const sub_account = str(formData.get("sub_account")) || null;
+  const supplier_kind = str(formData.get("supplier_kind")) || null;
+
+  const inrAmount = rate ? Number((amount * rate).toFixed(2)) : amount;
+  const { tdsWorking } = await import("@/lib/postingShape");
+  const work = tdsWorking(inrAmount, tds_mode as never, Number(tds_rate ?? 0), vendor_name);
 
   const proposal = {
     ...(bill.proposal as Record<string, unknown> ?? {}),
-    vendor_name, expense_account, gst_treatment, gst_tax_name,
-    gst_rate: Number(formData.get("gst_rate")) || 18,
-    tds_section, tds_rate,
+    vendor_name, expense_account, gst_treatment, gst_tax_name, gst_rate,
+    tds_section, tds_rate, tds_mode, nature, operating, sub_account, supplier_kind,
   };
 
   await svc.from("provider_bills").update({
-    bill_date: billDate, amount,
-    rate, inr_amount: rate ? Number((amount * rate).toFixed(2)) : amount,
+    bill_date: billDate, amount, bill_no,
+    rate, inr_amount: inrAmount,
+    nature, operating, sub_account, tds_mode,
+    booked_amount: work.bookedAmount, tds_amount: work.tds, vendor_gets: work.vendorGets,
     proposal, status: "draft", error: null, updated_at: new Date().toISOString(),
   }).eq("id", id);
 
@@ -337,8 +351,8 @@ export async function decideBillAction(formData: FormData) {
     try {
       await saveBillRule({
         institution: String(bill.institution), vendor_name, expense_account,
-        gst_treatment, gst_rate: Number(formData.get("gst_rate")) || 18,
-        tds_section, tds_rate, gst_tax_name,
+        gst_treatment, gst_rate, tds_section, tds_rate, gst_tax_name,
+        nature, operating, sub_account, tds_mode, supplier_kind,
       });
     } catch { /* the entry still stands even if the rule could not be kept */ }
   }

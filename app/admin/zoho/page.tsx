@@ -1,3 +1,4 @@
+import Link from "next/link";
 import AdminHero from "../_components/AdminHero";
 import { assertArea, currentStaff } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -8,7 +9,7 @@ import { FVD, KNOWN_FOREIGN_VENDORS } from "@/lib/foreignVendorDesk";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, decideBillAction, removeBillAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -253,11 +254,6 @@ export default async function ZohoHubPage(props: {
   const ruleFor = (inst: string) => allRules.find((r) => r.institution === inst);
   const seedFor = (inst: string) =>
     Object.entries(KNOWN_FOREIGN_VENDORS).find(([k]) => inst.toLowerCase().includes(k.toLowerCase()))?.[1];
-  const { count: unreadVaultInvoices } = hubConnected
-    ? await createServiceClient().from("zoho_vault_docs")
-        .select("id", { count: "exact", head: true })
-        .eq("doc_type", "Invoice / bill").eq("is_processed", false)
-    : { count: 0 };
   const fyNow = (() => {
     const now = new Date();
     const y = now.getUTCFullYear(), m = now.getUTCMonth() + 1;
@@ -1073,6 +1069,12 @@ export default async function ZohoHubPage(props: {
       {hubConnected && (
         <div id="bills">
           <h2 className="admin-section-title" style={{ marginTop: 26 }}>🧾 Bills to approve ({billsWaiting.length})</h2>
+          <p style={{ margin: "4px 0 8px" }}>
+            <Link className="btn small secondary" href="/admin/zoho/activity">📜 What has changed in Zoho</Link>
+            <span className="muted" style={{ fontSize: ".8rem", marginLeft: 8 }}>
+              the last 50 changes to the books, by this desk or by anyone working in Zoho
+            </span>
+          </p>
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             One line per invoice. Click it to see the entry proposed — the account, the GST, the TDS — change
             anything you disagree with <strong>here</strong>, and post it. What you change is remembered for that
@@ -1222,15 +1224,6 @@ export default async function ZohoHubPage(props: {
               </details>
             );
           })}
-
-          {(unreadVaultInvoices ?? 0) > 0 && (
-            <form action={scanBillsAction} className="card" style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontSize: ".85rem" }}>
-                {unreadVaultInvoices ?? 0} invoice(s) were filed straight into the vault instead of through the box above.
-              </span>
-              <SubmitButton className="btn small secondary" savedLabel="Read">Read them in</SubmitButton>
-            </form>
-          )}
 
           {complianceRows.length > 0 && (
             <details className="card" style={{ marginTop: 10 }}>

@@ -191,18 +191,6 @@ export async function readbackBillsAction() {
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);
 }
 
-export async function recheckBillDatesAction() {
-  // The date decides the GST period and the rupee value, so it is checked
-  // against the paper itself — not against what was filed or typed.
-  await assertArea("zoho");
-  const { recheckPostedBillDates } = await import("@/lib/providerBills");
-  let note: string;
-  try { note = await recheckPostedBillDates(); }
-  catch (e) { note = `Date check failed: ${e instanceof Error ? e.message : "unknown"}`; }
-  revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);
-}
-
 export async function uploadBillAction(formData: FormData) {
   // THE TEAM'S OWN DOOR FOR A BILL.
   //

@@ -447,61 +447,6 @@ export async function readbackPostedBills(): Promise<{ checked: number; opened: 
   return { checked, opened };
 }
 
-/**
- * CHECK A POSTED BILL'S DATE AGAINST THE PAPER, AND CORRECT IT.
- *
- * The first three bills went in while the reader still trusted the vault title,
- * which carries no date — so they were booked on the day they were FILED, and
- * the Rule-115 rate followed the wrong day with them. A bill's date decides its
- * GST period and its rupee value, so a wrong one is not cosmetic.
- *
- * This re-reads the invoice, and where it disagrees with what was booked it
- * moves the bill in Zoho to the invoice's own date at that date's rate.
- */
-export async function recheckPostedBillDates(): Promise<string> {
-  const svc = createServiceClient();
-  const { data } = await svc.from("provider_bills")
-    .select("id, institution, bill_no, bill_date, currency, amount, vault_doc_id, zoho_bill_id")
-    .eq("status", "posted").not("zoho_bill_id", "is", null).limit(50);
-
-  const notes: string[] = [];
-  let fixed = 0;
-  for (const row of data ?? []) {
-    if (!row.vault_doc_id) continue;
-    const { data: doc } = await svc.from("zoho_vault_docs").select("file_url").eq("id", row.vault_doc_id).maybeSingle();
-    if (!doc?.file_url) continue;
-    const text = await fetchText(String(doc.file_url)).catch(() => null);
-    if (!text) { notes.push(`${row.bill_no}: could not read the PDF`); continue; }
-    const { parseInvoiceText } = await import("@/lib/ai");
-    const facts = await parseInvoiceText(text).catch(() => null);
-    const real = str(facts?.date);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(real) || real === row.bill_date) continue;
-
-    const currency = String(row.currency ?? "USD").toUpperCase();
-    const total = Number(row.amount) || 0;
-    let rate: number | null = null, rateDate: string | null = null;
-    if (currency !== "INR") {
-      const r = await rule115Rate(real, currency).catch(() => null);
-      if (r) { rate = r.rate; rateDate = r.rateDate; }
-    }
-    // A date drives the GST period and the rupee value, so changing one in his
-    // books is his call. The desk works out what it should be and asks.
-    const { requestApproval } = await import("@/lib/zohoApprovals");
-    await requestApproval({
-      kind: "bill_date_fix", refTable: "provider_bills", refId: String(row.id),
-      summary: `Move ${row.institution} ${row.bill_no ?? ""} from ${row.bill_date} to ${real}` +
-               (rate ? ` and re-convert at ₹${rate} (Rule 115 for ${rateDate})` : "") +
-               ` — ₹${Math.round(total * (rate ?? 1)).toLocaleString("en-IN")}`,
-      details: { date: real, rate, rateDate, was: row.bill_date, amount: total, currency },
-    });
-    fixed++;
-    notes.push(`${row.bill_no}: ${row.bill_date} → ${real}${rate ? ` @ ₹${rate}` : ""}`);
-  }
-  return fixed || notes.length
-    ? `${fixed} date correction(s) put to the founder for approval. ${notes.join(" · ")}`
-    : "Every posted bill already carries its own invoice date.";
-}
-
 /** Post one approved bill to Zoho. Idempotent: a posted row is never re-sent. */
 export async function postProviderBill(id: string): Promise<void> {
   const svc = createServiceClient();

@@ -33,7 +33,7 @@ type LastTry = {
 };
 
 export default async function AiTrainingPage(props: {
-  searchParams: Promise<{ saved?: string; err?: string; taught?: string; tried?: string }>;
+  searchParams: Promise<{ saved?: string; err?: string; taught?: string; tried?: string; ok?: string }>;
 }) {
   await assertArea(null);
   const sp = await props.searchParams;
@@ -73,6 +73,7 @@ export default async function AiTrainingPage(props: {
       />
 
       {sp.err && <div className="notice err" style={{ marginTop: 16 }}>⚠️ {sp.err}</div>}
+      {sp.ok && <div className="notice ok" style={{ marginTop: 16 }}>✅ {sp.ok}</div>}
       {sp.saved && <div className="notice ok" style={{ marginTop: 16 }}>✅ Saved. It applies to the very next answer.</div>}
       {sp.taught && <div className="notice ok" style={{ marginTop: 16 }}>✅ Taught. The next similar question gets your answer.</div>}
 

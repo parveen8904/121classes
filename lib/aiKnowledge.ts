@@ -28,6 +28,13 @@ const STOP = new Set([
   "who", "why", "how", "from", "into", "about", "there", "their", "them", "they", "our", "any",
   "all", "please", "sir", "maam", "madam", "hai", "hey", "hello", "kya", "mein", "koi", "tell",
   "give", "want", "need", "know", "much", "many",
+  // Short function words. They are two and three letters, they carry no
+  // subject, and left in they do real damage: "Ind AS 116" and "ind as" share
+  // "as", which is enough to hang a fifteen-thousand-character exam blueprint
+  // on a lease question.
+  "is", "in", "of", "on", "at", "to", "or", "by", "be", "do", "if", "so", "no", "up",
+  "an", "as", "my", "me", "we", "us", "it", "its", "he", "she", "his", "her", "im",
+  "am", "did", "does", "done", "get", "got", "let", "may", "per", "pls", "plz", "ok",
 ]);
 
 /** A student never asks twice in the same words. Fold to the thing they mean. */

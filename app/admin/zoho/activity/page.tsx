@@ -17,7 +17,7 @@ export const maxDuration = 60;
 export default async function ZohoActivityPage() {
   await assertArea("zoho");
   const connected = await zohoConfigured();
-  const rows = connected ? await recentZohoActivity(50) : [];
+  const { rows, unread } = connected ? await recentZohoActivity(50) : { rows: [], unread: [] };
 
   const when = (iso: string) => {
     const d = new Date(iso);
@@ -45,6 +45,14 @@ export default async function ZohoActivityPage() {
         <div className="card"><p className="muted" style={{ margin: 0 }}>Zoho reported nothing — which usually means the connection needs re-authorising.</p></div>
       ) : (
         <>
+          {unread.length > 0 && (
+            <div className="card" style={{ borderLeft: "4px solid #b45309", marginBottom: 10 }}>
+              <strong style={{ fontSize: ".85rem" }}>⚠ Not everything could be read</strong>
+              <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
+                {unread.join(" · ")} — so changes there are missing from this list rather than absent from the books.
+              </p>
+            </div>
+          )}
           <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 10px" }}>
             <strong>Raised</strong> means the entry was created then; <strong>altered</strong> means an entry that
             already existed was changed. <strong>This desk</strong> marks the ones posted from the portal on your

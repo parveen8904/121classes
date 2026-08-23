@@ -29,17 +29,41 @@ type Row = Record<string, unknown>;
 const str = (v: unknown) => (v === null || v === undefined ? null : String(v));
 const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
 
-/** One module: newest change first, and never let one failure kill the report. */
+/**
+ * One module, newest change first.
+ *
+ * Not every module accepts the same sort: /expenses refuses last_modified_time
+ * outright. The first version of this swallowed that and returned nothing, so
+ * expenses simply vanished from the report — a silence that reads exactly like
+ * "nothing has changed". So each module is tried on the sorts it might accept,
+ * and a module that still cannot be read is REPORTED, not hidden.
+ */
 async function pull(
   path: string, key: string, kind: string,
   map: (r: Row) => { id: string; label: string; amount: number | null; currency: string; status: string | null },
   perPage = 25,
-): Promise<Activity[]> {
-  try {
-    const r = await zohoFetch<Record<string, Row[]>>(path, {
-      query: { sort_column: "last_modified_time", sort_order: "D", per_page: String(perPage) },
-    });
-    return (r[key] ?? []).map((row) => {
+): Promise<{ rows: Activity[]; failed: string | null }> {
+  const sorts = ["last_modified_time", "date", ""];
+  let lastErr = "could not be read";
+  for (const sort of sorts) {
+    try {
+      const r = await zohoFetch<Record<string, Row[]>>(path, {
+        query: { ...(sort ? { sort_column: sort, sort_order: "D" } : {}), per_page: String(perPage) },
+      });
+      return { rows: mapRows(r[key] ?? [], kind, map), failed: null };
+    } catch (e) {
+      lastErr = e instanceof Error ? e.message : "could not be read";
+    }
+  }
+  return { rows: [], failed: `${kind}: ${lastErr}` };
+}
+
+function mapRows(
+  rows: Row[], kind: string,
+  map: (r: Row) => { id: string; label: string; amount: number | null; currency: string; status: string | null },
+): Activity[] {
+  {
+    return rows.map((row) => {
       const m = map(row);
       const modified = str(row.last_modified_time) ?? str(row.created_time) ?? "";
       const createdAt = str(row.created_time) ?? "";
@@ -57,8 +81,6 @@ async function pull(
         _id: m.id,
       } as Activity & { _id: string };
     });
-  } catch {
-    return [];
   }
 }
 
@@ -68,8 +90,8 @@ async function pull(
  * `limit` is what he sees; each module is asked for a slice and the merged list
  * is cut to size, so a busy day of invoices cannot hide a single altered bill.
  */
-export async function recentZohoActivity(limit = 50): Promise<Activity[]> {
-  const [invoices, bills, receipts, payments, expenses, journals, contacts] = await Promise.all([
+export async function recentZohoActivity(limit = 50): Promise<{ rows: Activity[]; unread: string[] }> {
+  const pulled = await Promise.all([
     pull("/invoices", "invoices", "Invoice", (r) => ({
       id: String(r.invoice_id), label: `${str(r.invoice_number) ?? "—"} · ${str(r.customer_name) ?? ""}`,
       amount: num(r.total), currency: String(r.currency_code ?? "INR"), status: str(r.status),
@@ -100,7 +122,8 @@ export async function recentZohoActivity(limit = 50): Promise<Activity[]> {
     }), 15),
   ]);
 
-  const all = [...invoices, ...bills, ...receipts, ...payments, ...expenses, ...journals, ...contacts] as (Activity & { _id: string })[];
+  const all = pulled.flatMap((p) => p.rows) as (Activity & { _id: string })[];
+  const unread = pulled.map((p) => p.failed).filter(Boolean) as string[];
 
   // WHICH OF THESE WERE OURS. Anything this desk posted carries its Zoho id in
   // our own tables, so a row can say plainly whether it came through the gate
@@ -115,9 +138,10 @@ export async function recentZohoActivity(limit = 50): Promise<Activity[]> {
     ...((zp.data ?? []).map((r) => String(r.zoho_invoice_id))),
   ]);
 
-  return all
+  const rows = all
     .filter((a) => a.when)
     .sort((a, b) => b.when.localeCompare(a.when))
     .slice(0, limit)
     .map(({ _id, ...a }) => ({ ...a, ours: mine.has(_id) }));
+  return { rows, unread };
 }

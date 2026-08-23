@@ -202,6 +202,45 @@ async function taxIdByName(name: string): Promise<string | null> {
   } catch { return null; }
 }
 
+type ZohoBill = {
+  bill_id: string; vendor_name?: string; currency_code?: string; exchange_rate?: number;
+  sub_total?: number; tax_total?: number; total?: number; is_reverse_charge_applied?: boolean;
+  gst_treatment?: string; status?: string;
+};
+
+/**
+ * What Zoho itself holds for the bill — not what we sent it.
+ *
+ * A posting is only really verified when the books say so, so the created bill
+ * is echoed back onto the row: the currency and rate it actually used, the
+ * totals it computed, and whether the reverse charge landed at all.
+ */
+function echoOf(b: ZohoBill) {
+  return {
+    vendor: b.vendor_name ?? null, currency: b.currency_code ?? null, exchange_rate: b.exchange_rate ?? null,
+    sub_total: b.sub_total ?? null, tax_total: b.tax_total ?? null, total: b.total ?? null,
+    reverse_charge: b.is_reverse_charge_applied ?? null, gst_treatment: b.gst_treatment ?? null,
+    zoho_status: b.status ?? null, read_at: new Date().toISOString(),
+  };
+}
+
+/** Re-read posted bills from Zoho and record what it holds. Read-only. */
+export async function readbackPostedBills(): Promise<{ checked: number }> {
+  const svc = createServiceClient();
+  const { data } = await svc.from("provider_bills")
+    .select("id, zoho_bill_id").eq("status", "posted").not("zoho_bill_id", "is", null).limit(50);
+  let checked = 0;
+  for (const row of data ?? []) {
+    try {
+      const r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${row.zoho_bill_id}`);
+      if (!r.bill) continue;
+      await svc.from("provider_bills").update({ zoho_echo: echoOf(r.bill) }).eq("id", row.id);
+      checked++;
+    } catch { /* one unreadable bill must not stop the rest */ }
+  }
+  return { checked };
+}
+
 /** Post one approved bill to Zoho. Idempotent: a posted row is never re-sent. */
 export async function postProviderBill(id: string): Promise<void> {
   const svc = createServiceClient();
@@ -281,11 +320,12 @@ export async function postProviderBill(id: string): Promise<void> {
       else tdsNote = ` — TDS ${p.tds_section} @ ${p.tds_rate}% must be applied by hand (no matching TDS tax in Zoho)`;
     }
 
-    const r = await zohoFetch<{ bill?: { bill_id: string } }>("/bills", { method: "POST", body });
+    const r = await zohoFetch<{ bill?: ZohoBill }>("/bills", { method: "POST", body });
     if (!r.bill?.bill_id) return fail("Zoho did not return the created bill");
     await svc.from("provider_bills").update({
       status: "posted", zoho_bill_id: r.bill.bill_id, zoho_vendor_id: vendorId,
       rate, inr_amount: rate ? Number((total * rate).toFixed(2)) : total,
+      zoho_echo: echoOf(r.bill),
       error: tdsNote || null, updated_at: new Date().toISOString(),
     }).eq("id", id);
     // The vault copy is now worked, not raw.

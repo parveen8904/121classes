@@ -7,7 +7,7 @@ import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, saveBillRuleAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, readbackBillsAction, saveBillRuleAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -230,6 +230,17 @@ export default async function ZohoHubPage(props: {
   const billsFailed = bills.filter((b) => b.status === "failed");
   // One card per vendor still without a ruling.
   const askVendors = [...new Set(billsAsk.map((b) => b.institution))];
+  type PostedBillRow = {
+    id: string; institution: string; bill_no: string | null; bill_date: string | null; error: string | null;
+    zoho_echo: { currency?: string | null; total?: number | null; exchange_rate?: number | null;
+      tax_total?: number | null; reverse_charge?: boolean | null; zoho_status?: string | null } | null;
+  };
+  const { data: billsPostedData } = hubConnected
+    ? await createServiceClient().from("provider_bills")
+        .select("id, institution, bill_no, bill_date, zoho_echo, error")
+        .eq("status", "posted").order("bill_date", { ascending: false }).limit(50)
+    : { data: [] as never[] };
+  const billsPostedRows = (billsPostedData ?? []) as unknown as PostedBillRow[];
   const { count: billsPosted } = hubConnected
     ? await createServiceClient().from("provider_bills").select("id", { count: "exact", head: true }).eq("status", "posted")
     : { count: 0 };
@@ -965,6 +976,9 @@ export default async function ZohoHubPage(props: {
             <form action={scanBillsAction} style={{ margin: 0 }}>
               <SubmitButton className="btn small secondary" savedLabel="Scanned">🔄 Read the vault for new bills</SubmitButton>
             </form>
+            <form action={readbackBillsAction} style={{ margin: 0 }}>
+              <SubmitButton className="btn small secondary" savedLabel="Checked">🔍 Check what Zoho holds</SubmitButton>
+            </form>
             <span className="muted" style={{ fontSize: ".8rem" }}>✅ posted {billsPosted ?? 0}</span>
           </div>
           <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 10px" }}>
@@ -1074,6 +1088,32 @@ export default async function ZohoHubPage(props: {
 
           {bills.length === 0 && (
             <div className="card"><p className="muted" style={{ margin: 0 }}>No invoices waiting. 🔄 reads the vault for anything not yet booked.</p></div>
+          )}
+
+          {billsPostedRows.length > 0 && (
+            <details className="card" style={{ marginTop: 10 }}>
+              <summary className="btn small secondary as-btn">📗 Posted ({billsPostedRows.length}) — as Zoho holds them</summary>
+              <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0" }}>
+                Not what was sent — what the books actually hold, re-read with <strong>🔍 Check what Zoho holds</strong>.
+                A foreign bill should show its own currency at the Rule-115 rate and <strong>RCM ✓</strong>, with the
+                supplier charging no tax of their own.
+              </p>
+              {billsPostedRows.map((r) => (
+                <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: ".8rem", padding: "4px 0" }}>
+                  <span>✅ {r.bill_date} · <strong>{r.institution}</strong> · {r.bill_no ?? "—"}</span>
+                  {r.zoho_echo ? (
+                    <span className="muted">
+                      Zoho: {r.zoho_echo.currency ?? "?"} {r.zoho_echo.total ?? "?"}
+                      {r.zoho_echo.exchange_rate && r.zoho_echo.currency !== "INR" ? ` @ ₹${r.zoho_echo.exchange_rate}` : ""}
+                      {" · "}{r.zoho_echo.reverse_charge ? "RCM ✓" : "no reverse charge"}
+                      {" · supplier tax "}{r.zoho_echo.tax_total ?? 0}
+                      {r.zoho_echo.zoho_status ? ` · ${r.zoho_echo.zoho_status}` : ""}
+                    </span>
+                  ) : <span className="muted">not read back yet</span>}
+                  {r.error && <span style={{ color: "#b45309" }}>⚠ {r.error}</span>}
+                </div>
+              ))}
+            </details>
           )}
         </div>
       )}

@@ -381,9 +381,14 @@ let acctList: { names: { name: string; type: string; currency: string }[]; at: n
 export async function listZohoAccounts(): Promise<{ name: string; type: string; currency: string }[]> {
   if (acctList && Date.now() - acctList.at < 10 * 60_000) return acctList.names;
   const names: { name: string; type: string; currency: string }[] = [];
-  for (let page = 1; page <= 3; page++) {
+  // "AccountType.Active" SOUNDS like active accounts and is not: Zoho returns
+  // 376 accounts under it with NOT ONE expense head among them — no expense, no
+  // other_expense, no cost of goods sold. Every dropdown in this hub was
+  // therefore missing every expense ledger, which is why the team's own "Web
+  // Maintainence Expenses" could only ever be typed by hand.
+  for (let page = 1; page <= 5; page++) {
     const r = await zohoFetch<{ chartofaccounts?: { account_name: string; account_type: string; currency_code?: string }[]; page_context?: { has_more_page?: boolean } }>(
-      "/chartofaccounts", { query: { filter_by: "AccountType.Active", per_page: "200", page: String(page) } });
+      "/chartofaccounts", { query: { filter_by: "AccountType.All", per_page: "200", page: String(page) } });
     for (const a of r.chartofaccounts ?? []) names.push({ name: a.account_name, type: a.account_type, currency: a.currency_code || "INR" });
     if (!r.page_context?.has_more_page) break;
   }

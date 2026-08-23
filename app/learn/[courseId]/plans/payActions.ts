@@ -221,7 +221,7 @@ export async function createPlanOrder(input: {
   let amountInr = baseAmount;
   let couponId = "";
   if (input.couponCode) {
-    const applied = await applyCoupon(input.couponCode, baseAmount);
+    const applied = await applyCoupon(input.couponCode, baseAmount, { email: user.email, userId: user.id });
     if (applied) {
       amountInr = applied.amount;
       couponId = applied.couponId;
@@ -456,7 +456,7 @@ export async function createExtendOrder(input: {
   let amountInr = baseAmount;
   let couponId = "";
   if (input.couponCode) {
-    const applied = await applyCoupon(input.couponCode, baseAmount);
+    const applied = await applyCoupon(input.couponCode, baseAmount, { email: user.email, userId: user.id });
     if (applied) { amountInr = applied.amount; couponId = applied.couponId; }
   }
 

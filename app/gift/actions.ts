@@ -107,7 +107,7 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
   // Optional coupon (donor-scoped coupons apply here).
   let couponId = "";
   if (input.couponCode) {
-    const applied = await applyCoupon(input.couponCode, amount, { kind: "donor", email: user.email });
+    const applied = await applyCoupon(input.couponCode, amount, { kind: "donor", email: user.email, userId: user.id });
     if (applied) { amount = applied.amount; couponId = applied.couponId; }
   }
 
@@ -255,7 +255,7 @@ export async function previewGiftPrice(input: { subjectId: string; couponCode?: 
     return { ok: true, base, payable: base, discount: 0, couponApplied: false, couponCode: null, months };
   }
 
-  const applied = await applyCoupon(code, base, { kind: "donor", email: user.email });
+  const applied = await applyCoupon(code, base, { kind: "donor", email: user.email, userId: user.id });
   // A code that does not work is SAID to not work. It used to be dropped
   // quietly and the full amount charged.
   if (!applied) return { ok: false, reason: "badcoupon", base, months };

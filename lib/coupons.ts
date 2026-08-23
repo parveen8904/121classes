@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 export async function applyCoupon(
   code: string,
   amountInr: number,
-  ctx: { kind?: "user" | "donor"; email?: string | null } = {},
+  ctx: { kind?: "user" | "donor"; email?: string | null; userId?: string | null } = {},
 ): Promise<{ couponId: string; code: string; amount: number } | null> {
   const c = (code || "").trim().toUpperCase();
   if (!c) return null;
@@ -22,8 +22,31 @@ export async function applyCoupon(
   // on self-purchases; "any" works everywhere. Default context = user.
   const kind = ctx.kind ?? "user";
   if (coupon.scope && coupon.scope !== "any" && coupon.scope !== kind) return null;
-  // Optional lock to one person's email.
-  if (coupon.for_email && (ctx.email ?? "").trim().toLowerCase() !== String(coupon.for_email).trim().toLowerCase()) return null;
+  // OPTIONAL LOCK TO ONE PERSON — AND A PERSON HAS MORE THAN ONE ADDRESS.
+  //
+  // A supporter's code is created against their PROFILE email (the trading
+  // address on their invoices) but was checked against the address they SIGN IN
+  // with. For anyone whose login differs from their business address those are
+  // two different strings, so their own 25% code was refused on every order —
+  // "not valid, has expired, or is not for this purchase" — with nothing wrong
+  // with the coupon at all. Self-purchase was worse: the plans page passed no
+  // address whatsoever, so an email-locked scholarship code could never be
+  // redeemed by the very student it was written for.
+  //
+  // So identity is now the SET of addresses that belong to the caller: the one
+  // they signed in with, and the one on their profile. Matching either is
+  // matching them.
+  if (coupon.for_email) {
+    const want = String(coupon.for_email).trim().toLowerCase();
+    const mine = new Set<string>();
+    const add = (e: unknown) => { const v = String(e ?? "").trim().toLowerCase(); if (v) mine.add(v); };
+    add(ctx.email);
+    if (ctx.userId) {
+      const { data: prof } = await svc.from("profiles").select("email").eq("id", ctx.userId).maybeSingle();
+      add(prof?.email);
+    }
+    if (!mine.has(want)) return null;
+  }
 
   let amount = amountInr;
   if (coupon.percent_off) amount = Math.round(amountInr * (1 - coupon.percent_off / 100));

@@ -15,13 +15,19 @@ import { ORDER_STATES, chosenStates, matchesState } from "@/lib/orderStatus";
 // the one-click DAY approval above the table; per-row buttons are for
 // exceptions (hold something fishy, or approve one sale early).
 function ZohoCell({ status }: { id?: string; table?: string; status: string | null }) {
-  // READ-ONLY here — the office asked for Approve and Hold to live on the
-  // Accounts page with the rest of the Zoho work. This register just says
-  // where a sale stands.
-  if (status === "posted") return <span title="Posted to Zoho Books">✅ in Zoho</span>;
-  if (status === "approved") return <span className="muted" title="Will post to Zoho Books tonight">⏳ posts tonight</span>;
-  if (status === "skipped") return <span title="Held on the Accounts page — will not post">🚫 held</span>;
-  return <span className="muted" title="Approve or hold it on the Accounts page">— pending</span>;
+  // WHERE THE SALE STANDS IN THE BOOKS — never where the PAYMENT stands.
+  //
+  // This column used to say a bare "— pending" beside an order marked paid,
+  // which reads as though the student still owes money. The money is in; what
+  // is pending is the entry. It now says which.
+  //
+  // "Posts tonight" was also no longer true: the nightly run stopped posting on
+  // its own when the founder ruled that nothing reaches Zoho without him, so an
+  // approved sale now waits at his gate rather than going in at 3:30 am.
+  if (status === "posted") return <span title="This sale is in Zoho Books">✅ in Zoho</span>;
+  if (status === "approved") return <span className="muted" title="The accounts desk has approved it; it posts when CA Parveen Sharma releases it on the books desk">⏳ with CA Parveen Sharma</span>;
+  if (status === "skipped") return <span title="Held on the Accounts page — this will not post">🚫 held out of Zoho</span>;
+  return <span className="muted" title="Paid, but not yet approved for Zoho — the accounts desk approves it on the Accounts page">📗 not in Zoho yet</span>;
 }
 
 type Ship = { name?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string; phone?: string };

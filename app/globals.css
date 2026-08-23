@@ -963,3 +963,15 @@ html.in-app .askme-fab,
 html.in-app .pagehelp-fab {
   bottom: calc(16px + var(--inset-bottom));
 }
+
+
+/* A GRID CHILD WILL NOT SHRINK BELOW ITS CONTENT UNLESS TOLD TO.
+   Grid and flex items default to min-width:auto, and a native date or number
+   input carries a wide intrinsic size — so on a phone the field kept its
+   desktop width and sat on top of the one beside it. This is the fix for every
+   such form on the site, not only the one that was reported. */
+.card form > div,
+.card form > div > div,
+form .grid > div { min-width: 0; }
+.card input, .card select, .card textarea { max-width: 100%; }
+input[type="date"], input[type="number"] { min-width: 0; }

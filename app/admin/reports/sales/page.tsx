@@ -5,6 +5,13 @@ import { viaProxy } from "@/lib/fileProxy";
 import { formatINR } from "@/lib/pricing";
 import AdminHero from "../../_components/AdminHero";
 
+// READ IT FRESH, EVERY TIME.
+//
+// Every other report on this desk declares this and this one did not, so Next
+// served it from its cache: today's sales were missing from a page whose whole
+// job is to show today's sales. A stale sales figure is worse than no page.
+export const dynamic = "force-dynamic";
+
 const inr = (n: number) => "₹" + (Math.round(n) || 0).toLocaleString("en-IN");
 
 function fmt(s: string): string {

@@ -832,7 +832,7 @@ export default async function ZohoHubPage(props: {
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", marginTop: 10 }}>
             <form action={recordAdvanceAction} className="card">
               <strong style={{ fontSize: ".9rem" }}>💸 Record an advance (already paid)</strong>
-              <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr", marginTop: 8 }}>
+              <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", marginTop: 8 }}>
                 <div>
                   <label style={{ fontSize: ".75rem" }}>Person</label>
                   <select name="person_id" required style={{ marginBottom: 0 }}>
@@ -1344,7 +1344,7 @@ export default async function ZohoHubPage(props: {
                 <li>Open the <strong>Generate Code</strong> tab. Scope: <code style={{ userSelect: "all" }}>ZohoBooks.fullaccess.all</code> · Duration: <strong>10 minutes</strong> · any description → <strong>Generate</strong>, copy the code into the third box, and press Connect <em>straight away</em> (the code dies in 10 minutes).</li>
               </ol>
               <form action={connectZoho}>
-                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
                   <div><label>Client ID</label><input name="client_id" required autoComplete="off" placeholder="1000.XXXXXXXX…" /></div>
                   <div><label>Client Secret</label><input name="client_secret" required type="password" autoComplete="off" placeholder="paste the secret" /></div>
                 </div>

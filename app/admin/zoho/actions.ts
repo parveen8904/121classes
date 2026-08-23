@@ -223,9 +223,10 @@ export async function saveBillRuleAction(formData: FormData) {
   const gst_rate = Number(formData.get("gst_rate")) || 18;
   const tds_section = str(formData.get("tds_section")) || null;
   const tds_rate = Number(formData.get("tds_rate")) || null;
+  const gst_tax_name = str(formData.get("gst_tax_name")) || null;
   if (!institution || !expense_account) return;
   const { saveBillRule } = await import("@/lib/providerBills");
-  try { await saveBillRule({ institution, vendor_name, expense_account, gst_treatment, gst_rate, tds_section, tds_rate }); }
+  try { await saveBillRule({ institution, vendor_name, expense_account, gst_treatment, gst_rate, tds_section, tds_rate, gst_tax_name }); }
   catch { /* the row stays waiting */ }
   revalidatePath("/admin/zoho");
 }

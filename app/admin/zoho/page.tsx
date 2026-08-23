@@ -1029,6 +1029,10 @@ export default async function ZohoHubPage(props: {
                         <input name="gst_rate" type="number" step="0.01" defaultValue={18} style={{ marginBottom: 0 }} />
                       </div>
                       <div>
+                        <label style={{ fontSize: ".75rem" }}>Zoho tax (blank = IGST)</label>
+                        <input name="gst_tax_name" placeholder="GST18 if the supplier is in Delhi" style={{ marginBottom: 0 }} />
+                      </div>
+                      <div>
                         <label style={{ fontSize: ".75rem" }}>TDS section (blank = none)</label>
                         <input name="tds_section" placeholder="e.g. 194J / 195" style={{ marginBottom: 0 }} />
                       </div>

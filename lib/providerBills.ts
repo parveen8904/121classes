@@ -28,6 +28,9 @@ const str = (v: unknown) => String(v ?? "").trim();
 export type BillRule = {
   institution: string; vendor_name: string; expense_account: string;
   gst_treatment: string; gst_rate: number; tds_section: string | null; tds_rate: number | null;
+  /** Zoho tax to apply — "GST18" for an intra-state supplier, "IGST18" for
+   *  inter-state or an import. Blank falls back to IGST<rate>. */
+  gst_tax_name?: string | null;
 };
 
 async function fetchText(fileUrl: string): Promise<string | null> {
@@ -198,7 +201,11 @@ export async function postProviderBill(id: string): Promise<void> {
 
     // GST: reverse charge for an import of services; the charged tax for a
     // domestic bill; nothing when the vendor charges none.
-    const taxName = p.gst_treatment === "none" ? null : `IGST${Number(p.gst_rate ?? 18)}`;
+    // Named per vendor where it matters: a Delhi supplier is CGST+SGST ("GST18"),
+    // a Bengaluru one billing Delhi is IGST. Import of services is IGST too.
+    const taxName = p.gst_treatment === "none"
+      ? null
+      : (str(p.gst_tax_name) || `IGST${Number(p.gst_rate ?? 18)}`);
     const taxId = taxName ? await taxIdByName(taxName) : null;
 
     const body: Record<string, unknown> = {

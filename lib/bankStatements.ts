@@ -312,8 +312,32 @@ export async function postBankLine(lineId: string, accountChoice: string): Promi
 
   try {
     const bankId = await zohoAccountId(String(l.account_name));
-    const otherId = await zohoAccountId(accountChoice);
     const debit = Number(l.debit) || 0, credit = Number(l.credit) || 0;
+
+    // A LINE THAT SETTLES SOMETHING IS NOT AN EXPENSE.
+    //
+    // The expense was booked when the supplier's bill arrived. Paying it is a
+    // payment against that bill — book it as an expense again and the cost is
+    // counted twice while the bill stays open for ever. The same the other way:
+    // rent received settles the tenant's invoice, it is not fresh income.
+    if (l.match_kind && Array.isArray(l.match_ids) && l.match_ids.length) {
+      const { settleFromBank } = await import("@/lib/bankSettle");
+      const zid = await settleFromBank({
+        kind: String(l.match_kind) as "bill" | "invoice",
+        documentIds: (l.match_ids as string[]).map(String),
+        amount: debit > 0 ? debit : credit,
+        date: String(l.line_date),
+        bankAccountId: bankId,
+        reference: String(l.ref ?? "").slice(0, 90),
+        narration: String(l.narration ?? "").slice(0, 500),
+      });
+      await svc.from("bank_lines").update({
+        status: "posted", zoho_id: zid, error: null, updated_at: new Date().toISOString(),
+      }).eq("id", lineId);
+      return;
+    }
+
+    const otherId = await zohoAccountId(accountChoice);
     let zohoId = "";
     if (debit > 0) {
       const r = await zohoFetch<{ expense?: { expense_id: string } }>("/expenses", {

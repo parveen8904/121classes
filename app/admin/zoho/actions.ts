@@ -371,6 +371,50 @@ export async function retryDocumentAction(formData: FormData) {
   revalidatePath("/admin/zoho");
 }
 
+export async function matchBankAction() {
+  // Look at every waiting line and write down what it appears to settle.
+  // Decides nothing, posts nothing.
+  await assertArea("zoho");
+  const { matchWaitingLines } = await import("@/lib/bankMatching");
+  let note: string;
+  try { note = await matchWaitingLines(); }
+  catch (e) { note = `Could not read the open items from Zoho — ${e instanceof Error ? e.message : "unknown"}`; }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bank`);
+}
+
+export async function chooseMatchAction(formData: FormData) {
+  // He picks which open document a payment settles, out of the ones it could be.
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  const docId = str(formData.get("doc_id"));
+  if (!id) return;
+  const svc = createServiceClient();
+
+  if (docId === "__none") {
+    // Not a settlement after all — it falls back to the ordinary treatment.
+    await svc.from("bank_lines").update({
+      match_kind: null, match_ids: null, match_label: null, match_confidence: null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", id);
+    revalidatePath("/admin/zoho");
+    return;
+  }
+
+  const { data: l } = await svc.from("bank_lines").select("match_candidates").eq("id", id).maybeSingle();
+  const cands = (l?.match_candidates ?? []) as { id: string; kind: string; number: string; party: string; balance: number }[];
+  const pick = cands.find((c) => String(c.id) === docId);
+  if (!pick) return;
+
+  await svc.from("bank_lines").update({
+    match_kind: pick.kind, match_ids: [pick.id], match_party: pick.party,
+    match_label: `${pick.kind === "bill" ? "settles" : "receipt against"} ${pick.number || pick.kind} · ${pick.party} · ₹${Number(pick.balance).toLocaleString("en-IN")}`,
+    match_confidence: "certain",
+    updated_at: new Date().toISOString(),
+  }).eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
 export async function removeBillAction(formData: FormData) {
   // Take an invoice off the list. Nothing is deleted — the PDF stays in the
   // vault and the row stays with its reason, because "why is this not in the

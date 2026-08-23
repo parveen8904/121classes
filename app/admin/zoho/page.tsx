@@ -11,7 +11,7 @@ import RaiseDocument from "./RaiseDocument";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -123,6 +123,17 @@ export default async function ZohoHubPage(props: {
   const askLines = bankLines.filter((l) => l.status === "ask");
   const autoLines = bankLines.filter((l) => l.status === "auto");
   const failedLines = bankLines.filter((l) => l.status === "failed");
+  type MatchedLine = { id: string; line_date: string; narration: string; debit: number; credit: number;
+    match_kind: string | null; match_label: string | null; match_confidence: string | null;
+    match_candidates: { id: string; kind: string; number: string; party: string; balance: number; why: string[] }[] | null };
+  const { data: matchedData } = hubConnected
+    ? await createServiceClient().from("bank_lines")
+        .select("id, line_date, narration, debit, credit, match_kind, match_label, match_confidence, match_candidates")
+        .in("status", ["ask", "auto"]).not("match_confidence", "is", null)
+        .order("line_date", { ascending: false }).limit(40)
+    : { data: [] as never[] };
+  const matchedLines = (matchedData ?? []) as unknown as MatchedLine[];
+
   const { count: postedLineCount } = hubConnected
     ? await createServiceClient().from("bank_lines").select("id", { count: "exact", head: true }).in("status", ["posted", "matched"])
     : { count: 0 };
@@ -571,6 +582,66 @@ export default async function ZohoHubPage(props: {
             rule and that merchant never asks again). Openings must tie to the previous closing, so a missing
             statement cannot hide. ✅ posted/matched so far: {postedLineCount ?? 0}
           </p>
+
+          <div className="card" style={{ marginBottom: 10 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <form action={matchBankAction} style={{ margin: 0 }}>
+                <SubmitButton className="btn small secondary" savedLabel="Matched">🔗 Find what these payments settle</SubmitButton>
+              </form>
+              <span className="muted" style={{ fontSize: ".8rem" }}>
+                Asks Zoho what is still unpaid and looks for the bill or invoice each line clears.
+              </span>
+            </div>
+            {matchedLines.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <strong style={{ fontSize: ".85rem" }}>Settlements found ({matchedLines.length})</strong>
+                <p className="muted" style={{ fontSize: ".78rem", margin: "4px 0 8px" }}>
+                  A payment to a supplier is <strong>not</strong> an expense — the expense came with their bill. These
+                  post as a payment against the bill, or a receipt against the invoice, so the document is actually
+                  cleared. Approve them in the list below as usual.
+                </p>
+                {matchedLines.map((m) => (
+                  <div key={m.id} style={{ padding: "6px 0", borderTop: "1px solid rgba(0,0,0,.06)", fontSize: ".83rem" }}>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
+                      <span style={{ minWidth: 88 }}>{m.line_date}</span>
+                      <span style={{ minWidth: 86, fontWeight: 600 }}>
+                        {Number(m.debit) > 0 ? `−₹${Number(m.debit).toLocaleString("en-IN")}` : `+₹${Number(m.credit).toLocaleString("en-IN")}`}
+                      </span>
+                      <span className="muted" style={{ flex: "1 1 220px" }}>{String(m.narration).slice(0, 70)}</span>
+                      {m.match_confidence === "choose" ? (
+                        <form action={chooseMatchAction} style={{ margin: 0, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                          <input type="hidden" name="id" value={m.id} />
+                          <select name="doc_id" defaultValue="" style={{ marginBottom: 0, minWidth: 260 }}>
+                            <option value="">— which one does this settle? —</option>
+                            {(m.match_candidates ?? []).map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.number || c.kind} · {c.party} · ₹{Number(c.balance).toLocaleString("en-IN")}
+                              </option>
+                            ))}
+                            <option value="__none">None of these — treat it normally</option>
+                          </select>
+                          <SubmitButton className="btn small secondary" savedLabel="✓">Use this</SubmitButton>
+                        </form>
+                      ) : (
+                        <>
+                          <span style={{ color: "#0e6e52" }}>{m.match_label}</span>
+                          <span className="muted" style={{ fontSize: ".75rem" }}>
+                            {m.match_confidence === "certain" ? "certain" : "likely"}
+                            {(m.match_candidates?.[0]?.why ?? []).length ? ` — ${m.match_candidates![0].why.join(", ")}` : ""}
+                          </span>
+                          <form action={chooseMatchAction} style={{ margin: 0 }}>
+                            <input type="hidden" name="id" value={m.id} />
+                            <input type="hidden" name="doc_id" value="__none" />
+                            <SubmitButton className="btn small secondary" savedLabel="✓">Not this</SubmitButton>
+                          </form>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <form action={uploadStatementAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div style={{ minWidth: 260 }}>

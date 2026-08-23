@@ -8,7 +8,7 @@ import { FVD, KNOWN_FOREIGN_VENDORS } from "@/lib/foreignVendorDesk";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, readbackBillsAction, recheckBillDatesAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, readbackBillsAction, recheckBillDatesAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -231,6 +231,10 @@ export default async function ZohoHubPage(props: {
   const billsAsk = bills.filter((b) => b.status === "needs_info");
   const billsFailed = bills.filter((b) => b.status === "failed");
   // One card per vendor still without a ruling.
+  // Everything waiting on him before it can reach Zoho.
+  const { listPending } = await import("@/lib/zohoApprovals");
+  const pendingApprovals = hubConnected ? await listPending() : [];
+
   const askVendors = [...new Set(billsAsk.map((b) => b.institution))];
   // A foreign vendor whose withholding questions have never been answered. The
   // treatment card cannot help here — without the country and what they did,
@@ -999,6 +1003,61 @@ export default async function ZohoHubPage(props: {
             </div>
           )}
         </>
+      )}
+
+      {/* ── His gate: nothing reaches Zoho until he releases it ──────── */}
+      {hubConnected && (
+        <div id="approvals">
+          <h2 className="admin-section-title" style={{ marginTop: 26 }}>
+            ✋ Waiting for your approval ({pendingApprovals.length})
+          </h2>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
+            Nothing is written to Zoho from anywhere in this system — no posting, no date, no amount, no vendor,
+            no TDS — until you release it here. The desk prepares the work and asks; this page is the only door,
+            and it is <strong>yours alone</strong>. Everything below shows exactly what will be sent.
+          </p>
+
+          {pendingApprovals.length === 0 ? (
+            <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing waiting. The books are as you left them.</p></div>
+          ) : !isFounder ? (
+            <div className="card">
+              <p className="muted" style={{ margin: 0 }}>
+                {pendingApprovals.length} item(s) are with CA Parveen Sharma for approval. They post once he releases them.
+              </p>
+            </div>
+          ) : (
+            <>
+              <form action={approveAllZohoAction} className="card" style={{ marginBottom: 8, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                {pendingApprovals.map((a) => <input key={a.id} type="hidden" name="ids" value={a.id} />)}
+                <SubmitButton className="btn small" savedLabel="Posted">✅ Approve all {pendingApprovals.length} and post</SubmitButton>
+                <span className="muted" style={{ fontSize: ".8rem" }}>Or go through them one at a time below.</span>
+              </form>
+
+              {pendingApprovals.map((a) => (
+                <div className="card" key={a.id} style={{ marginTop: 8, borderLeft: "4px solid #b45309" }}>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ flex: "1 1 420px" }}>
+                      <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                        {a.kind.replace(/_/g, " ")}
+                      </span>
+                      <div style={{ fontSize: ".95rem", marginTop: 2 }}>{a.summary}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <form action={approveZohoAction} style={{ margin: 0 }}>
+                        <input type="hidden" name="id" value={a.id} />
+                        <SubmitButton className="btn small" savedLabel="Posted">✅ Approve</SubmitButton>
+                      </form>
+                      <form action={rejectZohoAction} style={{ margin: 0 }}>
+                        <input type="hidden" name="id" value={a.id} />
+                        <SubmitButton className="btn small secondary" savedLabel="Rejected">✕ No</SubmitButton>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
       )}
 
       {/* ── Provider invoices → Zoho bills ──────────────────────────── */}

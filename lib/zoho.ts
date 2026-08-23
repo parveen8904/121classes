@@ -1,4 +1,5 @@
 import { getSecret } from "@/lib/secrets";
+import { assertZohoWriteAllowed } from "@/lib/zohoGuard";
 
 // Zoho Books integration (India DC). Posting is driven by the founder's own
 // FREE Self Client keys pasted in Admin → Integrations — no AI involved, no
@@ -50,6 +51,8 @@ async function orgId(): Promise<string> {
 }
 
 async function zfetch(path: string, init?: RequestInit): Promise<Record<string, unknown>> {
+  // The same gate as the other gateway — there are only these two.
+  assertZohoWriteAllowed(init?.method, path);
   const token = await accessToken();
   const sep = path.includes("?") ? "&" : "?";
   const res = await fetch(`${BOOKS}${path}${sep}organization_id=${await orgId()}`, {

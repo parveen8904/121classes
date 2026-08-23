@@ -7,6 +7,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { clearSecretCache } from "@/lib/secrets";
 import { zohoExchangeGrantCode, zohoListOrganizations, zohoFetch } from "@/lib/zohoApi";
 import { str } from "../_lib/util";
+import { requestApprovalFor } from "@/lib/zohoApprovals";
 
 // ---- Connect Zoho Books (the Self-Client key) -------------------------------
 //
@@ -41,7 +42,7 @@ export async function approvePostingAction(formData: FormData) {
   const svc = createServiceClient();
   await svc.from("zoho_postings").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", id);
   const { postSale } = await import("@/lib/zohoPosting");
-  try { await postSale(id); } catch { /* the row now carries status=failed + the error text */ }
+  await requestApprovalFor("sale", "zoho_postings", id);
   revalidatePath("/admin/zoho");
 }
 
@@ -53,7 +54,7 @@ export async function approveAllDraftsAction() {
   const { postSale } = await import("@/lib/zohoPosting");
   for (const d of drafts ?? []) {
     await svc.from("zoho_postings").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", d.id);
-    try { await postSale(d.id); } catch { /* recorded on the row; continue with the rest */ }
+    await requestApprovalFor("sale", "zoho_postings", d.id);
   }
   revalidatePath("/admin/zoho");
 }
@@ -86,7 +87,7 @@ export async function approveSettlementAction(formData: FormData) {
   const svc = createServiceClient();
   await svc.from("zoho_settlements").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", id);
   const { postSettlement } = await import("@/lib/zohoSettlements");
-  try { await postSettlement(id); } catch { /* row carries status=failed + error */ }
+  await requestApprovalFor("settlement", "zoho_settlements", id);
   revalidatePath("/admin/zoho");
 }
 
@@ -98,7 +99,7 @@ export async function approveAllSettlementsAction() {
   const { postSettlement } = await import("@/lib/zohoSettlements");
   for (const r of rows ?? []) {
     await svc.from("zoho_settlements").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", r.id);
-    try { await postSettlement(r.id); } catch { /* continue */ }
+    await requestApprovalFor("settlement", "zoho_settlements", r.id);
   }
   revalidatePath("/admin/zoho");
 }
@@ -112,7 +113,7 @@ export async function approveSelectedSettlementsAction(formData: FormData) {
   const { postSettlement } = await import("@/lib/zohoSettlements");
   for (const id of ids) {
     await svc.from("zoho_settlements").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", id);
-    try { await postSettlement(id); } catch { /* the row carries its own reason; keep going */ }
+    await requestApprovalFor("settlement", "zoho_settlements", id);
   }
   revalidatePath("/admin/zoho");
 }
@@ -243,6 +244,45 @@ export async function uploadBillAction(formData: FormData) {
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);
 }
 
+export async function approveZohoAction(formData: FormData) {
+  // THE ONLY DOOR TO ZOHO, AND ONLY HE HOLDS IT. Not the accounts desk, not a
+  // cron, not this system on its own judgement.
+  await assertArea(null);
+  const me = await currentStaff();
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const { releaseApproval } = await import("@/lib/zohoApprovals");
+  const note = await releaseApproval(id, me?.id ?? null);
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#approvals`);
+}
+
+export async function approveAllZohoAction(formData: FormData) {
+  await assertArea(null);
+  const me = await currentStaff();
+  const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
+  if (!ids.length) return;
+  const { releaseApproval } = await import("@/lib/zohoApprovals");
+  let done = 0, failed = 0;
+  for (const id of ids) {
+    const r = await releaseApproval(id, me?.id ?? null);
+    if (r.startsWith("Approved and posted")) done++; else failed++;
+  }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(`${done} posted${failed ? `, ${failed} did not go through — see the reasons below` : ""}.`)}#approvals`);
+}
+
+export async function rejectZohoAction(formData: FormData) {
+  await assertArea(null);
+  const me = await currentStaff();
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const { rejectApproval } = await import("@/lib/zohoApprovals");
+  await rejectApproval(id, me?.id ?? null, str(formData.get("note")) || undefined);
+  revalidatePath("/admin/zoho");
+  redirect("/admin/zoho#approvals");
+}
+
 export async function saveForeignAnswersAction(formData: FormData) {
   // THE ACCOUNTS DESK ANSWERS THESE. They are questions of fact — where the
   // vendor is, what they actually did, which papers are on file — not rulings
@@ -327,7 +367,7 @@ export async function approveSelectedBillsAction(formData: FormData) {
   if (!ids.length) return;
   const { postProviderBill } = await import("@/lib/providerBills");
   for (const id of ids) {
-    try { await postProviderBill(id); } catch { /* the row keeps its reason */ }
+    await requestApprovalFor("provider_bill", "provider_bills", id);
   }
   revalidatePath("/admin/zoho");
 }
@@ -377,7 +417,7 @@ export async function answerLineAction(formData: FormData) {
   if (remember && rulePattern) {
     try { await saveMerchantRule(rulePattern, account); } catch { /* the posting still proceeds */ }
   }
-  try { await postBankLine(id, account); } catch { /* row carries failed + error */ }
+  await requestApprovalFor("bank_line", "bank_lines", id, { accountChoice: account });
   revalidatePath("/admin/zoho");
 }
 
@@ -390,7 +430,7 @@ export async function approveAutoLineAction(formData: FormData) {
   const account = String((l?.proposal as { account?: string } | null)?.account ?? "").trim();
   if (!account) return;
   const { postBankLine } = await import("@/lib/bankStatements");
-  try { await postBankLine(id, account); } catch { /* recorded */ }
+  await requestApprovalFor("bank_line", "bank_lines", id, { accountChoice: account });
   revalidatePath("/admin/zoho");
 }
 
@@ -402,7 +442,7 @@ export async function approveAllAutoAction() {
   for (const a of autos ?? []) {
     const account = String((a.proposal as { account?: string } | null)?.account ?? "").trim();
     if (!account) continue;
-    try { await postBankLine(a.id, account); } catch { /* continue */ }
+    await requestApprovalFor("bank_line", "bank_lines", a.id, { accountChoice: account });
   }
   revalidatePath("/admin/zoho");
 }
@@ -417,7 +457,7 @@ export async function approveSelectedLinesAction(formData: FormData) {
   for (const r of rows ?? []) {
     const account = String((r.proposal as { account?: string } | null)?.account ?? "").trim();
     if (!account) continue;
-    try { await postBankLine(r.id, account); } catch { /* the row keeps its reason */ }
+    await requestApprovalFor("bank_line", "bank_lines", r.id, { accountChoice: account });
   }
   revalidatePath("/admin/zoho");
 }
@@ -437,7 +477,7 @@ export async function approveSelectedBrokerageAction(formData: FormData) {
   if (!ids.length) return;
   const { postBrokerageLine } = await import("@/lib/brokerage");
   for (const id of ids) {
-    try { await postBrokerageLine(id, {}); } catch { /* the row keeps its reason */ }
+    await requestApprovalFor("brokerage_line", "brokerage_lines", id);
   }
   revalidatePath("/admin/zoho");
 }

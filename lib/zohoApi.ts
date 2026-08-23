@@ -1,3 +1,4 @@
+import { assertZohoWriteAllowed } from "@/lib/zohoGuard";
 import { getSecret } from "@/lib/secrets";
 
 // THE PORTAL'S OWN LINE TO ZOHO BOOKS (India data centre).
@@ -69,6 +70,8 @@ export async function zohoFetch<T = Record<string, unknown>>(
   path: string,
   init?: { method?: string; body?: Record<string, unknown>; query?: Record<string, string> },
 ): Promise<T> {
+  // The gate. Anything that would change the books needs his approval first.
+  assertZohoWriteAllowed(init?.method, path);
   const token = await zohoAccessToken();
   const orgId = await getSecret("ZOHO_ORG_ID");
   const q = new URLSearchParams({ ...(init?.query ?? {}), ...(orgId ? { organization_id: orgId } : {}) });

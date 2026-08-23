@@ -381,30 +381,66 @@ async function advanceBill(billId: string): Promise<{ state: "open" | "awaiting_
   }
 }
 
+/** Take one bill out of draft in Zoho. Runs only from a released approval. */
+export async function openPostedBill(id: string): Promise<void> {
+  const svc = createServiceClient();
+  const { data: b } = await svc.from("provider_bills").select("zoho_bill_id").eq("id", id).maybeSingle();
+  if (!b?.zoho_bill_id) throw new Error("that bill has no Zoho id");
+  const moved = await advanceBill(String(b.zoho_bill_id));
+  const r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${b.zoho_bill_id}`).catch(() => null);
+  await svc.from("provider_bills").update({
+    ...(r?.bill ? { zoho_echo: { ...echoOf(r.bill), ...(moved.state !== "open" ? { zoho_status: moved.state } : {}) } } : {}),
+    error: moved.state === "open" ? null : `not in the ledgers yet — ${moved.why}`,
+  }).eq("id", id);
+  if (moved.state !== "open") throw new Error(moved.why ?? "the bill would not open");
+}
+
+/** Move a booked bill to the date its own invoice carries. Release-time only. */
+export async function applyBillDateFix(id: string, date: string, rate: number | null): Promise<void> {
+  const svc = createServiceClient();
+  const { data: b } = await svc.from("provider_bills").select("zoho_bill_id, amount, currency").eq("id", id).maybeSingle();
+  if (!b?.zoho_bill_id) throw new Error("that bill has no Zoho id");
+  await zohoFetch(`/bills/${b.zoho_bill_id}`, {
+    method: "PUT",
+    body: { date, ...(rate ? { exchange_rate: rate } : {}) },
+  });
+  const total = Number(b.amount) || 0;
+  await svc.from("provider_bills").update({
+    bill_date: date, rate,
+    inr_amount: rate ? Number((total * rate).toFixed(2)) : total,
+    updated_at: new Date().toISOString(),
+  }).eq("id", id);
+}
+
 /**
- * Re-read posted bills from Zoho and record what it holds — and finish any that
- * are still sitting as drafts there, since a draft reaches no ledger.
+ * Re-read posted bills from Zoho and record what it holds. READ ONLY — where a
+ * bill is still a draft there, it is put to the founder for approval rather
+ * than opened on the spot, because opening it changes his books.
  */
 export async function readbackPostedBills(): Promise<{ checked: number; opened: number }> {
   const svc = createServiceClient();
   const { data } = await svc.from("provider_bills")
-    .select("id, zoho_bill_id").eq("status", "posted").not("zoho_bill_id", "is", null).limit(50);
+    .select("id, institution, bill_no, zoho_bill_id").eq("status", "posted").not("zoho_bill_id", "is", null).limit(50);
   let checked = 0, opened = 0;
   for (const row of data ?? []) {
     try {
       let r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${row.zoho_bill_id}`);
       if (!r.bill) continue;
-      let moved: { state: string; why?: string } | null = null;
-      if (r.bill.status !== "open" && r.bill.status !== "paid" && r.bill.status !== "partially_paid") {
-        moved = await advanceBill(String(row.zoho_bill_id));
-        if (moved.state === "open") { opened++; r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${row.zoho_bill_id}`); }
+      const stillDraft = r.bill.status !== "open" && r.bill.status !== "paid" && r.bill.status !== "partially_paid";
+      if (stillDraft) {
+        // Opening it would put it in the ledgers, so it is his call, not ours.
+        const { requestApproval } = await import("@/lib/zohoApprovals");
+        await requestApproval({
+          kind: "bill_open", refTable: "provider_bills", refId: String(row.id),
+          summary: `Take ${row.institution} ${row.bill_no ?? ""} out of draft in Zoho so it reaches the ledgers`,
+          details: { zoho_bill_id: row.zoho_bill_id, zoho_status: r.bill.status },
+        });
+        opened++;
       }
-      if (r.bill) {
-        await svc.from("provider_bills").update({
-          zoho_echo: { ...echoOf(r.bill), ...(moved && moved.state !== "open" ? { zoho_status: moved.state } : {}) },
-          error: moved && moved.state !== "open" ? `not in the ledgers yet — ${moved.why}` : null,
-        }).eq("id", row.id);
-      }
+      await svc.from("provider_bills").update({
+        zoho_echo: echoOf(r.bill),
+        error: stillDraft ? "still a draft in Zoho — waiting for your approval to open it" : null,
+      }).eq("id", row.id);
       checked++;
     } catch { /* one unreadable bill must not stop the rest */ }
   }
@@ -448,24 +484,21 @@ export async function recheckPostedBillDates(): Promise<string> {
       const r = await rule115Rate(real, currency).catch(() => null);
       if (r) { rate = r.rate; rateDate = r.rateDate; }
     }
-    try {
-      await zohoFetch(`/bills/${row.zoho_bill_id}`, {
-        method: "PUT",
-        body: { date: real, ...(rate ? { exchange_rate: rate } : {}) },
-      });
-      await svc.from("provider_bills").update({
-        bill_date: real, rate, rate_date: rateDate,
-        inr_amount: rate ? Number((total * rate).toFixed(2)) : total,
-        updated_at: new Date().toISOString(),
-      }).eq("id", row.id);
-      fixed++;
-      notes.push(`${row.bill_no}: ${row.bill_date} → ${real}${rate ? ` @ ₹${rate}` : ""}`);
-    } catch (e) {
-      notes.push(`${row.bill_no}: should be ${real} but Zoho refused the change — ${e instanceof Error ? e.message : "unknown"}`);
-    }
+    // A date drives the GST period and the rupee value, so changing one in his
+    // books is his call. The desk works out what it should be and asks.
+    const { requestApproval } = await import("@/lib/zohoApprovals");
+    await requestApproval({
+      kind: "bill_date_fix", refTable: "provider_bills", refId: String(row.id),
+      summary: `Move ${row.institution} ${row.bill_no ?? ""} from ${row.bill_date} to ${real}` +
+               (rate ? ` and re-convert at ₹${rate} (Rule 115 for ${rateDate})` : "") +
+               ` — ₹${Math.round(total * (rate ?? 1)).toLocaleString("en-IN")}`,
+      details: { date: real, rate, rateDate, was: row.bill_date, amount: total, currency },
+    });
+    fixed++;
+    notes.push(`${row.bill_no}: ${row.bill_date} → ${real}${rate ? ` @ ₹${rate}` : ""}`);
   }
   return fixed || notes.length
-    ? `${fixed} bill date(s) corrected. ${notes.join(" · ")}`
+    ? `${fixed} date correction(s) put to the founder for approval. ${notes.join(" · ")}`
     : "Every posted bill already carries its own invoice date.";
 }
 

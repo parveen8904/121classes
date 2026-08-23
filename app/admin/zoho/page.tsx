@@ -4,10 +4,11 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { formatDate } from "@/lib/dates";
 import { getSecret } from "@/lib/secrets";
 import { zohoConfigured } from "@/lib/zohoApi";
+import { FVD, KNOWN_FOREIGN_VENDORS } from "@/lib/foreignVendorDesk";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, readbackBillsAction, recheckBillDatesAction, saveBillRuleAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, readbackBillsAction, recheckBillDatesAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -218,10 +219,11 @@ export default async function ZohoHubPage(props: {
   }
 
   // Provider invoices waiting to become Zoho BILLS.
-  type ProviderBillRow = { id: string; institution: string; bill_no: string | null; bill_date: string | null; currency: string; amount: number | null; inr_amount: number | null; rate: number | null; status: string; proposal: { vendor_name?: string; expense_account?: string; gst_treatment?: string; gst_rate?: number; tds_section?: string | null; tds_rate?: number | null } | null; error: string | null };
+  type ProviderBillRow = { id: string; institution: string; bill_no: string | null; bill_date: string | null; currency: string; amount: number | null; inr_amount: number | null; rate: number | null; status: string; proposal: { vendor_name?: string; expense_account?: string; gst_treatment?: string; gst_rate?: number; tds_section?: string | null; tds_rate?: number | null } | null; error: string | null;
+    determination: { tdsLabel?: string; confidence?: string; form145Part?: string | null; form146Required?: boolean; warnings?: string[]; certAdvice?: { why: string; points: string[] } | null; grossedUp?: number | null } | null };
   const { data: billData } = hubConnected
     ? await createServiceClient().from("provider_bills")
-        .select("id, institution, bill_no, bill_date, currency, amount, inr_amount, rate, status, proposal, error")
+        .select("id, institution, bill_no, bill_date, currency, amount, inr_amount, rate, status, proposal, error, determination")
         .in("status", ["needs_info", "draft", "failed"]).order("bill_date")
     : { data: [] as never[] };
   const bills = (billData ?? []) as unknown as ProviderBillRow[];
@@ -230,6 +232,18 @@ export default async function ZohoHubPage(props: {
   const billsFailed = bills.filter((b) => b.status === "failed");
   // One card per vendor still without a ruling.
   const askVendors = [...new Set(billsAsk.map((b) => b.institution))];
+  // A foreign vendor whose withholding questions have never been answered. The
+  // treatment card cannot help here — without the country and what they did,
+  // there is no way to know what to withhold.
+  const { data: ruleRows } = hubConnected
+    ? await createServiceClient().from("provider_bill_rules").select("institution, country, service_category, billing_frequency")
+    : { data: [] as never[] };
+  const answered = new Set((ruleRows ?? [])
+    .filter((r) => r.country && r.service_category && r.billing_frequency)
+    .map((r) => String(r.institution)));
+  const foreignAsk = [...new Set(bills
+    .filter((b) => (b.currency || "USD") !== "INR" && !answered.has(b.institution))
+    .map((b) => b.institution))];
   type PostedBillRow = {
     id: string; institution: string; bill_no: string | null; bill_date: string | null; error: string | null;
     zoho_echo: { currency?: string | null; total?: number | null; exchange_rate?: number | null;
@@ -241,6 +255,16 @@ export default async function ZohoHubPage(props: {
         .eq("status", "posted").order("bill_date", { ascending: false }).limit(50)
     : { data: [] as never[] };
   const billsPostedRows = (billsPostedData ?? []) as unknown as PostedBillRow[];
+  // Bills that are in the books but whose forms are not filed yet.
+  type ComplianceRow = { id: string; institution: string; bill_no: string | null; bill_date: string | null;
+    form145_part: string | null; form146_required: boolean; form145_filed_at: string | null; form146_filed_at: string | null };
+  const { data: complianceData } = hubConnected
+    ? await createServiceClient().from("provider_bills")
+        .select("id, institution, bill_no, bill_date, form145_part, form146_required, form145_filed_at, form146_filed_at")
+        .eq("status", "posted").not("form145_part", "is", null).is("form145_filed_at", null)
+        .order("bill_date", { ascending: false }).limit(40)
+    : { data: [] as never[] };
+  const complianceRows = (complianceData ?? []) as unknown as ComplianceRow[];
   const { count: billsPosted } = hubConnected
     ? await createServiceClient().from("provider_bills").select("id", { count: "exact", head: true }).eq("status", "posted")
     : { count: 0 };
@@ -1013,6 +1037,66 @@ export default async function ZohoHubPage(props: {
             <span className="muted" style={{ fontSize: ".76rem" }}>Goes to the vault and into this queue in one step.</span>
           </form>
 
+          {foreignAsk.length > 0 && (
+            <>
+              <strong style={{ display: "block" }}>🌍 Foreign vendors — the withholding questions ({foreignAsk.length})</strong>
+              <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 8px" }}>
+                Answer what you can see on the invoice and in the vendor file. The desk works out the rest —
+                what to withhold, which part of <strong>Form 145</strong>, and whether an accountant&apos;s
+                certificate (<strong>Form 146</strong>) has to come first. Asked <strong>once per vendor</strong>
+                and remembered. These are questions of fact; the tax rulings behind them are the founder&apos;s.
+              </p>
+              {foreignAsk.map((inst) => {
+                const mine = bills.filter((b) => b.institution === inst);
+                const seed = Object.entries(KNOWN_FOREIGN_VENDORS).find(([k]) => inst.toLowerCase().includes(k.toLowerCase()))?.[1];
+                return (
+                  <form action={saveForeignAnswersAction} className="card" key={`fq-${inst}`} style={{ marginTop: 8, borderLeft: "4px solid #2563eb" }}>
+                    <input type="hidden" name="institution" value={inst} />
+                    <strong>{inst}</strong>
+                    <span className="muted" style={{ fontSize: ".8rem" }}> · {mine.length} invoice(s) waiting · {mine.map((m) => `${m.currency} ${m.amount ?? "?"}`).join(", ")}</span>
+                    <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", marginTop: 8 }}>
+                      <div>
+                        <label style={{ fontSize: ".75rem" }}>Where is the vendor?</label>
+                        <select name="country" defaultValue={seed?.country ?? ""} required style={{ marginBottom: 0 }}>
+                          <option value="">— pick —</option>
+                          {FVD.COUNTRIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: ".75rem" }}>What did they actually do?</label>
+                        <select name="service_category" defaultValue={seed?.category ?? "standardised"} style={{ marginBottom: 0 }}>
+                          <option value="standardised">Ready-made cloud / hosting / software — self-serve</option>
+                          <option value="bespoke">Work done for us — consulting, support, custom build</option>
+                          <option value="advertising">Online advertising</option>
+                          <option value="mixed">A mix of both</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: ".75rem" }}>How often do they bill?</label>
+                        <select name="billing_frequency" defaultValue="monthly" style={{ marginBottom: 0 }}>
+                          <option value="monthly">Every month</option>
+                          <option value="annual">Once a year</option>
+                          <option value="one">One-off</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: ".75rem" }}>Expected for the year (₹)</label>
+                        <input name="expected_annual" type="number" step="1" placeholder="rough is fine" style={{ marginBottom: 0 }} />
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10, fontSize: ".85rem" }}>
+                      <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_trc" style={{ width: "auto", marginRight: 6 }} />Tax residency certificate on file</label>
+                      <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_form10f" style={{ width: "auto", marginRight: 6 }} />Form 10F</label>
+                      <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_no_pe" style={{ width: "auto", marginRight: 6 }} />No-PE declaration</label>
+                      <label style={{ fontWeight: 400 }}><input type="checkbox" name="has_395_cert" style={{ width: "auto", marginRight: 6 }} />s.395 certificate held</label>
+                    </div>
+                    <SubmitButton className="btn small" savedLabel="✓ Worked out" style={{ marginTop: 10 }}>🧮 Work out {inst}</SubmitButton>
+                  </form>
+                );
+              })}
+            </>
+          )}
+
           {askVendors.length > 0 && (
             <>
               <strong style={{ display: "block" }}>❓ First invoice from these — how should they be treated? ({askVendors.length})</strong>
@@ -1072,7 +1156,8 @@ export default async function ZohoHubPage(props: {
                 rows={billsDraft.map((b) => ({
                   id: b.id, date: b.bill_date ?? "",
                   label: `${b.institution}${b.bill_no ? ` · ${b.bill_no}` : ""} · ${b.currency} ${b.amount ?? "?"}`,
-                  sub: `${b.rate ? `@ ₹${Number(b.rate).toFixed(2)} ` : ""}→ ${b.proposal?.expense_account ?? "?"} · GST ${b.proposal?.gst_treatment ?? "?"}${b.proposal?.tds_section ? ` · TDS ${b.proposal.tds_section}` : ""}`,
+                  sub: `${b.rate ? `@ ₹${Number(b.rate).toFixed(2)} ` : ""}→ ${b.proposal?.expense_account ?? "?"} · GST ${b.proposal?.gst_treatment ?? "?"}${b.proposal?.tds_section ? ` · TDS ${b.proposal.tds_section}` : ""}` +
+                    (b.determination ? ` · withhold ${b.determination.tdsLabel} (${b.determination.confidence})${b.determination.form145Part ? ` · Form 145 Part ${b.determination.form145Part}` : ""}${b.determination.form146Required ? " + Form 146" : ""}` : ""),
                   amount: b.inr_amount !== null ? Number(b.inr_amount) : 0,
                   status: b.status, error: b.error,
                 }))}
@@ -1091,6 +1176,37 @@ export default async function ZohoHubPage(props: {
 
           {bills.length === 0 && (
             <div className="card"><p className="muted" style={{ margin: 0 }}>No invoices waiting. 🔄 reads the vault for anything not yet booked.</p></div>
+          )}
+
+          {complianceRows.length > 0 && (
+            <div className="card" style={{ marginTop: 10, borderLeft: "4px solid #b45309" }}>
+              <strong>📋 Forms still to file ({complianceRows.length})</strong>
+              <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 8px" }}>
+                A remittance is not finished when the bill is booked. Each of these carries a
+                <strong> Form 145</strong> — and a Part C one carries its own <strong>Form 146</strong>, which
+                cannot be shared with any other remittance.
+              </p>
+              {complianceRows.map((r) => (
+                <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", padding: "5px 0", fontSize: ".85rem", borderTop: "1px solid var(--line, #eee)" }}>
+                  <span style={{ minWidth: 210 }}>{r.bill_date} · <strong>{r.institution}</strong> {r.bill_no ?? ""}</span>
+                  <span>Part {r.form145_part}{r.form146_required ? " + Form 146" : ""}</span>
+                  {!r.form145_filed_at && (
+                    <form action={markFormFiledAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <input type="hidden" name="which" value="145" />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">Form 145 filed</SubmitButton>
+                    </form>
+                  )}
+                  {r.form146_required && !r.form146_filed_at && (
+                    <form action={markFormFiledAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <input type="hidden" name="which" value="146" />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">Form 146 obtained</SubmitButton>
+                    </form>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
 
           {billsPostedRows.length > 0 && (

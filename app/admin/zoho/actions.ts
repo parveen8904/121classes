@@ -243,6 +243,65 @@ export async function uploadBillAction(formData: FormData) {
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);
 }
 
+export async function saveForeignAnswersAction(formData: FormData) {
+  // THE ACCOUNTS DESK ANSWERS THESE. They are questions of fact — where the
+  // vendor is, what they actually did, which papers are on file — not rulings
+  // on tax, which remain the founder's. The withholding, the Form 145 part and
+  // whether an accountant's certificate is needed are then worked out, never
+  // typed in by hand.
+  await assertArea("zoho");
+  const me = await currentStaff();
+  const institution = str(formData.get("institution"));
+  if (!institution) return;
+  const svc = createServiceClient();
+  const answers = {
+    country: str(formData.get("country")),
+    service_category: str(formData.get("service_category")) || "standardised",
+    billing_frequency: str(formData.get("billing_frequency")) || "monthly",
+    has_trc: formData.get("has_trc") === "on",
+    has_form10f: formData.get("has_form10f") === "on",
+    has_no_pe: formData.get("has_no_pe") === "on",
+    has_395_cert: formData.get("has_395_cert") === "on",
+    expected_annual: Number(formData.get("expected_annual")) || null,
+    answered_by: me?.id ?? null,
+    answered_at: new Date().toISOString(),
+  };
+  if (!answers.country) return;
+
+  const { data: existing } = await svc.from("provider_bill_rules")
+    .select("institution").eq("institution", institution).maybeSingle();
+  if (existing) {
+    await svc.from("provider_bill_rules").update(answers).eq("institution", institution);
+  } else {
+    // The founder's treatment ruling for foreign vendors already stands: import
+    // of services under reverse charge, booked to web maintenance. The answers
+    // fill in the rest of the row rather than waiting for a second form.
+    await svc.from("provider_bill_rules").insert({
+      institution, vendor_name: institution,
+      expense_account: "Web Maintainence Expenses",
+      gst_treatment: "rcm", gst_rate: 18, tds_section: null, tds_rate: null,
+      ...answers,
+    });
+  }
+  // Anything of theirs that was waiting on these answers can now be worked out.
+  const { redetermineWaiting } = await import("@/lib/providerBills");
+  try { await redetermineWaiting(institution); } catch { /* the rows stay waiting */ }
+  revalidatePath("/admin/zoho");
+  redirect("/admin/zoho#bills");
+}
+
+export async function markFormFiledAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  const which = str(formData.get("which"));
+  if (!id || !["145", "146"].includes(which)) return;
+  const svc = createServiceClient();
+  await svc.from("provider_bills")
+    .update({ [which === "145" ? "form145_filed_at" : "form146_filed_at"]: new Date().toISOString() })
+    .eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
 export async function saveBillRuleAction(formData: FormData) {
   // The TREATMENT is the founder's call — GST position and TDS are his to rule
   // on, not the accounts desk's.

@@ -28,6 +28,12 @@ const str = (v: unknown) => String(v ?? "").trim();
 export type BillRule = {
   institution: string; vendor_name: string; expense_account: string;
   gst_treatment: string; gst_rate: number; tds_section: string | null; tds_rate: number | null;
+  /** The foreign-vendor answers — facts the accounts desk gives once per
+   *  vendor, from which the withholding and the Form 145 part are worked out.
+   *  Absent on a domestic vendor. */
+  country?: string | null; service_category?: string | null; billing_frequency?: string | null;
+  has_trc?: boolean; has_form10f?: boolean; has_no_pe?: boolean; has_395_cert?: boolean;
+  expected_annual?: number | null;
   /** Zoho tax to apply — "GST18" for an intra-state supplier, "IGST18" for
    *  inter-state or an import. Blank falls back to IGST<rate>. */
   gst_tax_name?: string | null;
@@ -41,6 +47,89 @@ async function fetchText(fileUrl: string): Promise<string | null> {
   const res = await fetch(fileUrl, { cache: "no-store" }).catch(() => null);
   if (!res || !res.ok) return null;
   return await res.text();
+}
+
+/** 1 April to 31 March — the year the Form 145 aggregate is measured over. */
+export function fyStart(onISO: string): string {
+  const y = Number(onISO.slice(0, 4)), m = Number(onISO.slice(5, 7));
+  return `${m < 4 ? y - 1 : y}-04-01`;
+}
+
+/** Everything already booked to this vendor this financial year. */
+async function paidThisFy(institution: string, onISO: string): Promise<number> {
+  const svc = createServiceClient();
+  const { data } = await svc.from("provider_bills")
+    .select("inr_amount")
+    .eq("institution", institution)
+    .neq("status", "skipped")
+    .gte("bill_date", fyStart(onISO))
+    .lte("bill_date", onISO);
+  return (data ?? []).reduce((t, r) => t + Number(r.inr_amount ?? 0), 0);
+}
+
+/** Has the desk been given the foreign answers for this vendor yet? */
+export function foreignAnswered(rule?: Partial<BillRule> | null): boolean {
+  return Boolean(rule && rule.country && rule.service_category && rule.billing_frequency);
+}
+
+/**
+ * The desk's working for one invoice — what to withhold, which part of Form 145,
+ * whether an accountant's certificate has to come first.
+ */
+export async function determineFor(b: {
+  institution: string; bill_date: string; inr_amount: number | null; currency: string;
+}, rule: Partial<BillRule>) {
+  const { determineForeign } = await import("@/lib/foreignVendorDesk");
+  const svc = createServiceClient();
+  const { data: gstRow } = await svc.from("site_settings").select("value").eq("key", "gst_registered").maybeSingle();
+  const paid = await paidThisFy(b.institution, b.bill_date);
+  return determineForeign({
+    country: String(rule.country),
+    service_category: (rule.service_category ?? "standardised") as never,
+    billing_frequency: (rule.billing_frequency ?? "monthly") as never,
+    has_trc: !!rule.has_trc, has_form10f: !!rule.has_form10f,
+    has_no_pe: !!rule.has_no_pe, has_395_cert: !!rule.has_395_cert,
+    expected_annual: rule.expected_annual ?? null,
+  }, {
+    inrAmount: Number(b.inr_amount ?? 0),
+    paidThisFy: paid,
+    // He is registered; the setting is here so it is one edit if that changes.
+    gstRegistered: gstRow ? String(gstRow.value) !== "false" : true,
+  });
+}
+
+/**
+ * Work out, and record, what is to happen to every waiting invoice from this
+ * vendor. Called the moment the desk answers the questions, so the queue moves
+ * on its own rather than needing another scan.
+ */
+export async function redetermineWaiting(institution: string): Promise<number> {
+  const svc = createServiceClient();
+  const { data: rule } = await svc.from("provider_bill_rules")
+    .select("*").eq("institution", institution).maybeSingle();
+  if (!foreignAnswered(rule as Partial<BillRule>)) return 0;
+
+  const { data: rows } = await svc.from("provider_bills")
+    .select("id, institution, bill_date, inr_amount, currency, amount")
+    .eq("institution", institution).in("status", ["needs_info", "draft"]);
+
+  let moved = 0;
+  for (const b of rows ?? []) {
+    if (!b.bill_date || !b.inr_amount) continue;   // a row missing its figures still waits for a person
+    const d = await determineFor(b as never, rule as Partial<BillRule>);
+    await svc.from("provider_bills").update({
+      status: d.tdsRate === null ? "needs_info" : "draft",
+      proposal: { ...(rule as Record<string, unknown>) },
+      determination: d as unknown as Record<string, unknown>,
+      tds_rate_applied: d.tdsRate,
+      form145_part: d.form145Part,
+      form146_required: d.form146Required,
+      error: d.tdsRate === null ? "the withholding on this one needs your CA — the desk proposes no rate for advertising" : null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", b.id);
+    moved++;
+  }
+  return moved;
 }
 
 /**
@@ -128,6 +217,12 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
     // marked settled, not queued for a treatment.
     const isZero = total !== null && Number(total) === 0;
     const rule = rules.get(institution);
+    // A FOREIGN invoice needs more than an expense account. Until the desk has
+    // answered where the vendor is, what they actually did and what papers are
+    // on file, there is no way to know what to withhold — so it waits, even
+    // when a treatment rule already exists.
+    const isForeign = currency !== "INR";
+    const needsForeignAnswers = isForeign && !foreignAnswered(rule);
     await svc.from("provider_bills").insert({
       vault_doc_id: d.id, institution,
       bill_no: str(facts.invoice_no) || null, bill_date: billDate,
@@ -135,16 +230,19 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
       inr_amount: inr, rate, rate_date: rateDate,
       // A row whose date or figures are uncertain is never left as a one-tick
       // posting — it waits for a person.
-      status: isZero ? "skipped" : (!dated || mismatch || !total) ? "needs_info" : rule ? "draft" : "needs_info",
+      status: isZero ? "skipped"
+        : (!dated || mismatch || !total || needsForeignAnswers) ? "needs_info"
+        : rule ? "draft" : "needs_info",
       proposal: rule ? { ...rule } : null,
       error: isZero ? "zero-value invoice — nothing to book"
         : mismatch ? `check the amount — ${mismatch}`
         : !total ? "the amount could not be read — type it in before posting"
         : !dated ? `the invoice's own date could not be read — ${billDate} is the filing date, set the real one before posting`
+        : needsForeignAnswers ? "foreign vendor — the desk needs the withholding questions answered before this can be booked"
         : null,
     });
     if (isZero) continue;
-    if (rule && dated && total && !mismatch) added++; else asked++;
+    if (rule && dated && total && !mismatch && !needsForeignAnswers) added++; else asked++;
   }
   const left = pending.length - batch.length;
   return `${added + asked} invoice(s) read — ${added} proposed from a remembered rule, ${asked} waiting for a treatment.` +
@@ -430,6 +528,22 @@ export async function postProviderBill(id: string): Promise<void> {
         ` · GST: ${p.gst_treatment}` +
         (p.tds_section ? ` · TDS ${p.tds_section} @ ${p.tds_rate}%` : " · no TDS"),
     };
+
+    // THE DESK AND THE STANDING RULING HAVE TO AGREE.
+    //
+    // The founder ruled no TDS on foreign vendors, which is right wherever the
+    // treaty carries a make-available test. Where it does not — Slovenia is the
+    // live case — the desk works out that withholding IS due. Booking the bill
+    // without it would risk the whole expense being disallowed, and quietly
+    // overriding his ruling is not the desk's place either. So it stops and
+    // asks which stands.
+    const det = b.determination as { tdsRate?: number | null; tdsLabel?: string; why?: string } | null;
+    if (det && Number(det.tdsRate) > 0 && !p.tds_section) {
+      return fail(
+        `the desk works out ${det.tdsLabel} withholding on this one, but your standing ruling for foreign vendors is no TDS. ` +
+        `Which stands? Set a TDS section on the vendor to withhold, or record the ruling to post it at nil.`,
+      );
+    }
 
     // TDS, where Zoho holds a matching tax. Where it does not, the bill still
     // posts and the row says the TDS must be applied by hand — never silently.

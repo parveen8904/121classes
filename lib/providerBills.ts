@@ -73,30 +73,45 @@ export async function scanVaultForBills(limit = 6): Promise<string> {
     const institution = str(d.institution) || "Unknown";
 
     let facts: { invoice_no?: string; date?: string; currency?: string; tax?: number; total?: number } = {};
-    // The titles this desk writes already carry the figures — "Vercel — Aug 2026
-    // (USD 31.18) — UHL42VKB-0004". Reading them costs nothing, so the AI is
-    // only asked about invoices that arrived without one.
+    // The titles this desk writes carry the figures — "Vercel — Aug 2026
+    // (USD 31.18) — UHL42VKB-0004" — so they are read first, for free.
+    //
+    // But a title is a label, not the invoice. It never carries the invoice's
+    // OWN DATE, and some of them (Bunny's, filed by API) carry a bare number
+    // with no currency. Trusting that shortcut booked twelve Bunny invoices as
+    // rupees on today's date — wrong currency, wrong period, and therefore the
+    // wrong Rule-115 rate. So the title is now only a cross-check: the paper is
+    // read whenever the date or the currency is still unknown.
     const t = str(d.title);
-    const m = t.match(/\(([A-Z]{3})\s*([\d.,]+)\)/) || t.match(/\(([\d.,]+)\)/);
-    if (m) {
-      const hasCcy = m.length > 2;
-      facts.currency = hasCcy ? m[1] : "INR";
-      facts.total = Number(String(hasCcy ? m[2] : m[1]).replace(/,/g, "")) || undefined;
+    const m = t.match(/\(([A-Z]{3})\s*([\d.,]+)\)/);
+    const bare = m ? null : t.match(/\(([\d.,]+)\)/);
+    if (m || bare) {
+      if (m) facts.currency = m[1];
+      facts.total = Number(String(m ? m[2] : bare![1]).replace(/,/g, "")) || undefined;
       const dash = t.split("—").pop()?.trim();
       if (dash && /[A-Z0-9-]{4,}/.test(dash) && !/\)/.test(dash)) facts.invoice_no = dash;
     }
+    const fromTitle = facts.total ?? null;
     try {
-      if (facts.total) throw new Error("figures already known");
+      if (facts.total && facts.currency && facts.date) throw new Error("figures already known");
       const text = await fetchText(str(d.file_url));
       if (text) {
         const { parseInvoiceText } = await import("@/lib/ai");
-        facts = (await parseInvoiceText(text)) ?? {};
+        const read = await parseInvoiceText(text);
+        if (read) facts = { ...facts, ...read };
       }
     } catch { /* an unreadable PDF still queues — the figures can be typed in */ }
 
     const currency = (str(facts.currency) || "USD").toUpperCase();
-    const billDate = /^\d{4}-\d{2}-\d{2}$/.test(str(facts.date)) ? str(facts.date) : String(d.created_at).slice(0, 10);
+    // Where the invoice's own date could not be read, the filing date stands in
+    // — and the row SAYS SO, because the date decides both the GST period and
+    // the conversion rate.
+    const dated = /^\d{4}-\d{2}-\d{2}$/.test(str(facts.date));
+    const billDate = dated ? str(facts.date) : String(d.created_at).slice(0, 10);
     const total = Number(facts.total) || null;
+    // The title and the paper disagreeing is worth a human eye, not a guess.
+    const mismatch = fromTitle !== null && total !== null && Math.abs(fromTitle - total) > 0.01
+      ? `the title says ${fromTitle} but the invoice reads ${total}` : null;
 
     let rate: number | null = null, rateDate: string | null = null, inr: number | null = null;
     if (currency !== "INR" && total) {
@@ -117,12 +132,18 @@ export async function scanVaultForBills(limit = 6): Promise<string> {
       bill_no: str(facts.invoice_no) || null, bill_date: billDate,
       currency, amount: total, tax_amount: Number(facts.tax) || null,
       inr_amount: inr, rate, rate_date: rateDate,
-      status: isZero ? "skipped" : rule ? "draft" : "needs_info",
+      // A row whose date or figures are uncertain is never left as a one-tick
+      // posting — it waits for a person.
+      status: isZero ? "skipped" : (!dated || mismatch || !total) ? "needs_info" : rule ? "draft" : "needs_info",
       proposal: rule ? { ...rule } : null,
-      error: isZero ? "zero-value invoice — nothing to book" : null,
+      error: isZero ? "zero-value invoice — nothing to book"
+        : mismatch ? `check the amount — ${mismatch}`
+        : !total ? "the amount could not be read — type it in before posting"
+        : !dated ? `the invoice's own date could not be read — ${billDate} is the filing date, set the real one before posting`
+        : null,
     });
     if (isZero) continue;
-    if (rule) added++; else asked++;
+    if (rule && dated && total && !mismatch) added++; else asked++;
   }
   const left = pending.length - batch.length;
   return `${added + asked} invoice(s) read — ${added} proposed from a remembered rule, ${asked} waiting for a treatment.` +

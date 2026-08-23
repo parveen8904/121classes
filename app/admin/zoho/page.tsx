@@ -7,7 +7,7 @@ import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, saveBillRuleAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, saveBillRuleAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -973,6 +973,28 @@ export default async function ZohoHubPage(props: {
             remembers the answer, and every later invoice from them arrives already proposed. Foreign services post
             under <strong>reverse charge</strong>; the figures convert at their Rule-115 rate.
           </p>
+
+          {/* The team's own door: supplier + file, and it is both filed and queued. */}
+          <form action={uploadBillAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 10 }}>
+            <div style={{ minWidth: 180 }}>
+              <label style={{ fontSize: ".75rem" }}>📤 Upload a bill — supplier</label>
+              <input name="institution" list="inst-names" required placeholder="e.g. Vercel / HYTONE / BSES" style={{ marginBottom: 0 }} />
+            </div>
+            <div style={{ minWidth: 150 }}>
+              <label style={{ fontSize: ".75rem" }}>Description (optional)</label>
+              <input name="title" placeholder="e.g. Aug 2026" style={{ marginBottom: 0 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: ".75rem" }}>Year</label>
+              <input name="year_label" list="year-labels" defaultValue="FY 2026-27" style={{ marginBottom: 0, width: 130 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: ".75rem" }}>The invoice (PDF)</label>
+              <input type="file" name="file" required accept="application/pdf,image/*" style={{ marginBottom: 0 }} />
+            </div>
+            <SubmitButton className="btn small" savedLabel="✓ Filed">📤 File &amp; queue it</SubmitButton>
+            <span className="muted" style={{ fontSize: ".76rem" }}>Goes to the vault and into this queue in one step.</span>
+          </form>
 
           {askVendors.length > 0 && (
             <>

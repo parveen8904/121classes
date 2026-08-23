@@ -171,6 +171,47 @@ export async function scanBillsAction() {
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);
 }
 
+export async function uploadBillAction(formData: FormData) {
+  // THE TEAM'S OWN DOOR FOR A BILL.
+  //
+  // Going to the vault, filling six index fields and then pressing a second
+  // button on another section is a procedure, not a workflow — and the team has
+  // many bills to put in. This is one form: the supplier, the file, done. It
+  // files the vault copy AND queues the bill for treatment in one action.
+  await assertArea("zoho");
+  const institution = str(formData.get("institution"));
+  const file = formData.get("file") as File | null;
+  if (!institution || !file || !file.size) {
+    redirect(`/admin/zoho?scan=${encodeURIComponent("Name the supplier and choose the file.")}#bills`);
+  }
+  const safe = (file!.name || "invoice.pdf").replace(/[^\w.\-]+/g, "_").slice(-80);
+  const path = `zoho-vault/${Date.now()}-${safe}`;
+  const svc = createServiceClient();
+  const buf = Buffer.from(await file!.arrayBuffer());
+  const up = await svc.storage.from("secure").upload(path, buf, {
+    contentType: file!.type || "application/pdf", upsert: false,
+  });
+  if (up.error) redirect(`/admin/zoho?scan=${encodeURIComponent(`Upload failed: ${up.error.message}`)}#bills`);
+
+  const { data: doc } = await svc.from("zoho_vault_docs").insert({
+    title: `${institution} — ${str(formData.get("title")) || file!.name}`,
+    file_url: `secure:${path}`,
+    institution,
+    doc_type: "Invoice / bill",
+    year_label: str(formData.get("year_label")) || null,
+    is_processed: false,
+    note: str(formData.get("note")) || "uploaded by the accounts desk",
+  }).select("id").single();
+
+  let note = "Filed in the vault.";
+  if (doc) {
+    const { scanVaultForBills } = await import("@/lib/providerBills");
+    try { note = await scanVaultForBills(3); } catch { note = "Filed in the vault; press 🔄 to read it for the bill."; }
+  }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);
+}
+
 export async function saveBillRuleAction(formData: FormData) {
   // The TREATMENT is the founder's call — GST position and TDS are his to rule
   // on, not the accounts desk's.

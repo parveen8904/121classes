@@ -45,7 +45,7 @@ async function fetchText(fileUrl: string): Promise<string | null> {
  * a foreign one at its Rule-115 rate, and propose the treatment when the vendor
  * already has a rule. Returns a human summary.
  */
-export async function scanVaultForBills(): Promise<string> {
+export async function scanVaultForBills(limit = 6): Promise<string> {
   const svc = createServiceClient();
   const { data: docs } = await svc.from("zoho_vault_docs")
     .select("id, title, institution, file_url, created_at")
@@ -55,13 +55,35 @@ export async function scanVaultForBills(): Promise<string> {
   const { data: ruleRows } = await svc.from("provider_bill_rules").select("*");
   const rules = new Map((ruleRows ?? []).map((r) => [String(r.institution), r as BillRule]));
 
+  // READ A FEW AT A TIME, AND SAY WHAT IS LEFT.
+  //
+  // Each invoice costs a signed URL, a download, a PDF text extract and one
+  // small AI call; two dozen of those in a single request runs past the
+  // serverless limit and the whole scan dies with nothing to show for it —
+  // which is exactly what happened on the first press. So it takes a batch,
+  // reports the remainder, and is pressed again.
+  const pending = (docs ?? []).filter((d) => !have.has(String(d.id)));
+  const batch = pending.slice(0, limit);
+
   let added = 0, asked = 0;
-  for (const d of docs ?? []) {
-    if (have.has(String(d.id))) continue;
+  for (const d of batch) {
     const institution = str(d.institution) || "Unknown";
 
     let facts: { invoice_no?: string; date?: string; currency?: string; tax?: number; total?: number } = {};
+    // The titles this desk writes already carry the figures — "Vercel — Aug 2026
+    // (USD 31.18) — UHL42VKB-0004". Reading them costs nothing, so the AI is
+    // only asked about invoices that arrived without one.
+    const t = str(d.title);
+    const m = t.match(/\(([A-Z]{3})\s*([\d.,]+)\)/) || t.match(/\(([\d.,]+)\)/);
+    if (m) {
+      const hasCcy = m.length > 2;
+      facts.currency = hasCcy ? m[1] : "INR";
+      facts.total = Number(String(hasCcy ? m[2] : m[1]).replace(/,/g, "")) || undefined;
+      const dash = t.split("—").pop()?.trim();
+      if (dash && /[A-Z0-9-]{4,}/.test(dash) && !/\)/.test(dash)) facts.invoice_no = dash;
+    }
     try {
+      if (facts.total) throw new Error("figures already known");
       const text = await fetchText(str(d.file_url));
       if (text) {
         const { parseInvoiceText } = await import("@/lib/ai");
@@ -92,7 +114,9 @@ export async function scanVaultForBills(): Promise<string> {
     });
     if (rule) added++; else asked++;
   }
-  return `${added} bill(s) proposed from remembered rules, ${asked} waiting for their first treatment.`;
+  const left = pending.length - batch.length;
+  return `${added + asked} invoice(s) read — ${added} proposed from a remembered rule, ${asked} waiting for a treatment.` +
+    (left > 0 ? ` ${left} still to read — press again.` : " Vault fully read.");
 }
 
 /** Save the treatment for a vendor and re-propose every waiting invoice of theirs. */

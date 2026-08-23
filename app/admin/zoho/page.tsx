@@ -10,6 +10,7 @@ import EntryEditor from "./EntryEditor";
 import RaiseDocument from "./RaiseDocument";
 import SubmitButton from "@/app/components/SubmitButton";
 import Money from "@/app/components/Money";
+import { journalFromWorkingNote } from "@/lib/brokerageJournal";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
 import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
@@ -1183,12 +1184,92 @@ export default async function ZohoHubPage(props: {
                           </div>
                         )}
 
+                        {/* ── WHAT APPROVING WILL ACTUALLY DO ──────────────────
+                            He said plainly that he does not know what happens if
+                            he presses the button, and he was right not to know:
+                            the entry was worked out inside the approval, so
+                            nothing showed it to him first. It is worked out in
+                            one place now — lib/brokerageJournal.ts — and this is
+                            that same entry, line for line. What he approves is
+                            what gets posted. */}
+                        {(() => {
+                          const j = journalFromWorkingNote({
+                            account_name: n.account_name, period_start: n.period_start,
+                            period_end: n.period_end, workbook: w as never,
+                          });
+                          if (j.lines.length < 2) return null;
+                          const dr = j.lines.filter((l) => l.side === "debit").reduce((t, l) => t + l.amount, 0);
+                          const cr = j.lines.filter((l) => l.side === "credit").reduce((t, l) => t + l.amount, 0);
+                          const known = new Set(allAccountNames.map((a) => a.toLowerCase()));
+                          const missing = [...new Set(j.lines.map((l) => l.account))].filter((a) => !known.has(a.toLowerCase()));
+                          return (
+                            <details className="card" style={{ marginTop: 12, background: "rgba(14,110,82,.05)" }} open={n.status === "draft"}>
+                              <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: ".88rem" }}>
+                                🧾 The journal entry this becomes — {j.lines.length} lines, {formatINR(dr)} each side
+                              </summary>
+                              <p style={{ fontSize: ".8rem", margin: "8px 0 6px" }}>
+                                {n.status === "draft"
+                                  ? <><strong>Nothing is in Zoho yet.</strong> This is the entry that will be written there
+                                      when you approve — these accounts, these amounts, this narration, dated {n.period_end}.
+                                      It is worked out by the same code that posts it, so what you see here is what goes in.</>
+                                  : <>This is the entry that was posted{n.zoho_number ? ` as ${n.zoho_number}` : ""}.</>}
+                              </p>
+                              <div style={{ overflowX: "auto" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".82rem" }}>
+                                  <thead><tr>
+                                    <th style={{ textAlign: "left", padding: "4px 8px", fontSize: ".7rem", color: "#666" }}>LEDGER</th>
+                                    <th style={{ textAlign: "left", padding: "4px 8px", fontSize: ".7rem", color: "#666" }}>DEBIT</th>
+                                    <th style={{ textAlign: "left", padding: "4px 8px", fontSize: ".7rem", color: "#666" }}>CREDIT</th>
+                                  </tr></thead>
+                                  <tbody>
+                                    {j.lines.map((l, i) => (
+                                      <tr key={`${l.account}-${i}`} style={{ borderTop: "1px solid rgba(0,0,0,.06)" }}>
+                                        <td style={{ padding: "5px 8px" }}>
+                                          <strong>{l.account}</strong>
+                                          {!known.has(l.account.toLowerCase()) && (
+                                            <span style={{ color: "#b45309", fontSize: ".72rem" }}> · new — will be created as &ldquo;{l.account} (AI)&rdquo;</span>
+                                          )}
+                                          <div className="muted" style={{ fontSize: ".72rem" }}>{l.note}</div>
+                                        </td>
+                                        <td style={{ padding: "5px 8px" }}>{l.side === "debit" ? <Money n={l.amount} width={124} /> : null}</td>
+                                        <td style={{ padding: "5px 8px" }}>{l.side === "credit" ? <Money n={l.amount} width={124} /> : null}</td>
+                                      </tr>
+                                    ))}
+                                    <tr style={{ borderTop: "2px solid rgba(0,0,0,.2)" }}>
+                                      <td style={{ padding: "6px 8px", fontWeight: 700 }}>Total</td>
+                                      <td style={{ padding: "6px 8px" }}><Money n={dr} width={124} bold /></td>
+                                      <td style={{ padding: "6px 8px" }}><Money n={cr} width={124} bold /></td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                              <p className="muted" style={{ fontSize: ".76rem", marginTop: 6 }}>
+                                {Math.abs(dr - cr) < 0.01
+                                  ? "✅ It balances. Zoho refuses a journal that does not, and this is checked again before it is sent."
+                                  : `⚠ It does not balance — debits ${formatINR(dr)} against credits ${formatINR(cr)}. It will not be sent in this state.`}
+                                {missing.length > 0 && (
+                                  <> {missing.length} ledger{missing.length === 1 ? "" : "s"} named here {missing.length === 1 ? "does" : "do"} not exist
+                                    in Zoho yet and will be created with the &ldquo;(AI)&rdquo; suffix, never by renaming or
+                                    merging one of yours: {missing.join(", ")}.</>
+                                )}
+                                {" "}The broker&apos;s own CSV is attached to the entry in Zoho, so the file that justifies it
+                                travels with it.
+                              </p>
+                            </details>
+                          );
+                        })()}
+
                         {n.status === "draft" && (
                           <form action={approveBrokerageNoteAction} style={{ marginTop: 10 }}>
                             <input type="hidden" name="id" value={n.id} />
                             <SubmitButton className="btn small" savedLabel="✓ Journalled">
-                              {isFounder ? "✅ Approve the note & journal it" : "📤 Send the note for approval"}
+                              {isFounder ? "✅ Approve — post this entry to Zoho now" : "📤 Send the note to CA Parveen Sharma"}
                             </SubmitButton>
+                            <span className="muted" style={{ fontSize: ".75rem", marginLeft: 8 }}>
+                              {isFounder
+                                ? "This is the only step. Pressing it writes the entry above into Zoho Books straight away, with the CSV attached, and tells you the entry number it got — or exactly why it would not go."
+                                : "It goes to CA Parveen Sharma for approval. Nothing reaches Zoho until he releases it."}
+                            </span>
                           </form>
                         )}
                       </div>

@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { assertArea } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { WorkingNote, RateUsed, Detail } from "@/lib/brokerageWorkbook";
+import { journalFromWorkingNote } from "@/lib/brokerageJournal";
 
 // THE WORKING NOTE, AS A FILE HE CAN HAND TO ANYBODY.
 //
@@ -132,7 +133,35 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   rateSheet["!cols"] = [{ wch: 44 }, { wch: 12 }, { wch: 20 }, { wch: 13 }, { wch: 16 }, { wch: 16 }];
   XLSX.utils.book_append_sheet(wb, rateSheet, "Rates applied");
 
-  /* ── 3 · The detail behind each figure ─────────────────────────────────── */
+  /* ── 3 · The entry it becomes, so the note can be approved on paper ────── */
+  const j = journalFromWorkingNote({
+    account_name: String(row.account_name), period_start: String(row.period_start),
+    period_end: String(row.period_end), workbook: w as never,
+  });
+  if (j.lines.length >= 2) {
+    const jr: (string | number | null)[][] = [
+      [row.status === "draft"
+        ? "PROPOSED JOURNAL ENTRY — not yet approved, nothing is in Zoho"
+        : "JOURNAL ENTRY AS POSTED"],
+      [`Dated ${row.period_end} · ${j.narration}`],
+      [],
+      ["Ledger", "Debit ₹", "Credit ₹", "Narration"],
+    ];
+    for (const l of j.lines) {
+      jr.push([l.account, l.side === "debit" ? n2(l.amount) : null, l.side === "credit" ? n2(l.amount) : null, l.note]);
+    }
+    jr.push([
+      "Total",
+      n2(j.lines.filter((l) => l.side === "debit").reduce((t, l) => t + l.amount, 0)),
+      n2(j.lines.filter((l) => l.side === "credit").reduce((t, l) => t + l.amount, 0)),
+      "",
+    ]);
+    const jsheet = XLSX.utils.aoa_to_sheet(jr);
+    jsheet["!cols"] = [{ wch: 30 }, { wch: 16 }, { wch: 16 }, { wch: 90 }];
+    XLSX.utils.book_append_sheet(wb, jsheet, "Journal entry");
+  }
+
+  /* ── 4 · The detail behind each figure ─────────────────────────────────── */
   const add = (name: string, rows: Record<string, unknown>[], cols?: number[]) => {
     if (!rows.length) return;
     const sh = XLSX.utils.json_to_sheet(rows);

@@ -593,11 +593,7 @@ export async function approveBrokerageNoteAction(formData: FormData) {
   // Each head was converted at the Rule-115 rate of its own transactions when
   // the note was built, so the entry carries those figures rather than
   // re-converting a total at one rate.
-  const wb = n.workbook as {
-    equity: { subTotal: number; uncostedProceeds: number; uncostedCost: number | null };
-    options: { net: number }; income: { subTotal: number }; charges: { subTotal: number };
-    partial: boolean; inrByHead?: Record<string, number>;
-  } | null;
+  const wb = n.workbook as { partial?: boolean; inrByHead?: Record<string, number> } | null;
 
   let built: { lines: { account: string; side: "debit" | "credit"; amount: number; note: string; nature: string; operating: string }[]; narration: string };
   if (wb) {
@@ -606,35 +602,13 @@ export async function approveBrokerageNoteAction(formData: FormData) {
         "Those sales still have no purchase cost. Enter it first — a journal that leaves them out understates the gain, and one that includes the proceeds without the cost overstates it.",
       ) + "#brokerage");
     }
-    const inr = wb.inrByHead ?? {};
-    const heads: { key: string; account: string; nature: string; operating: string }[] = [
-      { key: "cashDividends", account: "Dividend-US", nature: "income", operating: "non_operating" },
-      { key: "manufacturedDividends", account: "Manufactured Dividend-US", nature: "income", operating: "non_operating" },
-      { key: "stockLending", account: "Stock Lending Income-US", nature: "income", operating: "non_operating" },
-      { key: "interest", account: "Interest Income", nature: "income", operating: "non_operating" },
-      { key: "options", account: "Option Premium-US", nature: "income", operating: "non_operating" },
-      { key: "equityRealised", account: "Capital Gain-US", nature: "income", operating: "non_operating" },
-      { key: "marginInterest", account: "Interest Paid-US", nature: "expense", operating: "non_operating" },
-      { key: "fees", account: "US Bank Charges", nature: "expense", operating: "non_operating" },
-    ];
-    const lines: typeof built.lines = [];
-    let net = 0;
-    for (const h of heads) {
-      const v = Number(inr[h.key] ?? 0);
-      if (Math.abs(v) < 0.5) continue;
-      // A head that came out negative is simply the other way round.
-      const side: "debit" | "credit" = v > 0 ? "credit" : "debit";
-      lines.push({ account: h.account, side, amount: Number(Math.abs(v).toFixed(2)),
-        note: `${h.key} for the period, at the Rule-115 rate of each transaction`,
-        nature: v > 0 ? "income" : "expense", operating: "non_operating" });
-      net += v;
-    }
-    if (Math.abs(net) > 0.5) {
-      lines.push({ account: String(n.account_name), side: net > 0 ? "debit" : "credit",
-        amount: Number(Math.abs(net).toFixed(2)), note: "the movement in the brokerage account",
-        nature: "asset", operating: "operating" });
-    }
-    built = { lines, narration: `${n.account_name} — ${n.period_start} to ${n.period_end}, from the approved working note` };
+    // THE SAME BUILDER THE PAGE SHOWED HIM BEFORE HE PRESSED THIS.
+    // He must never be able to approve one entry and have another one posted.
+    const { journalFromWorkingNote } = await import("@/lib/brokerageJournal");
+    built = journalFromWorkingNote({
+      account_name: String(n.account_name), period_start: String(n.period_start),
+      period_end: String(n.period_end), workbook: wb,
+    });
   } else {
     const { journalFromNote } = await import("@/lib/brokerageNote");
     built = journalFromNote({

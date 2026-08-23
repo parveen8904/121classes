@@ -381,16 +381,31 @@ let acctList: { names: { name: string; type: string; currency: string }[]; at: n
 export async function listZohoAccounts(): Promise<{ name: string; type: string; currency: string }[]> {
   if (acctList && Date.now() - acctList.at < 10 * 60_000) return acctList.names;
   const names: { name: string; type: string; currency: string }[] = [];
-  // "AccountType.Active" SOUNDS like active accounts and is not: Zoho returns
-  // 376 accounts under it with NOT ONE expense head among them — no expense, no
-  // other_expense, no cost of goods sold. Every dropdown in this hub was
-  // therefore missing every expense ledger, which is why the team's own "Web
-  // Maintainence Expenses" could only ever be typed by hand.
-  for (let page = 1; page <= 5; page++) {
-    const r = await zohoFetch<{ chartofaccounts?: { account_name: string; account_type: string; currency_code?: string }[]; page_context?: { has_more_page?: boolean } }>(
+  // TWO ZOHO QUIRKS, BOTH OF WHICH QUIETLY LOSE ACCOUNTS.
+  //
+  // 1. "AccountType.Active" sounds like active accounts and is not: under it
+  //    Zoho returns not one expense head — no expense, no other_expense, no
+  //    cost of goods sold. AccountType.All returns them.
+  //
+  // 2. has_more_page LIES. Page 2 comes back with 175 rows and has_more_page
+  //    false, and page 3 then hands over another 131 — which happen to be every
+  //    expense account in the chart. So the flag is not trusted: pages are read
+  //    until one comes back EMPTY.
+  //
+  // Between them the hub had been running on 376 of 531 accounts, missing
+  // exactly the shelf an invoice needs, which is why the team's own "Web
+  // Maintainence Expenses" could never be picked from a list.
+  const seen = new Set<string>();
+  for (let page = 1; page <= 8; page++) {
+    const r = await zohoFetch<{ chartofaccounts?: { account_name: string; account_type: string; currency_code?: string }[] }>(
       "/chartofaccounts", { query: { filter_by: "AccountType.All", per_page: "200", page: String(page) } });
-    for (const a of r.chartofaccounts ?? []) names.push({ name: a.account_name, type: a.account_type, currency: a.currency_code || "INR" });
-    if (!r.page_context?.has_more_page) break;
+    const batch = r.chartofaccounts ?? [];
+    if (batch.length === 0) break;
+    for (const a of batch) {
+      if (seen.has(a.account_name)) continue;
+      seen.add(a.account_name);
+      names.push({ name: a.account_name, type: a.account_type, currency: a.currency_code || "INR" });
+    }
   }
   acctList = { names, at: Date.now() };
   return names;

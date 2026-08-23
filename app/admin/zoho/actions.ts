@@ -103,6 +103,29 @@ export async function approveAllSettlementsAction() {
   revalidatePath("/admin/zoho");
 }
 
+export async function approveSelectedSettlementsAction(formData: FormData) {
+  await assertArea("zoho");
+  const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
+  if (!ids.length) return;
+  const staff = await currentStaff();
+  const svc = createServiceClient();
+  const { postSettlement } = await import("@/lib/zohoSettlements");
+  for (const id of ids) {
+    await svc.from("zoho_settlements").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", id);
+    try { await postSettlement(id); } catch { /* the row carries its own reason; keep going */ }
+  }
+  revalidatePath("/admin/zoho");
+}
+
+export async function skipSelectedSettlementsAction(formData: FormData) {
+  await assertArea("zoho");
+  const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
+  if (!ids.length) return;
+  await createServiceClient().from("zoho_settlements")
+    .update({ status: "skipped", updated_at: new Date().toISOString() }).in("id", ids);
+  revalidatePath("/admin/zoho");
+}
+
 export async function skipSettlementAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));

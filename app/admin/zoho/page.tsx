@@ -7,9 +7,10 @@ import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
+import SettlementPicker from "./SettlementPicker";
 import { rule115Rate, ttBuyRate } from "@/lib/forexRates";
 import { fySnapshot, indiaAdvanceTax, usEstimatedTax, taxAssumptions } from "@/lib/taxEngine";
 import { backlogItems, searchDesk } from "@/lib/zohoDesk";
@@ -436,41 +437,19 @@ export default async function ZohoHubPage(props: {
             Approve against the Razorpay dashboard figures the first few times.
           </p>
 
-          {sDrafts.length === 0 && sFailed.length === 0 && (
+          {sDrafts.length === 0 && sFailed.length === 0 ? (
             <div className="card"><p className="muted" style={{ margin: 0 }}>No settlements waiting. 🔄 Fetch pulls the latest from Razorpay.</p></div>
+          ) : (
+            <SettlementPicker
+              rows={[...sFailed, ...sDrafts].map((r) => ({
+                id: r.id, settled_on: r.settled_on, net: Number(r.net_inr),
+                fees: Number(r.fees_inr) + Number(r.tax_inr), gross: Number(r.gross_inr),
+                utr: r.utr, settlement_id: r.settlement_id, status: r.status, error: r.error,
+              }))}
+              approveSelected={approveSelectedSettlementsAction}
+              skipSelected={skipSelectedSettlementsAction}
+            />
           )}
-
-          {[...sFailed, ...sDrafts].map((r) => (
-            <div className="card" key={r.id} style={{ marginTop: 8, borderLeft: `4px solid ${r.status === "failed" ? "#b91c1c" : "var(--accent)"}` }}>
-              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                <strong>{r.settled_on}</strong>
-                <span style={{ flex: 1, minWidth: 240, fontSize: ".88rem" }}>
-                  net <strong>{formatINR(Number(r.net_inr))}</strong> to Axis · fee+GST {formatINR(Number(r.fees_inr) + Number(r.tax_inr))} · gross {formatINR(Number(r.gross_inr))}
-                  <span className="muted"> · UTR {r.utr || "—"} · {r.settlement_id}</span>
-                </span>
-                {r.status === "draft" ? (
-                  <span style={{ display: "inline-flex", gap: 6 }}>
-                    <form action={approveSettlementAction} style={{ margin: 0 }}>
-                      <input type="hidden" name="id" value={r.id} />
-                      <SubmitButton className="btn small" savedLabel="✓ Posted">✅ Approve &amp; post</SubmitButton>
-                    </form>
-                    <form action={skipSettlementAction} style={{ margin: 0 }}>
-                      <input type="hidden" name="id" value={r.id} />
-                      <SubmitButton className="btn small secondary" savedLabel="✓">Skip</SubmitButton>
-                    </form>
-                  </span>
-                ) : (
-                  <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-                    <span style={{ fontSize: ".78rem", color: "#b91c1c" }}>{r.error}</span>
-                    <form action={retrySettlementAction} style={{ margin: 0 }}>
-                      <input type="hidden" name="id" value={r.id} />
-                      <SubmitButton className="btn small secondary" savedLabel="✓">↻ Retry</SubmitButton>
-                    </form>
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
 
           {(sPosted.length > 0 || sMatched.length > 0) && (
             <details style={{ marginTop: 10 }}>

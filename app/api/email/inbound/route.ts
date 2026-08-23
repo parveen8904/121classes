@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { verifyMailgunSignature } from "@/lib/mailgunSignature";
 import { getSecret } from "@/lib/secrets";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -19,28 +19,6 @@ export const maxDuration = 120;
 // goes to the faculty rather than being invented.
 //
 // Every message is recorded either way, so nothing is answered invisibly.
-
-/** Mailgun signs each post; an unsigned one is somebody else's. */
-async function signatureOk(form: FormData): Promise<boolean> {
-  // Mailgun signs webhooks with the account's HTTP webhook signing key, which is
-  // NOT the sending key we post mail with. Verifying against the sending key
-  // rejects every genuine message as a forgery, so the signing key comes first
-  // and the old name stays only as a fallback for setups that never split them.
-  const key = (await getSecret("MAILGUN_WEBHOOK_KEY")) || (await getSecret("MAILGUN_API_KEY"));
-  if (!key) return false;
-  const timestamp = String(form.get("timestamp") ?? "");
-  const token = String(form.get("token") ?? "");
-  const signature = String(form.get("signature") ?? "");
-  if (!timestamp || !token || !signature) return false;
-
-  // Refuse anything more than 5 minutes old — a captured post cannot be replayed.
-  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return false;
-
-  const expected = createHmac("sha256", key).update(timestamp + token).digest("hex");
-  const a = Buffer.from(expected);
-  const b = Buffer.from(signature);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 /** Strip the quoted history so the AI answers today's question, not the thread. */
 function newestPart(body: string): string {
@@ -175,7 +153,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true }); // never make Mailgun retry a malformed post
   }
 
-  if (!(await signatureOk(form))) {
+  if (!(await verifyMailgunSignature(form))) {
     return NextResponse.json({ error: "bad signature" }, { status: 401 });
   }
 
@@ -193,32 +171,6 @@ export async function POST(req: NextRequest) {
   const question = newestPart(bodyRaw);
 
   const svc = createServiceClient();
-
-  // PROVIDER INVOICES FILE THEMSELVES ON THE WAY PAST.
-  //
-  // Vercel, Supabase, Cloudflare, Anthropic, Mailgun and Razorpay's own fee
-  // invoice all arrive by email each month (only Bunny offers an API). If this
-  // message is from one of those billing senders and carries a PDF, it is
-  // stored in the accounting vault — indexed by institution and financial year,
-  // deduped on the message id. It then RETURNS: a bill is not a student, and
-  // must never reach the student path, an auto-reply or the faculty desk.
-  try {
-    const attCount = Number(form.get("attachment-count") ?? 0);
-    const { providerFor, fileInvoiceFromMail } = await import("@/lib/invoiceMail");
-    if (providerFor(from) && attCount > 0) {
-      const atts: File[] = [];
-      for (let i = 1; i <= attCount; i++) {
-        const a = form.get(`attachment-${i}`);
-        if (a && typeof a === "object" && "arrayBuffer" in a) atts.push(a as File);
-      }
-      const filed = await fileInvoiceFromMail({
-        from, subject,
-        messageId: String(form.get("Message-Id") ?? form.get("message-id") ?? ""),
-        attachments: atts,
-      });
-      if (filed > 0) return NextResponse.json({ ok: true, filed });
-    }
-  } catch { /* a billing hiccup must never break the mail bridge */ }
 
   // IS THIS EVEN A STUDENT?
   //

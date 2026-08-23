@@ -2825,3 +2825,21 @@ export async function parseBrokerageStatementText(text: string): Promise<Brokera
   const j = parseLooseJson(out);
   return Array.isArray(j) ? (j as BrokerageLine[]) : null;
 }
+
+// ---- Provider invoice PDF → its figures (accounting hub) --------------------
+// Transcription only: what the invoice says. The TREATMENT (account, GST, TDS)
+// is never guessed here — a human rules on it once per vendor.
+export type InvoiceFacts = { invoice_no?: string; date?: string; currency?: string; subtotal?: number; tax?: number; total?: number };
+export async function parseInvoiceText(text: string): Promise<InvoiceFacts | null> {
+  const out = await callClaude(
+    "You read one supplier invoice and return ONLY JSON: " +
+    '{"invoice_no":"string","date":"YYYY-MM-DD","currency":"ISO code like USD or INR","subtotal":number,"tax":number,"total":number}. ' +
+    "Use the invoice's own totals; omit a field you cannot find. Numbers plain, no symbols or commas.",
+    text.slice(0, 40_000),
+    600,
+    { model: await fastModel(), feature: "invoice" },
+  );
+  if (!out) return null;
+  const j = parseLooseJson(out);
+  return j && typeof j === "object" ? (j as InvoiceFacts) : null;
+}

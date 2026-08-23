@@ -159,6 +159,56 @@ export async function fetchProviderInvoicesAction() {
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#vault`);
 }
 
+// ---- Provider invoices → Zoho bills ----------------------------------------
+
+export async function scanBillsAction() {
+  await assertArea("zoho");
+  const { scanVaultForBills } = await import("@/lib/providerBills");
+  let note: string;
+  try { note = await scanVaultForBills(); }
+  catch (e) { note = `Bill scan failed: ${e instanceof Error ? e.message : "unknown"}`; }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);
+}
+
+export async function saveBillRuleAction(formData: FormData) {
+  // The TREATMENT is the founder's call — GST position and TDS are his to rule
+  // on, not the accounts desk's.
+  await assertArea(null);
+  const institution = str(formData.get("institution"));
+  const vendor_name = str(formData.get("vendor_name")) || institution;
+  const expense_account = str(formData.get("expense_account"));
+  const gst_treatment = str(formData.get("gst_treatment")) || "rcm";
+  const gst_rate = Number(formData.get("gst_rate")) || 18;
+  const tds_section = str(formData.get("tds_section")) || null;
+  const tds_rate = Number(formData.get("tds_rate")) || null;
+  if (!institution || !expense_account) return;
+  const { saveBillRule } = await import("@/lib/providerBills");
+  try { await saveBillRule({ institution, vendor_name, expense_account, gst_treatment, gst_rate, tds_section, tds_rate }); }
+  catch { /* the row stays waiting */ }
+  revalidatePath("/admin/zoho");
+}
+
+export async function approveSelectedBillsAction(formData: FormData) {
+  await assertArea("zoho");
+  const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
+  if (!ids.length) return;
+  const { postProviderBill } = await import("@/lib/providerBills");
+  for (const id of ids) {
+    try { await postProviderBill(id); } catch { /* the row keeps its reason */ }
+  }
+  revalidatePath("/admin/zoho");
+}
+
+export async function skipSelectedBillsAction(formData: FormData) {
+  await assertArea("zoho");
+  const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
+  if (!ids.length) return;
+  await createServiceClient().from("provider_bills")
+    .update({ status: "skipped", updated_at: new Date().toISOString() }).in("id", ids);
+  revalidatePath("/admin/zoho");
+}
+
 // ---- Bank statements & the three queues ------------------------------------
 
 export async function uploadStatementAction(formData: FormData) {

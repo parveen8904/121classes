@@ -7,7 +7,7 @@ import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, saveBillRuleAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -216,6 +216,24 @@ export default async function ZohoHubPage(props: {
   if (hubConnected && searching) {
     try { searchRows = await searchDesk({ q: sp.q, from: sp.from, to: sp.to, part: sp.part }); } catch { /* empty */ }
   }
+
+  // Provider invoices waiting to become Zoho BILLS.
+  type ProviderBillRow = { id: string; institution: string; bill_no: string | null; bill_date: string | null; currency: string; amount: number | null; inr_amount: number | null; rate: number | null; status: string; proposal: { vendor_name?: string; expense_account?: string; gst_treatment?: string; gst_rate?: number; tds_section?: string | null; tds_rate?: number | null } | null; error: string | null };
+  const { data: billData } = hubConnected
+    ? await createServiceClient().from("provider_bills")
+        .select("id, institution, bill_no, bill_date, currency, amount, inr_amount, rate, status, proposal, error")
+        .in("status", ["needs_info", "draft", "failed"]).order("bill_date")
+    : { data: [] as never[] };
+  const bills = (billData ?? []) as unknown as ProviderBillRow[];
+  const billsDraft = bills.filter((b) => b.status === "draft");
+  const billsAsk = bills.filter((b) => b.status === "needs_info");
+  const billsFailed = bills.filter((b) => b.status === "failed");
+  // One card per vendor still without a ruling.
+  const askVendors = [...new Set(billsAsk.map((b) => b.institution))];
+  const { count: billsPosted } = hubConnected
+    ? await createServiceClient().from("provider_bills").select("id", { count: "exact", head: true }).eq("status", "posted")
+    : { count: 0 };
+  const expenseChoices = zohoAccounts.filter((a) => a.type === "expense" || a.type === "other_expense" || a.type === "cost_of_goods_sold").map((a) => a.name);
 
   const { data: docsData } = await createServiceClient()
     .from("zoho_vault_docs")
@@ -937,6 +955,101 @@ export default async function ZohoHubPage(props: {
             </div>
           )}
         </>
+      )}
+
+      {/* ── Provider invoices → Zoho bills ──────────────────────────── */}
+      {hubConnected && (
+        <div id="bills">
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 26 }}>
+            <h2 className="admin-section-title" style={{ margin: 0 }}>🧾 Provider invoices → Zoho bills</h2>
+            <form action={scanBillsAction} style={{ margin: 0 }}>
+              <SubmitButton className="btn small secondary" savedLabel="Scanned">🔄 Read the vault for new bills</SubmitButton>
+            </form>
+            <span className="muted" style={{ fontSize: ".8rem" }}>✅ posted {billsPosted ?? 0}</span>
+          </div>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 10px" }}>
+            Filing the PDF is not the accounting. Each invoice becomes a <strong>vendor bill</strong> — expense
+            account, GST position and TDS. Those are your calls, so the desk asks <strong>once per vendor</strong>,
+            remembers the answer, and every later invoice from them arrives already proposed. Foreign services post
+            under <strong>reverse charge</strong>; the figures convert at their Rule-115 rate.
+          </p>
+
+          {askVendors.length > 0 && (
+            <>
+              <strong style={{ display: "block" }}>❓ First invoice from these — how should they be treated? ({askVendors.length})</strong>
+              {askVendors.map((inst) => {
+                const mine = billsAsk.filter((b) => b.institution === inst);
+                const foreign = mine.some((b) => (b.currency || "USD") !== "INR");
+                return (
+                  <form action={saveBillRuleAction} className="card" key={inst} style={{ marginTop: 8 }}>
+                    <input type="hidden" name="institution" value={inst} />
+                    <strong>{inst}</strong>
+                    <span className="muted" style={{ fontSize: ".8rem" }}> · {mine.length} invoice(s) waiting · {mine.map((m) => `${m.currency} ${m.amount ?? "?"}`).join(", ")}</span>
+                    <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", marginTop: 8 }}>
+                      <div>
+                        <label style={{ fontSize: ".75rem" }}>Vendor name in Zoho</label>
+                        <input name="vendor_name" defaultValue={inst} style={{ marginBottom: 0 }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: ".75rem" }}>Expense account</label>
+                        <input name="expense_account" list="acct-names" required placeholder="start typing…" style={{ marginBottom: 0 }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: ".75rem" }}>GST</label>
+                        <select name="gst_treatment" defaultValue={foreign ? "rcm" : "domestic_itc"} style={{ marginBottom: 0 }}>
+                          <option value="rcm">Reverse charge — import of services</option>
+                          <option value="domestic_itc">Indian vendor charged GST — claim ITC</option>
+                          <option value="none">No GST</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: ".75rem" }}>GST rate %</label>
+                        <input name="gst_rate" type="number" step="0.01" defaultValue={18} style={{ marginBottom: 0 }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: ".75rem" }}>TDS section (blank = none)</label>
+                        <input name="tds_section" placeholder="e.g. 194J / 195" style={{ marginBottom: 0 }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: ".75rem" }}>TDS rate %</label>
+                        <input name="tds_rate" type="number" step="0.01" placeholder="—" style={{ marginBottom: 0 }} />
+                      </div>
+                    </div>
+                    <SubmitButton className="btn small" savedLabel="✓ Remembered" style={{ marginTop: 8 }}>💾 Save treatment for {inst}</SubmitButton>
+                  </form>
+                );
+              })}
+            </>
+          )}
+
+          {billsDraft.length > 0 && (
+            <>
+              <strong style={{ display: "block", marginTop: 14 }}>⚡ Ready to post ({billsDraft.length})</strong>
+              <QueuePicker
+                rows={billsDraft.map((b) => ({
+                  id: b.id, date: b.bill_date ?? "",
+                  label: `${b.institution}${b.bill_no ? ` · ${b.bill_no}` : ""} · ${b.currency} ${b.amount ?? "?"}`,
+                  sub: `${b.rate ? `@ ₹${Number(b.rate).toFixed(2)} ` : ""}→ ${b.proposal?.expense_account ?? "?"} · GST ${b.proposal?.gst_treatment ?? "?"}${b.proposal?.tds_section ? ` · TDS ${b.proposal.tds_section}` : ""}`,
+                  amount: b.inr_amount !== null ? Number(b.inr_amount) : 0,
+                  status: b.status, error: b.error,
+                }))}
+                approveSelected={approveSelectedBillsAction}
+                skipSelected={skipSelectedBillsAction}
+                approveLabel="✅ Post selected as bills"
+              />
+            </>
+          )}
+
+          {billsFailed.length > 0 && billsFailed.map((b) => (
+            <div className="card" key={b.id} style={{ marginTop: 6, padding: "10px 14px", borderLeft: "4px solid #b91c1c" }}>
+              <span style={{ fontSize: ".84rem" }}>❌ {b.institution} {b.bill_no ?? ""} — <span style={{ color: "#b91c1c" }}>{b.error}</span></span>
+            </div>
+          ))}
+
+          {bills.length === 0 && (
+            <div className="card"><p className="muted" style={{ margin: 0 }}>No invoices waiting. 🔄 reads the vault for anything not yet booked.</p></div>
+          )}
+        </div>
       )}
 
       {/* ── The document vault — the whole zoho area (founder + Pradeep) ── */}

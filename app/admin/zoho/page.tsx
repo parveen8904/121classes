@@ -1144,13 +1144,20 @@ export default async function ZohoHubPage(props: {
 
             return (
               <details className="card" key={b.id} style={{ marginTop: 6, padding: "10px 14px", borderLeft: `4px solid ${needAnswers || !inr ? "#b45309" : "#0e6e52"}` }}>
-                <summary style={{ cursor: "pointer", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline", listStyle: "revert" }}>
-                  <span style={{ minWidth: 92, fontSize: ".85rem" }}>{b.bill_date ?? "no date"}</span>
-                  <strong style={{ minWidth: 96 }}>{b.institution}</strong>
-                  <span className="muted" style={{ fontSize: ".82rem", minWidth: 130 }}>{b.bill_no ?? "no number"}</span>
-                  <span style={{ fontWeight: 600, minWidth: 96 }}>{inr ? `₹${inr.toLocaleString("en-IN")}` : "—"}</span>
-                  <span className="muted" style={{ fontSize: ".82rem" }}>{headline}</span>
-                  {waitingOnHim && <span style={{ fontSize: ".75rem", color: "#b45309" }}>· sent to you by the desk</span>}
+                {/* THE SUMMARY KEEPS ITS DEFAULT DISPLAY.
+                    Setting display:flex on a <summary> strips WebKit of the
+                    disclosure behaviour: on his Mac and his phone the line
+                    opened and then would not close again. The layout goes on a
+                    div inside it, where it costs nothing. */}
+                <summary style={{ cursor: "pointer" }}>
+                  <span style={{ display: "inline-flex", gap: 10, flexWrap: "wrap", alignItems: "baseline", width: "calc(100% - 1.4rem)" }}>
+                    <span style={{ minWidth: 92, fontSize: ".85rem" }}>{b.bill_date ?? "no date"}</span>
+                    <strong style={{ minWidth: 96 }}>{b.institution}</strong>
+                    <span className="muted" style={{ fontSize: ".82rem", minWidth: 130 }}>{b.bill_no ?? "no number"}</span>
+                    <span style={{ fontWeight: 600, minWidth: 96 }}>{inr ? `₹${inr.toLocaleString("en-IN")}` : "—"}</span>
+                    <span className="muted" style={{ fontSize: ".82rem" }}>{headline}</span>
+                    {waitingOnHim && <span style={{ fontSize: ".75rem", color: "#b45309" }}>· sent to you by the desk</span>}
+                  </span>
                 </summary>
 
                 <div style={{ marginTop: 12 }}>

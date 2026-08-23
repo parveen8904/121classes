@@ -144,18 +144,48 @@ export async function saveBillRule(rule: BillRule): Promise<number> {
   return (waiting ?? []).length;
 }
 
-async function findOrCreateVendor(name: string, overseas: boolean): Promise<string> {
-  const r = await zohoFetch<{ contacts?: { contact_id: string; contact_name: string }[] }>(
+async function currencyIdFor(code: string): Promise<string | null> {
+  try {
+    const r = await zohoFetch<{ currencies?: { currency_id: string; currency_code: string }[] }>("/settings/currencies");
+    return (r.currencies ?? []).find((c) => c.currency_code === code)?.currency_id ?? null;
+  } catch { return null; }
+}
+
+/**
+ * The vendor, in the CURRENCY THEY BILL IN.
+ *
+ * This is not cosmetic. A foreign vendor left on the base currency makes Zoho
+ * read a USD 20 bill as ₹20 — the line rate is the supplier's own figure and
+ * the exchange rate is only honoured when the bill is actually in their
+ * currency. So an overseas vendor is created in that currency, and an existing
+ * one still sitting on INR is corrected (safe while they have no transactions).
+ */
+async function findOrCreateVendor(name: string, overseas: boolean, currency: string): Promise<string> {
+  const r = await zohoFetch<{ contacts?: { contact_id: string; contact_name: string; currency_code?: string }[] }>(
     "/contacts", { query: { contact_name: name, contact_type: "vendor" } });
   const hit = (r.contacts ?? []).find((c) => c.contact_name.trim().toLowerCase() === name.trim().toLowerCase());
-  if (hit) return hit.contact_id;
+  const wantCurrency = overseas && currency !== "INR" ? currency : null;
+
+  if (hit) {
+    if (wantCurrency && hit.currency_code && hit.currency_code !== wantCurrency) {
+      const cid = await currencyIdFor(wantCurrency);
+      if (cid) {
+        try { await zohoFetch(`/contacts/${hit.contact_id}`, { method: "PUT", body: { currency_id: cid, gst_treatment: "overseas" } }); }
+        catch { /* an established vendor cannot change currency — the bill will say so */ }
+      }
+    }
+    return hit.contact_id;
+  }
+
+  const cid = wantCurrency ? await currencyIdFor(wantCurrency) : null;
   const made = await zohoFetch<{ contact?: { contact_id: string } }>("/contacts", {
     method: "POST",
     body: {
       contact_name: name, contact_type: "vendor",
-      // An overseas supplier must be marked as such or Zoho cannot apply the
-      // reverse charge correctly on the bill.
+      // An overseas supplier must be marked as such or Zoho refuses the reverse
+      // charge outright ("should be applied on import of services…").
       ...(overseas ? { gst_treatment: "overseas" } : {}),
+      ...(cid ? { currency_id: cid } : {}),
     },
   });
   if (!made.contact?.contact_id) throw new Error("could not create the vendor");
@@ -196,7 +226,7 @@ export async function postProviderBill(id: string): Promise<void> {
       rate = r.rate;
     }
 
-    const vendorId = await findOrCreateVendor(String(p.vendor_name), overseas);
+    const vendorId = await findOrCreateVendor(String(p.vendor_name), overseas, currency);
     const accountId = await zohoAccountId(String(p.expense_account));
 
     // GST: reverse charge for an import of services; the charged tax for a
@@ -213,7 +243,9 @@ export async function postProviderBill(id: string): Promise<void> {
       bill_number: str(b.bill_no) || `${b.institution}-${String(b.id).slice(0, 8)}`,
       date: b.bill_date,
       ...(currency !== "INR" ? { exchange_rate: rate } : {}),
-      ...(overseas ? { is_reverse_charge_applied: true } : {}),
+      // An import of services is supplied INTO his own state; without the
+      // destination Zoho cannot place the reverse charge and rejects the bill.
+      ...(overseas ? { is_reverse_charge_applied: true, destination_of_supply: "DL" } : {}),
       line_items: [{
         name: `${b.institution} services`,
         account_id: accountId,

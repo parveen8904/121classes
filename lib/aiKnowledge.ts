@@ -111,11 +111,14 @@ export async function knowledgeFor(question: string): Promise<string> {
     `Answer from it, in detail, and quote its specifics — the stage names, the timings, the standard ` +
     `numbers, the mark allocations — exactly as written. Do not water it down into general advice, ` +
     `and never contradict it from your own knowledge.\n` +
-    `Speak it as his guidance, in your own voice, and STOP when the answer is finished. ` +
-    `Do NOT name a document, a booklet, a guide or a strategy note; do NOT say it is "above", ` +
-    `"attached", "on the portal" or anywhere else; do NOT close with a line pointing the student ` +
-    `at where this is written. There is no such document for them to open, and sending them to ` +
-    `look for one is worse than not answering.\n\n` +
+    `Speak it as his guidance, in your own voice, and STOP when the answer is finished.\n` +
+    `THE "Covered in Class N" CLOSING LINE DOES NOT APPLY TO THIS ANSWER. That rule exists for ` +
+    `topics carried by a numbered class in the study material. This guidance carries no class ` +
+    `label, so there is nothing to name — and naming it anyway means inventing a title. Do NOT ` +
+    `end with "Covered in ...", do NOT name a document, a booklet, a guide or a strategy note, ` +
+    `and do NOT say it is "above", "attached" or "on the portal". There is no such document for ` +
+    `the student to open, and sending them looking for one is worse than not answering. End on ` +
+    `the last thing you have to tell them.\n\n` +
     `${best.row.body}\n\n` +
     `— end of the faculty's guidance —\n\n`
   );

@@ -334,6 +334,7 @@ export async function postBankLine(lineId: string, accountChoice: string): Promi
   try {
     const bankId = await zohoAccountId(String(l.account_name));
     const debit = Number(l.debit) || 0, credit = Number(l.credit) || 0;
+    const { lineNarration } = await import("@/lib/zohoNarration");
 
     // A LINE THAT SETTLES SOMETHING IS NOT AN EXPENSE.
     //
@@ -350,7 +351,18 @@ export async function postBankLine(lineId: string, accountChoice: string): Promi
         date: String(l.line_date),
         bankAccountId: bankId,
         reference: String(l.ref ?? "").slice(0, 90),
-        narration: String(l.narration ?? "").slice(0, 500),
+        // A receipt or a payment says what it settles, not merely that money
+        // moved: the head it clears and the document count, then the bank's own
+        // words kept as the source.
+        narration: lineNarration({
+          who: String(l.account_name),
+          what: String(l.match_kind) === "bill"
+            ? `payment against ${(l.match_ids as string[]).length} supplier bill(s)`
+            : `receipt against ${(l.match_ids as string[]).length} invoice(s)`,
+          docNo: String(l.ref ?? "") || null, docLabel: "bank ref",
+          docDate: String(l.line_date),
+          extra: `bank statement: ${String(l.narration ?? "").slice(0, 220)}`,
+        }),
       });
       const paper = await attachStatement(svc, l, String(l.match_kind) === "bill" ? "vendorpayment" : "customerpayment", zid);
       await svc.from("bank_lines").update({
@@ -360,6 +372,22 @@ export async function postBankLine(lineId: string, accountChoice: string): Promi
     }
 
     const otherId = await zohoAccountId(accountChoice);
+
+    // A BANK'S OWN WORDING IS NOT A NARRATION.
+    //
+    // "NEFT-AXISP0012345-VERCEL INC" tells a reader which wire it was and
+    // nothing about what it was for. What the desk decided — the head it went
+    // to, and the account it moved through — is the part the ledger needs, so it
+    // goes first and the bank's string is kept after it as the source, never
+    // instead of it.
+    const bankNarration = lineNarration({
+      who: accountChoice,
+      what: debit > 0 ? "paid from the bank" : "received into the bank",
+      docNo: String(l.ref ?? "") || null, docLabel: "bank ref",
+      docDate: String(l.line_date),
+      extra: `bank statement: ${String(l.narration ?? "").slice(0, 220)}`,
+    });
+
     let zohoId = "";
     if (debit > 0) {
       const r = await zohoFetch<{ expense?: { expense_id: string } }>("/expenses", {
@@ -369,7 +397,7 @@ export async function postBankLine(lineId: string, accountChoice: string): Promi
           paid_through_account_id: bankId,
           date: l.line_date,
           amount: debit,
-          description: String(l.narration).slice(0, 500),
+          description: bankNarration,
           ...(l.ref ? { reference_number: String(l.ref).slice(0, 90) } : {}),
         },
       });
@@ -381,10 +409,10 @@ export async function postBankLine(lineId: string, accountChoice: string): Promi
         body: {
           journal_date: l.line_date,
           reference_number: String(l.ref || "").slice(0, 90) || undefined,
-          notes: String(l.narration).slice(0, 500),
+          notes: bankNarration,
           line_items: [
-            { account_id: bankId, debit_or_credit: "debit", amount: credit },
-            { account_id: otherId, debit_or_credit: "credit", amount: credit },
+            { account_id: bankId, debit_or_credit: "debit", amount: credit, description: bankNarration },
+            { account_id: otherId, debit_or_credit: "credit", amount: credit, description: bankNarration },
           ],
         },
       });

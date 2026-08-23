@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { zohoFetch } from "@/lib/zohoApi";
+import { lineNarration } from "@/lib/zohoNarration";
 import { zohoAccountId, listZohoAccounts } from "@/lib/bankStatements";
 import { rule115Rate } from "@/lib/forexRates";
 import { resolveFileUrl, isSecureRef } from "@/lib/storage";
@@ -605,6 +606,7 @@ export async function postProviderBill(id: string): Promise<void> {
       vendor_id: vendorId,
       bill_number: str(b.bill_no) || `${b.institution}-${String(b.id).slice(0, 8)}`,
       date: b.bill_date,
+      ...(str(b.bill_no) ? { reference_number: str(b.bill_no) } : {}),
       ...(currency !== "INR" ? { exchange_rate: rate } : {}),
       // Zoho decides the whole GST shape of a bill from these three, and will
       // refuse the reverse charge outright unless the transaction says it is an
@@ -613,7 +615,25 @@ export async function postProviderBill(id: string): Promise<void> {
         ? { gst_treatment: "overseas", is_reverse_charge_applied: true, destination_of_supply: HOME_STATE }
         : { gst_treatment: "business_gst" }),
       line_items: [{
-        name: `${b.institution} services`,
+        name: `${b.institution} — ${String(p.expense_account ?? "services")}`.slice(0, 100),
+        // THE LEDGER SEES THIS, AND ONLY THIS.
+        //
+        // Notes below are full, but Zoho never prints them in Account
+        // Transactions. Whoever reads the expense head — the auditor, the
+        // department, or him in two years — gets the line description and
+        // nothing else, so the whole entry goes in it: the vendor, the head,
+        // their invoice and its date, the foreign figure with the rate, its
+        // source and Rule 115, the GST treatment and the withholding.
+        description: lineNarration({
+          who: String(p.vendor_name ?? b.institution),
+          what: String(p.expense_account ?? ""),
+          subAccount: b.sub_account ?? null,
+          docNo: str(b.bill_no), docDate: b.bill_date,
+          currency, amount: total, rate, rateDate: b.rate_date,
+          rateSource: currency !== "INR" && rate ? "SBI TT buy" : null,
+          gst: p.gst_treatment, gstRate: Number(p.gst_rate ?? 18),
+          tds: { section: p.tds_section ?? null, rate: Number(p.tds_rate ?? 0), amount: work.tds, mode: tdsMode },
+        }),
         account_id: accountId,
         rate: lineRate,
         quantity: 1,

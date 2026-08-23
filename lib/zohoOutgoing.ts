@@ -1,6 +1,7 @@
 import { zohoFetch } from "@/lib/zohoApi";
 import { createServiceClient } from "@/lib/supabase/service";
 import { zohoAccountType } from "@/lib/postingShape";
+import { lineNarration } from "@/lib/zohoNarration";
 
 // WHAT WE RAISE — INVOICES, CREDIT NOTES AND JOURNAL ENTRIES.
 //
@@ -129,7 +130,23 @@ export async function postOutgoing(id: string): Promise<void> {
 
     const line = {
       name: (s(d.description) || s(d.ledger)).slice(0, 100),
-      description: s(d.sub_account) || undefined,
+      // The ledger reads this and nothing else — see lib/zohoNarration.ts. On a
+      // sale the TDS belongs to the customer, so it is named as theirs: money we
+      // are owed and must watch into 26AS, never a cost of ours.
+      description: lineNarration({
+        who: party,
+        what: s(d.ledger),
+        subAccount: s(d.sub_account) || null,
+        docNo: s(d.doc_no) || null, docDate: String(d.doc_date ?? ""),
+        docLabel: d.kind === "credit_note" ? "our credit note" : "our invoice",
+        currency: s(d.currency) || "INR", amount: n(d.amount), rate: n(d.rate) || null,
+        gst: d.gst_treatment === "charged" ? "charged" : s(d.gst_treatment),
+        gstRate: n(d.gst_rate) || 18,
+        side: "sale",
+        gstSplit: d.gst_treatment === "charged" ? (intra ? "CGST+SGST" : "IGST") : null,
+        tds: { section: null, rate: n(d.tds_rate), whose: "theirs" },
+        extra: s(d.reference) ? `ref ${s(d.reference)}` : null,
+      }),
       rate: n(d.amount),
       quantity: 1,
       account_id: accountId,
@@ -211,11 +228,23 @@ export async function postJournal(d: Doc, id: string, svc: ReturnType<typeof cre
   try {
     const line_items = [];
     for (const l of lines) {
+      // A JOURNAL LINE WITH A BARE NOTE IS THE WORST ENTRY IN THE BOOKS.
+      //
+      // There is no vendor, no invoice and no document number to fall back on —
+      // the description is the only record of why the entry exists. So each side
+      // carries the party, the date and what the journal is for, and the line's
+      // own note after it.
       line_items.push({
         account_id: await ledgerId(l.account, l.nature ?? "expense", l.operating ?? "operating"),
         debit_or_credit: l.side,
         amount: Number(l.amount),
-        description: (l.note ?? "").slice(0, 200),
+        description: lineNarration({
+          who: s(d.party_name) || null,
+          what: l.account,
+          docDate: String(d.doc_date ?? ""),
+          docNo: s(d.reference) || null, docLabel: "ref",
+          extra: [s(d.description), s(l.note)].filter(Boolean).join(" — ") || null,
+        }),
       });
     }
     const r = await zohoFetch<{ journal?: { journal_id: string; entry_number?: string } }>("/journals", {

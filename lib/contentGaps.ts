@@ -30,7 +30,7 @@ export async function buildContentGapReport(): Promise<{ subjects: SubjectGaps[]
 
   const [{ data: secRows }, { data: repoRows }, { data: subjMats }, { data: mcqQ }, { data: subjQ }] = await Promise.all([
     topicIds.length
-      ? svc.from("sections_meta").select("id, topic_id, type, class_no, notes_hand_url, has_transcript, paper_question_pdf, paper_solution_pdf").in("topic_id", topicIds).eq("is_published", true)
+      ? svc.from("sections_meta").select("id, topic_id, type, class_no, notes_hand_url, notes_typed_url, pdf_url, has_transcript, paper_question_pdf, paper_solution_pdf").in("topic_id", topicIds).eq("is_published", true)
       : { data: [] as never[] },
     topicIds.length
       ? svc.from("repository_items").select("topic_id, kind").in("topic_id", topicIds).eq("is_active", true)
@@ -42,7 +42,18 @@ export async function buildContentGapReport(): Promise<{ subjects: SubjectGaps[]
     svc.from("subjective_questions").select("section_id"),
   ]);
 
-  type Sec = { id: string; topic_id: string; type: string; class_no: string | null; notes_hand_url: string | null; has_transcript: boolean; paper_question_pdf: string | null; paper_solution_pdf: string | null };
+  // AN ANSWER KEY IS AN ANSWER KEY, WHEREVER IT IS KEPT.
+  //
+  // This report was telling him every day that sixty topics had no "descriptive
+  // solution PDF (for AI grading)" while the AI was grading those very papers
+  // perfectly well — because an APPROVED key lives in item_solutions (the
+  // answer-keys desk drafts it and he approves it) and only twelve papers ever
+  // carried a solution PDF on the section itself. Both count.
+  const { data: keyRows } = await svc
+    .from("item_solutions").select("section_id").eq("status", "approved").not("section_id", "is", null);
+  const approvedKeys = new Set((keyRows ?? []).map((k) => String(k.section_id)));
+
+  type Sec = { id: string; topic_id: string; type: string; class_no: string | null; notes_hand_url: string | null; notes_typed_url: string | null; pdf_url: string | null; has_transcript: boolean; paper_question_pdf: string | null; paper_solution_pdf: string | null };
   const secByTopic = new Map<string, Sec[]>();
   for (const r of (secRows ?? []) as Sec[]) {
     const arr = secByTopic.get(r.topic_id) ?? [];
@@ -73,7 +84,9 @@ export async function buildContentGapReport(): Promise<{ subjects: SubjectGaps[]
     const mats = matsBySubject.get(s.id as string) ?? new Set<string>();
     if (!mats.has("rtp")) sg.push("RTP (subject level)");
     if (!mats.has("mtp")) sg.push("MTP (subject level)");
-    if (!mats.has("past_papers")) sg.push("past exam papers (subject level)");
+    // Past papers are filed as ICAI "suggested answers" (the paper together with
+    // its answers) — that is the same document, so it satisfies this.
+    if (!mats.has("past_papers") && !mats.has("suggested_answers")) sg.push("past exam papers (subject level)");
 
     const topicGaps: { topic: string; missing: string[] }[] = [];
     for (const t of (topics ?? []).filter((t) => t.subject_id === s.id && !t.is_combined)) {
@@ -81,6 +94,7 @@ export async function buildContentGapReport(): Promise<{ subjects: SubjectGaps[]
       const classSecs = secs.filter((x) => x.type === "full_class_video");
       const classes = classSecs.filter((x) => !/[A-Za-z]/.test(String(x.class_no ?? ""))).length;
       const missing: string[] = [];
+      const repo = repoByTopic.get(t.id as string) ?? new Set<string>();
       if (!classSecs.length) missing.push("classes");
       else {
         const noNotes = classSecs.filter((x) => !has(x.notes_hand_url)).length;
@@ -88,9 +102,14 @@ export async function buildContentGapReport(): Promise<{ subjects: SubjectGaps[]
         if (noNotes) missing.push(`handwritten notes for ${noNotes} of ${classes} classes`);
         if (noTranscript) missing.push(`transcripts for ${noTranscript} classes`);
       }
-      const repo = repoByTopic.get(t.id as string) ?? new Set<string>();
       if (!secs.some((x) => x.type === "revision_video") && !has(t.revision_video_url)) missing.push("revision video");
-      if (!has(t.revision_notes_hand_url) && !has(t.revision_notes_typed_url)) missing.push("revision notes");
+      // REVISION NOTES: the topic columns are one place they can sit, but in
+      // practice they are attached to the revision video itself (its PDF) or
+      // uploaded as topic material. Reading only the columns reported every
+      // topic as missing notes that are on screen for students.
+      const revNotesOnSection = secs.some((x) => x.type === "revision_video" && (has(x.pdf_url) || has(x.notes_hand_url) || has(x.notes_typed_url)));
+      const revNotesInRepo = repo.has("notes") || repo.has("revision_notes");
+      if (!has(t.revision_notes_hand_url) && !has(t.revision_notes_typed_url) && !revNotesOnSection && !revNotesInRepo) missing.push("revision notes");
       if (!has(t.book_pdf_url) && !repo.has("book")) missing.push("book PDF");
       if (!has(t.important_qs_rev1)) missing.push("important questions (rev 1)");
       const mcqSecs = secs.filter((x) => x.type === "mcq_test");
@@ -100,7 +119,7 @@ export async function buildContentGapReport(): Promise<{ subjects: SubjectGaps[]
       if (!descSecs.length) missing.push("descriptive test");
       else {
         if (descSecs.some((x) => !has(x.paper_question_pdf) && !(subjCounts.get(x.id) ?? 0))) missing.push("descriptive question paper");
-        if (descSecs.some((x) => has(x.paper_question_pdf) && !has(x.paper_solution_pdf))) missing.push("descriptive solution PDF (for AI grading)");
+        if (descSecs.some((x) => has(x.paper_question_pdf) && !has(x.paper_solution_pdf) && !approvedKeys.has(x.id))) missing.push("descriptive solution PDF (for AI grading)");
       }
       if (missing.length) topicGaps.push({ topic: t.title as string, missing });
       totalGaps += missing.length;

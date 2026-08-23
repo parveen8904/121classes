@@ -644,12 +644,21 @@ export async function postProviderBill(id: string): Promise<void> {
     // the posting.
     const moved = await advanceBill(r.bill.bill_id);
 
+    // The supplier's own invoice, onto the bill it produced.
+    let paper = "";
+    if (b.vault_doc_id) {
+      const { data: doc } = await svc.from("zoho_vault_docs").select("file_url, title").eq("id", b.vault_doc_id).maybeSingle();
+      const { attachToZoho } = await import("@/lib/zohoAttach");
+      const att = await attachToZoho("bill", r.bill.bill_id, doc?.file_url, `${b.institution}-${str(b.bill_no) || "invoice"}.pdf`);
+      if (!att.ok) paper = ` — posted, but the invoice PDF is not attached (${att.note})`;
+    }
+
     await svc.from("provider_bills").update({
       status: "posted", zoho_bill_id: r.bill.bill_id, zoho_vendor_id: vendorId,
       rate, inr_amount: rate ? Number((total * rate).toFixed(2)) : total,
       booked_amount: work.bookedAmount, tds_amount: work.tds, vendor_gets: work.vendorGets,
       zoho_echo: { ...echoOf(r.bill), zoho_status: moved.state },
-      error: tdsNote || (moved.state === "open" ? null : `not in the ledgers yet — ${moved.why}`),
+      error: (tdsNote || (moved.state === "open" ? "" : `not in the ledgers yet — ${moved.why}`)) + paper || null,
       updated_at: new Date().toISOString(),
     }).eq("id", id);
     // The vault copy is now worked, not raw.

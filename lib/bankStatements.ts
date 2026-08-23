@@ -299,6 +299,27 @@ export async function zohoAccountId(name: string): Promise<string> {
 /** Post an approved line. Debits become Expenses (the office's style: narration
  *  verbatim, paid through the bank account); credits become journals
  *  (Dr bank / Cr the chosen account). */
+/**
+ * The statement page behind a line, attached to whatever the line became.
+ *
+ * A bank entry with no paper is the hardest kind to check months later: the
+ * narration is a bank's abbreviation and nothing says where it came from. The
+ * statement itself answers that.
+ */
+async function attachStatement(
+  svc: ReturnType<typeof createServiceClient>, line: Record<string, unknown>,
+  kind: "expense" | "journal" | "vendorpayment" | "customerpayment", zohoId: string,
+): Promise<string | null> {
+  if (!line.statement_id) return null;
+  const { data: st } = await svc.from("bank_statements")
+    .select("file_url, file_name, account_name, period_start, period_end").eq("id", line.statement_id).maybeSingle();
+  if (!st?.file_url) return null;
+  const { attachToZoho } = await import("@/lib/zohoAttach");
+  const name = String(st.file_name || `${st.account_name} ${st.period_start} to ${st.period_end}.pdf`);
+  const att = await attachToZoho(kind, zohoId, String(st.file_url), name);
+  return att.ok ? null : `posted, but the statement is not attached (${att.note})`;
+}
+
 export async function postBankLine(lineId: string, accountChoice: string): Promise<void> {
   const svc = createServiceClient();
   const { data: l } = await svc.from("bank_lines").select("*").eq("id", lineId).maybeSingle();
@@ -331,8 +352,9 @@ export async function postBankLine(lineId: string, accountChoice: string): Promi
         reference: String(l.ref ?? "").slice(0, 90),
         narration: String(l.narration ?? "").slice(0, 500),
       });
+      const paper = await attachStatement(svc, l, String(l.match_kind) === "bill" ? "vendorpayment" : "customerpayment", zid);
       await svc.from("bank_lines").update({
-        status: "posted", zoho_id: zid, error: null, updated_at: new Date().toISOString(),
+        status: "posted", zoho_id: zid, error: paper, updated_at: new Date().toISOString(),
       }).eq("id", lineId);
       return;
     }
@@ -369,8 +391,9 @@ export async function postBankLine(lineId: string, accountChoice: string): Promi
       if (!r.journal?.journal_id) return fail("Zoho did not return the created journal");
       zohoId = r.journal.journal_id;
     }
+    const paper = await attachStatement(svc, l, debit > 0 ? "expense" : "journal", zohoId);
     await svc.from("bank_lines").update({
-      status: "posted", zoho_id: zohoId, error: null,
+      status: "posted", zoho_id: zohoId, error: paper,
       proposal: { ...(l.proposal as Record<string, unknown> ?? {}), account: accountChoice },
       updated_at: new Date().toISOString(),
     }).eq("id", lineId);

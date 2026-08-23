@@ -371,6 +371,101 @@ export async function retryDocumentAction(formData: FormData) {
   revalidatePath("/admin/zoho");
 }
 
+export async function buildBrokerageNoteAction(formData: FormData) {
+  // THE WORKING NOTE COMES FIRST. Nothing is journalled from a CSV directly.
+  await assertArea("zoho");
+  const account = str(formData.get("account_name"));
+  const from = str(formData.get("from")) || `${new Date().getUTCFullYear()}-04-01`;
+  const to = str(formData.get("to")) || new Date().toISOString().slice(0, 10);
+  if (!account) return;
+  const { saveNote } = await import("@/lib/brokerageNote");
+  let note: string;
+  try {
+    const made = await saveNote(account, from, to);
+    note = made ? `Working note prepared for ${account}, ${from} to ${to}.` : `Nothing found for ${account} between those dates.`;
+  } catch (e) { note = `Could not prepare the note — ${e instanceof Error ? e.message : "unknown"}`; }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#brokerage`);
+}
+
+export async function setSellCostAction(formData: FormData) {
+  // What the shares sold originally cost. Without it a sale has proceeds and no
+  // gain, and the note says so rather than assuming zero.
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  const costInr = Number(formData.get("cost_inr")) || 0;
+  const noteId = str(formData.get("note_id"));
+  if (!id || costInr <= 0) return;
+  const svc = createServiceClient();
+  await svc.from("brokerage_lines").update({ cost_inr: costInr, updated_at: new Date().toISOString() }).eq("id", id);
+
+  // Rebuild the note so the gain moves with it.
+  const { data: n } = await svc.from("brokerage_notes").select("account_name, period_start, period_end").eq("id", noteId).maybeSingle();
+  if (n) {
+    const { saveNote } = await import("@/lib/brokerageNote");
+    try { await saveNote(String(n.account_name), String(n.period_start), String(n.period_end)); } catch { /* the figure is saved either way */ }
+  }
+  revalidatePath("/admin/zoho");
+}
+
+export async function approveBrokerageNoteAction(formData: FormData) {
+  // The journal follows the note he approved — not the CSV.
+  await assertArea("zoho");
+  const me = await currentStaff();
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  const { data: n } = await svc.from("brokerage_notes").select("*").eq("id", id).maybeSingle();
+  if (!n || n.status === "posted") return;
+
+  const { journalFromNote } = await import("@/lib/brokerageNote");
+  const built = journalFromNote({
+    account: String(n.account_name), from: String(n.period_start), to: String(n.period_end),
+    buckets: n.buckets as never, gainInr: Number(n.gain_inr ?? 0), lossInr: Number(n.loss_inr ?? 0), unpricedSells: 0,
+  }, String(n.account_name));
+
+  if (built.lines.length < 2) {
+    redirect("/admin/zoho?scan=" + encodeURIComponent("There is nothing in that note to journal.") + "#brokerage");
+  }
+
+  const { data: doc } = await svc.from("zoho_documents").insert({
+    kind: "journal", doc_date: n.period_end,
+    description: built.narration,
+    reference: `${n.account_name} ${n.period_start}..${n.period_end}`,
+    amount: built.lines.filter((l) => l.side === "debit").reduce((t, l) => t + l.amount, 0),
+    inr_amount: built.lines.filter((l) => l.side === "debit").reduce((t, l) => t + l.amount, 0),
+    nature: "income", operating: "non_operating",
+    journal_lines: built.lines, created_by: me?.id ?? null,
+  }).select("id").single();
+  if (!doc?.id) return;
+
+  await svc.from("brokerage_notes").update({
+    status: "approved", approved_by: me?.id ?? null, approved_at: new Date().toISOString(),
+  }).eq("id", id);
+
+  if (me?.role === "admin") {
+    const { withFounderApproval } = await import("@/lib/zohoGuard");
+    const { postOutgoing } = await import("@/lib/zohoOutgoing");
+    let msg: string;
+    try {
+      await withFounderApproval(`inline:${doc.id}`, () => postOutgoing(String(doc.id)));
+      const { data: after } = await svc.from("zoho_documents").select("status, zoho_number, error").eq("id", doc.id).maybeSingle();
+      const posted = after?.status === "posted";
+      await svc.from("brokerage_notes").update({
+        status: posted ? "posted" : "failed", zoho_id: null, zoho_number: after?.zoho_number ?? null,
+        error: posted ? null : String(after?.error ?? "it would not post"),
+      }).eq("id", id);
+      msg = posted ? `Journalled from the note${after?.zoho_number ? ` — ${after.zoho_number}` : ""}.` : `Not journalled — ${after?.error ?? "see the note"}`;
+    } catch (e) { msg = `Not journalled — ${e instanceof Error ? e.message : "unknown"}`; }
+    revalidatePath("/admin/zoho");
+    redirect(`/admin/zoho?scan=${encodeURIComponent(msg)}#brokerage`);
+  }
+
+  await requestApprovalFor("outgoing", "zoho_documents", String(doc.id), undefined, me?.id ?? null);
+  revalidatePath("/admin/zoho");
+  redirect("/admin/zoho?scan=" + encodeURIComponent("The journal from that note is with CA Parveen Sharma.") + "#brokerage");
+}
+
 export async function matchBankAction() {
   // Look at every waiting line and write down what it appears to settle.
   // Decides nothing, posts nothing.

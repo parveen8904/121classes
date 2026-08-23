@@ -11,7 +11,7 @@ import RaiseDocument from "./RaiseDocument";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -123,6 +123,25 @@ export default async function ZohoHubPage(props: {
   const askLines = bankLines.filter((l) => l.status === "ask");
   const autoLines = bankLines.filter((l) => l.status === "auto");
   const failedLines = bankLines.filter((l) => l.status === "failed");
+  type NoteRow = { id: string; account_name: string; period_start: string; period_end: string; status: string;
+    buckets: Record<string, { label: string; usd: number; inr: number; count: number }>;
+    gain_inr: number | null; loss_inr: number | null; note: string | null; error: string | null; zoho_number: string | null };
+  const { data: noteData } = hubConnected
+    ? await createServiceClient().from("brokerage_notes")
+        .select("id, account_name, period_start, period_end, status, buckets, gain_inr, loss_inr, note, error, zoho_number")
+        .order("period_end", { ascending: false }).limit(8)
+    : { data: [] as never[] };
+  const brokerageNotes = (noteData ?? []) as unknown as NoteRow[];
+
+  type UnpricedSell = { id: string; line_date: string; symbol: string | null; inr_amount: number | null; account_name: string; description: string | null };
+  const { data: unpricedData } = hubConnected && brokerageNotes.length
+    ? await createServiceClient().from("brokerage_lines")
+        .select("id, line_date, symbol, inr_amount, account_name, description")
+        .eq("kind", "sell").is("cost_inr", null).neq("status", "skipped")
+        .order("line_date", { ascending: false }).limit(25)
+    : { data: [] as never[] };
+  const unpricedSells = (unpricedData ?? []) as unknown as UnpricedSell[];
+
   type MatchedLine = { id: string; line_date: string; narration: string; debit: number; credit: number;
     match_kind: string | null; match_label: string | null; match_confidence: string | null;
     match_candidates: { id: string; kind: string; number: string; party: string; balance: number; why: string[] }[] | null };
@@ -895,6 +914,118 @@ export default async function ZohoHubPage(props: {
             <strong> sell</strong> asks for its INR cost, and the gain/loss books itself.
             ✅ posted so far: {bDone ?? 0}
           </p>
+
+          <div className="card" style={{ marginBottom: 10 }}>
+            <strong style={{ fontSize: ".9rem" }}>📝 The working note</strong>
+            <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 8px" }}>
+              A statement is not journalled line by line. It is summarised into what actually happened over the
+              period — interest, dividends, charges, option premium each way, what shares cost and what they
+              fetched — and the gain or loss falls out of that, every figure at its own Rule-115 rate. You read and
+              correct the note; the journal follows from it.
+            </p>
+            <form action={buildBrokerageNoteAction} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div style={{ minWidth: 220 }}>
+                <label style={{ fontSize: ".75rem" }}>Account</label>
+                <select name="account_name" required style={{ marginBottom: 0 }}>
+                  {brokerageChoices.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: ".75rem" }}>From</label>
+                <input name="from" type="date" defaultValue={`${fyNow.slice(3, 7)}-04-01`} style={{ marginBottom: 0 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: ".75rem" }}>To</label>
+                <input name="to" type="date" defaultValue={new Date().toISOString().slice(0, 10)} style={{ marginBottom: 0 }} />
+              </div>
+              <SubmitButton className="btn small" savedLabel="Prepared">Prepare the note</SubmitButton>
+            </form>
+
+            {brokerageNotes.map((n) => {
+              const rows = Object.entries(n.buckets ?? {}).filter(([, b]) => b && b.count > 0);
+              return (
+                <details className="card" key={n.id} style={{ marginTop: 10 }} open={n.status === "draft"}>
+                  <summary style={{ cursor: "pointer" }}>
+                    <span style={{ display: "inline-flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
+                      <strong>{n.account_name}</strong>
+                      <span className="muted" style={{ fontSize: ".82rem" }}>{n.period_start} → {n.period_end}</span>
+                      <span style={{ fontSize: ".82rem" }}>
+                        {n.status === "posted" ? `✅ journalled${n.zoho_number ? ` · ${n.zoho_number}` : ""}`
+                          : n.status === "approved" ? "with CA Parveen Sharma"
+                          : n.status === "failed" ? `❌ ${n.error}` : "draft"}
+                      </span>
+                    </span>
+                  </summary>
+                  <div style={{ marginTop: 10, overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem" }}>
+                      <tbody>
+                        {rows.map(([k, b]) => (
+                          <tr key={k} style={{ borderTop: "1px solid rgba(0,0,0,.06)" }}>
+                            <td style={{ padding: "6px 8px" }}>{b.label}</td>
+                            <td className="muted" style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{b.count} txn</td>
+                            <td style={{ padding: "6px 8px", textAlign: "right", whiteSpace: "nowrap" }}>${b.usd.toFixed(2)}</td>
+                            <td style={{ padding: "6px 8px", textAlign: "right", whiteSpace: "nowrap", fontWeight: 600 }}>
+                              ₹{Math.round(b.inr).toLocaleString("en-IN")}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr style={{ borderTop: "2px solid rgba(0,0,0,.2)" }}>
+                          <td style={{ padding: "6px 8px", fontWeight: 600 }}>Realised gain</td>
+                          <td colSpan={2} />
+                          <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, color: "#0e6e52" }}>
+                            ₹{Math.round(Number(n.gain_inr ?? 0)).toLocaleString("en-IN")}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style={{ padding: "6px 8px", fontWeight: 600 }}>Realised loss</td>
+                          <td colSpan={2} />
+                          <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, color: "#b91c1c" }}>
+                            ₹{Math.round(Number(n.loss_inr ?? 0)).toLocaleString("en-IN")}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    {n.note && <p style={{ color: "#b45309", fontSize: ".82rem", margin: "8px 0 0" }}>⚠ {n.note}</p>}
+
+                    {n.status === "draft" && unpricedSells.filter((u) => u.account_name === n.account_name).length > 0 && (
+                      <div style={{ marginTop: 10 }}>
+                        <strong style={{ fontSize: ".83rem" }}>Sales still needing their cost</strong>
+                        <p className="muted" style={{ fontSize: ".76rem", margin: "2px 0 6px" }}>
+                          What those shares originally cost in rupees, at their own purchase-date rate. Until it is
+                          here the sale has proceeds and no gain — which is why the note will not pretend to one.
+                        </p>
+                        {unpricedSells.filter((u) => u.account_name === n.account_name).map((u) => (
+                          <form action={setSellCostAction} key={u.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "3px 0" }}>
+                            <input type="hidden" name="id" value={u.id} />
+                            <input type="hidden" name="note_id" value={n.id} />
+                            <span style={{ minWidth: 88, fontSize: ".8rem" }}>{u.line_date}</span>
+                            <span style={{ minWidth: 70, fontWeight: 600 }}>{u.symbol ?? "—"}</span>
+                            <span className="muted" style={{ minWidth: 110, fontSize: ".8rem" }}>
+                              got ₹{Math.round(Number(u.inr_amount ?? 0)).toLocaleString("en-IN")}
+                            </span>
+                            <input name="cost_inr" type="number" step="0.01" placeholder="cost ₹" style={{ marginBottom: 0, width: 130 }} />
+                            <SubmitButton className="btn small secondary" savedLabel="✓">Save</SubmitButton>
+                          </form>
+                        ))}
+                      </div>
+                    )}
+
+                    {n.status === "draft" && (
+                      <form action={approveBrokerageNoteAction} style={{ marginTop: 10 }}>
+                        <input type="hidden" name="id" value={n.id} />
+                        <SubmitButton className="btn small" savedLabel="✓ Journalled">
+                          {isFounder ? "✅ Approve the note & journal it" : "📤 Send the note for approval"}
+                        </SubmitButton>
+                        <span className="muted" style={{ fontSize: ".78rem", marginLeft: 8 }}>
+                          Income, charges and the realised gain go in; the shares themselves move on their own lines.
+                        </span>
+                      </form>
+                    )}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
 
           <form action={uploadBrokerageAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div style={{ minWidth: 240 }}>

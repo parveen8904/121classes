@@ -11,6 +11,8 @@ import RaiseDocument from "./RaiseDocument";
 import SubmitButton from "@/app/components/SubmitButton";
 import Money from "@/app/components/Money";
 import { journalFromWorkingNote } from "@/lib/brokerageJournal";
+import { entryForApproval } from "@/lib/approvalEntry";
+import EntryLines from "./EntryLines";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
 import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
@@ -286,6 +288,18 @@ export default async function ZohoHubPage(props: {
   // list below, marked as sent — showing it twice, once here and once there,
   // was just two places to decide the same thing.
   const pendingApprovals = allPending.filter((a) => a.kind !== "provider_bill");
+  // THE ENTRY BEHIND EACH ONE, WORKED OUT BEFORE THE GATE IS DRAWN.
+  //
+  // He should not have to open anything to see what releasing an item does to
+  // the ledgers. Where an entry cannot be derived honestly the item simply
+  // carries no table — never an invented one beside an approve button.
+  const approvalEntries = new Map<string, Awaited<ReturnType<typeof entryForApproval>>>();
+  await Promise.all(pendingApprovals.map(async (a) => {
+    approvalEntries.set(String(a.id), await entryForApproval({
+      kind: String(a.kind), ref_table: String(a.ref_table), ref_id: String(a.ref_id),
+      details: (a.details ?? null) as Record<string, unknown> | null,
+    }));
+  }));
   const pendingBillIds = new Set(allPending.filter((a) => a.kind === "provider_bill").map((a) => String(a.ref_id)));
 
   const { data: ruleRows } = hubConnected
@@ -1585,6 +1599,16 @@ export default async function ZohoHubPage(props: {
                         {a.kind.replace(/_/g, " ")}
                       </span>
                       <div style={{ fontSize: ".95rem", marginTop: 2 }}>{a.summary}</div>
+                      {(() => {
+                        const e = approvalEntries.get(String(a.id));
+                        return e
+                          ? <EntryLines entry={e} title="What approving this does to the ledgers" compact />
+                          : (
+                            <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
+                              The entry for this one cannot be shown here — open it on its own section below before you release it.
+                            </p>
+                          );
+                      })()}
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <form action={approveZohoAction} style={{ margin: 0 }}>

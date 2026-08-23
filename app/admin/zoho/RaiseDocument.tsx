@@ -3,6 +3,8 @@
 import { useState } from "react";
 import SubmitButton from "@/app/components/SubmitButton";
 import { NATURES, natureClause, ledgersFor, type Nature, type Operating } from "@/lib/postingShape";
+import { saleEntry, type Entry } from "@/lib/entryPreview";
+import EntryLines from "./EntryLines";
 
 // RAISING A DOCUMENT — the other half of the books.
 //
@@ -213,6 +215,15 @@ export default function RaiseDocument({ action, accountList, accounts, isFounder
                 That {money(tdsAmt)} is a receivable until it shows in 26AS against our PAN — never write it off as a discount.
               </p>
             )}
+            <EntryLines
+              entry={saleEntry({
+                who: party, account: ledger || "", gstTreatment, gstRate: gst,
+                intraState: intra, amount: amt, tdsRate: tds, isCreditNote: kind === "credit_note",
+              })}
+              title="…and the same thing as an entry"
+              intro="This is what raising it does to the ledgers."
+              compact
+            />
           </div>
         </>
       ) : (
@@ -266,6 +277,18 @@ export default function RaiseDocument({ action, accountList, accounts, isFounder
                 : dr === 0 && cr === 0 ? "Nothing entered yet."
                 : `It is out by ${money(Math.abs(dr - cr))} — a journal cannot be passed until the two sides agree.`}
             </p>
+            {dr + cr > 0 && (
+              <EntryLines
+                entry={{
+                  lines: lines
+                    .filter((l) => l.account.trim() && Number(l.amount) > 0)
+                    .map((l) => ({ account: l.account.trim(), side: l.side, amount: Number(l.amount), note: l.note || undefined })),
+                  dr, cr, balanced, caveats: [],
+                } as Entry}
+                title="…as it will stand in the books"
+                compact
+              />
+            )}
           </div>
         </>
       )}

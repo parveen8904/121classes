@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { NATURES, ledgersFor, tdsWorking, entrySentence, type Nature, type Operating, type TdsMode } from "@/lib/postingShape";
+import { purchaseEntry } from "@/lib/entryPreview";
+import EntryLines from "./EntryLines";
 
 // THE ENTRY, REWRITTEN AS HE TYPES.
 //
@@ -48,6 +50,13 @@ export default function EntryEditor(props: {
   const sentence = entrySentence({
     nature, operating, account: account || "— pick a ledger —", subAccount: subAccount || null,
     gstTreatment, gstRate: Number(gstRate) || 0, tds: work, who: props.who,
+  });
+  // The same thing again as debits and credits, because that is what he checks.
+  // Recomputed on every keystroke from the answers above, like the sentence.
+  const [tdsSection, setTdsSection] = useState(i.tdsSection);
+  const entry = purchaseEntry({
+    who: props.who, account: account || "", subAccount: subAccount || null, nature,
+    gstTreatment, gstRate: Number(gstRate) || 0, tds: work, tdsSection,
   });
 
   const label = { fontSize: ".75rem" } as const;
@@ -165,7 +174,7 @@ export default function EntryEditor(props: {
         </div>
         <div>
           <label style={label}>TDS section</label>
-          <input name="tds_section" defaultValue={i.tdsSection} placeholder="393(2) Sl.17" style={{ marginBottom: 0 }} />
+          <input name="tds_section" value={tdsSection} onChange={(e) => setTdsSection(e.target.value)} placeholder="393(2) Sl.17" style={{ marginBottom: 0 }} />
         </div>
       </div>
 
@@ -181,6 +190,12 @@ export default function EntryEditor(props: {
         {props.compliance && (
           <p className="muted" style={{ margin: "6px 0 0", fontSize: ".8rem" }}>{props.compliance}</p>
         )}
+        <EntryLines
+          entry={entry}
+          title="…and the same thing as an entry"
+          intro={`In rupees, dated as the invoice is. This is what approving does to the ledgers${props.currency !== "INR" ? " — the foreign figure is converted at the Rule 115 rate shown above" : ""}.`}
+          compact
+        />
       </div>
     </>
   );

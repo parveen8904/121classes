@@ -427,6 +427,34 @@ export async function decideBillAction(formData: FormData) {
   const sub_account = str(formData.get("sub_account")) || null;
   const supplier_kind = str(formData.get("supplier_kind")) || null;
 
+  // A CHANGED ANSWER IS NOT A CHANGED FIGURE — it is a reason to work it out
+  // again. Where he corrects the country or what the supplier actually did, the
+  // withholding on the screen was computed from the OLD answer, so posting on it
+  // would book a rate he never saw. The answers are saved, everything of theirs
+  // still waiting is re-worked, and the line comes back for him to look at.
+  const newCountry = str(formData.get("country"));
+  const newCategory = str(formData.get("service_category"));
+  if (newCountry || newCategory) {
+    const { data: rule } = await svc.from("provider_bill_rules")
+      .select("country, service_category").eq("institution", bill.institution).maybeSingle();
+    const changed = (newCountry && newCountry !== rule?.country) ||
+                    (newCategory && newCategory !== rule?.service_category);
+    if (changed) {
+      await svc.from("provider_bill_rules").update({
+        ...(newCountry ? { country: newCountry } : {}),
+        ...(newCategory ? { service_category: newCategory } : {}),
+        answered_by: me?.id ?? null, answered_at: new Date().toISOString(),
+      }).eq("institution", bill.institution);
+      const { redetermineWaiting } = await import("@/lib/providerBills");
+      let moved = 0;
+      try { moved = await redetermineWaiting(String(bill.institution)); } catch { /* the rows keep what they had */ }
+      revalidatePath("/admin/zoho");
+      redirect("/admin/zoho?scan=" + encodeURIComponent(
+        `${bill.institution} re-worked on the new answer${moved > 1 ? ` — all ${moved} of their invoices` : ""}. Check the line before posting.`,
+      ) + "#bills");
+    }
+  }
+
   const inrAmount = rate ? Number((amount * rate).toFixed(2)) : amount;
   const { tdsWorking } = await import("@/lib/postingShape");
   const work = tdsWorking(inrAmount, tds_mode as never, Number(tds_rate ?? 0), vendor_name);

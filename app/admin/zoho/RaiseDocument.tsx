@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import SubmitButton from "@/app/components/SubmitButton";
-import { NATURES, natureClause, type Nature, type Operating } from "@/lib/postingShape";
+import { NATURES, natureClause, ledgersFor, type Nature, type Operating } from "@/lib/postingShape";
 
 // RAISING A DOCUMENT — the other half of the books.
 //
@@ -21,9 +21,10 @@ const STATES = [
   ["AS", "Assam"], ["GA", "Goa"], ["JK", "Jammu & Kashmir"], ["CH", "Chandigarh"],
 ];
 
-export default function RaiseDocument({ action, accountList, isFounder }: {
+export default function RaiseDocument({ action, accountList, accounts, isFounder }: {
   action: (fd: FormData) => void | Promise<void>;
   accountList: string;
+  accounts: { name: string; type: string }[];
   isFounder: boolean;
 }) {
   const [kind, setKind] = useState<"invoice" | "credit_note" | "journal">("invoice");
@@ -57,6 +58,9 @@ export default function RaiseDocument({ action, accountList, isFounder }: {
   const dr = lines.filter((l) => l.side === "debit").reduce((t, l) => t + (Number(l.amount) || 0), 0);
   const cr = lines.filter((l) => l.side === "credit").reduce((t, l) => t + (Number(l.amount) || 0), 0);
   const balanced = Math.abs(dr - cr) < 0.01 && dr > 0;
+
+  const { best, rest } = ledgersFor(accounts, nature, operating);
+  const [typing, setTyping] = useState(false);
 
   const setLine = (i: number, patch: Partial<Line>) =>
     setLines((ls) => ls.map((l, k) => (k === i ? { ...l, ...patch } : l)));
@@ -128,8 +132,32 @@ export default function RaiseDocument({ action, accountList, isFounder }: {
             </div>
             <div>
               <label style={label}>Ledger</label>
-              <input name="ledger" list={accountList} required value={ledger} onChange={(e) => setLedger(e.target.value)}
-                     placeholder="pick one, or type a new name" style={{ marginBottom: 0 }} />
+              {typing ? (
+                <input name="ledger" required value={ledger} autoFocus onChange={(e) => setLedger(e.target.value)}
+                       placeholder="the new ledger's name" style={{ marginBottom: 0 }} />
+              ) : (
+                <select name="ledger" required value={ledger}
+                        onChange={(e) => { if (e.target.value === "__new") { setTyping(true); setLedger(""); } else setLedger(e.target.value); }}
+                        style={{ marginBottom: 0 }}>
+                  <option value="">— pick a ledger —</option>
+                  {best.length > 0 && (
+                    <optgroup label={operating === "operating" ? "Operating" : "Non-operating"}>
+                      {best.map((a) => <option key={a} value={a}>{a}</option>)}
+                    </optgroup>
+                  )}
+                  {rest.length > 0 && (
+                    <optgroup label="Filed elsewhere in the chart">
+                      {rest.map((a) => <option key={a} value={a}>{a}</option>)}
+                    </optgroup>
+                  )}
+                  <option value="__new">＋ a ledger that does not exist yet…</option>
+                </select>
+              )}
+              <div className="muted" style={{ fontSize: ".7rem", marginTop: 2 }}>
+                {typing
+                  ? <>Created in Zoho under this classification, marked (AI). <button type="button" className="btn small secondary" style={{ padding: "1px 6px", fontSize: ".7rem" }} onClick={() => { setTyping(false); setLedger(""); }}>pick an existing one</button></>
+                  : `${best.length} ledger${best.length === 1 ? "" : "s"} match what you chose.`}
+              </div>
             </div>
             <div>
               <label style={label}>Sub-head (optional)</label>

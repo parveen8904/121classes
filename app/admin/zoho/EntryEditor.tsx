@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { NATURES, tdsWorking, entrySentence, type Nature, type Operating, type TdsMode } from "@/lib/postingShape";
+import { NATURES, ledgersFor, tdsWorking, entrySentence, type Nature, type Operating, type TdsMode } from "@/lib/postingShape";
 
 // THE ENTRY, REWRITTEN AS HE TYPES.
 //
@@ -18,8 +18,12 @@ export default function EntryEditor(props: {
   inr: number;
   who: string;
   currency: string;
-  foreign: boolean;
   accountList: string;
+  /** Every Zoho ledger with its type, so the picker can show the right shelf. */
+  accounts: { name: string; type: string }[];
+  /** A foreign supplier's two answers, editable here rather than on a card of
+   *  their own — they are what decides the withholding, and they change. */
+  foreign?: { country: string; category: string; countries: string[] } | null;
   initial: {
     nature: string; operating: string; account: string; subAccount: string;
     gstTreatment: string; gstRate: number; tdsMode: string; tdsRate: string; tdsSection: string;
@@ -36,7 +40,10 @@ export default function EntryEditor(props: {
   const [tdsMode, setTdsMode] = useState<TdsMode>((i.tdsMode || "none") as TdsMode);
   const [tdsRate, setTdsRate] = useState(i.tdsRate);
 
+  const [typing, setTyping] = useState(false);
   const asksOperating = NATURES.find((n) => n.value === nature)?.asksOperating ?? true;
+  const { best, rest } = ledgersFor(props.accounts, nature, operating);
+  const natureWord = NATURES.find((n) => n.value === nature)?.label.replace(/^An? /, "") ?? "expense";
   const work = tdsWorking(props.inr, tdsMode, Number(tdsRate) || 0, props.who);
   const sentence = entrySentence({
     nature, operating, account: account || "— pick a ledger —", subAccount: subAccount || null,
@@ -66,9 +73,35 @@ export default function EntryEditor(props: {
         </div>
         <div>
           <label style={label}>Ledger</label>
-          <input name="expense_account" list={props.accountList} required value={account}
-                 onChange={(e) => setAccount(e.target.value)} placeholder="pick one, or type a new name" style={{ marginBottom: 0 }} />
-          <div className="muted" style={{ fontSize: ".7rem", marginTop: 2 }}>A name Zoho does not have is created, marked (AI).</div>
+          {typing ? (
+            <input name="expense_account" required value={account} autoFocus
+                   onChange={(e) => setAccount(e.target.value)} placeholder="the new ledger's name" style={{ marginBottom: 0 }} />
+          ) : (
+            <select name="expense_account" required value={account}
+                    onChange={(e) => { if (e.target.value === "__new") { setTyping(true); setAccount(""); } else setAccount(e.target.value); }}
+                    style={{ marginBottom: 0 }}>
+              <option value="">— pick a ledger —</option>
+              {best.length > 0 && (
+                <optgroup label={`${natureWord} — ${operating === "operating" ? "operating" : "non-operating"}`}>
+                  {best.map((a) => <option key={a} value={a}>{a}</option>)}
+                </optgroup>
+              )}
+              {rest.length > 0 && (
+                <optgroup label="Filed elsewhere in the chart">
+                  {rest.map((a) => <option key={a} value={a}>{a}</option>)}
+                </optgroup>
+              )}
+              {account && !best.includes(account) && !rest.includes(account) && (
+                <optgroup label="On this invoice now"><option value={account}>{account}</option></optgroup>
+              )}
+              <option value="__new">＋ a ledger that does not exist yet…</option>
+            </select>
+          )}
+          <div className="muted" style={{ fontSize: ".7rem", marginTop: 2 }}>
+            {typing
+              ? <>It is created in Zoho under <strong>{natureWord} · {operating === "operating" ? "operating" : "non-operating"}</strong>, marked (AI). <button type="button" className="btn small secondary" style={{ padding: "1px 6px", fontSize: ".7rem" }} onClick={() => { setTyping(false); setAccount(""); }}>pick an existing one instead</button></>
+              : `${best.length} ledger${best.length === 1 ? "" : "s"} match what you chose above.`}
+          </div>
         </div>
         <div>
           <label style={label}>Sub-head (optional)</label>
@@ -76,6 +109,32 @@ export default function EntryEditor(props: {
                  placeholder={nature === "drawings" ? "e.g. groceries, electricity" : "optional"} style={{ marginBottom: 0 }} />
         </div>
       </div>
+
+      {props.foreign && (
+        <>
+          <div style={{ ...head, margin: "14px 0 6px" }}>2b · Where they are, and what they did</div>
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))" }}>
+            <div>
+              <label style={label}>Country</label>
+              <select name="country" defaultValue={props.foreign.country} style={{ marginBottom: 0 }}>
+                {props.foreign.countries.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={label}>What they did for us</label>
+              <select name="service_category" defaultValue={props.foreign.category} style={{ marginBottom: 0 }}>
+                <option value="standardised">Ready-made software / hosting we just use</option>
+                <option value="bespoke">Work done for us by their people</option>
+                <option value="advertising">Advertising</option>
+                <option value="mixed">Both</option>
+              </select>
+            </div>
+          </div>
+          <div className="muted" style={{ fontSize: ".72rem", marginTop: 4 }}>
+            These two decide the withholding. Change either one and the entry is worked out again before it posts.
+          </div>
+        </>
+      )}
 
       <div style={{ ...head, margin: "14px 0 6px" }}>3 · GST and withholding</div>
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>

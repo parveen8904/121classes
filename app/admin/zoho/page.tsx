@@ -1103,7 +1103,7 @@ export default async function ZohoHubPage(props: {
               An invoice we are raising, a credit note, or a plain journal — the same questions as an invoice that
               arrives, asked the other way round.
             </p>
-            <RaiseDocument action={raiseDocumentAction} accountList="acct-names" isFounder={isFounder} />
+            <RaiseDocument action={raiseDocumentAction} accountList="acct-names" accounts={zohoAccounts} isFounder={isFounder} />
           </details>
 
           <form action={uploadBillAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
@@ -1223,8 +1223,13 @@ export default async function ZohoHubPage(props: {
                         inr={inr}
                         who={p.vendor_name ?? b.institution}
                         currency={b.currency}
-                        foreign={foreign}
                         accountList="acct-names"
+                        accounts={zohoAccounts}
+                        foreign={foreign ? {
+                          country: rule?.country ?? seedFor(b.institution)?.country ?? "United States",
+                          category: rule?.service_category ?? seedFor(b.institution)?.category ?? "standardised",
+                          countries: FVD.COUNTRIES.map((c) => c.name),
+                        } : null}
                         initial={{
                           nature: p.nature ?? "expense",
                           operating: p.operating ?? "operating",

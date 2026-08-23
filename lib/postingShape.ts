@@ -61,6 +61,38 @@ export function zohoAccountType(nature: Nature, operating: Operating): string {
   }
 }
 
+/**
+ * The ledgers worth offering for what he has just said this is.
+ *
+ * Showing all five hundred accounts for every invoice is the same as showing
+ * none: the answer he has already given — an operating expense, a fixed asset —
+ * names exactly one shelf of the chart, so that is the shelf he is offered. The
+ * rest stay reachable, because a real chart always has something filed in an
+ * odd place, and a new name can always be typed.
+ */
+export function ledgersFor(
+  accounts: { name: string; type: string }[], nature: Nature, operating: Operating,
+): { best: string[]; rest: string[] } {
+  const want = zohoAccountType(nature, operating);
+  // The neighbouring shelf, offered after the right one rather than hidden:
+  // an expense filed under "other expense" is a filing choice, not an error.
+  const near: Record<string, string[]> = {
+    expense: ["other_expense", "cost_of_goods_sold"],
+    other_expense: ["expense"],
+    other_current_asset: ["fixed_asset", "other_asset"],
+    fixed_asset: ["other_current_asset", "other_asset"],
+    income: ["other_income"],
+    other_income: ["income"],
+    other_current_liability: ["long_term_liability", "other_liability"],
+    long_term_liability: ["other_current_liability", "other_liability"],
+    equity: [],
+  };
+  const alsoOk = new Set([want, ...(near[want] ?? [])]);
+  const best = accounts.filter((a) => a.type === want).map((a) => a.name).sort();
+  const rest = accounts.filter((a) => a.type !== want && alsoOk.has(a.type)).map((a) => a.name).sort();
+  return { best, rest };
+}
+
 /** Which Zoho document this becomes. */
 export function zohoDocument(nature: Nature): "bill" | "vendor_credit" | "credit_note" | "journal" {
   if (nature === "expense" || nature === "asset" || nature === "drawings") return "bill";

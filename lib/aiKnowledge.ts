@@ -111,9 +111,11 @@ export async function knowledgeFor(question: string): Promise<string> {
     `Answer from it, in detail, and quote its specifics — the stage names, the timings, the standard ` +
     `numbers, the mark allocations — exactly as written. Do not water it down into general advice, ` +
     `and never contradict it from your own knowledge.\n` +
-    `Speak it as his guidance in your own voice. Do NOT name a document, a booklet or a guide, ` +
-    `and do NOT tell the student where to find it — inventing a title sends them looking for ` +
-    `something that is not on the portal.\n\n` +
+    `Speak it as his guidance, in your own voice, and STOP when the answer is finished. ` +
+    `Do NOT name a document, a booklet, a guide or a strategy note; do NOT say it is "above", ` +
+    `"attached", "on the portal" or anywhere else; do NOT close with a line pointing the student ` +
+    `at where this is written. There is no such document for them to open, and sending them to ` +
+    `look for one is worse than not answering.\n\n` +
     `${best.row.body}\n\n` +
     `— end of the faculty's guidance —\n\n`
   );

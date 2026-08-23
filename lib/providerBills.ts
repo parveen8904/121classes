@@ -224,21 +224,34 @@ function echoOf(b: ZohoBill) {
   };
 }
 
-/** Re-read posted bills from Zoho and record what it holds. Read-only. */
-export async function readbackPostedBills(): Promise<{ checked: number }> {
+/** Move a created bill out of draft. Returns whether it is now in the books. */
+async function openBill(billId: string): Promise<boolean> {
+  try { await zohoFetch(`/bills/${billId}/status/open`, { method: "POST" }); return true; }
+  catch { return false; }
+}
+
+/**
+ * Re-read posted bills from Zoho and record what it holds — and finish any that
+ * are still sitting as drafts there, since a draft reaches no ledger.
+ */
+export async function readbackPostedBills(): Promise<{ checked: number; opened: number }> {
   const svc = createServiceClient();
   const { data } = await svc.from("provider_bills")
     .select("id, zoho_bill_id").eq("status", "posted").not("zoho_bill_id", "is", null).limit(50);
-  let checked = 0;
+  let checked = 0, opened = 0;
   for (const row of data ?? []) {
     try {
-      const r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${row.zoho_bill_id}`);
+      let r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${row.zoho_bill_id}`);
       if (!r.bill) continue;
-      await svc.from("provider_bills").update({ zoho_echo: echoOf(r.bill) }).eq("id", row.id);
+      if (r.bill.status === "draft" && await openBill(String(row.zoho_bill_id))) {
+        opened++;
+        r = await zohoFetch<{ bill?: ZohoBill }>(`/bills/${row.zoho_bill_id}`);
+      }
+      if (r.bill) await svc.from("provider_bills").update({ zoho_echo: echoOf(r.bill) }).eq("id", row.id);
       checked++;
     } catch { /* one unreadable bill must not stop the rest */ }
   }
-  return { checked };
+  return { checked, opened };
 }
 
 /** Post one approved bill to Zoho. Idempotent: a posted row is never re-sent. */
@@ -322,11 +335,18 @@ export async function postProviderBill(id: string): Promise<void> {
 
     const r = await zohoFetch<{ bill?: ZohoBill }>("/bills", { method: "POST", body });
     if (!r.bill?.bill_id) return fail("Zoho did not return the created bill");
+
+    // Draft → Open. A draft bill in Zoho is a piece of paper, not an entry: it
+    // reaches no ledger, no expense, no GST return. Creating one is only half
+    // the posting.
+    const opened = await openBill(r.bill.bill_id);
+
     await svc.from("provider_bills").update({
       status: "posted", zoho_bill_id: r.bill.bill_id, zoho_vendor_id: vendorId,
       rate, inr_amount: rate ? Number((total * rate).toFixed(2)) : total,
-      zoho_echo: echoOf(r.bill),
-      error: tdsNote || null, updated_at: new Date().toISOString(),
+      zoho_echo: { ...echoOf(r.bill), ...(opened ? { zoho_status: "open" } : {}) },
+      error: tdsNote || (opened ? null : "created in Zoho but still a draft — press 🔍 to finish it"),
+      updated_at: new Date().toISOString(),
     }).eq("id", id);
     // The vault copy is now worked, not raw.
     if (b.vault_doc_id) await svc.from("zoho_vault_docs").update({ is_processed: true }).eq("id", b.vault_doc_id);

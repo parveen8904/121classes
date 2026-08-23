@@ -174,13 +174,17 @@ export async function scanBillsAction() {
 export async function readbackBillsAction() {
   // Proof, from the books themselves. Reads every posted bill back out of Zoho
   // and records what it holds — the rate it used, the totals it computed and
-  // whether the reverse charge landed. Read-only: it changes nothing in Zoho.
+  // whether the reverse charge landed. Anything Zoho still holds as a DRAFT is
+  // finished here, because a draft bill reaches no ledger and no GST return.
   await assertArea("zoho");
   const { readbackPostedBills } = await import("@/lib/providerBills");
   let note: string;
   try {
-    const { checked } = await readbackPostedBills();
-    note = checked ? `Read ${checked} posted bill${checked === 1 ? "" : "s"} back from Zoho.` : "No posted bills to check yet.";
+    const { checked, opened } = await readbackPostedBills();
+    note = checked
+      ? `Read ${checked} posted bill${checked === 1 ? "" : "s"} back from Zoho.` +
+        (opened ? ` ${opened} was still a draft there and is now in the books.` : "")
+      : "No posted bills to check yet.";
   } catch (e) { note = `Read-back failed: ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);

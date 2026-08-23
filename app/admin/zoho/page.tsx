@@ -977,7 +977,7 @@ export default async function ZohoHubPage(props: {
               <SubmitButton className="btn small secondary" savedLabel="Scanned">🔄 Read the vault for new bills</SubmitButton>
             </form>
             <form action={readbackBillsAction} style={{ margin: 0 }}>
-              <SubmitButton className="btn small secondary" savedLabel="Checked">🔍 Check what Zoho holds</SubmitButton>
+              <SubmitButton className="btn small secondary" savedLabel="Checked">🔍 Check &amp; finish in Zoho</SubmitButton>
             </form>
             <span className="muted" style={{ fontSize: ".8rem" }}>✅ posted {billsPosted ?? 0}</span>
           </div>
@@ -1094,7 +1094,7 @@ export default async function ZohoHubPage(props: {
             <details className="card" style={{ marginTop: 10 }}>
               <summary className="btn small secondary as-btn">📗 Posted ({billsPostedRows.length}) — as Zoho holds them</summary>
               <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0" }}>
-                Not what was sent — what the books actually hold, re-read with <strong>🔍 Check what Zoho holds</strong>.
+                Not what was sent — what the books actually hold, re-read with <strong>🔍 Check &amp; finish in Zoho</strong>.
                 A foreign bill should show its own currency at the Rule-115 rate and <strong>RCM ✓</strong>, with the
                 supplier charging no tax of their own.
               </p>

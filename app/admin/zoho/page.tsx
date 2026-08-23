@@ -11,7 +11,7 @@ import RaiseDocument from "./RaiseDocument";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -125,10 +125,21 @@ export default async function ZohoHubPage(props: {
   const failedLines = bankLines.filter((l) => l.status === "failed");
   type NoteRow = { id: string; account_name: string; period_start: string; period_end: string; status: string;
     buckets: Record<string, { label: string; usd: number; inr: number; count: number }>;
-    gain_inr: number | null; loss_inr: number | null; note: string | null; error: string | null; zoho_number: string | null };
+    gain_inr: number | null; loss_inr: number | null; note: string | null; error: string | null; zoho_number: string | null;
+    workbook: {
+      equity: { realisedFifo: number; uncostedProceeds: number; uncostedCost: number | null; subTotal: number;
+        opening: { scrip: string; qtySold: number; proceeds: number; avgPrice: number }[];
+        scrips: { scrip: string; realised: number; sameDayRoundTrip: boolean; soldFromOpening: boolean }[] };
+      options: { net: number; rows: { underlying: string; net: number; contracts: number }[] };
+      income: { cashDividends: number; manufacturedDividends: number; stockLending: number; interest: number; subTotal: number };
+      charges: { marginInterest: number; fees: number; subTotal: number };
+      netResult: number; partial: boolean;
+      excluded: { label: string; amount: number }[];
+      inrByHead?: Record<string, number>;
+    } | null };
   const { data: noteData } = hubConnected
     ? await createServiceClient().from("brokerage_notes")
-        .select("id, account_name, period_start, period_end, status, buckets, gain_inr, loss_inr, note, error, zoho_number")
+        .select("id, account_name, period_start, period_end, status, buckets, gain_inr, loss_inr, note, error, zoho_number, workbook")
         .order("period_end", { ascending: false }).limit(8)
     : { data: [] as never[] };
   const brokerageNotes = (noteData ?? []) as unknown as NoteRow[];
@@ -923,7 +934,33 @@ export default async function ZohoHubPage(props: {
               fetched — and the gain or loss falls out of that, every figure at its own Rule-115 rate. You read and
               correct the note; the journal follows from it.
             </p>
-            <form action={buildBrokerageNoteAction} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <form action={ingestActivityCsvAction} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 10 }}>
+              <div style={{ minWidth: 210 }}>
+                <label style={{ fontSize: ".75rem" }}>Account</label>
+                <select name="account_name" required style={{ marginBottom: 0 }}>
+                  {brokerageChoices.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: ".75rem" }}>From</label>
+                <input name="from" type="date" required defaultValue={`${fyNow.slice(3, 7)}-04-01`} style={{ marginBottom: 0 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: ".75rem" }}>To</label>
+                <input name="to" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} style={{ marginBottom: 0 }} />
+              </div>
+              <div style={{ minWidth: 200 }}>
+                <label style={{ fontSize: ".75rem" }}>The broker&apos;s activity file (CSV)</label>
+                <input type="file" name="file" required accept=".csv,text/csv" style={{ marginBottom: 0 }} />
+              </div>
+              <SubmitButton className="btn small" savedLabel="Prepared">📝 Build the working note</SubmitButton>
+            </form>
+
+            <details style={{ marginBottom: 8 }}>
+              <summary className="muted" style={{ cursor: "pointer", fontSize: ".78rem" }}>
+                …or summarise lines already parsed from a statement
+              </summary>
+              <form action={buildBrokerageNoteAction} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
               <div style={{ minWidth: 220 }}>
                 <label style={{ fontSize: ".75rem" }}>Account</label>
                 <select name="account_name" required style={{ marginBottom: 0 }}>
@@ -938,8 +975,9 @@ export default async function ZohoHubPage(props: {
                 <label style={{ fontSize: ".75rem" }}>To</label>
                 <input name="to" type="date" defaultValue={new Date().toISOString().slice(0, 10)} style={{ marginBottom: 0 }} />
               </div>
-              <SubmitButton className="btn small" savedLabel="Prepared">Prepare the note</SubmitButton>
-            </form>
+                <SubmitButton className="btn small secondary" savedLabel="Prepared">Summarise those lines</SubmitButton>
+              </form>
+            </details>
 
             {brokerageNotes.map((n) => {
               const rows = Object.entries(n.buckets ?? {}).filter(([, b]) => b && b.count > 0);
@@ -956,6 +994,103 @@ export default async function ZohoHubPage(props: {
                       </span>
                     </span>
                   </summary>
+                  {n.workbook ? (() => {
+                    const w = n.workbook!;
+                    const usd = (x: number) => (x < 0 ? "-" : "") + "$" + Math.abs(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    const inr = (k: string) => {
+                      const v = w.inrByHead?.[k];
+                      return v === undefined ? "" : `₹${Math.round(v).toLocaleString("en-IN")}`;
+                    };
+                    const Row = ({ label, amount, inrKey, bold, indent }: { label: string; amount: number; inrKey?: string; bold?: boolean; indent?: boolean }) => (
+                      <tr style={{ borderTop: "1px solid rgba(0,0,0,.06)" }}>
+                        <td style={{ padding: "5px 8px", paddingLeft: indent ? 22 : 8, fontWeight: bold ? 600 : 400 }}>{label}</td>
+                        <td style={{ padding: "5px 8px", textAlign: "right", whiteSpace: "nowrap", fontWeight: bold ? 600 : 400, fontVariantNumeric: "tabular-nums" }}>{usd(amount)}</td>
+                        <td className="muted" style={{ padding: "5px 8px", textAlign: "right", whiteSpace: "nowrap", fontSize: ".8rem" }}>{inrKey ? inr(inrKey) : ""}</td>
+                      </tr>
+                    );
+                    return (
+                      <div style={{ marginTop: 10, overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem" }}>
+                          <thead>
+                            <tr><th style={{ textAlign: "left", padding: "4px 8px", fontSize: ".72rem", letterSpacing: ".06em", color: "#666" }}>PARTICULARS</th>
+                              <th style={{ textAlign: "right", padding: "4px 8px", fontSize: ".72rem", color: "#666" }}>USD</th>
+                              <th style={{ textAlign: "right", padding: "4px 8px", fontSize: ".72rem", color: "#666" }}>₹ (RULE 115)</th></tr>
+                          </thead>
+                          <tbody>
+                            <tr><td colSpan={3} style={{ padding: "8px 8px 2px", fontWeight: 600, fontSize: ".78rem" }}>A · CAPITAL GAINS — EQUITY / ETF</td></tr>
+                            <Row label="Realised gain / (loss) — FIFO, cost carried from date of purchase" amount={w.equity.realisedFifo} inrKey="equityRealised" indent />
+                            <Row label="Sale proceeds of shares with no recorded purchase cost" amount={w.equity.uncostedProceeds} indent />
+                            <Row label="Less: cost of those shares" amount={w.equity.uncostedCost ?? 0} indent />
+                            <Row label={`Sub-total — equity${w.partial ? " (EXCLUDES the uncosted sales)" : ""}`} amount={w.equity.subTotal} bold />
+
+                            <tr><td colSpan={3} style={{ padding: "10px 8px 2px", fontWeight: 600, fontSize: ".78rem" }}>B · CAPITAL GAINS — OPTIONS (premium / cash basis)</td></tr>
+                            <Row label="Net premium realised on options" amount={w.options.net} inrKey="options" indent />
+
+                            <tr><td colSpan={3} style={{ padding: "10px 8px 2px", fontWeight: 600, fontSize: ".78rem" }}>C · INVESTMENT INCOME</td></tr>
+                            <Row label="Cash dividends (CDIV)" amount={w.income.cashDividends} inrKey="cashDividends" indent />
+                            <Row label="Manufactured / substitute dividends (MDIV) — ordinary income, no treaty dividend rate" amount={w.income.manufacturedDividends} inrKey="manufacturedDividends" indent />
+                            <Row label="Stock lending income (SLIP)" amount={w.income.stockLending} inrKey="stockLending" indent />
+                            <Row label="Interest on idle cash (INT)" amount={w.income.interest} inrKey="interest" indent />
+                            <Row label="Sub-total — investment income" amount={w.income.subTotal} bold />
+
+                            <tr><td colSpan={3} style={{ padding: "10px 8px 2px", fontWeight: 600, fontSize: ".78rem" }}>D · EXPENSES / CHARGES</td></tr>
+                            <Row label="Margin interest paid, net of credits (MINT)" amount={w.charges.marginInterest} inrKey="marginInterest" indent />
+                            <Row label="Fees" amount={w.charges.fees} inrKey="fees" indent />
+                            <Row label="Sub-total — charges" amount={w.charges.subTotal} bold />
+
+                            <tr style={{ borderTop: "2px solid rgba(0,0,0,.25)" }}>
+                              <td style={{ padding: "8px", fontWeight: 700 }}>NET RESULT FOR THE PERIOD{w.partial ? " — PARTIAL" : ""}</td>
+                              <td style={{ padding: "8px", textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{usd(w.netResult)}</td>
+                              <td />
+                            </tr>
+                          </tbody>
+                        </table>
+
+                        {w.excluded.length > 0 && (
+                          <p className="muted" style={{ fontSize: ".78rem", marginTop: 8 }}>
+                            <strong>Excluded as capital / non-income movements:</strong>{" "}
+                            {w.excluded.map((e) => `${e.label} ${usd(e.amount)}`).join(" · ")}
+                          </p>
+                        )}
+                        {w.equity.scrips.some((sc) => sc.sameDayRoundTrip) && (
+                          <p className="muted" style={{ fontSize: ".76rem", marginTop: 4 }}>
+                            Bought and sold on the same day, where the file carries no execution times, so which fill
+                            came first is an assumption: {w.equity.scrips.filter((sc) => sc.sameDayRoundTrip).map((sc) => sc.scrip).join(", ")}.
+                          </p>
+                        )}
+
+                        {n.status === "draft" && w.equity.uncostedProceeds > 0 && (
+                          <div className="card" style={{ marginTop: 10, background: "rgba(234,179,8,.08)" }}>
+                            <strong style={{ fontSize: ".83rem" }}>Sales with no purchase cost in the file</strong>
+                            <p className="muted" style={{ fontSize: ".77rem", margin: "2px 0 6px" }}>
+                              Shares held before this file begins. Until their cost is here the equity sub-total and the
+                              net result leave them out — proceeds without a cost are not a gain.
+                            </p>
+                            <div style={{ fontSize: ".8rem", marginBottom: 8 }}>
+                              {w.equity.opening.map((o) => (
+                                <div key={o.scrip}>{o.scrip} — {o.qtySold.toFixed(4)} sold for {usd(o.proceeds)} (avg {usd(o.avgPrice)})</div>
+                              ))}
+                            </div>
+                            <form action={setUncostedCostAction} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                              <input type="hidden" name="note_id" value={n.id} />
+                              <label style={{ fontSize: ".78rem", fontWeight: 400 }}>Total cost of all of the above (USD)</label>
+                              <input name="cost" type="number" step="0.01" defaultValue={w.equity.uncostedCost ?? ""} style={{ marginBottom: 0, width: 160 }} />
+                              <SubmitButton className="btn small secondary" savedLabel="✓">Save the cost</SubmitButton>
+                            </form>
+                          </div>
+                        )}
+
+                        {n.status === "draft" && (
+                          <form action={approveBrokerageNoteAction} style={{ marginTop: 10 }}>
+                            <input type="hidden" name="id" value={n.id} />
+                            <SubmitButton className="btn small" savedLabel="✓ Journalled">
+                              {isFounder ? "✅ Approve the note & journal it" : "📤 Send the note for approval"}
+                            </SubmitButton>
+                          </form>
+                        )}
+                      </div>
+                    );
+                  })() : (
                   <div style={{ marginTop: 10, overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem" }}>
                       <tbody>
@@ -1022,6 +1157,7 @@ export default async function ZohoHubPage(props: {
                       </form>
                     )}
                   </div>
+                  )}
                 </details>
               );
             })}

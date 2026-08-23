@@ -371,6 +371,66 @@ export async function retryDocumentAction(formData: FormData) {
   revalidatePath("/admin/zoho");
 }
 
+export async function ingestActivityCsvAction(formData: FormData) {
+  // THE BROKER'S OWN ACTIVITY FILE → THE WORKING NOTE HE CHECKS → the entry.
+  // Read exactly, not by guesswork: the codes in the file say what each line is.
+  await assertArea("zoho");
+  const account = str(formData.get("account_name_other")) || str(formData.get("account_name"));
+  const from = str(formData.get("from"));
+  const to = str(formData.get("to"));
+  const file = formData.get("file") as File | null;
+  if (!account || !file || !file.size || !from || !to) {
+    redirect(`/admin/zoho?scan=${encodeURIComponent("Pick the account, the period, and the activity file.")}#brokerage`);
+  }
+
+  const safe = (file!.name || "activity.csv").replace(/[^\w.\-]+/g, "_").slice(-80);
+  const path = `zoho-brokerage/${Date.now()}-${safe}`;
+  const svc = createServiceClient();
+  const buf = Buffer.from(await file!.arrayBuffer());
+  const { error } = await svc.storage.from("secure").upload(path, buf, {
+    contentType: file!.type || "text/csv", upsert: false,
+  });
+  if (error) redirect(`/admin/zoho?scan=${encodeURIComponent(`Upload failed: ${error.message}`)}#brokerage`);
+
+  const { ingestActivityCsv } = await import("@/lib/brokerageWorkbook");
+  let note: string;
+  try {
+    const r = await ingestActivityCsv({ account, from, to, fileRef: `secure:${path}`, fileName: file!.name });
+    note = "error" in r
+      ? `The note could not be prepared — ${r.error}`
+      : `Working note prepared for ${account}, ${from} to ${to}.` +
+        (r.note.partial ? " Some sales have no purchase cost in the file — they are listed for you." : "");
+  } catch (e) { note = `The note could not be prepared — ${e instanceof Error ? e.message : "unknown"}`; }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#brokerage`);
+}
+
+export async function setUncostedCostAction(formData: FormData) {
+  // His figure for shares the file has no purchase price for. Until it is here
+  // the equity sub-total leaves those sales out entirely — proceeds without a
+  // cost are not a gain.
+  await assertArea("zoho");
+  const noteId = str(formData.get("note_id"));
+  const cost = Number(formData.get("cost"));
+  if (!noteId || !(cost > 0)) return;
+  const svc = createServiceClient();
+  const { data: n } = await svc.from("brokerage_notes").select("workbook, status").eq("id", noteId).maybeSingle();
+  if (!n || n.status !== "draft") return;
+
+  const wb = n.workbook as Record<string, unknown>;
+  const equity = wb.equity as Record<string, number>;
+  equity.uncostedCost = cost;
+  equity.subTotal = Number(equity.realisedFifo) + (Number(equity.uncostedProceeds) - cost);
+  wb.partial = false;
+  wb.netResult = Number(equity.subTotal) + Number((wb.options as { net: number }).net)
+    + Number((wb.income as { subTotal: number }).subTotal) + Number((wb.charges as { subTotal: number }).subTotal);
+
+  await svc.from("brokerage_notes").update({
+    workbook: wb, note: null, updated_at: new Date().toISOString(),
+  }).eq("id", noteId);
+  revalidatePath("/admin/zoho");
+}
+
 export async function buildBrokerageNoteAction(formData: FormData) {
   // THE WORKING NOTE COMES FIRST. Nothing is journalled from a CSV directly.
   await assertArea("zoho");
@@ -418,11 +478,60 @@ export async function approveBrokerageNoteAction(formData: FormData) {
   const { data: n } = await svc.from("brokerage_notes").select("*").eq("id", id).maybeSingle();
   if (!n || n.status === "posted") return;
 
-  const { journalFromNote } = await import("@/lib/brokerageNote");
-  const built = journalFromNote({
-    account: String(n.account_name), from: String(n.period_start), to: String(n.period_end),
-    buckets: n.buckets as never, gainInr: Number(n.gain_inr ?? 0), lossInr: Number(n.loss_inr ?? 0), unpricedSells: 0,
-  }, String(n.account_name));
+  // THE JOURNAL FOLLOWS THE NOTE, HEAD BY HEAD, IN RUPEES.
+  //
+  // Each head was converted at the Rule-115 rate of its own transactions when
+  // the note was built, so the entry carries those figures rather than
+  // re-converting a total at one rate.
+  const wb = n.workbook as {
+    equity: { subTotal: number; uncostedProceeds: number; uncostedCost: number | null };
+    options: { net: number }; income: { subTotal: number }; charges: { subTotal: number };
+    partial: boolean; inrByHead?: Record<string, number>;
+  } | null;
+
+  let built: { lines: { account: string; side: "debit" | "credit"; amount: number; note: string; nature: string; operating: string }[]; narration: string };
+  if (wb) {
+    if (wb.partial) {
+      redirect("/admin/zoho?scan=" + encodeURIComponent(
+        "Those sales still have no purchase cost. Enter it first — a journal that leaves them out understates the gain, and one that includes the proceeds without the cost overstates it.",
+      ) + "#brokerage");
+    }
+    const inr = wb.inrByHead ?? {};
+    const heads: { key: string; account: string; nature: string; operating: string }[] = [
+      { key: "cashDividends", account: "Dividend-US", nature: "income", operating: "non_operating" },
+      { key: "manufacturedDividends", account: "Manufactured Dividend-US", nature: "income", operating: "non_operating" },
+      { key: "stockLending", account: "Stock Lending Income-US", nature: "income", operating: "non_operating" },
+      { key: "interest", account: "Interest Income", nature: "income", operating: "non_operating" },
+      { key: "options", account: "Option Premium-US", nature: "income", operating: "non_operating" },
+      { key: "equityRealised", account: "Capital Gain-US", nature: "income", operating: "non_operating" },
+      { key: "marginInterest", account: "Interest Paid-US", nature: "expense", operating: "non_operating" },
+      { key: "fees", account: "US Bank Charges", nature: "expense", operating: "non_operating" },
+    ];
+    const lines: typeof built.lines = [];
+    let net = 0;
+    for (const h of heads) {
+      const v = Number(inr[h.key] ?? 0);
+      if (Math.abs(v) < 0.5) continue;
+      // A head that came out negative is simply the other way round.
+      const side: "debit" | "credit" = v > 0 ? "credit" : "debit";
+      lines.push({ account: h.account, side, amount: Number(Math.abs(v).toFixed(2)),
+        note: `${h.key} for the period, at the Rule-115 rate of each transaction`,
+        nature: v > 0 ? "income" : "expense", operating: "non_operating" });
+      net += v;
+    }
+    if (Math.abs(net) > 0.5) {
+      lines.push({ account: String(n.account_name), side: net > 0 ? "debit" : "credit",
+        amount: Number(Math.abs(net).toFixed(2)), note: "the movement in the brokerage account",
+        nature: "asset", operating: "operating" });
+    }
+    built = { lines, narration: `${n.account_name} — ${n.period_start} to ${n.period_end}, from the approved working note` };
+  } else {
+    const { journalFromNote } = await import("@/lib/brokerageNote");
+    built = journalFromNote({
+      account: String(n.account_name), from: String(n.period_start), to: String(n.period_end),
+      buckets: n.buckets as never, gainInr: Number(n.gain_inr ?? 0), lossInr: Number(n.loss_inr ?? 0), unpricedSells: 0,
+    }, String(n.account_name));
+  }
 
   if (built.lines.length < 2) {
     redirect("/admin/zoho?scan=" + encodeURIComponent("There is nothing in that note to journal.") + "#brokerage");

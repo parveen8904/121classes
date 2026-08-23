@@ -39,23 +39,29 @@ const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : 
  * and a module that still cannot be read is REPORTED, not hidden.
  */
 async function pull(
-  path: string, key: string, kind: string,
+  path: string, key: string, kind: string, sort: string,
   map: (r: Row) => { id: string; label: string; amount: number | null; currency: string; status: string | null },
   perPage = 25,
 ): Promise<{ rows: Activity[]; failed: string | null }> {
-  const sorts = ["last_modified_time", "date", ""];
-  let lastErr = "could not be read";
-  for (const sort of sorts) {
+  // EACH MODULE IS ASKED ONCE, ON THE SORT IT ACCEPTS.
+  //
+  // Trying three sorts on seven modules meant up to twenty-one requests in a
+  // burst, and Zoho started refusing them — the report then reported its own
+  // throttling as a module it could not read. One call each, one retry without
+  // the sort, and no more.
+  try {
+    const r = await zohoFetch<Record<string, Row[]>>(path, {
+      query: { sort_column: sort, sort_order: "D", per_page: String(perPage) },
+    });
+    return { rows: mapRows(r[key] ?? [], kind, map), failed: null };
+  } catch {
     try {
-      const r = await zohoFetch<Record<string, Row[]>>(path, {
-        query: { ...(sort ? { sort_column: sort, sort_order: "D" } : {}), per_page: String(perPage) },
-      });
+      const r = await zohoFetch<Record<string, Row[]>>(path, { query: { per_page: String(perPage) } });
       return { rows: mapRows(r[key] ?? [], kind, map), failed: null };
     } catch (e) {
-      lastErr = e instanceof Error ? e.message : "could not be read";
+      return { rows: [], failed: `${kind}: ${e instanceof Error ? e.message : "could not be read"}` };
     }
   }
-  return { rows: [], failed: `${kind}: ${lastErr}` };
 }
 
 function mapRows(
@@ -92,31 +98,31 @@ function mapRows(
  */
 export async function recentZohoActivity(limit = 50): Promise<{ rows: Activity[]; unread: string[] }> {
   const pulled = await Promise.all([
-    pull("/invoices", "invoices", "Invoice", (r) => ({
+    pull("/invoices", "invoices", "Invoice", "last_modified_time", (r) => ({
       id: String(r.invoice_id), label: `${str(r.invoice_number) ?? "—"} · ${str(r.customer_name) ?? ""}`,
       amount: num(r.total), currency: String(r.currency_code ?? "INR"), status: str(r.status),
     })),
-    pull("/bills", "bills", "Bill", (r) => ({
+    pull("/bills", "bills", "Bill", "last_modified_time", (r) => ({
       id: String(r.bill_id), label: `${str(r.bill_number) ?? "—"} · ${str(r.vendor_name) ?? ""}`,
       amount: num(r.total), currency: String(r.currency_code ?? "INR"), status: str(r.status),
     })),
-    pull("/customerpayments", "customerpayments", "Payment received", (r) => ({
+    pull("/customerpayments", "customerpayments", "Payment received", "last_modified_time", (r) => ({
       id: String(r.payment_id), label: `${str(r.payment_number) ?? str(r.reference_number) ?? "—"} · ${str(r.customer_name) ?? ""}`,
       amount: num(r.amount), currency: String(r.currency_code ?? "INR"), status: str(r.status),
     })),
-    pull("/vendorpayments", "vendorpayments", "Payment made", (r) => ({
+    pull("/vendorpayments", "vendorpayments", "Payment made", "last_modified_time", (r) => ({
       id: String(r.payment_id), label: `${str(r.payment_number) ?? "—"} · ${str(r.vendor_name) ?? ""}`,
       amount: num(r.amount), currency: String(r.currency_code ?? "INR"), status: null,
     })),
-    pull("/expenses", "expenses", "Expense", (r) => ({
+    pull("/expenses", "expenses", "Expense", "date", (r) => ({
       id: String(r.expense_id), label: `${str(r.account_name) ?? "—"}${r.description ? ` · ${String(r.description).slice(0, 60)}` : ""}`,
       amount: num(r.total), currency: String(r.currency_code ?? "INR"), status: str(r.status),
     })),
-    pull("/journals", "journals", "Journal entry", (r) => ({
+    pull("/journals", "journals", "Journal entry", "date", (r) => ({
       id: String(r.journal_id), label: `${str(r.entry_number) ?? str(r.journal_id)} · ${str(r.reference_number) ?? str(r.notes) ?? ""}`.slice(0, 90),
       amount: num(r.total), currency: String(r.currency_code ?? "INR"), status: str(r.status),
     })),
-    pull("/contacts", "contacts", "Customer / vendor", (r) => ({
+    pull("/contacts", "contacts", "Customer / vendor", "last_modified_time", (r) => ({
       id: String(r.contact_id), label: `${str(r.contact_name) ?? "—"}${r.contact_type ? ` (${String(r.contact_type)})` : ""}`,
       amount: null, currency: "INR", status: str(r.status),
     }), 15),

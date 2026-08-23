@@ -194,6 +194,32 @@ export async function POST(req: NextRequest) {
 
   const svc = createServiceClient();
 
+  // PROVIDER INVOICES FILE THEMSELVES ON THE WAY PAST.
+  //
+  // Vercel, Supabase, Cloudflare, Anthropic, Mailgun and Razorpay's own fee
+  // invoice all arrive by email each month (only Bunny offers an API). If this
+  // message is from one of those billing senders and carries a PDF, it is
+  // stored in the accounting vault — indexed by institution and financial year,
+  // deduped on the message id. It then RETURNS: a bill is not a student, and
+  // must never reach the student path, an auto-reply or the faculty desk.
+  try {
+    const attCount = Number(form.get("attachment-count") ?? 0);
+    const { providerFor, fileInvoiceFromMail } = await import("@/lib/invoiceMail");
+    if (providerFor(from) && attCount > 0) {
+      const atts: File[] = [];
+      for (let i = 1; i <= attCount; i++) {
+        const a = form.get(`attachment-${i}`);
+        if (a && typeof a === "object" && "arrayBuffer" in a) atts.push(a as File);
+      }
+      const filed = await fileInvoiceFromMail({
+        from, subject,
+        messageId: String(form.get("Message-Id") ?? form.get("message-id") ?? ""),
+        attachments: atts,
+      });
+      if (filed > 0) return NextResponse.json({ ok: true, filed });
+    }
+  } catch { /* a billing hiccup must never break the mail bridge */ }
+
   // IS THIS EVEN A STUDENT?
   //
   // contact@ is BOTH the address students reply to and the address the site

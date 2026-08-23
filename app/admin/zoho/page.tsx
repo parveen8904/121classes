@@ -1084,7 +1084,7 @@ export default async function ZohoHubPage(props: {
       {/* ── Bills: one line each, opened only when he wants it ──────── */}
       {hubConnected && (
         <div id="bills">
-          <h2 className="admin-section-title" style={{ marginTop: 26 }}>🧾 Bills to approve ({billsWaiting.length})</h2>
+          <h2 className="admin-section-title" style={{ marginTop: 26 }}>🧾 Documents to approve ({billsWaiting.length})</h2>
           <p style={{ margin: "4px 0 8px" }}>
             <Link className="btn small secondary" href="/admin/zoho/activity">📜 What has changed in Zoho</Link>
             <span className="muted" style={{ fontSize: ".8rem", marginLeft: 8 }}>
@@ -1096,6 +1096,15 @@ export default async function ZohoHubPage(props: {
             anything you disagree with <strong>here</strong>, and post it. What you change is remembered for that
             supplier. Nothing goes to Zoho until you press the green button.
           </p>
+
+          <details className="card" style={{ marginBottom: 12 }}>
+            <summary className="btn small secondary as-btn">✍️ Nothing to upload? Write the entry yourself</summary>
+            <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0" }}>
+              An invoice we are raising, a credit note, or a plain journal — the same questions as an invoice that
+              arrives, asked the other way round.
+            </p>
+            <RaiseDocument action={raiseDocumentAction} accountList="acct-names" isFounder={isFounder} />
+          </details>
 
           <form action={uploadBillAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
             <div style={{ minWidth: 190 }}>
@@ -1255,6 +1264,40 @@ export default async function ZohoHubPage(props: {
             );
           })}
 
+          {raised.length > 0 && (
+            <details className="card" style={{ marginTop: 10 }}>
+              <summary className="btn small secondary as-btn">📗 Raised by us ({raised.length})</summary>
+              <div style={{ marginTop: 8 }}>
+                {raised.map((r) => (
+                  <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline", padding: "6px 0", borderTop: "1px solid rgba(0,0,0,.06)", fontSize: ".84rem" }}>
+                    <span style={{ minWidth: 88 }}>{r.doc_date}</span>
+                    <span style={{ minWidth: 92 }}>
+                      {r.kind === "credit_note" ? "Credit note" : r.kind === "journal" ? "Journal" : "Invoice"}
+                    </span>
+                    <strong style={{ minWidth: 130 }}>{r.party_name ?? r.description ?? "—"}</strong>
+                    <span style={{ minWidth: 90, fontWeight: 600 }}>
+                      {r.inr_amount !== null ? `₹${Number(r.inr_amount).toLocaleString("en-IN")}` : "—"}
+                    </span>
+                    <span className="muted">{r.ledger ?? ""}{Number(r.tds_rate) > 0 ? ` · TDS ${r.tds_rate}% withheld by them` : ""}</span>
+                    <span style={{ marginLeft: "auto" }}>
+                      {r.status === "posted"
+                        ? <span style={{ color: "#0e6e52" }}>✅ {r.zoho_number ?? "posted"}</span>
+                        : r.status === "failed"
+                          ? <span style={{ color: "#b91c1c" }}>❌ {r.error}</span>
+                          : <span className="muted">waiting</span>}
+                    </span>
+                    {r.status === "failed" && (
+                      <form action={retryDocumentAction} style={{ margin: 0 }}>
+                        <input type="hidden" name="id" value={r.id} />
+                        <SubmitButton className="btn small secondary" savedLabel="↻">Try again</SubmitButton>
+                      </form>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
           {complianceRows.length > 0 && (
             <details className="card" style={{ marginTop: 10 }}>
               <summary className="btn small secondary as-btn">📋 Forms still to file ({complianceRows.length})</summary>
@@ -1273,54 +1316,6 @@ export default async function ZohoHubPage(props: {
                   )}
                 </div>
               ))}
-            </details>
-          )}
-        </div>
-      )}
-
-      {/* ── What we raise ───────────────────────────────────────────── */}
-      {hubConnected && (
-        <div id="raise">
-          <h2 className="admin-section-title" style={{ marginTop: 26 }}>📤 Invoices, credit notes &amp; journals we raise</h2>
-          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
-            The other half of the books — what goes out, and everything that fits neither a bill nor an invoice.
-            The same questions as an invoice that arrives, with one reversal: on our own invoice the
-            <strong> customer withholds the TDS</strong>, so it is money owed to us, not money we pay.
-          </p>
-
-          <RaiseDocument action={raiseDocumentAction} accountList="acct-names" isFounder={isFounder} />
-
-          {raised.length > 0 && (
-            <details className="card" style={{ marginTop: 10 }}>
-              <summary className="btn small secondary as-btn">📗 Raised so far ({raised.length})</summary>
-              <div style={{ marginTop: 8 }}>
-                {raised.map((r) => (
-                  <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline", padding: "6px 0", borderTop: "1px solid rgba(0,0,0,.06)", fontSize: ".84rem" }}>
-                    <span style={{ minWidth: 88 }}>{r.doc_date}</span>
-                    <span style={{ minWidth: 92 }}>
-                      {r.kind === "credit_note" ? "Credit note" : r.kind === "journal" ? "Journal" : "Invoice"}
-                    </span>
-                    <strong style={{ minWidth: 130 }}>{r.party_name ?? r.description ?? "—"}</strong>
-                    <span style={{ minWidth: 90, fontWeight: 600 }}>
-                      {r.inr_amount !== null ? `₹${Number(r.inr_amount).toLocaleString("en-IN")}` : "—"}
-                    </span>
-                    <span className="muted">{r.ledger ?? ""}{Number(r.tds_rate) > 0 ? ` · TDS ${r.tds_rate}% withheld` : ""}</span>
-                    <span style={{ marginLeft: "auto" }}>
-                      {r.status === "posted"
-                        ? <span style={{ color: "#0e6e52" }}>✅ {r.zoho_number ?? "posted"}</span>
-                        : r.status === "failed"
-                          ? <span style={{ color: "#b91c1c" }}>❌ {r.error}</span>
-                          : <span className="muted">waiting</span>}
-                    </span>
-                    {r.status === "failed" && (
-                      <form action={retryDocumentAction} style={{ margin: 0 }}>
-                        <input type="hidden" name="id" value={r.id} />
-                        <SubmitButton className="btn small secondary" savedLabel="↻">Try again</SubmitButton>
-                      </form>
-                    )}
-                  </div>
-                ))}
-              </div>
             </details>
           )}
         </div>

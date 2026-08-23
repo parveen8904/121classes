@@ -20,7 +20,9 @@ export type ApprovalKind =
   | "sale"             // a portal sale → invoice + receipt
   | "petty_bill"       // a petty-cash bill
   | "petty_advance"    // a petty-cash advance
-  | "outgoing";        // an invoice, credit note or journal WE raise
+  | "outgoing"         // an invoice, credit note or journal WE raise
+  | "website_sale"     // a subscription sold on the portal
+  | "book_sale";       // a books order
 
 /** What each kind actually does, once he has released it. */
 const EXECUTORS: Record<ApprovalKind, (refId: string, details: Record<string, unknown>) => Promise<void>> = {
@@ -34,6 +36,8 @@ const EXECUTORS: Record<ApprovalKind, (refId: string, details: Record<string, un
   petty_bill: async (id, d) => (await import("@/lib/pettyCash")).postBill(id, String(d.expenseAccount ?? "")),
   petty_advance: async (id) => (await import("@/lib/pettyCash")).postAdvance(id),
   outgoing: async (id) => (await import("@/lib/zohoOutgoing")).postOutgoing(id),
+  website_sale: async (id) => (await import("@/lib/websiteSales")).postWebsiteSale("orders", id),
+  book_sale: async (id) => (await import("@/lib/websiteSales")).postWebsiteSale("book_orders", id),
 };
 
 export type ApprovalRow = {
@@ -171,6 +175,17 @@ async function describe(kind: ApprovalKind, refId: string): Promise<{ summary: s
   if (kind === "petty_bill") {
     const r = await one("petty_bills", "bill_date, amount, purpose");
     return { summary: r ? `Petty cash ${r.bill_date} — ${r.purpose} · ${money(r.amount)}` : "A petty-cash bill", details: { ...(r ?? {}) } };
+  }
+  if (kind === "website_sale" || kind === "book_sale") {
+    const table = kind === "website_sale" ? "orders" : "book_orders";
+    const r = await one(table, "amount_inr, invoice_no, created_at, kind");
+    return {
+      summary: r
+        ? `Website ${kind === "book_sale" ? "books order" : "sale"} of ${String(r.created_at).slice(0, 10)} — ${money(r.amount_inr)}` +
+          `${r.invoice_no ? ` · invoice ${r.invoice_no}` : ""}`
+        : "A website sale",
+      details: { ...(r ?? {}) },
+    };
   }
   if (kind === "outgoing") {
     const r = await one("zoho_documents", "kind, party_name, doc_date, description, amount, currency, inr_amount, ledger, gst_treatment, gst_rate, tds_rate, journal_lines");

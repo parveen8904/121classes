@@ -6,7 +6,7 @@ import { formatDate } from "@/lib/dates";
 import { getSecret } from "@/lib/secrets";
 import { zohoConfigured } from "@/lib/zohoApi";
 import { FVD, KNOWN_FOREIGN_VENDORS } from "@/lib/foreignVendorDesk";
-import { NATURES, tdsWorking, entrySentence } from "@/lib/postingShape";
+import EntryEditor from "./EntryEditor";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
@@ -1199,96 +1199,28 @@ export default async function ZohoHubPage(props: {
                         </div>
                       </div>
 
-                      {/* 2 — WHAT IT IS. Not every paper is an expense. */}
-                      <div style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".07em", color: "#666", margin: "14px 0 6px" }}>
-                        2 · What this is
-                      </div>
-                      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))" }}>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>Treat it as</label>
-                          <select name="nature" defaultValue={p.nature ?? "expense"} style={{ marginBottom: 0 }}>
-                            {NATURES.map((n) => <option key={n.value} value={n.value}>{n.label} — {n.hint}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>Operating or not</label>
-                          <select name="operating" defaultValue={p.operating ?? "operating"} style={{ marginBottom: 0 }}>
-                            <option value="operating">Operating — part of the trade</option>
-                            <option value="non_operating">Non-operating — below the trading result</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>Ledger</label>
-                          <input name="expense_account" list="acct-names" required defaultValue={p.expense_account ?? ""} placeholder="pick one, or type a new name" style={{ marginBottom: 0 }} />
-                          <div className="muted" style={{ fontSize: ".7rem", marginTop: 2 }}>A name Zoho does not have is created, marked (AI).</div>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>Sub-head (optional)</label>
-                          <input name="sub_account" defaultValue={p.sub_account ?? ""} placeholder="e.g. groceries, electricity" style={{ marginBottom: 0 }} />
-                        </div>
-                      </div>
-
-                      {/* 3 — THE TAXES. */}
-                      <div style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".07em", color: "#666", margin: "14px 0 6px" }}>
-                        3 · GST and withholding
-                      </div>
-                      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>GST</label>
-                          <select name="gst_treatment" defaultValue={p.gst_treatment ?? (foreign ? "rcm" : "domestic_itc")} style={{ marginBottom: 0 }}>
-                            <option value="rcm">Reverse charge — we pay it</option>
-                            <option value="domestic_itc">They charged it — claim ITC</option>
-                            <option value="none">No GST</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>GST rate %</label>
-                          <input name="gst_rate" type="number" step="0.01" defaultValue={p.gst_rate ?? 18} style={{ marginBottom: 0 }} />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>TDS</label>
-                          <select name="tds_mode" defaultValue={p.tds_mode ?? (tdsRate ? "deduct" : "none")} style={{ marginBottom: 0 }}>
-                            <option value="none">None</option>
-                            <option value="deduct">Deduct from their payment</option>
-                            <option value="gross_up">We bear it — gross up</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>TDS rate %</label>
-                          <input name="tds_rate" type="number" step="0.01" defaultValue={tdsRate ?? ""} placeholder="blank = none" style={{ marginBottom: 0 }} />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>TDS section</label>
-                          <input name="tds_section" defaultValue={p.tds_section ?? ""} placeholder="393(2) Sl.17" style={{ marginBottom: 0 }} />
-                        </div>
-                      </div>
-
-                      {/* THE ENTRY, IN WORDS, before he approves it. */}
-                      <div className="card" style={{ marginTop: 12, background: "rgba(14,110,82,.06)", padding: "10px 12px" }}>
-                        <div style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".07em", color: "#666" }}>The entry this makes</div>
-                        <p style={{ margin: "4px 0 0", fontSize: ".86rem", lineHeight: 1.6 }}>
-                          {entrySentence({
-                            nature: (p.nature ?? "expense") as never,
-                            operating: (p.operating ?? "operating") as never,
-                            account: p.expense_account ?? "—",
-                            subAccount: p.sub_account ?? null,
-                            gstTreatment: p.gst_treatment ?? (foreign ? "rcm" : "domestic_itc"),
-                            gstRate: Number(p.gst_rate ?? 18),
-                            tds: tdsWorking(inr, (p.tds_mode ?? (tdsRate ? "deduct" : "none")) as never, Number(tdsRate ?? 0), p.vendor_name ?? b.institution),
-                            who: p.vendor_name ?? b.institution,
-                          })}
-                        </p>
-                        {d?.form145Part && (
-                          <p className="muted" style={{ margin: "6px 0 0", fontSize: ".8rem" }}>
-                            Form 145 Part {d.form145Part}{d.form146Required ? " + Form 146 from your accountant" : ""}.
-                            {d.warnings?.length ? ` ${d.warnings[0]}` : ""}
-                          </p>
-                        )}
-                        <p className="muted" style={{ margin: "6px 0 0", fontSize: ".76rem" }}>
-                          Change anything above and press the button — the wording here is refreshed from what was
-                          last saved, so it always describes what will actually be sent.
-                        </p>
-                      </div>
+                      <EntryEditor
+                        inr={inr}
+                        who={p.vendor_name ?? b.institution}
+                        currency={b.currency}
+                        foreign={foreign}
+                        accountList="acct-names"
+                        initial={{
+                          nature: p.nature ?? "expense",
+                          operating: p.operating ?? "operating",
+                          account: p.expense_account ?? "",
+                          subAccount: p.sub_account ?? "",
+                          gstTreatment: p.gst_treatment ?? (foreign ? "rcm" : "domestic_itc"),
+                          gstRate: Number(p.gst_rate ?? 18),
+                          tdsMode: p.tds_mode ?? (tdsRate ? "deduct" : "none"),
+                          tdsRate: tdsRate === null || tdsRate === undefined ? "" : String(tdsRate),
+                          tdsSection: p.tds_section ?? "",
+                        }}
+                        compliance={d?.form145Part
+                          ? `Form 145 Part ${d.form145Part}${d.form146Required ? " + Form 146 from your accountant" : ""}.` +
+                            (d.warnings?.length ? ` ${d.warnings[0]}` : "")
+                          : null}
+                      />
 
                       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
                         <SubmitButton className="btn small" savedLabel="✓ Done">

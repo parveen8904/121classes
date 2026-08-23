@@ -55,15 +55,22 @@ export function fyStart(onISO: string): string {
   return `${m < 4 ? y - 1 : y}-04-01`;
 }
 
-/** Everything already booked to this vendor this financial year. */
-async function paidThisFy(institution: string, onISO: string): Promise<number> {
+/**
+ * Everything already booked to this vendor this financial year, NOT counting
+ * the invoice being looked at — it is already a row here, and the reasoning
+ * adds it on top. Counting it twice would push a vendor over the ₹5,00,000
+ * line early and call for an accountant's certificate that is not yet due.
+ */
+async function paidThisFy(institution: string, onISO: string, exceptId?: string): Promise<number> {
   const svc = createServiceClient();
-  const { data } = await svc.from("provider_bills")
-    .select("inr_amount")
+  let q = svc.from("provider_bills")
+    .select("id, inr_amount")
     .eq("institution", institution)
     .neq("status", "skipped")
     .gte("bill_date", fyStart(onISO))
     .lte("bill_date", onISO);
+  if (exceptId) q = q.neq("id", exceptId);
+  const { data } = await q;
   return (data ?? []).reduce((t, r) => t + Number(r.inr_amount ?? 0), 0);
 }
 
@@ -77,12 +84,12 @@ export function foreignAnswered(rule?: Partial<BillRule> | null): boolean {
  * whether an accountant's certificate has to come first.
  */
 export async function determineFor(b: {
-  institution: string; bill_date: string; inr_amount: number | null; currency: string;
+  id?: string; institution: string; bill_date: string; inr_amount: number | null; currency: string;
 }, rule: Partial<BillRule>) {
   const { determineForeign } = await import("@/lib/foreignVendorDesk");
   const svc = createServiceClient();
   const { data: gstRow } = await svc.from("site_settings").select("value").eq("key", "gst_registered").maybeSingle();
-  const paid = await paidThisFy(b.institution, b.bill_date);
+  const paid = await paidThisFy(b.institution, b.bill_date, b.id);
   return determineForeign({
     country: String(rule.country),
     service_category: (rule.service_category ?? "standardised") as never,

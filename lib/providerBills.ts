@@ -265,7 +265,11 @@ async function advanceBill(billId: string): Promise<{ state: "open" | "awaiting_
     return { state: "open" };
   } catch (e) {
     const why = e instanceof Error ? e.message : "unknown";
-    if (/not been approved|approval/i.test(why)) {
+    // Zoho's own words settle it. An edited bill can still read "draft" on the
+    // record while the books already hold it as open, and reporting THAT as
+    // "not in the ledgers" would be a false alarm — as bad as hiding a real one.
+    if (/already in open status/i.test(why)) return { state: "open" };
+    if (/not been approved/i.test(why)) {
       return { state: "awaiting_approval", why: "waiting for approval in Zoho — your books have bill approval switched on" };
     }
     return { state: "draft", why: submit ? `${why} (submit also failed: ${submit})` : why };

@@ -29,11 +29,20 @@ export async function GET(req: NextRequest) {
   const j = (await r.json()) as { items?: Record<string, unknown>[]; count?: number };
   const items = j.items ?? [];
   const num = (v: unknown) => Number(v) || 0;
+  // Break down by TYPE: a settlement is payments in, refunds/adjustments out.
+  const byType = new Map<string, { n: number; credit: number; debit: number; fee: number; tax: number }>();
+  for (const it of items) {
+    const t = String(it.type ?? "?");
+    const cur = byType.get(t) ?? { n: 0, credit: 0, debit: 0, fee: 0, tax: 0 };
+    cur.n++; cur.credit += num(it.credit); cur.debit += num(it.debit); cur.fee += num(it.fee); cur.tax += num(it.tax);
+    byType.set(t, cur);
+  }
   const bySettlement = new Map<string, { n: number; amount: number; fee: number; tax: number }>();
   for (const it of items) {
     const sid = String(it.settlement_id ?? "—");
     const cur = bySettlement.get(sid) ?? { n: 0, amount: 0, fee: 0, tax: 0 };
-    cur.n++; cur.amount += num(it.amount); cur.fee += num(it.fee); cur.tax += num(it.tax);
+    // net movement, not raw amount: credits in, debits out
+    cur.n++; cur.amount += num(it.credit) - num(it.debit); cur.fee += num(it.fee); cur.tax += num(it.tax);
     bySettlement.set(sid, cur);
   }
   const totals = [...bySettlement.values()].reduce((a, b) => ({
@@ -42,6 +51,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     month: `${year}-${month}`,
+    byType: [...byType.entries()].map(([t, v]) => ({ type: t, n: v.n, credit: v.credit / 100, debit: v.debit / 100, fee: v.fee / 100, tax: v.tax / 100 })),
     transactions: items.length,
     settlements: bySettlement.size,
     totals_paise: totals,

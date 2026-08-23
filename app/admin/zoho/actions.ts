@@ -121,6 +121,18 @@ export async function retrySettlementAction(formData: FormData) {
   revalidatePath("/admin/zoho");
 }
 
+// ---- Provider invoices, by API ---------------------------------------------
+
+export async function fetchProviderInvoicesAction() {
+  await assertArea("zoho");
+  const { fetchBunnyInvoices } = await import("@/lib/providerInvoices");
+  let note: string;
+  try { note = await fetchBunnyInvoices(); }
+  catch (e) { note = `Provider pull failed: ${e instanceof Error ? e.message : "unknown"}`; }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#vault`);
+}
+
 // ---- Bank statements & the three queues ------------------------------------
 
 export async function uploadStatementAction(formData: FormData) {

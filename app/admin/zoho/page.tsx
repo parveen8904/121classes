@@ -7,7 +7,7 @@ import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, readbackBillsAction, saveBillRuleAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, scanBillsAction, readbackBillsAction, recheckBillDatesAction, saveBillRuleAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -975,6 +975,9 @@ export default async function ZohoHubPage(props: {
             <h2 className="admin-section-title" style={{ margin: 0 }}>🧾 Provider invoices → Zoho bills</h2>
             <form action={scanBillsAction} style={{ margin: 0 }}>
               <SubmitButton className="btn small secondary" savedLabel="Scanned">🔄 Read the vault for new bills</SubmitButton>
+            </form>
+            <form action={recheckBillDatesAction} style={{ margin: 0 }}>
+              <SubmitButton className="btn small secondary" savedLabel="Checked">📅 Check posted dates against the paper</SubmitButton>
             </form>
             <form action={readbackBillsAction} style={{ margin: 0 }}>
               <SubmitButton className="btn small secondary" savedLabel="Checked">🔍 Check &amp; finish in Zoho</SubmitButton>

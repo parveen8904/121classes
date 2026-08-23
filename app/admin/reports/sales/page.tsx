@@ -37,11 +37,9 @@ type BookOrderRow = {
  * short by hundreds and looked perfectly plausible, which is what made it
  * dangerous. The same silence once hid two thirds of the AI bill.
  */
-async function readAll<T>(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  table: string,
-  columns: string,
-): Promise<T[]> {
+type Client = ReturnType<typeof createServiceClient> | Awaited<ReturnType<typeof createClient>>;
+
+async function readAll<T>(supabase: Client, table: string, columns: string): Promise<T[]> {
   const PAGE = 1000;
   const all: T[] = [];
   for (let from = 0; ; from += PAGE) {
@@ -56,14 +54,21 @@ async function readAll<T>(
 
 export default async function ReportsPage() {
   const supabase = createClient();
+  // THE MONEY IS READ WITH THE SERVICE KEY, THE REST WITH HIS OWN SESSION.
+  //
+  // Sponsorships came back as ₹0 on the first attempt: gift_orders is closed to
+  // the browser key by row-level security, and a policy that returns no rows
+  // returns no error either — the report would simply have gone on saying zero.
+  // The gift table lower down this page already read past it this way.
+  const svc = createServiceClient();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
   const [subOrders, bookOrders, giftOrders, subs, { count: students }, { data: books }] =
     await Promise.all([
-      readAll<MoneyRow>(supabase, "orders", "amount_inr, status, created_at"),
-      readAll<BookOrderRow>(supabase, "book_orders", "amount_inr, status, created_at, items"),
-      readAll<MoneyRow>(supabase, "gift_orders", "amount_inr, status, created_at"),
+      readAll<MoneyRow>(svc, "orders", "amount_inr, status, created_at"),
+      readAll<BookOrderRow>(svc, "book_orders", "amount_inr, status, created_at, items"),
+      readAll<MoneyRow>(svc, "gift_orders", "amount_inr, status, created_at"),
       readAll<SubRow>(supabase, "subscriptions", "status, ends_at, plans(tier)"),
       supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "student"),
       supabase.from("books").select("id, title"),

@@ -140,10 +140,16 @@ export function entrySentence(p: {
     : p.nature === "income_reversal" ? `Reverses income already booked to ${head}.`
     : `Expense: ${head} (${p.operating === "operating" ? "operating" : "non-operating"}).`;
 
+  // NO INPUT CREDIT ON WHAT IS NOT THE BUSINESS'S. Personal spending cannot
+  // carry ITC, so on drawings the GST is part of the cost, not something to
+  // claim back — saying otherwise would be a wrong claim in the return.
+  const personal = p.nature === "drawings";
   const gst =
-    p.gstTreatment === "rcm" ? ` GST ${p.gstRate}% under reverse charge — we pay it and claim it back.`
-    : p.gstTreatment === "domestic_itc" ? ` GST ${p.gstRate}% charged by them, claimed as input credit.`
-    : " No GST.";
+    p.gstTreatment === "none" ? " No GST."
+    : personal
+      ? ` GST ${p.gstRate}%${p.gstTreatment === "rcm" ? " under reverse charge" : ""} — a cost, with no input credit, because this is not the business's.`
+    : p.gstTreatment === "rcm" ? ` GST ${p.gstRate}% under reverse charge — we pay it and claim it back.`
+    : ` GST ${p.gstRate}% charged by them, claimed as input credit.`;
 
   return `${what}${gst} ${p.tds.sentence}`;
 }

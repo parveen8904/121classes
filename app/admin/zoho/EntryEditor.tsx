@@ -115,8 +115,8 @@ export default function EntryEditor(props: {
         <p style={{ margin: "4px 0 0", fontSize: ".88rem", lineHeight: 1.6 }}>{sentence}</p>
         {tdsMode === "gross_up" && (
           <p className="muted" style={{ margin: "6px 0 0", fontSize: ".8rem" }}>
-            The bill is raised at ₹{work.bookedAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })} so that
-            Zoho&apos;s own deduction leaves {props.who} exactly their invoice.
+            The bill is raised at ₹{work.bookedAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}{" "}
+            so that Zoho&apos;s own deduction leaves {props.who} exactly their invoice.
           </p>
         )}
         {props.compliance && (

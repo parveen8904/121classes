@@ -12,8 +12,11 @@ import { usePathname } from "next/navigation";
 // Nobody has ever criticised a class.
 //
 // So the ask goes to students who have actually been taught: signed in, on the
-// dashboard or in the learning area, after using the site on three separate
-// days. Not to a visitor, not mid-payment, not to somebody who arrived today.
+// dashboard or in the learning area — which already covers the descriptive
+// paper, the MCQ chapter tests and the case studies, since those all live
+// under /learn — plus the planner and the career page, after using the site
+// on three separate days. Not to a visitor, not mid-payment, not to somebody
+// who arrived today.
 //
 // TWO RULES THIS MUST NOT BREAK.
 //
@@ -33,7 +36,7 @@ import { usePathname } from "next/navigation";
 // inside the phone app is asked for a Play Store or App Store rating, and only
 // a student on the web is asked for the Google listing. Nobody is asked twice.
 
-const SHOW_ON = ["/dashboard", "/learn"];
+const SHOW_ON = ["/dashboard", "/learn", "/planner", "/career"];
 const K_DAYS = "grev.days";
 const K_LAST = "grev.lastAsk";
 const K_DONE = "grev.done";

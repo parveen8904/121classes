@@ -2836,12 +2836,32 @@ export async function parseBrokerageStatementText(text: string): Promise<Brokera
 // ---- Provider invoice PDF → its figures (accounting hub) --------------------
 // Transcription only: what the invoice says. The TREATMENT (account, GST, TDS)
 // is never guessed here — a human rules on it once per vendor.
-export type InvoiceFacts = { invoice_no?: string; date?: string; currency?: string; subtotal?: number; tax?: number; total?: number };
+export type InvoiceFacts = {
+  invoice_no?: string; date?: string; currency?: string; subtotal?: number; tax?: number; total?: number;
+  /** The Indian GST breakup, COPIED off the invoice — see the prompt below. */
+  taxable_value?: number; cgst?: number; sgst?: number; igst?: number;
+};
 export async function parseInvoiceText(text: string): Promise<InvoiceFacts | null> {
   const out = await callClaude(
+    // TRANSCRIBE, DO NOT CALCULATE.
+    //
+    // The founder's standing rule: "You will pick everything from the invoice
+    // only and that will be mentioned as CGST IGST SGST. You will not derive on
+    // your own." A model asked for a number it cannot see will helpfully work
+    // one out, and a plausible invented tax figure is the single most dangerous
+    // thing this function could return — it lands in a ledger. So the
+    // instruction to omit is repeated and made specific: a missing field is the
+    // right answer, and a human fills it in.
     "You read one supplier invoice and return ONLY JSON: " +
-    '{"invoice_no":"string","date":"YYYY-MM-DD","currency":"ISO code like USD or INR","subtotal":number,"tax":number,"total":number}. ' +
-    "Use the invoice's own totals; omit a field you cannot find. Numbers plain, no symbols or commas.",
+    '{"invoice_no":"string","date":"YYYY-MM-DD","currency":"ISO code like USD or INR","subtotal":number,' +
+    '"tax":number,"total":number,"taxable_value":number,"cgst":number,"sgst":number,"igst":number}. ' +
+    "COPY the figures the invoice prints. NEVER calculate, infer or apportion one. " +
+    "If a figure is not printed on the invoice, OMIT that field entirely — do not compute it from a percentage, " +
+    "from the total, or from the other figures. An omitted field is correct and expected; an invented one is not. " +
+    "taxable_value is the amount GST was charged on. Most Indian invoices show EITHER cgst and sgst together " +
+    "(supplier in the same state) OR igst alone (different state) — give only the ones actually printed, " +
+    "and never split a single GST figure into halves yourself. " +
+    "Omit every field you cannot find. Numbers plain, no symbols or commas.",
     text.slice(0, 40_000),
     600,
     { model: await fastModel(), feature: "invoice" },

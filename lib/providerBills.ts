@@ -175,7 +175,8 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
   for (const d of batch) {
     const institution = str(d.institution) || "Unknown";
 
-    let facts: { invoice_no?: string; date?: string; currency?: string; tax?: number; total?: number } = {};
+    let facts: { invoice_no?: string; date?: string; currency?: string; tax?: number; total?: number;
+                 taxable_value?: number; cgst?: number; sgst?: number; igst?: number } = {};
     // The titles this desk writes carry the figures — "Vercel — Aug 2026
     // (USD 31.18) — UHL42VKB-0004" — so they are read first, for free.
     //
@@ -240,6 +241,18 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
       vault_doc_id: d.id, institution,
       bill_no: str(facts.invoice_no) || null, bill_date: billDate,
       currency, amount: total, tax_amount: Number(facts.tax) || null,
+      // THE GST BREAKUP, WHERE THE INVOICE ACTUALLY PRINTED IT.
+      //
+      // "If you are unable to read any invoice, just leave the amount, we will
+      // fill in [the rest]." So this copies across only what was genuinely read
+      // and leaves the rest null — a null here means a person types it, which
+      // is the intended outcome, not a failure. Nothing is computed: a bill
+      // that arrives without these simply waits, and neither the preview nor
+      // the posting will invent them (see lib/entryPreview.ts).
+      taxable_value: Number(facts.taxable_value) || null,
+      cgst_amount: Number(facts.cgst) || null,
+      sgst_amount: Number(facts.sgst) || null,
+      igst_amount: Number(facts.igst) || null,
       inr_amount: inr, rate, rate_date: rateDate,
       // A row whose date or figures are uncertain is never left as a one-tick
       // posting — it waits for a person.

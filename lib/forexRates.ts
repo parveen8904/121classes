@@ -101,3 +101,38 @@ export async function rule115Rate(incomeDateISO: string, currency = "USD"):
   const r = await ttBuyRate(key, currency);
   return r ? { ...r, keyDate: key } : null;
 }
+
+/**
+ * THE RATE THIS SITE SHOWS DOLLARS AT.
+ *
+ * The admin dashboard and the costs page each carried `const INR = 85` — a
+ * number typed once and never revisited — while this very table held the real
+ * SBI TT buying rate the accounts desk works to: ₹95.00/USD. Every dollar cost
+ * on those pages was therefore understated by about twelve per cent; a month
+ * shown as ₹29,289 was really ₹32,735.
+ *
+ * So the display rate is the same one Rule 115 uses for the current month —
+ * the TT buy rate on the last day of the previous month — read from the same
+ * table, so the cost pages and the ledger cannot quote different dollars.
+ *
+ * FALLING BACK IS EXPLICIT. If no rate is on file the last known one is used,
+ * and only then the old constant; the caller is told which, so a page can say
+ * "at ₹95.00" rather than implying a precision it does not have.
+ */
+export const FALLBACK_USD_INR = 85;
+
+export async function displayUsdRate(now = new Date()):
+  Promise<{ rate: number; from: "rule115" | "last-known" | "fallback"; rateDate: string | null }> {
+  const today = now.toISOString().slice(0, 10);
+  try {
+    const r = await rule115Rate(today, "USD");
+    if (r?.rate) return { rate: r.rate, from: "rule115", rateDate: r.rateDate };
+
+    const svc = createServiceClient();
+    const { data } = await svc.from("forex_rates")
+      .select("tt_buy, rate_date").eq("currency", "USD").gt("tt_buy", 0)
+      .order("rate_date", { ascending: false }).limit(1).maybeSingle();
+    if (data?.tt_buy) return { rate: Number(data.tt_buy), from: "last-known", rateDate: String(data.rate_date) };
+  } catch { /* a rate lookup must never take a page down */ }
+  return { rate: FALLBACK_USD_INR, from: "fallback", rateDate: null };
+}

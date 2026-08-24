@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import { getBunnyBilling } from "@/lib/bunny";
 import { monthCostUsd } from "@/lib/monthCost";
+import { displayUsdRate } from "@/lib/forexRates";
 import SubmitButton from "@/app/components/SubmitButton";
 import { saveCostSettings, runPaperCleanup } from "./actions";
 import { countOldPapers } from "@/lib/paperCleanup";
@@ -12,8 +13,11 @@ import { countOldPapers } from "@/lib/paperCleanup";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Costs & usage — Admin" };
 
-const INR = 85;
-const money = (usd: number) => `$${usd.toFixed(2)} · ₹${Math.round(usd * INR)}`;
+// The rate is READ from the forex table the accounts desk works to, not typed.
+// A hardcoded 85 here understated every figure on this page by about twelve per
+// cent against the real ₹95.00/USD. Built per-request below.
+const moneyAt = (rate: number) => (usd: number) =>
+  `$${usd.toFixed(2)} · ₹${Math.round(usd * rate).toLocaleString("en-IN")}`;
 const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
 // Live project (Mumbai) + the org that holds the Pro billing.
@@ -69,6 +73,8 @@ export default async function CostsPage(props: { searchParams: Promise<{ purged?
   // The dashboard shows this same number, from lib/monthCost.ts. The parts are
   // still worked out above because this page explains each of them; the TOTAL
   // comes from the shared function so the two screens cannot drift apart.
+  const { rate: usdRate, from: rateFrom, rateDate } = await displayUsdRate();
+  const money = moneyAt(usdRate);
   const monthCost = await monthCostUsd();
   const totalMonth = monthCost.total;
 
@@ -120,6 +126,14 @@ export default async function CostsPage(props: { searchParams: Promise<{ purged?
       {/* Total this month */}
       <div style={{ marginTop: 18, background: "linear-gradient(135deg,#0d9488,#10b981)", color: "#fff", borderRadius: 14, padding: "18px 20px" }}>
         <div style={{ fontSize: ".85rem", opacity: 0.92 }}>Estimated total for {monthLabel}</div>
+        {/* Say which rate the rupee figures use. A converted number without its
+            rate is not checkable, and this page is read against real invoices. */}
+        <div style={{ fontSize: ".72rem", opacity: 0.8 }}>
+          converted at ₹{usdRate.toFixed(2)}/USD
+          {rateFrom === "rule115" ? ` · SBI TT buy ${rateDate} (the Rule 115 rate)`
+            : rateFrom === "last-known" ? ` · last rate on file (${rateDate})`
+            : " · no rate on file — fallback"}
+        </div>
         <div style={{ fontSize: "2rem", fontWeight: 800, margin: "4px 0" }}>{money(totalMonth)}</div>
         <div style={{ fontSize: ".8rem", opacity: 0.92 }}>
           AI {money(aiMonth)} (exact) · Bunny {money(bunnyMonth)} {bunnyBill ? "(live)" : "(entered)"} · Supabase {money(supabasePlan)} · Vercel {money(vercelPlan)} · Cloudflare {money(cloudflareBill)} — <strong>all real figures; add the Bunny account key to make Bunny live too</strong>

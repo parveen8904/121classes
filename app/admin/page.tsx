@@ -4,14 +4,17 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { currentStaff, pathAllowed } from "@/lib/adminAccess";
 import { ADMIN_GROUPS } from "@/lib/adminNav";
 import { monthCostUsd } from "@/lib/monthCost";
+import { displayUsdRate } from "@/lib/forexRates";
 
 export const dynamic = "force-dynamic";
-const INR = 85;
+// The dollar rate is READ, not typed — see displayUsdRate(). A constant here
+// understated every dollar cost by about twelve per cent against the rate the
+// accounts desk actually works to.
 
 async function loadStats() {
   const svc = createServiceClient();
   const head = { count: "exact" as const, head: true };
-  const [students, openings, doubtSummary, storage, money, cost] = await Promise.all([
+  const [students, openings, doubtSummary, storage, money, cost, usd] = await Promise.all([
     svc.from("profiles").select("id", head).eq("role", "student"),
     svc.from("job_listings").select("id", head).eq("status", "new"),
     // ONE DEFINITION OF "WAITING", AND IT LIVES IN ONE PLACE.
@@ -34,6 +37,7 @@ async function loadStats() {
     // The SAME figure the costs page shows — see lib/monthCost.ts. Two screens
     // computing one month's cost separately is how they come to disagree.
     monthCostUsd().catch(() => null),
+    displayUsdRate(),
   ]);
   const m = (Array.isArray(money.data) ? money.data[0] : money.data) as
     { revenue_all: number; revenue_month: number; revenue_today: number;
@@ -50,6 +54,7 @@ async function loadStats() {
     usersToday: Number(m?.users_today ?? 0),
     subsToday: Number(m?.subscriptions_today ?? 0),
     costMonthUsd: cost?.total ?? null,
+    usdRate: usd.rate,
   };
 }
 
@@ -67,7 +72,7 @@ export default async function AdminHome() {
     return !!staff && pathAllowed(href, staff);
   };
   const s = await loadStats();
-  const inr = (usd: number) => `₹${Math.round(usd * INR)}`;
+  const inr = (usdAmount: number) => `₹${Math.round(usdAmount * s.usdRate).toLocaleString("en-IN")}`;
   // The money first — it is the thing he opens this page to see. Rupee figures
   // are already rupees; inr() below converts DOLLAR costs and must not touch
   // them (that mistake would multiply revenue by 85).

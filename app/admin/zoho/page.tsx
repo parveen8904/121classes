@@ -417,7 +417,7 @@ export default async function ZohoHubPage(props: {
           WORK (the desk's queues), then FILES AND REFERENCE. This strip is so
           the page can be jumped through rather than scrolled. */}
       <nav className="card" style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", padding: "10px 12px" }}>
-        <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700 }}>Decide</span>
+        <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, color: "#b45309" }}>Approve</span>
         <a className="btn small" href="#approvals">✋ Waiting on you{pendingApprovals.length ? ` (${pendingApprovals.length})` : ""}</a>
         <a className="btn small secondary" href="#bills">🧾 Documents{billsWaiting.length ? ` (${billsWaiting.length})` : ""}</a>
         <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, marginLeft: 6 }}>Work</span>
@@ -426,7 +426,7 @@ export default async function ZohoHubPage(props: {
         <a className="btn small secondary" href="#bank">🏧 Statements</a>
         <a className="btn small secondary" href="#petty">👛 Petty cash</a>
         <a className="btn small secondary" href="#brokerage">📈 Investments</a>
-        <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, marginLeft: 6 }}>Files</span>
+        <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, marginLeft: 6 }}>Records</span>
         <a className="btn small secondary" href="#vault">🗄️ Vault</a>
         <a className="btn small secondary" href="#tax">🧾 Tax</a>
         <a className="btn small secondary" href="#backlog">📋 Backlog</a>
@@ -439,6 +439,10 @@ export default async function ZohoHubPage(props: {
         gets approved here, and is pushed with its portal reference — so nothing ever posts twice, and a correction
         is a fresh entry, never a silent edit. Bank feeds inside Zoho stay <strong>disconnected</strong>.
       </div>
+
+      {/* ═════════ ZONE 1 · For your approval ═════════ */}
+      <section className="zone" data-zone="approve">
+        <header className="zone-head"><span className="zone-kicker">For your approval</span></header>
 
       {/* ── His gate: nothing reaches Zoho until he releases it ──────── */}
       {hubConnected && (
@@ -510,7 +514,7 @@ export default async function ZohoHubPage(props: {
       {/* ── Bills: one line each, opened only when he wants it ──────── */}
       {hubConnected && (
         <details id="bills" data-sec>
-          <summary className="admin-section-title" style={{ cursor: "pointer" }}>🧾 Documents to approve ({billsWaiting.length})</summary>
+          <summary className="sec-head">🧾 Documents to approve{billsWaiting.length > 0 && <span className="sec-count warn">{billsWaiting.length}</span>}</summary>
           <p style={{ margin: "4px 0 8px" }}>
             <Link className="btn small secondary" href="/admin/zoho/activity">📜 What has changed in Zoho</Link>
             <span className="muted" style={{ fontSize: ".8rem", marginLeft: 8 }}>
@@ -805,93 +809,16 @@ export default async function ZohoHubPage(props: {
         </details>
       )}
 
-      {/* ── Pradeep's backlog — as-of a chosen date ─────────────────── */}
-      {hubConnected && (
-        <div id="backlog" className="card" style={{ marginTop: 16 }}>
-          <form style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <strong>📋 Task list — what is pending till</strong>
-            <input type="date" name="upto" defaultValue={upto} style={{ marginBottom: 0 }} />
-            <SubmitButton className="btn small secondary" savedLabel="✓">Show backlog</SubmitButton>
-            <span className="muted" style={{ fontSize: ".78rem" }}>Change the date and the backlog recomputes.</span>
-          </form>
-          {backlog.items.length === 0 ? (
-            <p className="muted" style={{ margin: "10px 0 0", fontSize: ".88rem" }}>✅ Nothing pending up to {upto} — statements covered and every queue clear.</p>
-          ) : (
-            <div style={{ display: "grid", gap: 5, marginTop: 10 }}>
-              {backlog.items.map((b, i) => (
-                <a key={i} href={b.anchor} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 10px", background: "var(--bg-soft)", borderRadius: 8, color: "var(--text)", textDecoration: "none" }}>
-                  <span className="badge" style={{ fontSize: ".7rem", minWidth: 110, textAlign: "center" }}>{b.part}</span>
-                  <span style={{ flex: 1, fontSize: ".86rem" }}>{b.task}</span>
-                  {b.count !== undefined && <strong>{b.count}</strong>}
-                  <span style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".8rem" }}>open →</span>
-                </a>
-              ))}
-            </div>
-          )}
-          {backlog.neverUploaded.length > 0 && (
-            <details style={{ marginTop: 8 }}>
-              <summary className="muted" style={{ cursor: "pointer", fontSize: ".8rem" }}>
-                {backlog.neverUploaded.length} account(s) with no statement uploaded yet
-              </summary>
-              <p className="muted" style={{ fontSize: ".78rem", margin: "6px 0 0" }}>{backlog.neverUploaded.join(" · ")}</p>
-            </details>
-          )}
-        </div>
-      )}
+      </section>
 
-      {/* ── Desk-wide search & filter (the reconciliation view) ─────── */}
-      {hubConnected && (
-        <div id="search" className="card" style={{ marginTop: 12 }}>
-          <form style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <label style={{ fontSize: ".72rem" }}>🔎 Search everything</label>
-              <input name="q" defaultValue={sp.q ?? ""} placeholder="narration, customer, UTR, symbol, order no…" style={{ marginBottom: 0 }} />
-            </div>
-            <div>
-              <label style={{ fontSize: ".72rem" }}>From</label>
-              <input type="date" name="from" defaultValue={sp.from ?? ""} style={{ marginBottom: 0 }} />
-            </div>
-            <div>
-              <label style={{ fontSize: ".72rem" }}>To</label>
-              <input type="date" name="to" defaultValue={sp.to ?? ""} style={{ marginBottom: 0 }} />
-            </div>
-            <div>
-              <label style={{ fontSize: ".72rem" }}>Part</label>
-              <select name="part" defaultValue={sp.part ?? "all"} style={{ marginBottom: 0 }}>
-                <option value="all">Everything</option>
-                <option value="sales">Sales</option>
-                <option value="settlements">Settlements</option>
-                <option value="bank">Bank lines</option>
-                <option value="brokerage">Brokerage</option>
-                <option value="petty">Petty cash</option>
-              </select>
-            </div>
-            <SubmitButton className="btn small" savedLabel="✓">Search</SubmitButton>
-            {searching && <a className="btn small secondary" href="/admin/zoho#search">Clear</a>}
-          </form>
-          {searching && (
-            <div style={{ marginTop: 10 }}>
-              <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 6px" }}>{searchRows.length} result(s){searchRows.length === 300 ? " (first 300)" : ""} — every status included, for reconciliation.</p>
-              <div style={{ display: "grid", gap: 4 }}>
-                {searchRows.map((r, i) => (
-                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "5px 10px", background: "var(--bg-soft)", borderRadius: 6, fontSize: ".82rem" }}>
-                    <span style={{ whiteSpace: "nowrap" }}>{r.date}</span>
-                    <span className="badge" style={{ fontSize: ".68rem" }}>{r.part}</span>
-                    <span style={{ flex: 1, minWidth: 200 }}>{r.label}</span>
-                    {r.amount !== null && <strong style={{ whiteSpace: "nowrap" }}>{r.amount < 0 ? `− ${formatINR(Math.abs(r.amount))}` : formatINR(r.amount)}</strong>}
-                    <span className="muted" style={{ fontSize: ".74rem" }}>{r.status}{r.ref ? ` · ${r.ref}` : ""}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {/* ═════════ ZONE 2 · Uploads & working queues ═════════ */}
+      <section className="zone" data-zone="work">
+        <header className="zone-head"><span className="zone-kicker">Uploads & working queues</span></header>
 
       {/* ── Sales → Zoho queue (the working desk) ───────────────────── */}
       {hubConnected && (
         <details id="queue" data-sec className="zoho-sec">
-          <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>📮 Sales → Zoho</summary>
+          <summary className="sec-head">📮 Sales → Zoho{drafts.length > 0 && <span className="sec-count">{drafts.length}</span>}</summary>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 24 }}>
             <form action={scanSalesAction} style={{ margin: 0 }}>
               <SubmitButton className="btn small secondary" savedLabel="Scanned">🔄 Scan for new sales</SubmitButton>
@@ -976,7 +903,7 @@ export default async function ZohoHubPage(props: {
       {/* ── Razorpay settlements → Zoho ─────────────────────────────── */}
       {hubConnected && (
         <details id="settlements" data-sec className="zoho-sec">
-          <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>🏦 Razorpay settlements → Zoho</summary>
+          <summary className="sec-head">🏦 Razorpay settlements → Zoho{sDrafts.length > 0 && <span className="sec-count">{sDrafts.length}</span>}</summary>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 26 }}>
             <form action={scanSettlementsAction} style={{ margin: 0 }}>
               <SubmitButton className="btn small secondary" savedLabel="Scanned">🔄 Fetch settlements</SubmitButton>
@@ -1035,7 +962,7 @@ export default async function ZohoHubPage(props: {
       {/* ── Bank statements & the three queues ──────────────────────── */}
       {hubConnected && (
         <details id="bank" data-sec className="zoho-sec">
-          <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>🏧 Bank &amp; card statements</summary>
+          <summary className="sec-head">🏧 Bank &amp; card statements{bankLines.length > 0 && <span className="sec-count">{bankLines.length}</span>}</summary>
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Upload each account&apos;s statement (CSV, Excel or PDF). Every line ends in one of three places:
             <strong> matched</strong> (already in Zoho — left alone), <strong>auto</strong> (a taught rule proposes
@@ -1200,49 +1127,10 @@ export default async function ZohoHubPage(props: {
         </details>
       )}
 
-      {/* ── Rule 115 panel: rates + a concise summary of the rule ───── */}
-      {hubConnected && (
-        <details className="card" style={{ marginTop: 18 }} id="rule115" data-sec>
-          {/* REFERENCE, NOT A TASK. Rule 115 is something to look up when a
-              foreign figure is being checked — it is not work waiting to be
-              done, and open by default it pushed the actual queues further down
-              a page he already found too long. */}
-          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: ".92rem" }}>
-            💱 Rule 115 — SBI TT buying rates{r115 ? ` · this month ₹${r115.rate.toFixed(2)}/USD` : ""}
-          </summary>
-          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
-            <strong>💱 Rule 115 — SBI TT buying rates</strong>
-            {r115 && <span style={{ fontSize: "1.1rem", fontWeight: 800 }}>this month: ₹{r115.rate.toFixed(2)}/USD</span>}
-            <span className="muted" style={{ fontSize: ".78rem" }}>source: officialforexrates.com (the designated authority)</span>
-          </div>
-          {monthEnds.length > 0 && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-              {monthEnds.map((m) => (
-                <div key={m.keyDate} style={{ background: "var(--bg-soft)", borderRadius: 8, padding: "6px 12px", fontSize: ".82rem" }}>
-                  <div className="muted" style={{ fontSize: ".72rem" }}>{m.keyDate}</div>
-                  <strong>{m.rate ? `₹${m.rate.toFixed(2)}` : "—"}</strong>
-                  {m.rate && m.rateDate !== m.keyDate && <span className="muted" style={{ fontSize: ".7rem" }}> ({m.rateDate})</span>}
-                </div>
-              ))}
-            </div>
-          )}
-          {/* The rule itself, said once, plainly — beside the numbers it governs. */}
-          <p className="muted" style={{ fontSize: ".8rem", lineHeight: 1.7, margin: "10px 0 0" }}>
-            <strong>Rule 115, Income-tax Rules 1962 — in short:</strong> foreign income is converted to rupees at the
-            <strong> SBI telegraphic-transfer BUYING rate</strong> on a specified date — for interest, dividends and
-            most income: the <strong>last day of the month before</strong> the month the income arose; for capital
-            gains: the last day of the month before the <strong>transfer</strong>; for salary: before the month it was
-            due. If SBI published nothing that day (holiday), the nearest earlier published rate applies. Every
-            conversion this desk makes stores its dollar amount, the rate used, the rate&apos;s date and this rule —
-            so any figure can be traced years later.
-          </p>
-        </details>
-      )}
-
       {/* ── Petty cash (imprest) ────────────────────────────────────── */}
       {hubConnected && (
         <details id="petty" data-sec className="zoho-sec">
-          <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>👛 Petty cash — advances</summary>
+          <summary className="sec-head">👛 Petty cash — advances{(pendingBills.length + failedAdvs.length) > 0 && <span className="sec-count">{pendingBills.length + failedAdvs.length}</span>}</summary>
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Record an advance <em>after</em> it is paid (it posts to the person&apos;s own Zoho advance account at
             once). The person uploads bills on their <strong>/admin/petty</strong> page; approving a bill books the
@@ -1366,7 +1254,7 @@ export default async function ZohoHubPage(props: {
       {/* ── Brokerage statements ────────────────────────────────────── */}
       {hubConnected && (
         <details id="brokerage" data-sec className="zoho-sec">
-          <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>📈 US brokerage, retirement &amp; investment statements</summary>
+          <summary className="sec-head">📈 Investments — brokerage &amp; retirement{brokLines.length > 0 && <span className="sec-count">{brokLines.length}</span>}</summary>
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Upload statements from any investment home — brokerages, <strong>retirement accounts (IRA/401k)</strong>,
             managed funds, Treasury Direct, anything else via the free account box. Every transaction is converted at its
@@ -1858,10 +1746,140 @@ export default async function ZohoHubPage(props: {
         </details>
       )}
 
+      </section>
+
+      {/* ═════════ ZONE 3 · Records & reference ═════════ */}
+      <section className="zone" data-zone="files">
+        <header className="zone-head"><span className="zone-kicker">Records & reference</span></header>
+
+      {/* ── Pradeep's backlog — as-of a chosen date ─────────────────── */}
+      {hubConnected && (
+        <details id="backlog" data-sec>
+          <summary className="sec-head">📋 Task list — the backlog</summary>
+          <form style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <strong>📋 Task list — what is pending till</strong>
+            <input type="date" name="upto" defaultValue={upto} style={{ marginBottom: 0 }} />
+            <SubmitButton className="btn small secondary" savedLabel="✓">Show backlog</SubmitButton>
+            <span className="muted" style={{ fontSize: ".78rem" }}>Change the date and the backlog recomputes.</span>
+          </form>
+          {backlog.items.length === 0 ? (
+            <p className="muted" style={{ margin: "10px 0 0", fontSize: ".88rem" }}>✅ Nothing pending up to {upto} — statements covered and every queue clear.</p>
+          ) : (
+            <div style={{ display: "grid", gap: 5, marginTop: 10 }}>
+              {backlog.items.map((b, i) => (
+                <a key={i} href={b.anchor} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 10px", background: "var(--bg-soft)", borderRadius: 8, color: "var(--text)", textDecoration: "none" }}>
+                  <span className="badge" style={{ fontSize: ".7rem", minWidth: 110, textAlign: "center" }}>{b.part}</span>
+                  <span style={{ flex: 1, fontSize: ".86rem" }}>{b.task}</span>
+                  {b.count !== undefined && <strong>{b.count}</strong>}
+                  <span style={{ color: "var(--accent)", fontWeight: 700, fontSize: ".8rem" }}>open →</span>
+                </a>
+              ))}
+            </div>
+          )}
+          {backlog.neverUploaded.length > 0 && (
+            <details style={{ marginTop: 8 }}>
+              <summary className="muted" style={{ cursor: "pointer", fontSize: ".8rem" }}>
+                {backlog.neverUploaded.length} account(s) with no statement uploaded yet
+              </summary>
+              <p className="muted" style={{ fontSize: ".78rem", margin: "6px 0 0" }}>{backlog.neverUploaded.join(" · ")}</p>
+            </details>
+          )}
+        </details>
+      )}
+
+      {/* ── Desk-wide search & filter (the reconciliation view) ─────── */}
+      {hubConnected && (
+        <details id="search" data-sec>
+          <summary className="sec-head">🔎 Search everything</summary>
+          <form style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <label style={{ fontSize: ".72rem" }}>🔎 Search everything</label>
+              <input name="q" defaultValue={sp.q ?? ""} placeholder="narration, customer, UTR, symbol, order no…" style={{ marginBottom: 0 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: ".72rem" }}>From</label>
+              <input type="date" name="from" defaultValue={sp.from ?? ""} style={{ marginBottom: 0 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: ".72rem" }}>To</label>
+              <input type="date" name="to" defaultValue={sp.to ?? ""} style={{ marginBottom: 0 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: ".72rem" }}>Part</label>
+              <select name="part" defaultValue={sp.part ?? "all"} style={{ marginBottom: 0 }}>
+                <option value="all">Everything</option>
+                <option value="sales">Sales</option>
+                <option value="settlements">Settlements</option>
+                <option value="bank">Bank lines</option>
+                <option value="brokerage">Brokerage</option>
+                <option value="petty">Petty cash</option>
+              </select>
+            </div>
+            <SubmitButton className="btn small" savedLabel="✓">Search</SubmitButton>
+            {searching && <a className="btn small secondary" href="/admin/zoho#search">Clear</a>}
+          </form>
+          {searching && (
+            <div style={{ marginTop: 10 }}>
+              <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 6px" }}>{searchRows.length} result(s){searchRows.length === 300 ? " (first 300)" : ""} — every status included, for reconciliation.</p>
+              <div style={{ display: "grid", gap: 4 }}>
+                {searchRows.map((r, i) => (
+                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "5px 10px", background: "var(--bg-soft)", borderRadius: 6, fontSize: ".82rem" }}>
+                    <span style={{ whiteSpace: "nowrap" }}>{r.date}</span>
+                    <span className="badge" style={{ fontSize: ".68rem" }}>{r.part}</span>
+                    <span style={{ flex: 1, minWidth: 200 }}>{r.label}</span>
+                    {r.amount !== null && <strong style={{ whiteSpace: "nowrap" }}>{r.amount < 0 ? `− ${formatINR(Math.abs(r.amount))}` : formatINR(r.amount)}</strong>}
+                    <span className="muted" style={{ fontSize: ".74rem" }}>{r.status}{r.ref ? ` · ${r.ref}` : ""}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </details>
+      )}
+
+      {/* ── Rule 115 panel: rates + a concise summary of the rule ───── */}
+      {hubConnected && (
+        <details id="rule115" data-sec>
+          {/* REFERENCE, NOT A TASK. Rule 115 is something to look up when a
+              foreign figure is being checked — it is not work waiting to be
+              done, and open by default it pushed the actual queues further down
+              a page he already found too long. */}
+          <summary className="sec-head">
+            💱 Rule 115 — SBI TT buying rates{r115 && <span className="sec-meta">₹{r115.rate.toFixed(2)}/USD this month</span>}
+          </summary>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+            <strong>💱 Rule 115 — SBI TT buying rates</strong>
+            {r115 && <span style={{ fontSize: "1.1rem", fontWeight: 800 }}>this month: ₹{r115.rate.toFixed(2)}/USD</span>}
+            <span className="muted" style={{ fontSize: ".78rem" }}>source: officialforexrates.com (the designated authority)</span>
+          </div>
+          {monthEnds.length > 0 && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+              {monthEnds.map((m) => (
+                <div key={m.keyDate} style={{ background: "var(--bg-soft)", borderRadius: 8, padding: "6px 12px", fontSize: ".82rem" }}>
+                  <div className="muted" style={{ fontSize: ".72rem" }}>{m.keyDate}</div>
+                  <strong>{m.rate ? `₹${m.rate.toFixed(2)}` : "—"}</strong>
+                  {m.rate && m.rateDate !== m.keyDate && <span className="muted" style={{ fontSize: ".7rem" }}> ({m.rateDate})</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {/* The rule itself, said once, plainly — beside the numbers it governs. */}
+          <p className="muted" style={{ fontSize: ".8rem", lineHeight: 1.7, margin: "10px 0 0" }}>
+            <strong>Rule 115, Income-tax Rules 1962 — in short:</strong> foreign income is converted to rupees at the
+            <strong> SBI telegraphic-transfer BUYING rate</strong> on a specified date — for interest, dividends and
+            most income: the <strong>last day of the month before</strong> the month the income arose; for capital
+            gains: the last day of the month before the <strong>transfer</strong>; for salary: before the month it was
+            due. If SBI published nothing that day (holiday), the nearest earlier published rate applies. Every
+            conversion this desk makes stores its dollar amount, the rate used, the rate&apos;s date and this rule —
+            so any figure can be traced years later.
+          </p>
+        </details>
+      )}
+
       {/* ── Tax worksheets (the founder's alone) ────────────────────── */}
       {isFounder && taxData && (
         <details id="tax" data-sec className="zoho-sec">
-          <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>🧾 Tax worksheets — projections, working shown</summary>
+          <summary className="sec-head">🧾 Tax worksheets — projections, working shown</summary>
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))" }}>
             <div className="card">
               <strong>🇮🇳 Advance tax — FY 2026-27 (A.Y. 2027-28)</strong>
@@ -1920,66 +1938,9 @@ export default async function ZohoHubPage(props: {
         </details>
       )}
 
-      {/* ── Build state ─────────────────────────────────────────────── */}
-      {/* A progress list for whoever is building this, not something the desk
-          acts on. It sat open between the day's work and his approvals gate. */}
-      <details id="buildstate" data-sec style={{ marginTop: 24 }}>
-        <summary className="muted" style={{ cursor: "pointer", fontSize: ".85rem" }}>Where the build stands</summary>
-      <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-        {PHASE_PLAN.map((p) => {
-          const b = STATE_BADGE[p.state];
-          return (
-            <div className="card" key={p.name} style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap", padding: "12px 16px" }}>
-              <strong style={{ minWidth: 220 }}>{p.name}</strong>
-              <span className="muted" style={{ flex: 1, minWidth: 240, fontSize: ".85rem" }}>{p.what}</span>
-              <span style={{ color: b.colour, fontWeight: 700, fontSize: ".8rem", whiteSpace: "nowrap" }}>{b.text}</span>
-            </div>
-          );
-        })}
-      </div>
-      </details>
-
-      {/* ── Connect Zoho (founder-only) ─────────────────────────────── */}
-      {isFounder && (
-        <>
-          {sp.zoho_ok && <div className="notice ok" style={{ marginTop: 16 }}>✅ {sp.zoho_ok}</div>}
-          {sp.zoho_err && <div className="notice err" style={{ marginTop: 16 }}>❌ {sp.zoho_err}</div>}
-
-          <h2 className="admin-section-title" style={{ marginTop: 28 }}>
-            🔌 Zoho connection {connected ? <span style={{ color: "#16a34a", fontSize: ".9rem" }}>· ✅ connected (org {orgId})</span> : <span style={{ color: "#b45309", fontSize: ".9rem" }}>· not connected yet</span>}
-          </h2>
-
-          {!connected && (
-            <div className="card" style={{ marginTop: 8 }}>
-              <strong>Five minutes, three pastes — done once, works forever.</strong>
-              <ol style={{ fontSize: ".88rem", lineHeight: 1.9, margin: "10px 0 14px", paddingLeft: 20 }}>
-                <li>Open <a className="grad" href="https://api-console.zoho.in" target="_blank" rel="noopener noreferrer"><strong>api-console.zoho.in</strong></a> and sign in as the account that runs Zoho Books (<strong>ps@aldine.edu.in</strong>).</li>
-                <li>Press <strong>Add Client → Self Client → Create → OK</strong>. Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> into the boxes below.</li>
-                <li>Open the <strong>Generate Code</strong> tab. Scope: <code style={{ userSelect: "all" }}>ZohoBooks.fullaccess.all</code> · Duration: <strong>10 minutes</strong> · any description → <strong>Generate</strong>, copy the code into the third box, and press Connect <em>straight away</em> (the code dies in 10 minutes).</li>
-              </ol>
-              <form action={connectZoho}>
-                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
-                  <div><label>Client ID</label><input name="client_id" required autoComplete="off" placeholder="1000.XXXXXXXX…" /></div>
-                  <div><label>Client Secret</label><input name="client_secret" required type="password" autoComplete="off" placeholder="paste the secret" /></div>
-                </div>
-                <label>Generated code (valid 10 minutes)</label>
-                <input name="grant_code" required autoComplete="off" placeholder="1000.xxxx.xxxx…" />
-                <SubmitButton className="btn" savedLabel="Connecting…" style={{ marginTop: 8 }}>🔌 Connect Zoho Books</SubmitButton>
-              </form>
-              <p className="muted" style={{ fontSize: ".78rem", marginTop: 10 }}>
-                The exchange happens on OUR server: console → this page → stored with your other integration keys.
-                On success the desk also creates its own <strong>&ldquo;Razorpay Clearing (AI)&rdquo;</strong> and
-                <strong> &ldquo;Payment Gateway Charges (AI)&rdquo;</strong> accounts — new accounts with the (AI)
-                suffix, no existing account touched.
-              </p>
-            </div>
-          )}
-        </>
-      )}
-
       {/* ── The document vault — the whole zoho area (founder + Pradeep) ── */}
-      <details id="vault" data-sec style={{ marginTop: 28 }}>
-        <summary className="admin-section-title" style={{ cursor: "pointer" }}>🗄️ Document vault ({docs.length})</summary>
+      <details id="vault" data-sec>
+        <summary className="sec-head">🗄️ Document vault{docs.length > 0 && <span className="sec-count">{docs.length}</span>}</summary>
       {/* ONE LINE OF WHAT IT IS; THE MECHANICS FOLD AWAY.
           The guarded route and who may delete are true and worth recording, but
           they are not what somebody filing a statement needs to read first. */}
@@ -2074,6 +2035,67 @@ export default async function ZohoHubPage(props: {
       )}
       </details>
 
+
+      {/* ── Build state ─────────────────────────────────────────────── */}
+      {/* A progress list for whoever is building this, not something the desk
+          acts on. It sat open between the day's work and his approvals gate. */}
+      <details id="buildstate" data-sec>
+        <summary className="sec-head sec-quiet">🧭 Where the build stands</summary>
+      <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+        {PHASE_PLAN.map((p) => {
+          const b = STATE_BADGE[p.state];
+          return (
+            <div className="card" key={p.name} style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap", padding: "12px 16px" }}>
+              <strong style={{ minWidth: 220 }}>{p.name}</strong>
+              <span className="muted" style={{ flex: 1, minWidth: 240, fontSize: ".85rem" }}>{p.what}</span>
+              <span style={{ color: b.colour, fontWeight: 700, fontSize: ".8rem", whiteSpace: "nowrap" }}>{b.text}</span>
+            </div>
+          );
+        })}
+      </div>
+      </details>
+
+      {/* ── Connect Zoho (founder-only) ─────────────────────────────── */}
+      {isFounder && (
+        <>
+          {sp.zoho_ok && <div className="notice ok" style={{ marginTop: 16 }}>✅ {sp.zoho_ok}</div>}
+          {sp.zoho_err && <div className="notice err" style={{ marginTop: 16 }}>❌ {sp.zoho_err}</div>}
+
+          <details id="connection" data-sec>
+          <summary className="sec-head">
+            🔌 Zoho connection {connected ? <span className="sec-meta ok">✅ connected · org {orgId}</span> : <span className="sec-meta warn">not connected yet</span>}
+          </summary>
+
+          {!connected && (
+            <div className="card" style={{ marginTop: 8 }}>
+              <strong>Five minutes, three pastes — done once, works forever.</strong>
+              <ol style={{ fontSize: ".88rem", lineHeight: 1.9, margin: "10px 0 14px", paddingLeft: 20 }}>
+                <li>Open <a className="grad" href="https://api-console.zoho.in" target="_blank" rel="noopener noreferrer"><strong>api-console.zoho.in</strong></a> and sign in as the account that runs Zoho Books (<strong>ps@aldine.edu.in</strong>).</li>
+                <li>Press <strong>Add Client → Self Client → Create → OK</strong>. Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> into the boxes below.</li>
+                <li>Open the <strong>Generate Code</strong> tab. Scope: <code style={{ userSelect: "all" }}>ZohoBooks.fullaccess.all</code> · Duration: <strong>10 minutes</strong> · any description → <strong>Generate</strong>, copy the code into the third box, and press Connect <em>straight away</em> (the code dies in 10 minutes).</li>
+              </ol>
+              <form action={connectZoho}>
+                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
+                  <div><label>Client ID</label><input name="client_id" required autoComplete="off" placeholder="1000.XXXXXXXX…" /></div>
+                  <div><label>Client Secret</label><input name="client_secret" required type="password" autoComplete="off" placeholder="paste the secret" /></div>
+                </div>
+                <label>Generated code (valid 10 minutes)</label>
+                <input name="grant_code" required autoComplete="off" placeholder="1000.xxxx.xxxx…" />
+                <SubmitButton className="btn" savedLabel="Connecting…" style={{ marginTop: 8 }}>🔌 Connect Zoho Books</SubmitButton>
+              </form>
+              <p className="muted" style={{ fontSize: ".78rem", marginTop: 10 }}>
+                The exchange happens on OUR server: console → this page → stored with your other integration keys.
+                On success the desk also creates its own <strong>&ldquo;Razorpay Clearing (AI)&rdquo;</strong> and
+                <strong> &ldquo;Payment Gateway Charges (AI)&rdquo;</strong> accounts — new accounts with the (AI)
+                suffix, no existing account touched.
+              </p>
+            </div>
+          )}
+          </details>
+        </>
+      )}
+
+      </section>
 
     </section>
   );

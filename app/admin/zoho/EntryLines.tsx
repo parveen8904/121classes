@@ -22,7 +22,23 @@ export default function EntryLines({
   intro?: string;
   compact?: boolean;
 }) {
-  if (!entry.lines.length) return null;
+  // NO LINES BUT SOMETHING TO SAY IS NOT NOTHING.
+  //
+  // This returned null the moment there were no lines, which silently hid the
+  // one case that most needs to be seen: a bill whose tax has not been keyed
+  // off the invoice yet, where the entry deliberately REFUSES to guess. Blank
+  // space beside an approve button reads as "nothing to check".
+  if (!entry.lines.length) {
+    if (!entry.caveats.length) return null;
+    return (
+      <div style={{ marginTop: compact ? 8 : 12 }}>
+        {title && <div style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em", color: "var(--muted)", fontWeight: 700 }}>{title}</div>}
+        {entry.caveats.map((c) => (
+          <p key={c} className="notice err" style={{ fontSize: ".78rem", margin: "6px 0 0", lineHeight: 1.6 }}>{c}</p>
+        ))}
+      </div>
+    );
+  }
   const money = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cell = { padding: compact ? "3px 6px" : "5px 8px" } as const;
   const num: React.CSSProperties = {

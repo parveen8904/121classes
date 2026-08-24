@@ -215,17 +215,17 @@ export default function EntryEditor(props: {
             <div>
               <label style={label}>CGST ₹</label>
               <input name="cgst_amount" type="number" step="0.01" value={cgst} onChange={(e) => setCgst(e.target.value)}
-                     placeholder="same state" style={{ marginBottom: 0 }} />
+                     placeholder="blank if not on the bill" style={{ marginBottom: 0 }} />
             </div>
             <div>
               <label style={label}>SGST ₹</label>
               <input name="sgst_amount" type="number" step="0.01" value={sgst} onChange={(e) => setSgst(e.target.value)}
-                     placeholder="same state" style={{ marginBottom: 0 }} />
+                     placeholder="blank if not on the bill" style={{ marginBottom: 0 }} />
             </div>
             <div>
               <label style={label}>IGST ₹</label>
               <input name="igst_amount" type="number" step="0.01" value={igst} onChange={(e) => setIgst(e.target.value)}
-                     placeholder="other state" style={{ marginBottom: 0 }} />
+                     placeholder="blank if not on the bill" style={{ marginBottom: 0 }} />
             </div>
           </div>
           <div className="muted" style={{ fontSize: ".72rem", marginTop: 4, lineHeight: 1.6 }}>
@@ -233,7 +233,7 @@ export default function EntryEditor(props: {
               ? drift === 0
                 ? `✓ Adds up to ₹${props.inr.toLocaleString("en-IN", { minimumFractionDigits: 2 })} — the invoice total.`
                 : `These add up to ₹${keyedTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}, which is ₹${Math.abs(drift).toFixed(2)} ${drift > 0 ? "more" : "less"} than the ₹${props.inr.toLocaleString("en-IN", { minimumFractionDigits: 2 })} on the bill. Suppliers do round, so a few paise is normal — a larger gap means something is mistyped.`
-              : "Blank means the entry is worked out from the rate instead, which will not match the invoice to the paisa. TDS is taken on the taxable value, so keying it also fixes the withholding."}
+              : "Nothing is worked out from the rate. Until these are filled in from the invoice there is no entry and the bill cannot be approved. Fill in only the boxes the bill actually shows — CGST and SGST together, or IGST on its own; whichever the supplier printed is the answer."}
           </div>
         </>
       )}

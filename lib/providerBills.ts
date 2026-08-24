@@ -523,6 +523,24 @@ export async function postProviderBill(id: string): Promise<void> {
     const total = Number(b.amount);
     if (!total) return fail("the invoice total could not be read — type it in first");
 
+    // A DOMESTIC BILL DOES NOT POST UNTIL ITS TAX HAS BEEN READ OFF THE PAPER.
+    //
+    // The preview refuses to invent this, and the gate must refuse too — a
+    // guard that only exists on the screen is not a guard. Where the supplier
+    // charged GST, the taxable value and the CGST/SGST/IGST are what the
+    // invoice says, and nothing here derives them from the rate.
+    //
+    // Reverse charge is exempt by its nature: an overseas supplier charges no
+    // tax at all, so there is nothing on the invoice to read and the liability
+    // is the one we self-assess.
+    const claimsItc = p.gst_treatment === "domestic_itc" || p.gst_treatment === "itc";
+    const statedTax = Number(b.cgst_amount ?? 0) + Number(b.sgst_amount ?? 0) + Number(b.igst_amount ?? 0);
+    if (claimsItc && !(Number(b.taxable_value) > 0 && statedTax > 0)) {
+      return fail(
+        "the tax on this bill has not been read off the invoice — open it and key the taxable value and the CGST/SGST/IGST exactly as printed, then approve it again",
+      );
+    }
+
     const currency = str(b.currency) || "USD";
     const overseas = p.gst_treatment === "rcm";
     let rate = b.rate ? Number(b.rate) : null;

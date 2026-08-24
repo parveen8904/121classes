@@ -84,13 +84,35 @@ export function purchaseEntry(p: {
   const statedTaxable = st?.taxable != null && Number(st.taxable) > 0 ? r2(Number(st.taxable)) : null;
   const haveStated = statedTaxable != null && statedTax > 0;
 
-  const base = haveStated ? statedTaxable! : r2(p.tds.bookedAmount);
-  const gst = p.gstTreatment === "none" ? 0 : haveStated ? statedTax : r2((base * gstRate) / 100);
-  if (!haveStated && p.gstTreatment !== "none" && gst > 0) {
-    caveats.push(
-      "The tax below is worked out from the rate, not read off the invoice. Key the invoice's own taxable value and CGST/SGST/IGST on the bill so the entry matches the document to the paisa.",
-    );
+  // NOTHING IS DERIVED. IF THE INVOICE HAS NOT BEEN READ, THERE IS NO ENTRY.
+  //
+  // His ruling, 24 Aug 2026: "You will pick everything from the invoice only and
+  // that will be mentioned as CGST IGST SGST. You will not derive on your own."
+  //
+  // So the earlier fallback — work the tax out from the rate and note that we
+  // had — is gone. A derived entry is a guess with an approve button beside it,
+  // and it was that guess which put ₹7,053 of courier expense in the books when
+  // the expense was ₹5,977. Where the tax has not been keyed, this returns NO
+  // entry and says why, and the desk cannot approve what it cannot see.
+  //
+  // WHICH TAX APPLIES IS ALSO THE INVOICE'S ANSWER, NOT OURS. A bill showing
+  // CGST and SGST is an intra-state supply; one showing IGST is inter-state.
+  // That is already stated on the document, so there is no supplier-state
+  // lookup here and no rule deciding it — the boxes that are filled in are the
+  // answer.
+  if (claimsItc && !haveStated) {
+    return finish([], [
+      "The tax on this bill has not been read off the invoice yet, so there is no entry to show and nothing to approve. " +
+      "Open the bill and key its taxable value and the CGST/SGST/IGST exactly as printed. Nothing here is worked out from the rate — " +
+      "a supplier rounds each line and may bill more than one rate, so a derived figure would not match the document.",
+    ]);
   }
+
+  const base = haveStated ? statedTaxable! : r2(p.tds.bookedAmount);
+  // Reverse charge is the one place a figure is not read off the invoice, and
+  // it cannot be: the supplier charges nothing at all, and the tax is the one
+  // WE self-assess at the notified rate under the statute.
+  const gst = p.gstTreatment === "none" ? 0 : haveStated ? statedTax : r2((base * gstRate) / 100);
 
   // PERSONAL SPENDING CANNOT CARRY INPUT CREDIT. On drawings the GST is part of
   // what was spent, so it is debited to the same head — claiming it would be a
@@ -110,8 +132,6 @@ export function purchaseEntry(p: {
       if (statedCgst > 0) lines.push({ account: "Input CGST", side: "debit", amount: statedCgst, note: "as charged on the invoice, claimed as input credit" });
       if (statedSgst > 0) lines.push({ account: "Input SGST", side: "debit", amount: statedSgst, note: "as charged on the invoice, claimed as input credit" });
       if (statedIgst > 0) lines.push({ account: "Input IGST", side: "debit", amount: statedIgst, note: "as charged on the invoice, claimed as input credit" });
-    } else {
-      lines.push({ account: `Input GST ${gstRate}%`, side: "debit", amount: gst, note: "worked out from the rate — not read off the invoice" });
     }
   }
 

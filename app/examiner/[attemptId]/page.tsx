@@ -14,8 +14,14 @@ export const dynamic = "force-dynamic";
 // One copy on the examiner's table: the question paper, the student's answer
 // book, the AI-checked report and annotated copy — verify, adjust marks if
 // needed, and release to the student.
-export default async function ExaminerCopy(props: { params: Promise<{ attemptId: string }> }) {
+export default async function ExaminerCopy(props: {
+  params: Promise<{ attemptId: string }>;
+  searchParams: Promise<{ err?: string }>;
+}) {
   const params = await props.params;
+  // The refusal from submitCheck when marks exceed the total — shown, not
+  // swallowed, or the press just appears to do nothing.
+  const { err } = await props.searchParams;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/examiner");
@@ -60,6 +66,10 @@ export default async function ExaminerCopy(props: { params: Promise<{ attemptId:
   const markingScheme = schemeRow?.scheme ? String(schemeRow.scheme) : "";
 
   const report = (row.report ?? null) as DescriptiveGrade | null;
+  // What the itemised questions actually add up to — the check on a total that
+  // may have been recorded wrongly. The Ind AS 41 copy said 20 while its own
+  // questions came to 25.
+  const aiMaxSum = (report?.per_question ?? []).reduce((t, q) => t + (Number(q.max) || 0), 0);
   const beingCheckedByOther = row.review_status === "checking" && row.examiner_id && row.examiner_id !== user.id && me?.role !== "admin";
   const checked = row.review_status === "checked";
 
@@ -128,6 +138,15 @@ export default async function ExaminerCopy(props: { params: Promise<{ attemptId:
         {report ? (
           <div className="card" style={{ marginTop: 8 }}>
             <strong>🤖 AI evaluation — {row.awarded_marks}{row.total_marks ? ` / ${row.total_marks}` : ""}</strong>
+            {/* A score above the paper's total is impossible, so say so here
+                rather than leaving him to spot it. The questions below are the
+                working; the total is the thing to correct. */}
+            {row.awarded_marks != null && row.total_marks != null && Number(row.awarded_marks) > Number(row.total_marks) && (
+              <p className="notice err" style={{ fontSize: ".82rem", margin: "8px 0 0", lineHeight: 1.6 }}>
+                ⚠ This copy is marked above its own total{aiMaxSum > 0 ? `, and the questions below add up to ${aiMaxSum}` : ""}.
+                The paper&apos;s total looks wrong — correct <strong>Out of</strong> in your verification below.
+              </p>
+            )}
             {report.summary && <p style={{ marginTop: 8 }}>{report.summary}</p>}
             {(report.per_question ?? []).length > 0 && (
               <div style={{ overflowX: "auto", marginTop: 10 }}>
@@ -198,10 +217,24 @@ export default async function ExaminerCopy(props: { params: Promise<{ attemptId:
           <form action={submitCheck} className="form-card" style={{ marginTop: 16 }}>
             <input type="hidden" name="id" value={row.id} />
             <strong>🖊️ Your verification</strong>
-            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 2fr", marginTop: 12 }}>
+            {err && <p className="notice err" style={{ fontSize: ".82rem", margin: "8px 0 0" }}>⚠ {err}</p>}
+            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr 2fr", marginTop: 12 }}>
               <div>
-                <label htmlFor="ex-marks">Final marks{row.total_marks ? ` (out of ${row.total_marks})` : ""}</label>
-                <input id="ex-marks" name="marks" type="number" step="0.5" min={0} max={row.total_marks ?? undefined} defaultValue={row.awarded_marks ?? ""} placeholder="e.g. 62" />
+                <label htmlFor="ex-marks">Final marks</label>
+                {/* No `max` here on purpose: it used to clamp to the stored
+                    total, so on a copy whose total was wrong the browser
+                    refused the right mark. The total beside it is editable and
+                    the pair is checked on submit instead. */}
+                <input id="ex-marks" name="marks" type="number" step="0.25" min={0} defaultValue={row.awarded_marks ?? ""} placeholder="e.g. 21.75" />
+              </div>
+              <div>
+                <label htmlFor="ex-total">Out of</label>
+                <input id="ex-total" name="total" type="number" step="0.5" min={1} defaultValue={row.total_marks ?? ""} placeholder="e.g. 25" />
+                {aiMaxSum > 0 && Number(row.total_marks) !== aiMaxSum && (
+                  <p className="muted" style={{ fontSize: ".74rem", margin: "4px 0 0", color: "#b45309" }}>
+                    ⚠ The questions above add up to <strong>{aiMaxSum}</strong>, not {row.total_marks ?? "—"}.
+                  </p>
+                )}
               </div>
               <div>
                 <label htmlFor="ex-remarks">Remarks for the student (optional)</label>

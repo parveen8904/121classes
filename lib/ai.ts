@@ -2152,13 +2152,51 @@ function shapeDescriptiveGrade(parsed: Record<string, unknown>, totalMarks: numb
           }))
           .filter((a: PaperAnnotation) => a.note)
       : [];
+    const awardedFinal = stepped
+      ? Math.round(pq.reduce((s: number, p: { awarded: number }) => s + p.awarded, 0) * 4) / 4
+      : Number.isFinite(Number(j.awarded))
+        ? Number(j.awarded)
+        : pq.reduce((s: number, p: { awarded: number }) => s + p.awarded, 0);
+
+    // THE PAPER'S TOTAL IS THE SUM OF ITS QUESTIONS, NOT A NUMBER ALONGSIDE THEM.
+    //
+    // This took j.total first — one figure the model states — over its own
+    // itemised per-question maxima. On the Ind AS 41 paper it answered
+    // total: 20 while listing questions worth 25, and the copy was filed as
+    // "21.75 / 20": a student scoring more than the paper carries, which is
+    // nonsense on its face and cost the founder his trust in the marking.
+    //
+    // The itemised maxima are the working; a lone total is an assertion. So the
+    // sum wins wherever the two disagree, and the configured paper total is
+    // used only when the model itemised nothing.
+    const sumOfMax = pq.reduce((s: number, p: { max: number }) => s + p.max, 0);
+    const statedTotal = Number(j.total) || 0;
+    const configured = Number(totalMarks) || 0;
+
+    // ORDER OF TRUTH: what the paper is SET at, then what its questions add up
+    // to, then what the model asserts.
+    //
+    // The configured total comes first because it is a human fact about the
+    // paper — a 100-mark mock is out of 100 even on a copy where the model
+    // itemises questions worth 95 or 110, and letting its arithmetic override
+    // that would quietly restate real papers. Only where nothing is configured
+    // (the Ind AS 41 test) do the itemised maxima decide, and they beat a lone
+    // stated total because they are the working rather than an assertion.
+    let totalFinal = configured > 0 ? configured : sumOfMax > 0 ? sumOfMax : statedTotal;
+    if (!configured && sumOfMax > 0 && statedTotal > 0 && Math.abs(statedTotal - sumOfMax) > 0.01) {
+      console.warn(`[grade_descriptive] stated total ${statedTotal} but questions sum to ${sumOfMax} — using the sum`);
+    }
+    // LAST GUARD: a score above the paper's total must never be stored. If it
+    // still happens the questions are the truth, so the total rises to meet
+    // them rather than the student's marks being silently cut.
+    if (totalFinal > 0 && awardedFinal > totalFinal) {
+      console.warn(`[grade_descriptive] awarded ${awardedFinal} exceeds total ${totalFinal} — raising total to the awarded sum`);
+      totalFinal = Math.max(totalFinal, sumOfMax, awardedFinal);
+    }
+
     return {
-      awarded: stepped
-        ? Math.round(pq.reduce((s: number, p: { awarded: number }) => s + p.awarded, 0) * 4) / 4
-        : Number.isFinite(Number(j.awarded))
-          ? Number(j.awarded)
-          : pq.reduce((s: number, p: { awarded: number }) => s + p.awarded, 0),
-      total: Number(j.total) || totalMarks || pq.reduce((s: number, p: { max: number }) => s + p.max, 0),
+      awarded: awardedFinal,
+      total: totalFinal,
       summary: String(j.summary ?? "").trim(),
       per_question: pq,
       improvements: arr(j.improvements),

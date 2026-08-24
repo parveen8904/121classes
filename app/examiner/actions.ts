@@ -60,8 +60,16 @@ export async function submitCheck(formData: FormData) {
   if (!ex) return;
   const id = str(formData.get("id"));
   const marksRaw = str(formData.get("marks"));
+  const totalRaw = str(formData.get("total"));
   const remarks = str(formData.get("remarks"));
   const marks = marksRaw === "" ? null : Number(marksRaw);
+  // THE PAPER'S TOTAL IS HIS TO CORRECT TOO.
+  //
+  // The Ind AS 41 copy was filed as "21.75 / 20" — the AI stated a total of 20
+  // while itemising questions worth 25 — and he had no way to put it right from
+  // the page where he sits. The grader no longer produces that, but a total
+  // that is simply wrong on an old copy still needs an examiner's pen.
+  const total = totalRaw === "" ? null : Number(totalRaw);
 
   const svc = createServiceClient();
   const { data: row } = await svc
@@ -79,6 +87,19 @@ export async function submitCheck(formData: FormData) {
   }
 
   const finalMarks = Number.isFinite(marks as number) ? (marks as number) : row.awarded_marks;
+  const finalTotal = Number.isFinite(total as number) && (total as number) > 0
+    ? (total as number)
+    : row.total_marks;
+
+  // A copy must never leave here saying a student scored more than the paper
+  // carries. If the two disagree, the examiner is told rather than the numbers
+  // being quietly adjusted behind him — it is his mark and his paper.
+  if (finalMarks != null && finalTotal != null && Number(finalMarks) > Number(finalTotal)) {
+    redirect(`/examiner/${id}?err=${encodeURIComponent(
+      `${finalMarks} is more than the paper's total of ${finalTotal}. Correct the marks, or the total if the paper is really out of more.`,
+    )}`);
+  }
+
   await svc
     .from("descriptive_attempts")
     .update({
@@ -89,6 +110,7 @@ export async function submitCheck(formData: FormData) {
       examiner_marks: finalMarks,
       examiner_remarks: remarks || null,
       awarded_marks: finalMarks,
+      total_marks: finalTotal,
     })
     .eq("id", id);
 
@@ -102,7 +124,7 @@ export async function submitCheck(formData: FormData) {
     html: emailShell(
       "Your copy has been checked 🧑‍🏫",
       `<p>The examiner has checked your descriptive paper <strong>${section?.title ?? ""}</strong>.</p>
-       <p>Marks: <strong>${finalMarks ?? "—"}${row.total_marks ? ` / ${row.total_marks}` : ""}</strong></p>
+       <p>Marks: <strong>${finalMarks ?? "—"}${finalTotal ? ` / ${finalTotal}` : ""}</strong></p>
        ${remarks ? `<p>Examiner's remarks: ${remarks}</p>` : ""}
        ${
          // A paper sent in through the free checking service has no course page

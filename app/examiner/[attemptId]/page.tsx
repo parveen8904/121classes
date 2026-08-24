@@ -8,6 +8,7 @@ import { submitCheck, unclaimCopy, saveExaminerCopy } from "../actions";
 import SubmitButton from "@/app/components/SubmitButton";
 import type { DescriptiveGrade } from "@/lib/ai";
 import AnswerKey from "@/app/components/AnswerKey";
+import { checkedByLine } from "@/lib/examinerName";
 
 export const dynamic = "force-dynamic";
 
@@ -92,7 +93,7 @@ export default async function ExaminerCopy(props: {
         )}
         {checked && (
           <div className="notice ok" style={{ margin: "12px 0" }}>
-            ✅ Checked by <strong>{row.examiner_name}</strong>
+            ✅ <strong>{checkedByLine(row.examiner_name as string | null)}</strong>
             {row.examiner_checked_at ? ` on ${new Date(row.examiner_checked_at).toLocaleString("en-IN")}` : ""} — already released to the student.
           </div>
         )}

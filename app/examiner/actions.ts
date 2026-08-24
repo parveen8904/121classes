@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { notifyByEmail, emailShell } from "@/lib/notify";
 import { str } from "../admin/_lib/util";
+import { checkedByLine } from "@/lib/examinerName";
 
 // Examiners are faculty or admins.
 async function requireExaminer(): Promise<{ id: string; name: string } | null> {
@@ -122,8 +123,8 @@ export async function submitCheck(formData: FormData) {
     email: (student?.email as string) ?? null,
     subject: `✅ Your checked copy is ready — ${section?.title ?? "descriptive test"}`,
     html: emailShell(
-      "Your copy has been checked 🧑‍🏫",
-      `<p>The examiner has checked your descriptive paper <strong>${section?.title ?? ""}</strong>.</p>
+      `Your copy has been checked 🧑‍🏫`,
+      `<p><strong>${checkedByLine(ex.name)}</strong> — your descriptive paper <strong>${section?.title ?? ""}</strong>.</p>
        <p>Marks: <strong>${finalMarks ?? "—"}${finalTotal ? ` / ${finalTotal}` : ""}</strong></p>
        ${remarks ? `<p>Examiner's remarks: ${remarks}</p>` : ""}
        ${

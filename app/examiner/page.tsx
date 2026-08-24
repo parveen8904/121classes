@@ -1,4 +1,5 @@
 import { formatDate, formatDateTime } from "@/lib/dates";
+import { checkedByLine } from "@/lib/examinerName";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -280,7 +281,7 @@ export default async function ExaminerDesk(props: { searchParams: Promise<{ subj
                 ))}
                 {i.review === "checked" && (
                   <span style={{ color: "#16a34a", fontWeight: 700, fontSize: ".85rem" }}>
-                    ✅ Checked by {i.examiner ?? "examiner"}{i.checkedAt ? ` · ${formatDate(i.checkedAt)}` : ""}
+                    ✅ {checkedByLine(i.examiner)}{i.checkedAt ? ` · ${formatDate(i.checkedAt)}` : ""}
                   </span>
                 )}
                 {i.review === "checked" && <Link className="btn small secondary" href={`/examiner/${i.id}`}>View</Link>}

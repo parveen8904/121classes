@@ -185,7 +185,15 @@ export async function buildAnnotatedPdf(
       const page = out.addPage([ow + MARGIN, oh]);
       page.drawPage(ep, { x: 0, y: 0, width: ow, height: oh });
       page.drawLine({ start: { x: ow, y: 0 }, end: { x: ow, y: oh }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
-      page.drawText(winAnsi("Checked by CA Parveen Sharma"), { x: ow + 14 * S, y: oh - 22 * S, size: 9 * S, font: fontB, color: rgb(0.05, 0.58, 0.53) });
+      // WHAT THIS MARGIN CAN HONESTLY CLAIM.
+      //
+      // It said "Checked by CA Parveen Sharma" on every annotated copy — but
+      // this PDF is drawn at GRADING time, before any examiner has even claimed
+      // it, and the marks on it are the AI's. Now that examiners are named, it
+      // was also liable to put his name on a copy CA Piyush checked. The
+      // examiner's name belongs on the release, where it is true: the results
+      // page and the email both carry it. See lib/examinerName.ts.
+      page.drawText(winAnsi("AI-checked copy - CA Parveen Sharma Classes"), { x: ow + 14 * S, y: oh - 22 * S, size: 9 * S, font: fontB, color: rgb(0.05, 0.58, 0.53) });
       const list = (byPage.get(i + 1) ?? []).slice().sort((a, b) => a.y - b.y);
       for (const a of list) {
         const yTop = oh - Math.min(0.97, Math.max(0.03, a.y)) * oh;

@@ -1,4 +1,5 @@
 import { formatDate } from "@/lib/dates";
+import { checkedByLine } from "@/lib/examinerName";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -74,7 +75,7 @@ export default async function PerformancePage() {
   // and still be told they had attempted nothing.
   const { data: myPapers } = await svc
     .from("descriptive_attempts")
-    .select("id, section_id, status, review_status, awarded_marks, total_marks, annotated_url, submitted_at, examiner_remarks, report")
+    .select("id, section_id, status, review_status, awarded_marks, total_marks, annotated_url, submitted_at, examiner_remarks, examiner_name, examiner_checked_at, report")
     .eq("student_id", user.id)
     .not("submitted_at", "is", null)
     .order("submitted_at", { ascending: false });
@@ -223,6 +224,15 @@ export default async function PerformancePage() {
                         )}
                         {report?.summary && (
                           <p style={{ marginTop: 8, fontSize: ".9rem" }}>{report.summary}</p>
+                        )}
+                        {/* WHO CHECKED IT, BY NAME. A named check means more to
+                            a student than an anonymous one, and it tells them
+                            who to ask about a mark. */}
+                        {a.review_status === "checked" && (
+                          <p className="muted" style={{ fontSize: ".8rem", margin: "6px 0 0" }}>
+                            ✅ {checkedByLine(a.examiner_name as string | null)}
+                            {a.examiner_checked_at ? ` · ${formatDate(a.examiner_checked_at as string)}` : ""}
+                          </p>
                         )}
                         {a.examiner_remarks && (
                           <p style={{ marginTop: 6, fontSize: ".9rem" }}>

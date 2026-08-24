@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { currentStaff, pathAllowed } from "@/lib/adminAccess";
 import { ADMIN_GROUPS } from "@/lib/adminNav";
 import { getBunnyBilling } from "@/lib/bunny";
+import { monthCostUsd } from "@/lib/monthCost";
 
 export const dynamic = "force-dynamic";
 const INR = 85;
@@ -12,7 +13,7 @@ async function loadStats() {
   const svc = createServiceClient();
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
   const head = { count: "exact" as const, head: true };
-  const [students, openings, doubtSummary, ai, storage, bunny, money] = await Promise.all([
+  const [students, openings, doubtSummary, ai, storage, bunny, money, cost] = await Promise.all([
     svc.from("profiles").select("id", head).eq("role", "student"),
     svc.from("job_listings").select("id", head).eq("status", "new"),
     // ONE DEFINITION OF "WAITING", AND IT LIVES IN ONE PLACE.
@@ -37,6 +38,9 @@ async function loadStats() {
     // here would be cut off at PostgREST's 1,000-row cap and under-report,
     // which is how the AI-spend tile once showed half the real figure.
     svc.rpc("admin_dashboard_money"),
+    // The SAME figure the costs page shows — see lib/monthCost.ts. Two screens
+    // computing one month's cost separately is how they come to disagree.
+    monthCostUsd().catch(() => null),
   ]);
   const m = (Array.isArray(money.data) ? money.data[0] : money.data) as
     { revenue_all: number; revenue_month: number; revenue_today: number;
@@ -55,6 +59,8 @@ async function loadStats() {
     revenueToday: Number(m?.revenue_today ?? 0),
     usersToday: Number(m?.users_today ?? 0),
     subsToday: Number(m?.subscriptions_today ?? 0),
+    costMonthUsd: cost?.total ?? null,
+    costBreakdown: cost,
   };
 }
 
@@ -90,6 +96,17 @@ export default async function AdminHome() {
     // different problems and led to the same place.
     // One number from one table, now that every channel writes to it.
     { label: "Doubts waiting", value: String(s.waiting), href: "/admin/doubt-log", alert: s.waiting > 0 },
+    // Everything the month costs, AI included — the one number to set the
+    // revenue tiles against. inr() converts dollars: every provider bills in
+    // USD, so the total is summed in dollars and converted once, here.
+    ...(s.costMonthUsd !== null ? [{
+      label: "Total cost (this month)",
+      value: inr(s.costMonthUsd),
+      href: "/admin/costs",
+      hint: s.costBreakdown
+        ? `AI ${inr(s.costBreakdown.ai)} · Bunny ${inr(s.costBreakdown.bunny)} · Supabase ${inr(s.costBreakdown.supabase)} · Vercel ${inr(s.costBreakdown.vercel)}`
+        : undefined,
+    }] : []),
     { label: "AI cost (this month)", value: inr(s.aiMonth), href: "/admin/costs" },
     ...(s.bunnyMonth !== null ? [{ label: "Bunny (this month)", value: inr(s.bunnyMonth), href: "/admin/costs" }] : []),
     { label: "Storage used", value: `${s.storageMb.toFixed(1)} MB`, href: "/admin/costs" },
@@ -133,6 +150,11 @@ export default async function AdminHome() {
             <div style={{ background: "var(--bg-soft)", borderRadius: 10, padding: "14px 16px", border: c.alert ? "1px solid #f59e0b" : "1px solid transparent" }}>
               <div className="muted" style={{ fontSize: ".78rem" }}>{c.label}</div>
               <div style={{ fontSize: "1.5rem", fontWeight: 700, marginTop: 2 }}>{c.value}</div>
+              {/* What the number is made of, where a single figure would hide
+                  it — a month's cost is four providers, not one bill. */}
+              {"hint" in c && c.hint && (
+                <div className="muted" style={{ fontSize: ".7rem", marginTop: 3, lineHeight: 1.5 }}>{c.hint}</div>
+              )}
             </div>
           </Link>
         ))}

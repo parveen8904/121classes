@@ -4,6 +4,7 @@ import AdminHero from "../_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import { getBunnyBilling } from "@/lib/bunny";
+import { monthCostUsd } from "@/lib/monthCost";
 import SubmitButton from "@/app/components/SubmitButton";
 import { saveCostSettings, runPaperCleanup } from "./actions";
 import { countOldPapers } from "@/lib/paperCleanup";
@@ -65,7 +66,10 @@ export default async function CostsPage(props: { searchParams: Promise<{ purged?
   // figure entered from the dashboard (dash.bunny.net → Account → Billing).
   const bunnyManual = cfg.get("bunny_bill_usd") != null ? Number(cfg.get("bunny_bill_usd")) : 0;
   const bunnyMonth = bunnyBill?.thisMonth ?? bunnyManual;
-  const totalMonth = aiMonth + bunnyMonth + supabasePlan + vercelPlan + cloudflareBill;
+  // The dashboard shows this same number, from lib/monthCost.ts. The parts are
+  // still worked out above because this page explains each of them; the TOTAL
+  // comes from the shared function so the two screens cannot drift apart.
+  const { total: totalMonth } = await monthCostUsd();
 
   // --- Payment history: what each provider has actually taken, month by month.
   // Written by the monthly cron (/api/cron/costs-snapshot); seeded with the real

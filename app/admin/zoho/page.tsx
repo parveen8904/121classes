@@ -408,6 +408,29 @@ export default async function ZohoHubPage(props: {
         back={{ href: "/admin", label: "Admin" }}
       />
 
+      {/* THE PAGE IN ORDER OF WHO HAS TO DO SOMETHING.
+          His complaint, 24 Aug 2026: the page was very lengthy and confusing.
+          It ran queues → reference → build notes → and only then his approvals
+          gate, roughly fifteen hundred lines down, which is the one thing only
+          he can do. The order is now: DECIDE (what is waiting on him), then
+          WORK (the desk's queues), then FILES AND REFERENCE. This strip is so
+          the page can be jumped through rather than scrolled. */}
+      <nav className="card" style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", padding: "10px 12px" }}>
+        <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700 }}>Decide</span>
+        <a className="btn small" href="#approvals">✋ Waiting on you{pendingApprovals.length ? ` (${pendingApprovals.length})` : ""}</a>
+        <a className="btn small secondary" href="#bills">🧾 Documents{billsWaiting.length ? ` (${billsWaiting.length})` : ""}</a>
+        <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, marginLeft: 6 }}>Work</span>
+        <a className="btn small secondary" href="#queue">📮 Sales</a>
+        <a className="btn small secondary" href="#settlements">🏦 Settlements</a>
+        <a className="btn small secondary" href="#bank">🏧 Statements</a>
+        <a className="btn small secondary" href="#petty">👛 Petty cash</a>
+        <a className="btn small secondary" href="#brokerage">📈 Investments</a>
+        <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, marginLeft: 6 }}>Files</span>
+        <a className="btn small secondary" href="#vault">🗄️ Vault</a>
+        <a className="btn small secondary" href="#tax">🧾 Tax</a>
+        <a className="btn small secondary" href="#backlog">📋 Backlog</a>
+      </nav>
+
       {/* The standing rule, said where the person who will live on this page reads it. */}
       <div className="notice" style={{ marginTop: 14, fontSize: ".85rem", lineHeight: 1.7 }}>
         <strong>The one rule of this desk:</strong> Zoho is written to, never worked in. Every entry starts here,
@@ -415,23 +438,368 @@ export default async function ZohoHubPage(props: {
         is a fresh entry, never a silent edit. Bank feeds inside Zoho stay <strong>disconnected</strong>.
       </div>
 
-      {/* NOTHING POSTS ITSELF — SO SAY SO WHERE IT IS WAITING.
-          The gate is roughly fifteen hundred lines down this page. The desk
-          sending work up to it used to be labelled "Approve & post" and flash
-          "✓ Posted", so the desk believed the job was done and the founder
-          never knew there was anything to release. The labels now say what they
-          do; this says where the work went. */}
-      {pendingApprovals.length > 0 && (
-        <div className="card" style={{ marginTop: 14, borderLeft: "4px solid #b45309" }}>
-          <strong style={{ fontSize: ".92rem" }}>
-            ✋ {pendingApprovals.length} item{pendingApprovals.length === 1 ? " is" : "s are"} waiting to be released into Zoho
-          </strong>
-          <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 8px", lineHeight: 1.6 }}>
-            {isFounder
-              ? "Nothing below has reached the books yet. Approving on a desk queue only sends the work here — releasing it is a separate press, and only you can make it."
-              : "These are with CA Parveen Sharma. They reach Zoho when he releases them, not when this desk approves them."}
+      {/* ── His gate: nothing reaches Zoho until he releases it ──────── */}
+      {hubConnected && (
+        <div id="approvals">
+          <h2 className="admin-section-title" style={{ marginTop: 26 }}>
+            ✋ Waiting for your approval ({pendingApprovals.length})
+          </h2>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
+            Nothing is written to Zoho from anywhere in this system — no posting, no date, no amount, no vendor,
+            no TDS — until you release it here. The desk prepares the work and asks; this page is the only door,
+            and it is <strong>yours alone</strong>. Everything below shows exactly what will be sent.
           </p>
-          <a className="btn small" href="#approvals">Go to the approvals gate ↓</a>
+
+          {pendingApprovals.length === 0 ? (
+            <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing waiting. The books are as you left them.</p></div>
+          ) : !isFounder ? (
+            <div className="card">
+              <p className="muted" style={{ margin: 0 }}>
+                {pendingApprovals.length} item(s) are with CA Parveen Sharma for approval. They post once he releases them.
+              </p>
+            </div>
+          ) : (
+            <>
+              <form action={approveAllZohoAction} className="card" style={{ marginBottom: 8, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                {pendingApprovals.map((a) => <input key={a.id} type="hidden" name="ids" value={a.id} />)}
+                <SubmitButton className="btn small" savedLabel="Posted">
+                  {pendingApprovals.length === 1 ? "✅ Approve and post" : `✅ Approve all ${pendingApprovals.length} and post`}
+                </SubmitButton>
+                <span className="muted" style={{ fontSize: ".8rem" }}>Or go through them one at a time below.</span>
+              </form>
+
+              {pendingApprovals.map((a) => (
+                <div className="card" key={a.id} style={{ marginTop: 8, borderLeft: "4px solid #b45309" }}>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ flex: "1 1 420px" }}>
+                      <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                        {a.kind.replace(/_/g, " ")}
+                      </span>
+                      <div style={{ fontSize: ".95rem", marginTop: 2 }}>{a.summary}</div>
+                      {(() => {
+                        const e = approvalEntries.get(String(a.id));
+                        return e
+                          ? <EntryLines entry={e} title="What approving this does to the ledgers" compact />
+                          : (
+                            <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
+                              The entry for this one cannot be shown here — open it on its own section below before you release it.
+                            </p>
+                          );
+                      })()}
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <form action={approveZohoAction} style={{ margin: 0 }}>
+                        <input type="hidden" name="id" value={a.id} />
+                        <SubmitButton className="btn small" savedLabel="Posted">✅ Approve</SubmitButton>
+                      </form>
+                      <form action={rejectZohoAction} style={{ margin: 0 }}>
+                        <input type="hidden" name="id" value={a.id} />
+                        <SubmitButton className="btn small secondary" savedLabel="Rejected">✕ No</SubmitButton>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Bills: one line each, opened only when he wants it ──────── */}
+      {hubConnected && (
+        <div id="bills">
+          <h2 className="admin-section-title" style={{ marginTop: 26 }}>🧾 Documents to approve ({billsWaiting.length})</h2>
+          <p style={{ margin: "4px 0 8px" }}>
+            <Link className="btn small secondary" href="/admin/zoho/activity">📜 What has changed in Zoho</Link>
+            <span className="muted" style={{ fontSize: ".8rem", marginLeft: 8 }}>
+              the last 50 changes to the books, by this desk or by anyone working in Zoho
+            </span>
+          </p>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
+            One line per invoice. Click it to see the entry proposed — the account, the GST, the TDS — change
+            anything you disagree with <strong>here</strong>, and post it. What you change is remembered for that
+            supplier. Nothing goes to Zoho until you press the green button.
+          </p>
+
+          <details className="card" style={{ marginBottom: 12 }}>
+            <summary className="btn small secondary as-btn">✍️ Nothing to upload? Write the entry yourself</summary>
+            <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0" }}>
+              An invoice we are raising, a credit note, or a plain journal — the same questions as an invoice that
+              arrives, asked the other way round.
+            </p>
+            <RaiseDocument action={raiseDocumentAction} accountList="acct-names" accounts={zohoAccounts} isFounder={isFounder} />
+          </details>
+
+          <form action={uploadBillAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
+            <div style={{ minWidth: 190 }}>
+              <label style={{ fontSize: ".75rem" }}>📤 Supplier</label>
+              <input name="institution" list="inst-names" required placeholder="e.g. Vercel / HYTONE" style={{ marginBottom: 0 }} />
+            </div>
+            <div style={{ minWidth: 210 }}>
+              <label style={{ fontSize: ".75rem" }}>The invoice (PDF)</label>
+              <input type="file" name="file" required accept="application/pdf" style={{ marginBottom: 0 }} />
+            </div>
+            <input type="hidden" name="year_label" value={fyNow} />
+            <SubmitButton className="btn small" savedLabel="✓ Read">📥 Add this invoice</SubmitButton>
+          </form>
+
+          {billsWaiting.length === 0 && (
+            <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing waiting.</p></div>
+          )}
+
+          {billsWaiting.map((b) => {
+            const rule = ruleFor(b.institution);
+            const foreign = (b.currency || "USD") !== "INR";
+            const needAnswers = foreign && !(rule?.country && rule?.service_category);
+            const d = b.determination;
+            const p = b.proposal ?? {};
+            const inr = Number(b.inr_amount ?? 0);
+            const tdsRate = d?.tdsRate ?? p.tds_rate ?? null;
+            const tdsAmt = tdsRate ? Math.round(inr * Number(tdsRate)) / 100 : 0;
+            const waitingOnHim = pendingBillIds.has(b.id);
+
+            // The one line. Everything he needs to decide whether to open it.
+            const headline = needAnswers
+              ? "needs two answers before it can be worked out"
+              : !inr ? "amount could not be read — open and type it in"
+              : `${p.gst_treatment === "rcm" ? "RCM 18%" : p.gst_treatment === "none" ? "no GST" : "GST 18% ITC"}` +
+                `${tdsRate ? ` · TDS ${tdsRate}% = ₹${tdsAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : " · no TDS"}` +
+                ` → ${p.expense_account ?? "account not set"}`;
+
+            return (
+              <details className="card" key={b.id} style={{ marginTop: 6, padding: "10px 14px", borderLeft: `4px solid ${needAnswers || !inr ? "#b45309" : "#0e6e52"}` }}>
+                {/* THE SUMMARY KEEPS ITS DEFAULT DISPLAY.
+                    Setting display:flex on a <summary> strips WebKit of the
+                    disclosure behaviour: on his Mac and his phone the line
+                    opened and then would not close again. The layout goes on a
+                    div inside it, where it costs nothing. */}
+                <summary style={{ cursor: "pointer" }}>
+                  <span style={{ display: "inline-flex", gap: 10, flexWrap: "wrap", alignItems: "baseline", width: "calc(100% - 1.4rem)" }}>
+                    <span style={{ minWidth: 92, fontSize: ".85rem" }}>{b.bill_date ?? "no date"}</span>
+                    <strong style={{ minWidth: 96 }}>{b.institution}</strong>
+                    <span className="muted" style={{ fontSize: ".82rem", minWidth: 130 }}>{b.bill_no ?? "no number"}</span>
+                    {/* An amount of zero here means the reader could not find one, not that the
+                        bill was for nothing — so it stays a dash. ₹0.00 in a money column
+                        is a figure, and it would be a false one. */}
+                    <span style={{ fontWeight: 600 }}><Money n={inr || null} /></span>
+                    <span className="muted" style={{ fontSize: ".82rem" }}>{headline}</span>
+                    {waitingOnHim && <span style={{ fontSize: ".75rem", color: "#b45309" }}>· sent to you by the desk</span>}
+                  </span>
+                </summary>
+
+                <div style={{ marginTop: 12 }}>
+                  {needAnswers ? (
+                    <form action={saveForeignAnswersAction}>
+                      <input type="hidden" name="institution" value={b.institution} />
+                      <input type="hidden" name="billing_frequency" value="monthly" />
+                      <p style={{ fontSize: ".85rem", margin: "0 0 8px" }}>
+                        {b.institution} is outside India. Two things decide the tax — asked once for this supplier.
+                      </p>
+                      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))" }}>
+                        <div>
+                          <label style={{ fontSize: ".75rem" }}>Which country are they in?</label>
+                          <select name="country" required defaultValue={seedFor(b.institution)?.country ?? ""} style={{ marginBottom: 0 }}>
+                            <option value="">— pick —</option>
+                            {FVD.COUNTRIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: ".75rem" }}>What did they do for us?</label>
+                          <select name="service_category" defaultValue={seedFor(b.institution)?.category ?? "standardised"} style={{ marginBottom: 0 }}>
+                            <option value="standardised">Ready-made software / hosting we just use</option>
+                            <option value="bespoke">Work done for us by their people</option>
+                            <option value="advertising">Advertising</option>
+                            <option value="mixed">Both</option>
+                          </select>
+                        </div>
+                      </div>
+                      <SubmitButton className="btn small" savedLabel="✓" style={{ marginTop: 10 }}>Save and work out the entry</SubmitButton>
+                    </form>
+                  ) : (
+                    <form action={decideBillAction}>
+                      <input type="hidden" name="id" value={b.id} />
+                      <input type="hidden" name="vendor_name" value={p.vendor_name ?? b.institution} />
+
+                      {/* 1 — THE PAPER. Everything on it can be corrected here. */}
+                      <div style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".07em", color: "#666", margin: "0 0 6px" }}>
+                        1 · The invoice
+                      </div>
+                      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
+                        <div>
+                          <label style={{ fontSize: ".75rem" }}>Supplier is</label>
+                          <select name="supplier_kind" defaultValue={p.supplier_kind ?? (foreign ? "foreign" : "indian")} style={{ marginBottom: 0 }}>
+                            <option value="indian">Indian</option>
+                            <option value="foreign">Foreign</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: ".75rem" }}>Invoice number</label>
+                          <input name="bill_no" defaultValue={b.bill_no ?? ""} style={{ marginBottom: 0 }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: ".75rem" }}>Invoice date</label>
+                          <input name="bill_date" type="date" defaultValue={b.bill_date ?? ""} style={{ marginBottom: 0 }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: ".75rem" }}>Amount ({b.currency})</label>
+                          <input name="amount" type="number" step="0.01" defaultValue={b.amount ?? ""} style={{ marginBottom: 0 }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: ".75rem" }}>Exchange rate</label>
+                          <input name="rate" type="number" step="0.0001" defaultValue={b.rate ?? ""} placeholder={foreign ? "₹ per unit" : "1"} style={{ marginBottom: 0 }} />
+                          <div className="muted" style={{ fontSize: ".7rem", marginTop: 2 }}>
+                            {b.rate_date ? `SBI TT buy ${b.rate_date}, Rule 115` : "blank for an Indian invoice"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <EntryEditor
+                        inr={inr}
+                        who={p.vendor_name ?? b.institution}
+                        currency={b.currency}
+                        accountList="acct-names"
+                        accounts={zohoAccounts}
+                        foreign={foreign ? {
+                          country: rule?.country ?? seedFor(b.institution)?.country ?? "United States",
+                          category: rule?.service_category ?? seedFor(b.institution)?.category ?? "standardised",
+                          countries: FVD.COUNTRIES.map((c) => c.name),
+                        } : null}
+                        initial={{
+                          nature: p.nature ?? "expense",
+                          operating: p.operating ?? "operating",
+                          account: p.expense_account ?? "",
+                          subAccount: p.sub_account ?? "",
+                          gstTreatment: p.gst_treatment ?? (foreign ? "rcm" : "domestic_itc"),
+                          gstRate: Number(p.gst_rate ?? 18),
+                          tdsMode: p.tds_mode ?? (tdsRate ? "deduct" : "none"),
+                          tdsRate: tdsRate === null || tdsRate === undefined ? "" : String(tdsRate),
+                          tdsSection: p.tds_section ?? "",
+                          // What the invoice printed, where somebody has keyed it.
+                          taxable: b.taxable_value == null ? "" : String(b.taxable_value),
+                          cgst: b.cgst_amount == null ? "" : String(b.cgst_amount),
+                          sgst: b.sgst_amount == null ? "" : String(b.sgst_amount),
+                          igst: b.igst_amount == null ? "" : String(b.igst_amount),
+                        }}
+                        compliance={d?.form145Part
+                          ? `Form 145 Part ${d.form145Part}${d.form146Required ? " + Form 146 from your accountant" : ""}.` +
+                            (d.warnings?.length ? ` ${d.warnings[0]}` : "")
+                          : null}
+                      />
+
+                      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
+                        <SubmitButton className="btn small" savedLabel="✓ Done">
+                          {isFounder ? "✅ Approve & post to Zoho" : "📤 Send for approval"}
+                        </SubmitButton>
+                        <label style={{ fontWeight: 400, fontSize: ".8rem" }}>
+                          <input type="checkbox" name="as_rule" value="yes" defaultChecked style={{ width: "auto", marginRight: 6 }} />
+                          Remember all of this for {b.institution}
+                        </label>
+                      </div>
+                    </form>
+                  )}
+
+                  <form action={removeBillAction} style={{ marginTop: 8 }}>
+                    <input type="hidden" name="id" value={b.id} />
+                    <SubmitButton className="btn small secondary" savedLabel="Removed">🗑 Remove from this list</SubmitButton>
+                    <span className="muted" style={{ fontSize: ".76rem", marginLeft: 8 }}>The PDF stays in the vault.</span>
+                  </form>
+                </div>
+              </details>
+            );
+          })}
+
+          {billsPostedRows.length > 0 && (
+            <details className="card" style={{ marginTop: 10 }}>
+              <summary className="btn small secondary as-btn">📗 In the books ({billsPostedRows.length}) — with their paper</summary>
+              <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0" }}>
+                What Zoho holds, and whether the supplier&apos;s own invoice is attached to it there. An entry and the
+                document behind it should never be two separate hunts.
+              </p>
+              {billsPostedRows.map((r) => (
+                <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline", padding: "5px 0", borderTop: "1px solid rgba(0,0,0,.06)", fontSize: ".83rem" }}>
+                  <span style={{ minWidth: 88 }}>{r.bill_date}</span>
+                  <strong style={{ minWidth: 96 }}>{r.institution}</strong>
+                  <span className="muted" style={{ minWidth: 120 }}>{r.bill_no ?? "—"}</span>
+                  {r.zoho_echo && (
+                    <span className="muted">
+                      {r.zoho_echo.currency} {r.zoho_echo.total}
+                      {r.zoho_echo.exchange_rate && r.zoho_echo.currency !== "INR" ? ` @ ₹${r.zoho_echo.exchange_rate}` : ""}
+                      {r.zoho_echo.reverse_charge ? " · RCM" : ""}
+                      {r.zoho_echo.zoho_status ? ` · ${r.zoho_echo.zoho_status}` : ""}
+                    </span>
+                  )}
+                  {r.error && <span style={{ color: "#b45309" }}>⚠ {r.error}</span>}
+                  <span style={{ marginLeft: "auto" }}>
+                    {!r.zoho_bill_id ? null
+                      : Number(r.zoho_echo?.documents ?? 0) > 0
+                        ? <span style={{ color: "#0e6e52", fontSize: ".78rem" }} title="Zoho holds the supplier's own invoice against this bill">📎 invoice attached</span>
+                      : !r.vault_doc_id ? null
+                      : r.paper_note
+                        ? <span style={{ color: "#b45309", fontSize: ".78rem" }}>📎 {r.paper_note}</span>
+                        : (
+                          <form action={attachPaperAction} style={{ margin: 0 }}>
+                            <input type="hidden" name="id" value={r.id} />
+                            <SubmitButton className="btn small secondary" savedLabel="📎 attached">📎 Attach the invoice</SubmitButton>
+                          </form>
+                        )}
+                  </span>
+                </div>
+              ))}
+            </details>
+          )}
+
+          {raised.length > 0 && (
+            <details className="card" style={{ marginTop: 10 }}>
+              <summary className="btn small secondary as-btn">📗 Raised by us ({raised.length})</summary>
+              <div style={{ marginTop: 8 }}>
+                {raised.map((r) => (
+                  <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline", padding: "6px 0", borderTop: "1px solid rgba(0,0,0,.06)", fontSize: ".84rem" }}>
+                    <span style={{ minWidth: 88 }}>{r.doc_date}</span>
+                    <span style={{ minWidth: 92 }}>
+                      {r.kind === "credit_note" ? "Credit note" : r.kind === "journal" ? "Journal" : "Invoice"}
+                    </span>
+                    <strong style={{ minWidth: 130 }}>{r.party_name ?? r.description ?? "—"}</strong>
+                    <span style={{ fontWeight: 600 }}><Money n={r.inr_amount === null ? null : Number(r.inr_amount)} width={98} /></span>
+                    <span className="muted">{r.ledger ?? ""}{Number(r.tds_rate) > 0 ? ` · TDS ${r.tds_rate}% withheld by them` : ""}</span>
+                    <span style={{ marginLeft: "auto" }}>
+                      {r.status === "posted"
+                        ? <span style={{ color: "#0e6e52" }}>✅ {r.zoho_number ?? "posted"}</span>
+                        : r.status === "failed"
+                          ? <span style={{ color: "#b91c1c" }}>❌ {r.error}</span>
+                          : <span className="muted">waiting</span>}
+                    </span>
+                    {r.status === "failed" && (
+                      <form action={retryDocumentAction} style={{ margin: 0 }}>
+                        <input type="hidden" name="id" value={r.id} />
+                        <SubmitButton className="btn small secondary" savedLabel="↻">Try again</SubmitButton>
+                      </form>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {complianceRows.length > 0 && (
+            <details className="card" style={{ marginTop: 10 }}>
+              <summary className="btn small secondary as-btn">📋 Forms still to file ({complianceRows.length})</summary>
+              <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0" }}>
+                A remittance is not finished when the bill is booked — each of these still carries its Form 145.
+              </p>
+              {complianceRows.map((r) => (
+                <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", padding: "4px 0", fontSize: ".82rem" }}>
+                  <span style={{ minWidth: 200 }}>{r.bill_date} · <strong>{r.institution}</strong> {r.bill_no ?? ""}</span>
+                  <span>Part {r.form145_part}{r.form146_required ? " + Form 146" : ""}</span>
+                  {!r.form145_filed_at && (
+                    <form action={markFormFiledAction} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={r.id} /><input type="hidden" name="which" value="145" />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">Filed</SubmitButton>
+                    </form>
+                  )}
+                </div>
+              ))}
+            </details>
+          )}
         </div>
       )}
 
@@ -832,8 +1200,15 @@ export default async function ZohoHubPage(props: {
 
       {/* ── Rule 115 panel: rates + a concise summary of the rule ───── */}
       {hubConnected && (
-        <div className="card" style={{ marginTop: 18 }} id="rule115">
-          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <details className="card" style={{ marginTop: 18 }} id="rule115">
+          {/* REFERENCE, NOT A TASK. Rule 115 is something to look up when a
+              foreign figure is being checked — it is not work waiting to be
+              done, and open by default it pushed the actual queues further down
+              a page he already found too long. */}
+          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: ".92rem" }}>
+            💱 Rule 115 — SBI TT buying rates{r115 ? ` · this month ₹${r115.rate.toFixed(2)}/USD` : ""}
+          </summary>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
             <strong>💱 Rule 115 — SBI TT buying rates</strong>
             {r115 && <span style={{ fontSize: "1.1rem", fontWeight: 800 }}>this month: ₹{r115.rate.toFixed(2)}/USD</span>}
             <span className="muted" style={{ fontSize: ".78rem" }}>source: officialforexrates.com (the designated authority)</span>
@@ -859,7 +1234,7 @@ export default async function ZohoHubPage(props: {
             conversion this desk makes stores its dollar amount, the rate used, the rate&apos;s date and this rule —
             so any figure can be traced years later.
           </p>
-        </div>
+        </details>
       )}
 
       {/* ── Petty cash (imprest) ────────────────────────────────────── */}
@@ -1544,8 +1919,11 @@ export default async function ZohoHubPage(props: {
       )}
 
       {/* ── Build state ─────────────────────────────────────────────── */}
-      <h2 className="admin-section-title" style={{ marginTop: 24 }}>Where the build stands</h2>
-      <div style={{ display: "grid", gap: 8 }}>
+      {/* A progress list for whoever is building this, not something the desk
+          acts on. It sat open between the day's work and his approvals gate. */}
+      <details style={{ marginTop: 24 }}>
+        <summary className="muted" style={{ cursor: "pointer", fontSize: ".85rem" }}>Where the build stands</summary>
+      <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
         {PHASE_PLAN.map((p) => {
           const b = STATE_BADGE[p.state];
           return (
@@ -1557,6 +1935,7 @@ export default async function ZohoHubPage(props: {
           );
         })}
       </div>
+      </details>
 
       {/* ── Connect Zoho (founder-only) ─────────────────────────────── */}
       {isFounder && (
@@ -1596,385 +1975,27 @@ export default async function ZohoHubPage(props: {
         </>
       )}
 
-      {/* ── His gate: nothing reaches Zoho until he releases it ──────── */}
-      {hubConnected && (
-        <div id="approvals">
-          <h2 className="admin-section-title" style={{ marginTop: 26 }}>
-            ✋ Waiting for your approval ({pendingApprovals.length})
-          </h2>
-          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
-            Nothing is written to Zoho from anywhere in this system — no posting, no date, no amount, no vendor,
-            no TDS — until you release it here. The desk prepares the work and asks; this page is the only door,
-            and it is <strong>yours alone</strong>. Everything below shows exactly what will be sent.
-          </p>
-
-          {pendingApprovals.length === 0 ? (
-            <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing waiting. The books are as you left them.</p></div>
-          ) : !isFounder ? (
-            <div className="card">
-              <p className="muted" style={{ margin: 0 }}>
-                {pendingApprovals.length} item(s) are with CA Parveen Sharma for approval. They post once he releases them.
-              </p>
-            </div>
-          ) : (
-            <>
-              <form action={approveAllZohoAction} className="card" style={{ marginBottom: 8, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                {pendingApprovals.map((a) => <input key={a.id} type="hidden" name="ids" value={a.id} />)}
-                <SubmitButton className="btn small" savedLabel="Posted">
-                  {pendingApprovals.length === 1 ? "✅ Approve and post" : `✅ Approve all ${pendingApprovals.length} and post`}
-                </SubmitButton>
-                <span className="muted" style={{ fontSize: ".8rem" }}>Or go through them one at a time below.</span>
-              </form>
-
-              {pendingApprovals.map((a) => (
-                <div className="card" key={a.id} style={{ marginTop: 8, borderLeft: "4px solid #b45309" }}>
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div style={{ flex: "1 1 420px" }}>
-                      <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em" }}>
-                        {a.kind.replace(/_/g, " ")}
-                      </span>
-                      <div style={{ fontSize: ".95rem", marginTop: 2 }}>{a.summary}</div>
-                      {(() => {
-                        const e = approvalEntries.get(String(a.id));
-                        return e
-                          ? <EntryLines entry={e} title="What approving this does to the ledgers" compact />
-                          : (
-                            <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
-                              The entry for this one cannot be shown here — open it on its own section below before you release it.
-                            </p>
-                          );
-                      })()}
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <form action={approveZohoAction} style={{ margin: 0 }}>
-                        <input type="hidden" name="id" value={a.id} />
-                        <SubmitButton className="btn small" savedLabel="Posted">✅ Approve</SubmitButton>
-                      </form>
-                      <form action={rejectZohoAction} style={{ margin: 0 }}>
-                        <input type="hidden" name="id" value={a.id} />
-                        <SubmitButton className="btn small secondary" savedLabel="Rejected">✕ No</SubmitButton>
-                      </form>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ── Bills: one line each, opened only when he wants it ──────── */}
-      {hubConnected && (
-        <div id="bills">
-          <h2 className="admin-section-title" style={{ marginTop: 26 }}>🧾 Documents to approve ({billsWaiting.length})</h2>
-          <p style={{ margin: "4px 0 8px" }}>
-            <Link className="btn small secondary" href="/admin/zoho/activity">📜 What has changed in Zoho</Link>
-            <span className="muted" style={{ fontSize: ".8rem", marginLeft: 8 }}>
-              the last 50 changes to the books, by this desk or by anyone working in Zoho
-            </span>
-          </p>
-          <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
-            One line per invoice. Click it to see the entry proposed — the account, the GST, the TDS — change
-            anything you disagree with <strong>here</strong>, and post it. What you change is remembered for that
-            supplier. Nothing goes to Zoho until you press the green button.
-          </p>
-
-          <details className="card" style={{ marginBottom: 12 }}>
-            <summary className="btn small secondary as-btn">✍️ Nothing to upload? Write the entry yourself</summary>
-            <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0" }}>
-              An invoice we are raising, a credit note, or a plain journal — the same questions as an invoice that
-              arrives, asked the other way round.
-            </p>
-            <RaiseDocument action={raiseDocumentAction} accountList="acct-names" accounts={zohoAccounts} isFounder={isFounder} />
-          </details>
-
-          <form action={uploadBillAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
-            <div style={{ minWidth: 190 }}>
-              <label style={{ fontSize: ".75rem" }}>📤 Supplier</label>
-              <input name="institution" list="inst-names" required placeholder="e.g. Vercel / HYTONE" style={{ marginBottom: 0 }} />
-            </div>
-            <div style={{ minWidth: 210 }}>
-              <label style={{ fontSize: ".75rem" }}>The invoice (PDF)</label>
-              <input type="file" name="file" required accept="application/pdf" style={{ marginBottom: 0 }} />
-            </div>
-            <input type="hidden" name="year_label" value={fyNow} />
-            <SubmitButton className="btn small" savedLabel="✓ Read">📥 Add this invoice</SubmitButton>
-          </form>
-
-          {billsWaiting.length === 0 && (
-            <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing waiting.</p></div>
-          )}
-
-          {billsWaiting.map((b) => {
-            const rule = ruleFor(b.institution);
-            const foreign = (b.currency || "USD") !== "INR";
-            const needAnswers = foreign && !(rule?.country && rule?.service_category);
-            const d = b.determination;
-            const p = b.proposal ?? {};
-            const inr = Number(b.inr_amount ?? 0);
-            const tdsRate = d?.tdsRate ?? p.tds_rate ?? null;
-            const tdsAmt = tdsRate ? Math.round(inr * Number(tdsRate)) / 100 : 0;
-            const waitingOnHim = pendingBillIds.has(b.id);
-
-            // The one line. Everything he needs to decide whether to open it.
-            const headline = needAnswers
-              ? "needs two answers before it can be worked out"
-              : !inr ? "amount could not be read — open and type it in"
-              : `${p.gst_treatment === "rcm" ? "RCM 18%" : p.gst_treatment === "none" ? "no GST" : "GST 18% ITC"}` +
-                `${tdsRate ? ` · TDS ${tdsRate}% = ₹${tdsAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : " · no TDS"}` +
-                ` → ${p.expense_account ?? "account not set"}`;
-
-            return (
-              <details className="card" key={b.id} style={{ marginTop: 6, padding: "10px 14px", borderLeft: `4px solid ${needAnswers || !inr ? "#b45309" : "#0e6e52"}` }}>
-                {/* THE SUMMARY KEEPS ITS DEFAULT DISPLAY.
-                    Setting display:flex on a <summary> strips WebKit of the
-                    disclosure behaviour: on his Mac and his phone the line
-                    opened and then would not close again. The layout goes on a
-                    div inside it, where it costs nothing. */}
-                <summary style={{ cursor: "pointer" }}>
-                  <span style={{ display: "inline-flex", gap: 10, flexWrap: "wrap", alignItems: "baseline", width: "calc(100% - 1.4rem)" }}>
-                    <span style={{ minWidth: 92, fontSize: ".85rem" }}>{b.bill_date ?? "no date"}</span>
-                    <strong style={{ minWidth: 96 }}>{b.institution}</strong>
-                    <span className="muted" style={{ fontSize: ".82rem", minWidth: 130 }}>{b.bill_no ?? "no number"}</span>
-                    {/* An amount of zero here means the reader could not find one, not that the
-                        bill was for nothing — so it stays a dash. ₹0.00 in a money column
-                        is a figure, and it would be a false one. */}
-                    <span style={{ fontWeight: 600 }}><Money n={inr || null} /></span>
-                    <span className="muted" style={{ fontSize: ".82rem" }}>{headline}</span>
-                    {waitingOnHim && <span style={{ fontSize: ".75rem", color: "#b45309" }}>· sent to you by the desk</span>}
-                  </span>
-                </summary>
-
-                <div style={{ marginTop: 12 }}>
-                  {needAnswers ? (
-                    <form action={saveForeignAnswersAction}>
-                      <input type="hidden" name="institution" value={b.institution} />
-                      <input type="hidden" name="billing_frequency" value="monthly" />
-                      <p style={{ fontSize: ".85rem", margin: "0 0 8px" }}>
-                        {b.institution} is outside India. Two things decide the tax — asked once for this supplier.
-                      </p>
-                      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))" }}>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>Which country are they in?</label>
-                          <select name="country" required defaultValue={seedFor(b.institution)?.country ?? ""} style={{ marginBottom: 0 }}>
-                            <option value="">— pick —</option>
-                            {FVD.COUNTRIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>What did they do for us?</label>
-                          <select name="service_category" defaultValue={seedFor(b.institution)?.category ?? "standardised"} style={{ marginBottom: 0 }}>
-                            <option value="standardised">Ready-made software / hosting we just use</option>
-                            <option value="bespoke">Work done for us by their people</option>
-                            <option value="advertising">Advertising</option>
-                            <option value="mixed">Both</option>
-                          </select>
-                        </div>
-                      </div>
-                      <SubmitButton className="btn small" savedLabel="✓" style={{ marginTop: 10 }}>Save and work out the entry</SubmitButton>
-                    </form>
-                  ) : (
-                    <form action={decideBillAction}>
-                      <input type="hidden" name="id" value={b.id} />
-                      <input type="hidden" name="vendor_name" value={p.vendor_name ?? b.institution} />
-
-                      {/* 1 — THE PAPER. Everything on it can be corrected here. */}
-                      <div style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".07em", color: "#666", margin: "0 0 6px" }}>
-                        1 · The invoice
-                      </div>
-                      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>Supplier is</label>
-                          <select name="supplier_kind" defaultValue={p.supplier_kind ?? (foreign ? "foreign" : "indian")} style={{ marginBottom: 0 }}>
-                            <option value="indian">Indian</option>
-                            <option value="foreign">Foreign</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>Invoice number</label>
-                          <input name="bill_no" defaultValue={b.bill_no ?? ""} style={{ marginBottom: 0 }} />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>Invoice date</label>
-                          <input name="bill_date" type="date" defaultValue={b.bill_date ?? ""} style={{ marginBottom: 0 }} />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>Amount ({b.currency})</label>
-                          <input name="amount" type="number" step="0.01" defaultValue={b.amount ?? ""} style={{ marginBottom: 0 }} />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: ".75rem" }}>Exchange rate</label>
-                          <input name="rate" type="number" step="0.0001" defaultValue={b.rate ?? ""} placeholder={foreign ? "₹ per unit" : "1"} style={{ marginBottom: 0 }} />
-                          <div className="muted" style={{ fontSize: ".7rem", marginTop: 2 }}>
-                            {b.rate_date ? `SBI TT buy ${b.rate_date}, Rule 115` : "blank for an Indian invoice"}
-                          </div>
-                        </div>
-                      </div>
-
-                      <EntryEditor
-                        inr={inr}
-                        who={p.vendor_name ?? b.institution}
-                        currency={b.currency}
-                        accountList="acct-names"
-                        accounts={zohoAccounts}
-                        foreign={foreign ? {
-                          country: rule?.country ?? seedFor(b.institution)?.country ?? "United States",
-                          category: rule?.service_category ?? seedFor(b.institution)?.category ?? "standardised",
-                          countries: FVD.COUNTRIES.map((c) => c.name),
-                        } : null}
-                        initial={{
-                          nature: p.nature ?? "expense",
-                          operating: p.operating ?? "operating",
-                          account: p.expense_account ?? "",
-                          subAccount: p.sub_account ?? "",
-                          gstTreatment: p.gst_treatment ?? (foreign ? "rcm" : "domestic_itc"),
-                          gstRate: Number(p.gst_rate ?? 18),
-                          tdsMode: p.tds_mode ?? (tdsRate ? "deduct" : "none"),
-                          tdsRate: tdsRate === null || tdsRate === undefined ? "" : String(tdsRate),
-                          tdsSection: p.tds_section ?? "",
-                          // What the invoice printed, where somebody has keyed it.
-                          taxable: b.taxable_value == null ? "" : String(b.taxable_value),
-                          cgst: b.cgst_amount == null ? "" : String(b.cgst_amount),
-                          sgst: b.sgst_amount == null ? "" : String(b.sgst_amount),
-                          igst: b.igst_amount == null ? "" : String(b.igst_amount),
-                        }}
-                        compliance={d?.form145Part
-                          ? `Form 145 Part ${d.form145Part}${d.form146Required ? " + Form 146 from your accountant" : ""}.` +
-                            (d.warnings?.length ? ` ${d.warnings[0]}` : "")
-                          : null}
-                      />
-
-                      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
-                        <SubmitButton className="btn small" savedLabel="✓ Done">
-                          {isFounder ? "✅ Approve & post to Zoho" : "📤 Send for approval"}
-                        </SubmitButton>
-                        <label style={{ fontWeight: 400, fontSize: ".8rem" }}>
-                          <input type="checkbox" name="as_rule" value="yes" defaultChecked style={{ width: "auto", marginRight: 6 }} />
-                          Remember all of this for {b.institution}
-                        </label>
-                      </div>
-                    </form>
-                  )}
-
-                  <form action={removeBillAction} style={{ marginTop: 8 }}>
-                    <input type="hidden" name="id" value={b.id} />
-                    <SubmitButton className="btn small secondary" savedLabel="Removed">🗑 Remove from this list</SubmitButton>
-                    <span className="muted" style={{ fontSize: ".76rem", marginLeft: 8 }}>The PDF stays in the vault.</span>
-                  </form>
-                </div>
-              </details>
-            );
-          })}
-
-          {billsPostedRows.length > 0 && (
-            <details className="card" style={{ marginTop: 10 }}>
-              <summary className="btn small secondary as-btn">📗 In the books ({billsPostedRows.length}) — with their paper</summary>
-              <p className="muted" style={{ fontSize: ".78rem", margin: "8px 0" }}>
-                What Zoho holds, and whether the supplier&apos;s own invoice is attached to it there. An entry and the
-                document behind it should never be two separate hunts.
-              </p>
-              {billsPostedRows.map((r) => (
-                <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline", padding: "5px 0", borderTop: "1px solid rgba(0,0,0,.06)", fontSize: ".83rem" }}>
-                  <span style={{ minWidth: 88 }}>{r.bill_date}</span>
-                  <strong style={{ minWidth: 96 }}>{r.institution}</strong>
-                  <span className="muted" style={{ minWidth: 120 }}>{r.bill_no ?? "—"}</span>
-                  {r.zoho_echo && (
-                    <span className="muted">
-                      {r.zoho_echo.currency} {r.zoho_echo.total}
-                      {r.zoho_echo.exchange_rate && r.zoho_echo.currency !== "INR" ? ` @ ₹${r.zoho_echo.exchange_rate}` : ""}
-                      {r.zoho_echo.reverse_charge ? " · RCM" : ""}
-                      {r.zoho_echo.zoho_status ? ` · ${r.zoho_echo.zoho_status}` : ""}
-                    </span>
-                  )}
-                  {r.error && <span style={{ color: "#b45309" }}>⚠ {r.error}</span>}
-                  <span style={{ marginLeft: "auto" }}>
-                    {!r.zoho_bill_id ? null
-                      : Number(r.zoho_echo?.documents ?? 0) > 0
-                        ? <span style={{ color: "#0e6e52", fontSize: ".78rem" }} title="Zoho holds the supplier's own invoice against this bill">📎 invoice attached</span>
-                      : !r.vault_doc_id ? null
-                      : r.paper_note
-                        ? <span style={{ color: "#b45309", fontSize: ".78rem" }}>📎 {r.paper_note}</span>
-                        : (
-                          <form action={attachPaperAction} style={{ margin: 0 }}>
-                            <input type="hidden" name="id" value={r.id} />
-                            <SubmitButton className="btn small secondary" savedLabel="📎 attached">📎 Attach the invoice</SubmitButton>
-                          </form>
-                        )}
-                  </span>
-                </div>
-              ))}
-            </details>
-          )}
-
-          {raised.length > 0 && (
-            <details className="card" style={{ marginTop: 10 }}>
-              <summary className="btn small secondary as-btn">📗 Raised by us ({raised.length})</summary>
-              <div style={{ marginTop: 8 }}>
-                {raised.map((r) => (
-                  <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline", padding: "6px 0", borderTop: "1px solid rgba(0,0,0,.06)", fontSize: ".84rem" }}>
-                    <span style={{ minWidth: 88 }}>{r.doc_date}</span>
-                    <span style={{ minWidth: 92 }}>
-                      {r.kind === "credit_note" ? "Credit note" : r.kind === "journal" ? "Journal" : "Invoice"}
-                    </span>
-                    <strong style={{ minWidth: 130 }}>{r.party_name ?? r.description ?? "—"}</strong>
-                    <span style={{ fontWeight: 600 }}><Money n={r.inr_amount === null ? null : Number(r.inr_amount)} width={98} /></span>
-                    <span className="muted">{r.ledger ?? ""}{Number(r.tds_rate) > 0 ? ` · TDS ${r.tds_rate}% withheld by them` : ""}</span>
-                    <span style={{ marginLeft: "auto" }}>
-                      {r.status === "posted"
-                        ? <span style={{ color: "#0e6e52" }}>✅ {r.zoho_number ?? "posted"}</span>
-                        : r.status === "failed"
-                          ? <span style={{ color: "#b91c1c" }}>❌ {r.error}</span>
-                          : <span className="muted">waiting</span>}
-                    </span>
-                    {r.status === "failed" && (
-                      <form action={retryDocumentAction} style={{ margin: 0 }}>
-                        <input type="hidden" name="id" value={r.id} />
-                        <SubmitButton className="btn small secondary" savedLabel="↻">Try again</SubmitButton>
-                      </form>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
-
-          {complianceRows.length > 0 && (
-            <details className="card" style={{ marginTop: 10 }}>
-              <summary className="btn small secondary as-btn">📋 Forms still to file ({complianceRows.length})</summary>
-              <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0" }}>
-                A remittance is not finished when the bill is booked — each of these still carries its Form 145.
-              </p>
-              {complianceRows.map((r) => (
-                <div key={r.id} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", padding: "4px 0", fontSize: ".82rem" }}>
-                  <span style={{ minWidth: 200 }}>{r.bill_date} · <strong>{r.institution}</strong> {r.bill_no ?? ""}</span>
-                  <span>Part {r.form145_part}{r.form146_required ? " + Form 146" : ""}</span>
-                  {!r.form145_filed_at && (
-                    <form action={markFormFiledAction} style={{ margin: 0 }}>
-                      <input type="hidden" name="id" value={r.id} /><input type="hidden" name="which" value="145" />
-                      <SubmitButton className="btn small secondary" savedLabel="✓">Filed</SubmitButton>
-                    </form>
-                  )}
-                </div>
-              ))}
-            </details>
-          )}
-        </div>
-      )}
-
       {/* ── The document vault — the whole zoho area (founder + Pradeep) ── */}
       <h2 className="admin-section-title" style={{ marginTop: 28 }} id="vault">🗄️ Document vault</h2>
+      {/* ONE LINE OF WHAT IT IS; THE MECHANICS FOLD AWAY.
+          The guarded route and who may delete are true and worth recording, but
+          they are not what somebody filing a statement needs to read first. */}
       <p className="muted" style={{ fontSize: ".85rem", marginTop: 4 }}>
-        Every paper the desk works from — statements, ITRs, computations, challans — indexed by
-        <strong> year → institution</strong>, with its type and whether it is the raw file or a processed one.
-        Files open through this desk&apos;s own guarded route, never the general file proxy. Deleting is the
-        founder&apos;s alone.
+        Every paper the desk works from, filed by <strong>year → institution</strong>.
       </p>
+      <details style={{ margin: "6px 0 0" }}>
+        <summary className="muted" style={{ cursor: "pointer", fontSize: ".8rem" }}>What belongs here, and who can remove it</summary>
+        <p className="muted" style={{ fontSize: ".82rem", marginTop: 6, lineHeight: 1.7 }}>
+          Bank and card statements, brokerage statements, 26AS and AIS/TIS, returns and computations, challans,
+          invoices and agreements — the raw file or a processed one, whichever you have. Files open through this
+          desk&apos;s own guarded route rather than the general file proxy, and deleting is the founder&apos;s alone.
+        </p>
+      </details>
 
       <form action={fetchProviderInvoicesAction} style={{ marginTop: 10 }}>
         <SubmitButton className="btn small" savedLabel="✓ Pulled">🔄 Pull provider invoices by API (Bunny + Razorpay)</SubmitButton>
         <span className="muted" style={{ fontSize: ".78rem", marginLeft: 10 }}>
-          Bunny hands over the PDFs directly and Razorpay its monthly fee invoices (GST — ITC claimable) — no login, no
-          duplicates. Anthropic and Mailgun have no invoice API; theirs arrive by email.
+          Bunny and Razorpay hand theirs over directly. Anthropic and Mailgun have no invoice API — theirs arrive by email.
         </span>
       </form>
 

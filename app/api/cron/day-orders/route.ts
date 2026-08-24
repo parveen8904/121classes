@@ -49,8 +49,22 @@ export async function GET(req: NextRequest) {
   // what is still owed AND what was already reported since the day began, a
   // "Reported" column telling them apart. Only the owed are stamped.
   const label = byDay ?? night;
+  const win = istDayBounds(label);
   const owed = byDay ? parcelsOnly(await ordersForDay(byDay)) : await parcelsOwed();
-  const already = byDay ? [] : await parcelsReportedSince(istDayBounds(night).from);
+
+  // ALREADY-REPORTED ROWS ARE ONLY THE DAY'S OWN ORDERS.
+  //
+  // This was added so a night whose parcels went out on a daytime button press
+  // would not arrive as an empty sheet. But it included everything STAMPED that
+  // day — and 24 Aug is when the 16-parcel historical backlog was stamped in
+  // one go, orders placed as far back as 9 August. He opened the mail wanting
+  // the last twenty-four hours and found a month.
+  //
+  // Filtering on when the order was PLACED settles both: the day's own parcels
+  // still appear marked "earlier today", so the sheet is never empty and never
+  // lies, while an old order that merely happened to be stamped today stays out.
+  const already = byDay ? [] : (await parcelsReportedSince(win.from))
+    .filter((r) => r.placedAt >= win.from && r.placedAt <= win.to);
   const rows = [...owed, ...already];
 
   if (params.get("dry") === "1") {
@@ -74,6 +88,10 @@ export async function GET(req: NextRequest) {
 
   const { sendEmailWithAttachment, emailShell } = await import("@/lib/notify");
   const newCount = owed.length;
+  // Owed parcels are deliberately NOT limited to the day: one that slipped an
+  // earlier night must still be packed, and silently dropping it would be the
+  // original bug in a new coat. They are marked as carried over instead.
+  const carried = owed.filter((r) => r.placedAt < win.from).length;
   const subject = testTo ? `[TEST] \u{1F4E6} ${newCount} parcel(s) to pack`
     : rows.length === 0 ? `\u{2705} Nothing to pack — no parcels today`
     : newCount === 0 ? `\u{2705} Nothing new to pack — all ${already.length} parcel(s) already sent to you today`
@@ -82,9 +100,11 @@ export async function GET(req: NextRequest) {
     ? "<p>No paid order with books to send arrived today. Nothing is owed.</p>"
     : newCount === 0
       ? `<p>Every parcel of the day — ${already.length} — was already emailed to you earlier today (see the Reported column). Nothing new is owed tonight.</p>`
-      : already.length
-        ? `<p><strong>${newCount} new</strong> parcel(s) below are marked <strong>NEW — pack this</strong>; ${already.length} more were already sent to you earlier today and are listed for the full day's picture.</p>`
-        : "";
+      : `<p><strong>${newCount} to pack</strong>${
+          carried ? `, of which ${carried} carried over from an earlier day` : ""
+        }${
+          already.length ? `; ${already.length} more were already sent to you earlier today and are shown for the day's full picture` : ""
+        }.</p>`;
   const html = emailShell(subject, intro + dayReportHtml(label, rows));
   // A real .xlsx, not a CSV renamed — and only when there is something on it.
   const attachment = rows.length > 0 ? await dispatchWorkbook(rows, label) : null;

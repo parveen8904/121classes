@@ -69,7 +69,8 @@ export default async function CostsPage(props: { searchParams: Promise<{ purged?
   // The dashboard shows this same number, from lib/monthCost.ts. The parts are
   // still worked out above because this page explains each of them; the TOTAL
   // comes from the shared function so the two screens cannot drift apart.
-  const { total: totalMonth } = await monthCostUsd();
+  const monthCost = await monthCostUsd();
+  const totalMonth = monthCost.total;
 
   // --- Payment history: what each provider has actually taken, month by month.
   // Written by the monthly cron (/api/cron/costs-snapshot); seeded with the real

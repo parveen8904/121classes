@@ -103,8 +103,11 @@ export default async function AdminHome() {
       label: "Total cost (this month)",
       value: inr(s.costMonthUsd),
       href: "/admin/costs",
+      // Say where each figure came from. "invoiced" is what they actually
+      // charged; a stand-in must not read as a live meter.
       hint: s.costBreakdown
-        ? `AI ${inr(s.costBreakdown.ai)} · Bunny ${inr(s.costBreakdown.bunny)} · Supabase ${inr(s.costBreakdown.supabase)} · Vercel ${inr(s.costBreakdown.vercel)}`
+        ? `AI ${inr(s.costBreakdown.ai.usd)} · Bunny ${inr(s.costBreakdown.bunny.usd)} · Supabase ${inr(s.costBreakdown.supabase.usd)} · Vercel ${inr(s.costBreakdown.vercel.usd)} · Cloudflare ${inr(s.costBreakdown.cloudflare.usd)}`
+          + (s.costBreakdown.estimated ? " — part estimated from the last invoice" : " — invoiced")
         : undefined,
     }] : []),
     { label: "AI cost (this month)", value: inr(s.aiMonth), href: "/admin/costs" },

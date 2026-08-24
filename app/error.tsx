@@ -27,15 +27,35 @@ function autoHeal(error: unknown): boolean {
 export default function RouteError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => { autoHeal(error); }, [error]);
 
+  // DO NOT TELL SOMEBODY TO RELOAD WHEN RELOADING CANNOT HELP.
+  //
+  // This screen said "the site was just updated — this page needs a quick
+  // refresh" for EVERY error, whatever it was. When a genuine bug reached it,
+  // the founder reloaded, hit the same bug, was told the same thing, and
+  // reloaded again: the page appeared to be stuck rather than broken, and the
+  // real fault stayed invisible. A stale chunk after a deploy really does heal
+  // on reload; nothing else does. So only that case makes the claim.
+  const stale = isStaleChunk(error);
+
   return (
-    <section className="container" style={{ paddingTop: 60, paddingBottom: 60, maxWidth: 520, textAlign: "center" }}>
-      <h2>🔄 One moment…</h2>
-      <p className="muted">
-        The site was just updated — this page needs a quick refresh.
+    <section className="container" style={{ paddingTop: 60, paddingBottom: 60, maxWidth: 560, textAlign: "center" }}>
+      <h2>{stale ? "🔄 One moment…" : "⚠ Something on this page failed"}</h2>
+      <p className="muted" style={{ lineHeight: 1.7 }}>
+        {stale
+          ? "The site was just updated — this page needs a quick refresh."
+          : "This is a fault on our side, not something you did, and reloading will not clear it. It has been logged."}
       </p>
-      <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14 }}>
-        <button className="btn" onClick={() => window.location.reload()}>Reload page</button>
-        <button className="btn secondary" onClick={() => reset()}>Try again</button>
+      {/* The digest is what turns "it broke" into a line in the server log.
+          Without it, reporting a fault means describing a blank screen. */}
+      {!stale && error?.digest && (
+        <p className="muted" style={{ fontSize: ".78rem", marginTop: 8 }}>
+          Quote this when reporting it: <code>{error.digest}</code>
+        </p>
+      )}
+      <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14, flexWrap: "wrap" }}>
+        {stale && <button className="btn" onClick={() => window.location.reload()}>Reload page</button>}
+        <button className={stale ? "btn secondary" : "btn"} onClick={() => reset()}>Try again</button>
+        {!stale && <a className="btn secondary" href="/support">Tell us what you were doing</a>}
       </div>
     </section>
   );

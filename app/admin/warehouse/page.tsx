@@ -3,7 +3,7 @@ import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { listDispatchQueue } from "@/lib/warehouse";
 import { viaProxy } from "@/lib/fileProxy";
-import { saveTracking, emailShippingLabels, uploadTracking, bookWithDelhivery, emailMissedDispatches } from "./actions";
+import { saveTracking, emailShippingLabels, uploadTracking, bookWithDelhivery, emailMissedDispatches, sendDispatchNow, sendDispatchTestHere } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Warehouse — Admin" };
@@ -175,6 +175,29 @@ export default async function WarehousePage(props: {
             📧 Email students who were never sent their tracking
           </SubmitButton>
         </form>
+      </div>
+
+      {/* THE NIGHTLY SHEET, ON THE PACKER'S OWN SCREEN.
+          These were only on the Sales/Orders page, which is where the money is
+          looked at, not where parcels are packed. */}
+      <div className="card" style={{ marginTop: 14 }}>
+        <strong style={{ fontSize: ".92rem" }}>📦 The nightly dispatch sheet</strong>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 10px", lineHeight: 1.6 }}>
+          Goes out on its own every night at midnight IST with an Excel workbook attached, listing every parcel still
+          owed — paid, with books due, from students, supporters and vendors alike. A parcel stays on the list until
+          the email has actually gone, so nothing is missed and nothing is sent twice.
+        </p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <form action={sendDispatchTestHere} style={{ margin: 0 }}>
+            <SubmitButton className="btn small secondary">👁 Send me a test copy</SubmitButton>
+          </form>
+          <form action={sendDispatchNow} style={{ margin: 0 }}>
+            <SubmitButton className="btn small">📧 Send it to the warehouse now</SubmitButton>
+          </form>
+          <span className="muted" style={{ fontSize: ".78rem" }}>
+            The test goes only to you and marks nothing as reported.
+          </span>
+        </div>
       </div>
 
       {/* Suggested, not enforced — a warehouse uses whoever is cheapest that

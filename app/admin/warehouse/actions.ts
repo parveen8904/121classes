@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { requireArea } from "@/lib/adminAccess";
+import { requireArea, currentStaff } from "@/lib/adminAccess";
 import { listDispatchQueue } from "@/lib/warehouse";
 import { buildShippingLabelsPdf } from "@/lib/shippingLabels";
 import { sendEmailWithAttachment } from "@/lib/notify";
@@ -273,4 +273,47 @@ export async function emailMissedDispatches() {
   const sent = await notifyDispatchMany(waiting);
   revalidatePath("/admin/warehouse");
   redirect(`/admin/warehouse?told=${sent}`);
+}
+
+/**
+ * THE NIGHTLY DISPATCH SHEET — SENT FROM THE WAREHOUSE PAGE, WHERE IT BELONGS.
+ *
+ * These two lived on the Sales/Orders screen, which is the wrong desk: the
+ * person who needs to send or check a packing list is the one packing, and the
+ * orders page is for looking at money. Same code, moved to the counter it
+ * serves. (Kept on Orders too, since the office also reaches for it there.)
+ */
+export async function sendDispatchNow() {
+  if (!(await requireArea("warehouse"))) return;
+  const { runWarehouseDispatch } = await import("@/lib/warehouse");
+  const r = await runWarehouseDispatch();
+  revalidatePath("/admin/warehouse");
+  redirect(`/admin/warehouse?told=${encodeURIComponent(
+    r.skipped ? r.skipped : `dispatch list sent — ${r.count} parcel(s), now marked as reported`,
+  )}`);
+}
+
+/** The same email, to the person pressing it, marking nothing as reported. */
+export async function sendDispatchTestHere() {
+  if (!(await requireArea("warehouse"))) return;
+  const me = await currentStaff();
+  const { data: prof } = me
+    ? await createServiceClient().from("profiles").select("email").eq("id", me.id).maybeSingle()
+    : { data: null };
+  const to = String((prof as { email?: string } | null)?.email ?? "").trim();
+  if (!to) redirect(`/admin/warehouse?told=${encodeURIComponent("there is no email address on your own account")}`);
+
+  const { parcelsOwed, dispatchWorkbook, dayReportHtml, istDayJustEnded } = await import("@/lib/dayOrderReport");
+  const { sendEmailWithAttachment, emailShell } = await import("@/lib/notify");
+  const rows = await parcelsOwed();
+  const label = istDayJustEnded();
+  const subject = `[TEST] \u{1F4E6} ${rows.length} parcel(s) to pack`;
+  const ok = await sendEmailWithAttachment(
+    to, subject, emailShell(subject, dayReportHtml(label, rows)), await dispatchWorkbook(rows, label),
+  ).catch(() => false);
+
+  redirect(`/admin/warehouse?told=${encodeURIComponent(
+    ok ? `test copy sent to ${to} — ${rows.length} parcel(s). Nothing was marked as reported.`
+       : "the test email could not be sent — check Mailgun on Integrations",
+  )}`);
 }

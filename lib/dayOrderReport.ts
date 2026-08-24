@@ -107,14 +107,29 @@ const GIFTS_COLS = "id, order_no, amount_inr, status, books_due, months, created
  */
 export async function parcelsOwed(): Promise<DayOrderRow[]> {
   const svc = createServiceClient();
-  const paid = ["paid", "provisioned", "dispatched", "delivered"];
+
+  // THE THREE TABLES DO NOT SPEAK THE SAME STATUS LANGUAGE.
+  //
+  // orders.status and gift_orders.status are plain text and will accept any
+  // value, but book_orders.status is a Postgres ENUM — book_order_status, whose
+  // only members are paid, dispatched, delivered and cancelled. Asking it for
+  // "provisioned" is not an empty result, it is a TYPE ERROR that rejects the
+  // whole query: `invalid input value for enum book_order_status`. That took
+  // /admin/orders down until it was caught here.
+  //
+  // "provisioned" is a vendor-sale state anyway — it is how a gift_order says
+  // it has been paid for and handed over. A book order never enters it, so
+  // asking for it was meaningless as well as fatal.
+  const PAID_TEXT = ["paid", "provisioned", "dispatched", "delivered"];
+  const PAID_BOOK_ENUM = ["paid", "dispatched", "delivered"];
+
   const [subs, books, gifts] = await Promise.all([
     svc.from("orders").select(SUBS_COLS)
-      .in("status", paid).eq("books_due", true).is("warehouse_notified_at", null).order("created_at"),
+      .in("status", PAID_TEXT).eq("books_due", true).is("warehouse_notified_at", null).order("created_at"),
     svc.from("book_orders").select(BOOKS_COLS)
-      .in("status", paid).is("warehouse_notified_at", null).order("created_at"),
+      .in("status", PAID_BOOK_ENUM).is("warehouse_notified_at", null).order("created_at"),
     svc.from("gift_orders").select(GIFTS_COLS)
-      .in("status", paid).eq("books_due", true).is("warehouse_notified_at", null).order("created_at"),
+      .in("status", PAID_TEXT).eq("books_due", true).is("warehouse_notified_at", null).order("created_at"),
   ]);
   return buildRows(subs, books, gifts);
 }

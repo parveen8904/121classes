@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { viaProxy } from "@/lib/fileProxy";
 import { formatINR } from "@/lib/pricing";
 import { matchesState } from "@/lib/accountsExport";
+import { selectAll } from "@/lib/pageAll";
 import AdminHero from "../../_components/AdminHero";
 import Money from "@/app/components/Money";
 
@@ -37,21 +38,25 @@ type BookOrderRow = {
  * report quietly counted about two thirds of them — the tier breakdown was
  * short by hundreds and looked perfectly plausible, which is what made it
  * dangerous. The same silence once hid two thirds of the AI bill.
+ *
+ * THE PAGING IS NOW selectAll, AND EVERY READ IS ORDERED. There was a local
+ * readAll here that did the same job with two faults of its own:
+ *
+ *   · IT PAGED WITHOUT AN ORDER BY. Postgres does not promise a stable row
+ *     order between two unordered queries, so the same row could arrive on
+ *     page one and again on page two while another was never returned at all.
+ *     That is not a hypothetical here: subscriptions holds 1,704 rows, so it
+ *     already pages twice, and it is exactly the table feeding the active-
+ *     subscription count and the bronze/silver/gold breakdown. Ordering by the
+ *     primary key — unique, never null, never rewritten — makes the pages a
+ *     partition of the table instead of two overlapping samples.
+ *
+ *   · IT SWALLOWED ERRORS. `if (error) break` returned whatever had been
+ *     collected, and for a failure on the first page that is an empty array —
+ *     a refused query reading as "no sales". selectAll logs the failure loudly
+ *     and says the answer is incomplete, and carries a 200,000-row seatbelt
+ *     against a runaway loop, which readAll did not.
  */
-type Client = ReturnType<typeof createServiceClient> | Awaited<ReturnType<typeof createClient>>;
-
-async function readAll<T>(supabase: Client, table: string, columns: string): Promise<T[]> {
-  const PAGE = 1000;
-  const all: T[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase.from(table).select(columns).range(from, from + PAGE - 1);
-    if (error) break;
-    const page = (data ?? []) as unknown as T[];
-    all.push(...page);
-    if (page.length < PAGE) break;
-  }
-  return all;
-}
 
 export default async function ReportsPage() {
   const supabase = createClient();
@@ -67,10 +72,10 @@ export default async function ReportsPage() {
 
   const [subOrders, bookOrders, giftOrders, subs, { count: students }, { data: books }] =
     await Promise.all([
-      readAll<MoneyRow>(svc, "orders", "amount_inr, status, created_at"),
-      readAll<BookOrderRow>(svc, "book_orders", "amount_inr, status, created_at, items"),
-      readAll<MoneyRow>(svc, "gift_orders", "amount_inr, status, created_at"),
-      readAll<SubRow>(supabase, "subscriptions", "status, ends_at, plans(tier)"),
+      selectAll<MoneyRow>((from, to) => svc.from("orders").select("amount_inr, status, created_at").order("id", { ascending: true }).range(from, to) as never),
+      selectAll<BookOrderRow>((from, to) => svc.from("book_orders").select("amount_inr, status, created_at, items").order("id", { ascending: true }).range(from, to) as never),
+      selectAll<MoneyRow>((from, to) => svc.from("gift_orders").select("amount_inr, status, created_at").order("id", { ascending: true }).range(from, to) as never),
+      selectAll<SubRow>((from, to) => supabase.from("subscriptions").select("status, ends_at, plans(tier)").order("id", { ascending: true }).range(from, to) as never),
       supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "student"),
       supabase.from("books").select("id, title"),
     ]);

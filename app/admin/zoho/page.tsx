@@ -509,7 +509,7 @@ export default async function ZohoHubPage(props: {
 
       {/* ── Bills: one line each, opened only when he wants it ──────── */}
       {hubConnected && (
-        <details id="bills" data-sec open={billsWaiting.length > 0}>
+        <details id="bills" data-sec>
           <summary className="admin-section-title" style={{ cursor: "pointer" }}>🧾 Documents to approve ({billsWaiting.length})</summary>
           <p style={{ margin: "4px 0 8px" }}>
             <Link className="btn small secondary" href="/admin/zoho/activity">📜 What has changed in Zoho</Link>
@@ -890,7 +890,7 @@ export default async function ZohoHubPage(props: {
 
       {/* ── Sales → Zoho queue (the working desk) ───────────────────── */}
       {hubConnected && (
-        <details id="queue" data-sec open className="zoho-sec">
+        <details id="queue" data-sec className="zoho-sec">
           <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>📮 Sales → Zoho</summary>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 24 }}>
             <form action={scanSalesAction} style={{ margin: 0 }}>
@@ -975,7 +975,7 @@ export default async function ZohoHubPage(props: {
 
       {/* ── Razorpay settlements → Zoho ─────────────────────────────── */}
       {hubConnected && (
-        <details id="settlements" data-sec open className="zoho-sec">
+        <details id="settlements" data-sec className="zoho-sec">
           <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>🏦 Razorpay settlements → Zoho</summary>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 26 }}>
             <form action={scanSettlementsAction} style={{ margin: 0 }}>
@@ -1034,7 +1034,7 @@ export default async function ZohoHubPage(props: {
 
       {/* ── Bank statements & the three queues ──────────────────────── */}
       {hubConnected && (
-        <details id="bank" data-sec open className="zoho-sec">
+        <details id="bank" data-sec className="zoho-sec">
           <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>🏧 Bank &amp; card statements</summary>
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Upload each account&apos;s statement (CSV, Excel or PDF). Every line ends in one of three places:
@@ -1241,7 +1241,7 @@ export default async function ZohoHubPage(props: {
 
       {/* ── Petty cash (imprest) ────────────────────────────────────── */}
       {hubConnected && (
-        <details id="petty" data-sec open className="zoho-sec">
+        <details id="petty" data-sec className="zoho-sec">
           <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>👛 Petty cash — advances</summary>
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Record an advance <em>after</em> it is paid (it posts to the person&apos;s own Zoho advance account at
@@ -1365,7 +1365,7 @@ export default async function ZohoHubPage(props: {
 
       {/* ── Brokerage statements ────────────────────────────────────── */}
       {hubConnected && (
-        <details id="brokerage" data-sec open className="zoho-sec">
+        <details id="brokerage" data-sec className="zoho-sec">
           <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>📈 US brokerage, retirement &amp; investment statements</summary>
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Upload statements from any investment home — brokerages, <strong>retirement accounts (IRA/401k)</strong>,
@@ -1860,7 +1860,7 @@ export default async function ZohoHubPage(props: {
 
       {/* ── Tax worksheets (the founder's alone) ────────────────────── */}
       {isFounder && taxData && (
-        <details id="tax" data-sec open className="zoho-sec">
+        <details id="tax" data-sec className="zoho-sec">
           <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>🧾 Tax worksheets — projections, working shown</summary>
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))" }}>
             <div className="card">
@@ -1978,7 +1978,7 @@ export default async function ZohoHubPage(props: {
       )}
 
       {/* ── The document vault — the whole zoho area (founder + Pradeep) ── */}
-      <details id="vault" data-sec open={docs.length > 0} style={{ marginTop: 28 }}>
+      <details id="vault" data-sec style={{ marginTop: 28 }}>
         <summary className="admin-section-title" style={{ cursor: "pointer" }}>🗄️ Document vault ({docs.length})</summary>
       {/* ONE LINE OF WHAT IT IS; THE MECHANICS FOLD AWAY.
           The guarded route and who may delete are true and worth recording, but

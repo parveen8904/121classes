@@ -15,6 +15,16 @@ import { useEffect, useState } from "react";
 // adds the two buttons that act on all of them at once, and nothing else
 // depends on it having loaded.
 //
+// WHY NOT ONE OF THEM PASSES `open` AS A PROP. This is what made the buttons
+// look broken. React treats `open` on <details> as a controlled attribute: pass
+// it and React owns it, so every re-render writes the server's value back over
+// whatever the person just clicked. The Zoho desk re-renders constantly —
+// almost every action on it is a server action ending in revalidatePath — so a
+// section collapsed by hand sprang open again moments later, and setting
+// el.open imperatively here was simply overwritten. The markup now ships with
+// no `open` attribute at all: every section renders collapsed, the DOM owns the
+// state, and this file re-opens whichever ones he had open.
+//
 // "ALL" HAS TO MEAN ALL. The first version reached only the six work sections,
 // which was 64% of the page: Documents to approve (the single largest block),
 // the vault, Rule 115 and the build notes all stayed open, so pressing Collapse
@@ -27,6 +37,7 @@ import { useEffect, useState } from "react";
 // hide it on a day it mattered.
 
 const KEY = "zoho.sections";
+const LEGACY_KEY = "zoho.sections.closed";   // the array this used to write
 
 export default function SectionToggle() {
   const [ready, setReady] = useState(false);
@@ -45,7 +56,29 @@ export default function SectionToggle() {
   // hidden by a preference saved before it existed.
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(KEY) || "{}") as Record<string, boolean>;
+      // A PREFERENCE IN THE OLD SHAPE IS STILL A PREFERENCE.
+      //
+      // The first version stored an ARRAY of closed ids under a different key.
+      // Changing to a keyed map without migrating is what made the buttons look
+      // broken: the new code read the new key, found nothing, restored nothing,
+      // and every reload reopened the whole desk. He collapsed it, it came
+      // back, and there was no way to tell that from a dead button. Found by
+      // reading his own browser: the array was still sitting under the old key.
+      let saved: Record<string, boolean> = {};
+      const raw = localStorage.getItem(KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) for (const id of parsed) saved[String(id)] = false;
+        else if (parsed && typeof parsed === "object") saved = parsed as Record<string, boolean>;
+      } else {
+        const legacy = localStorage.getItem(LEGACY_KEY);
+        if (legacy) {
+          const ids = JSON.parse(legacy);
+          if (Array.isArray(ids)) for (const id of ids) saved[String(id)] = false;
+        }
+      }
+      localStorage.removeItem(LEGACY_KEY);
+
       for (const el of Array.from(document.querySelectorAll<HTMLDetailsElement>("details[data-sec]"))) {
         if (el.id && Object.prototype.hasOwnProperty.call(saved, el.id)) el.open = saved[el.id];
       }
@@ -65,10 +98,20 @@ export default function SectionToggle() {
 
   // Each section remembers itself as he opens and closes it, not only when
   // these buttons are used.
+  //
+  // Listened for on the document in the CAPTURE phase, deliberately: `toggle`
+  // does not bubble, and binding to each element one by one only works for the
+  // elements that existed at mount. A server action re-renders this page and
+  // can replace those nodes, after which every one of those listeners is
+  // attached to something no longer on the screen. One listener on the document
+  // survives all of it and picks up sections rendered later.
   useEffect(() => {
-    const els = Array.from(document.querySelectorAll<HTMLDetailsElement>("details[data-sec]"));
-    els.forEach((el) => el.addEventListener("toggle", remember));
-    return () => els.forEach((el) => el.removeEventListener("toggle", remember));
+    const onToggle = (e: Event) => {
+      const t = e.target as HTMLElement | null;
+      if (t && t.matches?.("details[data-sec]")) remember();
+    };
+    document.addEventListener("toggle", onToggle, true);
+    return () => document.removeEventListener("toggle", onToggle, true);
   }, []);
 
   function setAll(open: boolean) {

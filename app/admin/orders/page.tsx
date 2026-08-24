@@ -5,7 +5,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { formatINR } from "@/lib/pricing";
 import { viaProxy } from "@/lib/fileProxy";
 import AdminHero from "../_components/AdminHero";
-import { setOrderStatus, sendDispatchEmail, generateInvoice, reissueInvoice, reissueBookInvoice, adminConfirmPayment } from "./actions";
+import { setOrderStatus, sendDispatchEmail, sendDispatchTestToMe, generateInvoice, reissueInvoice, reissueBookInvoice, adminConfirmPayment } from "./actions";
 import SelectAll from "./SelectAll";
 import FilterReset from "./FilterReset";
 import { inChunks } from "@/lib/pageAll";
@@ -531,14 +531,25 @@ export default async function AdminOrdersPage(
         </div>
       )}
 
-      <form action={sendDispatchEmail} style={{ marginTop: 18 }}>
-        <SubmitButton className="btn small">
-          📧 Email dispatch list to warehouse
-        </SubmitButton>
-        <span className="muted" style={{ fontSize: ".8rem", marginLeft: 10 }}>
-          Also runs automatically each evening.
-        </span>
-      </form>
+      <div style={{ marginTop: 18, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <form action={sendDispatchEmail} style={{ margin: 0 }}>
+          <SubmitButton className="btn small">
+            📧 Email dispatch list to warehouse
+          </SubmitButton>
+        </form>
+        {/* Look before you send. This goes only to the person pressing it and
+            marks nothing as reported — see sendDispatchTestToMe(). */}
+        <form action={sendDispatchTestToMe} style={{ margin: 0 }}>
+          <SubmitButton className="btn small secondary">
+            👁 Send me a test copy first
+          </SubmitButton>
+        </form>
+      </div>
+      <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0 0", lineHeight: 1.6 }}>
+        Runs automatically every night at midnight IST, with the same Excel workbook attached. It lists every parcel
+        still owed — paid, with books due, from students, supporters and vendors alike — and marks each one as
+        reported only once the email has actually gone, so nothing is missed and nothing is sent twice.
+      </p>
 
       <div style={{ marginTop: 18, display: "grid", gap: 12 }}>
         {orders.length > 0 ? (

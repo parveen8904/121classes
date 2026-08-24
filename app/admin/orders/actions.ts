@@ -1,6 +1,6 @@
 "use server";
 
-import { requireArea } from "@/lib/adminAccess";
+import { requireArea, currentStaff } from "@/lib/adminAccess";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -129,6 +129,44 @@ export async function sendDispatchEmail() {
   const r = await runWarehouseDispatch();
   revalidatePath("/admin/orders");
   redirect(`/admin/orders?dispatch=${r.skipped ? "skipped" : r.count}`);
+}
+
+/**
+ * SEND ONE COPY TO MYSELF, AND CHANGE NOTHING.
+ *
+ * Checking what the warehouse is about to be sent used to mean either sending
+ * it to them for real, or holding the CRON_SECRET and calling the endpoint by
+ * hand. Neither is a reasonable way to answer "does the spreadsheet look
+ * right?", so this sends exactly the same email — same list, same workbook — to
+ * the address of whoever pressed it, and to nobody else.
+ *
+ * It does NOT stamp anything. A test that marked the parcels as reported would
+ * delete them from the real list the packer is waiting for, which is the one
+ * mistake this button must never make.
+ */
+export async function sendDispatchTestToMe() {
+  if (!(await requireArea("store"))) return;
+  const me = await currentStaff();
+  const { createServiceClient: svcClient } = await import("@/lib/supabase/service");
+  const { data: prof } = me
+    ? await svcClient().from("profiles").select("email").eq("id", me.id).maybeSingle()
+    : { data: null };
+  const to = String((prof as { email?: string } | null)?.email ?? "").trim();
+  if (!to) redirect(`/admin/orders?dispatch=${encodeURIComponent("no email on your own account to send a test to")}`);
+
+  const { parcelsOwed, dispatchWorkbook, dayReportHtml, istDayJustEnded } = await import("@/lib/dayOrderReport");
+  const { sendEmailWithAttachment, emailShell } = await import("@/lib/notify");
+  const rows = await parcelsOwed();
+  const label = istDayJustEnded();
+  const subject = `[TEST] \u{1F4E6} ${rows.length} parcel(s) to pack`;
+  const ok = await sendEmailWithAttachment(
+    to, subject, emailShell(subject, dayReportHtml(label, rows)), await dispatchWorkbook(rows, label),
+  ).catch(() => false);
+
+  redirect(`/admin/orders?dispatch=${encodeURIComponent(
+    ok ? `test sent to ${to} — ${rows.length} parcel(s), nothing marked as reported`
+       : "the test email could not be sent — check Mailgun on Integrations",
+  )}`);
 }
 
 /**

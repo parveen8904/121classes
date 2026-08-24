@@ -4,6 +4,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import { tryServiceClient } from "@/lib/supabase/service";
 import { mdToHtml } from "@/lib/markdown";
+import { personRef, orgRef, WEBSITE_ID } from "@/lib/entity";
 
 export const revalidate = 3600;
 
@@ -96,8 +97,17 @@ export default async function ArticlePage(props: { params: Promise<{ slug: strin
     description: a.description || undefined,
     datePublished: a.created_at,
     dateModified: a.updated_at,
-    author: { "@type": "Person", name: "CA Parveen Sharma", url: "https://caparveensharma.com" },
-    publisher: { "@type": "Organization", name: "CA Parveen Sharma", logo: { "@type": "ImageObject", url: "https://caparveensharma.com/icon-512.png" } },
+    // BY @id, NOT BY NAME.
+    //
+    // Each article used to declare its own loose "CA Parveen Sharma" — so two
+    // hundred and thirty articles gave Google two hundred and thirty separate
+    // authors who happened to share a name. Pointing at the site's one Person
+    // node instead turns them into two hundred and thirty signals about one man,
+    // which is the whole mechanism behind a Knowledge Panel.
+    author: personRef,
+    publisher: orgRef,
+    isPartOf: { "@id": WEBSITE_ID },
+    inLanguage: "en-IN",
     mainEntityOfPage: `https://caparveensharma.com/articles/${a.slug}`,
   };
 

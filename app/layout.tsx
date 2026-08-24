@@ -14,6 +14,7 @@ import LeadPopup from "./components/LeadPopup";
 import PageHelp from "./components/PageHelp";
 import RatePrompt from "./components/RatePrompt";
 import PushRegister from "./components/PushRegister";
+import { sameAsFrom, orgNode, personNode, websiteNode } from "@/lib/entity";
 
 // IMPORTANT: no force-dynamic and no cookie reads here. This layout wraps EVERY
 // page — anything dynamic in it disables caching for the whole site (which was
@@ -29,7 +30,10 @@ const getSupportLinks = unstable_cache(
     const { data } = await svc
       .from("site_settings")
       .select("key, value")
-      .in("key", ["support_whatsapp", "support_phone", "support_telegram", "whatsapp_faculty", "support_youtube", "support_instagram", "support_twitter", "support_facebook", "google_site_verification"]);
+      // founder_photo joins this list because a Knowledge Panel is built around
+      // a picture of the person as much as around the facts — Google will not
+      // show one it has no image for.
+      .in("key", ["support_whatsapp", "support_phone", "support_telegram", "whatsapp_faculty", "support_youtube", "support_instagram", "support_twitter", "support_facebook", "google_site_verification", "founder_photo"]);
     return Object.fromEntries((data ?? []).map((r) => [r.key, r.value as string | null]));
   },
   ["layout-support-links"],
@@ -124,11 +128,11 @@ const themeScript = `(function(){var t;try{t=localStorage.getItem('theme');}catc
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const links = await getSupportLinks();
   const m = new Map(Object.entries(links as Record<string, string | null>));
-  // Social profiles strengthen the knowledge-graph link between the site and
-  // the founder's established channels (E-E-A-T signal for Google).
-  const sameAs = ["support_youtube", "support_instagram", "support_twitter", "support_facebook"]
-    .map((k) => m.get(k))
-    .filter((u): u is string => Boolean(u && u.startsWith("http")));
+  // Everything Google needs to decide that the YouTube channel, the Instagram
+  // account, the older Aldine site and this portal are one man — defined once in
+  // lib/entity.ts so no page can describe him differently.
+  const sameAs = sameAsFrom(m);
+  const founderPhoto = m.get("founder_photo") || undefined;
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -139,45 +143,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           dangerouslySetInnerHTML={{ __html: JSON.stringify({
             "@context": "https://schema.org",
             "@graph": [
-              {
-                "@type": "EducationalOrganization",
-                "@id": "https://caparveensharma.com/#org",
-                name: "CA Parveen Sharma — Personalised Learning",
-                url: "https://caparveensharma.com",
-                logo: "https://caparveensharma.com/icon-512.png",
-                sameAs,
-                founder: { "@id": "https://caparveensharma.com/#person" },
-                // THE VISITOR OFFICE — and it must match the Google Business
-                // Profile character for character, because consistent
-                // name/address/phone across the web and GBP is what Google uses
-                // to decide two mentions are the same business.
-                //
-                // Three addresses exist and each has one job. This is the one
-                // students can come to. The REGISTERED address is B-173, Nirman
-                // Vihar, Delhi 110092 and belongs on tax invoices only, where
-                // the law requires the registered place of business — it is
-                // held in site_settings.gst_address and must not be copied
-                // here. A third, C-56 Preet Vihar, has been vacated and appears
-                // nowhere in this codebase; if it ever reappears on the Google
-                // listing it is wrong.
-                address: { "@type": "PostalAddress", streetAddress: "W6/30, DLF Phase 3, Sector 24", addressLocality: "Gurugram", addressRegion: "Haryana", postalCode: "122010", addressCountry: "IN" },
-                telephone: "+91-9810012674",
-              },
-              {
-                "@type": "Person",
-                "@id": "https://caparveensharma.com/#person",
-                name: "CA Parveen Sharma",
-                // The proper field for this, rather than repeating the name in
-                // prose. Google uses alternateName to join a misspelling to the
-                // person it means; the second and third forms are what students
-                // actually type.
-                alternateName: ["CA Praveen Sharma", "Praveen Sharma", "Parveen Sharma"],
-                jobTitle: "Chartered Accountant & Educator",
-                description: "CA faculty with 36 years of teaching experience — Advanced Accounting (CA Inter) and Financial Reporting (CA Final).",
-                url: "https://caparveensharma.com",
-                sameAs,
-                worksFor: { "@id": "https://caparveensharma.com/#org" },
-              },
+              websiteNode(),
+              orgNode({ sameAs }),
+              personNode({ sameAs, image: founderPhoto }),
             ],
           }) }}
         />

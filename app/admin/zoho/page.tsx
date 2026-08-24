@@ -509,8 +509,8 @@ export default async function ZohoHubPage(props: {
 
       {/* ── Bills: one line each, opened only when he wants it ──────── */}
       {hubConnected && (
-        <div id="bills">
-          <h2 className="admin-section-title" style={{ marginTop: 26 }}>🧾 Documents to approve ({billsWaiting.length})</h2>
+        <details id="bills" data-sec open={billsWaiting.length > 0}>
+          <summary className="admin-section-title" style={{ cursor: "pointer" }}>🧾 Documents to approve ({billsWaiting.length})</summary>
           <p style={{ margin: "4px 0 8px" }}>
             <Link className="btn small secondary" href="/admin/zoho/activity">📜 What has changed in Zoho</Link>
             <span className="muted" style={{ fontSize: ".8rem", marginLeft: 8 }}>
@@ -802,7 +802,7 @@ export default async function ZohoHubPage(props: {
               ))}
             </details>
           )}
-        </div>
+        </details>
       )}
 
       {/* ── Pradeep's backlog — as-of a chosen date ─────────────────── */}
@@ -1202,7 +1202,7 @@ export default async function ZohoHubPage(props: {
 
       {/* ── Rule 115 panel: rates + a concise summary of the rule ───── */}
       {hubConnected && (
-        <details className="card" style={{ marginTop: 18 }} id="rule115">
+        <details className="card" style={{ marginTop: 18 }} id="rule115" data-sec>
           {/* REFERENCE, NOT A TASK. Rule 115 is something to look up when a
               foreign figure is being checked — it is not work waiting to be
               done, and open by default it pushed the actual queues further down
@@ -1923,7 +1923,7 @@ export default async function ZohoHubPage(props: {
       {/* ── Build state ─────────────────────────────────────────────── */}
       {/* A progress list for whoever is building this, not something the desk
           acts on. It sat open between the day's work and his approvals gate. */}
-      <details style={{ marginTop: 24 }}>
+      <details id="buildstate" data-sec style={{ marginTop: 24 }}>
         <summary className="muted" style={{ cursor: "pointer", fontSize: ".85rem" }}>Where the build stands</summary>
       <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
         {PHASE_PLAN.map((p) => {
@@ -1978,7 +1978,8 @@ export default async function ZohoHubPage(props: {
       )}
 
       {/* ── The document vault — the whole zoho area (founder + Pradeep) ── */}
-      <h2 className="admin-section-title" style={{ marginTop: 28 }} id="vault">🗄️ Document vault</h2>
+      <details id="vault" data-sec open={docs.length > 0} style={{ marginTop: 28 }}>
+        <summary className="admin-section-title" style={{ cursor: "pointer" }}>🗄️ Document vault ({docs.length})</summary>
       {/* ONE LINE OF WHAT IT IS; THE MECHANICS FOLD AWAY.
           The guarded route and who may delete are true and worth recording, but
           they are not what somebody filing a statement needs to read first. */}
@@ -2071,6 +2072,7 @@ export default async function ZohoHubPage(props: {
           ))}
         </div>
       )}
+      </details>
 
 
     </section>

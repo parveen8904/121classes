@@ -35,6 +35,40 @@ const TRACK_SUBJECT: Record<Track, { course: string; subject: string }> = {
   final: { course: "CA Final", subject: "Financial Reporting" },
 };
 
+/**
+ * THE NAME THAT MAY BE READ OUT LOUD.
+ *
+ * A student's stored full_name is whatever they typed at signup, and some of it
+ * is not a name. One real profile reads "Anjali Anjali 9355804741" — the girl's
+ * own phone number, sitting in the field this announcement was about to send to
+ * every Telegram and Discord group. His rule is explicit: do not share phone
+ * numbers or emails. So the name is cleaned before it can ever be posted:
+ *
+ *   · any run of six or more digits goes (phone numbers, enrolment ids),
+ *   · anything with an @ goes (an email pasted into the name box),
+ *   · a word immediately repeated is collapsed ("Anjali Anjali" → "Anjali"),
+ *   · and if what is left is not a plausible name, NOBODY is announced for
+ *     that track. Silence is the safe failure here; a mangled or revealing
+ *     name in a room of students is not.
+ */
+export function publicName(raw: string | null | undefined): string {
+  let n = String(raw ?? "");
+  if (n.includes("@")) n = n.replace(/\S+@\S+/g, " ");
+  n = n.replace(/\d[\d\s-]{4,}\d/g, " ");   // 6+ digits, however spaced
+  n = n.replace(/[^\p{L}\s.'-]/gu, " ");     // keep letters and name punctuation
+  n = n.replace(/\s+/g, " ").trim();
+
+  const words = n.split(" ").filter(Boolean);
+  const deduped: string[] = [];
+  for (const w of words) {
+    if (!deduped.length || deduped[deduped.length - 1].toLowerCase() !== w.toLowerCase()) deduped.push(w);
+  }
+  const out = deduped.join(" ");
+  // Two letters is the shortest thing that could be a name; below that, or all
+  // punctuation, and we say nothing rather than something wrong.
+  return /\p{L}{2,}/u.test(out) ? out : "";
+}
+
 export type TopperRow = { day: string; track: Track; student_id: string | null; student_name: string; announced_at: string | null };
 
 /** The IST calendar day of an instant. */
@@ -104,7 +138,7 @@ export async function findToppers(day: string): Promise<{ track: Track; studentI
       const id = String(r.student_id ?? "");
       if (!id) continue;
       const prev = best.get(id);
-      if (!prev || pct > prev.pct) best.set(id, { pct, name: String(r.profiles?.full_name ?? "").trim() });
+      if (!prev || pct > prev.pct) best.set(id, { pct, name: publicName(r.profiles?.full_name) });
     }
     if (!best.size) continue;
 

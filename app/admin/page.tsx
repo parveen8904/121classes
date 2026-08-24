@@ -103,11 +103,12 @@ export default async function AdminHome() {
       label: "Total cost (this month)",
       value: inr(s.costMonthUsd),
       href: "/admin/costs",
-      // Say where each figure came from. "invoiced" is what they actually
-      // charged; a stand-in must not read as a live meter.
-      hint: s.costBreakdown
-        ? `AI ${inr(s.costBreakdown.ai.usd)} · Bunny ${inr(s.costBreakdown.bunny.usd)} · Supabase ${inr(s.costBreakdown.supabase.usd)} · Vercel ${inr(s.costBreakdown.vercel.usd)} · Cloudflare ${inr(s.costBreakdown.cloudflare.usd)}`
-          + (s.costBreakdown.estimated ? " — part estimated from the last invoice" : " — invoiced")
+      // WHERE THE FIGURE CAME FROM, IN ONE WORD. The full per-provider
+      // breakdown lives on the costs page, which already prints it; carrying
+      // it here made this tile three lines taller than every other one. What a
+      // glance needs is whether the number is real or a stand-in.
+      sub: s.costBreakdown
+        ? (s.costBreakdown.estimated ? "part estimated" : "invoiced")
         : undefined,
     }] : []),
     { label: "AI cost (this month)", value: inr(s.aiMonth), href: "/admin/costs" },
@@ -149,15 +150,25 @@ export default async function AdminHome() {
       {/* At-a-glance stats */}
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", marginTop: 18, marginBottom: 26 }}>
         {visibleCards.map((c) => (
-          <Link key={c.label} href={c.href} style={{ display: "block", textDecoration: "none" }}>
-            <div style={{ background: "var(--bg-soft)", borderRadius: 10, padding: "14px 16px", border: c.alert ? "1px solid #f59e0b" : "1px solid transparent" }}>
-              <div className="muted" style={{ fontSize: ".78rem" }}>{c.label}</div>
-              <div style={{ fontSize: "1.5rem", fontWeight: 700, marginTop: 2 }}>{c.value}</div>
-              {/* What the number is made of, where a single figure would hide
-                  it — a month's cost is four providers, not one bill. */}
-              {"hint" in c && c.hint && (
-                <div className="muted" style={{ fontSize: ".7rem", marginTop: 3, lineHeight: 1.5 }}>{c.hint}</div>
-              )}
+          <Link key={c.label} href={c.href} style={{ display: "block", textDecoration: "none", height: "100%" }}>
+            <div style={{
+              background: "var(--bg-soft)", borderRadius: 10, padding: "14px 16px",
+              border: c.alert ? "1px solid #f59e0b" : "1px solid transparent",
+              // Fill the grid cell and lay out top-to-bottom, so every tile in a
+              // row is exactly as tall as the row — no ragged edges.
+              height: "100%", display: "flex", flexDirection: "column", boxSizing: "border-box",
+            }}>
+              {/* Two lines reserved for the label: "Subscriptions sold today"
+                  wraps where "Students" does not, and without this the two
+                  tiles sit at different heights. */}
+              <div className="muted" style={{ fontSize: ".78rem", lineHeight: 1.35, minHeight: "2.1em" }}>{c.label}</div>
+              <div style={{ fontSize: "1.5rem", fontWeight: 700, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{c.value}</div>
+              {/* Always present, even when empty: a reserved line keeps the
+                  tiles identical whether or not a figure has provenance to
+                  show. The full cost breakdown is on the costs page. */}
+              <div className="muted" style={{ fontSize: ".7rem", marginTop: "auto", paddingTop: 4, minHeight: "1.2em" }}>
+                {"sub" in c ? c.sub ?? "" : ""}
+              </div>
             </div>
           </Link>
         ))}

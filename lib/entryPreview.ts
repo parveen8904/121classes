@@ -212,6 +212,21 @@ export function saleEntry(p: {
    * Given here, the split is done the way Zoho does it: base rounded,
    * tax = gross − base, so the total is the receipt exactly. */
   inclusiveGross?: number | null;
+  /** WHERE THE MONEY LANDED, WHEN IT IS ALREADY IN.
+   *
+   * His question, 25 Aug 2026: "the party stands debited, and when you receive
+   * the money you say bank debit — how will you clear that party?"
+   *
+   * It IS cleared: postSale writes TWO documents, the invoice and then a
+   * customer payment applied to that invoice (invoices:[{invoice_id,
+   * amount_applied}]), which knocks the receivable off. The preview showed
+   * only the invoice, so on screen the party stood debited for ever — the
+   * entry was true and half-told, which for a receivable is the same as wrong.
+   *
+   * Given here, the receipt leg is shown too: Dr this account, Cr the party,
+   * for the gross. The party nets to nil in the same breath, which is what
+   * actually happens in Zoho. */
+  settledInto?: string | null;
 }): Entry {
   const gstRate = Number(p.gstRate) || 0;
   const inc = p.inclusiveGross != null && p.inclusiveGross > 0 ? r2(p.inclusiveGross) : null;
@@ -251,12 +266,25 @@ export function saleEntry(p: {
     caveats.push("The customer deducts this from what they pay us and gives the government credit against our PAN. It is a receivable, never an expense.");
   }
 
+  const owed = base + gst - withheld;
   lines.push({
     account: receivableFor(p.who),
     side: flip("debit"),
-    amount: base + gst - withheld,
+    amount: owed,
     note: withheld > 0 ? "what they will actually remit" : "what they owe us",
   });
+
+  // THE RECEIPT, WHERE THE MONEY IS ALREADY IN. Shown as its own two lines so
+  // the party is seen to clear rather than merely asserted to.
+  if (p.settledInto && !p.isCreditNote && owed > 0) {
+    lines.push({ account: p.settledInto, side: "debit", amount: owed, note: "the money, already received" });
+    lines.push({ account: receivableFor(p.who), side: "credit", amount: owed, note: "…and the party is squared off — nothing is left outstanding" });
+    caveats.push(
+      `${p.who || "The customer"} nets to nil: debited by the invoice and credited by the receipt, both for ${
+        owed.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      }. Zoho is sent the invoice and then a payment applied against it, which is what squares the account — no balance is left standing.`,
+    );
+  }
 
   if (p.isCreditNote) caveats.push("A credit note reverses the invoice, so every side is the other way round.");
   return finish(lines, caveats);

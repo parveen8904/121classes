@@ -679,6 +679,7 @@ export default async function ZohoHubPage(props: {
                     intraState: r.payload.stateCode === "DL",
                     amount: Number(r.payload.amountInr) || 0,
                     inclusiveGross: Number(r.payload.amountInr) || 0,
+                    settledInto: "Razorpay Clearing",
                   })}
                   title="What posting this sale writes"
                   compact

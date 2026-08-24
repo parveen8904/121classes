@@ -123,6 +123,9 @@ export async function entryForApproval(a: {
         intraState: s(pl.stateCode) === "DL",
         amount: gross,
         inclusiveGross: gross,
+        // The money is already in — postSale applies a payment into Razorpay
+        // Clearing against this very invoice, so show the party clearing.
+        settledInto: "Razorpay Clearing",
       });
     }
 
@@ -160,6 +163,9 @@ export async function entryForApproval(a: {
         intraState: state === "DL",
         amount: gross,
         inclusiveGross: gross,
+        // The money is already in — postSale applies a payment into Razorpay
+        // Clearing against this very invoice, so show the party clearing.
+        settledInto: "Razorpay Clearing",
       });
     }
   } catch {

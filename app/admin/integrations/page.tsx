@@ -436,6 +436,7 @@ export default async function IntegrationsPage(
           <KeyField name="WHATSAPP_MISSEDCALL_TEMPLATE" label="WhatsApp missed-call reply template (sends the free-planner link to callers)" placeholder="approved MARKETING/UTILITY template with one {{1}} variable (the link)" />
           <KeyField name="FACULTY_TELEGRAM_CHAT_ID" label="Faculty Telegram chat id (for doubt alerts)" placeholder="your own Telegram chat id" />
           <KeyField name="FACULTY_EMAIL" label="Faculty alert email" placeholder="contact@caparveensharma.com" />
+          <KeyField name="WAREHOUSE_EMAIL" label="Warehouse email (the nightly dispatch list of parcels to pack)" placeholder="the address that packs and couriers the books — nothing is sent until this is set" />
           <KeyField name="CRON_SECRET" label="Cron secret (optional — protects scheduled jobs)" placeholder="any random text" />
           <KeyField name="ALDINE_WEBHOOK_SECRET" label="Aldine bridge secret (same text goes in the WooCommerce webhook's Secret field)" placeholder="any long random text — e.g. 40 letters and digits" />
           <KeyField name="BUFFER_API_KEY" label="Buffer API key (auto-posts campaign X/Twitter drafts through your Buffer account)" placeholder="publish.buffer.com → Settings → API → create access token (org owner only)" />

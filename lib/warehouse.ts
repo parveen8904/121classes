@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { parsePostalParts } from "@/lib/indiaStates";
 import { sendEmail, emailConfigured, emailShell } from "@/lib/notify";
+import { getSecret } from "@/lib/secrets";
 
 type Ship = { name?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string; phone?: string; email?: string };
 type Item = { book_id?: string; qty?: number };
@@ -121,9 +122,27 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
 // Email the warehouse the list of paid, not-yet-notified book orders, then
 // stamp them. Returns a summary. Safe to call repeatedly (idempotent on the flag).
 export async function runWarehouseDispatch(): Promise<{ ok: boolean; count: number; skipped?: string }> {
-  const warehouse = process.env.WAREHOUSE_EMAIL;
-  if (!warehouse || !(await emailConfigured())) {
-    return { ok: true, count: 0, skipped: "email or WAREHOUSE_EMAIL not configured" };
+  // WHERE THE DISPATCH LIST IS SENT — AND WHY THIS WAS READ THE WRONG WAY.
+  //
+  // This was the only address on the site read straight from process.env. Every
+  // other one goes through getSecret, which reads what the founder typed on the
+  // Integrations page. WAREHOUSE_EMAIL was not on that page and was not in
+  // secretKeys.ts either, so there was no way to set it and nowhere it could
+  // have been set — it was empty from the day this was written.
+  //
+  // The cost of that was silent: with no address the run below returned
+  // { ok: true, count: 0 } — a SUCCESS — so the nightly cron reported a clean
+  // run every night while the warehouse was never told about a single parcel.
+  // Sixteen were owed by 24 Aug 2026 and not one had been notified.
+  //
+  // So: the founder's own setting first, env only as a fallback, and a missing
+  // address is now reported as NOT ok, because it is not ok.
+  const warehouse = ((await getSecret("WAREHOUSE_EMAIL")) || process.env.WAREHOUSE_EMAIL || "").trim();
+  if (!warehouse) {
+    return { ok: false, count: 0, skipped: "no WAREHOUSE_EMAIL — set it on Admin → Integrations; nothing was sent" };
+  }
+  if (!(await emailConfigured())) {
+    return { ok: false, count: 0, skipped: "email is not configured — nothing was sent" };
   }
 
   const svc = createServiceClient();

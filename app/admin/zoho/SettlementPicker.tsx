@@ -74,7 +74,7 @@ export default function SettlementPicker({
           <span style={{ display: "inline-flex", gap: 8, marginLeft: "auto" }}>
             <form action={approveSelected} style={{ margin: 0 }}>
               {[...picked].map((id) => <input key={id} type="hidden" name="ids" value={id} />)}
-              <SubmitButton className="btn small" savedLabel="✓ Posted">✅ Approve &amp; post selected</SubmitButton>
+              <SubmitButton className="btn small" savedLabel="📤 Sent for approval">📤 Send selected for approval</SubmitButton>
             </form>
             <form action={skipSelected} style={{ margin: 0 }}>
               {[...picked].map((id) => <input key={id} type="hidden" name="ids" value={id} />)}

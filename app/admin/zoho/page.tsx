@@ -414,6 +414,26 @@ export default async function ZohoHubPage(props: {
         is a fresh entry, never a silent edit. Bank feeds inside Zoho stay <strong>disconnected</strong>.
       </div>
 
+      {/* NOTHING POSTS ITSELF — SO SAY SO WHERE IT IS WAITING.
+          The gate is roughly fifteen hundred lines down this page. The desk
+          sending work up to it used to be labelled "Approve & post" and flash
+          "✓ Posted", so the desk believed the job was done and the founder
+          never knew there was anything to release. The labels now say what they
+          do; this says where the work went. */}
+      {pendingApprovals.length > 0 && (
+        <div className="card" style={{ marginTop: 14, borderLeft: "4px solid #b45309" }}>
+          <strong style={{ fontSize: ".92rem" }}>
+            ✋ {pendingApprovals.length} item{pendingApprovals.length === 1 ? " is" : "s are"} waiting to be released into Zoho
+          </strong>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 8px", lineHeight: 1.6 }}>
+            {isFounder
+              ? "Nothing below has reached the books yet. Approving on a desk queue only sends the work here — releasing it is a separate press, and only you can make it."
+              : "These are with CA Parveen Sharma. They reach Zoho when he releases them, not when this desk approves them."}
+          </p>
+          <a className="btn small" href="#approvals">Go to the approvals gate ↓</a>
+        </div>
+      )}
+
       {/* ── Pradeep's backlog — as-of a chosen date ─────────────────── */}
       {hubConnected && (
         <div id="backlog" className="card" style={{ marginTop: 16 }}>
@@ -507,7 +527,7 @@ export default async function ZohoHubPage(props: {
             </form>
             {drafts.length > 0 && (
               <form action={approveAllDraftsAction} style={{ margin: 0 }}>
-                <SubmitButton className="btn small" savedLabel="✓ Posted">✅ Approve &amp; post all {drafts.length} draft(s)</SubmitButton>
+                <SubmitButton className="btn small" savedLabel="📤 Sent for approval">📤 Send all {drafts.length} draft(s) for approval</SubmitButton>
               </form>
             )}
             <span className="muted" style={{ fontSize: ".8rem" }}>
@@ -539,7 +559,7 @@ export default async function ZohoHubPage(props: {
                   <span style={{ display: "inline-flex", gap: 6 }}>
                     <form action={approvePostingAction} style={{ margin: 0 }}>
                       <input type="hidden" name="id" value={r.id} />
-                      <SubmitButton className="btn small" savedLabel="✓ Posted">✅ Approve &amp; post</SubmitButton>
+                      <SubmitButton className="btn small" savedLabel="📤 Sent for approval">📤 Send for approval</SubmitButton>
                     </form>
                     <form action={skipPostingAction} style={{ margin: 0 }}>
                       <input type="hidden" name="id" value={r.id} />
@@ -592,7 +612,7 @@ export default async function ZohoHubPage(props: {
             </form>
             {sDrafts.length > 0 && (
               <form action={approveAllSettlementsAction} style={{ margin: 0 }}>
-                <SubmitButton className="btn small" savedLabel="✓ Posted">✅ Approve &amp; post all {sDrafts.length}</SubmitButton>
+                <SubmitButton className="btn small" savedLabel="📤 Sent for approval">📤 Send all {sDrafts.length} for approval</SubmitButton>
               </form>
             )}
             <span className="muted" style={{ fontSize: ".8rem" }}>✅ posted {sPosted.length} · 🤝 matched {sMatched.length}</span>

@@ -45,6 +45,10 @@ export const SECRET_KEYS = [
   "INTERAKT_API_KEY",
   "FACULTY_TELEGRAM_CHAT_ID",
   "FACULTY_EMAIL",
+  // The warehouse's own address, for the nightly dispatch list. Absent from
+  // this list until 24 Aug 2026, which meant it could not be set at all and the
+  // dispatch email had never once been sent. See lib/warehouse.ts.
+  "WAREHOUSE_EMAIL",
   "CRON_SECRET",
   // DELHIVERY — booking parcels without writing docket numbers by hand.
   // A key that is not named here is silently DISCARDED when the founder saves

@@ -41,7 +41,6 @@ export async function approvePostingAction(formData: FormData) {
   const staff = await currentStaff();
   const svc = createServiceClient();
   await svc.from("zoho_postings").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", id);
-  const { postSale } = await import("@/lib/zohoPosting");
   await requestApprovalFor("sale", "zoho_postings", id);
   revalidatePath("/admin/zoho");
 }
@@ -51,7 +50,6 @@ export async function approveAllDraftsAction() {
   const staff = await currentStaff();
   const svc = createServiceClient();
   const { data: drafts } = await svc.from("zoho_postings").select("id").eq("status", "draft").order("order_no");
-  const { postSale } = await import("@/lib/zohoPosting");
   for (const d of drafts ?? []) {
     await svc.from("zoho_postings").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", d.id);
     await requestApprovalFor("sale", "zoho_postings", d.id);
@@ -86,7 +84,6 @@ export async function approveSettlementAction(formData: FormData) {
   const staff = await currentStaff();
   const svc = createServiceClient();
   await svc.from("zoho_settlements").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", id);
-  const { postSettlement } = await import("@/lib/zohoSettlements");
   await requestApprovalFor("settlement", "zoho_settlements", id);
   revalidatePath("/admin/zoho");
 }
@@ -96,7 +93,6 @@ export async function approveAllSettlementsAction() {
   const staff = await currentStaff();
   const svc = createServiceClient();
   const { data: rows } = await svc.from("zoho_settlements").select("id").eq("status", "draft").order("settled_on");
-  const { postSettlement } = await import("@/lib/zohoSettlements");
   for (const r of rows ?? []) {
     await svc.from("zoho_settlements").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", r.id);
     await requestApprovalFor("settlement", "zoho_settlements", r.id);
@@ -110,7 +106,6 @@ export async function approveSelectedSettlementsAction(formData: FormData) {
   if (!ids.length) return;
   const staff = await currentStaff();
   const svc = createServiceClient();
-  const { postSettlement } = await import("@/lib/zohoSettlements");
   for (const id of ids) {
     await svc.from("zoho_settlements").update({ approved_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", id);
     await requestApprovalFor("settlement", "zoho_settlements", id);

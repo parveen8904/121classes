@@ -15,7 +15,7 @@ export type QueueRow = {
 };
 
 export default function QueuePicker({
-  rows, approveSelected, skipSelected, firstShown = 12, approveLabel = "✅ Approve & post selected",
+  rows, approveSelected, skipSelected, firstShown = 12, approveLabel = "📤 Send selected for approval",
 }: {
   rows: QueueRow[];
   approveSelected: (fd: FormData) => void | Promise<void>;
@@ -68,7 +68,7 @@ export default function QueuePicker({
           <span style={{ display: "inline-flex", gap: 8, marginLeft: "auto" }}>
             <form action={approveSelected} style={{ margin: 0 }}>
               {[...picked].map((id) => <input key={id} type="hidden" name="ids" value={id} />)}
-              <SubmitButton className="btn small" savedLabel="✓ Posted">{approveLabel}</SubmitButton>
+              <SubmitButton className="btn small" savedLabel="📤 Sent for approval">{approveLabel}</SubmitButton>
             </form>
             <form action={skipSelected} style={{ margin: 0 }}>
               {[...picked].map((id) => <input key={id} type="hidden" name="ids" value={id} />)}

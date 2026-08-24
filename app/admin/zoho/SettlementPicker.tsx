@@ -16,6 +16,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 export type PickRow = {
   id: string; settled_on: string; net: number; fees: number; gross: number;
   utr: string | null; settlement_id: string; status: string; error: string | null;
+  detail?: React.ReactNode;
 };
 
 const FIRST_SHOWN = 12;
@@ -87,7 +88,8 @@ export default function SettlementPicker({
 
       <div style={{ display: "grid", gap: 5, marginTop: 8 }}>
         {shown.map((r) => (
-          <label key={r.id} className="card"
+          <div key={r.id}>
+          <label className="card"
             style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "8px 12px", cursor: "pointer",
                      borderLeft: `4px solid ${r.status === "failed" ? "#b91c1c" : picked.has(r.id) ? "var(--accent)" : "transparent"}` }}>
             <input type="checkbox" checked={picked.has(r.id)} onChange={() => toggle(r.id)} />
@@ -98,6 +100,16 @@ export default function SettlementPicker({
             </span>
             {r.status === "failed" && <span style={{ fontSize: ".76rem", color: "#b91c1c" }}>{r.error}</span>}
           </label>
+            {/* The entry this row becomes, prerendered by the server. It rides
+                along as a ReactNode so this client component stays ignorant of
+                accounting. */}
+            {r.detail && (
+              <details style={{ margin: "0 0 2px 34px" }}>
+                <summary className="btn small secondary as-btn">📖 Journal entry</summary>
+                <div style={{ marginTop: 6 }}>{r.detail}</div>
+              </details>
+            )}
+          </div>
         ))}
       </div>
     </div>

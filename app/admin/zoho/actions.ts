@@ -57,6 +57,38 @@ export async function approveAllDraftsAction() {
   revalidatePath("/admin/zoho");
 }
 
+/**
+ * EDIT THE TWO THINGS ON A SALE THAT ARE OURS TO DECIDE.
+ *
+ * His spec: every queue shows its journal entry with editable fields. On a
+ * portal sale almost nothing is honestly editable — the amount is the money
+ * Razorpay actually collected, the customer is whoever paid, the invoice
+ * number is the portal's own series. What IS ours: the buyer's state (which
+ * decides CGST+SGST against IGST and the place of supply) and which income
+ * ledger the sale belongs to. Both are read from the payload by postSale, so
+ * an edit here is exactly what gets posted — not a cosmetic overlay.
+ */
+export async function editSalePayloadAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  const stateName = str(formData.get("state_name"));
+  const accountKind = str(formData.get("account_kind"));
+  if (!id) return;
+  const svc = createServiceClient();
+  const { data: row } = await svc.from("zoho_postings").select("status, payload").eq("id", id).maybeSingle();
+  // Only before it is sent up. After approval the entry he released is the
+  // entry that posts; editing underneath it would make his approval a lie.
+  if (!row || !["draft", "needs_info", "failed"].includes(String(row.status))) return;
+  const { zohoStateCode } = await import("@/lib/indiaStates");
+  const payload = {
+    ...(row.payload as Record<string, unknown> ?? {}),
+    ...(stateName ? { stateCode: zohoStateCode(stateName) } : {}),
+    ...(accountKind ? { extension: accountKind === "validity" } : {}),
+  };
+  await svc.from("zoho_postings").update({ payload, updated_at: new Date().toISOString() }).eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
 export async function skipPostingAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));

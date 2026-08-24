@@ -12,6 +12,8 @@ import SubmitButton from "@/app/components/SubmitButton";
 export type QueueRow = {
   id: string; date: string; label: string; sub?: string | null;
   amount: number; badge?: string | null; status: string; error?: string | null;
+  /** Prerendered journal-entry preview (server-built EntryLines). */
+  detail?: React.ReactNode;
 };
 
 export default function QueuePicker({
@@ -81,7 +83,8 @@ export default function QueuePicker({
 
       <div style={{ display: "grid", gap: 5, marginTop: 8 }}>
         {shown.map((r) => (
-          <label key={r.id} className="card"
+          <div key={r.id}>
+          <label className="card"
             style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "8px 12px", cursor: "pointer",
                      borderLeft: `4px solid ${r.status === "failed" ? "#b91c1c" : picked.has(r.id) ? "var(--accent)" : "transparent"}` }}>
             <input type="checkbox" checked={picked.has(r.id)} onChange={() => toggle(r.id)} />
@@ -93,6 +96,16 @@ export default function QueuePicker({
             {r.badge && <span className="badge" style={{ fontSize: ".7rem" }}>{r.badge}</span>}
             {r.status === "failed" && <span style={{ fontSize: ".76rem", color: "#b91c1c" }}>{r.error}</span>}
           </label>
+            {/* The entry this row becomes, prerendered by the server. It rides
+                along as a ReactNode so this client component stays ignorant of
+                accounting. */}
+            {r.detail && (
+              <details style={{ margin: "0 0 2px 34px" }}>
+                <summary className="btn small secondary as-btn">📖 Journal entry</summary>
+                <div style={{ marginTop: 6 }}>{r.detail}</div>
+              </details>
+            )}
+          </div>
         ))}
       </div>
     </div>

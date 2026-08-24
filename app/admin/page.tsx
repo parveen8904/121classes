@@ -12,7 +12,7 @@ async function loadStats() {
   const svc = createServiceClient();
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
   const head = { count: "exact" as const, head: true };
-  const [students, openings, doubtSummary, ai, storage, bunny] = await Promise.all([
+  const [students, openings, doubtSummary, ai, storage, bunny, money] = await Promise.all([
     svc.from("profiles").select("id", head).eq("role", "student"),
     svc.from("job_listings").select("id", head).eq("status", "new"),
     // ONE DEFINITION OF "WAITING", AND IT LIVES IN ONE PLACE.
@@ -32,7 +32,15 @@ async function loadStats() {
     svc.rpc("ai_spend_since", { period_start: monthStart }),
     svc.rpc("storage_usage"),
     getBunnyBilling(),
+    // THE MONEY, AGGREGATED IN THE DATABASE. One call, one definition of
+    // "paid", all three tables — see admin_dashboard_money(). Summing rows in
+    // here would be cut off at PostgREST's 1,000-row cap and under-report,
+    // which is how the AI-spend tile once showed half the real figure.
+    svc.rpc("admin_dashboard_money"),
   ]);
+  const m = (Array.isArray(money.data) ? money.data[0] : money.data) as
+    { revenue_all: number; revenue_month: number; revenue_today: number;
+      users_today: number; subscriptions_today: number } | null;
   const aiMonth = (ai.data ?? []).reduce((s: number, r: { cost_usd: number | string }) => s + (Number(r.cost_usd) || 0), 0);
   const stRow = Array.isArray(storage.data) ? storage.data[0] : storage.data;
   return {
@@ -42,6 +50,11 @@ async function loadStats() {
     aiMonth,
     storageMb: stRow ? (Number(stRow.bytes) || 0) / (1024 * 1024) : 0,
     bunnyMonth: bunny ? bunny.thisMonth : null,
+    revenueAll: Number(m?.revenue_all ?? 0),
+    revenueMonth: Number(m?.revenue_month ?? 0),
+    revenueToday: Number(m?.revenue_today ?? 0),
+    usersToday: Number(m?.users_today ?? 0),
+    subsToday: Number(m?.subscriptions_today ?? 0),
   };
 }
 
@@ -60,7 +73,16 @@ export default async function AdminHome() {
   };
   const s = await loadStats();
   const inr = (usd: number) => `₹${Math.round(usd * INR)}`;
+  // The money first — it is the thing he opens this page to see. Rupee figures
+  // are already rupees; inr() below converts DOLLAR costs and must not touch
+  // them (that mistake would multiply revenue by 85).
+  const rupees = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
   const cards = [
+    { label: "Revenue today", value: rupees(s.revenueToday), href: "/admin/reports/sales" },
+    { label: "Revenue this month", value: rupees(s.revenueMonth), href: "/admin/reports/sales" },
+    { label: "Revenue in total", value: rupees(s.revenueAll), href: "/admin/reports/sales" },
+    { label: "Subscriptions sold today", value: String(s.subsToday), href: "/admin/orders" },
+    { label: "Users added today", value: String(s.usersToday), href: "/admin/users" },
     { label: "Students", value: String(s.students), href: "/admin/users" },
     { label: "Openings to review", value: String(s.openings), href: "/admin/placement", alert: s.openings > 0 },
     // One tile, one number, one destination. It used to be two — "open doubts"

@@ -32,9 +32,9 @@ import { useEffect, useState } from "react";
 // data-sec is now in scope — 91% of the page — and each summary carries its own
 // count, so a fully collapsed desk still says where the work is.
 //
-// THE ONE EXCEPTION is the approvals gate. It is the reason the page exists, and
-// a "collapse all" able to hide what is waiting on the founder would eventually
-// hide it on a day it mattered.
+// THE GATE COLLAPSES TOO — his ruling, 24 Aug 2026, reversing my earlier
+// exception. What keeps waiting work visible is the amber count pill on the
+// closed row and on the jump tile, not a section forced open.
 
 const KEY = "zoho.sections";
 const LEGACY_KEY = "zoho.sections.closed";   // the array this used to write

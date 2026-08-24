@@ -416,21 +416,26 @@ export default async function ZohoHubPage(props: {
           he can do. The order is now: DECIDE (what is waiting on him), then
           WORK (the desk's queues), then FILES AND REFERENCE. This strip is so
           the page can be jumped through rather than scrolled. */}
-      <nav className="card" style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", padding: "10px 12px" }}>
-        <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, color: "#b45309" }}>Approve</span>
-        <a className="btn small" href="#approvals">✋ Waiting on you{pendingApprovals.length ? ` (${pendingApprovals.length})` : ""}</a>
-        <a className="btn small secondary" href="#bills">🧾 Documents{billsWaiting.length ? ` (${billsWaiting.length})` : ""}</a>
-        <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, marginLeft: 6 }}>Work</span>
-        <a className="btn small secondary" href="#queue">📮 Sales</a>
-        <a className="btn small secondary" href="#settlements">🏦 Settlements</a>
-        <a className="btn small secondary" href="#bank">🏧 Statements</a>
-        <a className="btn small secondary" href="#petty">👛 Petty cash</a>
-        <a className="btn small secondary" href="#brokerage">📈 Investments</a>
-        <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, marginLeft: 6 }}>Records</span>
-        <a className="btn small secondary" href="#vault">🗄️ Vault</a>
-        <a className="btn small secondary" href="#tax">🧾 Tax</a>
-        <a className="btn small secondary" href="#backlog">📋 Backlog</a>
-        <span style={{ marginLeft: "auto" }}><SectionToggle /></span>
+      <nav className="card zoho-nav">
+        <div className="nav-row"><span className="nav-lab" style={{ color: "#b45309" }}>Approve</span>
+          <a className="btn small secondary" href="#approvals">✋ Waiting on you{pendingApprovals.length ? ` (${pendingApprovals.length})` : ""}</a>
+          <a className="btn small secondary" href="#bills">🧾 Documents{billsWaiting.length ? ` (${billsWaiting.length})` : ""}</a>
+        </div>
+        <div className="nav-row"><span className="nav-lab">Work</span>
+          <a className="btn small secondary" href="#queue">📮 Sales</a>
+          <a className="btn small secondary" href="#settlements">🏦 Settlements</a>
+          <a className="btn small secondary" href="#bank">🏧 Statements</a>
+          <a className="btn small secondary" href="#petty">👛 Petty cash</a>
+          <a className="btn small secondary" href="#brokerage">📈 Investments</a>
+        </div>
+        <div className="nav-row"><span className="nav-lab">Records</span>
+          <a className="btn small secondary" href="#vault">🗄️ Vault</a>
+          <a className="btn small secondary" href="#tax">🧾 Tax</a>
+          <a className="btn small secondary" href="#backlog">📋 Backlog</a>
+          <a className="btn small secondary" href="#search">🔎 Search</a>
+          <a className="btn small secondary" href="/admin/zoho/activity">📜 Zoho activity</a>
+        </div>
+        <div className="nav-row"><span className="nav-lab" aria-hidden="true"></span><SectionToggle /></div>
       </nav>
 
       {/* The standing rule, said where the person who will live on this page reads it. */}
@@ -446,10 +451,10 @@ export default async function ZohoHubPage(props: {
 
       {/* ── His gate: nothing reaches Zoho until he releases it ──────── */}
       {hubConnected && (
-        <div id="approvals">
-          <h2 className="admin-section-title" style={{ marginTop: 26 }}>
-            ✋ Waiting for your approval ({pendingApprovals.length})
-          </h2>
+        <details id="approvals" data-sec>
+          {/* He ruled that this collapses like everything else. The amber pill
+              carries the count, so a closed gate still says work is waiting. */}
+          <summary className="sec-head">✋ Waiting for your approval{pendingApprovals.length > 0 && <span className="sec-count warn">{pendingApprovals.length}</span>}</summary>
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Nothing is written to Zoho from anywhere in this system — no posting, no date, no amount, no vendor,
             no TDS — until you release it here. The desk prepares the work and asks; this page is the only door,
@@ -508,7 +513,7 @@ export default async function ZohoHubPage(props: {
               ))}
             </>
           )}
-        </div>
+        </details>
       )}
 
       {/* ── Bills: one line each, opened only when he wants it ──────── */}
@@ -1752,6 +1757,10 @@ export default async function ZohoHubPage(props: {
       <section className="zone" data-zone="files">
         <header className="zone-head"><span className="zone-kicker">Records & reference</span></header>
 
+      {/* One click, another page — but it belongs with the records, said as a
+          row so the zone reads as one list. */}
+      <a className="sec-row-link" href="/admin/zoho/activity">📜 What has changed in Zoho — the activity log<span className="sec-meta">open →</span></a>
+
       {/* ── Pradeep's backlog — as-of a chosen date ─────────────────── */}
       {hubConnected && (
         <details id="backlog" data-sec>
@@ -1940,7 +1949,7 @@ export default async function ZohoHubPage(props: {
 
       {/* ── The document vault — the whole zoho area (founder + Pradeep) ── */}
       <details id="vault" data-sec>
-        <summary className="sec-head">🗄️ Document vault{docs.length > 0 && <span className="sec-count">{docs.length}</span>}</summary>
+        <summary className="sec-head">🗄️ Document vault — upload invoices &amp; statements{docs.length > 0 && <span className="sec-count">{docs.length}</span>}</summary>
       {/* ONE LINE OF WHAT IT IS; THE MECHANICS FOLD AWAY.
           The guarded route and who may delete are true and worth recording, but
           they are not what somebody filing a statement needs to read first. */}

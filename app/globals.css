@@ -813,6 +813,9 @@ summary.as-btn::marker { content: ""; }
    were). So: every section is a CARD ROW — same face open or closed — and the
    zones are labelled bands with a hairline rule. */
 .zone { margin-top: 30px; }
+.zoho-nav { display: grid; gap: 8px; margin-top: 14px; padding: 12px 14px; }
+.nav-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.nav-lab { flex: none; width: 74px; font-size: .7rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }
 .zone-head { display: flex; align-items: center; gap: 12px; margin-bottom: 2px; }
 .zone-kicker { font-size: .7rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); white-space: nowrap; }
 .zone[data-zone="approve"] .zone-kicker { color: #b45309; }
@@ -821,8 +824,16 @@ summary.as-btn::marker { content: ""; }
 /* One row, one section. The row is the summary's card; opening it keeps the
    same card and reveals the body under a hairline. */
 details[data-sec] { background: var(--card); border: 1px solid var(--border); border-radius: 12px; margin-top: 10px; padding: 0 16px; }
+/* Colour, deliberately: each zone's rows carry its band, so approve/work/
+   records read apart even with every row closed. */
+.zone[data-zone="approve"] details[data-sec] { border-left: 4px solid #b45309; }
+.zone[data-zone="work"] details[data-sec] { border-left: 4px solid var(--accent); }
+.zone[data-zone="files"] details[data-sec] { border-left: 4px solid #64748b; }
+/* A record that is one click to another page, drawn as the same row. */
+.sec-row-link { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--border); border-left: 4px solid #64748b; border-radius: 12px; margin-top: 10px; padding: 13px 16px; font-weight: 700; font-size: 1rem; color: inherit; text-decoration: none; }
+.sec-row-link:hover { color: var(--accent); }
 details[data-sec][open] { padding-bottom: 16px; }
-.sec-head { display: flex; align-items: center; gap: 10px; margin: 0 -16px; padding: 13px 16px; font-weight: 700; font-size: .98rem; list-style: none; cursor: pointer; border-radius: 12px; }
+.sec-head { display: flex; align-items: center; gap: 10px; margin: 0 -16px; padding: 13px 16px; font-weight: 700; font-size: 1rem; list-style: none; cursor: pointer; border-radius: 12px; }
 details[data-sec][open] > .sec-head { border-bottom: 1px solid var(--border); border-radius: 12px 12px 0 0; margin-bottom: 12px; }
 .sec-head::-webkit-details-marker { display: none; }
 /* A flex <summary> loses its native disclosure triangle, so the marker is
@@ -832,7 +843,7 @@ details[data-sec][open] > .sec-head::before { transform: rotate(90deg); }
 .sec-head:hover { color: var(--accent); }
 .sec-head:hover::before { color: var(--accent); }
 .sec-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.sec-quiet { font-weight: 600; color: var(--muted); font-size: .88rem; }
+.sec-quiet { color: var(--muted); }  /* same size and weight as every other row — only the colour is quieter */
 /* The number that matters, on the right, in a pill — amber when it is waiting
    on the founder rather than the desk. */
 .sec-count { margin-left: auto; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); border-radius: 999px; padding: 1px 10px; font-size: .78rem; font-weight: 800; font-variant-numeric: tabular-nums; }

@@ -103,6 +103,44 @@ export async function entryForApproval(a: {
       return bankEntry({ bank: s(l.account_name), account, debit: n(l.debit), credit: n(l.credit) });
     }
 
+    /* A PORTAL SALE QUEUED FOR HIS GATE — the kind that was showing nothing.
+       The gate previews were written per source table, and zoho_postings was
+       simply never given a branch — nor was zoho_settlements below. Those are
+       the two most common things at the gate, so the founder saw "the entry
+       cannot be shown here" on almost everything he was asked to release. */
+    if (a.ref_table === "zoho_postings") {
+      const { data: d } = await svc.from("zoho_postings").select("payload").eq("id", a.ref_id).maybeSingle();
+      const pl = (d?.payload ?? {}) as Record<string, unknown>;
+      const gross = n(pl.amountInr);
+      if (!gross) return null;
+      // Portal prices are GST-inclusive; the income is the value inside them.
+      const base = Number((gross / 1.18).toFixed(2));
+      return saleEntry({
+        who: s(pl.customer) || "the student",
+        account: pl.extension ? "Sales-Validity" : "Sales-Classes",
+        gstTreatment: "charged",
+        gstRate: 18,
+        intraState: s(pl.stateCode) === "DL",
+        amount: base,
+      });
+    }
+
+    /* A Razorpay settlement — one bank credit squared to the paisa. */
+    if (a.ref_table === "zoho_settlements") {
+      const { data: r } = await svc.from("zoho_settlements")
+        .select("net_inr, fees_inr, tax_inr, gross_inr, utr").eq("id", a.ref_id).maybeSingle();
+      if (!r) return null;
+      const net = n(r.net_inr), fee = n(r.fees_inr) + n(r.tax_inr), gross = n(r.gross_inr);
+      if (!gross) return null;
+      const lines = [
+        { account: "Axis Current-923020019087117", side: "debit" as const, amount: net, note: "what the bank was actually credited" },
+        ...(fee > 0 ? [{ account: "Payment Gateway Charges (AI)", side: "debit" as const, amount: fee, note: "Razorpay's fee plus the GST on it" }] : []),
+        { account: "Razorpay Clearing", side: "credit" as const, amount: gross, note: "out of clearing — the money is no longer in transit" },
+      ];
+      const dr = Number((net + fee).toFixed(2));
+      return { lines, dr, cr: gross, balanced: Math.abs(dr - gross) < 0.02, caveats: [] };
+    }
+
     /* A sale from the portal — the invoice Zoho will carry. */
     if (a.ref_table === "orders" || a.ref_table === "gift_orders" || a.ref_table === "book_orders") {
       const { data: o } = await svc.from(a.ref_table).select("*").eq("id", a.ref_id).maybeSingle();

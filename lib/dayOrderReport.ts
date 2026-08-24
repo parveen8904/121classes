@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { formatDate } from "@/lib/dates";
 import { parsePostalParts } from "@/lib/indiaStates";
+import { matchesState } from "@/lib/accountsExport";
 
 // THE DAY'S ORDERS, SENT WITHOUT ANYONE ASKING.
 //
@@ -50,9 +51,31 @@ export function istDayBounds(day: string): { from: string; to: string } {
   };
 }
 
-/** "Yesterday" in India — what a midnight run is reporting on. */
+/** The IST calendar day containing `now`. */
 export function istToday(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(now);
+}
+
+/**
+ * THE DAY THAT HAS JUST FINISHED — which is not the one istToday() returns.
+ *
+ * This is why the warehouse spreadsheet was arriving EMPTY every night. Vercel
+ * runs crons in UTC; the schedule is `30 18 * * *`, and 18:30 UTC is 00:00 IST
+ * OF THE NEXT DAY. So istToday() named the day that was just BEGINNING, the
+ * report asked for orders between 00:00 and 23:59 of a day that was zero
+ * seconds old, and the file went out with nothing in it but a header row.
+ *
+ * The attachment sent on 13 Aug (UTC) was called orders-2026-08-14.csv and
+ * covered 14 August at the instant it started. Eleven orders were placed that
+ * day — every one of them hours after the packer had been sent the sheet.
+ *
+ * Stepping back an hour before reading the calendar lands on the day that has
+ * just ended: at 00:00 IST that is 23:00 the previous evening. An hour is used
+ * rather than a date subtraction so that a few minutes of cron drift either
+ * side of midnight still names the right day.
+ */
+export function istDayJustEnded(now = new Date()): string {
+  return istToday(new Date(now.getTime() - 60 * 60 * 1000));
 }
 
 export async function ordersForDay(day: string): Promise<DayOrderRow[]> {
@@ -70,6 +93,20 @@ export async function ordersForDay(day: string): Promise<DayOrderRow[]> {
       .select("order_no, amount_inr, status, books_due, months, created_at, recipient_name, recipient_email, recipient_phone, recipient_address, subjects:subject_id(title, courses(title)), profiles:gifter_id(full_name, business_name)")
       .gte("created_at", from).lte("created_at", to).order("created_at"),
   ]);
+
+  // A REFUSED QUERY IS NOT A QUIET DAY.
+  //
+  // These three were read straight into `(x.data ?? [])`, so a PostgREST
+  // refusal — a bad embed, an RLS policy, a renamed column — produced an empty
+  // array that is indistinguishable from "nothing was sold". The warehouse
+  // would be sent a header row and no reason, exactly as if trade had stopped.
+  // It throws now: a cron that fails loudly gets fixed, one that sends an empty
+  // sheet does not.
+  for (const [what, res] of [["subscriptions", subs], ["book orders", books], ["vendor/sponsored orders", gifts]] as const) {
+    if (res.error) {
+      throw new Error(`the day report could not read ${what}: ${res.error.message}. Nothing was sent rather than sending an incomplete list.`);
+    }
+  }
 
   const out: DayOrderRow[] = [];
   const courseOf = (s: unknown): string => {
@@ -157,6 +194,37 @@ export async function ordersForDay(day: string): Promise<DayOrderRow[]> {
   return out;
 }
 
+/**
+ * WHAT THE WAREHOUSE IS ACTUALLY SENT: PARCELS, NOT SALES.
+ *
+ * His instruction, 24 Aug 2026: "The orders must be paid orders and they should
+ * include the orders from direct students or supporters or vendors, but only
+ * paid orders where we are supposed to send books, only these will be attached
+ * here, not all orders."
+ *
+ * Two conditions, and both matter to the person packing:
+ *
+ *   · PAID. An unpaid order is not a parcel. On 14 August seven of the eleven
+ *     orders were still `created` — an abandoned checkout is not something to
+ *     put in a box, and a packer who ships one has given the books away.
+ *
+ *   · BOOKS ACTUALLY DUE. A subscription without a printed set has nothing to
+ *     send. It belongs in a sales report, not on a packing bench.
+ *
+ * WHERE IT DOES NOT DISCRIMINATE is just as deliberate: a student's own card, a
+ * supporter's sponsorship and a vendor's sale all reach this list, because the
+ * books go in the same box whoever paid for them. That is why all three tables
+ * are read above.
+ *
+ * "Paid" is matchesState(…, "paid") — the same definition the accounts desk and
+ * the sales report use, so a vendor sale sitting in `provisioned` is recognised
+ * as paid rather than quietly dropped. That exact trap once kept every vendor
+ * order away from the warehouse.
+ */
+export function parcelsOnly(rows: DayOrderRow[]): DayOrderRow[] {
+  return rows.filter((r) => r.booksDue && matchesState(r.status, "paid"));
+}
+
 const inr = (n: number) => "Rs. " + Math.round(n).toLocaleString("en-IN");
 
 export function dayReportCsv(rows: DayOrderRow[]): string {
@@ -187,7 +255,10 @@ export function dayReportHtml(day: string, rows: DayOrderRow[]): string {
   const toShip = paid.filter((r) => r.booksDue);
 
   if (rows.length === 0) {
-    return `<p>No orders were placed on <strong>${formatDate(`${day}T06:00:00Z`)}</strong>.</p>`;
+    // The rows reaching here are already only the parcels — paid, books due —
+    // so "no orders were placed" would be wrong as well as unhelpful: there may
+    // have been plenty of orders and simply nothing to pack.
+    return `<p>Nothing to pack for <strong>${formatDate(`${day}T06:00:00Z`)}</strong> — no paid order that day has books to send.</p>`;
   }
 
   const cell = "padding:6px 9px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top";

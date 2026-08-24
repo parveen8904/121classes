@@ -3,6 +3,8 @@ import CartCheckout from "./CartCheckout";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
+  // A cart belongs to whoever filled it.
+  robots: { index: false, follow: true },
   // Its own address, so it is not read as a copy of the home page.
   alternates: { canonical: "/books/cart" }, title: "Your cart — Books by CA Parveen Sharma" };
 

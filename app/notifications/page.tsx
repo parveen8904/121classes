@@ -6,6 +6,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
+  // One person's notifications.
+  robots: { index: false, follow: true },
   // Its own address, so it is not read as a copy of the home page.
   alternates: { canonical: "/notifications" }, title: "Notifications — CA Parveen Sharma" };
 

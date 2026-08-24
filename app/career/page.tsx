@@ -1,12 +1,16 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import CareerOpenings, { type Opening } from "./CareerOpenings";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
-  alternates: { canonical: "/career" }, title: "Career Corner — CA Parveen Sharma" };
+  alternates: { canonical: "/career" },
+  title: "Career corner — articleship & CA job openings",
+  description:
+    "Current articleship and CA job openings, filtered by city, with guidance on placements and interviews from CA Parveen Sharma and team.",
+};
 
 // Each opening line: "Title | Firm | Location | applyLinkOrEmail"
 function parseJob(line: string) {
@@ -28,18 +32,29 @@ function Block({ icon, title, body }: { icon: string; title: string; body: strin
 
 export default async function CareerPage(props: { searchParams: Promise<{ city?: string }> }) {
   const searchParams = await props.searchParams;
+  // OPENINGS ARE WORTH NOTHING BEHIND A LOGIN.
+  //
+  // This page bounced a signed-out visitor to /login, so a student searching for
+  // articleship or a job could not reach it and Google could not index it — it
+  // was reported as blocked, because the login it redirects to is disallowed in
+  // robots.txt. The openings and the guidance are now readable by anyone. The
+  // three personal tools below — the placement profile, the CV builder and the
+  // mock interview — still need an account, and say so.
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login?next=/career");
 
-  const { data } = await supabase.from("site_settings").select("key, value").in("key", ["career_articleship", "career_placement", "career_resources", "career_jobs", "career_links", "career_cities"]);
+  // Read with the service key: the settings and the approved openings are meant
+  // for the public, and row-level security would otherwise return nothing at all
+  // to a visitor who is not signed in — an empty page rather than a locked one.
+  const svc = createServiceClient();
+  const { data } = await svc.from("site_settings").select("key, value").in("key", ["career_articleship", "career_placement", "career_resources", "career_jobs", "career_links", "career_cities"]);
   const m = new Map((data ?? []).map((r) => [r.key, r.value as string]));
 
   const any = ["career_articleship", "career_placement", "career_resources", "career_jobs"].some((k) => (m.get(k) || "").trim());
   const jobs = (m.get("career_jobs") || "").split("\n").map((l) => l.trim()).filter(Boolean);
 
   // Auto-aggregated, admin-approved openings, grouped by category.
-  const { data: listingsRaw } = await supabase
+  const { data: listingsRaw } = await svc
     .from("job_listings")
     .select("id, title, company, location, url, category, source, posted_at, created_at")
     .eq("status", "approved")
@@ -66,7 +81,7 @@ export default async function CareerPage(props: { searchParams: Promise<{ city?:
 
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
-      <p className="crumb"><Link prefetch={false} href="/dashboard">← Dashboard</Link></p>
+      <p className="crumb"><Link prefetch={false} href={user ? "/dashboard" : "/"}>← {user ? "Dashboard" : "Home"}</Link></p>
         <div className="learn-hero">
         <span className="badge">🎓 Career Corner</span>
         <h1>Career corner</h1>
@@ -74,10 +89,15 @@ export default async function CareerPage(props: { searchParams: Promise<{ city?:
       </div>
 
       {/* Tools */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16, alignItems: "center" }}>
         <Link className="btn" href="/career/profile">💼 My placement profile — get sent to employers</Link>
         <Link className="btn secondary" href="/career/cv">📄 Build my CV</Link>
         <Link className="btn secondary" href="/career/interview">🎤 AI mock interview</Link>
+        {!user && (
+          <span className="muted" style={{ fontSize: ".82rem" }}>
+            These three are yours alone, so they ask you to sign in — the openings below do not.
+          </span>
+        )}
       </div>
 
       {/* Nova Seed Capital — the founder's startup-grooming venture */}

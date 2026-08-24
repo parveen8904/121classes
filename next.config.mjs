@@ -67,6 +67,32 @@ const nextConfig = {
           { key: "X-DNS-Prefetch-Control", value: "on" },
         ],
       },
+      // A JAVASCRIPT CHUNK IS NOT A PAGE — SAY SO, DO NOT HIDE IT.
+      //
+      // Search Console listed 195 URLs as "Crawled - currently not indexed" and
+      // 190 of them were /_next/static/chunks/*.js and *.css: the site's own
+      // build files. They can never be indexed and they were burning crawl
+      // budget that should be going to the courses and the articles.
+      //
+      // The tempting fix — Disallow: /_next/ in robots.txt — would be a serious
+      // mistake. Google renders the site to see it, and rendering needs exactly
+      // these files; blocking them makes every page look broken to the crawler.
+      // So they stay fully crawlable and carry a header saying they are not to
+      // be indexed. That is the difference between "do not look at this" and
+      // "look, but this is not a page".
+      {
+        source: "/_next/static/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex" }],
+      },
+      {
+        source: "/_next/image",
+        headers: [{ key: "X-Robots-Tag", value: "noindex" }],
+      },
+      // The API answers machines, not searchers.
+      {
+        source: "/api/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex" }],
+      },
     ];
   },
 };

@@ -7,6 +7,8 @@ import CareerUpload from "./CareerUpload";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
+  // One student's placement profile.
+  robots: { index: false, follow: true },
   // Its own address, so it is not read as a copy of the home page.
   alternates: { canonical: "/career/profile" }, title: "My placement profile — CA Parveen Sharma" };
 

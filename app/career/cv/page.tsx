@@ -4,6 +4,8 @@ import CvBuilder from "./CvBuilder";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
+  // A personal CV builder.
+  robots: { index: false, follow: true },
   // Its own address, so it is not read as a copy of the home page.
   alternates: { canonical: "/career/cv" }, title: "CV Builder — CA Parveen Sharma" };
 

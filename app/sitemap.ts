@@ -24,6 +24,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ["/faculty", 0.7],
     ["/build-your-plan", 0.7],
     ["/placements", 0.6],
+    // Public since 24 Aug 2026. Both used to bounce a signed-out visitor to
+    // /login, so a student searching for articleship openings or for help with
+    // the fees could not reach either one, and Google reported them as blocked.
+    ["/career", 0.7],
+    ["/scholarship", 0.6],
     ["/guide", 0.6],            // was missing
     ["/help", 0.6],             // was missing
     ["/sponsor-guide", 0.5],    // was missing

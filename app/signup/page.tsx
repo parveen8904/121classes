@@ -4,6 +4,8 @@ import SignupForm from "./SignupForm";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
+  // The form itself has nothing to find; the pages that explain what you get do.
+  robots: { index: false, follow: true },
   // Its own address, so it is not read as a copy of the home page.
   alternates: { canonical: "/signup" }, title: "Create account — CA Parveen Sharma" };
 

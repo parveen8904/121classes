@@ -3,6 +3,11 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import LoginForm from "./login-form";
 
+export const metadata = {
+  // A sign-in form is not a search result. Crawlable so Google can read this and drop the page, which robots.txt blocking could never achieve.
+  robots: { index: false, follow: true },
+};
+
 // Render at request time (never statically pre-render this auth page at build).
 export const dynamic = "force-dynamic";
 

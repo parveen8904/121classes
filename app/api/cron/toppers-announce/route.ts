@@ -54,8 +54,15 @@ export async function GET(req: NextRequest) {
   const text = toppersMessage(rows, day);
   const link = "https://caparveensharma.com/learn/performance";
 
-  const [tg, dc, push] = await Promise.all([
-    // Telegram subject groups.
+  // ONE MESSAGE, EVERYWHERE — not one per subject.
+  //
+  // His instruction: the channel AND both groups, "irrespective of inter
+  // Final". A Final topper is news in the Intermediate room too; splitting the
+  // announcement by subject would have shown each group only half of it.
+  const [channel, tg, dc, push] = await Promise.all([
+    // The Telegram channel — the broadcast one students follow.
+    import("@/lib/notify").then((m) => m.sendTelegramChannel(text, link)).catch(() => false),
+    // Every subject group, the same full message in each.
     import("@/lib/telegramBroadcast").then((m) => m.postToAllGroups(text, link)).catch(() => 0),
     // Discord.
     import("@/lib/discord").then((m) => m.postToDiscord(text, link)).catch(() => false),
@@ -71,7 +78,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     ok: true, day, sent: true,
-    telegramGroups: tg, discord: dc,
+    telegramChannel: channel, telegramGroups: tg, discord: dc,
     push: push ? { sent: push.sent, failed: push.failed } : null,
     toppers: rows.map((r) => ({ track: r.track, name: r.student_name })),
   });

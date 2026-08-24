@@ -72,7 +72,7 @@ export async function editSalePayloadAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));
   const stateName = str(formData.get("state_name"));
-  const accountKind = str(formData.get("account_kind"));
+  const salesAccount = str(formData.get("sales_account"));
   if (!id) return;
   const svc = createServiceClient();
   const { data: row } = await svc.from("zoho_postings").select("status, payload").eq("id", id).maybeSingle();
@@ -90,7 +90,10 @@ export async function editSalePayloadAction(formData: FormData) {
   const payload = {
     ...(row.payload as Record<string, unknown> ?? {}),
     ...(stateName ? { stateCode: zohoStateCode(stateName) } : {}),
-    ...(accountKind ? { extension: accountKind === "validity" } : {}),
+    // The ledger as typed or picked — his ruling: sales are of various types
+    // (previous teachers' courses among them), so this is any income ledger,
+    // not a pair. Cleared by saving it empty.
+    salesAccount: salesAccount || null,
   };
   await svc.from("zoho_postings").update({ payload, updated_at: new Date().toISOString() }).eq("id", id);
   revalidatePath("/admin/zoho");

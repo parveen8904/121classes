@@ -70,6 +70,12 @@ export type SalePayload = {
   receiptNo: string;      // the portal's E-series receipt suffix
   razorpayPaymentId: string;
   extension: boolean;     // true → Sales-Validity
+  /** HIS RULING, 25 Aug 2026: the income ledger is not a fixed pair. Sales can
+   *  be of various types — previous teachers' courses among them — so the desk
+   *  may choose ANY income ledger by name. Resolved against the chart at
+   *  posting time; a name Zoho does not know fails loudly rather than booking
+   *  somewhere silently wrong. Absent → the old pair by the extension flag. */
+  salesAccount?: string;
 };
 
 const istDay = (iso: string) =>
@@ -285,7 +291,7 @@ export async function postSale(postingId: string): Promise<void> {
             rate: p.amountInr,
             quantity: 1,
             hsn_or_sac: "999293",
-            account_id: p.extension ? R.salesValidity : R.salesClasses,
+            account_id: p.salesAccount ? await accountIdByName(p.salesAccount) : p.extension ? R.salesValidity : R.salesClasses,
             tax_id: intra ? R.gst18 : R.igst18,
           }],
           notes: "Thanks for your business.",

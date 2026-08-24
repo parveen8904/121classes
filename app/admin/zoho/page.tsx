@@ -183,6 +183,10 @@ export default async function ZohoHubPage(props: {
   if (hubConnected) { try { zohoAccounts = await listZohoAccounts(); } catch { /* section degrades gracefully */ } }
   const bankChoices = zohoAccounts.filter((a) => a.type === "bank" || a.type === "credit_card").map((a) => a.name);
   const allAccountNames = zohoAccounts.map((a) => a.name);
+  // Every income ledger in the chart — the sale editor offers these and accepts
+  // a typed name besides; an unknown name fails the posting loudly, it does not
+  // book somewhere silently wrong.
+  const incomeChoices = zohoAccounts.filter((a) => a.type === "income" || a.type === "other_income").map((a) => a.name);
   // A sensible rule-pattern suggestion: the narration's most merchant-ish token.
   const suggestPattern = (narration: string) => {
     const cleaned = narration.replace(/^(UPI|INB|NEFT|IMPS|RTGS|POS|ATM)[\/ -]*/i, "").replace(/^(P2M|P2A|IFT|NEFT|IMPS)[\/ -]*/i, "");
@@ -615,6 +619,9 @@ export default async function ZohoHubPage(props: {
             already entered manually is recognised by its order number and left alone.
           </p>
 
+          <datalist id="income-ledgers">
+            {incomeChoices.map((n) => <option key={n} value={n} />)}
+          </datalist>
           {drafts.length === 0 && needsInfo.length === 0 && failed.length === 0 && (
             <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing waiting — every sale is posted or matched. 🔄 Scan picks up new ones.</p></div>
           )}
@@ -667,7 +674,7 @@ export default async function ZohoHubPage(props: {
                 <EntryLines
                   entry={saleEntry({
                     who: String(r.payload.customer || "the student"),
-                    account: r.payload.extension ? "Sales-Validity" : "Sales-Classes",
+                    account: String(r.payload.salesAccount || (r.payload.extension ? "Sales-Validity" : "Sales-Classes")),
                     gstTreatment: "charged", gstRate: 18,
                     intraState: r.payload.stateCode === "DL",
                     amount: Number(r.payload.amountInr) || 0,
@@ -686,11 +693,10 @@ export default async function ZohoHubPage(props: {
                     </select>
                   </div>
                   <div>
-                    <label style={{ fontSize: ".72rem" }}>Income ledger</label>
-                    <select name="account_kind" defaultValue={r.payload.extension ? "validity" : "classes"} style={{ marginBottom: 0 }}>
-                      <option value="classes">Sales-Classes</option>
-                      <option value="validity">Sales-Validity (extension)</option>
-                    </select>
+                    <label style={{ fontSize: ".72rem" }}>Income ledger — pick one or type any</label>
+                    <input name="sales_account" list="income-ledgers"
+                           defaultValue={String(r.payload.salesAccount || (r.payload.extension ? "Sales-Validity" : "Sales-Classes"))}
+                           style={{ marginBottom: 0, minWidth: 220 }} />
                   </div>
                   <SubmitButton className="btn small secondary" savedLabel="✓ Reworked">💾 Save &amp; rework the entry</SubmitButton>
                   <span className="muted" style={{ fontSize: ".74rem" }}>

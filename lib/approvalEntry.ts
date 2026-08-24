@@ -117,7 +117,7 @@ export async function entryForApproval(a: {
       // Zoho will, so the preview totals the receipt to the paisa.
       return saleEntry({
         who: s(pl.customer) || "the student",
-        account: pl.extension ? "Sales-Validity" : "Sales-Classes",
+        account: s(pl.salesAccount) || (pl.extension ? "Sales-Validity" : "Sales-Classes"),
         gstTreatment: "charged",
         gstRate: 18,
         intraState: s(pl.stateCode) === "DL",

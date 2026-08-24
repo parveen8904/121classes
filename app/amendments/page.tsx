@@ -8,7 +8,7 @@ import AmendmentsView, { type AmendItem } from "./AmendmentsView";
 export const dynamic = "force-dynamic";
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
-  alternates: { canonical: "/amendments" }, title: "Amendments & Updates — CA Parveen Sharma" };
+  alternates: { canonical: "/amendments" }, title: "Amendments & Updates" };
 
 type Row = {
   id: string;

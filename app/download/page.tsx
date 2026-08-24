@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
   alternates: { canonical: "/download" },
-  title: "Download the app — CA Parveen Sharma",
+  title: "Download the app",
   description: "Download the CA Parveen Sharma desktop app for Mac & Windows to watch classes offline, securely.",
 };
 

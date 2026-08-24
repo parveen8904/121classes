@@ -7,7 +7,7 @@ import OrderList, { OrderSearch, orderMatches, type SupporterOrder } from "./Ord
 import PenaltyPay from "./PenaltyPay";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Supporter — CA Parveen Sharma" };
+export const metadata = { title: "Supporter" };
 
 // The supporter's own room.
 //

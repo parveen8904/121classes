@@ -46,7 +46,7 @@ async function getItem(slug: string): Promise<Item | null> {
 export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await props.params;
   const it = await getItem(slug);
-  if (!it) return { title: "Free download — CA Parveen Sharma" };
+  if (!it) return { title: "Free download" };
   const label = KIND_LABEL[it.kind] ?? "Study material";
   const title = `${it.title} — free PDF download`;
   const description =

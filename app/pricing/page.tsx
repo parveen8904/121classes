@@ -13,7 +13,7 @@ export const revalidate = 300;
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
   alternates: { canonical: "/pricing" },
-  title: "Plans & Pricing — CA Parveen Sharma",
+  title: "Plans & Pricing",
   description: "Transparent pricing for CA Final and CA Intermediate — Silver and Gold plans by duration, and live batches. All prices include GST.",
 };
 

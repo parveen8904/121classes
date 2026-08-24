@@ -1,7 +1,7 @@
 
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
-  alternates: { canonical: "/terms" }, title: "Terms of Service — CA Parveen Sharma" };
+  alternates: { canonical: "/terms" }, title: "Terms of Service" };
 
 export default function Terms() {
   return (

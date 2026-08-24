@@ -7,7 +7,7 @@ export const metadata = {
   // A personal CV builder.
   robots: { index: false, follow: true },
   // Its own address, so it is not read as a copy of the home page.
-  alternates: { canonical: "/career/cv" }, title: "CV Builder — CA Parveen Sharma" };
+  alternates: { canonical: "/career/cv" }, title: "CV Builder" };
 
 export default async function CvPage() {
   const supabase = createClient();

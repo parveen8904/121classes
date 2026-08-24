@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = {
-  title: "Test series — CA Parveen Sharma",
+  title: "Test series",
   description:
     "Full-syllabus mock tests under exam conditions, with your answer book checked and returned — for CA Final Financial Reporting and CA Inter Advanced Accounting.",
   // Its own address, so it is not read as a copy of the home page.

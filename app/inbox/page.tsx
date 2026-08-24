@@ -7,7 +7,7 @@ import { getSubjModelAnswers } from "@/lib/answers";
 import InboxView, { type Msg } from "./InboxView";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Inbox — CA Parveen Sharma" };
+export const metadata = { title: "Inbox" };
 
 export default async function StudentInbox() {
   const supabase = createClient();

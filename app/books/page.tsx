@@ -5,7 +5,7 @@ import { lightImg } from "@/lib/img";
 import { AddToCartButton, CartBar } from "./cartClient";
 
 export const metadata = {
-  title: "Books — CA Parveen Sharma",
+  title: "Books",
   description:
     "Printed books by CA Parveen Sharma for CA Final Financial Reporting and CA Intermediate Advanced Accounting, posted to your address.",
   // Its own address, so it is not read as a copy of the home page.

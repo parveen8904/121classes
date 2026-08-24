@@ -6,7 +6,7 @@ export const revalidate = 300;
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
   alternates: { canonical: "/results" },
-  title: "Results — CA Parveen Sharma",
+  title: "Results",
   description: "Rank-holders and successes mentored by CA Parveen Sharma & team — CA Final and CA Intermediate.",
 };
 

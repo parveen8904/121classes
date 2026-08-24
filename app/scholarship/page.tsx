@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
   alternates: { canonical: "/scholarship" },
-  title: "Scholarships & fee discounts — CA Parveen Sharma",
+  title: "Scholarships & fee discounts",
   description:
     "Merit discount of 15% for students scoring 55% or more in the last 12 months, and a 10% need-based discount for students from a financially weaker background. How to apply.",
 };

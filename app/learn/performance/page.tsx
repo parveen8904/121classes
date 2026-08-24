@@ -7,7 +7,7 @@ import Help from "@/app/components/Help";
 import { viaProxy } from "@/lib/fileProxy";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "My Performance — CA Parveen Sharma" };
+export const metadata = { title: "My Performance" };
 
 // HOW MANY OTHERS SAT IT IS NEVER SHOWN. ANYWHERE.
 //

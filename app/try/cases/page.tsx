@@ -6,7 +6,7 @@ import TryCasePlayer from "./TryCasePlayer";
 export const dynamic = "force-dynamic";
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
-  alternates: { canonical: "/try/cases" }, title: "Try a free CA case scenario — CA Parveen Sharma" };
+  alternates: { canonical: "/try/cases" }, title: "Try a free CA case scenario" };
 
 // The reward page of the verified-lead funnel: one REAL case scenario with its
 // MCQs, playable without an account — plus any free sample PDFs the admin has

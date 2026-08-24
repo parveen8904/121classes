@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import MfaChallenge from "./MfaChallenge";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Two-factor check — CA Parveen Sharma" };
+export const metadata = { title: "Two-factor check" };
 
 export default async function MfaPage(props: { searchParams: Promise<{ next?: string }> }) {
   const searchParams = await props.searchParams;

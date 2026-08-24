@@ -11,7 +11,7 @@ export const revalidate = 300;
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
   alternates: { canonical: "/courses" },
-  title: "Courses — CA Parveen Sharma",
+  title: "Courses",
   description: "Advanced Accounting & Financial Reporting — fully guided: classes, day-by-day planner, AI doubt-solving on WhatsApp/Telegram, tests with performance reports, revisions, notes and amendments updated to your exam.",
 };
 

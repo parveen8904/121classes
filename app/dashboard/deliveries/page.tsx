@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { deliveriesFor } from "@/lib/deliveries";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Your books — CA Parveen Sharma" };
+export const metadata = { title: "Your books" };
 
 // WHERE ARE MY BOOKS.
 //

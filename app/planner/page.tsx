@@ -18,7 +18,7 @@ export const metadata = {
   // A student's own plan. Google had this URL indexed with no description because it redirects to a page it was forbidden to read.
   robots: { index: false, follow: true },
   // Its own address, so it is not read as a copy of the home page.
-  alternates: { canonical: "/planner" }, title: "Study planner — CA Parveen Sharma" };
+  alternates: { canonical: "/planner" }, title: "Study planner" };
 
 import { formatDate, todayIST } from "@/lib/dates";
 const todayISO = () => todayIST();

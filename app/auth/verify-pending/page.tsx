@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import VerifyPending from "./VerifyPending";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Verify your email — CA Parveen Sharma" };
+export const metadata = { title: "Verify your email" };
 
 export default async function VerifyPendingPage() {
   const supabase = createClient();

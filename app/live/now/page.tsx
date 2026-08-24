@@ -6,7 +6,7 @@ import { getLiveState } from "@/lib/liveStream";
 export const dynamic = "force-dynamic";
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
-  alternates: { canonical: "/live/now" }, title: "Live class — CA Parveen Sharma" };
+  alternates: { canonical: "/live/now" }, title: "Live class" };
 
 // The one address a student ever needs for live classes: if Sir is live, the
 // player is here; if not, it says so. Login required — the page is inside the

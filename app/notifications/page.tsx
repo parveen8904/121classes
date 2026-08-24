@@ -9,7 +9,7 @@ export const metadata = {
   // One person's notifications.
   robots: { index: false, follow: true },
   // Its own address, so it is not read as a copy of the home page.
-  alternates: { canonical: "/notifications" }, title: "Notifications — CA Parveen Sharma" };
+  alternates: { canonical: "/notifications" }, title: "Notifications" };
 
 type Row = {
   id: string;

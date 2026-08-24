@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import ZoomEmbed from "./ZoomEmbed";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Live class — CA Parveen Sharma" };
+export const metadata = { title: "Live class" };
 
 // White-label live class: students watch inside caparveensharma.com. They never
 // see (or can copy) a zoom.us link — joining happens via a server-issued

@@ -8,7 +8,7 @@ import GiftForm from "./GiftForm";
 export const dynamic = "force-dynamic";
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
-  alternates: { canonical: "/gift" }, title: "Sponsor a Student — CA Parveen Sharma" };
+  alternates: { canonical: "/gift" }, title: "Sponsor a Student" };
 
 export default async function GiftPage() {
   const supabase = createClient();

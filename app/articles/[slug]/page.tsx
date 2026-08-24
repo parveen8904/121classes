@@ -32,7 +32,7 @@ function redirectTarget(a: { is_published?: boolean; redirect_to?: string | null
 export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const params = await props.params;
   const a = await getArticle(params.slug);
-  if (!a || !a.is_published) return { title: "Article — CA Parveen Sharma" };
+  if (!a || !a.is_published) return { title: "Article" };
   return {
     title: `${a.title} — CA Parveen Sharma`,
     description: (a.description as string) || undefined,

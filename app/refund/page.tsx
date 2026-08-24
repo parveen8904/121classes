@@ -1,7 +1,7 @@
 
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
-  alternates: { canonical: "/refund" }, title: "Refund Policy — CA Parveen Sharma" };
+  alternates: { canonical: "/refund" }, title: "Refund Policy" };
 
 export default function Refund() {
   return (

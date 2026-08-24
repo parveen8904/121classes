@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
   alternates: { canonical: "/ask" },
-  title: "Ask a doubt — CA Parveen Sharma",
+  title: "Ask a doubt",
   description:
     "Stuck on a sum at midnight? Ask on WhatsApp, Telegram or email and get a worked answer from CA Parveen Sharma's own material — usually in seconds.",
 };

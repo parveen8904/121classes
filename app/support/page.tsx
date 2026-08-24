@@ -7,7 +7,7 @@ import { createSupportTicket } from "./actions";
 export const dynamic = "force-dynamic";
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
-  alternates: { canonical: "/support" }, title: "Help & support — CA Parveen Sharma" };
+  alternates: { canonical: "/support" }, title: "Help & support" };
 
 const CATEGORY_LABEL: Record<string, string> = {
   payment: "Payment / subscription", access: "Can't access my classes",

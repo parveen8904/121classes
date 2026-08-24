@@ -7,7 +7,7 @@ import { claimCopy, giveMoreTime, rebuildCopyForAttempt } from "./actions";
 import SubmitButton from "@/app/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Examiner desk — CA Parveen Sharma" };
+export const metadata = { title: "Examiner desk" };
 
 // The examiner desk: every submitted descriptive copy, filterable by subject /
 // test / topic. Claim a copy to check it; a copy being checked by another

@@ -5,7 +5,7 @@ import MockInterview from "./MockInterview";
 export const dynamic = "force-dynamic";
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
-  alternates: { canonical: "/career/interview" }, title: "AI Mock Interview — CA Parveen Sharma" };
+  alternates: { canonical: "/career/interview" }, title: "AI Mock Interview" };
 
 export default async function InterviewPage() {
   const supabase = createClient();

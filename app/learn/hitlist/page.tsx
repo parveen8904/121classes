@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { viaProxy } from "@/lib/fileProxy";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "The hitlist — CA Parveen Sharma" };
+export const metadata = { title: "The hitlist" };
 
 // THE HITLIST — the topics worth the marks, with the marks they carry.
 //

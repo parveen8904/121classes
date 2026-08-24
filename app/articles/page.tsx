@@ -4,7 +4,7 @@ import { tryServiceClient } from "@/lib/supabase/service";
 // Public SEO surface — cached and regenerated hourly.
 export const revalidate = 3600;
 export const metadata = {
-  title: "Free CA Study Articles & Notes — CA Parveen Sharma",
+  title: "Free CA Study Articles & Notes",
   description: "Free articles for CA students — Ind AS & AS explained, Advanced Accounting chapters, study plans, revision strategy and exam tips by CA Parveen Sharma.",
   alternates: { canonical: "/articles" },
 };

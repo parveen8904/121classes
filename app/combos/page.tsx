@@ -4,7 +4,7 @@ import { razorpayConfigured } from "@/lib/razorpay";
 import ComboCheckout from "./ComboCheckout";
 
 export const metadata = {
-  title: "Combos — CA Parveen Sharma",
+  title: "Combos",
   description:
     "Course combinations at a single price — Financial Reporting and Advanced Accounting together, with everything each course carries.",
   // Its own address, so it is not read as a copy of the home page.

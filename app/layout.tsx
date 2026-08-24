@@ -15,6 +15,7 @@ import PageHelp from "./components/PageHelp";
 import RatePrompt from "./components/RatePrompt";
 import PushRegister from "./components/PushRegister";
 import { sameAsFrom, orgNode, personNode, websiteNode } from "@/lib/entity";
+import ReviewPrompt from "@/app/components/ReviewPrompt";
 
 // IMPORTANT: no force-dynamic and no cookie reads here. This layout wraps EVERY
 // page — anything dynamic in it disables caching for the whole site (which was
@@ -33,7 +34,7 @@ const getSupportLinks = unstable_cache(
       // founder_photo joins this list because a Knowledge Panel is built around
       // a picture of the person as much as around the facts — Google will not
       // show one it has no image for.
-      .in("key", ["support_whatsapp", "support_phone", "support_telegram", "whatsapp_faculty", "support_youtube", "support_instagram", "support_twitter", "support_facebook", "google_site_verification", "founder_photo"]);
+      .in("key", ["support_whatsapp", "support_phone", "support_telegram", "whatsapp_faculty", "support_youtube", "support_instagram", "support_twitter", "support_facebook", "google_site_verification", "founder_photo", "google_review_url"]);
     return Object.fromEntries((data ?? []).map((r) => [r.key, r.value as string | null]));
   },
   ["layout-support-links"],
@@ -123,6 +124,11 @@ export const viewport: Viewport = {
 // fallback for when storage is blocked or cleared. Without the cookie a full
 // page load fell back to the system setting, so following a plain link into a
 // page loaded it dark while the rest of the session stayed light.
+// His Business Profile's own review link, read off the profile on 24 Aug 2026.
+// It opens Google's review box directly rather than the listing. Overridable in
+// site_settings.google_review_url if the listing is ever rebuilt.
+const GOOGLE_REVIEW_URL = "https://g.page/r/CaBc4Bqt83Y7EBM/review";
+
 const themeScript = `(function(){var t;try{t=localStorage.getItem('theme');}catch(e){}if(!t){var m=document.cookie.match(/(?:^|; )theme=(light|dark)/);if(m)t=m[1];}if(!t){try{t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}catch(e){t='dark';}}document.documentElement.setAttribute('data-theme',t);})();`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -169,6 +175,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <PageHelp />
         {/* Play-Store rating ask — Android app only, invested users, happy pages */}
         <RatePrompt />
+        {/* The Google listing carries 133 reviews at 3.9, most of them years old
+            and from the offline centre. This asks a student who has actually
+            been taught — see the reasoning in the component. */}
+        <ReviewPrompt url={m.get("google_review_url") || GOOGLE_REVIEW_URL} />
         <PushRegister />
       </body>
     </html>

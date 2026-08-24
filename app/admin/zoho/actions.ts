@@ -79,6 +79,13 @@ export async function editSalePayloadAction(formData: FormData) {
   // Only before it is sent up. After approval the entry he released is the
   // entry that posts; editing underneath it would make his approval a lie.
   if (!row || !["draft", "needs_info", "failed"].includes(String(row.status))) return;
+  // THE STATUS ALONE DOES NOT SAY "SENT". A sale keeps status=draft while its
+  // approval request sits at his gate — seen live on #10115, editable in the
+  // queue at the same moment it was waiting on him. What he approves must be
+  // what posts, so a pending request locks the payload too.
+  const { data: pending } = await svc.from("zoho_approvals")
+    .select("id").eq("kind", "sale").eq("ref_id", id).eq("status", "pending").maybeSingle();
+  if (pending) return;
   const { zohoStateCode } = await import("@/lib/indiaStates");
   const payload = {
     ...(row.payload as Record<string, unknown> ?? {}),

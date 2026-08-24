@@ -35,13 +35,22 @@ export const WEBSITE_ID = `${SITE}/#website`;
 export const personRef = { "@id": PERSON_ID } as const;
 export const orgRef = { "@id": ORG_ID } as const;
 
-/** The office students can actually come to. Must match the Google Business
- *  Profile character for character — a differing address is how Google decides
- *  two mentions are two different businesses. The REGISTERED address (Nirman
- *  Vihar) belongs on tax invoices only and must never appear here. */
+/**
+ * The office students can come to, WRITTEN THE WAY THE VERIFIED LISTING WRITES IT.
+ *
+ * Checked against Google Business Profile on 24 Aug 2026, where the listing is
+ * verified: it reads "30, Road No. W6, DLF Phase 3, sector 24, Gurugram,
+ * Haryana 122010". This file said "W6/30, DLF Phase 3, Sector 24" — the same
+ * doorway, written differently, which is exactly the difference that stops
+ * Google concluding two mentions are one business. The verified listing wins,
+ * because that is the one Google itself has confirmed on the ground.
+ *
+ * The REGISTERED address (Nirman Vihar) belongs on tax invoices only and must
+ * never appear here.
+ */
 export const OFFICE = {
   "@type": "PostalAddress",
-  streetAddress: "W6/30, DLF Phase 3, Sector 24",
+  streetAddress: "30, Road No. W6, DLF Phase 3, sector 24",
   addressLocality: "Gurugram",
   addressRegion: "Haryana",
   postalCode: "122010",
@@ -123,9 +132,20 @@ export function sameAsFrom(settings: Map<string, string | null>): string[] {
     .map((k) => settings.get(k))
     .filter((u): u is string => Boolean(u && u.startsWith("http")));
 
-  // His own long-standing site and company — his before this portal existed,
-  // and the strongest link there is between the two names.
-  return [...new Set([...fromSettings, "https://aldine.edu.in"])];
+  // PROFILES GOOGLE ALREADY KNOWS ARE HIM.
+  //
+  // Found by searching his own name on 24 Aug 2026 and checking each result
+  // against the listing — not guessed. LinkedIn was the significant miss: 61,000
+  // followers, his name, his subjects, and no link from this site at all, so
+  // Google had nothing joining the two.
+  return [...new Set([
+    ...fromSettings,
+    "https://in.linkedin.com/in/caparveensharma",
+    "https://play.google.com/store/apps/details?id=in.caclasses.app",
+    // His own long-standing site and company — his before this portal existed,
+    // and the strongest link there is between the two names.
+    "https://aldine.edu.in",
+  ])];
 }
 
 /** The man. One definition, used by the layout and by the faculty page. */
@@ -172,7 +192,12 @@ export function orgNode(p: { sameAs: string[]; logo?: string }) {
     "@type": "EducationalOrganization",
     "@id": ORG_ID,
     name: "CA Parveen Sharma — Personalised Learning",
-    alternateName: ["CA Parveen Sharma Classes", "Aldine CA"],
+    // "CA Parveen Sharma Studio" is the name on the VERIFIED Google Business
+    // Profile, and it is not the name this site trades under. Rather than
+    // silently change either, both are declared: alternateName is how you tell
+    // Google that two names are one business. Whether the listing should be
+    // renamed to match the site is his call, not a thing to fix quietly.
+    alternateName: ["CA Parveen Sharma Studio", "CA Parveen Sharma Classes", "Aldine CA"],
     url: SITE,
     logo: p.logo ?? `${SITE}/icon-512.png`,
     image: p.logo ?? `${SITE}/icon-512.png`,

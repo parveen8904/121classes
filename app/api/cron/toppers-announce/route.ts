@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
-import { istDay, toppersMessage, type Track } from "@/lib/dailyToppers";
+import { istDay, toppersMessage, toppersPushBody, type Track } from "@/lib/dailyToppers";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
       // The cron only ever announces the day that just ended, so this reads
       // correctly; the hand-send on the leaderboards page dates itself.
       title: "🏆 Today's toppers",
-      body: rows.map((r) => r.student_name).join(" · "),
+      body: toppersPushBody(rows),
       link: "/learn/performance",
     })).catch(() => null),
   ]);

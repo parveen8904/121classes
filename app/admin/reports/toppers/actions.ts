@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireArea } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
-import { istDay, recordToppers, toppersMessage } from "@/lib/dailyToppers";
+import { istDay, recordToppers, toppersMessage, toppersPushBody } from "@/lib/dailyToppers";
 
 // SEND THE DAY'S TOPPERS NOW, BY HAND.
 //
@@ -66,7 +66,7 @@ export async function sendToppersNow(formData: FormData) {
     import("@/lib/discord").then((m) => m.postToDiscord(text, link)).catch(() => false),
     import("@/lib/push").then((m) => m.pushToEveryone({
       title: day === istDay() ? "🏆 Today's toppers" : `🏆 Toppers — ${new Date(`${day}T12:00:00+05:30`).toLocaleDateString("en-IN", { day: "numeric", month: "long", timeZone: "Asia/Kolkata" })}`,
-      body: rows.map((r) => r.student_name).join(" · "),
+      body: toppersPushBody(rows),
       link: "/learn/performance",
     })).catch(() => null),
   ]);

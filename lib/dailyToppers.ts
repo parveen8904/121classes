@@ -206,6 +206,29 @@ export async function recordToppers(day: string): Promise<TopperRow[]> {
  * The message, in his words: "just tell today's toppers in inter and final".
  * No marks, no percentage, no paper name, no contact details.
  */
+/**
+ * THE PUSH BODY — the same facts, in the room a notification has.
+ *
+ * This was built separately at both send sites as just the names joined by a
+ * dot, so the phone showed "Anjali · KRISHNA KUMAR" with no way to tell which
+ * paper either of them topped. The long-form message had the labels all along;
+ * the notification quietly dropped them because it was written twice, in two
+ * files, instead of once here.
+ *
+ * Short labels because a lock screen gives about two lines: "CA Inter" and
+ * "CA Final" are what a student of this school calls them.
+ */
+export function toppersPushBody(rows: { track: Track; student_name: string }[]): string {
+  const short: Record<Track, string> = { inter: "CA Inter", final: "CA Final" };
+  return (["inter", "final"] as Track[])
+    .map((t) => {
+      const r = rows.find((x) => x.track === t);
+      return r ? `${short[t]}: ${r.student_name}` : null;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function toppersMessage(rows: { track: Track; student_name: string }[], day: string): string {
   const on = new Date(`${day}T12:00:00+05:30`).toLocaleDateString("en-IN", {
     day: "numeric", month: "long", timeZone: "Asia/Kolkata",

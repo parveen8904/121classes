@@ -136,6 +136,18 @@ export async function buildAnnotatedPdf(
   studentPdfUrl: string,
   grade: DescriptiveGrade,
   official?: { pdfUrl?: string | null; text?: string | null; scheme?: string | null },
+  /** WHOSE CHECK THE MARGIN CLAIMS.
+   *
+   * His ruling: the annotation says "Checked by CA Piyush" or "Checked by CA
+   * Parveen Sharma", and nothing else. But this PDF is drawn at GRADING time,
+   * before an examiner has claimed the copy, so at that moment there is no
+   * honest name to put there — and it used to print his regardless.
+   *
+   * So the page is drawn WITHOUT the line when nobody has checked it yet, and
+   * redrawn WITH the name the moment an examiner releases it. The student only
+   * ever receives the released copy, so the only version they see carries the
+   * name of the person who actually checked it. */
+  examinerName?: string | null,
 ): Promise<Uint8Array | null> {
   try {
     const res = await fetch(studentPdfUrl, { cache: "no-store" });
@@ -143,6 +155,12 @@ export async function buildAnnotatedPdf(
       console.error("[checked_copy] cannot read the student's paper", res.status);
       return null;
     }
+    // Built once, drawn on every page. Absent until an examiner has released
+    // the copy — see the note on examinerName above.
+    const { examinerTitle } = await import("@/lib/examinerName");
+    const title = examinerTitle(examinerName);
+    const checkedBy = title ? `Checked by ${title}` : "";
+
     const srcBytes = new Uint8Array(await res.arrayBuffer());
     const out = await PDFDocument.create();
     const font = await out.embedFont(StandardFonts.Helvetica);
@@ -185,15 +203,10 @@ export async function buildAnnotatedPdf(
       const page = out.addPage([ow + MARGIN, oh]);
       page.drawPage(ep, { x: 0, y: 0, width: ow, height: oh });
       page.drawLine({ start: { x: ow, y: 0 }, end: { x: ow, y: oh }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
-      // WHAT THIS MARGIN CAN HONESTLY CLAIM.
-      //
-      // It said "Checked by CA Parveen Sharma" on every annotated copy — but
-      // this PDF is drawn at GRADING time, before any examiner has even claimed
-      // it, and the marks on it are the AI's. Now that examiners are named, it
-      // was also liable to put his name on a copy CA Piyush checked. The
-      // examiner's name belongs on the release, where it is true: the results
-      // page and the email both carry it. See lib/examinerName.ts.
-      page.drawText(winAnsi("AI-checked copy - CA Parveen Sharma Classes"), { x: ow + 14 * S, y: oh - 22 * S, size: 9 * S, font: fontB, color: rgb(0.05, 0.58, 0.53) });
+      // Only ever the examiner's own name, and only once there is one.
+      if (checkedBy) {
+        page.drawText(winAnsi(checkedBy), { x: ow + 14 * S, y: oh - 22 * S, size: 9 * S, font: fontB, color: rgb(0.05, 0.58, 0.53) });
+      }
       const list = (byPage.get(i + 1) ?? []).slice().sort((a, b) => a.y - b.y);
       for (const a of list) {
         const yTop = oh - Math.min(0.97, Math.max(0.03, a.y)) * oh;

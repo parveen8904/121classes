@@ -101,9 +101,44 @@ export async function submitCheck(formData: FormData) {
     )}`);
   }
 
+  // RE-DRAW THE COPY WITH THE NAME OF WHOEVER ACTUALLY CHECKED IT.
+  //
+  // The annotated PDF is built at grading time, before anyone has claimed the
+  // copy, so its margin is drawn blank. This is the moment the name becomes
+  // true, so the page is redrawn with it — "Checked by CA Piyush" — and the
+  // student's copy is the redrawn one.
+  //
+  // An examiner who uploaded their OWN marked copy is left alone: their file is
+  // their own work and is not ours to restamp. And a redraw that fails must not
+  // block the release — the marks matter more than the margin, so the original
+  // stands and the failure is logged.
+  let annotatedUrl = row.annotated_url as string | null;
+  const ownCopy = String(row.source ?? "") === "examiner_upload" || String(annotatedUrl ?? "").includes("/examiner/");
+  if (!ownCopy) {
+    try {
+      const { data: full } = await svc.from("descriptive_attempts").select("file_url, report").eq("id", id).maybeSingle();
+      const { resolveFileUrl } = await import("@/lib/storage");
+      const studentUrl = full?.file_url ? await resolveFileUrl(String(full.file_url)) : null;
+      if (studentUrl && full?.report) {
+        const { buildAnnotatedPdf } = await import("@/app/learn/section/[sectionId]/paperActions");
+        const bytes = await buildAnnotatedPdf(studentUrl, full.report as never, undefined, ex.name);
+        if (bytes) {
+          const path = `descriptive/checked/${id}-checked.pdf`;
+          const up = await svc.storage.from("secure").upload(path, Buffer.from(bytes), {
+            contentType: "application/pdf", upsert: true,
+          });
+          if (!up.error) annotatedUrl = path;
+        }
+      }
+    } catch (e) {
+      console.error("[submitCheck] could not restamp the checked copy", e instanceof Error ? e.message : e);
+    }
+  }
+
   await svc
     .from("descriptive_attempts")
     .update({
+      annotated_url: annotatedUrl,
       review_status: "checked",
       examiner_id: ex.id,
       examiner_name: ex.name,
@@ -366,6 +401,9 @@ export async function rebuildCopyForAttempt(formData: FormData) {
     studentUrl,
     report as never,
     { pdfUrl: officialPdf, text: officialText },
+    // Only once it has been released — a rebuild before checking must not
+    // claim a check that has not happened.
+    r!.review_status === "checked" ? (r!.examiner_name as string | null) : null,
   );
   if (!bytes) redirect("/examiner?err=" + encodeURIComponent("The copy could not be drawn — the answer book may be unreadable or protected."));
 

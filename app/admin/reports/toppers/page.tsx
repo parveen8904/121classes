@@ -133,6 +133,12 @@ export default async function ToppersPage(props: {
           announced at all. Counted on the day a copy was <strong>released</strong>, not written.
         </p>
         {sp.sent && <p className="notice ok" style={{ fontSize: ".82rem" }}>{sp.sent}</p>}
+        {sp.day === istDay() && (
+          <p className="muted" style={{ fontSize: ".78rem", margin: "0 0 8px", color: "#b45309" }}>
+            ⏳ Today is still running — this is who leads so far, not the topper. It is settled at 11:59 PM and
+            announced at 3 AM, so it cannot be sent by hand yet.
+          </p>
+        )}
         {sp.preview && (
           <pre style={{ whiteSpace: "pre-wrap", background: "var(--bg-soft)", padding: "12px 14px", borderRadius: 10, fontSize: ".85rem", margin: "0 0 10px" }}>
             {sp.preview}

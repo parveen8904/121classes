@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import { sendTelegramMessage, sendWhatsApp, sendEmail, emailShell } from "@/lib/notify";
 import { tgSendToGroup } from "@/lib/telegramGroup";
+import { telegramChatId } from "@/lib/notify";
 import { discordSendToChannel } from "@/lib/discord";
 import { selectAll } from "@/lib/pageAll";
 
@@ -60,7 +61,7 @@ export async function GET(req: NextRequest) {
 
   // Targets are shared across posts — fetch once.
   const [channel, { data: subjects }] = await Promise.all([
-    getSecret("TELEGRAM_CHANNEL_ID"),
+    getSecret("TELEGRAM_CHANNEL_ID").then((v) => telegramChatId(v)),
     svc.from("subjects").select("telegram_group_chat_id, discord_channel_id"),
   ]);
   const tgGroups = [...new Set((subjects ?? []).map((s) => s.telegram_group_chat_id as string | null).filter(Boolean))] as string[];

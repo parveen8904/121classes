@@ -46,6 +46,19 @@ export async function sendToppersNow(formData: FormData) {
     )}`);
   }
 
+  // A DAY STILL RUNNING HAS NO TOPPER YET.
+  //
+  // His point, and it is right: at any hour before midnight another copy may
+  // still be released and beat whoever leads now. The nightly job decides at
+  // 11:59 PM for exactly that reason, so sending today's by hand would
+  // announce a leader, not a topper — and the stamp would then stop 3 AM
+  // correcting it. Yesterday and earlier are settled and send freely.
+  if (day >= istDay()) {
+    redirect(`/admin/reports/toppers?day=${day}&sent=${encodeURIComponent(
+      `${day} is not over yet — another copy released today could still change who tops. It is decided at 11:59 PM and announced at 3 AM. Use "Show me the message" to see how it stands now.`,
+    )}`);
+  }
+
   const link = "https://caparveensharma.com/learn/performance";
   const [channel, groups, discord, push] = await Promise.all([
     import("@/lib/notify").then((m) => m.sendTelegramChannel(text, link)).catch(() => false),

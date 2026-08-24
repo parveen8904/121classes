@@ -17,10 +17,34 @@ export async function telegramConfigured(): Promise<boolean> {
 
 // Post one message to the Telegram channel — reaches EVERY member in a single
 // API call (scale-safe). The bot must be an admin of the channel.
+/**
+ * WHAT TELEGRAM WILL ACTUALLY ACCEPT AS A CHAT.
+ *
+ * The channel had been stored as "https://t.me/aldineho" — the address you copy
+ * out of the browser, and the obvious thing to paste into a box labelled
+ * "Telegram channel". The API takes "@aldineho" or a numeric id and rejects a
+ * URL, so every channel broadcast had been failing: the send returned false and
+ * nothing said so. Found when the toppers announcement reported the channel ✗
+ * while both groups went through.
+ *
+ * Rather than only correcting the stored value, whatever he pastes is now
+ * understood: a t.me link, an @handle, a bare handle, or a numeric id.
+ */
+export function telegramChatId(raw: string | null | undefined): string {
+  const v = String(raw ?? "").trim();
+  if (!v) return "";
+  if (/^-?\d+$/.test(v)) return v;                        // numeric chat id
+  const fromUrl = v.match(/^https?:\/\/t\.me\/(?:s\/)?([A-Za-z0-9_]+)/i);
+  if (fromUrl) return `@${fromUrl[1]}`;
+  if (v.startsWith("@")) return v;
+  if (/^[A-Za-z0-9_]{4,}$/.test(v)) return `@${v}`;        // bare handle
+  return v;                                                 // leave it; the API will say
+}
+
 export async function sendTelegramChannel(text: string, linkUrl?: string): Promise<boolean> {
   const token = await getSecret("TELEGRAM_BOT_TOKEN");
   if (!token) return false;
-  const chat = (await getSecret("TELEGRAM_CHANNEL_ID")) || "@caparveen";
+  const chat = telegramChatId(await getSecret("TELEGRAM_CHANNEL_ID")) || "@caparveen";
   const body = linkUrl ? `${text}\n\n${linkUrl}` : text;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -29,8 +53,13 @@ export async function sendTelegramChannel(text: string, linkUrl?: string): Promi
       body: JSON.stringify({ chat_id: chat, text: body }),
       cache: "no-store",
     });
+    // Loud on refusal. A channel that quietly rejects every post looks exactly
+    // like a channel nobody reads — which is how a URL sat in the chat-id field
+    // for weeks without anybody knowing the broadcasts were going nowhere.
+    if (!res.ok) console.error(`[telegram] channel ${chat} refused the post: ${res.status} ${(await res.text()).slice(0, 200)}`);
     return res.ok;
-  } catch {
+  } catch (e) {
+    console.error(`[telegram] channel post threw: ${e instanceof Error ? e.message : "unknown"}`);
     return false;
   }
 }

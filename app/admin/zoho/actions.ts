@@ -387,24 +387,12 @@ export async function raiseDocumentAction(formData: FormData) {
     redirect("/admin/zoho?scan=" + encodeURIComponent("That could not be saved — please try again.") + "#raise");
   }
 
-  if (isFounder) {
-    const { withFounderApproval } = await import("@/lib/zohoGuard");
-    const { postOutgoing } = await import("@/lib/zohoOutgoing");
-    let note: string;
-    try {
-      await withFounderApproval(`inline:${made.id}`, () => postOutgoing(String(made.id)));
-      const { data: after } = await svc.from("zoho_documents").select("status, zoho_number, error").eq("id", made.id).maybeSingle();
-      note = after?.status === "posted"
-        ? `Posted to Zoho${after.zoho_number ? ` as ${after.zoho_number}` : ""}.${after.error ? ` ${after.error}` : ""}`
-        : `Not posted — ${after?.error ?? "see the row"}`;
-    } catch (e) { note = `Not posted — ${e instanceof Error ? e.message : "unknown"}`; }
-    revalidatePath("/admin/zoho");
-    redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#raise`);
-  }
-
+  // Raised here, released at the gate — even by him. See decideBillAction.
   await requestApprovalFor("outgoing", "zoho_documents", String(made.id), undefined, me?.id ?? null);
   revalidatePath("/admin/zoho");
-  redirect("/admin/zoho?scan=" + encodeURIComponent("Sent to CA Parveen Sharma for approval.") + "#raise");
+  redirect("/admin/zoho?scan=" + encodeURIComponent(
+    isFounder ? "Raised and sent to your approval gate." : "Sent to CA Parveen Sharma for approval.",
+  ) + "#approvals");
 }
 
 export async function retryDocumentAction(formData: FormData) {
@@ -412,11 +400,8 @@ export async function retryDocumentAction(formData: FormData) {
   const me = await currentStaff();
   const id = str(formData.get("id"));
   if (!id) return;
-  if (me?.role === "admin") {
-    const { withFounderApproval } = await import("@/lib/zohoGuard");
-    const { postOutgoing } = await import("@/lib/zohoOutgoing");
-    try { await withFounderApproval(`inline:${id}`, () => postOutgoing(id)); } catch { /* the row keeps its reason */ }
-  } else {
+  {
+    // A retry is a fresh attempt to post, so it asks again like any other.
     await requestApprovalFor("outgoing", "zoho_documents", id, undefined, me?.id ?? null);
   }
   revalidatePath("/admin/zoho");
@@ -676,23 +661,7 @@ export async function approveBrokerageNoteAction(formData: FormData) {
     status: "approved", approved_by: me?.id ?? null, approved_at: new Date().toISOString(),
   }).eq("id", id);
 
-  if (me?.role === "admin") {
-    const { withFounderApproval } = await import("@/lib/zohoGuard");
-    const { postOutgoing } = await import("@/lib/zohoOutgoing");
-    let msg: string;
-    try {
-      await withFounderApproval(`inline:${doc.id}`, () => postOutgoing(String(doc.id)));
-      const { data: after } = await svc.from("zoho_documents").select("status, zoho_number, error").eq("id", doc.id).maybeSingle();
-      const posted = after?.status === "posted";
-      await svc.from("brokerage_notes").update({
-        status: posted ? "posted" : "failed", zoho_id: null, zoho_number: after?.zoho_number ?? null,
-        error: posted ? null : String(after?.error ?? "it would not post"),
-      }).eq("id", id);
-      msg = posted ? `Journalled from the note${after?.zoho_number ? ` — ${after.zoho_number}` : ""}.` : `Not journalled — ${after?.error ?? "see the note"}`;
-    } catch (e) { msg = `Not journalled — ${e instanceof Error ? e.message : "unknown"}`; }
-    revalidatePath("/admin/zoho");
-    redirect(`/admin/zoho?scan=${encodeURIComponent(msg)}#brokerage`);
-  }
+  // Journalled through the gate like everything else.
 
   await requestApprovalFor("outgoing", "zoho_documents", String(doc.id), undefined, me?.id ?? null);
   revalidatePath("/admin/zoho");
@@ -878,34 +847,12 @@ export async function decideBillAction(formData: FormData) {
     } catch { /* the entry still stands even if the rule could not be kept */ }
   }
 
-  if (isFounder) {
-    // His press is the approval. It goes.
-    const { withFounderApproval } = await import("@/lib/zohoGuard");
-    const { postProviderBill } = await import("@/lib/providerBills");
-    let note: string;
-    try {
-      await withFounderApproval(`inline:${id}`, () => postProviderBill(id));
-      const { data: after } = await svc.from("provider_bills").select("status, error").eq("id", id).maybeSingle();
-      if (after?.status === "posted") {
-        // Read it straight back out of Zoho and finish it there if it is still a
-        // draft. Proving a posting landed is part of posting it, not a chore to
-        // remember afterwards.
-        const { readbackPostedBills } = await import("@/lib/providerBills");
-        await withFounderApproval(`inline:${id}`, () => readbackPostedBills().then(() => undefined)).catch(() => {});
-        const { data: fin } = await svc.from("provider_bills").select("zoho_echo, error").eq("id", id).maybeSingle();
-        const st = (fin?.zoho_echo as { zoho_status?: string } | null)?.zoho_status;
-        note = st === "open" || st === "overdue" || st === "paid"
-          ? "Posted to Zoho and in the ledgers."
-          : `Posted to Zoho — ${fin?.error ?? "still to be opened there"}`;
-      } else {
-        note = `Not posted — ${after?.error ?? "see the row"}`;
-      }
-    } catch (e) {
-      note = `Not posted — ${e instanceof Error ? e.message : "unknown"}`;
-    }
-    revalidatePath("/admin/zoho");
-    redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);
-  }
+  // IT ALWAYS ASKS, IT NEVER POSTS — including when he presses it himself.
+  // His instruction, 25 Aug 2026: "it should not say approve and post to
+  // Zoho, it should say send for approval". The architecture already said so
+  // — the gate is "the only door, and it is yours alone" — and this was a
+  // second door that posted on the spot, which is how an entry reaches the
+  // books without him having sat and read it as an entry.
 
   await requestApprovalFor("provider_bill", "provider_bills", id, undefined, me?.id ?? null);
   revalidatePath("/admin/zoho");
@@ -1175,12 +1122,16 @@ export async function recordAdvanceAction(formData: FormData) {
   const svc = createServiceClient();
   const { data: row } = await svc.from("petty_advances").insert({
     person_id: personId, adv_date: advDate, amount, bank_account_name: bank,
-    status: "failed", created_by: staff?.id ?? null,
+    status: "pending", created_by: staff?.id ?? null,
   }).select("id").single();
   if (!row) return;
-  const { postAdvance } = await import("@/lib/pettyCash");
-  try { await postAdvance(row.id); } catch { /* row carries failed + error */ }
+  // THE FIFTH DOOR, AND THE QUIETEST. This posted the advance to Zoho on the
+  // spot and swallowed the failure in an empty catch, so a rejected posting
+  // looked exactly like nothing happening. It asks now, like everything else,
+  // and the row waits as `pending` rather than being born `failed`.
+  await requestApprovalFor("petty_advance", "petty_advances", String(row.id), undefined, staff?.id ?? null);
   revalidatePath("/admin/zoho");
+  redirect("/admin/zoho?scan=" + encodeURIComponent("Advance recorded and sent to the approval gate.") + "#approvals");
 }
 
 export async function approveBillAction(formData: FormData) {

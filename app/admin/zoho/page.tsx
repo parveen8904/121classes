@@ -1019,7 +1019,7 @@ export default async function ZohoHubPage(props: {
                   </select>
                 </div>
               </div>
-              <SubmitButton className="btn small" savedLabel="✓ Posted" style={{ marginTop: 8 }}>💸 Record &amp; post</SubmitButton>
+              <SubmitButton className="btn small" savedLabel="📤 Sent" style={{ marginTop: 8 }}>📤 Record &amp; send for approval</SubmitButton>
               {/* The fields above ARE the entry's editable fields — this line
                   says which ledger each one lands in. */}
               <p className="muted" style={{ fontSize: ".76rem", margin: "8px 0 0", lineHeight: 1.7 }}>
@@ -1819,7 +1819,7 @@ export default async function ZohoHubPage(props: {
 
                       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
                         <SubmitButton className="btn small" savedLabel="✓ Done">
-                          {isFounder ? "✅ Approve & post to Zoho" : "📤 Send for approval"}
+                          📤 Send for approval
                         </SubmitButton>
                         <label style={{ fontWeight: 400, fontSize: ".8rem" }}>
                           <input type="checkbox" name="as_rule" value="yes" defaultChecked style={{ width: "auto", marginRight: 6 }} />

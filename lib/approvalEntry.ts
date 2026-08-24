@@ -73,6 +73,15 @@ export async function entryForApproval(a: {
         gstRate: n(p.gst_rate) || 18,
         tds: tdsWorking(inr, mode as never, n(p.tds_rate), s(p.vendor_name) || s(b.institution)),
         tdsSection: s(p.tds_section) || null,
+        // The invoice's own tax, where somebody has keyed it. Absent on the
+        // older bills, and purchaseEntry says so on the entry rather than
+        // quietly falling back to arithmetic.
+        stated: {
+          taxable: b.taxable_value == null ? null : n(b.taxable_value),
+          cgst: b.cgst_amount == null ? null : n(b.cgst_amount),
+          sgst: b.sgst_amount == null ? null : n(b.sgst_amount),
+          igst: b.igst_amount == null ? null : n(b.igst_amount),
+        },
       });
     }
 

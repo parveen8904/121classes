@@ -33,25 +33,64 @@ export const receivableFor = (who: string) => `${who || "the customer"} (receiva
 /* ═══════════════════════════════════════════════════════════════════════════
    SOMETHING WE BOUGHT — a supplier's bill
    ═══════════════════════════════════════════════════════════════════════════ */
+/** Rounded to the nearest rupee — his ruling, 24 Aug 2026. */
+export const roundTds = (n: number) => Math.round(Number(n) || 0);
+
 export function purchaseEntry(p: {
   who: string;
   account: string;
   subAccount?: string | null;
   nature: Nature | string;
-  /** "rcm" | "itc" | "none" — as the desk classifies it. */
+  /** "rcm" | "domestic_itc" | "none" — as the desk classifies it. */
   gstTreatment: string;
   gstRate: number;
   /** The working already done: booked amount, the withholding, and what is paid. */
   tds: TdsWorking;
   tdsSection?: string | null;
+  /** THE TAX AS THE INVOICE PRINTS IT — never derived. See the note below. */
+  stated?: { taxable?: number | null; cgst?: number | null; sgst?: number | null; igst?: number | null } | null;
 }): Entry {
-  const base = r2(p.tds.bookedAmount);
   const gstRate = Number(p.gstRate) || 0;
-  const gst = p.gstTreatment === "none" ? 0 : r2((base * gstRate) / 100);
   const head = p.subAccount ? `${p.account} — ${p.subAccount}` : (p.account || "— no ledger chosen —");
   const caveats: string[] = [];
-
   const lines: EntryLine[] = [];
+
+  // "THEY CHARGED IT" IS SPELLED domestic_itc, AND THIS TESTED FOR "itc".
+  //
+  // The form has always saved domestic_itc; this compared against "itc", so the
+  // two never met. The input-credit line was therefore never added to a single
+  // domestic bill, and the whole tax-inclusive total was debited to the expense
+  // head: FIRST FLY EXPRESS 480/2026 booked ₹7,053 of courier expense when the
+  // expense was ₹5,977 and ₹1,075.86 was tax we can reclaim.
+  const claimsItc = p.gstTreatment === "domestic_itc" || p.gstTreatment === "itc";
+
+  // THE TAX IS READ, NOT CALCULATED.
+  //
+  // His ruling: "you cannot derive it on your own — you have to check it from
+  // the invoice." A supplier rounds each line, can bill more than one rate on
+  // one document, and can add cess or a discount, so gross ÷ 1.18 is a guess
+  // that will not reconcile. FIRST FLY is the proof: 5,977 + 537.93 + 537.93 is
+  // 7,052.86, fourteen paise below the 7,053 on the face of the bill.
+  //
+  // Where the stated figures are present they are used exactly. Where they are
+  // not — an older bill, or one nobody has keyed the tax into — the entry falls
+  // back to the old arithmetic AND SAYS SO, because a derived tax figure
+  // presented silently as fact is the thing being corrected here.
+  const st = p.stated ?? null;
+  const statedCgst = r2(Number(st?.cgst ?? 0));
+  const statedSgst = r2(Number(st?.sgst ?? 0));
+  const statedIgst = r2(Number(st?.igst ?? 0));
+  const statedTax = r2(statedCgst + statedSgst + statedIgst);
+  const statedTaxable = st?.taxable != null && Number(st.taxable) > 0 ? r2(Number(st.taxable)) : null;
+  const haveStated = statedTaxable != null && statedTax > 0;
+
+  const base = haveStated ? statedTaxable! : r2(p.tds.bookedAmount);
+  const gst = p.gstTreatment === "none" ? 0 : haveStated ? statedTax : r2((base * gstRate) / 100);
+  if (!haveStated && p.gstTreatment !== "none" && gst > 0) {
+    caveats.push(
+      "The tax below is worked out from the rate, not read off the invoice. Key the invoice's own taxable value and CGST/SGST/IGST on the bill so the entry matches the document to the paisa.",
+    );
+  }
 
   // PERSONAL SPENDING CANNOT CARRY INPUT CREDIT. On drawings the GST is part of
   // what was spent, so it is debited to the same head — claiming it would be a
@@ -63,8 +102,17 @@ export function purchaseEntry(p: {
     lines.push({ account: head, side: "debit", amount: base, note: "the value of what was supplied" });
   }
 
-  if (!personal && p.gstTreatment === "itc" && gst > 0) {
-    lines.push({ account: `Input GST ${gstRate}%`, side: "debit", amount: gst, note: "charged by them on the invoice, claimed as input credit" });
+  // CGST AND SGST ARE TWO LEDGERS, NOT ONE. They are separate credits in the
+  // return and are reclaimed separately, so a single merged "Input GST" line
+  // could not be filed from.
+  if (!personal && claimsItc && gst > 0) {
+    if (haveStated) {
+      if (statedCgst > 0) lines.push({ account: "Input CGST", side: "debit", amount: statedCgst, note: "as charged on the invoice, claimed as input credit" });
+      if (statedSgst > 0) lines.push({ account: "Input SGST", side: "debit", amount: statedSgst, note: "as charged on the invoice, claimed as input credit" });
+      if (statedIgst > 0) lines.push({ account: "Input IGST", side: "debit", amount: statedIgst, note: "as charged on the invoice, claimed as input credit" });
+    } else {
+      lines.push({ account: `Input GST ${gstRate}%`, side: "debit", amount: gst, note: "worked out from the rate — not read off the invoice" });
+    }
   }
 
   if (!personal && p.gstTreatment === "rcm" && gst > 0) {
@@ -73,7 +121,22 @@ export function purchaseEntry(p: {
     caveats.push("Under reverse charge the supplier charges nothing, so the two GST lines cancel and the vendor is credited with the invoice only.");
   }
 
-  const withheld = r2(p.tds.tds);
+  // WITHHOLD ON THE VALUE, NOT ON THE TAX — AND ROUND TO THE RUPEE.
+  //
+  // Two corrections in one line. TDS was taken on the tax-inclusive total, so
+  // FIRST FLY was withheld ₹70.53 (1% of 7,053) when the deduction is 1% of the
+  // taxable 5,977 = ₹59.77: GST shown separately on an invoice is not part of
+  // the sum on which tax is deducted at source. And it was carried to the
+  // paisa, where a challan is paid in whole rupees — his ruling is the nearest
+  // rupee, so ₹59.77 is withheld as ₹60.
+  //
+  // Grossing up is left exactly as tdsWorking computed it: there the invoice is
+  // what the supplier keeps and the tax is built on top, which is a different
+  // sum and not one to re-derive here.
+  const withheld =
+    p.tds.mode === "deduct" && Number(p.tds.rate) > 0
+      ? roundTds((base * Number(p.tds.rate)) / 100)
+      : r2(p.tds.tds);
   if (withheld > 0) {
     const sec = (p.tdsSection ?? "").trim();
     lines.push({
@@ -86,7 +149,9 @@ export function purchaseEntry(p: {
     });
   }
 
-  const payable = (personal ? base + gst : base + (p.gstTreatment === "itc" ? gst : 0)) - withheld;
+  // Reverse charge is the exception: the supplier charged nothing, so what is
+  // owed to them is the invoice alone and the two GST lines cancel each other.
+  const payable = (personal ? base + gst : base + (claimsItc ? gst : 0)) - withheld;
   lines.push({
     account: payableFor(p.who),
     side: "credit",

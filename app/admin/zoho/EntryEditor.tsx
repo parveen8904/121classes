@@ -29,6 +29,8 @@ export default function EntryEditor(props: {
   initial: {
     nature: string; operating: string; account: string; subAccount: string;
     gstTreatment: string; gstRate: number; tdsMode: string; tdsRate: string; tdsSection: string;
+    /** What the invoice itself prints. Blank on bills raised before this existed. */
+    taxable?: string; cgst?: string; sgst?: string; igst?: string;
   };
   compliance?: string | null;
 }) {
@@ -41,6 +43,11 @@ export default function EntryEditor(props: {
   const [gstRate, setGstRate] = useState(String(i.gstRate));
   const [tdsMode, setTdsMode] = useState<TdsMode>((i.tdsMode || "none") as TdsMode);
   const [tdsRate, setTdsRate] = useState(i.tdsRate);
+  // READ OFF THE INVOICE, NOT WORKED OUT. See lib/entryPreview.ts.
+  const [taxable, setTaxable] = useState(i.taxable ?? "");
+  const [cgst, setCgst] = useState(i.cgst ?? "");
+  const [sgst, setSgst] = useState(i.sgst ?? "");
+  const [igst, setIgst] = useState(i.igst ?? "");
 
   const [typing, setTyping] = useState(false);
   const asksOperating = NATURES.find((n) => n.value === nature)?.asksOperating ?? true;
@@ -54,10 +61,22 @@ export default function EntryEditor(props: {
   // The same thing again as debits and credits, because that is what he checks.
   // Recomputed on every keystroke from the answers above, like the sentence.
   const [tdsSection, setTdsSection] = useState(i.tdsSection);
+  const stated = {
+    taxable: taxable === "" ? null : Number(taxable),
+    cgst: cgst === "" ? null : Number(cgst),
+    sgst: sgst === "" ? null : Number(sgst),
+    igst: igst === "" ? null : Number(igst),
+  };
   const entry = purchaseEntry({
     who: props.who, account: account || "", subAccount: subAccount || null, nature,
-    gstTreatment, gstRate: Number(gstRate) || 0, tds: work, tdsSection,
+    gstTreatment, gstRate: Number(gstRate) || 0, tds: work, tdsSection, stated,
   });
+  // Does what was keyed actually add up to the bill? The supplier's own total is
+  // the check, and a mismatch is worth seeing BEFORE approving, not after Zoho
+  // has refused the document.
+  const keyedTotal = (Number(taxable) || 0) + (Number(cgst) || 0) + (Number(sgst) || 0) + (Number(igst) || 0);
+  const keyedAny = [taxable, cgst, sgst, igst].some((v) => v !== "");
+  const drift = keyedAny ? Number((keyedTotal - props.inr).toFixed(2)) : 0;
 
   const label = { fontSize: ".75rem" } as const;
   const head = { fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".07em", color: "#666" } as const;
@@ -177,6 +196,47 @@ export default function EntryEditor(props: {
           <input name="tds_section" value={tdsSection} onChange={(e) => setTdsSection(e.target.value)} placeholder="393(2) Sl.17" style={{ marginBottom: 0 }} />
         </div>
       </div>
+
+      {/* THE TAX AS THE INVOICE PRINTS IT.
+          These are typed off the document, never derived from the total: a
+          supplier rounds each line, may bill two rates on one bill, and may add
+          cess or a discount, so dividing the total by 1.18 does not reproduce
+          the paper. Leave them blank and the entry falls back to the rate and
+          says on its face that it did. */}
+      {gstTreatment === "domestic_itc" && (
+        <>
+          <div style={{ ...head, margin: "14px 0 6px" }}>3b · The tax, exactly as the invoice prints it</div>
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
+            <div>
+              <label style={label}>Taxable value</label>
+              <input name="taxable_value" type="number" step="0.01" value={taxable} onChange={(e) => setTaxable(e.target.value)}
+                     placeholder="what tax was charged on" style={{ marginBottom: 0 }} />
+            </div>
+            <div>
+              <label style={label}>CGST ₹</label>
+              <input name="cgst_amount" type="number" step="0.01" value={cgst} onChange={(e) => setCgst(e.target.value)}
+                     placeholder="same state" style={{ marginBottom: 0 }} />
+            </div>
+            <div>
+              <label style={label}>SGST ₹</label>
+              <input name="sgst_amount" type="number" step="0.01" value={sgst} onChange={(e) => setSgst(e.target.value)}
+                     placeholder="same state" style={{ marginBottom: 0 }} />
+            </div>
+            <div>
+              <label style={label}>IGST ₹</label>
+              <input name="igst_amount" type="number" step="0.01" value={igst} onChange={(e) => setIgst(e.target.value)}
+                     placeholder="other state" style={{ marginBottom: 0 }} />
+            </div>
+          </div>
+          <div className="muted" style={{ fontSize: ".72rem", marginTop: 4, lineHeight: 1.6 }}>
+            {keyedAny
+              ? drift === 0
+                ? `✓ Adds up to ₹${props.inr.toLocaleString("en-IN", { minimumFractionDigits: 2 })} — the invoice total.`
+                : `These add up to ₹${keyedTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}, which is ₹${Math.abs(drift).toFixed(2)} ${drift > 0 ? "more" : "less"} than the ₹${props.inr.toLocaleString("en-IN", { minimumFractionDigits: 2 })} on the bill. Suppliers do round, so a few paise is normal — a larger gap means something is mistyped.`
+              : "Blank means the entry is worked out from the rate instead, which will not match the invoice to the paisa. TDS is taken on the taxable value, so keying it also fixes the withholding."}
+          </div>
+        </>
+      )}
 
       <div className="card" style={{ marginTop: 12, background: "rgba(14,110,82,.06)", padding: "10px 12px" }}>
         <div style={head}>The entry this makes</div>

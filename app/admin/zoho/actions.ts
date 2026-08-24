@@ -785,9 +785,29 @@ export async function decideBillAction(formData: FormData) {
     }
   }
 
+  // THE TAX AS THE INVOICE PRINTS IT — kept as typed, never recomputed.
+  const num = (k: string) => {
+    const v = formData.get(k);
+    if (v === null || String(v).trim() === "") return null;
+    const n2 = Number(v);
+    return Number.isFinite(n2) ? n2 : null;
+  };
+  const taxable_value = num("taxable_value");
+  const cgst_amount = num("cgst_amount");
+  const sgst_amount = num("sgst_amount");
+  const igst_amount = num("igst_amount");
+
   const inrAmount = rate ? Number((amount * rate).toFixed(2)) : amount;
   const { tdsWorking } = await import("@/lib/postingShape");
-  const work = tdsWorking(inrAmount, tds_mode as never, Number(tds_rate ?? 0), vendor_name);
+  // TDS IS TAKEN ON THE TAXABLE VALUE WHERE WE KNOW IT.
+  //
+  // GST shown separately on an invoice is not part of the sum tax is deducted
+  // on, so withholding on the tax-inclusive total over-deducts — FIRST FLY was
+  // ₹70.53 against a correct ₹59.77. Where the invoice's taxable value has been
+  // keyed it is the base; where it has not, the old behaviour stands and the
+  // entry says on its face that the tax was derived rather than read.
+  const tdsBase = taxable_value != null && taxable_value > 0 ? taxable_value : inrAmount;
+  const work = tdsWorking(tdsBase, tds_mode as never, Number(tds_rate ?? 0), vendor_name);
 
   const proposal = {
     ...(bill.proposal as Record<string, unknown> ?? {}),
@@ -799,6 +819,7 @@ export async function decideBillAction(formData: FormData) {
     bill_date: billDate, amount, bill_no,
     rate, inr_amount: inrAmount,
     nature, operating, sub_account, tds_mode,
+    taxable_value, cgst_amount, sgst_amount, igst_amount,
     booked_amount: work.bookedAmount, tds_amount: work.tds, vendor_gets: work.vendorGets,
     proposal, status: "draft", error: null, updated_at: new Date().toISOString(),
   }).eq("id", id);

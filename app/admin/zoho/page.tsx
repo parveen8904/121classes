@@ -274,10 +274,11 @@ export default async function ZohoHubPage(props: {
       // What the document is, and how the withholding is met — remembered per supplier.
       nature?: string | null; operating?: string | null; sub_account?: string | null;
       tds_mode?: string | null; supplier_kind?: string | null } | null; error: string | null;
-    determination: { tdsLabel?: string; tdsRate?: number | null; confidence?: string; form145Part?: string | null; form146Required?: boolean; warnings?: string[]; certAdvice?: { why: string; points: string[] } | null; grossedUp?: number | null } | null };
+    determination: { tdsLabel?: string; tdsRate?: number | null; confidence?: string; form145Part?: string | null; form146Required?: boolean; warnings?: string[]; certAdvice?: { why: string; points: string[] } | null; grossedUp?: number | null } | null;
+    taxable_value: number | null; cgst_amount: number | null; sgst_amount: number | null; igst_amount: number | null };
   const { data: billData } = hubConnected
     ? await createServiceClient().from("provider_bills")
-        .select("id, institution, bill_no, bill_date, currency, amount, inr_amount, rate, rate_date, status, proposal, error, determination")
+        .select("id, institution, bill_no, bill_date, currency, amount, inr_amount, rate, rate_date, status, proposal, error, determination, taxable_value, cgst_amount, sgst_amount, igst_amount")
         .in("status", ["needs_info", "draft", "failed"]).order("bill_date")
     : { data: [] as never[] };
   const bills = (billData ?? []) as unknown as ProviderBillRow[];
@@ -889,6 +890,20 @@ export default async function ZohoHubPage(props: {
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", marginTop: 10 }}>
             <form action={recordAdvanceAction} className="card">
               <strong style={{ fontSize: ".9rem" }}>💸 Record an advance (already paid)</strong>
+              {/* NOBODY TO PAY IT TO, AND THE FORM DID NOT SAY SO.
+                  With petty_people empty the Person list held nothing but
+                  "— pick —", and recordAdvanceAction returns silently when no
+                  person is chosen. So the amount, the date and the bank could
+                  all be filled in, "Record & post" pressed, and nothing at all
+                  happened — no entry, no error, no explanation. */}
+              {pBalances.length === 0 && (
+                <p className="notice err" style={{ fontSize: ".8rem", margin: "8px 0 0", lineHeight: 1.6 }}>
+                  There is nobody to record an advance against yet, so this form cannot do anything.
+                  Add the person first with <strong>➕ Add a person</strong> beside this and they
+                  will appear in the list. (If you have added people already, this list is also
+                  what you see when Zoho cannot be reached to read their balances.)
+                </p>
+              )}
               <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", marginTop: 8 }}>
                 <div>
                   <label style={{ fontSize: ".75rem" }}>Person</label>
@@ -1817,6 +1832,11 @@ export default async function ZohoHubPage(props: {
                           tdsMode: p.tds_mode ?? (tdsRate ? "deduct" : "none"),
                           tdsRate: tdsRate === null || tdsRate === undefined ? "" : String(tdsRate),
                           tdsSection: p.tds_section ?? "",
+                          // What the invoice printed, where somebody has keyed it.
+                          taxable: b.taxable_value == null ? "" : String(b.taxable_value),
+                          cgst: b.cgst_amount == null ? "" : String(b.cgst_amount),
+                          sgst: b.sgst_amount == null ? "" : String(b.sgst_amount),
+                          igst: b.igst_amount == null ? "" : String(b.igst_amount),
                         }}
                         compliance={d?.form145Part
                           ? `Form 145 Part ${d.form145Part}${d.form146Required ? " + Form 146 from your accountant" : ""}.` +

@@ -60,7 +60,6 @@ async function loadStats() {
     usersToday: Number(m?.users_today ?? 0),
     subsToday: Number(m?.subscriptions_today ?? 0),
     costMonthUsd: cost?.total ?? null,
-    costBreakdown: cost,
   };
 }
 
@@ -103,13 +102,6 @@ export default async function AdminHome() {
       label: "Total cost (this month)",
       value: inr(s.costMonthUsd),
       href: "/admin/costs",
-      // WHERE THE FIGURE CAME FROM, IN ONE WORD. The full per-provider
-      // breakdown lives on the costs page, which already prints it; carrying
-      // it here made this tile three lines taller than every other one. What a
-      // glance needs is whether the number is real or a stand-in.
-      sub: s.costBreakdown
-        ? (s.costBreakdown.estimated ? "part estimated" : "invoiced")
-        : undefined,
     }] : []),
     { label: "AI cost (this month)", value: inr(s.aiMonth), href: "/admin/costs" },
     ...(s.bunnyMonth !== null ? [{ label: "Bunny (this month)", value: inr(s.bunnyMonth), href: "/admin/costs" }] : []),
@@ -163,12 +155,6 @@ export default async function AdminHome() {
                   tiles sit at different heights. */}
               <div className="muted" style={{ fontSize: ".78rem", lineHeight: 1.35, minHeight: "2.1em" }}>{c.label}</div>
               <div style={{ fontSize: "1.5rem", fontWeight: 700, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{c.value}</div>
-              {/* Always present, even when empty: a reserved line keeps the
-                  tiles identical whether or not a figure has provenance to
-                  show. The full cost breakdown is on the costs page. */}
-              <div className="muted" style={{ fontSize: ".7rem", marginTop: "auto", paddingTop: 4, minHeight: "1.2em" }}>
-                {"sub" in c ? c.sub ?? "" : ""}
-              </div>
             </div>
           </Link>
         ))}

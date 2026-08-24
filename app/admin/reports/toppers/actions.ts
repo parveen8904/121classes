@@ -52,7 +52,7 @@ export async function sendToppersNow(formData: FormData) {
     import("@/lib/telegramBroadcast").then((m) => m.postToAllGroups(text, link)).catch(() => 0),
     import("@/lib/discord").then((m) => m.postToDiscord(text, link)).catch(() => false),
     import("@/lib/push").then((m) => m.pushToEveryone({
-      title: "🏆 Today's toppers",
+      title: day === istDay() ? "🏆 Today's toppers" : `🏆 Toppers — ${new Date(`${day}T12:00:00+05:30`).toLocaleDateString("en-IN", { day: "numeric", month: "long", timeZone: "Asia/Kolkata" })}`,
       body: rows.map((r) => r.student_name).join(" · "),
       link: "/learn/performance",
     })).catch(() => null),

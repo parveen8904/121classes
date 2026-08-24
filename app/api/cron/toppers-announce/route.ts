@@ -68,6 +68,8 @@ export async function GET(req: NextRequest) {
     import("@/lib/discord").then((m) => m.postToDiscord(text, link)).catch(() => false),
     // Phones — Android and iPhone both, through the one helper.
     import("@/lib/push").then((m) => m.pushToEveryone({
+      // The cron only ever announces the day that just ended, so this reads
+      // correctly; the hand-send on the leaderboards page dates itself.
       title: "🏆 Today's toppers",
       body: rows.map((r) => r.student_name).join(" · "),
       link: "/learn/performance",

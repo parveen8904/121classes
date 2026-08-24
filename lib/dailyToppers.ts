@@ -190,10 +190,16 @@ export function toppersMessage(rows: { track: Track; student_name: string }[], d
   const on = new Date(`${day}T12:00:00+05:30`).toLocaleDateString("en-IN", {
     day: "numeric", month: "long", timeZone: "Asia/Kolkata",
   });
+  // "TODAY'S" ONLY WHEN IT IS TODAY. The nightly run always announces the day
+  // that just ended, so the word is right there — but a day re-sent by hand
+  // days later would tell every student that three-day-old results are
+  // today's. The date was always in the line; now the wording agrees with it.
+  const isToday = day === istDay();
+  const heading = isToday ? `🏆 Today's toppers (${on})` : `🏆 Toppers — ${on}`;
   const line = (t: Track) => {
     const r = rows.find((x) => x.track === t);
     return r ? `${TRACK_LABEL[t]} — ${r.student_name}` : null;
   };
   const lines = [line("inter"), line("final")].filter(Boolean) as string[];
-  return [`🏆 Today's toppers (${on})`, "", ...lines, "", "Well done — keep going. 💪"].join("\n");
+  return [heading, "", ...lines, "", "Well done — keep going. 💪"].join("\n");
 }

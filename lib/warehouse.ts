@@ -119,119 +119,49 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
   return pendingOnly ? out.filter((i) => !i.tracking) : out;
 }
 
-// Email the warehouse the list of paid, not-yet-notified book orders, then
-// stamp them. Returns a summary. Safe to call repeatedly (idempotent on the flag).
+/**
+ * ONE NIGHTLY EMAIL, NOT TWO — AND THIS IS THE BUTTON THAT SENDS IT NOW.
+ *
+ * There used to be two warehouse mails on two schedules: a midnight-IST
+ * spreadsheet, and this one at 18:00 IST carrying an HTML table and NO
+ * attachment, built from its own slightly different idea of what was owed. Two
+ * lists at two moments meant the packer had to reconcile them, and a parcel
+ * could sit in one and not the other. It is also why an email arrived with
+ * nothing attached: this was the one that sent it.
+ *
+ * They are folded together. The nightly job is /api/cron/day-orders, and this
+ * function — the "send the dispatch list now" button on the orders page — runs
+ * the same code over the same list, so the button and the cron cannot drift
+ * apart again.
+ */
 export async function runWarehouseDispatch(): Promise<{ ok: boolean; count: number; skipped?: string }> {
-  // WHERE THE DISPATCH LIST IS SENT — AND WHY THIS WAS READ THE WRONG WAY.
-  //
-  // This was the only address on the site read straight from process.env. Every
-  // other one goes through getSecret, which reads what the founder typed on the
-  // Integrations page. WAREHOUSE_EMAIL was not on that page and was not in
-  // secretKeys.ts either, so there was no way to set it and nowhere it could
-  // have been set — it was empty from the day this was written.
-  //
-  // The cost of that was silent: with no address the run below returned
-  // { ok: true, count: 0 } — a SUCCESS — so the nightly cron reported a clean
-  // run every night while the warehouse was never told about a single parcel.
-  // Sixteen were owed by 24 Aug 2026 and not one had been notified.
-  //
-  // So: the founder's own setting first, env only as a fallback, and a missing
-  // address is now reported as NOT ok, because it is not ok.
-  const warehouse = ((await getSecret("WAREHOUSE_EMAIL")) || process.env.WAREHOUSE_EMAIL || "").trim();
-  if (!warehouse) {
-    return { ok: false, count: 0, skipped: "no WAREHOUSE_EMAIL — set it on Admin → Integrations; nothing was sent" };
-  }
+  const { parcelsOwed, markReported, dispatchWorkbook, dayReportHtml, dayReportRecipients, istDayJustEnded } =
+    await import("@/lib/dayOrderReport");
+
   if (!(await emailConfigured())) {
     return { ok: false, count: 0, skipped: "email is not configured — nothing was sent" };
   }
-
-  const svc = createServiceClient();
-  const [{ data: orders }, { data: goldOrders }, { data: giftOrders }] = await Promise.all([
-    svc.from("book_orders")
-      .select("id, order_no, guest_contact, ship_to, items")
-      .eq("status", "paid")
-      .is("warehouse_notified_at", null)
-      .order("created_at", { ascending: true }),
-    // 9+ month Gold sales owe a FREE books parcel too.
-    svc.from("orders")
-      .select("id, order_no, subjects:subject_id(title), profiles:student_id(full_name, phone, address_line1, address_line2, city, state, pincode)")
-      .eq("books_due", true).eq("status", "paid")
-      .is("warehouse_notified_at", null)
-      .order("created_at", { ascending: true }),
-    // …and gifted 9+ month Gold, shipped to the recipient. "provisioned" is
-    // the vendor sale's paid state — see the note on the queue query above.
-    svc.from("gift_orders")
-      .select("id, order_no, recipient_name, recipient_phone, recipient_address, subjects:subject_id(title)")
-      .eq("books_due", true).in("status", ["paid", "provisioned"])
-      .is("warehouse_notified_at", null)
-      .order("created_at", { ascending: true }),
-  ]);
-
-  const list = (orders ?? []) as unknown as (OrderRow & { order_no?: number | null })[];
-  type GoldRow = { id: string; order_no: number | null; subjects: { title: string } | null; profiles: { full_name: string | null; phone: string | null; address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; pincode: string | null } | null };
-  const goldList = (goldOrders ?? []) as unknown as GoldRow[];
-  type GiftDispatchRow = { id: string; order_no: number | null; recipient_name: string | null; recipient_phone: string | null; recipient_address: string | null; subjects: { title: string } | null };
-  const giftList = (giftOrders ?? []) as unknown as GiftDispatchRow[];
-  if (!list.length && !goldList.length && !giftList.length) return { ok: true, count: 0 };
-
-  const ids = [...new Set(list.flatMap((o) => (o.items ?? []).map((i) => i.book_id).filter(Boolean)))] as string[];
-  const { data: books } = ids.length
-    ? await svc.from("books").select("id, title").in("id", ids)
-    : { data: [] as { id: string; title: string }[] };
-  const titleById = new Map((books ?? []).map((b) => [b.id, b.title]));
-
-  const bookRows = list
-    .map((o) => {
-      const s = o.ship_to ?? {};
-      const items = (o.items ?? [])
-        .map((i) => `${titleById.get(i.book_id ?? "") ?? "Book"} × ${i.qty ?? 1}`)
-        .join(", ");
-      return `<tr>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">${o.order_no ? `#${o.order_no}` : ""}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">${items}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">${s.name ?? o.guest_contact?.name ?? ""}<br>${s.line1 ?? ""}${s.line2 ? ", " + s.line2 : ""}, ${s.city ?? ""}, ${s.state ?? ""} ${s.pincode ?? ""}<br>📞 ${s.phone ?? o.guest_contact?.phone ?? ""}</td>
-      </tr>`;
-    })
-    .join("");
-  const goldRows = goldList
-    .map((g) => {
-      const p = g.profiles;
-      const addr = p ? [p.address_line1, p.address_line2, [p.city, p.state, p.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
-      return `<tr>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">${g.order_no ? `#${g.order_no}` : ""}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">📦 ${g.subjects?.title ?? "Gold"} — FREE printed books set (9+ month Gold)</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">${p?.full_name ?? ""}<br>${addr}<br>📞 ${p?.phone ?? ""}</td>
-      </tr>`;
-    })
-    .join("");
-
-  const giftRowsHtml = giftList
-    .map((g) => `<tr>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">${g.order_no ? `#${g.order_no}` : ""}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">🎁 GIFT — ${g.subjects?.title ?? "Gold"} FREE printed books set (9+ month Gold)</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">${g.recipient_name ?? ""}<br>${g.recipient_address ?? ""}<br>📞 ${g.recipient_phone ?? ""}</td>
-      </tr>`)
-    .join("");
-
-  const total = list.length + goldList.length + giftList.length;
-  const html = emailShell(
-    `📦 Dispatch list — ${total} parcel${total === 1 ? "" : "s"}`,
-    `<p>Please pack and ship the following (free shipping). Print the shipping labels and enter each courier
-     tracking ID on the Warehouse page: <a href="https://caparveensharma.com/admin/warehouse">caparveensharma.com/admin/warehouse</a></p>
-     <table style="width:100%;border-collapse:collapse;font-size:14px">
-       <tr><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #0d9488">Order no</th>
-           <th style="text-align:left;padding:6px 10px;border-bottom:2px solid #0d9488">Contents</th>
-           <th style="text-align:left;padding:6px 10px;border-bottom:2px solid #0d9488">Ship to</th></tr>
-       ${bookRows}${goldRows}${giftRowsHtml}
-     </table>`,
-  );
-
-  const ok = await sendEmail(warehouse, `📦 ${total} parcel(s) to dispatch`, html);
-  if (ok) {
-    const now = new Date().toISOString();
-    if (list.length) await svc.from("book_orders").update({ warehouse_notified_at: now }).in("id", list.map((o) => o.id));
-    if (goldList.length) await svc.from("orders").update({ warehouse_notified_at: now }).in("id", goldList.map((g) => g.id));
-    if (giftList.length) await svc.from("gift_orders").update({ warehouse_notified_at: now }).in("id", giftList.map((g) => g.id));
+  const to = await dayReportRecipients();
+  if (!to.length) {
+    return { ok: false, count: 0, skipped: "nobody to send to — set WAREHOUSE_EMAIL on Admin → Integrations" };
   }
-  return { ok, count: total };
+
+  const rows = await parcelsOwed();
+  const label = istDayJustEnded();
+  const subject = `\u{1F4E6} ${rows.length} parcel(s) to pack`;
+  const html = emailShell(subject, dayReportHtml(label, rows));
+
+  const attachment = await dispatchWorkbook(rows, label);
+  const { sendEmailWithAttachment } = await import("@/lib/notify");
+  let sent = 0;
+  for (const address of to) {
+    const ok = await sendEmailWithAttachment(address, subject, html, attachment).catch(() => false);
+    if (ok) sent++;
+  }
+  if (!sent) return { ok: false, count: rows.length, skipped: "the email reached nobody — nothing was marked as reported" };
+
+  // Send first, stamp second. A parcel stamped and never sent is one nobody
+  // ever packs; a parcel reported twice is merely a nuisance.
+  await markReported(rows);
+  return { ok: true, count: rows.length };
 }

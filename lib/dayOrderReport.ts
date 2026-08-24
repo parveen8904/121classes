@@ -19,6 +19,9 @@ import { matchesState } from "@/lib/accountsExport";
 // him looking for orders that are not there.
 
 export type DayOrderRow = {
+  /** Which table and row this came from — so the send can stamp it as reported. */
+  table: "orders" | "book_orders" | "gift_orders";
+  id: string;
   orderNo: string;
   kind: string;
   student: string;
@@ -78,21 +81,63 @@ export function istDayJustEnded(now = new Date()): string {
   return istToday(new Date(now.getTime() - 60 * 60 * 1000));
 }
 
+const SUBS_COLS = "id, order_no, amount_inr, status, books_due, created_at, months:subject_id, subjects:subject_id(title, courses(title)), profiles:student_id(full_name, email, phone, address_line1, address_line2, city, state, pincode)";
+const BOOKS_COLS = "id, order_no, amount_inr, status, created_at, ship_to, guest_contact, items";
+const GIFTS_COLS = "id, order_no, amount_inr, status, books_due, months, created_at, recipient_name, recipient_email, recipient_phone, recipient_address, subjects:subject_id(title, courses(title)), profiles:gifter_id(full_name, business_name)";
+
+/**
+ * EVERY PARCEL STILL OWED, WHENEVER IT WAS ORDERED.
+ *
+ * This replaces "the orders placed on day X" as what the warehouse is sent, and
+ * it is the answer to his second requirement: "make sure that any orders exact
+ * on a particular time of sending mail are not missed next day."
+ *
+ * A calendar window cannot promise that. Whatever boundary is chosen, an order
+ * landing on the wrong side of it by a millisecond falls between two reports
+ * and is never packed — and if a night's run fails outright, that whole day is
+ * lost with it and nobody finds out.
+ *
+ * So the question asked is not "what came in yesterday" but "what do we still
+ * owe": paid, books due, and never yet sent to the warehouse. A parcel stays on
+ * the list until it has actually been reported, and is stamped only after the
+ * email is away. An order placed in the same second as the send either makes
+ * this run or is still unstamped and makes the next one. Nothing can fall in a
+ * gap, nothing is sent twice, and a missed night simply appears the following
+ * one.
+ */
+export async function parcelsOwed(): Promise<DayOrderRow[]> {
+  const svc = createServiceClient();
+  const paid = ["paid", "provisioned", "dispatched", "delivered"];
+  const [subs, books, gifts] = await Promise.all([
+    svc.from("orders").select(SUBS_COLS)
+      .in("status", paid).eq("books_due", true).is("warehouse_notified_at", null).order("created_at"),
+    svc.from("book_orders").select(BOOKS_COLS)
+      .in("status", paid).is("warehouse_notified_at", null).order("created_at"),
+    svc.from("gift_orders").select(GIFTS_COLS)
+      .in("status", paid).eq("books_due", true).is("warehouse_notified_at", null).order("created_at"),
+  ]);
+  return buildRows(subs, books, gifts);
+}
+
+/** Every order placed on one IST day, whatever its state — for a re-send of a
+ *  particular date, and for looking at what a day actually contained. */
 export async function ordersForDay(day: string): Promise<DayOrderRow[]> {
   const svc = createServiceClient();
   const { from, to } = istDayBounds(day);
 
   const [subs, books, gifts] = await Promise.all([
-    svc.from("orders")
-      .select("order_no, amount_inr, status, books_due, created_at, months:subject_id, subjects:subject_id(title, courses(title)), profiles:student_id(full_name, email, phone, address_line1, address_line2, city, state, pincode)")
+    svc.from("orders").select(SUBS_COLS)
       .gte("created_at", from).lte("created_at", to).order("created_at"),
-    svc.from("book_orders")
-      .select("order_no, amount_inr, status, created_at, ship_to, guest_contact, items")
+    svc.from("book_orders").select(BOOKS_COLS)
       .gte("created_at", from).lte("created_at", to).order("created_at"),
-    svc.from("gift_orders")
-      .select("order_no, amount_inr, status, books_due, months, created_at, recipient_name, recipient_email, recipient_phone, recipient_address, subjects:subject_id(title, courses(title)), profiles:gifter_id(full_name, business_name)")
+    svc.from("gift_orders").select(GIFTS_COLS)
       .gte("created_at", from).lte("created_at", to).order("created_at"),
   ]);
+  return buildRows(subs, books, gifts);
+}
+
+type Res = { data: unknown; error: { message: string } | null };
+function buildRows(subs: Res, books: Res, gifts: Res): DayOrderRow[] {
 
   // A REFUSED QUERY IS NOT A QUIET DAY.
   //
@@ -118,6 +163,7 @@ export async function ordersForDay(day: string): Promise<DayOrderRow[]> {
     const p = r.profiles as unknown as Record<string, string | null> | null;
     const s = r.subjects as unknown;
     out.push({
+      table: "orders", id: String(r.id),
       orderNo: r.order_no ? `#${r.order_no}` : "—",
       kind: "Subscription",
       student: String(p?.full_name ?? ""),
@@ -142,6 +188,7 @@ export async function ordersForDay(day: string): Promise<DayOrderRow[]> {
     const g = (r.guest_contact ?? {}) as Record<string, string | undefined>;
     const items = (r.items ?? []) as unknown as { qty?: number }[];
     out.push({
+      table: "book_orders", id: String(r.id),
       orderNo: r.order_no ? `#${r.order_no}` : "—",
       kind: "Books",
       student: s.name ?? g.name ?? "",
@@ -166,6 +213,7 @@ export async function ordersForDay(day: string): Promise<DayOrderRow[]> {
     const s = r.subjects as unknown;
     const who = seller?.business_name || seller?.full_name || "";
     out.push({
+      table: "gift_orders", id: String(r.id),
       orderNo: r.order_no ? `#${r.order_no}` : "—",
       // Whose sale it was matters to the warehouse: a vendor's parcel is
       // queried through the vendor, not the student.
@@ -221,11 +269,97 @@ export async function ordersForDay(day: string): Promise<DayOrderRow[]> {
  * as paid rather than quietly dropped. That exact trap once kept every vendor
  * order away from the warehouse.
  */
+/**
+ * MARK THEM REPORTED — ONLY AFTER THE EMAIL IS ACTUALLY AWAY.
+ *
+ * The order matters and is deliberate: send first, stamp second. Stamping first
+ * and then failing to send would erase the parcel from every future report and
+ * nobody would ever learn it had been dropped. Stamping after means the worst
+ * case is that a parcel appears twice — visible, and trivially resolved by the
+ * packer — rather than silently never.
+ */
+export async function markReported(rows: DayOrderRow[]): Promise<number> {
+  if (!rows.length) return 0;
+  const svc = createServiceClient();
+  const at = new Date().toISOString();
+  let stamped = 0;
+  for (const table of ["orders", "book_orders", "gift_orders"] as const) {
+    const ids = rows.filter((r) => r.table === table).map((r) => r.id);
+    if (!ids.length) continue;
+    // In chunks: a few hundred UUIDs in one .in() is the URL-length trap that
+    // reads back as an empty result rather than an error. See lib/pageAll.ts.
+    for (let i = 0; i < ids.length; i += 200) {
+      const batch = ids.slice(i, i + 200);
+      const { error } = await svc.from(table).update({ warehouse_notified_at: at }).in("id", batch);
+      if (error) throw new Error(`the parcels were emailed but could not be marked as reported (${table}): ${error.message}`);
+      stamped += batch.length;
+    }
+  }
+  return stamped;
+}
+
 export function parcelsOnly(rows: DayOrderRow[]): DayOrderRow[] {
   return rows.filter((r) => r.booksDue && matchesState(r.status, "paid"));
 }
 
 const inr = (n: number) => "Rs. " + Math.round(n).toLocaleString("en-IN");
+
+/**
+ * A REAL EXCEL WORKBOOK, BECAUSE THAT IS WHAT WAS ASKED FOR.
+ *
+ * The nightly mail carried a .csv — and before that, the 18:00 run carried no
+ * attachment at all, which is the mail he opened and found empty-handed. A CSV
+ * does open in Excel, but it is not an Excel file: the columns arrive unsized,
+ * a PIN code beginning in zero is eaten as a number, and there is nothing to
+ * freeze the header against while scrolling four hundred parcels.
+ *
+ * So this writes a genuine .xlsx with the sheetjs build already in the project.
+ * Everything is written as TEXT — phone numbers, PIN codes and order numbers
+ * are identifiers, not quantities, and Excel will happily turn 011... into 11
+ * and a long phone number into 9.81e9. Amount stays numeric, because that one
+ * really is a quantity and the packer may want to total it.
+ */
+export async function dispatchWorkbook(rows: DayOrderRow[], label: string): Promise<{
+  filename: string; contentType: string; content: Buffer;
+}> {
+  const XLSX = await import("xlsx");
+  const head = ["Order no", "Type", "Student", "Email", "Phone", "Course", "Term", "Amount", "Status", "Books to send",
+                "Address", "City", "State", "PIN code", "Placed at"];
+  const aoa: unknown[][] = [head];
+  for (const r of rows) {
+    aoa.push([
+      r.orderNo, r.kind, r.student, r.email, r.phone, r.course, r.months,
+      Math.round(r.amount), r.status, r.booksDue ? "YES" : "no",
+      r.address, r.city, r.state, r.pincode, formatDate(r.placedAt),
+    ]);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  // Force the identifier columns to text so Excel stops "helping".
+  const textCols = [0, 4, 13]; // Order no, Phone, PIN code
+  const range = XLSX.utils.decode_range(ws["!ref"] ?? "A1");
+  for (let R = 1; R <= range.e.r; R++) {
+    for (const C of textCols) {
+      const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+      if (cell && cell.v !== undefined && cell.v !== null) { cell.t = "s"; cell.v = String(cell.v); }
+    }
+  }
+  ws["!cols"] = [
+    { wch: 10 }, { wch: 26 }, { wch: 22 }, { wch: 28 }, { wch: 14 }, { wch: 26 }, { wch: 10 },
+    { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 42 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 18 },
+  ];
+  ws["!freeze"] = { xSplit: "0", ySplit: "1", topLeftCell: "A2", activePane: "bottomLeft", state: "frozen" };
+  ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(range.e.r, 1), c: head.length - 1 } }) };
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Parcels to pack");
+  const content = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  return {
+    filename: `parcels-${label}.xlsx`,
+    contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    content,
+  };
+}
 
 export function dayReportCsv(rows: DayOrderRow[]): string {
   const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
@@ -306,19 +440,34 @@ export function dayReportHtml(day: string, rows: DayOrderRow[]): string {
  * somebody to remember this exists. `day_report_email` in site_settings adds
  * anyone else who wants a copy.
  */
+/**
+ * EVERYONE WHO GETS THE NIGHTLY SHEET — ONE EMAIL, ONE LIST.
+ *
+ * There were two warehouse emails on two schedules: this one at midnight IST
+ * with the spreadsheet, and a separate 18:00 IST dispatch note with an HTML
+ * table and no attachment, going to WAREHOUSE_EMAIL. Two lists, two moments,
+ * two different definitions of what was owed — and the packer had to reconcile
+ * them. They are now one, so WAREHOUSE_EMAIL is folded in here.
+ */
 export async function dayReportRecipients(): Promise<string[]> {
   const svc = createServiceClient();
-  const [{ data: staff }, { data: extra }] = await Promise.all([
+  const { getSecret } = await import("@/lib/secrets");
+  const [{ data: staff }, { data: extra }, warehouse] = await Promise.all([
     svc.from("profiles").select("email, role, permissions").in("role", ["admin", "operator"]).limit(200),
     svc.from("site_settings").select("value").eq("key", "day_report_email").maybeSingle(),
+    getSecret("WAREHOUSE_EMAIL"),
   ]);
   const out = new Set<string>();
   for (const p of (staff ?? []) as { email: string | null; role: string; permissions: string[] | null }[]) {
     if (!p.email) continue;
     if (p.role === "operator" && (p.permissions ?? []).includes("warehouse")) out.add(p.email);
   }
-  for (const e of String((extra as { value?: string } | null)?.value ?? "").split(/[,\s]+/)) {
-    if (e.includes("@")) out.add(e.trim());
+  // The warehouse's own address, and anyone else he has added on the settings
+  // page — his own address among them, so he sees exactly what the packer sees.
+  for (const source of [String((extra as { value?: string } | null)?.value ?? ""), String(warehouse ?? "")]) {
+    for (const e of source.split(/[,\s]+/)) {
+      if (e.includes("@")) out.add(e.trim().toLowerCase());
+    }
   }
   return [...out];
 }

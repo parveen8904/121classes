@@ -7,6 +7,8 @@ import { FEEDBACK_RATINGS, FEEDBACK_TEXT, SCALE } from "@/lib/feedbackQuestions"
 
 export const dynamic = "force-dynamic";
 export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/feedback" },
   title: "Tell us what you think — CA Parveen Sharma",
   description: "Two minutes, ten questions. Tell us what is working and what is not.",
 };

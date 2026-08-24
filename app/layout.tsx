@@ -78,7 +78,16 @@ const baseMetadata: Metadata = {
     "The official site of CA Parveen Sharma (also written Praveen Sharma) — Financial Reporting for CA Final and Advanced Accounting for CA Inter. Live classes, day-by-day study plans, AI doubt-solving and ad-free lectures, taught by him.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "CA Parveen Sharma" },
-  alternates: { canonical: "/" },
+  // NO CANONICAL HERE. THIS IS WHAT KEPT THE SITE OUT OF GOOGLE.
+  //
+  // Next.js hands a layout's `alternates` down to every page that does not set
+  // its own, so this one line made /pricing, /courses, /books, /test-series and
+  // forty other pages each declare the HOME PAGE as their canonical version —
+  // every one of them telling Google "I am a copy of the home page, index that
+  // instead". Search Console reported them exactly as that: "Alternate page
+  // with proper canonical tag" and "Duplicate, Google chose different canonical
+  // than user". The home page now sets its own in app/page.tsx, and every page
+  // carries its own address. Never put a canonical on a layout.
   openGraph: {
     type: "website",
     url: "https://caparveensharma.com",

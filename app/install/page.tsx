@@ -1,6 +1,8 @@
 import InstallHelper from "./InstallHelper";
 
 export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/install" },
   title: "Install the app — CA Parveen Sharma",
 };
 

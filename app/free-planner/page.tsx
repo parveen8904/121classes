@@ -2,6 +2,8 @@ import LandingForm from "./LandingForm";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/free-planner" },
   title: "Free CA Study Planner — CA Parveen Sharma",
   description: "Get a free day-by-day study plan for your CA attempt — built around your exam date, with revision rounds and chapter tests. By CA Parveen Sharma.",
 };

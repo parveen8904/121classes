@@ -7,7 +7,9 @@ import SecureFileInput from "@/app/components/SecureFileInput";
 import { submitScholarship } from "./actions";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Financial help / scholarship — CA Parveen Sharma" };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/scholarship" }, title: "Financial help / scholarship — CA Parveen Sharma" };
 
 export default async function ScholarshipPage(props: { searchParams: Promise<{ done?: string; err?: string }> }) {
   const searchParams = await props.searchParams;

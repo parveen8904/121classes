@@ -1,6 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { lightImg } from "@/lib/img";
 
+export const metadata = {
+  title: "Faculty — CA Parveen Sharma",
+  description:
+    "CA Parveen Sharma has taught Financial Reporting and Accounting for over 36 years. Who teaches you here, and what he teaches.",
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/faculty" },
+};
+
 export const dynamic = "force-dynamic";
 
 export default async function FacultyPage() {

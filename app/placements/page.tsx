@@ -5,6 +5,8 @@ import CountUp from "@/app/components/CountUp";
 // Public marketing page — cache it and refresh every 5 minutes.
 export const revalidate = 300;
 export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/placements" },
   title: "Placements & Career — CA Parveen Sharma",
   description: "Live CA & articleship openings, AI mock interviews, a CV builder and firm connections — your launchpad from student to Chartered Accountant.",
 };

@@ -11,6 +11,11 @@ import { studentsTaught } from "@/lib/studentsTaught";
 import { saleFromSettings } from "@/lib/sale";
 import { getChannelOverview, getRecentVideos } from "@/lib/youtubeStats";
 
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/" },
+};
+
 // Public marketing homepage — no per-user content (only public, published rows).
 // Serve it from the edge cache and refresh every 5 minutes instead of running
 // ~8 DB queries + an auth check on every one of the ~1000 nightly visits. This

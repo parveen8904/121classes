@@ -4,7 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import GroupChat from "./GroupChat";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Group discussion — CA Parveen Sharma" };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/discuss" }, title: "Group discussion — CA Parveen Sharma" };
 
 export default async function DiscussPage() {
   const supabase = createClient();

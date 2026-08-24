@@ -4,6 +4,8 @@ import Link from "next/link";
 // Static marketing page — cache it (refresh every 10 minutes).
 export const revalidate = 600;
 export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/build-your-plan" },
   title: "Build your study plan — CA Parveen Sharma",
   description: "A personal, day-by-day study plan to exam day — disciplined, targeted and mentored. Daily targets, revision rounds, most-important-questions, doubt-solving on WhatsApp/Telegram, and progress tracking.",
 };

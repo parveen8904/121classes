@@ -4,7 +4,9 @@ import { createServiceClient } from "@/lib/supabase/service";
 import TryCasePlayer from "./TryCasePlayer";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Try a free CA case scenario — CA Parveen Sharma" };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/try/cases" }, title: "Try a free CA case scenario — CA Parveen Sharma" };
 
 // The reward page of the verified-lead funnel: one REAL case scenario with its
 // MCQs, playable without an account — plus any free sample PDFs the admin has

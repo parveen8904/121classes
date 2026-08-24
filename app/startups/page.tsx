@@ -4,6 +4,8 @@ import { lightImg } from "@/lib/img";
 
 export const revalidate = 3600;
 export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/startups" },
   title: "Startups — Nova Seed Capital",
   description:
     "Nova Seed Capital — headed by CA Parveen Sharma — grooms, mentors and invests in new startups. Have an idea or an early-stage venture? Get in touch.",

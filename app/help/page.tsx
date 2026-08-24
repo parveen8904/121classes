@@ -2,7 +2,9 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "How to install the app — CA Parveen Sharma" };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/help" }, title: "How to install the app — CA Parveen Sharma" };
 
 export default async function InstallHelpPage() {
   const supabase = createClient();

@@ -4,7 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import CareerOpenings, { type Opening } from "./CareerOpenings";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Career Corner — CA Parveen Sharma" };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/career" }, title: "Career Corner — CA Parveen Sharma" };
 
 // Each opening line: "Title | Firm | Location | applyLinkOrEmail"
 function parseJob(line: string) {

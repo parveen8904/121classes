@@ -3,7 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import MockInterview from "./MockInterview";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "AI Mock Interview — CA Parveen Sharma" };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/career/interview" }, title: "AI Mock Interview — CA Parveen Sharma" };
 
 export default async function InterviewPage() {
   const supabase = createClient();

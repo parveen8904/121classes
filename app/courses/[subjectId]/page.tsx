@@ -17,14 +17,22 @@ const hrs = (mins: number) => {
 
 export async function generateMetadata(props: { params: Promise<{ subjectId: string }> }) {
   const params = await props.params;
+  // ITS OWN ADDRESS, WHATEVER ELSE IS OR IS NOT KNOWN.
+  //
+  // The root layout used to hand every page the home page as its canonical, and
+  // a subject page returning {} inherited it — telling Google this course page
+  // was a copy of the home page and should not be indexed. The canonical is set
+  // first, so even the early returns carry it.
+  const alternates = { canonical: `/courses/${params.subjectId}` };
   const svc = tryServiceClient();
-  if (!svc) return {};
+  if (!svc) return { alternates };
   const { data: s } = await svc.from("subjects").select("title, courses(title)").eq("id", params.subjectId).maybeSingle();
-  if (!s) return {};
+  if (!s) return { alternates };
   const course = (s as { courses?: { title?: string } | null }).courses?.title ?? "CA";
   return {
     title: `${s.title} — ${course} | CA Parveen Sharma`,
     description: `Explore ${s.title} (${course}) — every chapter, class hours, tests, revisions and resources. First classes free after signup.`,
+    alternates,
   };
 }
 

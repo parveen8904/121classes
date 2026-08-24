@@ -5,7 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Notifications — CA Parveen Sharma" };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/notifications" }, title: "Notifications — CA Parveen Sharma" };
 
 type Row = {
   id: string;

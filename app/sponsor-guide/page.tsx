@@ -2,7 +2,9 @@ import Link from "next/link";
 import { SPONSOR_GUIDE } from "@/lib/sponsorGuide";
 
 export const revalidate = 3600;
-export const metadata = { title: "Sponsor a Student — Guide | CA Parveen Sharma", description: "How to sponsor a CA student and what they receive." };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/sponsor-guide" }, title: "Sponsor a Student — Guide | CA Parveen Sharma", description: "How to sponsor a CA student and what they receive." };
 
 export default function SponsorGuidePage() {
   const g = SPONSOR_GUIDE;

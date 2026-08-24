@@ -5,6 +5,8 @@ import AnswerKey from "@/app/components/AnswerKey";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/mock-tests" },
   title: "CA Intermediate mock tests — September 2026",
   description:
     "Free full-length mock test papers for CA Intermediate Advanced Accounting, September 2026 — 100 marks in the ICAI pattern. Write it, send it in, get it back checked.",

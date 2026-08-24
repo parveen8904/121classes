@@ -6,6 +6,12 @@ import { formatINR } from "@/lib/pricing";
 import { razorpayConfigured } from "@/lib/razorpay";
 import BookCheckout from "./BookCheckout";
 
+export async function generateMetadata(props: { params: Promise<{ id: string }> }) {
+  // Its own address, so a book is not read as a copy of the home page.
+  const { id } = await props.params;
+  return { alternates: { canonical: `/books/${id}` } };
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function BookDetail(props: { params: Promise<{ id: string }> }) {

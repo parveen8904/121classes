@@ -14,7 +14,9 @@ import { savePlanSetup, emailMyPlan, rebalanceFromToday, applyNamedTemplate } fr
 import DoneToggle from "./DoneToggle";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Study planner — CA Parveen Sharma" };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/planner" }, title: "Study planner — CA Parveen Sharma" };
 
 import { formatDate, todayIST } from "@/lib/dates";
 const todayISO = () => todayIST();

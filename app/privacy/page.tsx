@@ -1,5 +1,7 @@
 
-export const metadata = { title: "Privacy Policy — CA Parveen Sharma" };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/privacy" }, title: "Privacy Policy — CA Parveen Sharma" };
 
 export default function Privacy() {
   return (

@@ -6,7 +6,9 @@ import { saveCareerProfile } from "./actions";
 import CareerUpload from "./CareerUpload";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "My placement profile — CA Parveen Sharma" };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/career/profile" }, title: "My placement profile — CA Parveen Sharma" };
 
 // THE STUDENT'S PLACEMENT PROFILE.
 //

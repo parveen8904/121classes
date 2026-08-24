@@ -2,7 +2,9 @@ import { razorpayConfigured } from "@/lib/razorpay";
 import CartCheckout from "./CartCheckout";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Your cart — Books by CA Parveen Sharma" };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/books/cart" }, title: "Your cart — Books by CA Parveen Sharma" };
 
 export default async function CartPage() {
   const configured = await razorpayConfigured();

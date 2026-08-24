@@ -3,7 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import CvBuilder from "./CvBuilder";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "CV Builder — CA Parveen Sharma" };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/career/cv" }, title: "CV Builder — CA Parveen Sharma" };
 
 export default async function CvPage() {
   const supabase = createClient();

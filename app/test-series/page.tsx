@@ -1,6 +1,14 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
+export const metadata = {
+  title: "Test series — CA Parveen Sharma",
+  description:
+    "Full-syllabus mock tests under exam conditions, with your answer book checked and returned — for CA Final Financial Reporting and CA Inter Advanced Accounting.",
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/test-series" },
+};
+
 export const dynamic = "force-dynamic";
 
 type CourseRow = { id: string; title: string; subjects: { id: string; title: string }[] };

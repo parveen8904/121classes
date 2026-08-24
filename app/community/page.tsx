@@ -5,7 +5,9 @@ import { postCommunity, deleteCommunity, pinCommunity } from "./actions";
 import TelegramFeed from "@/app/components/TelegramFeed";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Community — CA Parveen Sharma" };
+export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/community" }, title: "Community — CA Parveen Sharma" };
 
 type Row = {
   id: string;

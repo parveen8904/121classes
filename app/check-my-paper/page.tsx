@@ -8,6 +8,8 @@ import PaperUpload from "./PaperUpload";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/check-my-paper" },
   title: "Get your paper checked — CA Parveen Sharma",
   description:
     "Send your handwritten answer book and get it back marked against CA Parveen Sharma's own answer key, with the marks written on your own pages. Free — no plan needed.",

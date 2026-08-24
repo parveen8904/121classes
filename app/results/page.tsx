@@ -4,6 +4,8 @@ import { lightImg } from "@/lib/img";
 // Public marketing page — cache it and refresh every 5 minutes.
 export const revalidate = 300;
 export const metadata = {
+  // Its own address, so it is not read as a copy of the home page.
+  alternates: { canonical: "/results" },
   title: "Results — CA Parveen Sharma",
   description: "Rank-holders and successes mentored by CA Parveen Sharma & team — CA Final and CA Intermediate.",
 };

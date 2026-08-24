@@ -183,7 +183,7 @@ export default async function WarehousePage(props: {
       <div className="card" style={{ marginTop: 14 }}>
         <strong style={{ fontSize: ".92rem" }}>📦 The nightly dispatch sheet</strong>
         <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 10px", lineHeight: 1.6 }}>
-          Goes out on its own every night at midnight IST with an Excel workbook attached, listing every parcel still
+          Goes out on its own every night at 12:30 am IST with an Excel workbook attached, listing every parcel still
           owed — paid, with books due, from students, supporters and vendors alike. A parcel stays on the list until
           the email has actually gone, so nothing is missed and nothing is sent twice.
         </p>

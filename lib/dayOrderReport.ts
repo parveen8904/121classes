@@ -10,7 +10,9 @@ import { matchesState } from "@/lib/accountsExport";
 // he has to remember. A report you have to go and fetch is a report that gets
 // fetched on the days it does not matter.
 //
-// It goes at midnight IST, which is the end of the day it covers, so the file
+// It goes at 00:30 IST — his choice, 25 Aug 2026: half an hour past the day it
+// covers, so an order landing at the stroke of midnight is settled into the
+// right day before the file is made — and the file
 // he opens in the morning is complete and never changes afterwards.
 //
 // Every kind of sale is in it. A parcel does not care whether the money came
@@ -67,7 +69,7 @@ export function istToday(now = new Date()): string {
  * THE DAY THAT HAS JUST FINISHED — which is not the one istToday() returns.
  *
  * This is why the warehouse spreadsheet was arriving EMPTY every night. Vercel
- * runs crons in UTC; the schedule is `30 18 * * *`, and 18:30 UTC is 00:00 IST
+ * runs crons in UTC; the original schedule `30 18 * * *` fired at 00:00 IST
  * OF THE NEXT DAY. So istToday() named the day that was just BEGINNING, the
  * report asked for orders between 00:00 and 23:59 of a day that was zero
  * seconds old, and the file went out with nothing in it but a header row.
@@ -77,9 +79,9 @@ export function istToday(now = new Date()): string {
  * day — every one of them hours after the packer had been sent the sheet.
  *
  * Stepping back an hour before reading the calendar lands on the day that has
- * just ended: at 00:00 IST that is 23:00 the previous evening. An hour is used
- * rather than a date subtraction so that a few minutes of cron drift either
- * side of midnight still names the right day.
+ * just ended: at the current 00:30 IST firing (0 19 * * * UTC) that is 23:30
+ * the previous evening. The hour also absorbs cron drift — any firing between
+ * 00:00 and 00:59 IST names the same, correct day.
  */
 export function istDayJustEnded(now = new Date()): string {
   return istToday(new Date(now.getTime() - 60 * 60 * 1000));
@@ -493,7 +495,7 @@ export function dayReportHtml(day: string, rows: DayOrderRow[]): string {
 /**
  * EVERYONE WHO GETS THE NIGHTLY SHEET — ONE EMAIL, ONE LIST.
  *
- * There were two warehouse emails on two schedules: this one at midnight IST
+ * There were two warehouse emails on two schedules: this one after midnight IST
  * with the spreadsheet, and a separate 18:00 IST dispatch note with an HTML
  * table and no attachment, going to WAREHOUSE_EMAIL. Two lists, two moments,
  * two different definitions of what was owed — and the packer had to reconcile

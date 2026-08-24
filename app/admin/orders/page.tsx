@@ -546,7 +546,7 @@ export default async function AdminOrdersPage(
         </form>
       </div>
       <p className="muted" style={{ fontSize: ".8rem", margin: "8px 0 0", lineHeight: 1.6 }}>
-        Runs automatically every night at midnight IST, with the same Excel workbook attached. It lists every parcel
+        Runs automatically every night at 12:30 am IST, with the same Excel workbook attached. It lists every parcel
         still owed — paid, with books due, from students, supporters and vendors alike — and marks each one as
         reported only once the email has actually gone, so nothing is missed and nothing is sent twice.
       </p>

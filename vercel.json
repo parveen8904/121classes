@@ -117,7 +117,7 @@
     },
     {
       "path": "/api/cron/day-orders",
-      "schedule": "30 18 * * *"
+      "schedule": "0 19 * * *"
     },
     {
       "path": "/api/cron/stuck-at-signup",

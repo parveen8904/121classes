@@ -740,3 +740,31 @@ export async function postProviderBill(id: string): Promise<void> {
     await fail(e instanceof Error ? e.message : "posting failed");
   }
 }
+
+/**
+ * ATTACH THE INVOICE PDF TO A BILL ALREADY IN ZOHO — the executor behind the
+ * `attach_paper` approval. Lifted out of attachPaperAction on 25 Aug 2026 so
+ * that it runs from releaseApproval like every other write: his ruling, "make
+ * attaching through the gate". It touches no ledger, but it changes what the
+ * books show a posting to be, and one door is easier to guard than two.
+ */
+export async function attachBillPaper(billId: string): Promise<void> {
+  const svc = createServiceClient();
+  const { data: b } = await svc.from("provider_bills")
+    .select("institution, bill_no, zoho_bill_id, vault_doc_id").eq("id", billId).maybeSingle();
+  if (!b?.zoho_bill_id) throw new Error("that bill is not in Zoho yet, so there is nothing to attach to");
+  if (!b.vault_doc_id) throw new Error("no invoice is filed against that bill in the vault");
+  const { data: doc } = await svc.from("zoho_vault_docs").select("file_url").eq("id", b.vault_doc_id).maybeSingle();
+  if (!doc?.file_url) throw new Error("the filed invoice has no file behind it");
+
+  const { attachToZoho } = await import("@/lib/zohoAttach");
+  const att = await attachToZoho("bill", String(b.zoho_bill_id), String(doc.file_url),
+    `${b.institution}-${b.bill_no ?? "invoice"}.pdf`);
+  await svc.from("provider_bills").update({
+    paper_note: att.ok ? null : `the invoice is not attached (${att.note})`,
+  }).eq("id", billId);
+  // ASK ZOHO WHETHER IT ACTUALLY HAS THE FILE, rather than believing our own
+  // upload — otherwise the row goes on offering to attach what is attached.
+  if (att.ok) await refreshBillEcho(billId, String(b.zoho_bill_id));
+  else throw new Error(att.note || "Zoho would not take the file");
+}

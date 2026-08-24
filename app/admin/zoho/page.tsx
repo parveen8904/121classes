@@ -563,7 +563,12 @@ export default async function ZohoHubPage(props: {
                         const e = approvalEntries.get(String(a.id));
                         return e
                           ? <EntryLines entry={e} title="What approving this does to the ledgers" compact />
-                          : (
+                          : a.kind === "attach_paper" ? (
+                            <p className="muted" style={{ fontSize: ".78rem", margin: "6px 0 0", lineHeight: 1.6 }}>
+                              📎 No ledger changes. Releasing this files the invoice PDF against a bill already in Zoho —
+                              nothing is debited, credited or re-dated.
+                            </p>
+                          ) : (
                             <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0" }}>
                               The entry for this one cannot be shown here — open it on its own section below before you release it.
                             </p>

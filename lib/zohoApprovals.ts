@@ -14,6 +14,7 @@ export type ApprovalKind =
   | "provider_bill"    // book a vendor bill
   | "bill_date_fix"    // move a booked bill to the date its invoice actually carries
   | "bill_open"        // take a bill out of draft in Zoho so it reaches the ledgers
+  | "attach_paper"     // file the invoice PDF against a bill already in Zoho
   | "settlement"       // a Razorpay settlement
   | "bank_line"        // one line of a bank or card statement
   | "brokerage_line"   // one brokerage transaction
@@ -29,6 +30,7 @@ const EXECUTORS: Record<ApprovalKind, (refId: string, details: Record<string, un
   provider_bill: async (id) => (await import("@/lib/providerBills")).postProviderBill(id),
   bill_date_fix: async (id, d) => (await import("@/lib/providerBills")).applyBillDateFix(id, String(d.date), Number(d.rate) || null),
   bill_open: async (id) => (await import("@/lib/providerBills")).openPostedBill(id),
+  attach_paper: async (id) => (await import("@/lib/providerBills")).attachBillPaper(id),
   settlement: async (id) => (await import("@/lib/zohoSettlements")).postSettlement(id),
   bank_line: async (id, d) => (await import("@/lib/bankStatements")).postBankLine(id, String(d.accountChoice ?? "")),
   brokerage_line: async (id, d) => { await (await import("@/lib/brokerage")).postBrokerageLine(id, d as never); },
@@ -153,6 +155,17 @@ async function describe(kind: ApprovalKind, refId: string): Promise<{ summary: s
                ` · GST ${p.gst_treatment ?? "?"}` +
                (d.tdsLabel ? ` · withhold ${d.tdsLabel}` : p.tds_section ? ` · TDS ${p.tds_section}` : " · no TDS"),
       details: { ...b },
+    };
+  }
+  if (kind === "attach_paper") {
+    const b = await one("provider_bills", "institution, bill_no, bill_date, inr_amount, zoho_echo");
+    const z = (b?.zoho_echo ?? {}) as Record<string, unknown>;
+    return {
+      summary: b
+        ? `Attach the invoice PDF to ${b.institution} ${b.bill_no ?? ""} of ${b.bill_date} (${money(b.inr_amount)})` +
+          `${z.zoho_number ? ` — ${z.zoho_number} in Zoho` : ""}. No ledger changes.`
+        : "Attach an invoice to a bill",
+      details: { ...(b ?? {}) },
     };
   }
   if (kind === "settlement") {

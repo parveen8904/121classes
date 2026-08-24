@@ -58,6 +58,16 @@ export async function entryForApproval(a: {
     }
 
     /* A supplier's bill the desk has worked out. */
+    // ATTACHING PAPER CHANGES NO LEDGER — AND MUST NOT LOOK AS IF IT DOES.
+    //
+    // An attach_paper request carries ref_table "provider_bills" like a real
+    // booking, so without this it would be drawn with the bill's whole journal
+    // entry beside it: expense, input tax, TDS, vendor. Releasing it books
+    // nothing of the sort — it files a PDF against a document already in Zoho.
+    // An entry shown next to an approve button is a promise about what the
+    // press will do.
+    if (a.kind === "attach_paper") return null;
+
     if (a.ref_table === "provider_bills") {
       const { data: b } = await svc.from("provider_bills").select("*").eq("id", a.ref_id).maybeSingle();
       if (!b) return null;

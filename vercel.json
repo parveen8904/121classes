@@ -116,6 +116,14 @@
       "schedule": "0 3 * * *"
     },
     {
+      "path": "/api/cron/toppers-decide",
+      "schedule": "29 18 * * *"
+    },
+    {
+      "path": "/api/cron/toppers-announce",
+      "schedule": "30 21 * * *"
+    },
+    {
       "path": "/api/cron/day-orders",
       "schedule": "0 19 * * *"
     },

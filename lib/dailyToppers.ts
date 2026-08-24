@@ -101,12 +101,19 @@ export async function findToppers(day: string): Promise<{ track: Track; studentI
   const svc = createServiceClient();
   const { from, to } = istDayBounds(day);
 
+  // THE NAME IS FETCHED SEPARATELY, NOT EMBEDDED.
+  //
+  // descriptive_attempts.student_id carries NO foreign key — only examiner_id,
+  // section_id and mock_paper_id do — so PostgREST cannot embed profiles
+  // through it and the whole query was refused: "Could not find a relationship
+  // between 'descriptive_attempts' and 'student_id'". Adding the constraint to
+  // a live table is the riskier fix (it would fail outright on any orphaned
+  // row), so the ids are collected and the names looked up in a second query.
   const { data, error } = await svc
     .from("descriptive_attempts")
     .select(
       "student_id, awarded_marks, total_marks, " +
-      "sections:section_id(topics:topic_id(subjects:subject_id(title, courses:course_id(title)))), " +
-      "profiles:student_id(full_name)",
+      "sections:section_id(topics:topic_id(subjects:subject_id(title, courses:course_id(title))))",
     )
     .eq("review_status", "checked")
     .gte("examiner_checked_at", from)
@@ -118,7 +125,20 @@ export async function findToppers(day: string): Promise<{ track: Track; studentI
   // announcing an empty day because a join failed is not.
   if (error) throw new Error(`could not read the day's checked copies: ${error.message}`);
 
-  const rows = (data ?? []) as unknown as Row[];
+  const raw = (data ?? []) as unknown as Omit<Row, "profiles">[];
+
+  const ids = [...new Set(raw.map((r) => String(r.student_id ?? "")).filter(Boolean))];
+  const names = new Map<string, string>();
+  // In chunks: a long .in() list builds a URL the server refuses, and it comes
+  // back as an empty column rather than an error. See lib/pageAll.ts.
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data: people } = await svc.from("profiles").select("id, full_name").in("id", ids.slice(i, i + 200));
+    for (const p of people ?? []) names.set(String(p.id), String(p.full_name ?? ""));
+  }
+  const rows: Row[] = raw.map((r) => ({
+    ...r,
+    profiles: { full_name: names.get(String(r.student_id ?? "")) ?? null },
+  }));
   const out: { track: Track; studentId: string | null; name: string }[] = [];
 
   for (const track of ["inter", "final"] as Track[]) {

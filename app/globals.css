@@ -800,6 +800,27 @@ summary.as-btn::marker { content: ""; }
 .form-card > h3 { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .admin-section-title { margin: 38px 0 6px; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; }
 
+/* ===== Collapsible sections on the Zoho desk =====
+   The summaries reuse .admin-section-title so a collapsed section looks exactly
+   like the heading it replaced. But that class sets display:flex, and a flex
+   <summary> loses its native disclosure triangle in every browser — leaving a
+   heading that is clickable with nothing to say so. The marker is therefore
+   drawn here and rotated when the section is open. */
+details[data-sec] > summary { list-style: none; cursor: pointer; }
+details[data-sec] > summary::-webkit-details-marker { display: none; }
+details[data-sec] > summary::before {
+  content: "\25B8";                 /* ▸ */
+  color: var(--muted);
+  font-size: .85em;
+  transition: transform .15s ease;
+}
+details[data-sec][open] > summary::before { transform: rotate(90deg); }
+details[data-sec] > summary:hover { color: var(--accent); }
+details[data-sec] > summary:hover::before { color: var(--accent); }
+/* Keyboard users need to see where they are, and list-style:none removes the
+   default outline treatment on some browsers. */
+details[data-sec] > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
 /* ===================== Mobile nav menu (landing) ===================== */
 .nav-burger {
   display: none; /* shown only on small screens */

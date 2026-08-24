@@ -13,6 +13,7 @@ import Money from "@/app/components/Money";
 import { journalFromWorkingNote } from "@/lib/brokerageJournal";
 import { entryForApproval } from "@/lib/approvalEntry";
 import EntryLines from "./EntryLines";
+import SectionToggle from "./SectionToggle";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
 import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction } from "./actions";
@@ -429,6 +430,7 @@ export default async function ZohoHubPage(props: {
         <a className="btn small secondary" href="#vault">🗄️ Vault</a>
         <a className="btn small secondary" href="#tax">🧾 Tax</a>
         <a className="btn small secondary" href="#backlog">📋 Backlog</a>
+        <span style={{ marginLeft: "auto" }}><SectionToggle /></span>
       </nav>
 
       {/* The standing rule, said where the person who will live on this page reads it. */}
@@ -888,9 +890,9 @@ export default async function ZohoHubPage(props: {
 
       {/* ── Sales → Zoho queue (the working desk) ───────────────────── */}
       {hubConnected && (
-        <div id="queue">
+        <details id="queue" data-sec open className="zoho-sec">
+          <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>📮 Sales → Zoho</summary>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 24 }}>
-            <h2 className="admin-section-title" style={{ margin: 0 }}>📮 Sales → Zoho</h2>
             <form action={scanSalesAction} style={{ margin: 0 }}>
               <SubmitButton className="btn small secondary" savedLabel="Scanned">🔄 Scan for new sales</SubmitButton>
             </form>
@@ -968,14 +970,14 @@ export default async function ZohoHubPage(props: {
               </div>
             </details>
           )}
-        </div>
+        </details>
       )}
 
       {/* ── Razorpay settlements → Zoho ─────────────────────────────── */}
       {hubConnected && (
-        <div id="settlements">
+        <details id="settlements" data-sec open className="zoho-sec">
+          <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>🏦 Razorpay settlements → Zoho</summary>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 26 }}>
-            <h2 className="admin-section-title" style={{ margin: 0 }}>🏦 Razorpay settlements → Zoho</h2>
             <form action={scanSettlementsAction} style={{ margin: 0 }}>
               <SubmitButton className="btn small secondary" savedLabel="Scanned">🔄 Fetch settlements</SubmitButton>
             </form>
@@ -1021,7 +1023,7 @@ export default async function ZohoHubPage(props: {
               </div>
             </details>
           )}
-        </div>
+        </details>
       )}
 
       {hubConnected && (
@@ -1032,8 +1034,8 @@ export default async function ZohoHubPage(props: {
 
       {/* ── Bank statements & the three queues ──────────────────────── */}
       {hubConnected && (
-        <div id="bank">
-          <h2 className="admin-section-title" style={{ marginTop: 26 }}>🏧 Bank &amp; card statements</h2>
+        <details id="bank" data-sec open className="zoho-sec">
+          <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>🏧 Bank &amp; card statements</summary>
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Upload each account&apos;s statement (CSV, Excel or PDF). Every line ends in one of three places:
             <strong> matched</strong> (already in Zoho — left alone), <strong>auto</strong> (a taught rule proposes
@@ -1195,7 +1197,7 @@ export default async function ZohoHubPage(props: {
               ))}
             </>
           )}
-        </div>
+        </details>
       )}
 
       {/* ── Rule 115 panel: rates + a concise summary of the rule ───── */}
@@ -1239,8 +1241,8 @@ export default async function ZohoHubPage(props: {
 
       {/* ── Petty cash (imprest) ────────────────────────────────────── */}
       {hubConnected && (
-        <div id="petty">
-          <h2 className="admin-section-title" style={{ marginTop: 26 }}>👛 Petty cash — advances</h2>
+        <details id="petty" data-sec open className="zoho-sec">
+          <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>👛 Petty cash — advances</summary>
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Record an advance <em>after</em> it is paid (it posts to the person&apos;s own Zoho advance account at
             once). The person uploads bills on their <strong>/admin/petty</strong> page; approving a bill books the
@@ -1358,13 +1360,13 @@ export default async function ZohoHubPage(props: {
               ))}
             </>
           )}
-        </div>
+        </details>
       )}
 
       {/* ── Brokerage statements ────────────────────────────────────── */}
       {hubConnected && (
-        <div id="brokerage">
-          <h2 className="admin-section-title" style={{ marginTop: 26 }}>📈 US brokerage, retirement &amp; investment statements</h2>
+        <details id="brokerage" data-sec open className="zoho-sec">
+          <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>📈 US brokerage, retirement &amp; investment statements</summary>
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Upload statements from any investment home — brokerages, <strong>retirement accounts (IRA/401k)</strong>,
             managed funds, Treasury Direct, anything else via the free account box. Every transaction is converted at its
@@ -1853,13 +1855,13 @@ export default async function ZohoHubPage(props: {
               </div>
             </div>
           ))}
-        </div>
+        </details>
       )}
 
       {/* ── Tax worksheets (the founder's alone) ────────────────────── */}
       {isFounder && taxData && (
-        <div id="tax">
-          <h2 className="admin-section-title" style={{ marginTop: 26 }}>🧾 Tax worksheets — projections, working shown</h2>
+        <details id="tax" data-sec open className="zoho-sec">
+          <summary className="admin-section-title" style={{ cursor: "pointer", marginTop: 26 }}>🧾 Tax worksheets — projections, working shown</summary>
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))" }}>
             <div className="card">
               <strong>🇮🇳 Advance tax — FY 2026-27 (A.Y. 2027-28)</strong>
@@ -1915,7 +1917,7 @@ export default async function ZohoHubPage(props: {
             <SubmitButton className="btn small" savedLabel="✓ Saved">💾 Save assumptions</SubmitButton>
             <span className="muted" style={{ fontSize: ".76rem" }}>Only you see this section.</span>
           </form>
-        </div>
+        </details>
       )}
 
       {/* ── Build state ─────────────────────────────────────────────── */}

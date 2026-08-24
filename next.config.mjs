@@ -26,6 +26,22 @@ const nextConfig = {
   // results. Class materials and repository papers are NOT reachable this way —
   // they belong in the private bucket and are served through /api/file after a
   // login check.
+  // ONE ADDRESS FOR THE SITE, NOT TWO.
+  //
+  // www.caparveensharma.com was answering 200 in its own right, so Google had a
+  // second copy of every page. It reported them as "Alternate page with proper
+  // canonical tag" — our canonical was saving us, but only after Google had
+  // spent a crawl on each www page and then thrown it away. The www host now
+  // says permanently, in one hop, that the site lives on the bare domain.
+  async redirects() {
+    return [{
+      source: "/:path*",
+      has: [{ type: "host", value: "www.caparveensharma.com" }],
+      destination: "https://caparveensharma.com/:path*",
+      permanent: true,
+    }];
+  },
+
   async rewrites() {
     const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
     if (!base) return [];

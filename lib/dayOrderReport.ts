@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { formatDate } from "@/lib/dates";
+import { formatDate, formatDateTime } from "@/lib/dates";
 import { parsePostalParts } from "@/lib/indiaStates";
 import { matchesState } from "@/lib/accountsExport";
 
@@ -22,6 +22,10 @@ export type DayOrderRow = {
   /** Which table and row this came from — so the send can stamp it as reported. */
   table: "orders" | "book_orders" | "gift_orders";
   id: string;
+  /** When this parcel was already reported to the warehouse — null = not yet.
+   *  The nightly mail includes the whole day, marked, so a daytime button
+   *  press no longer produces a midnight sheet with nothing on it. */
+  reportedAt?: string | null;
   orderNo: string;
   kind: string;
   student: string;
@@ -105,6 +109,34 @@ const GIFTS_COLS = "id, order_no, amount_inr, status, books_due, months, created
  * gap, nothing is sent twice, and a missed night simply appears the following
  * one.
  */
+/**
+ * EVERYTHING ALREADY REPORTED SINCE AN INSTANT — the other half of the night's
+ * picture. On 24 Aug the day's two parcels went out on a 21:15 button press,
+ * so the midnight sheet was legitimately empty — and from the founder's chair
+ * an empty sheet is indistinguishable from the pipeline being broken again
+ * ("very bad"). The nightly mail now carries owed PLUS already-reported-today,
+ * marked apart; only the owed are stamped, so nothing is ever double-counted.
+ */
+export async function parcelsReportedSince(fromIso: string): Promise<DayOrderRow[]> {
+  const svc = createServiceClient();
+  const paid = ["paid", "provisioned", "dispatched", "delivered"];
+  const [subs, books, gifts] = await Promise.all([
+    svc.from("orders").select(SUBS_COLS + ", warehouse_notified_at")
+      .in("status", paid).eq("books_due", true).gte("warehouse_notified_at", fromIso).order("created_at"),
+    svc.from("book_orders").select(BOOKS_COLS + ", warehouse_notified_at")
+      .in("status", ["paid", "dispatched", "delivered"]).gte("warehouse_notified_at", fromIso).order("created_at"),
+    svc.from("gift_orders").select(GIFTS_COLS + ", warehouse_notified_at")
+      .in("status", paid).eq("books_due", true).gte("warehouse_notified_at", fromIso).order("created_at"),
+  ]);
+  const stamp = new Map<string, string>();
+  for (const res of [subs, books, gifts]) {
+    for (const r of ((res.data ?? []) as unknown as { id: string; warehouse_notified_at: string }[])) {
+      stamp.set(String(r.id), String(r.warehouse_notified_at));
+    }
+  }
+  return buildRows(subs, books, gifts).map((r) => ({ ...r, reportedAt: stamp.get(r.id) ?? null }));
+}
+
 export async function parcelsOwed(): Promise<DayOrderRow[]> {
   const svc = createServiceClient();
 
@@ -339,13 +371,16 @@ export async function dispatchWorkbook(rows: DayOrderRow[], label: string): Prom
 }> {
   const XLSX = await import("xlsx");
   const head = ["Order no", "Type", "Student", "Email", "Phone", "Course", "Term", "Amount", "Status", "Books to send",
-                "Address", "City", "State", "PIN code", "Placed at"];
+                "Address", "City", "State", "PIN code", "Placed at", "Reported"];
   const aoa: unknown[][] = [head];
   for (const r of rows) {
     aoa.push([
       r.orderNo, r.kind, r.student, r.email, r.phone, r.course, r.months,
       Math.round(r.amount), r.status, r.booksDue ? "YES" : "no",
       r.address, r.city, r.state, r.pincode, formatDate(r.placedAt),
+      // NEW TONIGHT is the packer's cue; a row sent to them earlier the same
+      // day says when, so the sheet is the whole day without double work.
+      r.reportedAt ? `earlier today · ${formatDateTime(r.reportedAt)}` : "NEW — pack this",
     ]);
   }
   const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -361,7 +396,7 @@ export async function dispatchWorkbook(rows: DayOrderRow[], label: string): Prom
   }
   ws["!cols"] = [
     { wch: 10 }, { wch: 26 }, { wch: 22 }, { wch: 28 }, { wch: 14 }, { wch: 26 }, { wch: 10 },
-    { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 42 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 18 },
+    { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 42 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 26 },
   ];
   ws["!freeze"] = { xSplit: "0", ySplit: "1", topLeftCell: "A2", activePane: "bottomLeft", state: "frozen" };
   ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(range.e.r, 1), c: head.length - 1 } }) };

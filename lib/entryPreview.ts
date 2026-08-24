@@ -201,10 +201,24 @@ export function saleEntry(p: {
   /** What the customer withholds from what they pay us. */
   tdsRate?: number;
   isCreditNote?: boolean;
+  /** THE TAX-INCLUSIVE PRICE, WHEN THAT IS WHAT THE CUSTOMER PAID.
+   *
+   * Portal prices are inclusive and the invoice goes to Zoho as
+   * is_inclusive_tax with the gross — Zoho then works the tax out so that
+   * base + tax equals the gross TO THE PAISA. The preview used to divide
+   * the gross, round the base, and re-derive the tax from that rounded
+   * base, which put ₹2,700.01 on screen for a ₹2,700 receipt. A preview
+   * one paisa away from the receipt is not the entry that will be posted.
+   * Given here, the split is done the way Zoho does it: base rounded,
+   * tax = gross − base, so the total is the receipt exactly. */
+  inclusiveGross?: number | null;
 }): Entry {
-  const base = r2(p.amount);
   const gstRate = Number(p.gstRate) || 0;
-  const gst = p.gstTreatment === "charged" ? r2((base * gstRate) / 100) : 0;
+  const inc = p.inclusiveGross != null && p.inclusiveGross > 0 ? r2(p.inclusiveGross) : null;
+  const base = inc != null && p.gstTreatment === "charged"
+    ? r2(inc / (1 + gstRate / 100))
+    : r2(p.amount);
+  const gst = p.gstTreatment === "charged" ? (inc != null ? r2(inc - base) : r2((base * gstRate) / 100)) : 0;
   const head = p.subAccount ? `${p.account} — ${p.subAccount}` : (p.account || "— no ledger chosen —");
   const withheld = r2((base * (Number(p.tdsRate) || 0)) / 100);
   const caveats: string[] = [];
@@ -217,8 +231,11 @@ export function saleEntry(p: {
 
   if (gst > 0) {
     if (p.intraState) {
-      lines.push({ account: `Output CGST ${gstRate / 2}%`, side: flip("credit"), amount: r2(gst / 2), note: "collected from them and owed to the government" });
-      lines.push({ account: `Output SGST ${gstRate / 2}%`, side: flip("credit"), amount: r2(gst / 2), note: "collected from them and owed to the government" });
+      // The halves must re-add to the tax exactly; rounding each half
+      // independently loses a paisa on odd amounts.
+      const cg = r2(gst / 2);
+      lines.push({ account: `Output CGST ${gstRate / 2}%`, side: flip("credit"), amount: cg, note: "collected from them and owed to the government" });
+      lines.push({ account: `Output SGST ${gstRate / 2}%`, side: flip("credit"), amount: r2(gst - cg), note: "collected from them and owed to the government" });
     } else {
       lines.push({ account: `Output IGST ${gstRate}%`, side: flip("credit"), amount: gst, note: "collected from them and owed to the government" });
     }

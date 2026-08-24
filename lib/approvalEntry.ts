@@ -113,15 +113,16 @@ export async function entryForApproval(a: {
       const pl = (d?.payload ?? {}) as Record<string, unknown>;
       const gross = n(pl.amountInr);
       if (!gross) return null;
-      // Portal prices are GST-inclusive; the income is the value inside them.
-      const base = Number((gross / 1.18).toFixed(2));
+      // Portal prices are GST-inclusive; saleEntry splits the gross the way
+      // Zoho will, so the preview totals the receipt to the paisa.
       return saleEntry({
         who: s(pl.customer) || "the student",
         account: pl.extension ? "Sales-Validity" : "Sales-Classes",
         gstTreatment: "charged",
         gstRate: 18,
         intraState: s(pl.stateCode) === "DL",
-        amount: base,
+        amount: gross,
+        inclusiveGross: gross,
       });
     }
 
@@ -150,7 +151,6 @@ export async function entryForApproval(a: {
       // them — showing the whole receipt as income would overstate the sale and
       // understate the tax collected.
       const rate = 18;
-      const base = Number((gross / (1 + rate / 100)).toFixed(2));
       const state = s(o.billing_state) || s(o.state) || "DL";
       return saleEntry({
         who: s(o.billing_name) || s(o.recipient_name) || "the student",
@@ -158,7 +158,8 @@ export async function entryForApproval(a: {
         gstTreatment: "charged",
         gstRate: rate,
         intraState: state === "DL",
-        amount: base,
+        amount: gross,
+        inclusiveGross: gross,
       });
     }
   } catch {

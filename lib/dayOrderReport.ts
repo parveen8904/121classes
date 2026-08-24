@@ -447,3 +447,64 @@ export async function dayReportRecipients(): Promise<string[]> {
   }
   return [...out];
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   WHICH NIGHTS ACTUALLY WENT
+   The sheet is strictly one IST day's orders, so nothing sweeps a missed night
+   into the next one. That is predictable, and it means a miss has to be seen.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+export type DispatchRun = { day: string; ran_at: string; parcels: number; sent: number; recipients: number; error: string | null; by_hand: boolean };
+
+/** Written after the mail is away — including when it failed, because a night
+ *  that tried and could not send is exactly what he needs to know about. */
+export async function recordDispatchRun(r: {
+  day: string; parcels: number; sent: number; recipients: number; error?: string | null; byHand?: boolean;
+}): Promise<void> {
+  const svc = createServiceClient();
+  await svc.from("warehouse_dispatch_runs").upsert({
+    day: r.day, ran_at: new Date().toISOString(), parcels: r.parcels,
+    sent: r.sent, recipients: r.recipients, error: r.error ?? null, by_hand: r.byHand ?? false,
+  }, { onConflict: "day" });
+}
+
+/**
+ * Nights in the recent past that produced no successful send.
+ *
+ * Two different failures, deliberately treated the same because the packer
+ * cares about neither distinction: a day with a row but sent = 0 (it ran and
+ * could not deliver) and a day with no row at all (it never ran — a dead cron,
+ * a deploy that dropped the schedule). Today is excluded: its sheet is not due
+ * until 00:30 tomorrow.
+ */
+export async function missedDispatchNights(days = 14): Promise<{ day: string; reason: string }[]> {
+  const svc = createServiceClient();
+  const today = istToday();
+  const wanted: string[] = [];
+  for (let i = 1; i <= days; i++) {
+    const d = new Date(`${today}T00:00:00+05:30`);
+    d.setUTCDate(d.getUTCDate() - i);
+    wanted.push(istToday(d));
+  }
+  const oldest = wanted[wanted.length - 1];
+  const { data, error } = await svc.from("warehouse_dispatch_runs")
+    .select("day, sent, error").gte("day", oldest).lte("day", wanted[0]);
+  // A warning system that fails silently is worse than none — if the table
+  // cannot be read, say nothing rather than claim every night was fine.
+  if (error) return [];
+  const byDay = new Map((data ?? []).map((r) => [String(r.day), r as { sent: number; error: string | null }]));
+
+  const out: { day: string; reason: string }[] = [];
+  for (const day of wanted) {
+    const r = byDay.get(day);
+    if (!r) out.push({ day, reason: "no run — the job did not fire that night" });
+    else if (!r.sent) out.push({ day, reason: r.error ? `failed — ${r.error}` : "ran, but the mail reached nobody" });
+  }
+  // FIRST RUN IS NOT A FORTNIGHT OF FAILURES. Before this table existed there
+  // are no rows, and reporting fourteen missed nights on day one would train
+  // him to ignore the banner — which is the one thing it must never do.
+  const { data: first } = await svc.from("warehouse_dispatch_runs")
+    .select("day").order("day").limit(1).maybeSingle();
+  if (!first) return [];
+  return out.filter((m) => m.day >= String(first.day));
+}

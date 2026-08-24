@@ -3,7 +3,7 @@ import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { listDispatchQueue } from "@/lib/warehouse";
 import { viaProxy } from "@/lib/fileProxy";
-import { saveTracking, emailShippingLabels, uploadTracking, bookWithDelhivery, emailMissedDispatches, sendDispatchNow, sendDispatchTestHere } from "./actions";
+import { saveTracking, emailShippingLabels, uploadTracking, bookWithDelhivery, emailMissedDispatches, sendDispatchNow, sendDispatchTestHere, resendDispatchDayAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Warehouse — Admin" };
@@ -31,6 +31,10 @@ export default async function WarehousePage(props: {
     return true;
   };
   const all = (await listDispatchQueue(false)).filter((i) => inRange(i.createdAt));
+  // NIGHTS THAT PRODUCED NO SHEET. Since the mail is strictly one day's orders,
+  // nothing sweeps a miss into the next night — so a miss is shown here.
+  const { missedDispatchNights } = await import("@/lib/dayOrderReport");
+  const missedNights = await missedDispatchNights().catch(() => []);
   // Shown only when it can actually work — a button that answers "not set up"
   // is a button that teaches people not to press buttons.
   const { delhiveryConfigured } = await import("@/lib/delhivery");
@@ -177,15 +181,39 @@ export default async function WarehousePage(props: {
         </form>
       </div>
 
+      {missedNights.length > 0 && (
+        <div className="card" style={{ marginTop: 14, borderLeft: "4px solid #b91c1c" }}>
+          <strong style={{ fontSize: ".95rem", color: "#b91c1c" }}>
+            ⚠ {missedNights.length === 1 ? "One night" : `${missedNights.length} nights`} did not reach the warehouse
+          </strong>
+          <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 10px", lineHeight: 1.6 }}>
+            The nightly sheet is strictly the orders placed on one day, so nothing carries a missed night into the
+            next one. These days were never sent — send each one now and the parcels on it get packed.
+          </p>
+          <div style={{ display: "grid", gap: 6 }}>
+            {missedNights.map((m) => (
+              <div key={m.day} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <strong style={{ minWidth: 104, fontVariantNumeric: "tabular-nums" }}>{m.day}</strong>
+                <span className="muted" style={{ flex: 1, minWidth: 200, fontSize: ".82rem" }}>{m.reason}</span>
+                <form action={resendDispatchDayAction} style={{ margin: 0 }}>
+                  <input type="hidden" name="day" value={m.day} />
+                  <SubmitButton className="btn small" savedLabel="✓ Sent">📧 Send {m.day}</SubmitButton>
+                </form>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* THE NIGHTLY SHEET, ON THE PACKER'S OWN SCREEN.
           These were only on the Sales/Orders page, which is where the money is
           looked at, not where parcels are packed. */}
       <div className="card" style={{ marginTop: 14 }}>
         <strong style={{ fontSize: ".92rem" }}>📦 The nightly dispatch sheet</strong>
         <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 10px", lineHeight: 1.6 }}>
-          Goes out on its own every night at 12:30 am IST with an Excel workbook attached, listing every parcel still
-          owed — paid, with books due, from students, supporters and vendors alike. A parcel stays on the list until
-          the email has actually gone, so nothing is missed and nothing is sent twice.
+          Goes out on its own every night at 12:30 am IST with an Excel workbook attached. It lists the orders placed
+          that day between 12 am and 12 am IST — paid, with books to send, from students, supporters and vendors
+          alike. A night that fails to send is reported at the top of this page so it can be sent again.
         </p>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <form action={sendDispatchTestHere} style={{ margin: 0 }}>

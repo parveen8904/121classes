@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSecret } from "@/lib/secrets";
-import { ordersForDay, parcelsOnly, markReported, dispatchWorkbook, dayReportHtml, dayReportRecipients, istDayJustEnded } from "@/lib/dayOrderReport";
+import { ordersForDay, parcelsOnly, markReported, recordDispatchRun, dispatchWorkbook, dayReportHtml, dayReportRecipients, istDayJustEnded } from "@/lib/dayOrderReport";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -61,8 +61,11 @@ export async function GET(req: NextRequest) {
   const testTo = (params.get("test") ?? "").trim().toLowerCase();
   const to = testTo && testTo.includes("@") ? [testTo] : await dayReportRecipients();
   if (!to.length) {
-    return NextResponse.json({ ok: false, day: label, count: rows.length, sent: 0,
-      error: "nobody to send to — set WAREHOUSE_EMAIL on Integrations, or day_report_email in site settings" }, { status: 500 });
+    const why = "nobody to send to — set WAREHOUSE_EMAIL on Integrations, or day_report_email in site settings";
+    // Recorded as a failed night, not swallowed: no recipients is exactly the
+    // kind of quiet misconfiguration that once went unnoticed for weeks.
+    if (!testTo) await recordDispatchRun({ day: label, parcels: rows.length, sent: 0, recipients: 0, error: why, byHand: !!byDay });
+    return NextResponse.json({ ok: false, day: label, count: rows.length, sent: 0, error: why }, { status: 500 });
   }
 
   const { sendEmailWithAttachment, emailShell } = await import("@/lib/notify");
@@ -93,6 +96,17 @@ export async function GET(req: NextRequest) {
   // the contents, so a parcel appears on exactly one night: that of the day it
   // was placed.
   if (!testTo && !byDay && sent > 0) stamped = await markReported(rows);
+
+  // THE NIGHT IS ON RECORD EITHER WAY. A day with no row at all is a job that
+  // never fired; a row with sent = 0 is one that fired and could not deliver.
+  // /admin/warehouse reads both and warns.
+  if (!testTo) {
+    await recordDispatchRun({
+      day: label, parcels: rows.length, sent, recipients: to.length,
+      error: failed.length ? `could not deliver to ${failed.join(", ")}` : null,
+      byHand: !!byDay,
+    });
+  }
 
   return NextResponse.json({
     ok: sent > 0, mode: testTo ? "test" : byDay ? "re-send" : "nightly",

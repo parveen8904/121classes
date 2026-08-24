@@ -319,3 +319,52 @@ export async function sendDispatchTestHere() {
        : "the test email could not be sent — check Mailgun on Integrations",
   )}`);
 }
+
+/**
+ * RE-SEND ONE MISSED NIGHT, from the banner that noticed it.
+ *
+ * The sheet is strictly one IST day's orders, so a night that never ran leaves
+ * a hole nothing fills by itself. This fills exactly that hole: the same day,
+ * the same window, the same workbook — and it records the run, so the banner
+ * stops warning about a night that has now been sent.
+ */
+export async function resendDispatchDayAction(formData: FormData) {
+  if (!(await requireArea("warehouse"))) return;
+  const day = String(formData.get("day") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+
+  const { ordersForDay, parcelsOnly, markReported, recordDispatchRun, dispatchWorkbook, dayReportHtml, dayReportRecipients } =
+    await import("@/lib/dayOrderReport");
+  const { sendEmailWithAttachment, sendEmail, emailShell, emailConfigured } = await import("@/lib/notify");
+
+  if (!(await emailConfigured())) {
+    redirect(`/admin/warehouse?told=${encodeURIComponent("Email is not configured — nothing was sent.")}`);
+  }
+  const to = await dayReportRecipients();
+  if (!to.length) {
+    redirect(`/admin/warehouse?told=${encodeURIComponent("Nobody to send to — set WAREHOUSE_EMAIL on Integrations.")}`);
+  }
+
+  const rows = parcelsOnly(await ordersForDay(day));
+  const subject = rows.length === 0
+    ? `\u{2705} Nothing to pack — no book orders on ${day}`
+    : `\u{1F4E6} ${rows.length} parcel(s) to pack — orders of ${day}`;
+  const html = emailShell(subject, `<p>Re-sent by hand for <strong>${day}</strong>.</p>` + dayReportHtml(day, rows));
+  const attachment = rows.length ? await dispatchWorkbook(rows, day) : null;
+
+  let sent = 0;
+  for (const address of to) {
+    const ok = await (attachment
+      ? sendEmailWithAttachment(address, subject, html, attachment)
+      : sendEmail(address, subject, html)).catch(() => false);
+    if (ok) sent++;
+  }
+  if (sent && rows.length) await markReported(rows);
+  await recordDispatchRun({ day, parcels: rows.length, sent, recipients: to.length,
+    error: sent ? null : "the re-send reached nobody", byHand: true });
+
+  revalidatePath("/admin/warehouse");
+  redirect(`/admin/warehouse?told=${encodeURIComponent(
+    sent ? `${day} re-sent — ${rows.length} parcel(s).` : `${day} could not be sent to anyone.`,
+  )}`);
+}

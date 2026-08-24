@@ -3,7 +3,6 @@ import AdminHero from "./_components/AdminHero";
 import { createServiceClient } from "@/lib/supabase/service";
 import { currentStaff, pathAllowed } from "@/lib/adminAccess";
 import { ADMIN_GROUPS } from "@/lib/adminNav";
-import { getBunnyBilling } from "@/lib/bunny";
 import { monthCostUsd } from "@/lib/monthCost";
 
 export const dynamic = "force-dynamic";
@@ -11,9 +10,8 @@ const INR = 85;
 
 async function loadStats() {
   const svc = createServiceClient();
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
   const head = { count: "exact" as const, head: true };
-  const [students, openings, doubtSummary, ai, storage, bunny, money, cost] = await Promise.all([
+  const [students, openings, doubtSummary, storage, money, cost] = await Promise.all([
     svc.from("profiles").select("id", head).eq("role", "student"),
     svc.from("job_listings").select("id", head).eq("status", "new"),
     // ONE DEFINITION OF "WAITING", AND IT LIVES IN ONE PLACE.
@@ -27,12 +25,7 @@ async function loadStats() {
     // Both now ask the same function. There is nowhere left for them to
     // disagree.
     svc.rpc("doubt_report_summary", { p_days: 30 }),
-    // Aggregated in the DATABASE. Summing the raw rows here was silently cut
-    // off by the 1,000-row cap, so the figure stopped moving four days into
-    // the month and read barely half of what was really being spent.
-    svc.rpc("ai_spend_since", { period_start: monthStart }),
     svc.rpc("storage_usage"),
-    getBunnyBilling(),
     // THE MONEY, AGGREGATED IN THE DATABASE. One call, one definition of
     // "paid", all three tables — see admin_dashboard_money(). Summing rows in
     // here would be cut off at PostgREST's 1,000-row cap and under-report,
@@ -45,15 +38,12 @@ async function loadStats() {
   const m = (Array.isArray(money.data) ? money.data[0] : money.data) as
     { revenue_all: number; revenue_month: number; revenue_today: number;
       users_today: number; subscriptions_today: number } | null;
-  const aiMonth = (ai.data ?? []).reduce((s: number, r: { cost_usd: number | string }) => s + (Number(r.cost_usd) || 0), 0);
   const stRow = Array.isArray(storage.data) ? storage.data[0] : storage.data;
   return {
     students: students.count ?? 0,
     openings: openings.count ?? 0,
     waiting: Number((doubtSummary.data as { waiting?: number } | null)?.waiting ?? 0),
-    aiMonth,
     storageMb: stRow ? (Number(stRow.bytes) || 0) / (1024 * 1024) : 0,
-    bunnyMonth: bunny ? bunny.thisMonth : null,
     revenueAll: Number(m?.revenue_all ?? 0),
     revenueMonth: Number(m?.revenue_month ?? 0),
     revenueToday: Number(m?.revenue_today ?? 0),
@@ -103,8 +93,6 @@ export default async function AdminHome() {
       value: inr(s.costMonthUsd),
       href: "/admin/costs",
     }] : []),
-    { label: "AI cost (this month)", value: inr(s.aiMonth), href: "/admin/costs" },
-    ...(s.bunnyMonth !== null ? [{ label: "Bunny (this month)", value: inr(s.bunnyMonth), href: "/admin/costs" }] : []),
     { label: "Storage used", value: `${s.storageMb.toFixed(1)} MB`, href: "/admin/costs" },
   ];
   const visibleCards = isSuper ? cards : cards.filter((c) => canPath(c.href));

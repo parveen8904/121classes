@@ -79,6 +79,46 @@ export default async function CareerPage(props: { searchParams: Promise<{ city?:
     : (listings ?? []);
 
 
+  // ── WHAT WE MAY TELL GOOGLE THIS PAGE IS ────────────────────────────────
+  //
+  // He asked for JobPosting markup and I had offered it, so this is the part
+  // worth reading before the code: JobPosting is the WRONG schema here, and
+  // using it would be a real risk rather than a technicality.
+  //
+  // Google's rules for JobPosting are that the marked-up page IS the job — one
+  // job, its full description, and the place you apply. These openings are none
+  // of that: they are aggregated from sixty-nine other boards, we hold a
+  // four-hundred-character excerpt rather than the employer's description, we
+  // are not the hiring organisation, and applying happens on their site. Sites
+  // that mark up third-party listings this way collect a manual action for job
+  // posting spam, and expired postings — which we cannot see expire, because we
+  // do not own them — are the most common trigger.
+  //
+  // ItemList is the schema for what this page actually is: a curated list of
+  // openings, each named and each pointing at the source. It claims nothing
+  // untrue, it is what Google asks a list page to use, and it costs nothing if
+  // Google ignores it.
+  //
+  // The day he posts his OWN openings, or a firm posts through him with a real
+  // description and a closing date, those become genuine JobPosting pages —
+  // each on its own address, marked up in full. That is a build worth doing on
+  // real vacancies, not on someone else's.
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: `CA and articleship openings${selectedCity ? ` in ${selectedCity}` : ""}`,
+    description:
+      "Articleship and chartered-accountancy openings collected from public job boards and reviewed before they are shown, on CA Parveen Sharma's career corner.",
+    numberOfItems: shown.length,
+    itemListOrder: "https://schema.org/ItemListOrderDescending",
+    itemListElement: shown.slice(0, 50).map((j, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: [j.title, j.company].filter(Boolean).join(" — "),
+      url: j.url as string,
+    })),
+  };
+
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 760 }}>
       <p className="crumb"><Link prefetch={false} href={user ? "/dashboard" : "/"}>← {user ? "Dashboard" : "Home"}</Link></p>
@@ -125,6 +165,10 @@ export default async function CareerPage(props: { searchParams: Promise<{ city?:
           <button className="btn small secondary" type="submit">Apply</button>
         </form>
       )}
+
+      {/* WHAT THIS PAGE MAY HONESTLY CLAIM TO BE.
+          ItemList, not JobPosting — see the note in structuredData below. */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
 
       {/* Auto-aggregated openings — paginated so the page stays short. */}
       <CareerOpenings

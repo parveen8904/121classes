@@ -135,7 +135,7 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
  * apart again.
  */
 export async function runWarehouseDispatch(): Promise<{ ok: boolean; count: number; skipped?: string }> {
-  const { parcelsOwed, markReported, dispatchWorkbook, dayReportHtml, dayReportRecipients, istDayJustEnded } =
+  const { ordersForDay, parcelsOnly, markReported, dispatchWorkbook, dayReportHtml, dayReportRecipients, istToday } =
     await import("@/lib/dayOrderReport");
 
   if (!(await emailConfigured())) {
@@ -146,8 +146,10 @@ export async function runWarehouseDispatch(): Promise<{ ok: boolean; count: numb
     return { ok: false, count: 0, skipped: "nobody to send to — set WAREHOUSE_EMAIL on Admin → Integrations" };
   }
 
-  const rows = await parcelsOwed();
-  const label = istDayJustEnded();
+  // TODAY'S orders, on the same 00:00–00:00 IST rule as the nightly mail — one
+  // window everywhere, so the button and the cron can never disagree.
+  const label = istToday();
+  const rows = parcelsOnly(await ordersForDay(label));
   const subject = `\u{1F4E6} ${rows.length} parcel(s) to pack`;
   const html = emailShell(subject, dayReportHtml(label, rows));
 

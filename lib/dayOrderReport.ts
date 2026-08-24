@@ -24,9 +24,9 @@ export type DayOrderRow = {
   /** Which table and row this came from — so the send can stamp it as reported. */
   table: "orders" | "book_orders" | "gift_orders";
   id: string;
-  /** When this parcel was already reported to the warehouse — null = not yet.
-   *  The nightly mail includes the whole day, marked, so a daytime button
-   *  press no longer produces a midnight sheet with nothing on it. */
+  /** When this parcel was reported to the warehouse — a record, not a filter.
+   *  The day window decides what a sheet contains; this only lets a row say
+   *  it has been sent before. */
   reportedAt?: string | null;
   orderNo: string;
   kind: string;
@@ -91,82 +91,6 @@ const SUBS_COLS = "id, order_no, amount_inr, status, books_due, created_at, mont
 const BOOKS_COLS = "id, order_no, amount_inr, status, created_at, ship_to, guest_contact, items";
 const GIFTS_COLS = "id, order_no, amount_inr, status, books_due, months, created_at, recipient_name, recipient_email, recipient_phone, recipient_address, subjects:subject_id(title, courses(title)), profiles:gifter_id(full_name, business_name)";
 
-/**
- * EVERY PARCEL STILL OWED, WHENEVER IT WAS ORDERED.
- *
- * This replaces "the orders placed on day X" as what the warehouse is sent, and
- * it is the answer to his second requirement: "make sure that any orders exact
- * on a particular time of sending mail are not missed next day."
- *
- * A calendar window cannot promise that. Whatever boundary is chosen, an order
- * landing on the wrong side of it by a millisecond falls between two reports
- * and is never packed — and if a night's run fails outright, that whole day is
- * lost with it and nobody finds out.
- *
- * So the question asked is not "what came in yesterday" but "what do we still
- * owe": paid, books due, and never yet sent to the warehouse. A parcel stays on
- * the list until it has actually been reported, and is stamped only after the
- * email is away. An order placed in the same second as the send either makes
- * this run or is still unstamped and makes the next one. Nothing can fall in a
- * gap, nothing is sent twice, and a missed night simply appears the following
- * one.
- */
-/**
- * EVERYTHING ALREADY REPORTED SINCE AN INSTANT — the other half of the night's
- * picture. On 24 Aug the day's two parcels went out on a 21:15 button press,
- * so the midnight sheet was legitimately empty — and from the founder's chair
- * an empty sheet is indistinguishable from the pipeline being broken again
- * ("very bad"). The nightly mail now carries owed PLUS already-reported-today,
- * marked apart; only the owed are stamped, so nothing is ever double-counted.
- */
-export async function parcelsReportedSince(fromIso: string): Promise<DayOrderRow[]> {
-  const svc = createServiceClient();
-  const paid = ["paid", "provisioned", "dispatched", "delivered"];
-  const [subs, books, gifts] = await Promise.all([
-    svc.from("orders").select(SUBS_COLS + ", warehouse_notified_at")
-      .in("status", paid).eq("books_due", true).gte("warehouse_notified_at", fromIso).order("created_at"),
-    svc.from("book_orders").select(BOOKS_COLS + ", warehouse_notified_at")
-      .in("status", ["paid", "dispatched", "delivered"]).gte("warehouse_notified_at", fromIso).order("created_at"),
-    svc.from("gift_orders").select(GIFTS_COLS + ", warehouse_notified_at")
-      .in("status", paid).eq("books_due", true).gte("warehouse_notified_at", fromIso).order("created_at"),
-  ]);
-  const stamp = new Map<string, string>();
-  for (const res of [subs, books, gifts]) {
-    for (const r of ((res.data ?? []) as unknown as { id: string; warehouse_notified_at: string }[])) {
-      stamp.set(String(r.id), String(r.warehouse_notified_at));
-    }
-  }
-  return buildRows(subs, books, gifts).map((r) => ({ ...r, reportedAt: stamp.get(r.id) ?? null }));
-}
-
-export async function parcelsOwed(): Promise<DayOrderRow[]> {
-  const svc = createServiceClient();
-
-  // THE THREE TABLES DO NOT SPEAK THE SAME STATUS LANGUAGE.
-  //
-  // orders.status and gift_orders.status are plain text and will accept any
-  // value, but book_orders.status is a Postgres ENUM — book_order_status, whose
-  // only members are paid, dispatched, delivered and cancelled. Asking it for
-  // "provisioned" is not an empty result, it is a TYPE ERROR that rejects the
-  // whole query: `invalid input value for enum book_order_status`. That took
-  // /admin/orders down until it was caught here.
-  //
-  // "provisioned" is a vendor-sale state anyway — it is how a gift_order says
-  // it has been paid for and handed over. A book order never enters it, so
-  // asking for it was meaningless as well as fatal.
-  const PAID_TEXT = ["paid", "provisioned", "dispatched", "delivered"];
-  const PAID_BOOK_ENUM = ["paid", "dispatched", "delivered"];
-
-  const [subs, books, gifts] = await Promise.all([
-    svc.from("orders").select(SUBS_COLS)
-      .in("status", PAID_TEXT).eq("books_due", true).is("warehouse_notified_at", null).order("created_at"),
-    svc.from("book_orders").select(BOOKS_COLS)
-      .in("status", PAID_BOOK_ENUM).is("warehouse_notified_at", null).order("created_at"),
-    svc.from("gift_orders").select(GIFTS_COLS)
-      .in("status", PAID_TEXT).eq("books_due", true).is("warehouse_notified_at", null).order("created_at"),
-  ]);
-  return buildRows(subs, books, gifts);
-}
 
 /** Every order placed on one IST day, whatever its state — for a re-send of a
  *  particular date, and for looking at what a day actually contained. */

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSecret } from "@/lib/secrets";
-import { ordersForDay, parcelsOwed, parcelsReportedSince, parcelsOnly, markReported, dispatchWorkbook, dayReportHtml, dayReportRecipients, istDayJustEnded, istDayBounds } from "@/lib/dayOrderReport";
+import { ordersForDay, parcelsOnly, markReported, dispatchWorkbook, dayReportHtml, dayReportRecipients, istDayJustEnded } from "@/lib/dayOrderReport";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -28,48 +28,27 @@ export async function GET(req: NextRequest) {
     if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  // WHAT IS STILL OWED, NOT WHAT ARRIVED YESTERDAY.
+  // ONE WINDOW: 00:00 to 00:00 IST of the day being reported. Nothing else.
   //
-  // A calendar window cannot promise that an order landing at the exact moment
-  // the mail goes out is not lost between two reports, and it loses a whole day
-  // whenever a run fails. So the default asks "what do we still owe the
-  // warehouse" — paid, books due, never yet reported — and stamps each parcel
-  // only once the email is away. ?day=YYYY-MM-DD still re-sends one date's
-  // orders by hand, and never stamps, because it is a copy of something already
-  // sent rather than a new instruction to pack.
+  // This grew two extra ideas and he was right to cut them out. First it sent
+  // "everything still owed", age-blind, so a stamping backlog arrived as a
+  // month of orders. Then I filtered the already-reported half by placement
+  // date but left the owed half age-blind — one sheet obeying two rules, which
+  // is worse than either. The rule is now the one he stated: the orders placed
+  // on that IST day, paid, with books to send.
+  //
+  // If a night's run fails, that day is re-sent by hand with ?day=YYYY-MM-DD —
+  // an explicit act, rather than a silent catch-up that makes the next sheet
+  // unpredictable.
   const asked = params.get("day");
   const byDay = asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : null;
-  const night = istDayJustEnded();
-
-  // THE NIGHTLY MAIL IS THE WHOLE DAY, NOT JUST THE REMAINDER.
-  //
-  // On 24 Aug the day's two parcels went out on a 21:15 button press, so the
-  // midnight sheet was legitimately empty — and an empty sheet from this
-  // pipeline reads as the pipeline broken again. The night's Excel now lists
-  // what is still owed AND what was already reported since the day began, a
-  // "Reported" column telling them apart. Only the owed are stamped.
-  const label = byDay ?? night;
-  const win = istDayBounds(label);
-  const owed = byDay ? parcelsOnly(await ordersForDay(byDay)) : await parcelsOwed();
-
-  // ALREADY-REPORTED ROWS ARE ONLY THE DAY'S OWN ORDERS.
-  //
-  // This was added so a night whose parcels went out on a daytime button press
-  // would not arrive as an empty sheet. But it included everything STAMPED that
-  // day — and 24 Aug is when the 16-parcel historical backlog was stamped in
-  // one go, orders placed as far back as 9 August. He opened the mail wanting
-  // the last twenty-four hours and found a month.
-  //
-  // Filtering on when the order was PLACED settles both: the day's own parcels
-  // still appear marked "earlier today", so the sheet is never empty and never
-  // lies, while an old order that merely happened to be stamped today stays out.
-  const already = byDay ? [] : (await parcelsReportedSince(win.from))
-    .filter((r) => r.placedAt >= win.from && r.placedAt <= win.to);
-  const rows = [...owed, ...already];
+  const day = byDay ?? istDayJustEnded();
+  const label = day;
+  const rows = parcelsOnly(await ordersForDay(day));
 
   if (params.get("dry") === "1") {
     return NextResponse.json({
-      ok: true, mode: byDay ? "re-send of one day" : "everything still owed",
+      ok: true, mode: byDay ? "re-send of one day" : "the day just ended",
       day: label, count: rows.length, recipients: await dayReportRecipients(), rows,
     });
   }
@@ -87,24 +66,12 @@ export async function GET(req: NextRequest) {
   }
 
   const { sendEmailWithAttachment, emailShell } = await import("@/lib/notify");
-  const newCount = owed.length;
-  // Owed parcels are deliberately NOT limited to the day: one that slipped an
-  // earlier night must still be packed, and silently dropping it would be the
-  // original bug in a new coat. They are marked as carried over instead.
-  const carried = owed.filter((r) => r.placedAt < win.from).length;
-  const subject = testTo ? `[TEST] \u{1F4E6} ${newCount} parcel(s) to pack`
-    : rows.length === 0 ? `\u{2705} Nothing to pack — no parcels today`
-    : newCount === 0 ? `\u{2705} Nothing new to pack — all ${already.length} parcel(s) already sent to you today`
-    : `\u{1F4E6} ${newCount} parcel(s) to pack` + (already.length ? ` (+${already.length} already sent today)` : "");
+  const subject = rows.length === 0
+    ? `${testTo ? "[TEST] " : ""}\u{2705} Nothing to pack — no book orders on ${label}`
+    : `${testTo ? "[TEST] " : ""}\u{1F4E6} ${rows.length} parcel(s) to pack — orders of ${label}`;
   const intro = rows.length === 0
-    ? "<p>No paid order with books to send arrived today. Nothing is owed.</p>"
-    : newCount === 0
-      ? `<p>Every parcel of the day — ${already.length} — was already emailed to you earlier today (see the Reported column). Nothing new is owed tonight.</p>`
-      : `<p><strong>${newCount} to pack</strong>${
-          carried ? `, of which ${carried} carried over from an earlier day` : ""
-        }${
-          already.length ? `; ${already.length} more were already sent to you earlier today and are shown for the day's full picture` : ""
-        }.</p>`;
+    ? `<p>No paid order with books to send was placed on <strong>${label}</strong>.</p>`
+    : "";
   const html = emailShell(subject, intro + dayReportHtml(label, rows));
   // A real .xlsx, not a CSV renamed — and only when there is something on it.
   const attachment = rows.length > 0 ? await dispatchWorkbook(rows, label) : null;
@@ -122,7 +89,10 @@ export async function GET(req: NextRequest) {
   // Send first, stamp second: a parcel seen twice is a nuisance, a parcel
   // stamped and never sent is one nobody ever packs.
   let stamped = 0;
-  if (!testTo && !byDay && sent > 0) stamped = await markReported(owed);
+  // Stamped as a RECORD of what was sent, not as a filter — the window decides
+  // the contents, so a parcel appears on exactly one night: that of the day it
+  // was placed.
+  if (!testTo && !byDay && sent > 0) stamped = await markReported(rows);
 
   return NextResponse.json({
     ok: sent > 0, mode: testTo ? "test" : byDay ? "re-send" : "nightly",

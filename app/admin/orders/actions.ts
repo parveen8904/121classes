@@ -154,10 +154,12 @@ export async function sendDispatchTestToMe() {
   const to = String((prof as { email?: string } | null)?.email ?? "").trim();
   if (!to) redirect(`/admin/orders?dispatch=${encodeURIComponent("no email on your own account to send a test to")}`);
 
-  const { parcelsOwed, dispatchWorkbook, dayReportHtml, istDayJustEnded } = await import("@/lib/dayOrderReport");
+  const { ordersForDay, parcelsOnly, dispatchWorkbook, dayReportHtml, istToday } = await import("@/lib/dayOrderReport");
   const { sendEmailWithAttachment, emailShell } = await import("@/lib/notify");
-  const rows = await parcelsOwed();
-  const label = istDayJustEnded();
+  // TODAY'S orders, on the same 00:00–00:00 IST rule as the nightly mail — one
+  // window everywhere, so the button and the cron can never disagree.
+  const label = istToday();
+  const rows = parcelsOnly(await ordersForDay(label));
   const subject = `[TEST] \u{1F4E6} ${rows.length} parcel(s) to pack`;
   const ok = await sendEmailWithAttachment(
     to, subject, emailShell(subject, dayReportHtml(label, rows)), await dispatchWorkbook(rows, label),

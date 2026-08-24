@@ -225,12 +225,32 @@ export async function prepareStep(
         cache: "no-store",
       });
       if (!res.ok) throw new Error(`download HTTP ${res.status}`);
-      let plain: Buffer = Buffer.from(new Uint8Array(await res.arrayBuffer()));
+      // TWO 64 MB COPIES THAT NOBODY NEEDED.
+      //
+      // Each pass through this loop holds a whole CHUNK several times over, and
+      // this runs in a serverless function with no configured memory — so the
+      // cost of a needless copy here is not slowness, it is the function being
+      // killed. Both copies below are now avoided:
+      //
+      //   · Buffer.from(new Uint8Array(ab)) COPIED the 64 MB. Buffer.from(ab)
+      //     is a view over the same memory — same bytes, no second allocation.
+      //     Nothing else reads the ArrayBuffer afterwards, so the view is safe.
+      //
+      //   · Buffer.concat([update, final]) allocated another 64 MB to append
+      //     something that is always empty here: autoPadding is off and every
+      //     chunk is block-aligned (CHUNK is a multiple of 16, and the last one
+      //     is pkcs7-padded just above), so final() returns zero bytes. The
+      //     concat is kept for the case where it ever does not.
+      //
+      // Peak per iteration drops from roughly four live copies to two.
+      let plain: Buffer = Buffer.from(await res.arrayBuffer());
       if (isFinal) plain = pkcs7(plain);
 
       const cipher = createCipheriv("aes-256-cbc", key, chainIv);
       cipher.setAutoPadding(false); // we manage padding so the chain can pause/resume
-      const enc = Buffer.concat([cipher.update(plain), cipher.final()]);
+      const head = cipher.update(plain);
+      const tail = cipher.final();
+      const enc = tail.length ? Buffer.concat([head, tail]) : head;
       chainIv = enc.subarray(enc.length - 16); // next chunk chains from the last block
 
       const partNumber = parts.length + 1;

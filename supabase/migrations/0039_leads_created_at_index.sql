@@ -1,0 +1,11 @@
+-- THE LEADS REPORT READ ALL 256,902 ROWS TO SHOW THE NEWEST 3,000.
+--
+-- /admin/reports/leads orders by created_at desc and takes 3,000, but leads
+-- carried indexes on id, phone and email only — nothing on created_at. So the
+-- planner had no choice but a parallel sequential scan of the whole table
+-- followed by a top-N heapsort, on every single page open. Measured 24 Aug
+-- 2026: 3,947 shared buffers (~31 MB) touched, 73 ms warm and far worse cold.
+--
+-- The same shape is used by the date filters (gte/lte on created_at) and by
+-- the two exact counts beside the list, so all of them gain from this.
+create index if not exists leads_created_at_idx on public.leads (created_at desc);

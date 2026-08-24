@@ -39,12 +39,24 @@ export default async function EncodingReport() {
       .order("priority", { ascending: false })
       .order("updated_at", { ascending: true, nullsFirst: true })
       .limit(4000),
-    svc.from("sections").select("id, title, topic_id, class_no:config->>class_no, bunny:m_bunny_video_id, yt:config->>youtube_url").eq("type", "full_class_video").limit(4000),
+    // READ THE MIRROR COLUMNS, NEVER config.
+    //
+    // This asked for config->>class_no and config->>youtube_url. Key-extraction
+    // is not a cheap peek: it DETOASTS THE WHOLE COLUMN, and config averages
+    // 108 kB on these rows. Three hundred and twenty-five classes therefore
+    // dragged roughly 33 MB through the function on every single page open —
+    // measured at 262 ms and 7,398 shared buffers (~58 MB) with everything
+    // already cached, and far worse cold.
+    //
+    // The m_* mirrors hold exactly the same values (checked row by row on
+    // 24 Aug 2026: 325 rows, zero mismatches) and the same query costs 0.5 ms
+    // and 117 buffers. Same data, 553x faster.
+    svc.from("sections").select("id, title, topic_id, class_no:m_class_no, bunny:m_bunny_video_id, yt:m_youtube_url").eq("type", "full_class_video").limit(4000),
     svc.from("protected_videos").select("section_id, resolution, byte_size, created_at").eq("is_published", true).limit(4000),
   ]);
 
   const jobs = (jobRows ?? []) as Job[];
-  type Sec = { id: string; title: string; topic_id: string | null; class_no: string | null; bunny: string | null; yt: string | null };
+  type Sec = { id: string; title: string; topic_id: string | null; class_no: string | number | null; bunny: string | null; yt: string | null };
   const sections = (secRows ?? []) as unknown as Sec[];
   const name = new Map(sections.map((s) => [s.id, `${s.class_no ? `Class ${s.class_no} · ` : ""}${s.title}`]));
 

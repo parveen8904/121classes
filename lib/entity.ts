@@ -192,12 +192,14 @@ export function orgNode(p: { sameAs: string[]; logo?: string }) {
     "@type": "EducationalOrganization",
     "@id": ORG_ID,
     name: "CA Parveen Sharma — Personalised Learning",
-    // "CA Parveen Sharma Studio" is the name on the VERIFIED Google Business
-    // Profile, and it is not the name this site trades under. Rather than
-    // silently change either, both are declared: alternateName is how you tell
-    // Google that two names are one business. Whether the listing should be
-    // renamed to match the site is his call, not a thing to fix quietly.
-    alternateName: ["CA Parveen Sharma Studio", "CA Parveen Sharma Classes", "Aldine CA"],
+    // CORRECTION, 24 Aug 2026. I read "CA Parveen Sharma Studio" off the
+    // Businesses list and put it here as the listing's name. It is not: opening
+    // the profile itself shows the business name field reads simply
+    // "CA Parveen Sharma", and "Studio" is only the internal label Google gives
+    // the location row. The public listing, the one with 133 reviews, is
+    // "CA Parveen Sharma" — so that is the name declared here, and "Studio" is
+    // gone. A label nobody outside can see has no business in structured data.
+    alternateName: ["CA Parveen Sharma", "CA Parveen Sharma Classes", "Aldine CA"],
     url: SITE,
     logo: p.logo ?? `${SITE}/icon-512.png`,
     image: p.logo ?? `${SITE}/icon-512.png`,

@@ -4,6 +4,9 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { requireArea } from "@/lib/adminAccess";
 import { inChunks, selectAll } from "@/lib/pageAll";
 import AdminHero from "../../_components/AdminHero";
+import SubmitButton from "@/app/components/SubmitButton";
+import { previewToppers, sendToppersNow } from "./actions";
+import { istDay } from "@/lib/dailyToppers";
 import { BOARDS, boardRows, rank, WEIGHTS, type Effort } from "@/lib/studentRanking";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +27,7 @@ export const metadata = { title: "Leaderboards — Admin" };
 const PER_BOARD = 50;
 
 export default async function ToppersPage(props: {
-  searchParams: Promise<{ attempt?: string; course?: string }>;
+  searchParams: Promise<{ attempt?: string; course?: string; day?: string; preview?: string; sent?: string }>;
 }) {
   if (!(await requireArea("store")) && !(await requireArea("results")) && !(await requireArea("reports"))) redirect("/admin");
   const sp = await props.searchParams;
@@ -118,6 +121,40 @@ export default async function ToppersPage(props: {
         subtitle="A board for each thing, with its leader named — classes, planner, mocks, written papers, marks, case studies and MCQs. Phone numbers included, because this is for mentoring. 🎯"
         back={{ href: "/admin/reports", label: "Reports" }}
       />
+
+      {/* THE DAILY ANNOUNCEMENT — the same message the 11:59/3 AM pair sends.
+          Here so it can be seen before it goes out, and re-sent for a day the
+          cron missed, without anybody needing the cron secret. */}
+      <div className="card" style={{ marginTop: 14 }}>
+        <strong style={{ fontSize: ".95rem" }}>🏆 Daily toppers announcement</strong>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 10px", lineHeight: 1.6 }}>
+          Decided on its own at <strong>11:59 PM</strong> and sent at <strong>3 AM</strong> to the Telegram channel,
+          every subject group, Discord and all phones — names only, no marks. A day with no released copies is not
+          announced at all. Counted on the day a copy was <strong>released</strong>, not written.
+        </p>
+        {sp.sent && <p className="notice ok" style={{ fontSize: ".82rem" }}>{sp.sent}</p>}
+        {sp.preview && (
+          <pre style={{ whiteSpace: "pre-wrap", background: "var(--bg-soft)", padding: "12px 14px", borderRadius: 10, fontSize: ".85rem", margin: "0 0 10px" }}>
+            {sp.preview}
+          </pre>
+        )}
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div>
+            <label style={{ fontSize: ".72rem" }}>Day (IST)</label>
+            <input form="toppers-preview" name="day" type="date" defaultValue={sp.day ?? istDay()} style={{ marginBottom: 0 }} />
+          </div>
+          <form id="toppers-preview" action={previewToppers} style={{ margin: 0 }}>
+            <SubmitButton className="btn small secondary">👁 Show me the message</SubmitButton>
+          </form>
+          <form action={sendToppersNow} style={{ margin: 0 }}>
+            <input type="hidden" name="day" value={sp.day ?? istDay()} />
+            <SubmitButton className="btn small">📣 Send it now</SubmitButton>
+          </form>
+          <span className="muted" style={{ fontSize: ".76rem" }}>
+            Sending posts to every channel and marks the day announced, so 3 AM will not repeat it.
+          </span>
+        </div>
+      </div>
 
       {/* Counted afresh on every open — never cached. Said out loud, with the
           clock to prove it, because boards that rank ALL-TIME totals move

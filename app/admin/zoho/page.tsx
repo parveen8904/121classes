@@ -296,6 +296,11 @@ export default async function ZohoHubPage(props: {
   // Releases that were refused. They leave the pending list the moment they
   // fail, so without this the gate falls silent and the work looks done.
   const failedApprovals = hubConnected ? await listFailed() : [];
+  // Approved by him, waiting only on Zoho's per-minute allowance. Shown so an
+  // emptying queue looks like progress rather than silence.
+  const { count: queuedCount } = hubConnected
+    ? await createServiceClient().from("zoho_approvals").select("id", { count: "exact", head: true }).eq("status", "queued")
+    : { count: 0 };
   // VENDOR BILLS BELONG AT THE GATE TOO — AND WITHOUT THIS THEY WERE STUCK.
   //
   // This used to exclude them, and that was right at the time: his press on the
@@ -545,6 +550,17 @@ export default async function ZohoHubPage(props: {
             no TDS — until you release it here. The desk prepares the work and asks; this page is the only door,
             and it is <strong>yours alone</strong>. Everything below shows exactly what will be sent.
           </p>
+
+          {(queuedCount ?? 0) > 0 && (
+            <div className="card" style={{ marginBottom: 10, borderLeft: "4px solid var(--accent)" }}>
+              <strong style={{ fontSize: ".92rem" }}>⏳ {queuedCount} approved and posting themselves</strong>
+              <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 0", lineHeight: 1.6 }}>
+                You have already released these. Zoho accepts 100 calls a minute for the whole organisation, so they
+                go a few at a time and clear over the next minutes. <strong>Nothing further is needed from you</strong> —
+                this number falls on its own.
+              </p>
+            </div>
+          )}
 
           {failedApprovals.length > 0 && (
             <div className="card" style={{ marginBottom: 10, borderLeft: "4px solid #b91c1c" }}>

@@ -276,8 +276,14 @@ export async function approveZohoAction(formData: FormData) {
   const me = await currentStaff();
   const id = str(formData.get("id"));
   if (!id) return;
-  const { releaseApproval } = await import("@/lib/zohoApprovals");
-  const note = await releaseApproval(id, me?.id ?? null);
+  const { releaseApproval, queueApproval, isThrottle } = await import("@/lib/zohoApprovals");
+  let note = await releaseApproval(id, me?.id ?? null);
+  if (isThrottle(note)) {
+    // He said yes; the minute was full. Hold it rather than hand the problem
+    // back to him.
+    await queueApproval(id, me?.id ?? null);
+    note = "Approved and queued — Zoho's minute was full, so it posts by itself shortly. Nothing further is needed.";
+  }
   revalidatePath("/admin/zoho");
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#approvals`);
 }
@@ -310,21 +316,24 @@ export async function approveAllZohoAction(formData: FormData) {
   //
   // A throttle is the ONE reason to stop early. Any other failure is that
   // item's own problem, gets recorded against it, and the rest carry on.
-  let done = 0, failed = 0, notReached = 0;
+  const { queueApproval, isThrottle } = await import("@/lib/zohoApprovals");
+  let done = 0, failed = 0, queued = 0;
   let throttled = false;
   for (const id of ids) {
-    if (throttled) { notReached++; continue; }
+    // Once the minute is spent there is no point asking Zoho again — the rest
+    // are held as approved-and-waiting and the drain posts them.
+    if (throttled) { await queueApproval(id, me?.id ?? null); queued++; continue; }
     const r = await releaseApproval(id, me?.id ?? null);
     if (r.startsWith("Approved and posted")) done++;
-    else if (/limit of 100 calls|throttling us|per-minute limit/i.test(r)) { throttled = true; notReached++; }
+    else if (isThrottle(r)) { throttled = true; await queueApproval(id, me?.id ?? null); queued++; }
     else failed++;
   }
 
   const note = `${done} posted`
     + (failed ? `, ${failed} did not go through — see the reasons above` : "")
-    + (notReached
-        ? `. ${notReached} not reached: Zoho allows 100 calls a minute and that minute is used up. `
-          + `They are still waiting on your gate — press approve again in a minute.`
+    + (queued
+        ? `. ${queued} more are approved and queued: Zoho takes 100 calls a minute, so they post by themselves `
+          + `over the next few minutes. Nothing further is needed from you.`
         : ".");
   revalidatePath("/admin/zoho");
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#approvals`);

@@ -153,6 +153,64 @@ export async function releaseApproval(approvalId: string, decidedBy: string | nu
   }
 }
 
+/** Is this failure Zoho refusing to talk to us for a minute, rather than
+ *  refusing the document itself? */
+export const isThrottle = (msg: string) =>
+  /limit of 100 calls|throttling us|per-minute limit|exceeded the maximum number of requests|too many requests/i.test(msg);
+
+/**
+ * HE SAID YES BUT ZOHO HAD NO CAPACITY — hold it, do not ask him again.
+ *
+ * The row keeps who decided it and when, so the drain is finishing his
+ * decision rather than making one.
+ */
+export async function queueApproval(approvalId: string, decidedBy: string | null): Promise<void> {
+  const svc = createServiceClient();
+  await svc.from("zoho_approvals").update({
+    status: "queued", decided_by: decidedBy, decided_at: new Date().toISOString(),
+    queued_at: new Date().toISOString(), result: null,
+  }).eq("id", approvalId).in("status", ["pending", "failed"]);
+}
+
+/**
+ * Post everything he already released, as far as the minute allows.
+ *
+ * Called by the drain cron every minute. Stops the moment Zoho throttles —
+ * anything not reached stays `queued` and goes in the next run, so a backlog
+ * of any size clears itself without him pressing anything again.
+ */
+export async function drainQueued(max = 40): Promise<{ posted: number; failed: number; left: number; stopped: boolean }> {
+  const svc = createServiceClient();
+  const { data } = await svc.from("zoho_approvals")
+    .select("id, decided_by").eq("status", "queued").order("queued_at").limit(max);
+  const rows = (data ?? []) as { id: string; decided_by: string | null }[];
+
+  let posted = 0, failed = 0, stopped = false;
+  for (const r of rows) {
+    if (stopped) break;
+    // Back to pending for the moment of release: releaseApproval only acts on a
+    // pending row, and that single-row precondition is what stops two drains
+    // posting the same thing twice.
+    const { data: claimed } = await svc.from("zoho_approvals")
+      .update({ status: "pending" }).eq("id", r.id).eq("status", "queued").select("id").maybeSingle();
+    if (!claimed) continue;   // another run took it
+
+    const note = await releaseApproval(r.id, r.decided_by);
+    if (note.startsWith("Approved and posted")) posted++;
+    else if (isThrottle(note)) {
+      // Put it back and stop for this minute.
+      await svc.from("zoho_approvals").update({
+        status: "queued", queued_at: new Date().toISOString(), result: null, decided_at: null,
+      }).eq("id", r.id);
+      stopped = true;
+    } else failed++;
+  }
+
+  const { count } = await svc.from("zoho_approvals")
+    .select("id", { count: "exact", head: true }).eq("status", "queued");
+  return { posted, failed, left: count ?? 0, stopped };
+}
+
 /** He said no. Nothing is sent, and the reason stays on the record. */
 export async function rejectApproval(approvalId: string, decidedBy: string | null, note?: string): Promise<void> {
   const svc = createServiceClient();

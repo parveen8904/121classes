@@ -282,10 +282,11 @@ export default async function ZohoHubPage(props: {
       nature?: string | null; operating?: string | null; sub_account?: string | null;
       tds_mode?: string | null; supplier_kind?: string | null } | null; error: string | null;
     determination: { tdsLabel?: string; tdsRate?: number | null; confidence?: string; form145Part?: string | null; form146Required?: boolean; warnings?: string[]; certAdvice?: { why: string; points: string[] } | null; grossedUp?: number | null } | null;
-    taxable_value: number | null; cgst_amount: number | null; sgst_amount: number | null; igst_amount: number | null };
+    taxable_value: number | null; cgst_amount: number | null; sgst_amount: number | null; igst_amount: number | null;
+    tds_amount: number | null; booked_amount: number | null };
   const { data: billData } = hubConnected
     ? await createServiceClient().from("provider_bills")
-        .select("id, institution, bill_no, bill_date, currency, amount, inr_amount, rate, rate_date, status, proposal, error, determination, taxable_value, cgst_amount, sgst_amount, igst_amount")
+        .select("id, institution, bill_no, bill_date, currency, amount, inr_amount, rate, rate_date, status, proposal, error, determination, taxable_value, cgst_amount, sgst_amount, igst_amount, tds_amount, booked_amount")
         .in("status", ["needs_info", "draft", "failed"]).order("bill_date")
     : { data: [] as never[] };
   const bills = (billData ?? []) as unknown as ProviderBillRow[];
@@ -1700,7 +1701,27 @@ export default async function ZohoHubPage(props: {
             const p = b.proposal ?? {};
             const inr = Number(b.inr_amount ?? 0);
             const tdsRate = d?.tdsRate ?? p.tds_rate ?? null;
-            const tdsAmt = tdsRate ? Math.round(inr * Number(tdsRate)) / 100 : 0;
+            // TDS IS ON THE VALUE, NOT THE TAX-INCLUSIVE TOTAL.
+            //
+            // This line worked the withholding out from `inr` — the whole
+            // invoice — so on any bill where the supplier charged GST it showed
+            // tax deducted on the tax as well. GST shown separately on an
+            // invoice is outside the TDS base, which is his rule and is also
+            // what the posting already does; the headline was the one place
+            // still doing it the old way, and it is the line he reads first.
+            //
+            // The stored figure wins where there is one: it was computed by
+            // tdsWorking at save time from the right base, so showing it means
+            // the headline cannot disagree with what will actually post.
+            const tdsBase = Number(b.taxable_value) > 0 ? Number(b.taxable_value) : inr;
+            const tdsAmt = Number(b.tds_amount) > 0
+              ? Number(b.tds_amount)
+              : tdsRate ? Math.round(tdsBase * Number(tdsRate)) / 100 : 0;
+            // A domestic bill whose invoice tax has not been keyed has no
+            // taxable value to work from, so anything shown is on the gross.
+            // Say so rather than print a figure that looks settled.
+            const tdsOnGross = !!tdsRate && !(Number(b.taxable_value) > 0)
+              && (p.gst_treatment === "domestic_itc" || p.gst_treatment === "itc");
             const waitingOnHim = pendingBillIds.has(b.id);
 
             // The one line. Everything he needs to decide whether to open it.
@@ -1708,7 +1729,7 @@ export default async function ZohoHubPage(props: {
               ? "needs two answers before it can be worked out"
               : !inr ? "amount could not be read — open and type it in"
               : `${p.gst_treatment === "rcm" ? "RCM 18%" : p.gst_treatment === "none" ? "no GST" : "GST 18% ITC"}` +
-                `${tdsRate ? ` · TDS ${tdsRate}% = ₹${tdsAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : " · no TDS"}` +
+                `${tdsRate ? ` · TDS ${tdsRate}% = ₹${tdsAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${tdsOnGross ? " (on the gross — key the invoice's taxable value)" : ""}` : " · no TDS"}` +
                 ` → ${p.expense_account ?? "account not set"}`;
 
             return (

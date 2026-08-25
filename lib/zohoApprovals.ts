@@ -145,15 +145,21 @@ async function describe(kind: ApprovalKind, refId: string): Promise<{ summary: s
     (await svc.from(table).select(cols).eq("id", refId).maybeSingle()).data as Record<string, unknown> | null;
 
   if (kind === "provider_bill") {
-    const b = await one("provider_bills", "institution, bill_no, bill_date, currency, amount, inr_amount, rate, proposal, determination");
+    const b = await one("provider_bills", "institution, bill_no, bill_date, currency, amount, inr_amount, rate, proposal, determination, taxable_value, tds_amount");
     if (!b) return { summary: "A vendor bill", details: {} };
     const p = (b.proposal ?? {}) as Record<string, unknown>;
     const d = (b.determination ?? {}) as Record<string, unknown>;
+    // The withholding in rupees, on the same base the posting uses — the
+    // taxable value where the invoice's own tax has been keyed, never the
+    // tax-inclusive total. A summary beside an approve button has to agree
+    // with the entry underneath it.
+    const withheld = Number(b.tds_amount) > 0 ? money(b.tds_amount) : null;
     return {
       summary: `Book ${b.institution} ${b.bill_no ?? ""} of ${b.bill_date} — ${b.currency} ${b.amount}` +
                (b.rate ? ` at ₹${b.rate}` : "") + ` = ${money(b.inr_amount)} → ${p.expense_account ?? "?"}` +
                ` · GST ${p.gst_treatment ?? "?"}` +
-               (d.tdsLabel ? ` · withhold ${d.tdsLabel}` : p.tds_section ? ` · TDS ${p.tds_section}` : " · no TDS"),
+               (withheld ? ` · withhold ${withheld}${Number(b.taxable_value) > 0 ? ` of ${money(b.taxable_value)}` : ""}`
+                 : d.tdsLabel ? ` · withhold ${d.tdsLabel}` : p.tds_section ? ` · TDS ${p.tds_section}` : " · no TDS"),
       details: { ...b },
     };
   }

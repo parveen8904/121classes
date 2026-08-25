@@ -299,13 +299,35 @@ export async function approveAllZohoAction(formData: FormData) {
   const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
   if (!ids.length) return;
   const { releaseApproval } = await import("@/lib/zohoApprovals");
-  let done = 0, failed = 0;
+
+  // RELEASE AS MANY AS THE MINUTE ALLOWS, THEN STOP AND SAY SO.
+  //
+  // Zoho gives the organisation 100 calls a minute and a posting costs several,
+  // so a long queue cannot all go at once however patient we are: waiting it
+  // out would simply move the failure to the function's own timeout, where the
+  // message is far less useful. Nothing is lost by stopping — an approval that
+  // was not reached is still pending and still on his gate.
+  //
+  // A throttle is the ONE reason to stop early. Any other failure is that
+  // item's own problem, gets recorded against it, and the rest carry on.
+  let done = 0, failed = 0, notReached = 0;
+  let throttled = false;
   for (const id of ids) {
+    if (throttled) { notReached++; continue; }
     const r = await releaseApproval(id, me?.id ?? null);
-    if (r.startsWith("Approved and posted")) done++; else failed++;
+    if (r.startsWith("Approved and posted")) done++;
+    else if (/limit of 100 calls|throttling us|per-minute limit/i.test(r)) { throttled = true; notReached++; }
+    else failed++;
   }
+
+  const note = `${done} posted`
+    + (failed ? `, ${failed} did not go through — see the reasons above` : "")
+    + (notReached
+        ? `. ${notReached} not reached: Zoho allows 100 calls a minute and that minute is used up. `
+          + `They are still waiting on your gate — press approve again in a minute.`
+        : ".");
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(`${done} posted${failed ? `, ${failed} did not go through — see the reasons below` : ""}.`)}#approvals`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#approvals`);
 }
 
 export async function rejectZohoAction(formData: FormData) {

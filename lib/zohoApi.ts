@@ -116,6 +116,47 @@ export async function zohoAccessToken(): Promise<string> {
 }
 
 /** Authenticated Zoho Books call. Path like "/chartofaccounts"; org id appended. */
+/**
+ * WAIT FOR A SLOT BEFORE CALLING ZOHO.
+ *
+ * Zoho allows 100 calls a minute per organisation, on every plan. The budget
+ * belongs to the organisation, not to a lambda, so it is counted in one
+ * database row that every invocation shares — a cron firing while he presses
+ * "approve all" draws from the same minute, and an in-memory counter would let
+ * each of them think it was alone. See the migration zoho_api_pacing.
+ *
+ * Waiting is bounded. A queue this long means something unusual is running, and
+ * hanging a request for a full minute would simply move the failure to the
+ * function timeout — where the message would be far less useful than this one.
+ */
+const MAX_WAIT_MS = 20_000;
+
+async function reserveZohoSlot(): Promise<void> {
+  let waited = 0;
+  for (let i = 0; i < 6; i++) {
+    let ms = 0;
+    try {
+      const { createServiceClient } = await import("@/lib/supabase/service");
+      const { data } = await createServiceClient().rpc("zoho_reserve_call", { p_limit: 80 });
+      ms = Number(data) || 0;
+    } catch {
+      // The pacer must never be the reason a posting fails. If the ledger of
+      // calls cannot be read, proceed — Zoho's own limit is still the backstop.
+      return;
+    }
+    if (ms <= 0) return;
+    if (waited + ms > MAX_WAIT_MS) {
+      throw new Error(
+        `Zoho's limit of 100 calls a minute is already used up — nothing was written. ` +
+        `Wait about ${Math.ceil(ms / 1000)} seconds and release it again.`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, ms + 250));
+    waited += ms + 250;
+  }
+  throw new Error("Zoho's per-minute limit stayed full — nothing was written. Try again shortly.");
+}
+
 export async function zohoFetch<T = Record<string, unknown>>(
   path: string,
   init?: { method?: string; body?: Record<string, unknown>; query?: Record<string, string> },
@@ -123,6 +164,9 @@ export async function zohoFetch<T = Record<string, unknown>>(
 ): Promise<T> {
   // The gate. Anything that would change the books needs his approval first.
   assertZohoWriteAllowed(init?.method, path);
+  // Paced to Zoho's published limit. A retry (attempt > 0) has already held a
+  // slot and is not charged twice.
+  if (attempt === 0) await reserveZohoSlot();
   const token = await zohoAccessToken();
   const orgId = await getSecret("ZOHO_ORG_ID");
   const q = new URLSearchParams({ ...(init?.query ?? {}), ...(orgId ? { organization_id: orgId } : {}) });

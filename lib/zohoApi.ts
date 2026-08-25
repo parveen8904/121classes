@@ -119,6 +119,7 @@ export async function zohoAccessToken(): Promise<string> {
 export async function zohoFetch<T = Record<string, unknown>>(
   path: string,
   init?: { method?: string; body?: Record<string, unknown>; query?: Record<string, string> },
+  attempt = 0,
 ): Promise<T> {
   // The gate. Anything that would change the books needs his approval first.
   assertZohoWriteAllowed(init?.method, path);
@@ -136,7 +137,33 @@ export async function zohoFetch<T = Record<string, unknown>>(
   });
   const j = (await res.json().catch(() => ({}))) as T & { code?: number; message?: string };
   if (!res.ok || (typeof j.code === "number" && j.code !== 0)) {
-    throw new Error(`Zoho ${path}: ${j.message || res.status}`);
+    const msg = String(j.message || res.status);
+
+    // A RATE LIMIT IS A WAIT, NOT A FAILURE.
+    //
+    // Zoho answers a burst with "For security reasons you have been blocked for
+    // some time as you have exceeded the maximum number of requests per
+    // minute", and that came back to him as two sales that simply did not post.
+    // Nothing was wrong with either of them; they were the ones that happened
+    // to be behind the others in the queue.
+    //
+    // Caching the ids it was asking for removes most of the cause. This handles
+    // the rest: a throttled READ waits and tries again rather than losing the
+    // work. A WRITE is never retried automatically — a bill or invoice that may
+    // in fact have been created must not be sent twice, and a duplicate in the
+    // ledger is far worse than an error he can press again.
+    const throttled = res.status === 429 || /exceeded the maximum number of requests|too many requests/i.test(msg);
+    const isRead = (init?.method ?? "GET").toUpperCase() === "GET";
+    if (throttled && isRead && attempt < 2) {
+      await new Promise((r) => setTimeout(r, (attempt + 1) * 3000));
+      return zohoFetch<T>(path, init, attempt + 1);
+    }
+    if (throttled) {
+      throw new Error(
+        `Zoho is throttling us just now (too many requests in a minute) — nothing was written. Wait a minute and release it again.`,
+      );
+    }
+    throw new Error(`Zoho ${path}: ${msg}`);
   }
   return j;
 }

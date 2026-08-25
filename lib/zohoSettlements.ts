@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { zohoFetch } from "@/lib/zohoApi";
+import { accountId as lookupAccountId } from "@/lib/zohoLookup";
 import { fetchRazorpaySettlements } from "@/lib/razorpay";
 
 // RAZORPAY SETTLEMENTS → ZOHO, squared to the paisa.
@@ -26,13 +27,10 @@ const istDay = (unixSec: number) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(unixSec * 1000));
 
 let ids: { axis: string; charges: string; clearing: string } | null = null;
-async function accountId(name: string): Promise<string> {
-  const r = await zohoFetch<{ chartofaccounts?: { account_id: string; account_name: string }[] }>(
-    "/chartofaccounts", { query: { search_text: name, filter_by: "AccountType.All" } });
-  const hit = (r.chartofaccounts ?? []).find((a) => a.account_name === name);
-  if (!hit) throw new Error(`Zoho account "${name}" not found`);
-  return hit.account_id;
-}
+// Shared and cached in the database — the private copy here asked Zoho three
+// times per settlement and its cache died with each serverless invocation.
+// See lib/zohoLookup.ts.
+const accountId = (name: string) => lookupAccountId(name);
 async function refs() {
   if (ids) return ids;
   ids = {

@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { zohoFetch } from "@/lib/zohoApi";
+import { taxId } from "@/lib/zohoLookup";
 import { lineNarration } from "@/lib/zohoNarration";
 import { zohoAccountId, listZohoAccounts } from "@/lib/bankStatements";
 import { rule115Rate } from "@/lib/forexRates";
@@ -341,12 +342,9 @@ async function findOrCreateVendor(name: string, overseas: boolean, currency: str
   return made.contact.contact_id;
 }
 
-async function taxIdByName(name: string): Promise<string | null> {
-  try {
-    const r = await zohoFetch<{ taxes?: { tax_id: string; tax_name: string }[] }>("/settings/taxes");
-    return (r.taxes ?? []).find((t) => t.tax_name === name)?.tax_id ?? null;
-  } catch { return null; }
-}
+// Shared and cached — see lib/zohoLookup.ts. Asking Zoho for the tax list on
+// every bill is part of what tripped its per-minute limit.
+const taxIdByName = (name: string) => taxId(name);
 
 type ZohoBill = {
   bill_id: string; vendor_name?: string; currency_code?: string; exchange_rate?: number;

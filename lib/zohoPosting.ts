@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { zohoFetch } from "@/lib/zohoApi";
+import { accountId } from "@/lib/zohoLookup";
 import { zohoStateCode } from "@/lib/indiaStates";
 
 // THE POSTING ENGINE — portal sales → Zoho Books, in the team's own house style.
@@ -29,13 +30,10 @@ const TERMS =
 
 let refCache: { salesClasses: string; salesValidity: string; clearing: string; gst18: string; igst18: string } | null = null;
 
-async function accountIdByName(name: string): Promise<string> {
-  const r = await zohoFetch<{ chartofaccounts?: { account_id: string; account_name: string }[] }>(
-    "/chartofaccounts", { query: { search_text: name, filter_by: "AccountType.All" } });
-  const hit = (r.chartofaccounts ?? []).find((a) => a.account_name === name);
-  if (!hit) throw new Error(`Zoho account "${name}" not found`);
-  return hit.account_id;
-}
+// Shared, database-backed. The in-file version asked Zoho on every posting and
+// its cache did not survive a serverless invocation — which is what tripped
+// Zoho's per-minute limit on a run of releases. See lib/zohoLookup.ts.
+const accountIdByName = (name: string) => accountId(name);
 
 async function refs() {
   if (refCache) return refCache;

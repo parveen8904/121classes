@@ -292,10 +292,19 @@ export default async function ZohoHubPage(props: {
   // Everything waiting on him before it can reach Zoho.
   const { listPending } = await import("@/lib/zohoApprovals");
   const allPending = hubConnected ? await listPending() : [];
-  // A vendor bill the desk has sent up is shown ON ITS OWN LINE in the bills
-  // list below, marked as sent — showing it twice, once here and once there,
-  // was just two places to decide the same thing.
-  const pendingApprovals = allPending.filter((a) => a.kind !== "provider_bill");
+  // VENDOR BILLS BELONG AT THE GATE TOO — AND WITHOUT THIS THEY WERE STUCK.
+  //
+  // This used to exclude them, and that was right at the time: his press on the
+  // bill card posted it there and then, so listing it here as well would have
+  // been two places to decide the same thing.
+  //
+  // Then he ruled that nothing may post except through the gate, and I removed
+  // the bill card's direct-post path — without removing this filter. The result
+  // was a trap: the desk said "sent to you by the desk", the gate said "nothing
+  // waiting", and NINETEEN bills piled up with no way to release them at all.
+  // The card is now only a marker that it has been sent; the gate is where it
+  // is decided, so the gate must show it.
+  const pendingApprovals = allPending;
   // THE ENTRY BEHIND EACH ONE, WORKED OUT BEFORE THE GATE IS DRAWN.
   //
   // He should not have to open anything to see what releasing an item does to
@@ -1719,7 +1728,10 @@ export default async function ZohoHubPage(props: {
                         is a figure, and it would be a false one. */}
                     <span style={{ fontWeight: 600 }}><Money n={inr || null} /></span>
                     <span className="muted" style={{ fontSize: ".82rem" }}>{headline}</span>
-                    {waitingOnHim && <span style={{ fontSize: ".75rem", color: "#b45309" }}>· sent to you by the desk</span>}
+                    {/* Say WHERE it is waiting. "sent to you by the desk" told
+                        him it had moved but not where to go, and while the gate
+                        was hiding bills that was the whole of the trail. */}
+                    {waitingOnHim && <span style={{ fontSize: ".75rem", color: "#b45309" }}>· waiting at your approval gate ↑</span>}
                   </span>
                 </summary>
 

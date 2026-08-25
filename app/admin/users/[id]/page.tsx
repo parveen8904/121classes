@@ -7,7 +7,7 @@ import DeleteButton from "../../_components/DeleteButton";
 import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan, resetStudentTests, resetOneAttempt, regradeAttempt, makeLoginLink } from "../actions";
 import { startViewAs } from "@/app/dashboard/viewAsActions";
 import PaperForStudent from "./PaperForStudent";
-import { ADMIN_AREAS } from "@/lib/adminAccess";
+import { ADMIN_AREAS, currentStaff } from "@/lib/adminAccess";
 
 function fmt(s: string | null): string {
   if (!s) return "—";
@@ -32,6 +32,44 @@ export default async function UserDetail(
 ) {
   const searchParams = await props.searchParams;
   const params = await props.params;
+
+  // ONE ACCOUNT'S PAGE IS NOT THE SAME JOB AS THE LIST.
+  //
+  // The "users" grant (added 25 Aug 2026 at Ravi's request) opens the Users
+  // section so the office can add people, send set-password mails, rescue
+  // first logins and import supporters. This page is a different thing: it can
+  // open the student's dashboard as them, mint a one-time sign-in link, set a
+  // password, wipe a plan or a test, and edit roles and rights — and rights
+  // editing is how a holder would grant themselves everything else.
+  //
+  // Every action on this page is admin-only in actions.ts. Showing the console
+  // to a grant holder would therefore be a screen of buttons that silently do
+  // nothing — the "rights given but nothing happens" fault reported before. So
+  // the page says plainly who to ask instead.
+  const staff = await currentStaff();
+  if (staff?.role !== "admin") {
+    return (
+      <div className="container" style={{ padding: "24px 0" }}>
+        <AdminHero
+          badge="👥 Users"
+          title="This account's page is admin-only"
+          subtitle="Your rights cover the Users section, not individual accounts"
+          back={{ href: "/admin/users", label: "Users" }}
+        />
+        <div className="notice" style={{ marginTop: 16, lineHeight: 1.75 }}>
+          <p style={{ marginTop: 0 }}>
+            You can add people, send a set-password email, rescue first logins and import supporters
+            from the <a href="/admin/users">Users list</a>.
+          </p>
+          <p style={{ marginBottom: 0 }}>
+            Opening one account gives control of it — signing in as them, changing a password, editing
+            roles and rights — so it stays with the admins. Ask Sir if you need something changed here.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const supabase = createClient();
   const { data: u } = await supabase
     .from("profiles")

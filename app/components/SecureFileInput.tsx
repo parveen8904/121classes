@@ -13,6 +13,7 @@ export default function SecureFileInput({
   const [ref, setRef] = useState("");
   const [busy, setBusy] = useState(false);
   const [fileName, setFileName] = useState("");
+  const [err, setErr] = useState("");
   const supabase = createClient();
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -23,8 +24,24 @@ export default function SecureFileInput({
       const ext = (file.name.split(".").pop() || "bin").replace(/[^a-z0-9]/gi, "").slice(0, 6);
       const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const { error } = await supabase.storage.from("secure").upload(path, file, { contentType: file.type || "application/octet-stream", upsert: true });
-      if (error) { alert("Upload failed — please try again."); return; }
-      setRef(`secure:${path}`); setFileName(file.name);
+      if (error) {
+        // WHY IT FAILED, NOT JUST THAT IT DID.
+        //
+        // This threw the reason away and said "please try again" — inviting a
+        // student to keep attempting something that could not work. Scholarship
+        // uploads had been refused by storage policy for every applicant, and
+        // the message told them nothing and told us nothing either.
+        const why = String(error.message || "");
+        const denied = /row-level security|not authorized|permission/i.test(why);
+        setErr(denied
+          ? "We are not able to accept that file here yet — this is our fault, not yours. Please tell us on the support page and we will fix it."
+          : /exceed|too large|payload/i.test(why)
+            ? "That file is too large. Please upload one under about 10 MB."
+            : `Upload failed: ${why || "unknown error"}. Please try once more, then tell us on the support page.`);
+        console.error("[SecureFileInput] upload refused", { folder, why });
+        return;
+      }
+      setErr(""); setRef(`secure:${path}`); setFileName(file.name);
     } finally { setBusy(false); e.target.value = ""; }
   }
 
@@ -38,6 +55,7 @@ export default function SecureFileInput({
         </label>
         {fileName && <span className="muted" style={{ fontSize: ".82rem" }}>{ref ? "✓ " : ""}{fileName}</span>}
       </div>
+      {err && <p className="notice err" style={{ fontSize: ".82rem", margin: "8px 0 0", lineHeight: 1.6 }}>{err}</p>}
       <input type="hidden" name={name} value={ref} required={required} />
     </div>
   );

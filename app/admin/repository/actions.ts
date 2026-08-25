@@ -91,6 +91,62 @@ export async function extractItemText(formData: FormData) {
   revalidatePath("/admin/repository");
 }
 
+// EDIT AN ITEM THAT IS ALREADY IN.
+//
+// Until now this page could add, disable and delete — but not change anything.
+// Ravi's report was "unable to find this question bank in admin panel for
+// editing purpose", and he was right twice over: the item was buried in an
+// unfiltered list of 174, and even once found there was nothing to press. A
+// wrong title, a question bank filed under the wrong subject, or a validity
+// that should have said "from May 2027" could only be fixed by deleting the
+// item and uploading it again — which throws away its extracted text and its
+// place in the search index.
+//
+// Replacing the FILE re-extracts the text, because the old text belongs to the
+// old file; leaving the file box empty keeps both the file and its text.
+export async function updateRepositoryItem(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const id = str(formData.get("id"));
+  const title = str(formData.get("title")).trim();
+  if (!id || !title) return;
+
+  const svc = createServiceClient();
+  const { data: before } = await svc
+    .from("repository_items").select("file_url").eq("id", id).maybeSingle();
+
+  const newFile = orNull(formData.get("file_url"));
+  const fileChanged = !!newFile && newFile !== (before?.file_url ?? null);
+
+  const patch: Record<string, unknown> = {
+    title,
+    kind: str(formData.get("kind")) || "other",
+    subject_id: orNull(formData.get("subject_id")),
+    course_id: orNull(formData.get("course_id")),
+    valid_from: orNull(formData.get("valid_from")),
+    valid_to: orNull(formData.get("valid_to")),
+    valid_from_attempt: orNull(formData.get("valid_from_attempt")),
+  };
+
+  // A PDF is the only thing the public Resources page can carry, so the tick is
+  // only honoured when there is one — exactly as on the add form.
+  const effectiveFile = newFile ?? before?.file_url ?? null;
+  const isPdf = !!effectiveFile && /\.pdf($|\?)/i.test(effectiveFile);
+  const share = formData.get("share_to_resources") === "on" && isPdf;
+  patch.share_to_resources = share;
+  patch.resource_label = share ? (str(formData.get("resource_label")) || title) : null;
+
+  if (fileChanged) {
+    patch.file_url = newFile;
+    // The stored text described the file being replaced. Re-read it rather
+    // than leaving the AI answering from a document that is no longer here.
+    patch.content = /\.pdf($|\?)/i.test(newFile!) ? await extractPdfText(newFile!) : null;
+  }
+
+  await svc.from("repository_items").update(patch).eq("id", id);
+  revalidatePath("/admin/repository");
+  revalidatePath("/resources");
+}
+
 export async function deleteRepositoryItem(formData: FormData) {
   if (!(await requireAdmin())) return;
   const id = str(formData.get("id"));

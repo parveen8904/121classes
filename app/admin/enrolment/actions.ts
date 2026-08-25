@@ -71,7 +71,7 @@ async function planIdForTier(
 }
 
 export async function grantSubscription(formData: FormData) {
-  await assertArea(null);
+  await assertArea("enrolment");
   const email = str(formData.get("email")).toLowerCase();
   const courseId = str(formData.get("course_id"));
   const subjectRaw = str(formData.get("subject_id"));
@@ -160,7 +160,7 @@ export async function grantSubscription(formData: FormData) {
 }
 
 export async function bulkGrant(formData: FormData) {
-  await assertArea(null);
+  await assertArea("enrolment");
   const raw = str(formData.get("emails"));
   const courseId = str(formData.get("course_id"));
   const subjectRaw = str(formData.get("subject_id"));
@@ -239,7 +239,7 @@ export async function bulkGrant(formData: FormData) {
 }
 
 export async function revokeSubscription(formData: FormData) {
-  await assertArea(null);
+  await assertArea("enrolment");
   const id = str(formData.get("id"));
   const supabase = createClient();
   await supabase.from("subscriptions").update({ status: "cancelled", auto_renew: false }).eq("id", id);
@@ -251,7 +251,7 @@ export async function revokeSubscription(formData: FormData) {
 // this saves. Reversible: the reason and time are kept so a mistake can be
 // undone and a genuine block can be explained later.
 export async function blockSubscription(formData: FormData) {
-  await assertArea(null);
+  await assertArea("enrolment");
   const id = str(formData.get("id"));
   const reason = str(formData.get("reason")).trim().slice(0, 300);
   if (!id) return;
@@ -266,7 +266,7 @@ export async function blockSubscription(formData: FormData) {
 }
 
 export async function restoreSubscription(formData: FormData) {
-  await assertArea(null);
+  await assertArea("enrolment");
   const id = str(formData.get("id"));
   if (!id) return;
   await createServiceClient().from("subscriptions").update({
@@ -279,7 +279,7 @@ export async function restoreSubscription(formData: FormData) {
 }
 
 export async function extendSubscription(formData: FormData) {
-  await assertArea(null);
+  await assertArea("enrolment");
   const id = str(formData.get("id"));
   const months = num(formData.get("months"), 1);
   const supabase = createClient();
@@ -305,7 +305,7 @@ export async function extendSubscription(formData: FormData) {
 // Past students in bulk, ANY size: upload the Excel template (or paste), rows
 // queue, and a cron drips the emails slowly so the batch never looks like spam.
 export async function queuePastStudents(formData: FormData) {
-  await assertArea(null);
+  await assertArea("enrolment");
   const courseId = str(formData.get("course_id"));
   const subjectId = str(formData.get("subject_id")) || null;
   const tier = TIERS.includes(str(formData.get("tier"))) ? str(formData.get("tier")) : "gold";

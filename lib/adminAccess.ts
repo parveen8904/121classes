@@ -31,6 +31,17 @@ export const ADMIN_AREAS: AdminArea[] = [
   { key: "moderation", label: "🛡️ Group chat moderation", prefixes: ["/admin/discussion"] },
   { key: "live", label: "📡 Live classes", prefixes: ["/admin/live"] },
   { key: "results", label: "🏆 Results", prefixes: ["/admin/results"] },
+  // PEOPLE. Both of these existed as pages long before rights did, and neither
+  // was ever listed here — so `pathAllowed` refused every operator and faculty
+  // member who was sent to them, with no checkbox anyone could tick to fix it.
+  // Ravi reported it as "pl add user and enrollment section here also".
+  //
+  // Two grants, not one, because they are two jobs. Enrolment is the daily
+  // office task: someone paid, give them the course. Users is the heavier one —
+  // it adds people, resets first logins, imports supporters and can change a
+  // role — so it is handed out on its own and the label says what it carries.
+  { key: "enrolment", label: "📝 Enrolment (give a student course access, bulk enrol)", prefixes: ["/admin/enrolment"] },
+  { key: "users", label: "👥 Users (add people, send set-password mails, rescue logins, import supporters)", prefixes: ["/admin/users"] },
   { key: "store", label: "💳 Sales, orders & books", prefixes: ["/admin/books", "/admin/orders", "/admin/supporters", "/admin/accounts"] },
   { key: "warehouse", label: "🏭 Warehouse & shipping", prefixes: ["/admin/warehouse"] },
   { key: "career", label: "🎓 Career & placement", prefixes: ["/admin/content", "/admin/placement"] },

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { currentStaff, staffCanArea } from "@/lib/adminAccess";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -22,6 +23,27 @@ async function requireAdmin(): Promise<boolean> {
   if (!user) return false;
   const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
   return data?.role === "admin";
+}
+
+// THE "USERS" GRANT — THE DESK JOB, NOT THE KEYS.
+//
+// The page had no entry in ADMIN_AREAS at all, so only an admin could open it
+// and every action here checked for admin alone. Ravi asked for the section to
+// be grantable, and it now is — but the grant deliberately does NOT carry
+// everything on this page, because the actions here are not of one kind:
+//
+//   · Adding people, sending a set-password mail, rescuing first logins and
+//     importing supporters are the office's daily work. Those take the grant.
+//
+//   · Setting somebody's password, minting a sign-in link, and changing a role
+//     or rights are ways to BECOME another account — and rights-editing is a
+//     way to grant yourself the rest. Wiping a student's plan, tests or an
+//     attempt destroys their record. Those stay with the founder and admins,
+//     exactly as before, whoever holds this grant.
+//
+// So the checkbox opens the section without handing over the keys to it.
+async function requireUsersDesk(): Promise<boolean> {
+  return staffCanArea(await currentStaff(), "users");
 }
 
 // THE FOUNDER'S ACCOUNT CANNOT BE SEIZED BY ANOTHER ADMIN.
@@ -88,7 +110,7 @@ async function emailSetPasswordLink(email: string, name: string): Promise<boolea
 // Admin adds one or many users (no verification needed — admin-trusted). Each is
 // created confirmed, then emailed a "set your password" link.
 export async function addUsers(formData: FormData) {
-  if (!(await requireAdmin())) return;
+  if (!(await requireUsersDesk())) return;
   const role = ROLES.includes(str(formData.get("role"))) ? str(formData.get("role")) : "student";
   const lines = str(formData.get("bulk")).split(/\n/).map((l) => l.trim()).filter(Boolean);
   const svc = createServiceClient();
@@ -115,7 +137,7 @@ export async function addUsers(formData: FormData) {
 
 // Per-user: (re)send the set-password email.
 export async function sendSetPasswordEmail(formData: FormData) {
-  if (!(await requireAdmin())) return;
+  if (!(await requireUsersDesk())) return;
   const email = str(formData.get("email"));
   const name = str(formData.get("name"));
   if (await foundersAccountIsProtected({ email })) redirect("/admin/users?invited=0");
@@ -302,7 +324,7 @@ export async function resetStudentTests(formData: FormData) {
 // the next morning. This sends a password instead: it does not expire, it works
 // from any device, and it can be read aloud over a phone.
 export async function rescueFirstLogins(formData?: FormData) {
-  if (!(await requireAdmin())) return;
+  if (!(await requireUsersDesk())) return;
   // "tried" = only those who asked for a link themselves and still are not in.
   // Anything else writes to every student who has never signed in, most of whom
   // have never even opened the login page.
@@ -330,7 +352,7 @@ export async function rescueFirstLogins(formData?: FormData) {
  * flipped to supporter rather than duplicated.
  */
 export async function importSupporters(formData: FormData) {
-  if (!(await requireAdmin())) return;
+  if (!(await requireUsersDesk())) return;
   const lines = str(formData.get("bulk")).split(/\n/).map((l) => l.trim()).filter(Boolean);
   const svc = createServiceClient();
   let created = 0, marked = 0, failed = 0;

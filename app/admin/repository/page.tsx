@@ -5,7 +5,7 @@ import { aiConfigured } from "@/lib/ai";
 import SubmitButton from "@/app/components/SubmitButton";
 import AdminHero from "../_components/AdminHero";
 import PdfUpload from "../_components/PdfUpload";
-import { addRepositoryItem, deleteRepositoryItem, toggleRepositoryItem, extractItemText, runIngestNow, refreshRepositoryIndex, readUnreadableFiles } from "./actions";
+import { addRepositoryItem, updateRepositoryItem, deleteRepositoryItem, toggleRepositoryItem, extractItemText, runIngestNow, refreshRepositoryIndex, readUnreadableFiles } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "AI Repository — Admin" };
@@ -43,6 +43,9 @@ type Item = {
   valid_to: string | null;
   valid_from_attempt: string | null;
   is_active: boolean;
+  course_id: string | null;
+  share_to_resources: boolean | null;
+  resource_label: string | null;
 };
 
 function fmtRange(from: string | null, to: string | null, attempt: string | null): string {
@@ -52,12 +55,15 @@ function fmtRange(from: string | null, to: string | null, attempt: string | null
   return parts.join(" · ") || "no validity set";
 }
 
-export default async function RepositoryPage() {
+export default async function RepositoryPage(
+  props: { searchParams: Promise<{ q?: string; kind?: string; subject?: string; edit?: string }> },
+) {
+  const sp = await props.searchParams;
   const svc = createServiceClient();
   const [{ data: items }, { data: subjects }, { data: courses }, ai, { data: secs }] = await Promise.all([
     // Metadata view — never the extracted text itself. Selecting `content`
     // here pulled 18 MB per page view and made every refresh crawl.
-    svc.from("repository_items_meta").select("id, title, kind, subject_id, file_url, content_chars, is_unreadable, has_text, valid_from, valid_to, valid_from_attempt, is_active").order("created_at", { ascending: false }),
+    svc.from("repository_items_meta").select("id, title, kind, subject_id, file_url, content_chars, is_unreadable, has_text, valid_from, valid_to, valid_from_attempt, is_active, course_id, share_to_resources, resource_label").order("created_at", { ascending: false }),
     svc.from("subjects").select("id, title").order("title"),
     svc.from("courses").select("id, title").order("title"),
     aiConfigured(),
@@ -65,6 +71,37 @@ export default async function RepositoryPage() {
     svc.from("sections_meta").select("topic_id, has_transcript, has_digest, notes_hand_url, has_notes_text, pdf_url, notes_typed_url, has_pdf_text").eq("type", "full_class_video").eq("is_published", true),
   ]);
   const list = (items ?? []) as Item[];
+  // The finder. Matching on the name is done here rather than in the query
+  // because the whole metadata list is already loaded for the coverage figures
+  // above — a second round trip would buy nothing.
+  const q = (sp.q ?? "").trim();
+  const kindFilter = sp.kind ?? "";
+  const subjectFilter = sp.subject ?? "";
+  const needle = q.toLowerCase();
+  const shown = list.filter((it) =>
+    (!needle || it.title.toLowerCase().includes(needle)) &&
+    (!kindFilter || it.kind === kindFilter) &&
+    (!subjectFilter || it.subject_id === subjectFilter));
+
+  // WHICH ONE IS OPEN FOR EDITING.
+  //
+  // Only that one renders its form. Putting a form inside all 174 cards --
+  // even collapsed, since a <details> still fills the DOM -- would have meant
+  // 174 upload widgets on a page that is already a long list, which is the
+  // kind of weight this codebase spends real effort keeping off.
+  //
+  // The open item is a query parameter so the filters survive the trip: press
+  // Edit, save, and the same filtered view comes back.
+  const editing = sp.edit ?? "";
+  const keepFilters = (extra: Record<string, string>) => {
+    const usp = new URLSearchParams();
+    if (q) usp.set("q", q);
+    if (kindFilter) usp.set("kind", kindFilter);
+    if (subjectFilter) usp.set("subject", subjectFilter);
+    for (const [k, v] of Object.entries(extra)) { if (v) usp.set(k, v); else usp.delete(k); }
+    const qs = usp.toString();
+    return `/admin/repository${qs ? `?${qs}` : ""}`;
+  };
   const subjMap = new Map((subjects ?? []).map((s) => [s.id, s.title as string]));
 
   // What content the AI actually has to answer from.
@@ -273,13 +310,46 @@ export default async function RepositoryPage() {
         </div>
       </details>
 
-      {/* LIST */}
-      <h3 style={{ marginTop: 30 }}>📦 In the repository ({list.length})</h3>
+      {/* LIST — WITH A WAY TO FIND ONE ITEM AMONG HUNDREDS.
+          174 items in date order with no search is why "I cannot find the
+          question bank" was a fair report. Name, type and subject narrow it;
+          the form is a GET so a filtered view can be bookmarked or sent on. */}
+      <h3 style={{ marginTop: 30 }}>📦 In the repository ({shown.length}{shown.length !== list.length ? ` of ${list.length}` : ""})</h3>
+
+      <form method="get" className="card" style={{ marginTop: 12, display: "grid", gap: 10, gridTemplateColumns: "2fr 1.4fr 1.4fr auto", alignItems: "end" }}>
+        <div>
+          <label>Search by name</label>
+          <input name="q" defaultValue={q} placeholder="e.g. question bank, RTP, Ind AS 115" />
+        </div>
+        <div>
+          <label>Type</label>
+          <select name="kind" defaultValue={kindFilter}>
+            <option value="">— All types —</option>
+            {Object.entries(KIND_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label>Subject</label>
+          <select name="subject" defaultValue={subjectFilter}>
+            <option value="">— All subjects —</option>
+            {(subjects ?? []).map((sub) => <option key={sub.id} value={sub.id}>{sub.title}</option>)}
+          </select>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button className="btn" type="submit">Find</button>
+          {(q || kindFilter || subjectFilter) && <Link className="btn small secondary" href="/admin/repository">Clear</Link>}
+        </div>
+      </form>
+
       {list.length === 0 ? (
         <p className="muted">Nothing added yet.</p>
+      ) : shown.length === 0 ? (
+        <p className="muted" style={{ marginTop: 12 }}>
+          Nothing matches that. <Link href="/admin/repository">Show all {list.length}</Link>.
+        </p>
       ) : (
         <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
-          {list.map((it) => (
+          {shown.map((it) => (
             <div className="card" key={it.id} style={{ opacity: it.is_active ? 1 : 0.55 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                 <div>
@@ -306,12 +376,93 @@ export default async function RepositoryPage() {
                     <input type="hidden" name="active" value={it.is_active ? "false" : "true"} />
                     <button className="btn small secondary" type="submit">{it.is_active ? "Disable" : "Enable"}</button>
                   </form>
+                  <Link
+                    className="btn small secondary"
+                    href={keepFilters({ edit: editing === it.id ? "" : it.id })}
+                  >
+                    {editing === it.id ? "Close" : "✏️ Edit"}
+                  </Link>
                   <form action={deleteRepositoryItem} style={{ margin: 0 }}>
                     <input type="hidden" name="id" value={it.id} />
                     <button className="btn small secondary" type="submit">Delete</button>
                   </form>
                 </div>
               </div>
+
+              {/* EDIT — the thing this page never had. Only the item being
+                  edited renders a form; the rest carry a link. Leave the file
+                  box empty to keep the file and its extracted text; choose a
+                  new PDF only to REPLACE it, which re-reads the text. */}
+              {editing === it.id && (
+                <form action={updateRepositoryItem} style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                  <input type="hidden" name="id" value={it.id} />
+
+                  <div>
+                    <label>Name</label>
+                    <input name="title" defaultValue={it.title} required />
+                  </div>
+
+                  <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr" }}>
+                    <div>
+                      <label>Type</label>
+                      <select name="kind" defaultValue={it.kind}>
+                        {Object.entries(KIND_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label>Subject</label>
+                      <select name="subject_id" defaultValue={it.subject_id ?? ""}>
+                        <option value="">— Any / not subject-specific —</option>
+                        {(subjects ?? []).map((sub) => <option key={sub.id} value={sub.id}>{sub.title}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label>Course</label>
+                      <select name="course_id" defaultValue={it.course_id ?? ""}>
+                        <option value="">— Any / not course-specific —</option>
+                        {(courses ?? []).map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr" }}>
+                    <div>
+                      <label>Valid from (date)</label>
+                      <input name="valid_from" type="date" defaultValue={it.valid_from ?? ""} />
+                    </div>
+                    <div>
+                      <label>Valid to (date)</label>
+                      <input name="valid_to" type="date" defaultValue={it.valid_to ?? ""} />
+                    </div>
+                    <div>
+                      <label>Valid from attempt</label>
+                      <input name="valid_from_attempt" defaultValue={it.valid_from_attempt ?? ""} placeholder="e.g. May 2026" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <PdfUpload name="file_url" folder="repository" label="Replace the file (optional — leave empty to keep the current one and its text)" />
+                    {it.file_url && (
+                      <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 0" }}>
+                        Currently attached. Choosing a new PDF replaces it and re-reads its text.
+                      </p>
+                    )}
+                  </div>
+
+                  <label className="remember">
+                    <input type="checkbox" name="share_to_resources" defaultChecked={!!it.share_to_resources} /> 🌐 Share this PDF on the public <strong>Resources</strong> page (PDFs only)
+                  </label>
+                  <div>
+                    <label>Resources page label (optional — defaults to the name)</label>
+                    <input name="resource_label" defaultValue={it.resource_label ?? ""} placeholder="e.g. ICAI RTP — May 2026 (FR)" />
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <SubmitButton className="btn" savedLabel="✓ Saved">Save changes</SubmitButton>
+                    <Link className="btn small secondary" href={keepFilters({ edit: "" })}>Cancel</Link>
+                  </div>
+                </form>
+              )}
             </div>
           ))}
         </div>

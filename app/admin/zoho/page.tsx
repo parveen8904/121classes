@@ -1700,7 +1700,19 @@ export default async function ZohoHubPage(props: {
             const d = b.determination;
             const p = b.proposal ?? {};
             const inr = Number(b.inr_amount ?? 0);
-            const tdsRate = d?.tdsRate ?? p.tds_rate ?? null;
+            // HIS ANSWER BEATS THE MACHINE'S GUESS.
+            //
+            // This read `d?.tdsRate ?? p.tds_rate` — the AI's determination
+            // first, and `??` only falls through on null. So once the AI had
+            // decided 10%, setting the rate to nil on the form changed the
+            // stored proposal and the entry, and the headline went on saying
+            // "TDS 10% = ₹234.88" for ever. He changed it, we saved it, and the
+            // one line he reads kept quoting the figure he had just overruled.
+            //
+            // Zero is a real answer here, not an absent one, so the test is
+            // whether he has SET the rate — not whether it is truthy.
+            const setRate = p.tds_rate !== null && p.tds_rate !== undefined && String(p.tds_rate) !== "";
+            const tdsRate = setRate ? Number(p.tds_rate) : (d?.tdsRate ?? null);
             // TDS IS ON THE VALUE, NOT THE TAX-INCLUSIVE TOTAL.
             //
             // This line worked the withholding out from `inr` — the whole
@@ -1714,7 +1726,11 @@ export default async function ZohoHubPage(props: {
             // tdsWorking at save time from the right base, so showing it means
             // the headline cannot disagree with what will actually post.
             const tdsBase = Number(b.taxable_value) > 0 ? Number(b.taxable_value) : inr;
-            const tdsAmt = Number(b.tds_amount) > 0
+            // A bill that has been worked out carries its own withholding, and
+            // that is what will post — including when it is zero. Only a bill
+            // nobody has saved yet falls back to computing from the rate.
+            const worked = b.tds_amount !== null && b.tds_amount !== undefined;
+            const tdsAmt = worked
               ? Number(b.tds_amount)
               : tdsRate ? Math.round(tdsBase * Number(tdsRate)) / 100 : 0;
             // A domestic bill whose invoice tax has not been keyed has no
@@ -1729,7 +1745,7 @@ export default async function ZohoHubPage(props: {
               ? "needs two answers before it can be worked out"
               : !inr ? "amount could not be read — open and type it in"
               : `${p.gst_treatment === "rcm" ? "RCM 18%" : p.gst_treatment === "none" ? "no GST" : "GST 18% ITC"}` +
-                `${tdsRate ? ` · TDS ${tdsRate}% = ₹${tdsAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${tdsOnGross ? " (on the gross — key the invoice's taxable value)" : ""}` : " · no TDS"}` +
+                `${tdsAmt > 0 ? ` · TDS ${tdsRate}% = ₹${tdsAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${tdsOnGross ? " (on the gross — key the invoice's taxable value)" : ""}` : " · no TDS"}` +
                 ` → ${p.expense_account ?? "account not set"}`;
 
             return (

@@ -47,8 +47,48 @@ export async function zohoExchangeGrantCode(clientId: string, clientSecret: stri
   return { ok: true, refreshToken: j.refresh_token };
 }
 
+/**
+ * THE ACCESS TOKEN IS SHARED, NOT PER-INVOCATION.
+ *
+ * `tokenCache` lives in module memory, which on Vercel means one cache per warm
+ * lambda — and a cold start has none. Releasing a run of bills therefore asked
+ * Zoho for a fresh access token again and again, and Zoho rate-limits that
+ * endpoint: it answered "Access Denied", which surfaced to him as
+ * "Zoho refused the stored credential" on a bill that was otherwise fine. The
+ * credential was never the problem; the frequency was.
+ *
+ * The token is now kept in app_secrets alongside the refresh token it came
+ * from, so every invocation shares one and a refresh happens roughly hourly
+ * rather than once per posting. It is no more sensitive than the refresh token
+ * already stored there, and expires on its own.
+ */
+const TOKEN_KEY = "ZOHO_ACCESS_TOKEN_CACHE";
+
+async function readSharedToken(): Promise<string | null> {
+  try {
+    const raw = await getSecret(TOKEN_KEY);
+    if (!raw) return null;
+    const { token, exp } = JSON.parse(raw) as { token: string; exp: number };
+    // A minute of headroom, so a token cannot expire mid-request.
+    return token && Date.now() < exp - 60_000 ? token : null;
+  } catch { return null; }
+}
+
+async function writeSharedToken(token: string, expiresInSec: number): Promise<void> {
+  try {
+    const { createServiceClient } = await import("@/lib/supabase/service");
+    const value = JSON.stringify({ token, exp: Date.now() + expiresInSec * 1000 });
+    await createServiceClient().from("app_secrets").upsert({ key: TOKEN_KEY, value }, { onConflict: "key" });
+    const { clearSecretCache } = await import("@/lib/secrets");
+    clearSecretCache();
+  } catch { /* a cache that cannot be written is not a reason to fail the call */ }
+}
+
 export async function zohoAccessToken(): Promise<string> {
   if (tokenCache && Date.now() < tokenCache.exp - 60_000) return tokenCache.token;
+  const shared = await readSharedToken();
+  if (shared) { tokenCache = { token: shared, exp: Date.now() + 5 * 60_000 }; return shared; }
+
   const [id, secret, refresh] = await Promise.all([
     getSecret("ZOHO_CLIENT_ID"), getSecret("ZOHO_CLIENT_SECRET"), getSecret("ZOHO_REFRESH_TOKEN"),
   ]);
@@ -60,8 +100,18 @@ export async function zohoAccessToken(): Promise<string> {
     cache: "no-store",
   });
   const j = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error?: string };
-  if (!j.access_token) throw new Error(`Zoho refused the stored credential (${j.error || "no access token"}).`);
-  tokenCache = { token: j.access_token, exp: Date.now() + (Number(j.expires_in) || 3600) * 1000 };
+  if (!j.access_token) {
+    // Zoho rate-limits this endpoint and answers "Access Denied" when asked too
+    // often. Say which it is, because the two need opposite responses: a real
+    // credential problem needs reconnecting, a rate limit needs waiting.
+    const why = String(j.error || "no access token");
+    throw new Error(/access.?denied|rate/i.test(why)
+      ? `Zoho is rate-limiting the login just now (${why}) — the credential is fine. Try again in a minute.`
+      : `Zoho refused the stored credential (${why}).`);
+  }
+  const ttl = Number(j.expires_in) || 3600;
+  tokenCache = { token: j.access_token, exp: Date.now() + ttl * 1000 };
+  await writeSharedToken(j.access_token, ttl);
   return tokenCache.token;
 }
 

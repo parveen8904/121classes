@@ -700,6 +700,26 @@ export async function postProviderBill(id: string): Promise<void> {
     // An explicitly SET rate is his ruling, and zero is a ruling — it is the
     // whole of what "no TDS on foreign vendors" means. The question is only
     // worth asking while he has said nothing at all.
+    // "NO GST" ON AN IMPORT IS NOT A POSITION ZOHO WILL ACCEPT.
+    //
+    // Zoho refused three of these with: "Specify either a Tax Exemption or
+    // Reverse Charge." It is right to. A bill from a foreign supplier is an
+    // import of service: under GST it carries reverse charge, where we
+    // self-assess the tax and claim it straight back — the two legs cancel and
+    // nothing is actually paid, which is why "no GST" feels equivalent and is
+    // not. A zero-tax bill needs a REASON, and Zoho will only take one of two:
+    // reverse charge, or a recorded exemption.
+    //
+    // Caught here rather than at Zoho, because the message Zoho sends back
+    // names a field on a screen he never sees.
+    if (currency !== "INR" && p.gst_treatment === "none") {
+      return fail(
+        `Zoho will not take a foreign bill marked "no GST": an import of service must carry reverse charge, ` +
+        `or a recorded tax exemption. Open the bill and set GST to "Reverse charge — we pay it" — under reverse ` +
+        `charge the two tax lines cancel, so nothing is paid either way, but the bill is then legal on the face of it.`,
+      );
+    }
+
     const det = b.determination as { tdsRate?: number | null; tdsLabel?: string; why?: string } | null;
     const ruledRate = p.tds_rate !== null && p.tds_rate !== undefined && String(p.tds_rate) !== "";
     const hasRuled = !!p.tds_section || ruledRate || p.tds_mode === "none";

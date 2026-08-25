@@ -18,7 +18,7 @@ import EntryLines from "./EntryLines";
 import SectionToggle from "./SectionToggle";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -291,8 +291,11 @@ export default async function ZohoHubPage(props: {
     : { data: [] as never[] };
   const bills = (billData ?? []) as unknown as ProviderBillRow[];
   // Everything waiting on him before it can reach Zoho.
-  const { listPending } = await import("@/lib/zohoApprovals");
+  const { listPending, listFailed } = await import("@/lib/zohoApprovals");
   const allPending = hubConnected ? await listPending() : [];
+  // Releases that were refused. They leave the pending list the moment they
+  // fail, so without this the gate falls silent and the work looks done.
+  const failedApprovals = hubConnected ? await listFailed() : [];
   // VENDOR BILLS BELONG AT THE GATE TOO — AND WITHOUT THIS THEY WERE STUCK.
   //
   // This used to exclude them, and that was right at the time: his press on the
@@ -542,6 +545,29 @@ export default async function ZohoHubPage(props: {
             no TDS — until you release it here. The desk prepares the work and asks; this page is the only door,
             and it is <strong>yours alone</strong>. Everything below shows exactly what will be sent.
           </p>
+
+          {failedApprovals.length > 0 && (
+            <div className="card" style={{ marginBottom: 10, borderLeft: "4px solid #b91c1c" }}>
+              <strong style={{ fontSize: ".92rem", color: "#b91c1c" }}>
+                ⚠ {failedApprovals.length} you released did not post
+              </strong>
+              <p className="muted" style={{ fontSize: ".8rem", margin: "6px 0 10px", lineHeight: 1.6 }}>
+                Zoho refused these, so nothing was written. Deal with the reason, then send each back to the gate.
+              </p>
+              {failedApprovals.map((f) => (
+                <div key={f.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap", padding: "8px 0", borderTop: "1px solid var(--border)" }}>
+                  <div style={{ flex: "1 1 420px" }}>
+                    <div style={{ fontSize: ".88rem" }}>{f.summary}</div>
+                    <div style={{ fontSize: ".78rem", color: "#b91c1c", marginTop: 2 }}>{f.result?.error ?? "no reason recorded"}</div>
+                  </div>
+                  <form action={retryApprovalAction} style={{ margin: 0 }}>
+                    <input type="hidden" name="id" value={f.id} />
+                    <SubmitButton className="btn small secondary" savedLabel="✓">↻ Back to the gate</SubmitButton>
+                  </form>
+                </div>
+              ))}
+            </div>
+          )}
 
           {pendingApprovals.length === 0 ? (
             <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing waiting. The books are as you left them.</p></div>

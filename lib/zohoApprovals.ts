@@ -46,6 +46,7 @@ export type ApprovalRow = {
   id: string; kind: ApprovalKind; ref_table: string; ref_id: string;
   summary: string; details: Record<string, unknown> | null;
   status: string; requested_at: string; note: string | null;
+  result?: { error?: string } | null; decided_at?: string | null;
 };
 
 /**
@@ -83,6 +84,35 @@ export async function pendingCount(): Promise<number> {
   const { count } = await svc.from("zoho_approvals")
     .select("id", { count: "exact", head: true }).eq("status", "pending");
   return count ?? 0;
+}
+
+/**
+ * THINGS HE RELEASED THAT DID NOT POST.
+ *
+ * releaseApproval marks a failure as `failed`, and the gate only lists
+ * `pending` — so the moment something failed it vanished from the one screen
+ * he had been watching. He pressed approve on two Bunny bills, both were
+ * refused by the TDS guard, and the gate went quiet as though the work were
+ * done. The reason was on the row in the bills list further down, which is not
+ * where anybody looks after pressing a button.
+ *
+ * They belong back in front of him, with the reason.
+ */
+export async function listFailed(limit = 20): Promise<ApprovalRow[]> {
+  const svc = createServiceClient();
+  const { data } = await svc.from("zoho_approvals")
+    .select("id, kind, ref_table, ref_id, summary, details, status, requested_at, note, result, decided_at")
+    .eq("status", "failed").order("decided_at", { ascending: false }).limit(limit);
+  return (data ?? []) as unknown as ApprovalRow[];
+}
+
+/** Put a failed one back on his desk, so it can be released again once the
+ *  reason is dealt with. */
+export async function retryApproval(approvalId: string): Promise<void> {
+  const svc = createServiceClient();
+  await svc.from("zoho_approvals")
+    .update({ status: "pending", result: null, decided_at: null, decided_by: null })
+    .eq("id", approvalId).eq("status", "failed");
 }
 
 export async function listPending(limit = 100): Promise<ApprovalRow[]> {

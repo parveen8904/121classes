@@ -282,6 +282,17 @@ export async function approveZohoAction(formData: FormData) {
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#approvals`);
 }
 
+/** Put a refused release back on his desk once he has dealt with the reason. */
+export async function retryApprovalAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const { retryApproval } = await import("@/lib/zohoApprovals");
+  await retryApproval(id);
+  revalidatePath("/admin/zoho");
+  redirect("/admin/zoho?scan=" + encodeURIComponent("Back on your gate — release it again when the reason is settled.") + "#approvals");
+}
+
 export async function approveAllZohoAction(formData: FormData) {
   await assertArea(null);
   const me = await currentStaff();

@@ -688,11 +688,25 @@ export async function postProviderBill(id: string): Promise<void> {
     // without it would risk the whole expense being disallowed, and quietly
     // overriding his ruling is not the desk's place either. So it stops and
     // asks which stands.
+    // AND SETTING THE RATE ON THE BILL IS HOW HE ANSWERS IT.
+    //
+    // This asked the question but did not recognise the answer. It fired
+    // whenever the determination wanted TDS and no tds_section was set — so
+    // opening the bill, setting the rate to nil, saving it and approving it
+    // produced this same refusal every time, because "nil" was not a section.
+    // Two Bunny bills failed at his gate on exactly that, after he had told the
+    // form twice that no tax was to be withheld.
+    //
+    // An explicitly SET rate is his ruling, and zero is a ruling — it is the
+    // whole of what "no TDS on foreign vendors" means. The question is only
+    // worth asking while he has said nothing at all.
     const det = b.determination as { tdsRate?: number | null; tdsLabel?: string; why?: string } | null;
-    if (det && Number(det.tdsRate) > 0 && !p.tds_section) {
+    const ruledRate = p.tds_rate !== null && p.tds_rate !== undefined && String(p.tds_rate) !== "";
+    const hasRuled = !!p.tds_section || ruledRate || p.tds_mode === "none";
+    if (det && Number(det.tdsRate) > 0 && !hasRuled) {
       return fail(
         `the desk works out ${det.tdsLabel} withholding on this one, but your standing ruling for foreign vendors is no TDS. ` +
-        `Which stands? Set a TDS section on the vendor to withhold, or record the ruling to post it at nil.`,
+        `Which stands? Open the bill and set the TDS rate — nil to post it without withholding, or a rate and section to withhold.`,
       );
     }
 

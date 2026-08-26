@@ -1010,6 +1010,35 @@ export async function uploadStatementAction(formData: FormData) {
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bank`);
 }
 
+// TRY A STATEMENT AGAIN, WITHOUT UPLOADING IT AGAIN.
+//
+// Three Axis statements failed to parse on 25 Aug 2026. The file was already
+// stored, but the only way to retry was to find it and upload it a second
+// time — so a parser fix could not be tested against the file that broke it.
+// This re-reads the stored file with the parser as it stands today.
+export async function reparseStatementAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  const { data: st } = await svc
+    .from("bank_statements").select("account_name, file_url, file_name").eq("id", id).maybeSingle();
+  if (!st?.file_url) {
+    redirect(`/admin/zoho?scan=${encodeURIComponent("That statement has no stored file.")}#bank`);
+  }
+  // The old failed row goes, so a successful retry does not leave a twin.
+  await svc.from("bank_statements").delete().eq("id", id);
+  const { ingestStatement } = await import("@/lib/bankStatements");
+  let note: string;
+  try {
+    note = await ingestStatement(String(st!.account_name), String(st!.file_url), String(st!.file_name ?? "statement"));
+  } catch (e) {
+    note = `Statement failed again: ${e instanceof Error ? e.message : "unknown"}`;
+  }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bank`);
+}
+
 export async function answerLineAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));
@@ -1146,11 +1175,15 @@ export async function recordAdvanceAction(formData: FormData) {
   const amount = Number(formData.get("amount"));
   const advDate = str(formData.get("adv_date"));
   const bank = str(formData.get("bank_account_name"));
+  // What it was given for. A month later a bare amount tells nobody anything,
+  // and the person holding it could not see a reason on their own ledger.
+  const purpose = str(formData.get("purpose")).trim() || null;
   if (!personId || !amount || amount <= 0 || !advDate || !bank) return;
   const staff = await currentStaff();
   const svc = createServiceClient();
   const { data: row } = await svc.from("petty_advances").insert({
     person_id: personId, adv_date: advDate, amount, bank_account_name: bank,
+    purpose,
     status: "pending", created_by: staff?.id ?? null,
   }).select("id").single();
   if (!row) return;

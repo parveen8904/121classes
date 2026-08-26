@@ -45,11 +45,17 @@ export default async function PettyPage(props: { searchParams: Promise<{ msg?: s
   }
 
   const [{ data: advs }, { data: bills }] = await Promise.all([
-    svc.from("petty_advances").select("adv_date, amount, status").eq("person_id", person.id).eq("status", "posted").order("adv_date", { ascending: false }),
+    svc.from("petty_advances").select("adv_date, amount, status, purpose").eq("person_id", person.id).eq("status", "posted").order("adv_date", { ascending: false }),
     svc.from("petty_bills").select("id, bill_date, amount, purpose, status, note, created_at").eq("person_id", person.id).order("created_at", { ascending: false }),
   ]);
   const advanced = (advs ?? []).reduce((s, a) => s + Number(a.amount), 0);
   const spent = (bills ?? []).filter((b) => b.status === "approved").reduce((s, b) => s + Number(b.amount), 0);
+  // WAITING IS NOT THE SAME AS APPROVED — and only approved reduces what you
+  // owe. Showing one number for "bills" hid the difference, so somebody who
+  // had handed in everything still appeared to be holding the whole advance.
+  const submitted = (bills ?? [])
+    .filter((b) => b.status === "pending" || b.status === "failed")
+    .reduce((s, b) => s + Number(b.amount), 0);
   const balance = advanced - spent;
 
   return (
@@ -66,8 +72,24 @@ export default async function PettyPage(props: { searchParams: Promise<{ msg?: s
       <div className="admin-cards" style={{ marginTop: 14, gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>
         <div className="admin-tile"><div className="tile-ic">💰</div><h3 style={{ fontSize: "1.3rem" }}>{formatINR(advanced)}</h3><p>advances received</p></div>
         <div className="admin-tile"><div className="tile-ic">🧾</div><h3 style={{ fontSize: "1.3rem" }}>{formatINR(spent)}</h3><p>bills approved</p></div>
+        <div className="admin-tile"><div className="tile-ic">⏳</div><h3 style={{ fontSize: "1.3rem" }}>{formatINR(submitted)}</h3><p>submitted, awaiting approval</p></div>
         <div className="admin-tile"><div className="tile-ic">👛</div><h3 style={{ fontSize: "1.3rem" }}>{formatINR(balance)}</h3><p>closing balance with you</p></div>
       </div>
+
+      {(advs ?? []).length > 0 && (
+        <>
+          <h2 className="admin-section-title" style={{ marginTop: 22 }}>💰 Advances given to you</h2>
+          <div className="card" style={{ display: "grid", gap: 6 }}>
+            {(advs ?? []).map((a, i) => (
+              <div key={i} style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap", fontSize: ".9rem" }}>
+                <strong style={{ minWidth: 96 }}>{formatINR(Number(a.amount))}</strong>
+                <span className="muted">{formatDate(String(a.adv_date))}</span>
+                <span>{(a as { purpose?: string | null }).purpose || <span className="muted">— no reason recorded —</span>}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <h2 className="admin-section-title" style={{ marginTop: 22 }}>📤 Submit a bill</h2>
       <form action={uploadBillAction} className="card">

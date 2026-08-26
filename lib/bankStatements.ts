@@ -46,32 +46,75 @@ export function parseIndianDate(raw: string): string {
 export type StmtLine = { date: string; narration: string; ref: string; debit: number; credit: number; balance: number | null };
 
 const HEAD = {
-  date: /^(txn ?date|tran\.? ?date|transaction ?date|date|value ?date)$/i,
-  narration: /^(particulars?|narration|description|details|transaction ?(details|remarks)|remarks)$/i,
+  date: /^(txn ?date|tran\.? ?date|transaction ?date|date|value ?date|posting ?date|date ?of ?transaction)$/i,
+  narration: /^(particulars?|narration|description|details|transaction ?(details|remarks|particulars?)|remarks|transaction)$/i,
   ref: /^(chq\.?\/?ref\.? ?(no\.?)?|ref(erence)? ?(no\.?)?|cheque ?no\.?|utr|chqno)$/i,
-  debit: /^(withdrawal ?(amt\.?)? ?(\(?inr\)?)?|debit|dr|dr\.? ?amount|withdrawals?)$/i,
-  credit: /^(deposit ?(amt\.?)? ?(\(?inr\)?)?|credit|cr|cr\.? ?amount|deposits?)$/i,
+  debit: /^(withdrawal ?(amt\.?)? ?(\(?inr\)?)?|debit ?(amt\.?)?|dr|dr\.? ?amount|withdrawals?|debits?)$/i,
+  credit: /^(deposit ?(amt\.?)? ?(\(?inr\)?)?|credit ?(amt\.?)?|cr|cr\.? ?amount|deposits?|credits?)$/i,
   balance: /^(closing ?balance|balance|bal|running ?balance|balance ?(\(?inr\)?)?)$/i,
   amount: /^(amount|amount ?\(?inr\)?|txn ?amount)$/i,
   drcr: /^(dr\/?cr|type|cr\/?dr)$/i,
 };
 
 export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string } {
-  // Find the header row: the first row matching a date-column AND a narration-column.
+  // FINDING THE HEADER ROW, AND SAYING WHAT WENT WRONG WHEN IT IS NOT FOUND.
+  //
+  // Three Axis statements uploaded on 25 Aug 2026 all failed with "could not
+  // find the header row", which told nobody anything: the file was never shown,
+  // so there was no way to learn what its columns are actually called. Two
+  // things changed here.
+  //
+  // First, it looks further and less rigidly. Bank exports carry a block of
+  // account details above the table — 30 rows was optimistic — and the column
+  // names vary ("Tran Date", "Transaction Particulars", "Withdrawal Amt."),
+  // so an exact match is tried first and a contains-match second.
+  //
+  // Second, when it still cannot find the header, it REPORTS THE ROWS IT SAW.
+  // That turns a dead end into something anyone can act on.
+  const SCAN = Math.min(rows.length, 200);
   let hi = -1; const cols: Record<string, number> = {};
-  for (let i = 0; i < Math.min(rows.length, 30); i++) {
-    const r = rows[i].map((c) => str(c));
-    const find = (re: RegExp) => r.findIndex((c) => re.test(c));
-    if (find(HEAD.date) >= 0 && find(HEAD.narration) >= 0) {
-      hi = i;
-      for (const [k, re] of Object.entries(HEAD)) {
-        const idx = find(re);
-        if (idx >= 0) cols[k] = idx;
+
+  const locate = (loose: boolean) => {
+    for (let i = 0; i < SCAN; i++) {
+      const r = (rows[i] ?? []).map((c) => str(c));
+      const find = (re: RegExp) => r.findIndex((c) => {
+        if (re.test(c)) return true;
+        if (!loose) return false;
+        // Loose pass: the column name merely has to contain the word, so
+        // "Transaction Particulars" and "Withdrawal Amt (INR)" still match.
+        const bare = c.replace(/[^a-z ]/gi, " ").replace(/\s+/g, " ").trim();
+        return bare.split(" ").some((w) => re.test(w)) || re.test(bare);
+      });
+      if (find(HEAD.date) >= 0 && find(HEAD.narration) >= 0) {
+        hi = i;
+        for (const [k, re] of Object.entries(HEAD)) {
+          const idx = find(re);
+          if (idx >= 0) cols[k] = idx;
+        }
+        return true;
       }
-      break;
     }
+    return false;
+  };
+
+  if (!locate(false)) locate(true);
+
+  if (hi < 0) {
+    // Show the first rows that actually contain something, so the real column
+    // names are visible without anybody opening the file by hand.
+    const sample = rows
+      .slice(0, 25)
+      .map((r) => (r ?? []).map((c) => str(c)).filter(Boolean).join(" | "))
+      .filter(Boolean)
+      .slice(0, 6)
+      .map((r) => (r.length > 120 ? `${r.slice(0, 120)}…` : r));
+    return {
+      lines: [],
+      note:
+        "could not find the header row (a Date column and a Particulars/Narration column). " +
+        (sample.length ? `The file starts: ${sample.join(" ⏎ ")}` : "The file appeared to be empty."),
+    };
   }
-  if (hi < 0) return { lines: [], note: "could not find the header row (Date + Particulars)" };
 
   const lines: StmtLine[] = [];
   for (const raw of rows.slice(hi + 1)) {

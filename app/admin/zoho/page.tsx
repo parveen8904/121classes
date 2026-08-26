@@ -18,7 +18,7 @@ import EntryLines from "./EntryLines";
 import SectionToggle from "./SectionToggle";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -938,6 +938,15 @@ export default async function ZohoHubPage(props: {
                     <span className="muted">{s.lines_total} lines</span>
                     <span>{s.status === "failed" ? "❌ failed" : s.continuity_ok === false ? "⚠️ continuity break" : s.continuity_ok ? "🔗 continuity ✓" : "· first statement"}</span>
                     {s.note && <span style={{ color: "#b45309", fontSize: ".78rem" }}>{s.note}</span>}
+                    {/* A failed statement can be re-read from the file already
+                        stored, so a parser fix is testable against the file
+                        that broke it without hunting for it again. */}
+                    {s.status === "failed" && (
+                      <form action={reparseStatementAction} style={{ margin: 0 }}>
+                        <input type="hidden" name="id" value={s.id} />
+                        <button className="btn small secondary" type="submit">↻ Try again</button>
+                      </form>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1075,6 +1084,13 @@ export default async function ZohoHubPage(props: {
                     <option value="Petty Cash">Petty Cash</option>
                   </select>
                 </div>
+              </div>
+              {/* WHAT IT IS FOR. A bare amount tells nobody anything a month
+                  later, and the person holding the advance saw no reason on
+                  their own ledger either. */}
+              <div style={{ marginTop: 8 }}>
+                <label style={{ fontSize: ".75rem" }}>What is this advance for?</label>
+                <input name="purpose" placeholder="e.g. courier charges for the August dispatches" style={{ marginBottom: 0 }} />
               </div>
               <SubmitButton className="btn small" savedLabel="📤 Sent" style={{ marginTop: 8 }}>📤 Record &amp; send for approval</SubmitButton>
               {/* The fields above ARE the entry's editable fields — this line

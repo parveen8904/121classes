@@ -1067,6 +1067,21 @@ export async function readInvoiceTaxAction(formData: FormData) {
   redirect(`/admin/zoho?scan=${encodeURIComponent(msg)}#bills`);
 }
 
+// ASK ZOHO AGAIN ABOUT WHAT IS STILL WAITING.
+//
+// His complaint: entries already passed — by the Razorpay clearing button or
+// typed into Zoho by hand — keep being asked for in the portal. Matching only
+// ever ran at ingest, which is before most of that happens. This looks again.
+export async function rematchBankAction() {
+  await assertArea("zoho");
+  const { rematchWaitingLines } = await import("@/lib/bankStatements");
+  let msg: string;
+  try { msg = await rematchWaitingLines(); }
+  catch (e) { msg = `Could not re-check: ${e instanceof Error ? e.message : "unknown"}`; }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(msg)}#bank`);
+}
+
 export async function reparseStatementAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));

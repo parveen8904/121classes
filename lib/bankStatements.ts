@@ -661,6 +661,84 @@ export async function postBankLine(lineId: string, accountChoice: string, subAcc
   }
 }
 
+/**
+ * ASK ZOHO AGAIN ABOUT THE LINES STILL WAITING.
+ *
+ * Matching happens when a statement is ingested, which is the wrong moment for
+ * half of it: he posts things in Zoho afterwards — the Razorpay clearing
+ * button, an entry typed in by hand — and the portal goes on asking about
+ * money that is already in the books, because nothing ever looks again.
+ *
+ * This re-checks every line still marked `ask` or `auto` against the account's
+ * own Zoho register and against the settlements we have posted. It only ever
+ * moves a line TO matched; it never un-matches, never posts, and never touches
+ * a line he has already answered.
+ */
+export async function rematchWaitingLines(): Promise<string> {
+  const svc = createServiceClient();
+  const { data: waiting } = await svc
+    .from("bank_lines")
+    .select("id, account_name, line_date, narration, debit, credit")
+    .in("status", ["ask", "auto"])
+    .order("line_date");
+
+  const rows = waiting ?? [];
+  if (!rows.length) return "Nothing is waiting to be answered.";
+
+  const { data: settleRows } = await svc
+    .from("zoho_settlements").select("settlement_id, settled_on, net_inr, status")
+    .in("status", ["posted", "matched"]);
+  const settleByAmt = new Map<string, string>();
+  for (const r of settleRows ?? []) {
+    const d = String((r as { settled_on?: string }).settled_on ?? "").slice(0, 10);
+    const a = Number((r as { net_inr?: number }).net_inr ?? 0);
+    if (d && a > 0) settleByAmt.set(`${d}|${a.toFixed(2)}`, String(r.settlement_id));
+  }
+
+  // One register read per bank account, over the span its waiting lines cover.
+  const byAccount = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const k = String(r.account_name);
+    byAccount.set(k, [...(byAccount.get(k) ?? []), r]);
+  }
+
+  let matched = 0;
+  const claimed = new Set<string>();
+  for (const [account, list] of byAccount) {
+    const dates = list.map((r) => String(r.line_date)).sort();
+    const txns = await fetchZohoBankTxnsFor(account, dates[0], dates[dates.length - 1]);
+    for (const l of list) {
+      const debit = Number(l.debit) || 0, credit = Number(l.credit) || 0;
+      const date = String(l.line_date);
+      let note: string | null = null;
+      let zid: string | null = null;
+
+      if (credit > 0 && settleByAmt.get(`${date}|${credit.toFixed(2)}`)) {
+        note = "Razorpay settlement (already posted)";
+      }
+      if (!note) {
+        const dir = debit > 0 ? "out" : "in";
+        const amt = (debit > 0 ? debit : credit).toFixed(2);
+        const t = txns.get(`${date}|${amt}|${dir}`)?.find((x) => !claimed.has(x.id));
+        if (t) {
+          claimed.add(t.id);
+          zid = t.id;
+          note = `already in Zoho — ${t.type}${t.note ? ` (${t.note})` : ""}`;
+        }
+      }
+      if (note) {
+        await svc.from("bank_lines").update({
+          status: "matched", zoho_id: zid, error: note, updated_at: new Date().toISOString(),
+        }).eq("id", l.id);
+        matched++;
+      }
+    }
+  }
+  return matched
+    ? `${matched} of ${rows.length} waiting line(s) are already in Zoho and will not be asked again.`
+    : `Checked ${rows.length} waiting line(s) — none of them is in Zoho yet.`;
+}
+
 /** Save a taught rule and re-file any waiting ask-lines it now covers. */
 export async function saveMerchantRule(pattern: string, accountName: string, subAccount?: string | null): Promise<number> {
   const svc = createServiceClient();

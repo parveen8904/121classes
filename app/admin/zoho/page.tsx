@@ -18,7 +18,7 @@ import EntryLines from "./EntryLines";
 import SectionToggle from "./SectionToggle";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction, rematchBankAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -941,6 +941,16 @@ export default async function ZohoHubPage(props: {
               <input type="file" name="file" required accept=".csv,.txt,.xls,.xlsx,.pdf" style={{ marginBottom: 0 }} />
             </div>
             <SubmitButton className="btn small" savedLabel="✓ Read">📥 Upload &amp; read</SubmitButton>
+          </form>
+
+          {/* Matching runs at ingest, which is before he posts things in Zoho.
+              This looks again, so money already in the books stops being asked
+              about. It only ever marks a line matched — never posts. */}
+          <form action={rematchBankAction} style={{ marginTop: 8 }}>
+            <SubmitButton className="btn small secondary" savedLabel="✓ Checked">🔁 Re-check waiting lines against Zoho</SubmitButton>
+            <span className="muted" style={{ fontSize: ".78rem", marginLeft: 8 }}>
+              Anything already in Zoho — a settlement you posted, an entry typed in by hand — stops being asked about.
+            </span>
           </form>
 
           {stmts.length > 0 && (

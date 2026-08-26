@@ -1760,13 +1760,22 @@ export default async function ZohoHubPage(props: {
               wording may have changed — so the names are shown rather than
               guessed at, and the matcher accepts either the section or the
               rate. */}
-          {zohoTds.length > 0 && (
-            <p className="muted" style={{ fontSize: ".78rem", marginTop: 8 }}>
-              <strong>TDS rates in Zoho:</strong>{" "}
-              {zohoTds.map((t) => `${t.tax_name} (${t.tax_percentage}%)`).join(" · ")}
-              . A bill matches on either the section wording or the rate, so a renamed section still finds its rate.
-            </p>
-          )}
+          {/* ALWAYS SAY SOMETHING. This line rendered only when Zoho returned
+              rates, so when the read came back empty the whole panel vanished
+              and looked like "nothing to report" — which is the same mistake
+              as treating a failed lookup as an absence. It now states what it
+              found, including finding nothing. */}
+          <p className="muted" style={{ fontSize: ".78rem", marginTop: 8, lineHeight: 1.7 }}>
+            <strong>TDS rates in Zoho:</strong>{" "}
+            {zohoTds.length
+              ? `${zohoTds.map((t) => `${t.tax_name} (${t.tax_percentage}%)`).join(" · ")}. A bill matches on either the section wording or the rate, so a renamed section still finds its rate.`
+              : "none came back. Either the organisation holds no TDS rates, or Zoho could not be read just now — a bill needing one will refuse to post rather than go in without its withholding."}
+            <br />
+            <strong>Sections our vendor rules withhold under:</strong>{" "}
+            {tdsNeeded.length
+              ? tdsNeeded.map((n) => `${n.section} @ ${n.rate}% (${n.vendors.join(", ")})`).join(" · ")
+              : "none set."}
+          </p>
 
           {tdsGaps.length > 0 && (
             <div className="card" style={{ marginTop: 8, borderLeft: "3px solid #b45309" }}>

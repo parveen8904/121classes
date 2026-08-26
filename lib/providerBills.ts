@@ -981,9 +981,11 @@ export async function postProviderBill(id: string): Promise<void> {
       // to be found and undone.
       let taxes: { tax_id: string; tax_name: string; tax_percentage: number }[] | null = null;
       try {
-        const tds = await zohoFetch<{ taxes?: { tax_id: string; tax_name: string; tax_percentage: number }[] }>(
-          "/settings/taxes", { query: { filter_by: "Taxes.Tds" } });
-        taxes = tds?.taxes ?? [];
+        // Reads the filtered list and, when that comes back empty, the whole
+        // tax list — because filter_by=Taxes.Tds returned nothing on his org
+        // while a 1% TDS was sitting in it. See lib/zohoTds.ts.
+        const { listZohoTds } = await import("@/lib/zohoTds");
+        taxes = await listZohoTds();
       } catch (e) {
         return fail(
           `could not read the TDS rates from Zoho, so this bill was not posted rather than posted without its ` +

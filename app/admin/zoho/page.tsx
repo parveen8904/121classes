@@ -299,6 +299,13 @@ export default async function ZohoHubPage(props: {
     ? await Promise.all([listZohoTds().catch(() => []), tdsSectionsNeeded().catch(() => [])])
     : [[], []];
   const tdsGaps = tdsNeeded.filter((n) => !matchTds(zohoTds, n.section, n.rate));
+  // When no TDS rate is found, show what Zoho DOES hold — a rate filed under a
+  // name we did not expect is the likeliest reason, and it is invisible unless
+  // the list is on the screen.
+  const allTaxNames = zohoTds.length
+    ? []
+    : (await (await import("@/lib/zohoTds")).listAllZohoTaxes().catch(() => []))
+        .map((t) => `${t.tax_name} (${t.tax_percentage}%)`).slice(0, 20);
   // Everything waiting on him before it can reach Zoho.
   const { listPending, listFailed } = await import("@/lib/zohoApprovals");
   const allPending = hubConnected ? await listPending() : [];
@@ -1769,7 +1776,7 @@ export default async function ZohoHubPage(props: {
             <strong>TDS rates in Zoho:</strong>{" "}
             {zohoTds.length
               ? `${zohoTds.map((t) => `${t.tax_name} (${t.tax_percentage}%)`).join(" · ")}. A bill matches on either the section wording or the rate, so a renamed section still finds its rate.`
-              : "none came back. Either the organisation holds no TDS rates, or Zoho could not be read just now — a bill needing one will refuse to post rather than go in without its withholding."}
+              : `none came back${allTaxNames.length ? `, though Zoho does hold: ${allTaxNames.join(" · ")}` : ""}. A bill needing one refuses to post rather than go in without its withholding.`}
             <br />
             <strong>Sections our vendor rules withhold under:</strong>{" "}
             {tdsNeeded.length

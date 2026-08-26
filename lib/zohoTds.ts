@@ -17,11 +17,38 @@ import { createServiceClient } from "@/lib/supabase/service";
 
 export type TdsTax = { tax_id: string; tax_name: string; tax_percentage: number };
 
-/** Every TDS rate the organisation holds. */
+/**
+ * Every TDS rate the organisation holds.
+ *
+ * `filter_by=Taxes.Tds` came back EMPTY on his org while a 1% TDS demonstrably
+ * exists in it — which is precisely how a bill came to post reporting "no
+ * matching TDS tax". Trusting one filter constant to be the whole truth is the
+ * same error as trusting a failed lookup to mean "none".
+ *
+ * So it asks the filtered way first and, when that yields nothing, reads the
+ * whole tax list and keeps what is actually a TDS rate — Zoho marks it on the
+ * record (tax_type / tax_specific_type), and failing that the name says so.
+ */
+type RawTax = TdsTax & { tax_type?: string; tax_specific_type?: string };
+
+const looksTds = (t: RawTax) =>
+  /tds/i.test(String(t.tax_type ?? "")) ||
+  /tds/i.test(String(t.tax_specific_type ?? "")) ||
+  /\btds\b/i.test(String(t.tax_name ?? ""));
+
 export async function listZohoTds(): Promise<TdsTax[]> {
-  const r = await zohoFetch<{ taxes?: TdsTax[] }>(
+  const filtered = await zohoFetch<{ taxes?: RawTax[] }>(
     "/settings/taxes", { query: { filter_by: "Taxes.Tds" } }).catch(() => null);
-  return r?.taxes ?? [];
+  if (filtered?.taxes?.length) return filtered.taxes;
+
+  const all = await zohoFetch<{ taxes?: RawTax[] }>("/settings/taxes").catch(() => null);
+  return (all?.taxes ?? []).filter(looksTds);
+}
+
+/** Everything Zoho returns, TDS or not — for the screen, when nothing matches. */
+export async function listAllZohoTaxes(): Promise<RawTax[]> {
+  const all = await zohoFetch<{ taxes?: RawTax[] }>("/settings/taxes").catch(() => null);
+  return all?.taxes ?? [];
 }
 
 /** Which sections our own vendor rules will need when their bills post. */

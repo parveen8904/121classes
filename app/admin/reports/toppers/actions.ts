@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireArea } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
-import { istDay, recordToppers, toppersMessage, toppersPushBody, toppersPushTitle } from "@/lib/dailyToppers";
+import { str } from "../../_lib/util";
+import { istDay, recordToppers, toppersMessage } from "@/lib/dailyToppers";
+import { announceToppers, type Channel } from "@/lib/toppersAnnounce";
 
 // SEND THE DAY'S TOPPERS NOW, BY HAND.
 //
@@ -37,7 +39,7 @@ export async function previewToppers(formData: FormData) {
 export async function sendToppersNow(formData: FormData) {
   if (!(await requireArea("reports"))) return;
   const day = String(formData.get("day") ?? "") || istDay();
-  const { rows, text } = await build(day);
+  const { rows } = await build(day);
 
   // HIS RULE: a day with no releases is not announced at all.
   if (!rows.length) {
@@ -59,17 +61,10 @@ export async function sendToppersNow(formData: FormData) {
     )}`);
   }
 
-  const link = "https://caparveensharma.com/learn/performance";
-  const [channel, groups, discord, push] = await Promise.all([
-    import("@/lib/notify").then((m) => m.sendTelegramChannel(text, link)).catch(() => false),
-    import("@/lib/telegramBroadcast").then((m) => m.postToAllGroups(text, link)).catch(() => 0),
-    import("@/lib/discord").then((m) => m.postToDiscord(text, link)).catch(() => false),
-    import("@/lib/push").then((m) => m.pushToEveryone({
-      title: toppersPushTitle(day),
-      body: toppersPushBody(rows),
-      link: "/learn/performance",
-    })).catch(() => null),
-  ]);
+  // "Phones only" exists because the four channels do not always need
+  // re-sending together — see lib/toppersAnnounce.ts.
+  const only = (str(formData.get("only")) || null) as Channel | null;
+  const r = await announceToppers(day, rows, only);
 
   // Stamped so the 3 AM job does not congratulate the same students twice.
   await createServiceClient().from("daily_toppers")
@@ -77,8 +72,10 @@ export async function sendToppersNow(formData: FormData) {
 
   revalidatePath("/admin/reports/toppers");
   redirect(`/admin/reports/toppers?day=${day}&sent=${encodeURIComponent(
-    `Sent for ${day} — Telegram channel ${channel ? "✓" : "✗"}, ${groups} group(s), Discord ${discord ? "✓" : "✗"}` +
-    `, phones ${push ? `${push.sent} sent / ${push.failed} failed` : "unavailable"}.`,
+    only === "push"
+      ? `Phones only, for ${day} — ${r.push ? `${r.push.sent} sent / ${r.push.failed} failed` : "unavailable"}. Telegram and Discord were not touched.`
+      : `Sent for ${day} — Telegram channel ${r.channel ? "✓" : "✗"}, ${r.groups} group(s), Discord ${r.discord ? "✓" : "✗"}` +
+        `, phones ${r.push ? `${r.push.sent} sent / ${r.push.failed} failed` : "unavailable"}.`,
   )}`);
 }
 

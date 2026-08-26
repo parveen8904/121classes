@@ -156,8 +156,17 @@ export default async function ToppersPage(props: {
             <input type="hidden" name="day" value={sp.day ?? istDay()} />
             <SubmitButton className="btn small">📣 Send it now</SubmitButton>
           </form>
+          {/* PHONES ONLY. When the notification changes but the Telegram
+              message has not, re-announcing everything would put a second,
+              identical congratulation in the channel and every group. */}
+          <form action={sendToppersNow} style={{ margin: 0 }}>
+            <input type="hidden" name="day" value={sp.day ?? istDay()} />
+            <input type="hidden" name="only" value="push" />
+            <SubmitButton className="btn small secondary">📱 Phones only</SubmitButton>
+          </form>
           <span className="muted" style={{ fontSize: ".76rem" }}>
             Sending posts to every channel and marks the day announced, so 3 AM will not repeat it.
+            <strong> Phones only</strong> sends the notification again and leaves Telegram and Discord alone.
           </span>
         </div>
       </div>

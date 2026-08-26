@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
-import { istDay, toppersMessage, toppersPushBody, toppersPushTitle, type Track } from "@/lib/dailyToppers";
+import { istDay, type Track } from "@/lib/dailyToppers";
+import { announceToppers, type Channel } from "@/lib/toppersAnnounce";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -51,35 +52,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, day, sent: false, note: "already announced" });
   }
 
-  const text = toppersMessage(rows, day);
-  const link = "https://caparveensharma.com/learn/performance";
-
-  // ONE MESSAGE, EVERYWHERE — not one per subject.
-  //
-  // His instruction: the channel AND both groups, "irrespective of inter
-  // Final". A Final topper is news in the Intermediate room too; splitting the
-  // announcement by subject would have shown each group only half of it.
-  const [channel, tg, dc, push] = await Promise.all([
-    // The Telegram channel — the broadcast one students follow.
-    import("@/lib/notify").then((m) => m.sendTelegramChannel(text, link)).catch(() => false),
-    // Every subject group, the same full message in each.
-    import("@/lib/telegramBroadcast").then((m) => m.postToAllGroups(text, link)).catch(() => 0),
-    // Discord.
-    import("@/lib/discord").then((m) => m.postToDiscord(text, link)).catch(() => false),
-    // Phones — Android and iPhone both, through the one helper.
-    import("@/lib/push").then((m) => m.pushToEveryone({
-      title: toppersPushTitle(day),
-      body: toppersPushBody(rows),
-      link: "/learn/performance",
-    })).catch(() => null),
-  ]);
+  // Which channels to send. `only=push` sends the phones alone; see
+  // lib/toppersAnnounce.ts for why that is worth having.
+  const only = (params.get("only") || null) as Channel | null;
+  const r = await announceToppers(day, rows, only);
 
   await svc.from("daily_toppers").update({ announced_at: new Date().toISOString() }).eq("day", day);
 
   return NextResponse.json({
     ok: true, day, sent: true,
-    telegramChannel: channel, telegramGroups: tg, discord: dc,
-    push: push ? { sent: push.sent, failed: push.failed } : null,
+    only: only ?? "all",
+    telegramChannel: r.channel, telegramGroups: r.groups, discord: r.discord,
+    push: r.push,
     toppers: rows.map((r) => ({ track: r.track, name: r.student_name })),
   });
 }

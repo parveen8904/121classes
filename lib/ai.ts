@@ -2859,6 +2859,12 @@ export type InvoiceTaxRead = {
   vendor_address: string | null;
   vendor_phone: string | null;
   vendor_email: string | null;
+  /** UDYAM REGISTRATION, WHERE THE SUPPLIER PRINTS IT.
+   *  Section 43B(h): an expense owed to an MSME supplier is not deductible
+   *  unless it is paid within 45 days. That turns on whether the SUPPLIER is
+   *  MSME, which is knowable only from their own invoice — most print it. */
+  vendor_udyam: string | null;
+  vendor_msme_type: string | null;
 };
 
 export async function parseInvoiceTaxText(text: string): Promise<InvoiceTaxRead | null> {
@@ -2867,7 +2873,8 @@ export async function parseInvoiceTaxText(text: string): Promise<InvoiceTaxRead 
     '{"taxable_value":number|null,"cgst":number|null,"sgst":number|null,"igst":number|null,' +
     '"total":number|null,"invoice_no":string|null,"invoice_date":"YYYY-MM-DD"|null,"note":string|null,' +
     '"vendor_name":string|null,"vendor_gstin":string|null,"vendor_state":string|null,' +
-    '"vendor_address":string|null,"vendor_phone":string|null,"vendor_email":string|null}\n\n' +
+    '"vendor_address":string|null,"vendor_phone":string|null,"vendor_email":string|null,' +
+    '"vendor_udyam":string|null,"vendor_msme_type":string|null}\n\n' +
     "RULES — these matter more than being helpful:\n" +
     "1. TRANSCRIBE ONLY. Every number must appear on the invoice. Never calculate a taxable " +
     "value from a total and a rate. Never split a tax figure into CGST and SGST yourself. " +
@@ -2884,7 +2891,12 @@ export async function parseInvoiceTaxText(text: string): Promise<InvoiceTaxRead 
     "their address, phone and email. vendor_state is the SUPPLIER's state, not the " +
     "customer's — take it from their address or from their GSTIN's first two digits " +
     "if the state is printed nowhere else, and say in note when you did that. Give the " +
-    "state's full name (e.g. \"Delhi\", \"Maharashtra\"). Never guess a GSTIN.",
+    "state's full name (e.g. \"Delhi\", \"Maharashtra\"). Never guess a GSTIN.\n" +
+    "8. vendor_udyam is the supplier's Udyam / MSME registration number if the invoice " +
+    "prints one — the form is UDYAM-XX-00-0000000. Many invoices carry it near the GSTIN " +
+    "or in the footer, sometimes labelled MSME No., Udyog Aadhaar or UAM. Copy it exactly " +
+    "and never invent one. vendor_msme_type is Micro, Small or Medium only if the invoice " +
+    "says which; otherwise null.",
     text.slice(0, 120_000),
     1_200,
     { model: await fastModel(), feature: "invoice_tax" },

@@ -283,7 +283,7 @@ export default async function ZohoHubPage(props: {
       tds_mode?: string | null; supplier_kind?: string | null } | null; error: string | null;
     determination: { tdsLabel?: string; tdsRate?: number | null; confidence?: string; form145Part?: string | null; form146Required?: boolean; warnings?: string[]; certAdvice?: { why: string; points: string[] } | null; grossedUp?: number | null } | null;
     taxable_value: number | null; cgst_amount: number | null; sgst_amount: number | null; igst_amount: number | null;
-    tax_read: { taxable_value: number | null; cgst: number | null; sgst: number | null; igst: number | null; total: number | null; note: string | null } | null;
+    tax_read: { taxable_value: number | null; cgst: number | null; sgst: number | null; igst: number | null; total: number | null; note: string | null; vendor_name?: string | null; vendor_gstin?: string | null; vendor_state?: string | null; vendor_udyam?: string | null; vendor_msme_type?: string | null } | null;
     tds_amount: number | null; booked_amount: number | null };
   const { data: billData } = hubConnected
     ? await createServiceClient().from("provider_bills")

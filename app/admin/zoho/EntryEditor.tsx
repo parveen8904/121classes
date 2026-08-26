@@ -31,6 +31,8 @@ export default function EntryEditor(props: {
   taxRead?: {
     taxable_value: number | null; cgst: number | null; sgst: number | null; igst: number | null;
     total: number | null; note: string | null;
+    vendor_name?: string | null; vendor_gstin?: string | null; vendor_state?: string | null;
+    vendor_udyam?: string | null; vendor_msme_type?: string | null;
   } | null;
   initial: {
     nature: string; operating: string; account: string; subAccount: string;
@@ -227,6 +229,20 @@ export default function EntryEditor(props: {
               return (
                 <div style={{ background: "var(--bg-soft)", borderRadius: 8, padding: "8px 10px", marginBottom: 8, fontSize: ".8rem", lineHeight: 1.7 }}>
                   <strong>📄 The invoice says:</strong> {bits.join(" · ")}
+                  {/* The supplier as their own paper names them — this is what
+                      the Zoho vendor is created or completed from. */}
+                  {(t.vendor_name || t.vendor_gstin || t.vendor_udyam) && (
+                    <div style={{ fontSize: ".78rem", marginTop: 4 }}>
+                      <strong>Supplier:</strong>{" "}
+                      {[t.vendor_name, t.vendor_gstin, t.vendor_state].filter(Boolean).join(" · ")}
+                      {t.vendor_udyam && (
+                        <span style={{ color: "#0e6e52" }}>
+                          {" · "}MSME {t.vendor_udyam}{t.vendor_msme_type ? ` (${t.vendor_msme_type})` : ""}
+                          {" — 43B(h): pay within 45 days or the expense is disallowed"}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {t.note && <div className="muted" style={{ fontSize: ".76rem" }}>{t.note}</div>}
                   <button
                     type="button"

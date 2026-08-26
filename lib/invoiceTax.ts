@@ -35,6 +35,9 @@ export type InvoiceTax = {
   vendor_address: string | null;
   vendor_phone: string | null;
   vendor_email: string | null;
+  /** Udyam registration, for Section 43B(h) — see the note in lib/ai.ts. */
+  vendor_udyam: string | null;
+  vendor_msme_type: string | null;
   read_at: string;
 };
 
@@ -91,6 +94,17 @@ export async function readInvoiceTax(billId: string): Promise<InvoiceTax | null>
     vendor_address: s(j.vendor_address),
     vendor_phone: s(j.vendor_phone),
     vendor_email: s(j.vendor_email),
+    // UDYAM-XX-00-0000000 or nothing. A half-read registration number is worse
+    // than none: it would sit on the vendor looking authoritative while being
+    // untraceable, and 43B(h) turns on it.
+    vendor_udyam: (() => {
+      const u = (s(j.vendor_udyam) ?? "").toUpperCase().replace(/\s/g, "");
+      return /^UDYAM-[A-Z]{2}-\d{2}-\d{7}$/.test(u) ? u : null;
+    })(),
+    vendor_msme_type: (() => {
+      const t = (s(j.vendor_msme_type) ?? "").trim().toLowerCase();
+      return ["micro", "small", "medium"].includes(t) ? t[0].toUpperCase() + t.slice(1) : null;
+    })(),
     read_at: new Date().toISOString(),
   };
 }
@@ -129,7 +143,8 @@ export async function readAndStore(billId: string): Promise<{ ok: boolean; why: 
     tax.igst !== null ? `IGST ₹${tax.igst}` : null,
   ].filter(Boolean);
 
-  const who = [tax.vendor_name, tax.vendor_gstin, tax.vendor_state].filter(Boolean).join(" · ");
+  const who = [tax.vendor_name, tax.vendor_gstin, tax.vendor_state,
+    tax.vendor_udyam ? `MSME ${tax.vendor_udyam}` : null].filter(Boolean).join(" · ");
   return {
     ok: true,
     tax,

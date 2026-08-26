@@ -339,6 +339,8 @@ function indianVendorFields(facts: VendorFacts): Record<string, unknown> {
 export type VendorFacts = {
   gstin?: string | null; state?: string | null; address?: string | null;
   phone?: string | null; email?: string | null;
+  /** Udyam registration and size, where the invoice printed them. */
+  udyam?: string | null; msmeType?: string | null;
 };
 
 /**
@@ -477,6 +479,43 @@ export function pickContact(
  * filled from the invoice. It only ever FILLS: a value already in Zoho is left
  * alone, because their books may hold something better than one invoice does.
  */
+/**
+ * PUT THE SUPPLIER'S MSME REGISTRATION ON THEIR ZOHO CONTACT.
+ *
+ * Section 43B(h): an expense owed to an MSME supplier is not deductible unless
+ * it is paid within 45 days. Whether a supplier IS MSME is knowable only from
+ * their own paper, and it is now read off it — but it is worth nothing sitting
+ * in our database while the books, where the ageing actually lives, do not
+ * know it.
+ *
+ * SENT ON ITS OWN, AND ALLOWED TO FAIL. Zoho exposes the MSME fields on a
+ * contact only once MSME is switched on for the organisation, and his is
+ * currently set to "not MSME registered". Folding these into the create call
+ * would mean an unknown field could fail the whole contact and take the bill
+ * down with it. So this is a separate best-effort write: when the org is not
+ * ready for it, nothing is lost but the extra field, and the moment he
+ * switches MSME on it starts landing without another line of code.
+ */
+async function applyMsme(contactId: string, facts: VendorFacts): Promise<string> {
+  const udyam = String(facts.udyam ?? "").trim();
+  if (!udyam) return "";
+  try {
+    await zohoFetch(`/contacts/${contactId}`, {
+      method: "PUT",
+      body: {
+        msme_registered: true,
+        msme_type: facts.msmeType ? String(facts.msmeType).toLowerCase() : "udyam",
+        msme_registration_number: udyam,
+      },
+    });
+    return ` — MSME ${udyam} recorded on the vendor`;
+  } catch {
+    // Almost always "MSME is not enabled for this organisation", which is a
+    // setting, not a fault. Said plainly rather than swallowed.
+    return ` — the supplier prints Udyam ${udyam}; Zoho would not take it (switch MSME on in Settings → Taxes & Compliance → MSME Settings and it will attach by itself)`;
+  }
+}
+
 async function findOrCreateVendor(
   name: string, overseas: boolean, currency: string, facts: VendorFacts = {},
 ): Promise<{ id: string; note: string }> {
@@ -503,11 +542,12 @@ async function findOrCreateVendor(
       try { await zohoFetch(`/contacts/${hit.contact_id}`, { method: "PUT", body: patch }); }
       catch { /* the bill will report it if Zoho still cannot place them */ }
     }
+    const msme = await applyMsme(hit.contact_id, facts);
     return {
       id: hit.contact_id,
-      note: Object.keys(patch).length
+      note: (Object.keys(patch).length
         ? ` — matched the vendor on ${why} and filled in ${Object.keys(patch).join(", ")}`
-        : ` — matched the vendor on ${why}`,
+        : ` — matched the vendor on ${why}`) + msme,
     };
   }
 
@@ -530,11 +570,12 @@ async function findOrCreateVendor(
     },
   });
   if (!made.contact?.contact_id) throw new Error("could not create the vendor");
+  const msme = await applyMsme(made.contact.contact_id, facts);
   return {
     id: made.contact.contact_id,
-    note: conflict
+    note: (conflict
       ? ` — Zoho already held "${name}" with ${why}, so this supplier was created separately as "${distinct}"`
-      : " — vendor created from the invoice",
+      : " — vendor created from the invoice") + msme,
   };
 }
 
@@ -772,6 +813,8 @@ export async function postProviderBill(id: string): Promise<void> {
       address: (read.vendor_address as string) ?? null,
       phone: (read.vendor_phone as string) ?? null,
       email: (read.vendor_email as string) ?? null,
+      udyam: (read.vendor_udyam as string) ?? null,
+      msmeType: (read.vendor_msme_type as string) ?? null,
     });
     const vendorId = vendorPick.id;
     // How the party was identified is recorded on the bill, because "matched on

@@ -74,6 +74,26 @@ export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string
   const SCAN = Math.min(rows.length, 200);
   let hi = -1; const cols: Record<string, number> = {};
 
+  // A HEADER THAT LEADS NOWHERE IS NOT THE HEADER.
+  //
+  // Loosening the match found "a Date column and a Description column" in an
+  // Axis preamble block — the account summary above the table — and stopped
+  // there. Every row after it then failed to yield a date, and the file came
+  // back as "no transaction lines found" while the real table sat further
+  // down, untouched.
+  //
+  // So a candidate now has to PROVE itself: at least two of the rows beneath it
+  // must parse as a date in the column it claims. If none do, the search
+  // carries on looking.
+  const dateRowsUnder = (start: number, dateCol: number) => {
+    let hits = 0;
+    for (let j = start + 1; j < Math.min(rows.length, start + 40); j++) {
+      if (parseIndianDate(str((rows[j] ?? [])[dateCol]))) hits++;
+      if (hits >= 2) break;
+    }
+    return hits;
+  };
+
   const locate = (loose: boolean) => {
     for (let i = 0; i < SCAN; i++) {
       const r = (rows[i] ?? []).map((c) => str(c));
@@ -85,7 +105,8 @@ export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string
         const bare = c.replace(/[^a-z ]/gi, " ").replace(/\s+/g, " ").trim();
         return bare.split(" ").some((w) => re.test(w)) || re.test(bare);
       });
-      if (find(HEAD.date) >= 0 && find(HEAD.narration) >= 0) {
+      const dIdx = find(HEAD.date);
+      if (dIdx >= 0 && find(HEAD.narration) >= 0 && dateRowsUnder(i, dIdx) >= 2) {
         hi = i;
         for (const [k, re] of Object.entries(HEAD)) {
           const idx = find(re);
@@ -117,6 +138,12 @@ export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string
   }
 
   const lines: StmtLine[] = [];
+  // Kept so that "found the header, parsed nothing" can say what it was
+  // looking at — the same reason the not-found case prints the file's first
+  // rows. A failure that names no evidence cannot be acted on.
+  const headerSeen = (rows[hi] ?? []).map((c) => str(c)).filter(Boolean).join(" | ").slice(0, 200);
+  const firstDataRow = (rows[hi + 1] ?? []).map((c) => str(c)).filter(Boolean).join(" | ").slice(0, 200);
+
   for (const raw of rows.slice(hi + 1)) {
     const cell = (k: string) => (cols[k] !== undefined ? str(raw[cols[k]]) : "");
     const date = parseIndianDate(cell("date"));
@@ -137,6 +164,16 @@ export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string
       debit, credit,
       balance: cols.balance !== undefined && cell("balance") !== "" ? num(cell("balance")) : null,
     });
+  }
+  // Found the header and still parsed nothing: say what was under it, so the
+  // real reason (a date format, a merged cell, an empty sheet) is visible.
+  if (!lines.length) {
+    return {
+      lines,
+      note:
+        "found the header but no transaction rows parsed under it. " +
+        `Header: ${headerSeen || "(blank)"} — first row beneath: ${firstDataRow || "(blank)"}`,
+    };
   }
   return { lines, note: "" };
 }

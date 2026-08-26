@@ -368,7 +368,10 @@ export default async function ZohoHubPage(props: {
   const allRules = (ruleRows ?? []) as unknown as (ForeignRule & {
     vendor_name?: string; expense_account?: string; gst_treatment?: string;
     gst_rate?: number; tds_section?: string | null; tds_rate?: number | null; gst_tax_name?: string | null })[];
-  const ruleFor = (inst: string) => allRules.find((r) => r.institution === inst);
+  // Case-insensitive: "First Fly Express" must find the rule saved as
+  // "FIRST FLY EXPRESS" — exact matching is how one courier got two rules.
+  const instK = (v: string) => v.toLowerCase().replace(/\s+/g, " ").trim();
+  const ruleFor = (inst: string) => allRules.find((r) => instK(r.institution) === instK(inst));
   const seedFor = (inst: string) =>
     Object.entries(KNOWN_FOREIGN_VENDORS).find(([k]) => inst.toLowerCase().includes(k.toLowerCase()))?.[1];
   const fyNow = (() => {

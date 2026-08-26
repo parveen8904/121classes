@@ -117,15 +117,29 @@ export async function determineFor(b: {
  * vendor. Called the moment the desk answers the questions, so the queue moves
  * on its own rather than needing another scan.
  */
+/**
+ * ONE SUPPLIER, HOWEVER THEIR NAME WAS TYPED.
+ *
+ * The FIRST FLY invoice was re-uploaded as "First Fly Express" where the
+ * original said "FIRST FLY EXPRESS", and every institution comparison in this
+ * file was exact — so the same courier ended up with two treatment rules, and
+ * would have drifted into two of everything. Case and spacing are not
+ * identity; this key is what every comparison uses now.
+ */
+export const instKey = (v: string | null | undefined): string =>
+  String(v ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+
 export async function redetermineWaiting(institution: string): Promise<number> {
   const svc = createServiceClient();
-  const { data: rule } = await svc.from("provider_bill_rules")
-    .select("*").eq("institution", institution).maybeSingle();
+  // ilike with no wildcard is exact-but-case-insensitive in PostgREST — the
+  // same vendor's bills may carry either spelling, and both must be re-worked.
+  const { data: ruleRows0 } = await svc.from("provider_bill_rules").select("*");
+  const rule = (ruleRows0 ?? []).find((r) => instKey(String(r.institution)) === instKey(institution)) ?? null;
   if (!foreignAnswered(rule as Partial<BillRule>)) return 0;
 
   const { data: rows } = await svc.from("provider_bills")
     .select("id, institution, bill_date, inr_amount, currency, amount")
-    .eq("institution", institution).in("status", ["needs_info", "draft"]);
+    .ilike("institution", institution).in("status", ["needs_info", "draft"]);
 
   let moved = 0;
   for (const b of rows ?? []) {
@@ -159,7 +173,9 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
   const { data: queued } = await svc.from("provider_bills").select("vault_doc_id");
   const have = new Set((queued ?? []).map((q) => String(q.vault_doc_id)));
   const { data: ruleRows } = await svc.from("provider_bill_rules").select("*");
-  const rules = new Map((ruleRows ?? []).map((r) => [String(r.institution), r as BillRule]));
+  // Keyed on the normalised name, so "First Fly Express" finds the rule saved
+  // as "FIRST FLY EXPRESS" instead of founding a dynasty of duplicates.
+  const rules = new Map((ruleRows ?? []).map((r) => [instKey(String(r.institution)), r as BillRule]));
 
   // READ A FEW AT A TIME, AND SAY WHAT IS LEFT.
   //
@@ -174,7 +190,12 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
 
   let added = 0, asked = 0;
   for (const d of batch) {
-    const institution = str(d.institution) || "Unknown";
+    // Where a rule already exists for this supplier, its spelling WINS: the
+    // bill is stored under the rule's name, so however the upload was typed,
+    // everything of one supplier converges on one string.
+    const typed = str(d.institution) || "Unknown";
+    const knownRule = rules.get(instKey(typed));
+    const institution = knownRule ? String(knownRule.institution) : typed;
 
     let facts: { invoice_no?: string; date?: string; currency?: string; tax?: number; total?: number;
                  taxable_value?: number; cgst?: number; sgst?: number; igst?: number } = {};
@@ -231,7 +252,7 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
     // vendor bill would put an empty liability in the books. It is filed and
     // marked settled, not queued for a treatment.
     const isZero = total !== null && Number(total) === 0;
-    const rule = rules.get(institution);
+    const rule = rules.get(instKey(institution));
     // A FOREIGN invoice needs more than an expense account. Until the desk has
     // answered where the vendor is, what they actually did and what papers are
     // on file, there is no way to know what to withhold — so it waits, even
@@ -317,10 +338,17 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
 /** Save the treatment for a vendor and re-propose every waiting invoice of theirs. */
 export async function saveBillRule(rule: BillRule): Promise<number> {
   const svc = createServiceClient();
+  // ONE RULE PER SUPPLIER. An upsert keyed on the exact string made
+  // "First Fly Express" a second rule beside "FIRST FLY EXPRESS". If a rule
+  // already exists under any spelling, THAT row is updated and its spelling
+  // kept — the earliest spelling is the canonical one.
+  const { data: allRules } = await svc.from("provider_bill_rules").select("institution");
+  const existing = (allRules ?? []).find((r) => instKey(String(r.institution)) === instKey(rule.institution));
+  const canonical = existing ? String(existing.institution) : rule.institution;
   await svc.from("provider_bill_rules").upsert(
-    { ...rule, updated_at: new Date().toISOString() }, { onConflict: "institution" });
+    { ...rule, institution: canonical, updated_at: new Date().toISOString() }, { onConflict: "institution" });
   const { data: waiting } = await svc.from("provider_bills")
-    .select("id").eq("institution", rule.institution).eq("status", "needs_info");
+    .select("id").ilike("institution", rule.institution).eq("status", "needs_info");
   for (const w of waiting ?? []) {
     await svc.from("provider_bills").update({
       status: "draft", proposal: { ...rule }, updated_at: new Date().toISOString(),

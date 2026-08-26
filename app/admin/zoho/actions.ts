@@ -805,8 +805,9 @@ export async function decideBillAction(formData: FormData) {
   const newCountry = str(formData.get("country"));
   const newCategory = str(formData.get("service_category"));
   if (newCountry || newCategory) {
+    // ilike, not eq: the same supplier's bills may carry either capitalisation.
     const { data: rule } = await svc.from("provider_bill_rules")
-      .select("country, service_category").eq("institution", bill.institution).maybeSingle();
+      .select("country, service_category").ilike("institution", bill.institution).maybeSingle();
     const changed = (newCountry && newCountry !== rule?.country) ||
                     (newCategory && newCategory !== rule?.service_category);
     if (changed) {
@@ -814,7 +815,7 @@ export async function decideBillAction(formData: FormData) {
         ...(newCountry ? { country: newCountry } : {}),
         ...(newCategory ? { service_category: newCategory } : {}),
         answered_by: me?.id ?? null, answered_at: new Date().toISOString(),
-      }).eq("institution", bill.institution);
+      }).ilike("institution", bill.institution);
       const { redetermineWaiting } = await import("@/lib/providerBills");
       let moved = 0;
       try { moved = await redetermineWaiting(String(bill.institution)); } catch { /* the rows keep what they had */ }
@@ -914,9 +915,9 @@ export async function saveForeignAnswersAction(formData: FormData) {
   if (!answers.country) return;
 
   const { data: existing } = await svc.from("provider_bill_rules")
-    .select("institution").eq("institution", institution).maybeSingle();
+    .select("institution").ilike("institution", institution).maybeSingle();
   if (existing) {
-    await svc.from("provider_bill_rules").update(answers).eq("institution", institution);
+    await svc.from("provider_bill_rules").update(answers).ilike("institution", institution);
   } else {
     // The founder's treatment ruling for foreign vendors already stands: import
     // of services under reverse charge, booked to web maintenance. The answers

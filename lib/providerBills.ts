@@ -238,7 +238,7 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
     // when a treatment rule already exists.
     const isForeign = currency !== "INR";
     const needsForeignAnswers = isForeign && !foreignAnswered(rule);
-    await svc.from("provider_bills").insert({
+    const { data: madeRow } = await svc.from("provider_bills").insert({
       vault_doc_id: d.id, institution,
       bill_no: str(facts.invoice_no) || null, bill_date: billDate,
       currency, amount: total, tax_amount: Number(facts.tax) || null,
@@ -267,8 +267,46 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
         : !dated ? `the invoice's own date could not be read — ${billDate} is the filing date, set the real one before posting`
         : needsForeignAnswers ? "foreign vendor — the desk needs the withholding questions answered before this can be booked"
         : null,
-    });
+    }).select("id").maybeSingle();
     if (isZero) continue;
+
+    // READ THE PAPER PROPERLY, ON EVERY INVOICE.
+    //
+    // Above, the PDF is opened only when the TITLE has not already given the
+    // total, currency and date — a shortcut that means a well-titled invoice is
+    // never actually read. That is why 25 bills reached the books with not one
+    // taxable value or GST amount between them, and why the vendor was a bare
+    // name: nothing had ever looked at the document.
+    //
+    // So the full read runs here regardless. It transcribes the tax as printed,
+    // the supplier's GSTIN, state, address and phone, and their Udyam number
+    // where they print one. One AI call per invoice, against a bill that will
+    // otherwise sit waiting for somebody to type it all in by hand.
+    if (madeRow?.id) {
+      try {
+        const { readAndStore } = await import("@/lib/invoiceTax");
+        const r = await readAndStore(String(madeRow.id));
+        const t = r.tax;
+        // WHERE THE READ FOOTS, IT IS THE ANSWER — not a suggestion.
+        //
+        // These figures are transcribed off the invoice, which is exactly what
+        // his rule asks for, so filling them in is not "deriving" anything.
+        // The safety is the arithmetic: the parts must add back to the invoice
+        // total within a rupee. If they do not, they stay a proposal and a
+        // person decides, which is the same line the editor draws.
+        if (t && t.taxable_value !== null) {
+          const parts = t.taxable_value + (t.cgst ?? 0) + (t.sgst ?? 0) + (t.igst ?? 0);
+          const against = t.total ?? total ?? 0;
+          if (against > 0 && Math.abs(parts - against) <= 1) {
+            await svc.from("provider_bills").update({
+              taxable_value: t.taxable_value,
+              cgst_amount: t.cgst, sgst_amount: t.sgst, igst_amount: t.igst,
+            }).eq("id", madeRow.id);
+          }
+        }
+      } catch { /* an unreadable invoice still queues — it is typed in by hand */ }
+    }
+
     if (rule && dated && total && !mismatch && !needsForeignAnswers) added++; else asked++;
   }
   const left = pending.length - batch.length;

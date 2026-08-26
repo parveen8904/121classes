@@ -1027,6 +1027,29 @@ export async function uploadStatementAction(formData: FormData) {
 // nothing in by itself — the figures appear beside the boxes for him to check
 // against the paper, and Save is still his. "No reverse engineering. Just see
 // the invoice and fill it."
+// SET UP A TDS RATE IN ZOHO.
+//
+// FIRST FLY posted with its GST right and its ₹60 withholding unattached,
+// because his books hold no rate for section 393(2) Sl.17. This asks Zoho to
+// create it and reports Zoho's own answer either way — see lib/zohoTds.ts for
+// why it asks rather than assumes.
+export async function createTdsTaxAction(formData: FormData) {
+  await assertArea("zoho");
+  const section = str(formData.get("section")).trim();
+  const rate = Number(formData.get("rate"));
+  if (!section || !(rate > 0)) return;
+  const { createZohoTds } = await import("@/lib/zohoTds");
+  let msg: string;
+  try {
+    const r = await createZohoTds(section, rate);
+    msg = r.why;
+  } catch (e) {
+    msg = `Could not reach Zoho: ${e instanceof Error ? e.message : "unknown"}`;
+  }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(msg)}#bills`);
+}
+
 export async function readInvoiceTaxAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));

@@ -223,14 +223,60 @@ export async function scanPortalSales(): Promise<string> {
 
 // ---- Posting one approved sale ----------------------------------------------
 
+/**
+ * THE CUSTOMER, IDENTIFIED BY SOMETHING THAT IS ACTUALLY THEIRS.
+ *
+ * His instruction, 26 Aug 2026: two parties can share a name, so check
+ * something real before journalising. On this side that key is the EMAIL —
+ * every sale carries one, it is unique to the account, and two students called
+ * Rahul Sharma are two students. Invoicing one against the other's ledger puts
+ * a payment on the wrong statement.
+ *
+ * The old search was worse than name-only: it did not pass contact_type at
+ * all, so a VENDOR sharing the name could come back and be invoiced as a
+ * customer.
+ *
+ * Where a matched customer has no email on file, theirs is filled in — the
+ * same "complete what is missing" rule as on the supplier side.
+ */
 async function findOrCreateCustomer(name: string, email: string): Promise<string> {
-  const r = await zohoFetch<{ contacts?: { contact_id: string; contact_name: string }[] }>(
-    "/contacts", { query: { contact_name: name } });
-  const exact = (r.contacts ?? []).find((x) => x.contact_name.trim().toLowerCase() === name.trim().toLowerCase());
-  if (exact) return exact.contact_id;
+  type C = { contact_id: string; contact_name: string; email?: string };
+  const seen = new Map<string, C>();
+  const add = (l?: C[]) => { for (const c of l ?? []) if (!seen.has(c.contact_id)) seen.set(c.contact_id, c); };
+
+  const byName = await zohoFetch<{ contacts?: C[] }>(
+    "/contacts", { query: { contact_name: name, contact_type: "customer" } }).catch(() => null);
+  add(byName?.contacts);
+  if (email) {
+    const byMail = await zohoFetch<{ contacts?: C[] }>(
+      "/contacts", { query: { email, contact_type: "customer" } }).catch(() => null);
+    add(byMail?.contacts);
+  }
+  const all = [...seen.values()];
+  const norm = (v?: string) => String(v ?? "").trim().toLowerCase();
+
+  // 1. The email settles it.
+  if (email) {
+    const byMail = all.find((c) => norm(c.email) === norm(email));
+    if (byMail) return byMail.contact_id;
+  }
+  // 2. Otherwise a single same-name customer with no email of their own — the
+  //    ordinary case of a contact created before we sent one.
+  const sameName = all.filter((c) => norm(c.contact_name) === norm(name));
+  const blank = sameName.filter((c) => !norm(c.email));
+  if (blank.length === 1) {
+    if (email) {
+      try { await zohoFetch(`/contacts/${blank[0].contact_id}`, { method: "PUT", body: { email } }); }
+      catch { /* filling the blank is best effort; the invoice still posts */ }
+    }
+    return blank[0].contact_id;
+  }
+  // 3. A name that matches while the email does not is somebody else. Zoho
+  //    needs the contact name unique, so theirs carries their own address.
+  const distinct = sameName.length && email ? `${name} (${email})` : name;
   const made = await zohoFetch<{ contact?: { contact_id: string } }>("/contacts", {
     method: "POST",
-    body: { contact_name: name, contact_type: "customer", ...(email ? { email } : {}) },
+    body: { contact_name: distinct, contact_type: "customer", ...(email ? { email } : {}) },
   });
   if (!made.contact?.contact_id) throw new Error("could not create the customer");
   return made.contact.contact_id;

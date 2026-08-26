@@ -18,7 +18,7 @@ import EntryLines from "./EntryLines";
 import SectionToggle from "./SectionToggle";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -291,6 +291,14 @@ export default async function ZohoHubPage(props: {
         .in("status", ["needs_info", "draft", "failed"]).order("bill_date")
     : { data: [] as never[] };
   const bills = (billData ?? []) as unknown as ProviderBillRow[];
+  // What withholding Zoho can actually apply, against what our vendor rules
+  // will ask for. A bill that posts with its TDS unattached is a return that
+  // will not tie, and until now that only showed up after the fact.
+  const { listZohoTds, tdsSectionsNeeded, matchTds } = await import("@/lib/zohoTds");
+  const [zohoTds, tdsNeeded] = hubConnected
+    ? await Promise.all([listZohoTds().catch(() => []), tdsSectionsNeeded().catch(() => [])])
+    : [[], []];
+  const tdsGaps = tdsNeeded.filter((n) => !matchTds(zohoTds, n.section, n.rate));
   // Everything waiting on him before it can reach Zoho.
   const { listPending, listFailed } = await import("@/lib/zohoApprovals");
   const allPending = hubConnected ? await listPending() : [];
@@ -1747,6 +1755,25 @@ export default async function ZohoHubPage(props: {
             <input type="hidden" name="year_label" value={fyNow} />
             <SubmitButton className="btn small" savedLabel="✓ Read">📥 Add this invoice</SubmitButton>
           </form>
+
+          {tdsGaps.length > 0 && (
+            <div className="card" style={{ marginTop: 8, borderLeft: "3px solid #b45309" }}>
+              <strong>⚠️ Zoho has no TDS rate for {tdsGaps.length === 1 ? "one section" : `${tdsGaps.length} sections`} we withhold under</strong>
+              <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 8px", lineHeight: 1.7 }}>
+                A bill still posts, but the withholding does not attach to it — that is why FIRST FLY went in
+                with its GST right and its ₹60 sitting outside the entry.
+              </p>
+              {tdsGaps.map((g) => (
+                <form action={createTdsTaxAction} key={`${g.section}|${g.rate}`} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
+                  <input type="hidden" name="section" value={g.section} />
+                  <input type="hidden" name="rate" value={g.rate} />
+                  <span style={{ minWidth: 200, fontSize: ".85rem" }}><strong>{g.section}</strong> @ {g.rate}%</span>
+                  <span className="muted" style={{ fontSize: ".78rem", minWidth: 160 }}>{g.vendors.join(", ")}</span>
+                  <SubmitButton className="btn small secondary" savedLabel="✓ Asked">➕ Create it in Zoho</SubmitButton>
+                </form>
+              ))}
+            </div>
+          )}
 
           {billsWaiting.length === 0 && (
             <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing waiting.</p></div>

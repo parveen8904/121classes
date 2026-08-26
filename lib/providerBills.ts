@@ -378,47 +378,164 @@ export function placeOfContact(facts: VendorFacts): string | null {
   return STATE_CODE[st] ?? null;
 }
 
-async function findOrCreateVendor(name: string, overseas: boolean, currency: string, facts: VendorFacts = {}): Promise<string> {
-  const r = await zohoFetch<{ contacts?: { contact_id: string; contact_name: string; currency_code?: string }[] }>(
-    "/contacts", { query: { contact_name: name, contact_type: "vendor" } });
-  const hit = (r.contacts ?? []).find((c) => c.contact_name.trim().toLowerCase() === name.trim().toLowerCase());
-  const wantCurrency = overseas && currency !== "INR" ? currency : null;
+/** The PAN inside a GSTIN — characters 3 to 12. Two GSTINs of one business
+ *  across states share a PAN, which is why it is the second-best key. */
+export const panOf = (gstin: string | null | undefined): string | null => {
+  const g = String(gstin ?? "").toUpperCase().replace(/\s/g, "");
+  return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/.test(g) ? g.slice(2, 12) : null;
+};
 
-  const gstBits = !overseas ? indianVendorFields(facts) : {};
+const squash = (v: string | null | undefined) =>
+  String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
-  if (hit) {
-    if (wantCurrency && hit.currency_code && hit.currency_code !== wantCurrency) {
-      const cid = await currencyIdFor(wantCurrency);
-      if (cid) {
-        try { await zohoFetch(`/contacts/${hit.contact_id}`, { method: "PUT", body: { currency_id: cid, gst_treatment: "overseas" } }); }
-        catch { /* an established vendor cannot change currency — the bill will say so */ }
-      }
-    }
-    // A vendor already created with nothing but a name is the reason Zoho had
-    // to guess the place of supply. Where the invoice now tells us, fill it in.
-    if (Object.keys(gstBits).length) {
-      try { await zohoFetch(`/contacts/${hit.contact_id}`, { method: "PUT", body: gstBits }); }
-      catch { /* the bill will report it if Zoho still cannot place them */ }
-    }
-    return hit.contact_id;
+type ZContact = {
+  contact_id: string; contact_name: string; contact_type?: string;
+  currency_code?: string; gst_no?: string; phone?: string; email?: string;
+  billing_address?: { address?: string };
+};
+
+/** Ask Zoho for candidates by name AND by GSTIN, since either may find them. */
+async function candidateContacts(name: string, gstin: string | null, type: "vendor" | "customer"): Promise<ZContact[]> {
+  const seen = new Map<string, ZContact>();
+  const add = (list: ZContact[] | undefined) => {
+    for (const c of list ?? []) if (!seen.has(c.contact_id)) seen.set(c.contact_id, c);
+  };
+  const byName = await zohoFetch<{ contacts?: ZContact[] }>(
+    "/contacts", { query: { contact_name: name, contact_type: type } }).catch(() => null);
+  add(byName?.contacts);
+  if (gstin) {
+    const byGst = await zohoFetch<{ contacts?: ZContact[] }>(
+      "/contacts", { query: { search_text: gstin, contact_type: type } }).catch(() => null);
+    add(byGst?.contacts);
+  }
+  return [...seen.values()];
+}
+
+/**
+ * WHICH OF THEM IS ACTUALLY THIS PARTY.
+ *
+ * His instruction, 26 Aug 2026: "there can be two vendors by same name so
+ * always check with GST or PAN or address before journalising."
+ *
+ * He is right, and matching on the name alone was how it worked. Two firms
+ * called "Sharma & Co" are two firms, and posting one's bill against the
+ * other's ledger is money in the wrong account and a return that will not tie.
+ *
+ * So identity is settled in this order, strongest first:
+ *   1. GSTIN — the registration itself. Nothing beats it.
+ *   2. PAN — the same business registered in another state.
+ *   3. Address or phone, where neither side has a GSTIN.
+ *   4. A single name match carrying NO GSTIN of its own, which is the ordinary
+ *      case of a contact somebody typed in by hand before this existed.
+ *
+ * A name that matches while the GSTIN does not is treated as a DIFFERENT
+ * party, which is the whole point of his instruction.
+ */
+export function pickContact(
+  cands: ZContact[], name: string, facts: VendorFacts,
+): { hit: ZContact | null; why: string; conflict: boolean } {
+  const gstin = String(facts.gstin ?? "").toUpperCase().replace(/\s/g, "") || null;
+  const pan = panOf(gstin);
+
+  if (gstin) {
+    const byGst = cands.find((c) => squash(c.gst_no) === squash(gstin));
+    if (byGst) return { hit: byGst, why: "GSTIN", conflict: false };
+  }
+  if (pan) {
+    const byPan = cands.find((c) => panOf(c.gst_no) === pan);
+    if (byPan) return { hit: byPan, why: "PAN", conflict: false };
   }
 
+  const sameName = cands.filter((c) => squash(c.contact_name) === squash(name));
+
+  if (facts.address || facts.phone) {
+    const byPlace = sameName.find((c) =>
+      (facts.phone && squash(c.phone) && squash(c.phone).includes(squash(facts.phone).slice(-10))) ||
+      (facts.address && squash(c.billing_address?.address) &&
+        squash(c.billing_address?.address).slice(0, 24) === squash(facts.address).slice(0, 24)));
+    if (byPlace) return { hit: byPlace, why: "address or phone", conflict: false };
+  }
+
+  // A name match whose GSTIN differs is somebody else trading under the same
+  // name. Never journalise against them.
+  const blank = sameName.filter((c) => !squash(c.gst_no));
+  if (gstin && sameName.length && !blank.length) {
+    return { hit: null, why: "same name but a different GSTIN", conflict: true };
+  }
+  if (blank.length === 1) return { hit: blank[0], why: "name (no GSTIN on file)", conflict: false };
+  if (blank.length > 1) {
+    return { hit: null, why: `${blank.length} contacts share this name and none carries a GSTIN`, conflict: true };
+  }
+  return { hit: null, why: "no match", conflict: false };
+}
+
+/**
+ * The vendor, identified properly and completed where Zoho is missing details.
+ *
+ * "If you find any vendor has missing details, that should be completed on
+ * Zoho automatically." So a contact we identify as this party has its blanks
+ * filled from the invoice. It only ever FILLS: a value already in Zoho is left
+ * alone, because their books may hold something better than one invoice does.
+ */
+async function findOrCreateVendor(
+  name: string, overseas: boolean, currency: string, facts: VendorFacts = {},
+): Promise<{ id: string; note: string }> {
+  const gstin = String(facts.gstin ?? "").toUpperCase().replace(/\s/g, "") || null;
+  const cands = await candidateContacts(name, gstin, "vendor");
+  const { hit, why, conflict } = pickContact(cands, name, facts);
+  const wantCurrency = overseas && currency !== "INR" ? currency : null;
+  const wanted = !overseas ? indianVendorFields(facts) : {};
+
+  if (hit) {
+    const patch: Record<string, unknown> = {};
+    // Only the blanks. Never overwrite what their books already say.
+    for (const [k, v] of Object.entries(wanted)) {
+      const existing = (hit as unknown as Record<string, unknown>)[k];
+      const empty = existing === undefined || existing === null || existing === "" ||
+        (k === "billing_address" && !squash((existing as { address?: string })?.address));
+      if (empty) patch[k] = v;
+    }
+    if (wantCurrency && hit.currency_code && hit.currency_code !== wantCurrency) {
+      const cid = await currencyIdFor(wantCurrency);
+      if (cid) { patch.currency_id = cid; patch.gst_treatment = "overseas"; }
+    }
+    if (Object.keys(patch).length) {
+      try { await zohoFetch(`/contacts/${hit.contact_id}`, { method: "PUT", body: patch }); }
+      catch { /* the bill will report it if Zoho still cannot place them */ }
+    }
+    return {
+      id: hit.contact_id,
+      note: Object.keys(patch).length
+        ? ` — matched the vendor on ${why} and filled in ${Object.keys(patch).join(", ")}`
+        : ` — matched the vendor on ${why}`,
+    };
+  }
+
+  // A genuine second party under a name Zoho already holds. Zoho requires the
+  // contact name to be unique, so theirs is distinguished by their own GSTIN
+  // rather than being merged into somebody else's ledger.
+  const distinct = conflict && gstin ? `${name} (${gstin})` : name;
   const cid = wantCurrency ? await currencyIdFor(wantCurrency) : null;
   const made = await zohoFetch<{ contact?: { contact_id: string } }>("/contacts", {
     method: "POST",
     body: {
-      contact_name: name, contact_type: "vendor",
+      contact_name: distinct, contact_type: "vendor",
       // An overseas supplier must be marked as such or Zoho refuses the reverse
       // charge outright ("should be applied on import of services…").
       ...(overseas ? { gst_treatment: "overseas" } : {}),
       ...(cid ? { currency_id: cid } : {}),
       // An Indian supplier needs their GSTIN and their state, or Zoho cannot
       // tell an intra-state bill from an inter-state one.
-      ...gstBits,
+      ...wanted,
     },
   });
   if (!made.contact?.contact_id) throw new Error("could not create the vendor");
-  return made.contact.contact_id;
+  return {
+    id: made.contact.contact_id,
+    note: conflict
+      ? ` — Zoho already held "${name}" with ${why}, so this supplier was created separately as "${distinct}"`
+      : " — vendor created from the invoice",
+  };
 }
 
 // Shared and cached — see lib/zohoLookup.ts. Asking Zoho for the tax list on
@@ -647,14 +764,19 @@ export async function postProviderBill(id: string): Promise<void> {
     // the vendor… therefore the entry cannot be posted." A domestic vendor was
     // being created with a name and nothing else, so Zoho had no state to place
     // them in and fell back to ours.
+    let vendorNote = "";
     const read = (b.tax_read ?? {}) as Record<string, unknown>;
-    const vendorId = await findOrCreateVendor(String(p.vendor_name), overseas, currency, {
+    const vendorPick = await findOrCreateVendor(String(p.vendor_name), overseas, currency, {
       gstin: (read.vendor_gstin as string) ?? null,
       state: (read.vendor_state as string) ?? null,
       address: (read.vendor_address as string) ?? null,
       phone: (read.vendor_phone as string) ?? null,
       email: (read.vendor_email as string) ?? null,
     });
+    const vendorId = vendorPick.id;
+    // How the party was identified is recorded on the bill, because "matched on
+    // GSTIN" and "matched on a name with no GSTIN" are not the same assurance.
+    vendorNote = vendorPick.note;
     if (vendorId) {
       await svc.from("provider_bills").update({ zoho_vendor_id: vendorId }).eq("id", id);
     }
@@ -876,7 +998,7 @@ export async function postProviderBill(id: string): Promise<void> {
       rate, inr_amount: rate ? Number((total * rate).toFixed(2)) : total,
       booked_amount: work.bookedAmount, tds_amount: work.tds, vendor_gets: work.vendorGets,
       zoho_echo: { ...echoOf(r.bill), zoho_status: moved.state },
-      error: (tdsNote || (moved.state === "open" ? "" : `not in the ledgers yet — ${moved.why}`)) + paper || null,
+      error: ((tdsNote || (moved.state === "open" ? "" : `not in the ledgers yet — ${moved.why}`)) + vendorNote + paper) || null,
       updated_at: new Date().toISOString(),
     }).eq("id", id);
     // The vault copy is now worked, not raw.

@@ -968,12 +968,34 @@ export async function postProviderBill(id: string): Promise<void> {
     // posts and the row says the TDS must be applied by hand — never silently.
     let tdsNote = "";
     if (p.tds_section) {
-      const tds = await zohoFetch<{ taxes?: { tax_id: string; tax_name: string; tax_percentage: number }[] }>(
-        "/settings/taxes", { query: { filter_by: "Taxes.Tds" } }).catch(() => null);
-      const match = (tds?.taxes ?? []).find(
+      // "NO SUCH TAX" AND "I COULD NOT ASK" ARE NOT THE SAME ANSWER.
+      //
+      // FIRST FLY posted saying no matching TDS tax existed. A 1% rate DOES
+      // exist in his Zoho — the lookup simply failed, and `.catch(() => null)`
+      // turned that failure into an empty list, which reads as an absence. So
+      // a bill went into the books with its withholding quietly detached, which
+      // is a return that will not tie.
+      //
+      // A lookup that cannot be made now STOPS the posting. A bill can be
+      // posted a minute later; a bill posted with the wrong tax treatment has
+      // to be found and undone.
+      let taxes: { tax_id: string; tax_name: string; tax_percentage: number }[] | null = null;
+      try {
+        const tds = await zohoFetch<{ taxes?: { tax_id: string; tax_name: string; tax_percentage: number }[] }>(
+          "/settings/taxes", { query: { filter_by: "Taxes.Tds" } });
+        taxes = tds?.taxes ?? [];
+      } catch (e) {
+        return fail(
+          `could not read the TDS rates from Zoho, so this bill was not posted rather than posted without its ` +
+          `${p.tds_rate}% withholding — ${e instanceof Error ? e.message : "unknown"}. Approve it again in a minute.`,
+        );
+      }
+      // The section wording changes between years; the RATE is the stable half,
+      // so either identifies the rate to apply.
+      const match = taxes.find(
         (t) => t.tax_name.includes(String(p.tds_section)) || Number(t.tax_percentage) === Number(p.tds_rate));
       if (match) body.tds_tax_id = match.tax_id;
-      else tdsNote = ` — TDS ${p.tds_section} @ ${p.tds_rate}% must be applied by hand (no matching TDS tax in Zoho)`;
+      else tdsNote = ` — TDS ${p.tds_section} @ ${p.tds_rate}% must be applied by hand (Zoho holds ${taxes.length ? `only: ${taxes.map((t) => `${t.tax_name} ${t.tax_percentage}%`).join(", ")}` : "no TDS rates at all"})`;
     }
 
     const r = await zohoFetch<{ bill?: ZohoBill }>("/bills", { method: "POST", body });

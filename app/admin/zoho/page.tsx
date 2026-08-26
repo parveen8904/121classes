@@ -1756,6 +1756,18 @@ export default async function ZohoHubPage(props: {
             <SubmitButton className="btn small" savedLabel="✓ Read">📥 Add this invoice</SubmitButton>
           </form>
 
+          {/* WHAT ZOHO ACTUALLY HOLDS. He said a 1% rate exists and the section
+              wording may have changed — so the names are shown rather than
+              guessed at, and the matcher accepts either the section or the
+              rate. */}
+          {zohoTds.length > 0 && (
+            <p className="muted" style={{ fontSize: ".78rem", marginTop: 8 }}>
+              <strong>TDS rates in Zoho:</strong>{" "}
+              {zohoTds.map((t) => `${t.tax_name} (${t.tax_percentage}%)`).join(" · ")}
+              . A bill matches on either the section wording or the rate, so a renamed section still finds its rate.
+            </p>
+          )}
+
           {tdsGaps.length > 0 && (
             <div className="card" style={{ marginTop: 8, borderLeft: "3px solid #b45309" }}>
               <strong>⚠️ Zoho has no TDS rate for {tdsGaps.length === 1 ? "one section" : `${tdsGaps.length} sections`} we withhold under</strong>

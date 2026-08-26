@@ -2,7 +2,7 @@ import { formatDateTime } from "@/lib/dates";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { restoreMessage, hideMessage, banSender, unbanUser, saveBlockedTerms, makeStudentsOnlyLink } from "./actions";
+import { restoreMessage, hideMessage, banSender, unbanUser, saveBlockedTerms, makeStudentsOnlyLink, restoreAutoRemoved, banByTelegramId, unhideSenderMessages } from "./actions";
 import { botGroupStatus } from "@/lib/telegramGroup";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export const metadata = { title: "Group moderation — Admin" };
 
 type Msg = { id: string; chat_id: string; sender_name: string | null; body: string | null; created_at: string; source: string; status: string; flagged: boolean; flag_reasons: string[] };
 
-export default async function DiscussionAdmin(props: { searchParams: Promise<{ q?: string; group?: string; linked?: string; linkerr?: string }> }) {
+export default async function DiscussionAdmin(props: { searchParams: Promise<{ q?: string; group?: string; linked?: string; linkerr?: string; done?: string }> }) {
   const searchParams = await props.searchParams;
   const svc = createServiceClient();
   const q = (searchParams.q ?? "").trim();
@@ -81,6 +81,61 @@ export default async function DiscussionAdmin(props: { searchParams: Promise<{ q
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60, maxWidth: 920 }}>
       <AdminHero badge="🛡️ Group moderation" title="Discussion moderation" subtitle="Review flagged messages, search across all groups, hide messages and ban/mute users. Your DB is the record; Telegram is kept in sync." back={{ href: "/admin", label: "Admin" }} />
+
+      {searchParams.done && <div className="notice ok" style={{ marginTop: 12 }}>{searchParams.done}</div>}
+
+      {/* PUTTING RIGHT WHAT THE OLD MEMBERSHIP RULE DID.
+          Until 26 Aug 2026 an unlinked sender was deleted and banned on their
+          first message. 36 people went, the Intermediate group emptied, and a
+          student reporting harassment had nine of her ten messages hidden. */}
+      <div style={{ ...card, marginTop: 16, borderLeft: "3px solid #b45309" }}>
+        <h3 style={{ marginTop: 0 }}>🧯 Put back / take out</h3>
+
+        <form action={restoreAutoRemoved} style={{ margin: "10px 0 16px" }}>
+          <SubmitButton className="btn" savedLabel="✓ Done">↩️ Restore everyone the old rule removed</SubmitButton>
+          <p className="muted" style={{ fontSize: ".8rem", margin: "6px 0 0" }}>
+            Lifts the Telegram ban for every person banned as “Not a linked student”. It never touches
+            somebody you banned on purpose. Telegram does not put anyone back by itself — once the ban is
+            lifted they can rejoin, so send them the group link.
+          </p>
+        </form>
+
+        <form action={banByTelegramId} style={{ display: "grid", gap: 8, gridTemplateColumns: "1.4fr 1fr 1.4fr auto", alignItems: "end" }}>
+          <div>
+            <label>Group</label>
+            <select name="chat_id" defaultValue={groupChats[0]?.chat ?? ""}>
+              {groupChats.map((g) => <option key={g.chat} value={g.chat}>{g.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label>Telegram id</label>
+            <input name="tg_user_id" placeholder="e.g. 5715948034" inputMode="numeric" />
+          </div>
+          <div>
+            <label>Reason</label>
+            <input name="reason" placeholder="e.g. harassing a student" />
+          </div>
+          <SubmitButton className="btn small" savedLabel="✓ Removed">🚫 Remove &amp; ban</SubmitButton>
+        </form>
+
+        <form action={unhideSenderMessages} style={{ display: "grid", gap: 8, gridTemplateColumns: "1.4fr 1fr auto", alignItems: "end", marginTop: 12 }}>
+          <div>
+            <label>Group</label>
+            <select name="chat_id" defaultValue={groupChats[0]?.chat ?? ""}>
+              {groupChats.map((g) => <option key={g.chat} value={g.chat}>{g.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label>Telegram id</label>
+            <input name="tg_user_id" placeholder="whose messages were wrongly hidden" inputMode="numeric" />
+          </div>
+          <SubmitButton className="btn small secondary" savedLabel="✓ Restored">👁 Un-hide their messages</SubmitButton>
+        </form>
+        <p className="muted" style={{ fontSize: ".8rem", margin: "6px 0 0" }}>
+          For a student whose report of abuse was hidden by the blocked-terms list. Their words come back on
+          the record here. In Telegram they are gone — they were deleted at the time.
+        </p>
+      </div>
 
       {searchParams.linked === "1" && <div className="notice ok" style={{ marginTop: 12 }}>✅ A students-only join link was created and saved for the website. You can now safely make that group Private and delete its public link.</div>}
       {searchParams.linkerr === "1" && <div className="notice err" style={{ marginTop: 12 }}>Couldn&apos;t create the link — the bot must be an admin with &ldquo;Invite users via link&rdquo; permission in that group. Fix that, then try again.</div>}

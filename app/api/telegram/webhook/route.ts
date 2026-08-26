@@ -4,7 +4,7 @@ import { sendTelegramMessage, notifyFaculty } from "@/lib/notify";
 import { answerDoubtFromMaterial, aiConfigured, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getSecret } from "@/lib/secrets";
-import { moderateMessageDyn, imageIsExplicit, containsLink } from "@/lib/moderation";
+import { looksLikeAbuseReport, moderateMessageDyn, imageIsExplicit, containsLink } from "@/lib/moderation";
 import { tgDeleteMessage, tgSendGroupReply, tgApproveJoin, tgDeclineJoin, tgRestrictUser, messageHasMedia, moderatableImageId, tgGetImageB64, tgIsGroupAdmin } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
 import { groupAiAnswer } from "@/lib/groupDoubt";
@@ -78,15 +78,30 @@ export async function POST(req: NextRequest) {
       .select("id")
       .eq("telegram_chat_id", jrUser)
       .maybeSingle();
-    if (linked?.id) {
-      await tgApproveJoin(jrChat, jrUser);
-    } else {
-      await tgDeclineJoin(jrChat, jrUser);
-      // Best-effort DM (works only if they've ever started the bot).
+    // EVERYONE IS LET IN. His instruction, 26 Aug 2026: "there is no need to
+    // check the student whether they exist in our system or not, if they are
+    // asking proper things, let them be in the group. We want to increase the
+    // group size. We don't want to decrease the group size."
+    //
+    // The old rule declined anyone who had not pressed "Connect Telegram" on
+    // their dashboard — 9.5% of students — and told them so in a DM Telegram
+    // would not deliver, because a bot cannot message someone who has never
+    // opened a chat with it. So it turned away his own paying students in
+    // silence, and the CA Intermediate group emptied.
+    //
+    // Behaviour, not membership, is what is policed now: blocked terms, links,
+    // explicit images and abuse are all still enforced below, and anyone who
+    // abuses the room is removed by the rule right under this one.
+    await tgApproveJoin(jrChat, jrUser);
+    if (!linked?.id) {
+      // Best-effort and entirely optional — linking makes the portal recognise
+      // them, it is not a condition of being here. Fails silently when they
+      // have never started the bot, which is fine; they are already in.
       await sendTelegramMessage(
         jrUser,
-        "🔒 This group is only for CA Parveen Sharma students. Please log in at caparveensharma.com, tap “Connect Telegram” on your dashboard, then request to join again — you'll be approved automatically.",
-      );
+        "👋 Welcome to CA Parveen Sharma's study group.\n\n" +
+        "Tip: sign in at caparveensharma.com and tap “Connect Telegram” on your dashboard — then the assistant here can see your course and answer from your own material.",
+      ).catch(() => false);
     }
     return NextResponse.json({ ok: true });
   }
@@ -137,33 +152,14 @@ export async function POST(req: NextRequest) {
       // step, so they are ASKED, in the room where they can actually read it,
       // and their message stands. Blocked terms, links and abuse are still
       // policed below exactly as before.
-      if (fromId && !msg?.from?.is_bot && !senderProf?.id && !(await tgIsGroupAdmin(chatId, fromId))) {
-        // Once a day per person, so a student posting ten times does not turn
-        // the group into a wall of the same reminder.
-        const since = new Date(Date.now() - 24 * 3600e3).toISOString();
-        const { data: told } = await svc
-          .from("group_link_reminders")
-          .select("reminded_at")
-          .eq("chat_id", chatId)
-          .eq("tg_user_id", fromId)
-          .maybeSingle();
-        if (!told || String(told.reminded_at) < since) {
-          await tgSendGroupReply(
-            chatId,
-            `👋 ${fromName}, we cannot match this Telegram account to your student account yet, so your questions here will not reach the AI assistant.\n\n` +
-            "Sign in at caparveensharma.com, open your dashboard and tap “Connect Telegram”. It takes a few seconds and only needs doing once.",
-            msg.message_id,
-          ).catch(() => null);
-          try {
-            await svc.from("group_link_reminders").upsert(
-              { chat_id: chatId, tg_user_id: fromId, reminded_at: new Date().toISOString(), times: told ? 2 : 1 },
-              { onConflict: "chat_id,tg_user_id" },
-            );
-          } catch { /* the reminder already went out; never block the message */ }
-        }
-        // Deliberately NOT returning: the message is mirrored, moderated and
-        // answered like anyone else's.
-      }
+      // NOTHING HERE CHECKS WHETHER THE SENDER IS "OURS" ANY MORE.
+      //
+      // This is where his own students were being deleted and banned on their
+      // first message for not having linked a Telegram account — 36 of them,
+      // two with live paid subscriptions. His ruling: do not check whether a
+      // student exists in our system; if they are asking proper things, let
+      // them be in the group. What follows polices what people DO, which is
+      // the thing that actually matters.
       const isStaffSender = !!senderProf && senderProf.role !== "student";
 
       // TEXT / CAPTION moderation (blocked terms, spam, links) — now also
@@ -193,10 +189,53 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // A REPORT OF ABUSE IS NEVER HIDDEN, AND NEVER DELETED.
+      //
+      // On 21 August the blocked-terms list matched the words a student needed
+      // to describe what was being done to her, and nine of her ten messages
+      // were removed from the room while the account she named kept posting.
+      // His ruling: the person reporting abuse must not be blocked, the person
+      // abusing must be. So a flagged message that reads as a REPORT stays up
+      // and comes to him instead.
+      //
+      // A report arrives in pieces — "Sending inappropriate msg", then "And
+      // sexting" — and the later pieces carry no report words of their own. So
+      // once somebody has reported, anything else they say for the next
+      // fifteen minutes is treated as part of it.
+      let isReport = !mediaExplicit && !!combined && looksLikeAbuseReport(combined);
+      if (!isReport && mod.flagged && !mediaExplicit && fromId) {
+        const { data: recent } = await svc
+          .from("group_messages")
+          .select("body")
+          .eq("chat_id", chatId)
+          .eq("sender_tg_id", fromId)
+          .gte("created_at", new Date(Date.now() - 15 * 60e3).toISOString())
+          .order("created_at", { ascending: false })
+          .limit(10);
+        isReport = (recent ?? []).some((r) => looksLikeAbuseReport(String((r as { body: string }).body ?? "")));
+      }
+
       let status = "visible";
-      if (mod.flagged || mediaExplicit) {
+      if ((mod.flagged || mediaExplicit) && !isReport) {
         await tgDeleteMessage(chatId, msg.message_id); // bot must be group admin
         status = "hidden";
+      }
+      if (isReport && mod.flagged) {
+        // Straight to him, with everything he needs to act on it.
+        try {
+          const { notifyFaculty } = await import("@/lib/notify");
+          await notifyFaculty(
+            "🚨 A student is reporting abuse in a study group",
+            `${fromName} (Telegram id ${fromId ?? "unknown"}) in ${msg.chat.title ?? chatId}:\n\n` +
+            `“${combined}”\n\n` +
+            "Their message has been LEFT VISIBLE deliberately. Open /admin/discussion to see the thread and remove whoever they are naming.",
+          );
+        } catch { /* an alert that fails must not hide the message */ }
+        try {
+          await svc.from("message_moderation_log").insert({
+            message_id: null, action: "abuse_report_kept_visible", reason: mod.reasons.join(", ") || "report",
+          });
+        } catch { /* logging is best effort */ }
       }
       // Explicit media is a removable offence at once — not a warning.
       if (mediaExplicit && fromId) {

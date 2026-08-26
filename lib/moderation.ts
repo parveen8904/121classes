@@ -148,6 +148,50 @@ export async function imageIsExplicit(b64: string, mediaType: string): Promise<{
 // www., t.me/ and bare domains with a common TLD. Deliberately does not trip on
 // "B.Com" / "M.Com" (needs 2+ characters before the dot) or a bare "file.pdf".
 const LINK_RE = /(https?:\/\/\S+|www\.\S+|t\.me\/\S+|\b[a-z0-9][a-z0-9-]{1,}\.(?:com|in|net|org|io|co|me|edu|gov|app|xyz|info|biz|link|ly|shop|store|online|site|club|live|tel|fun)\b(?:\/\S*)?)/i;
+// REPORTING ABUSE IS NOT ABUSE.
+//
+// 21 Aug 2026, CA Intermediate group. A student wrote "hi sir please remove
+// this ai room pervert guy from group", "Sending inappropriate msg", "Asking
+// for n₹des", "And sexting", and tagged the founder eight times. The blocked
+// terms list matched the words she needed in order to describe what was being
+// done to her, so NINE of her ten messages were hidden. The account she named
+// had none of his hidden and was never removed. She has not posted since.
+//
+// His ruling: "a person who reports me abuse should not be blocked, but the
+// person who is abusing should get blocked."
+//
+// So a flagged message is checked here first. A report asks someone for help
+// about somebody else; abuse is aimed AT someone. The two are told apart by
+// requiring both halves of a report — a call for help, and a third party it is
+// about — and by refusing the label to anything that solicits or targets the
+// reader directly.
+//
+// Where it is unsure, it sides with the student: a wrongly-visible report is
+// seen by the founder, while a wrongly-hidden one leaves somebody being
+// harassed with nowhere to turn.
+export function looksLikeAbuseReport(text: string): boolean {
+  const t = String(text ?? "").toLowerCase();
+  if (!t.trim()) return false;
+
+  // Aimed at the reader — that is the abuse itself, never a report of it.
+  if (/\b(send|give|show)\s+(me|us)\b/.test(t)) return false;
+  if (/\byour?\s+(pic|pics|photo|photos|number|nude|nudes|body)\b/.test(t)) return false;
+
+  // Half one, either form: asking someone for help, OR naming the misconduct.
+  // Naming it has to be enough on its own, because a report arrives in
+  // fragments — "Sending inappropriate msg", "And sexting" — and every one of
+  // those fragments was hidden on 21 August.
+  const asking = /\b(report|reported|remove|removed|kick|ban|block|blocked|complain|complaint|action|please|plz|pls|help|sir|admin|mods?|moderator)\b/.test(t)
+    || /@caparveen/.test(t);
+  const namesMisconduct = /\b(harr?a?s+\w*|creep\w*|pervert\w*|stalk\w*|abusi\w*|molest\w*|misbehav\w*|inappropriate|obscene|vulgar|indecent|sexting|nudes?)\b/.test(t);
+
+  // Half two: it is about somebody else, or about something done to me.
+  const aboutSomeoneElse = /\b(he|him|his|she|her|they|them|this guy|that guy|is doing|was doing|keeps|sending|sends|sent|asking|asked|me|my|dm)\b/.test(t)
+    || namesMisconduct;
+
+  return (asking || namesMisconduct) && aboutSomeoneElse;
+}
+
 export function containsLink(text: string): boolean {
   return LINK_RE.test(text || "");
 }

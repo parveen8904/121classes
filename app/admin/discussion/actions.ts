@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { tgDeleteMessage, tgRestrictUser } from "@/lib/telegramGroup";
+import { tgDeleteMessage, tgRestrictUser, tgUnbanUser, tgMemberStatus } from "@/lib/telegramGroup";
 import { discordDeleteChannelMessage } from "@/lib/discord";
 import { str } from "../_lib/util";
 
@@ -78,13 +78,119 @@ export async function banSender(formData: FormData) {
   revalidatePath("/admin/discussion");
 }
 
+// UNBAN — INCLUDING IN TELEGRAM, WHICH IT NEVER DID.
+//
+// This deleted our own row and stopped. The person stayed banned inside the
+// group and could not return however often the button was pressed, and nothing
+// said so. Now the ban is actually lifted where it was applied.
 export async function unbanUser(formData: FormData) {
   await assertArea("moderation");
   const me = await adminId();
   if (!me) return;
   const banId = str(formData.get("ban_id"));
-  await createServiceClient().from("banned_group_users").delete().eq("id", banId);
+  const svc = createServiceClient();
+  const { data: row } = await svc
+    .from("banned_group_users").select("chat_id, tg_user_id").eq("id", banId).maybeSingle();
+  if (row?.tg_user_id && row?.chat_id) {
+    await tgUnbanUser(String(row.chat_id), String(row.tg_user_id)).catch(() => false);
+  }
+  await svc.from("banned_group_users").delete().eq("id", banId);
   revalidatePath("/admin/discussion");
+}
+
+// PUT BACK EVERYONE THE OLD RULE THREW OUT.
+//
+// Until 26 Aug 2026 a first message from anyone whose Telegram was not linked
+// to a portal account got them deleted and banned. Only 9.5% of students had
+// linked, so it removed 36 people from the two study groups, at least two of
+// them holding a live paid subscription, and the CA Intermediate group went
+// silent. The rule is gone; this undoes what it did.
+//
+// It targets ONLY rows the rule itself wrote ("Not a linked student"), so a
+// person the founder or a moderator banned on purpose is never touched.
+export async function restoreAutoRemoved() {
+  await assertArea("moderation");
+  const me = await adminId();
+  if (!me) return;
+  const svc = createServiceClient();
+  const { data: rows } = await svc
+    .from("banned_group_users")
+    .select("id, chat_id, tg_user_id")
+    .ilike("reason", "Not a linked student%");
+
+  let lifted = 0;
+  for (const r of rows ?? []) {
+    const chat = String((r as { chat_id: string }).chat_id ?? "");
+    const uid = String((r as { tg_user_id: string | null }).tg_user_id ?? "");
+    if (chat && uid && (await tgUnbanUser(chat, uid).catch(() => false))) lifted++;
+    await svc.from("banned_group_users").delete().eq("id", (r as { id: string }).id);
+  }
+  await svc.from("message_moderation_log").insert({
+    message_id: null, action: "restored_auto_removed", reason: `${lifted} of ${(rows ?? []).length} lifted in Telegram`, by_admin: me,
+  });
+  revalidatePath("/admin/discussion");
+  redirect(`/admin/discussion?done=${encodeURIComponent(
+    `Ban lifted for ${lifted} of ${(rows ?? []).length} people removed by the old rule. Telegram does not put anyone back automatically — they can now rejoin, so send them the group link.`,
+  )}`);
+}
+
+// REMOVE SOMEBODY BY THEIR TELEGRAM ID.
+//
+// The per-message ban button only reaches people whose message is still in the
+// recent list. When a student reports somebody, the account being reported is
+// often further up the group than that.
+export async function banByTelegramId(formData: FormData) {
+  await assertArea("moderation");
+  const me = await adminId();
+  if (!me) return;
+  const chatId = str(formData.get("chat_id")).trim();
+  const tgUserId = str(formData.get("tg_user_id")).trim();
+  const reason = str(formData.get("reason")).trim() || "Removed by moderator";
+  if (!chatId || !/^\d+$/.test(tgUserId)) {
+    redirect(`/admin/discussion?done=${encodeURIComponent("Give a group and a numeric Telegram id.")}`);
+  }
+  const svc = createServiceClient();
+  const ok = await tgRestrictUser(chatId, tgUserId, true).catch(() => false);
+  await svc.from("banned_group_users").upsert(
+    { chat_id: chatId, user_id: null, tg_user_id: tgUserId, kind: "ban", reason, banned_by: me },
+    { onConflict: "chat_id,tg_user_id" },
+  );
+  await svc.from("message_moderation_log").insert({
+    message_id: null, action: "banned", reason: `${reason} (tg ${tgUserId})`, by_admin: me,
+  });
+  revalidatePath("/admin/discussion");
+  redirect(`/admin/discussion?done=${encodeURIComponent(
+    ok ? `Removed ${tgUserId} from the group and banned.` : `Recorded the ban, but Telegram refused it — check the bot is still an admin there.`,
+  )}`);
+}
+
+// PUT A STUDENT'S HIDDEN MESSAGES BACK ON THE RECORD.
+//
+// For somebody whose report of abuse was hidden by the blocked-terms list.
+// Their words return to the website view and stop counting against them.
+// It cannot undo the Telegram side: those messages were deleted from the group
+// at the time and Telegram gives no way to restore them.
+export async function unhideSenderMessages(formData: FormData) {
+  await assertArea("moderation");
+  const me = await adminId();
+  if (!me) return;
+  const chatId = str(formData.get("chat_id")).trim();
+  const tgUserId = str(formData.get("tg_user_id")).trim();
+  if (!chatId || !tgUserId) return;
+  const svc = createServiceClient();
+  const { data: rows } = await svc
+    .from("group_messages")
+    .update({ status: "visible", flagged: false })
+    .eq("chat_id", chatId).eq("sender_tg_id", tgUserId).eq("status", "hidden")
+    .select("id");
+  const status = await tgMemberStatus(chatId, tgUserId);
+  await svc.from("message_moderation_log").insert({
+    message_id: null, action: "unhidden_report", reason: `${(rows ?? []).length} messages restored (tg ${tgUserId})`, by_admin: me,
+  });
+  revalidatePath("/admin/discussion");
+  redirect(`/admin/discussion?done=${encodeURIComponent(
+    `${(rows ?? []).length} message(s) put back on the record. In Telegram they are gone for good — they were deleted at the time. That account is currently: ${status ?? "unknown"}.`,
+  )}`);
 }
 
 // Generate a students-only (approval-required) join link for a group and store

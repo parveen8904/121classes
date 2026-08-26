@@ -2,7 +2,7 @@ import { getSecret } from "@/lib/secrets";
 
 // Thin Telegram Bot API helpers for group chat (send / delete / restrict).
 // The bot must be an ADMINISTRATOR in the group for delete/restrict to work.
-async function tgApi(method: string, params: Record<string, unknown>): Promise<{ ok: boolean; result?: { message_id?: number } } | null> {
+async function tgApi(method: string, params: Record<string, unknown>): Promise<{ ok: boolean; result?: { message_id?: number; invite_link?: string } } | null> {
   const token = await getSecret("TELEGRAM_BOT_TOKEN");
   if (!token) return null;
   try {
@@ -65,6 +65,49 @@ export async function tgRestrictUser(chatId: string, tgUserId: string, ban = fal
     permissions: { can_send_messages: false },
   });
   return !!j?.ok;
+}
+
+// LIFT A BAN, PROPERLY.
+//
+// The admin page's "unban" only ever deleted our own database row, so the
+// person stayed banned inside Telegram and could not come back however many
+// times the button was pressed. This is the half that was missing.
+//
+// only_if_banned keeps it from quietly kicking a current member: without it,
+// unbanChatMember on somebody who is presently in the group removes them.
+//
+// NOTE: Telegram does not put anyone back. Lifting the ban only makes it
+// POSSIBLE for them to rejoin — they still have to accept an invite.
+export async function tgUnbanUser(chatId: string, tgUserId: string): Promise<boolean> {
+  const j = await tgApi("unbanChatMember", {
+    chat_id: chatId,
+    user_id: Number(tgUserId),
+    only_if_banned: true,
+  });
+  return !!j?.ok;
+}
+
+/** Where a given user stands in a group: "member", "left", "kicked", … */
+export async function tgMemberStatus(chatId: string, tgUserId: string): Promise<string | null> {
+  const token = await getSecret("TELEGRAM_BOT_TOKEN");
+  if (!token) return null;
+  try {
+    const m = await fetch(
+      `https://api.telegram.org/bot${token}/getChatMember?chat_id=${encodeURIComponent(chatId)}&user_id=${encodeURIComponent(tgUserId)}`,
+      { cache: "no-store", signal: AbortSignal.timeout(5000) },
+    ).then((r) => r.json());
+    return m?.ok ? String(m.result?.status ?? "") : null;
+  } catch { return null; }
+}
+
+/** A fresh invite link for a group, to hand back to somebody being restored. */
+export async function tgInviteLink(chatId: string): Promise<string | null> {
+  const j = await tgApi("createChatInviteLink", {
+    chat_id: chatId,
+    name: "Restored member",
+    creates_join_request: false,
+  });
+  return j?.ok ? String(j.result?.invite_link ?? "") || null : null;
 }
 
 // ── Media moderation helpers ────────────────────────────────────────────────

@@ -32,7 +32,7 @@ const EXECUTORS: Record<ApprovalKind, (refId: string, details: Record<string, un
   bill_open: async (id) => (await import("@/lib/providerBills")).openPostedBill(id),
   attach_paper: async (id) => (await import("@/lib/providerBills")).attachBillPaper(id),
   settlement: async (id) => (await import("@/lib/zohoSettlements")).postSettlement(id),
-  bank_line: async (id, d) => (await import("@/lib/bankStatements")).postBankLine(id, String(d.accountChoice ?? "")),
+  bank_line: async (id, d) => (await import("@/lib/bankStatements")).postBankLine(id, String(d.accountChoice ?? ""), (d.subAccount as string | null) ?? null),
   brokerage_line: async (id, d) => { await (await import("@/lib/brokerage")).postBrokerageLine(id, d as never); },
   sale: async (id) => (await import("@/lib/zohoPosting")).postSale(id),
   petty_bill: async (id, d) => (await import("@/lib/pettyCash")).postBill(id, String(d.expenseAccount ?? "")),

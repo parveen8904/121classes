@@ -1008,6 +1008,12 @@ export default async function ZohoHubPage(props: {
                   <form action={answerLineAction} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
                     <input type="hidden" name="id" value={l.id} />
                     <input name="account" list="acct-names" required placeholder="Which account? (start typing…)" style={{ marginBottom: 0, flex: 1, minWidth: 220, fontSize: ".84rem" }} />
+                    {/* WHICH ONE OF THE THING IT IS — the same qualifier a
+                        supplier bill carries. Not a separate Zoho ledger: it
+                        reads on the entry, which is all anyone sees of it
+                        afterwards. Remembered with the rule, so a merchant
+                        answered once keeps it every month. */}
+                    <input name="sub_account" placeholder="Sub-account (optional) — e.g. Delhi office" style={{ marginBottom: 0, width: 210, fontSize: ".8rem" }} />
                     <label className="remember" style={{ margin: 0, fontSize: ".78rem", display: "inline-flex", gap: 5, alignItems: "center" }}>
                       <input type="checkbox" name="remember" defaultChecked /> remember rule for
                     </label>

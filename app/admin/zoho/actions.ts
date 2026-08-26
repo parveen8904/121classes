@@ -1096,12 +1096,19 @@ export async function answerLineAction(formData: FormData) {
   const account = str(formData.get("account"));
   const rulePattern = str(formData.get("rule_pattern"));
   const remember = str(formData.get("remember")) === "on";
+  // WHICH ONE OF THE THING THIS IS. Courier Expenses (Delhi office), Rent
+  // (Nirman Vihar). Not a separate Zoho ledger — it reads on the entry, which
+  // is all anyone ever sees of it afterwards.
+  const subAccount = str(formData.get("sub_account")).trim() || null;
   if (!id || !account) return;
-  const { postBankLine, saveMerchantRule } = await import("@/lib/bankStatements");
+  const { saveMerchantRule } = await import("@/lib/bankStatements");
   if (remember && rulePattern) {
-    try { await saveMerchantRule(rulePattern, account); } catch { /* the posting still proceeds */ }
+    try { await saveMerchantRule(rulePattern, account, subAccount); } catch { /* the posting still proceeds */ }
   }
-  await requestApprovalFor("bank_line", "bank_lines", id, { accountChoice: account });
+  // Stored on the line so it survives the trip through his approval gate — the
+  // release posts from the row, not from this form.
+  await createServiceClient().from("bank_lines").update({ sub_account: subAccount }).eq("id", id);
+  await requestApprovalFor("bank_line", "bank_lines", id, { accountChoice: account, subAccount });
   revalidatePath("/admin/zoho");
 }
 

@@ -299,7 +299,7 @@ export async function ingestStatement(accountName: string, fileUrl: string, file
   // Pre-load the matching sources for the period.
   const [{ data: settleRows }, rules, zohoExp] = await Promise.all([
     svc.from("zoho_settlements").select("utr, settlement_id, status").in("status", ["posted", "matched"]),
-    svc.from("merchant_rules").select("id, pattern, account_name").then((r) => r.data ?? []),
+    svc.from("merchant_rules").select("id, pattern, account_name, sub_account").then((r) => r.data ?? []),
     fetchZohoExpensesFor(accountName, first.date, last.date),
   ]);
   const utrs = new Map((settleRows ?? []).filter((s) => s.utr).map((s) => [String(s.utr), String(s.settlement_id)]));
@@ -336,12 +336,19 @@ export async function ingestStatement(accountName: string, fileUrl: string, file
       const rule = rules.find((r) => up.includes(String(r.pattern).toUpperCase()));
       if (rule) {
         status = "auto";
-        proposal = { account: rule.account_name, kind: l.debit > 0 ? "expense" : "journal", ruleId: rule.id };
+        // A rule carries its sub-account too, so a merchant taught once keeps
+        // its qualifier every month rather than being re-typed.
+        proposal = {
+          account: rule.account_name,
+          subAccount: (rule as { sub_account?: string | null }).sub_account ?? null,
+          kind: l.debit > 0 ? "expense" : "journal", ruleId: rule.id,
+        };
       }
     }
 
     await svc.from("bank_lines").insert({
       statement_id: stmt.id, account_name: accountName,
+      sub_account: (proposal as { subAccount?: string | null } | null)?.subAccount ?? null,
       line_date: l.date, narration: l.narration, ref: l.ref || null,
       debit: l.debit, credit: l.credit, balance: l.balance,
       status, proposal, zoho_id: zohoId, matched_note: matchedNote,
@@ -411,7 +418,16 @@ async function attachStatement(
   return att.ok ? null : `posted, but the statement is not attached (${att.note})`;
 }
 
-export async function postBankLine(lineId: string, accountChoice: string): Promise<void> {
+/**
+ * Post one answered bank line.
+ *
+ * `subAccount` is the qualifier that says WHICH of a thing this is — Courier
+ * Expenses (Delhi office), Rent (Nirman Vihar). Exactly what a supplier bill
+ * already carries, and for the same reason: the ledger line is all an auditor
+ * or the department ever sees of an entry, so "which one" belongs in it.
+ * It is NOT a separate Zoho account; nothing new is created in the chart.
+ */
+export async function postBankLine(lineId: string, accountChoice: string, subAccount?: string | null): Promise<void> {
   const svc = createServiceClient();
   const { data: l } = await svc.from("bank_lines").select("*").eq("id", lineId).maybeSingle();
   if (!l) throw new Error("line not found");
@@ -471,9 +487,13 @@ export async function postBankLine(lineId: string, accountChoice: string): Promi
     // to, and the account it moved through — is the part the ledger needs, so it
     // goes first and the bank's string is kept after it as the source, never
     // instead of it.
+    // The stored answer wins where the caller passes nothing, so a line
+    // re-posted later keeps the qualifier it was answered with.
+    const sub = (subAccount ?? (l.sub_account as string | null) ?? "") || null;
     const bankNarration = lineNarration({
       who: accountChoice,
       what: debit > 0 ? "paid from the bank" : "received into the bank",
+      subAccount: sub,
       docNo: String(l.ref ?? "") || null, docLabel: "bank ref",
       docDate: String(l.line_date),
       extra: `bank statement: ${String(l.narration ?? "").slice(0, 220)}`,
@@ -522,18 +542,19 @@ export async function postBankLine(lineId: string, accountChoice: string): Promi
 }
 
 /** Save a taught rule and re-file any waiting ask-lines it now covers. */
-export async function saveMerchantRule(pattern: string, accountName: string): Promise<number> {
+export async function saveMerchantRule(pattern: string, accountName: string, subAccount?: string | null): Promise<number> {
   const svc = createServiceClient();
   const pat = pattern.trim();
   if (pat.length < 3) return 0;
-  const { data: rule } = await svc.from("merchant_rules").insert({ pattern: pat, account_name: accountName }).select("id").single();
+  const { data: rule } = await svc.from("merchant_rules").insert({ pattern: pat, account_name: accountName, sub_account: (subAccount ?? "") || null }).select("id").single();
   const { data: waiting } = await svc.from("bank_lines").select("id, narration, debit").eq("status", "ask");
   let n = 0;
   for (const w of waiting ?? []) {
     if (String(w.narration).toUpperCase().includes(pat.toUpperCase())) {
       await svc.from("bank_lines").update({
         status: "auto",
-        proposal: { account: accountName, kind: Number(w.debit) > 0 ? "expense" : "journal", ruleId: rule?.id },
+        proposal: { account: accountName, subAccount: (subAccount ?? "") || null, kind: Number(w.debit) > 0 ? "expense" : "journal", ruleId: rule?.id },
+        sub_account: (subAccount ?? "") || null,
         updated_at: new Date().toISOString(),
       }).eq("id", w.id);
       n++;

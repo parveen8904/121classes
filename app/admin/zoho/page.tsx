@@ -1776,7 +1776,7 @@ export default async function ZohoHubPage(props: {
             <strong>TDS rates in Zoho:</strong>{" "}
             {zohoTds.length
               ? `${zohoTds.map((t) => `${t.tax_name} (${t.tax_percentage}%)`).join(" · ")}. A bill matches on either the section wording or the rate, so a renamed section still finds its rate.`
-              : `none came back${allTaxNames.length ? `, though Zoho does hold: ${allTaxNames.join(" · ")}` : ""}. A bill needing one refuses to post rather than go in without its withholding.`}
+              : `none came back${allTaxNames.length ? `, though Zoho does hold: ${allTaxNames.join(" · ")}` : ""}. Those are all GST rates, so TDS is either not switched on in Zoho (Settings → Taxes → Tax Settings → Enable TDS) or is not exposed on this endpoint. A bill still posts; its withholding is noted on the row for you to apply.`}
             <br />
             <strong>Sections our vendor rules withhold under:</strong>{" "}
             {tdsNeeded.length
@@ -1791,13 +1791,19 @@ export default async function ZohoHubPage(props: {
                 A bill still posts, but the withholding does not attach to it — that is why FIRST FLY went in
                 with its GST right and its ₹60 sitting outside the entry.
               </p>
+              <p className="muted" style={{ fontSize: ".78rem", margin: "0 0 8px", lineHeight: 1.7 }}>
+                Zoho&apos;s published API creates GST-type taxes only, so the button below <em>asks</em> and reports
+                Zoho&apos;s own answer — it may well refuse. The reliable route is to switch TDS on in Zoho
+                (<strong>Settings → Taxes → Tax Settings → Enable TDS</strong>) and add the rate there; once it
+                exists, bills find it on their own, by the section wording <em>or</em> the rate.
+              </p>
               {tdsGaps.map((g) => (
                 <form action={createTdsTaxAction} key={`${g.section}|${g.rate}`} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
                   <input type="hidden" name="section" value={g.section} />
                   <input type="hidden" name="rate" value={g.rate} />
                   <span style={{ minWidth: 200, fontSize: ".85rem" }}><strong>{g.section}</strong> @ {g.rate}%</span>
                   <span className="muted" style={{ fontSize: ".78rem", minWidth: 160 }}>{g.vendors.join(", ")}</span>
-                  <SubmitButton className="btn small secondary" savedLabel="✓ Asked">➕ Create it in Zoho</SubmitButton>
+                  <SubmitButton className="btn small secondary" savedLabel="✓ Asked">➕ Ask Zoho to create it</SubmitButton>
                 </form>
               ))}
             </div>

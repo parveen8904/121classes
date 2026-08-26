@@ -15,7 +15,17 @@ import { resolveFileUrl, isSecureRef } from "@/lib/storage";
 
 const str = (v: unknown) => String(v ?? "").trim();
 const num = (v: unknown) => {
-  const n = Number(String(v ?? "").replace(/[₹,\s]/g, "").replace(/^\((.*)\)$/, "-$1"));
+  // AXIS PRINTS THE CURRENCY IN THE CELL: "INR 86,493.00".
+  //
+  // Stripping only ₹ and commas left "INR86493.00", which is NaN, which became
+  // 0, which made every row look like a zero-value line and be skipped. The
+  // whole statement came back as "no transaction lines found" while its figures
+  // sat there in plain sight.
+  const cleaned = String(v ?? "")
+    .replace(/^\s*(INR|RS\.?|₹)\s*/i, "")
+    .replace(/[₹,\s]/g, "")
+    .replace(/^\((.*)\)$/, "-$1");
+  const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
 };
 
@@ -48,12 +58,13 @@ export type StmtLine = { date: string; narration: string; ref: string; debit: nu
 const HEAD = {
   date: /^(txn ?date|tran\.? ?date|transaction ?date|date|value ?date|posting ?date|date ?of ?transaction)$/i,
   narration: /^(particulars?|narration|description|details|transaction ?(details|remarks|particulars?)|remarks|transaction)$/i,
-  ref: /^(chq\.?\/?ref\.? ?(no\.?)?|ref(erence)? ?(no\.?)?|cheque ?no\.?|utr|chqno)$/i,
+  ref: /^(chq\.?\/?ref\.? ?(no\.?)?|ref(erence)? ?(no\.?)?|cheque ?(no\.?|number)|utr|chqno)$/i,
   debit: /^(withdrawal ?(amt\.?)? ?(\(?inr\)?)?|debit ?(amt\.?)?|dr|dr\.? ?amount|withdrawals?|debits?)$/i,
   credit: /^(deposit ?(amt\.?)? ?(\(?inr\)?)?|credit ?(amt\.?)?|cr|cr\.? ?amount|deposits?|credits?)$/i,
   balance: /^(closing ?balance|balance|bal|running ?balance|balance ?(\(?inr\)?)?)$/i,
   amount: /^(amount|amount ?\(?inr\)?|txn ?amount)$/i,
-  drcr: /^(dr\/?cr|type|cr\/?dr)$/i,
+  // "Transaction Type" is what Axis calls the CR/DR column.
+  drcr: /^(dr\/?cr|type|cr\/?dr|transaction ?type|txn ?type|type ?of ?transaction)$/i,
 };
 
 export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string } {

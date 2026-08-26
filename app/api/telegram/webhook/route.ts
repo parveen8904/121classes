@@ -115,20 +115,54 @@ export async function POST(req: NextRequest) {
       const senderProf = fromId && !msg?.from?.is_bot
         ? (await svc.from("profiles").select("id, role").eq("telegram_chat_id", fromId).maybeSingle()).data
         : null;
+      //
+      // 26 Aug 2026 — THIS RULE WAS EATING HIS OWN STUDENTS.
+      //
+      // It banned on the FIRST message, and "linked" means the student pressed
+      // "Connect Telegram" on their dashboard. Only 373 of 3,910 students ever
+      // did (9.5%), so the test called nine students in ten an intruder. 36
+      // people were removed from the two groups, at least two of them holding
+      // a live paid subscription, and CA Intermediate went from 68 messages a
+      // day to nothing from 21 August. The founder's question was why the
+      // group had gone quiet: it had been quietly emptied.
+      //
+      // The explanation never reached them either. It was sent as a DM, and
+      // Telegram refuses a bot's DM to anyone who has not first opened a chat
+      // with that bot — which someone who never linked has by definition not
+      // done. So they were removed in silence, with no idea why.
+      //
+      // The door is the JOIN GATE above, which approves only linked students
+      // and is the right place for it. Somebody already inside and talking is
+      // overwhelmingly a paying student who simply never did a second setup
+      // step, so they are ASKED, in the room where they can actually read it,
+      // and their message stands. Blocked terms, links and abuse are still
+      // policed below exactly as before.
       if (fromId && !msg?.from?.is_bot && !senderProf?.id && !(await tgIsGroupAdmin(chatId, fromId))) {
-        await tgDeleteMessage(chatId, msg.message_id).catch(() => false);
-        await tgRestrictUser(chatId, fromId, true).catch(() => false);
-        try {
-          await svc.from("banned_group_users").upsert(
-            { chat_id: chatId, user_id: null, tg_user_id: fromId, kind: "ban", reason: `Not a linked student (${fromName})` },
-            { onConflict: "chat_id,tg_user_id" },
-          );
-        } catch { /* the Telegram removal already happened */ }
-        await sendTelegramMessage(
-          fromId,
-          "🔒 This group is only for CA Parveen Sharma students. Please log in at caparveensharma.com, tap “Connect Telegram” on your dashboard, then request to join again — you'll be approved automatically.",
-        ).catch(() => false);
-        return NextResponse.json({ ok: true });
+        // Once a day per person, so a student posting ten times does not turn
+        // the group into a wall of the same reminder.
+        const since = new Date(Date.now() - 24 * 3600e3).toISOString();
+        const { data: told } = await svc
+          .from("group_link_reminders")
+          .select("reminded_at")
+          .eq("chat_id", chatId)
+          .eq("tg_user_id", fromId)
+          .maybeSingle();
+        if (!told || String(told.reminded_at) < since) {
+          await tgSendGroupReply(
+            chatId,
+            `👋 ${fromName}, we cannot match this Telegram account to your student account yet, so your questions here will not reach the AI assistant.\n\n` +
+            "Sign in at caparveensharma.com, open your dashboard and tap “Connect Telegram”. It takes a few seconds and only needs doing once.",
+            msg.message_id,
+          ).catch(() => null);
+          try {
+            await svc.from("group_link_reminders").upsert(
+              { chat_id: chatId, tg_user_id: fromId, reminded_at: new Date().toISOString(), times: told ? 2 : 1 },
+              { onConflict: "chat_id,tg_user_id" },
+            );
+          } catch { /* the reminder already went out; never block the message */ }
+        }
+        // Deliberately NOT returning: the message is mirrored, moderated and
+        // answered like anyone else's.
       }
       const isStaffSender = !!senderProf && senderProf.role !== "student";
 

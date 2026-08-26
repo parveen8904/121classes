@@ -15,6 +15,67 @@ export function looksLikeQuestion(text: string): boolean {
   return /\b(how|what|why|when|where|which|whether|explain|solve|difference|doubt|calculate|clarify|anyone|help|confus|kya|kaise|kyun|kyu|kab|samjha)\b/i.test(t);
 }
 
+/**
+ * A MESSAGE THAT IS ONLY AN ACKNOWLEDGEMENT — SAY NOTHING.
+ *
+ * His instruction, 26 Aug 2026: "do not reply to thank you, okay, et cetera,
+ * oh ho, or similar exclamations."
+ *
+ * The AI judge already classified small talk as chatter, but it is a model
+ * call: it costs money, it takes a second, and on a tagged "thanks sir 🙏" it
+ * sometimes decided there was a question in there and answered it. A thank-you
+ * needs no model to recognise, so it is settled here in code, before anything
+ * is spent, and the answer is silence.
+ *
+ * Deliberately narrow. It fires only when the WHOLE message is an
+ * acknowledgement -- "ok" alone is silence, but "ok but why is goodwill not
+ * amortised" is a question and must reach the AI. Anything with a question
+ * mark is never treated as an acknowledgement.
+ */
+/** Every word that can appear in a message that says nothing. */
+const ACK_WORDS = new Set([
+  // English thanks
+  "thanks", "thank", "thankyou", "thanx", "thanku", "thnx", "thnks", "thnk", "thx", "tnx", "ty", "tysm",
+  "welcome", "lot", "a", "ton", "loads",
+  // Assent
+  "ok", "okay", "okk", "okkk", "k", "kk", "kkk", "fine", "good", "great", "nice", "cool",
+  "super", "perfect", "excellent", "awesome", "brilliant", "lovely",
+  "got", "gotit", "understood", "noted", "sure", "right", "correct", "true",
+  "yes", "yeah", "yep", "yup", "no", "nope", "done", "clear", "cleared", "helpful", "help",
+  // Exclamations -- "oh ho" is two words and both must be here
+  "oh", "ohh", "ohhh", "oho", "ohho", "ho", "hoo", "ah", "ahh", "aha", "haha", "hehe",
+  "hmm", "hm", "hmmm", "hmmmm", "wow", "oops", "arre", "arey", "are",
+  // Hindi / Hinglish
+  "acha", "achha", "accha", "acchha", "achcha",
+  "dhanyavad", "dhanyawad", "shukriya", "theek", "thik", "thike", "sahi", "bilkul",
+  "haan", "han", "haa", "haaa", "ha", "hn", "hanji", "samajh", "samjha", "samjh", "samajhgaya",
+  "gaya", "gyi", "gya", "hai", "he", "h", "now", "ab",
+  "pranam", "namaste", "namaskar", "congrats", "congratulations", "welldone", "bravo",
+]);
+
+export function isAcknowledgement(text: string): boolean {
+  let t = String(text ?? "")
+    .replace(/@[a-z0-9_]+/gi, " ")            // the bot tag itself is not content
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, " ")  // emoji
+    .toLowerCase()
+    .replace(/[.!,\-~*_'"]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!t) return true;                         // a bare tag or a lone emoji
+  if (t.includes("?")) return false;           // a question is never a thank-you
+  if (t.length > 40) return false;             // long enough to be saying something
+
+  // Politeness and filler that may surround the acknowledgement itself.
+  t = t.replace(/\b(sir|sirji|ji|maam|madam|bhai|yaar|so|very|much|too|the|u|you|all|guys|everyone|it|that|this|na|hi|hello|for|your|reply|answer|s|its)\b/g, " ")
+       .replace(/\s+/g, " ").trim();
+  if (!t) return true;
+
+  // EVERY remaining word must itself be an acknowledgement. That is what keeps
+  // "thanks" silent while "thanks what about AS 10" still reaches the AI: one
+  // word that is not on this list and the whole message is treated as real.
+  return t.split(" ").every((w) => ACK_WORDS.has(w));
+}
+
 // Daily cap on group AI answers (all groups combined) so a chatty day can't run
 // up the bill. Configurable via site_settings key ai_group_doubt_daily_limit.
 async function budgetLeft(): Promise<boolean> {
@@ -42,6 +103,9 @@ export async function groupAiAnswer(
   channel: "telegram_group" | "discord" = "telegram_group",
 ): Promise<string | null> {
   if (question.trim().length < 5) return null;
+  // Cheapest test first: a thank-you costs nothing to recognise and is
+  // answered with silence, per his instruction.
+  if (isAcknowledgement(question)) return null;
   if (!(await aiFeatureEnabled("group_doubt"))) return null;
   if (!(await budgetLeft())) return null;
 

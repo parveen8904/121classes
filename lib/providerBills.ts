@@ -941,12 +941,47 @@ export async function postProviderBill(id: string): Promise<void> {
     // their full invoice, so the bill is raised at the grossed-up figure and the
     // withholding comes out of that — leaving the vendor exactly their amount.
     const tdsMode = String(b.tds_mode ?? p.tds_mode ?? (p.tds_section ? "deduct" : "none"));
+
+    // TDS SITS ON THE TAXABLE VALUE, HERE TOO.
+    //
+    // This took the invoice TOTAL, so FIRST FLY posted ₹71 — 1% of ₹7,053 —
+    // while the screen he approved, and the figure saved against the bill, both
+    // said ₹60, being 1% of the taxable ₹5,977. GST charged separately on an
+    // invoice is outside the TDS base; that is his rule and it was already
+    // obeyed everywhere except the one place that writes to the books.
+    //
+    // Third time today the same shape: one number worked out in two places,
+    // drifting apart. The base is chosen once, here, and matches the preview.
+    const keyedTaxable = Number(b.taxable_value) > 0 ? Number(b.taxable_value) : null;
+    const tdsBaseInr = keyedTaxable !== null
+      // The keyed figure is in the invoice's own currency, so a foreign bill
+      // converts it the same way the total is converted.
+      ? (rate ? Number((keyedTaxable * rate).toFixed(2)) : keyedTaxable)
+      : (rate ? Number((total * rate).toFixed(2)) : total);
+
     const work = tdsWorking(
-      rate ? Number((total * rate).toFixed(2)) : total,
+      tdsBaseInr,
       tdsMode as never, Number(p.tds_rate ?? 0), String(p.vendor_name ?? b.institution),
     );
-    // Back into the invoice currency for the line, so Zoho converts it itself.
-    const lineRate = tdsMode === "gross_up" && rate ? Number((work.bookedAmount / rate).toFixed(2)) : total;
+    // THE LINE IS THE TAXABLE VALUE, BECAUSE ZOHO ADDS THE GST ITSELF.
+    //
+    // This sent the invoice TOTAL as the line amount and attached the GST tax
+    // id beside it, so Zoho added 18% on top of a figure that already included
+    // it. FIRST FLY's ₹7,053 invoice went into his books as ₹8,252.01 — an
+    // expense overstated by ₹1,076 and, worse, ₹1,269 of input credit claimed
+    // that no supplier ever charged.
+    //
+    // It never showed on the foreign bills because those go up under reverse
+    // charge, where the two tax lines cancel and the total is unaffected. The
+    // first domestic bill to post is the first one that could be wrong.
+    //
+    // Where the invoice's taxable value has been read, that is the line and
+    // Zoho computes the tax from it: 5,977 + 18% = 7,052.86, which is the
+    // invoice. A domestic bill cannot reach here without it — the guard above
+    // refuses to post one whose tax has not been read off the paper.
+    const lineRate = tdsMode === "gross_up" && rate
+      ? Number((work.bookedAmount / rate).toFixed(2))
+      : (!overseas && keyedTaxable !== null ? keyedTaxable : total);
 
     const body: Record<string, unknown> = {
       vendor_id: vendorId,

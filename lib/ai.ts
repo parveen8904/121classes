@@ -2834,6 +2834,48 @@ export async function draftGrowthIdeas(): Promise<
 // comes here, on the fast model. The engine never guesses categories — this is
 // pure transcription of the tabular lines.
 export type BankStmtLine = { date: string; narration: string; ref?: string; debit?: number; credit?: number; balance?: number };
+// READING THE TAX OFF A SUPPLIER'S INVOICE.
+//
+// His standing rule: "You have to read the invoice completely for the purpose
+// of taxation. How much is the CGST and IGST and SGST, because you cannot
+// derive it on your own?" And on 26 Aug 2026: "No reverse engineering. Just
+// see the invoice and fill it."
+//
+// So this TRANSCRIBES and nothing more. It may not compute a taxable value
+// from a total and a rate, split one tax figure into halves, or decide a
+// supplier is out-of-state. A figure that is not printed comes back null, and
+// a person deals with it.
+export type InvoiceTaxRead = {
+  taxable_value: number | null; cgst: number | null; sgst: number | null; igst: number | null;
+  total: number | null; invoice_no: string | null; invoice_date: string | null; note: string | null;
+};
+
+export async function parseInvoiceTaxText(text: string): Promise<InvoiceTaxRead | null> {
+  const out = await callClaude(
+    "You transcribe figures from an Indian supplier's tax invoice. Return ONLY a JSON object:\n" +
+    '{"taxable_value":number|null,"cgst":number|null,"sgst":number|null,"igst":number|null,' +
+    '"total":number|null,"invoice_no":string|null,"invoice_date":"YYYY-MM-DD"|null,"note":string|null}\n\n' +
+    "RULES — these matter more than being helpful:\n" +
+    "1. TRANSCRIBE ONLY. Every number must appear on the invoice. Never calculate a taxable " +
+    "value from a total and a rate. Never split a tax figure into CGST and SGST yourself. " +
+    "Never infer IGST because the supplier looks out-of-state.\n" +
+    "2. If a figure is not printed, return null. Null is the right answer for anything you " +
+    "cannot see; a guess is not.\n" +
+    "3. taxable_value is the value BEFORE tax ('Taxable Value', 'Amount', 'Sub Total'). " +
+    "total is the final payable figure.\n" +
+    "4. Amounts as plain numbers: no commas, no rupee sign.\n" +
+    "5. If several lines carry tax, add each tax head up and say so in note.\n" +
+    "6. Put anything odd in note — a page you could not read fully, two candidate totals, " +
+    "a credit note, a rounding line.",
+    text.slice(0, 120_000),
+    1_200,
+    { model: await fastModel(), feature: "invoice_tax" },
+  );
+  if (!out) return null;
+  const j = parseLooseJson(out);
+  return j && typeof j === "object" && !Array.isArray(j) ? (j as InvoiceTaxRead) : null;
+}
+
 export async function parseBankStatementText(text: string): Promise<BankStmtLine[] | null> {
   const out = await callClaude(
     "You transcribe Indian bank/credit-card statement text into JSON. Return ONLY a JSON array; each element " +

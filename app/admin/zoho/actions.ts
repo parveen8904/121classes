@@ -1016,6 +1016,34 @@ export async function uploadStatementAction(formData: FormData) {
 // stored, but the only way to retry was to find it and upload it a second
 // time — so a parser fix could not be tested against the file that broke it.
 // This re-reads the stored file with the parser as it stands today.
+// READ THE FIGURES OFF THE INVOICE FOR THIS BILL.
+//
+// Not one of 25 bills had a taxable value or a GST amount: the columns and the
+// boxes existed and nobody ever typed into them, which is why the GST columns
+// showed nothing, the entry carried no GST treatment, and TDS came out on the
+// gross instead of the taxable value.
+//
+// This reads the filed PDF and PROPOSES what is printed on it. It fills
+// nothing in by itself — the figures appear beside the boxes for him to check
+// against the paper, and Save is still his. "No reverse engineering. Just see
+// the invoice and fill it."
+export async function readInvoiceTaxAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const { readAndStore, footingNote } = await import("@/lib/invoiceTax");
+  let msg: string;
+  try {
+    const r = await readAndStore(id);
+    const foot = r.tax ? footingNote(r.tax) : null;
+    msg = foot ? `${r.why} ⚠️ ${foot}` : r.why;
+  } catch (e) {
+    msg = `Could not read that invoice: ${e instanceof Error ? e.message : "unknown"}`;
+  }
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(msg)}#bills`);
+}
+
 export async function reparseStatementAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));

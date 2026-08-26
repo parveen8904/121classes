@@ -18,7 +18,7 @@ import EntryLines from "./EntryLines";
 import SectionToggle from "./SectionToggle";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -283,10 +283,11 @@ export default async function ZohoHubPage(props: {
       tds_mode?: string | null; supplier_kind?: string | null } | null; error: string | null;
     determination: { tdsLabel?: string; tdsRate?: number | null; confidence?: string; form145Part?: string | null; form146Required?: boolean; warnings?: string[]; certAdvice?: { why: string; points: string[] } | null; grossedUp?: number | null } | null;
     taxable_value: number | null; cgst_amount: number | null; sgst_amount: number | null; igst_amount: number | null;
+    tax_read: { taxable_value: number | null; cgst: number | null; sgst: number | null; igst: number | null; total: number | null; note: string | null } | null;
     tds_amount: number | null; booked_amount: number | null };
   const { data: billData } = hubConnected
     ? await createServiceClient().from("provider_bills")
-        .select("id, institution, bill_no, bill_date, currency, amount, inr_amount, rate, rate_date, status, proposal, error, determination, taxable_value, cgst_amount, sgst_amount, igst_amount, tds_amount, booked_amount")
+        .select("id, institution, bill_no, bill_date, currency, amount, inr_amount, rate, rate_date, status, proposal, error, determination, taxable_value, cgst_amount, sgst_amount, igst_amount, tds_amount, booked_amount, tax_read")
         .in("status", ["needs_info", "draft", "failed"]).order("bill_date")
     : { data: [] as never[] };
   const bills = (billData ?? []) as unknown as ProviderBillRow[];
@@ -1907,6 +1908,7 @@ export default async function ZohoHubPage(props: {
                           category: rule?.service_category ?? seedFor(b.institution)?.category ?? "standardised",
                           countries: FVD.COUNTRIES.map((c) => c.name),
                         } : null}
+                        taxRead={b.tax_read ?? null}
                         initial={{
                           nature: p.nature ?? "expense",
                           operating: p.operating ?? "operating",
@@ -1940,6 +1942,16 @@ export default async function ZohoHubPage(props: {
                       </div>
                     </form>
                   )}
+
+                  {/* READ THE TAX OFF THE PAPER. It proposes; it fills nothing
+                      in by itself, and Save stays his. */}
+                  <form action={readInvoiceTaxAction} style={{ marginTop: 8 }}>
+                    <input type="hidden" name="id" value={b.id} />
+                    <SubmitButton className="btn small secondary" savedLabel="✓ Read">📄 Read the tax off the invoice</SubmitButton>
+                    <span className="muted" style={{ fontSize: ".76rem", marginLeft: 8 }}>
+                      Transcribes the taxable value and CGST/SGST/IGST from the filed PDF and shows them above for you to check. Nothing is derived.
+                    </span>
+                  </form>
 
                   <form action={removeBillAction} style={{ marginTop: 8 }}>
                     <input type="hidden" name="id" value={b.id} />

@@ -26,6 +26,12 @@ export default function EntryEditor(props: {
   /** A foreign supplier's two answers, editable here rather than on a card of
    *  their own — they are what decides the withholding, and they change. */
   foreign?: { country: string; category: string; countries: string[] } | null;
+  /** What was transcribed from the filed invoice, for him to check and accept.
+   *  A reading is a proposal — nothing here fills a box on its own. */
+  taxRead?: {
+    taxable_value: number | null; cgst: number | null; sgst: number | null; igst: number | null;
+    total: number | null; note: string | null;
+  } | null;
   initial: {
     nature: string; operating: string; account: string; subAccount: string;
     gstTreatment: string; gstRate: number; tdsMode: string; tdsRate: string; tdsSection: string;
@@ -206,6 +212,42 @@ export default function EntryEditor(props: {
       {gstTreatment === "domestic_itc" && (
         <>
           <div style={{ ...head, margin: "14px 0 6px" }}>3b · The tax, exactly as the invoice prints it</div>
+          {props.taxRead && (
+            (() => {
+              const t = props.taxRead!;
+              const num = (x: number | null) => (x === null ? "" : String(x));
+              const bits = [
+                t.taxable_value !== null ? `taxable ₹${t.taxable_value}` : null,
+                t.cgst !== null ? `CGST ₹${t.cgst}` : null,
+                t.sgst !== null ? `SGST ₹${t.sgst}` : null,
+                t.igst !== null ? `IGST ₹${t.igst}` : null,
+                t.total !== null ? `total ₹${t.total}` : null,
+              ].filter(Boolean);
+              if (!bits.length) return null;
+              return (
+                <div style={{ background: "var(--bg-soft)", borderRadius: 8, padding: "8px 10px", marginBottom: 8, fontSize: ".8rem", lineHeight: 1.7 }}>
+                  <strong>📄 The invoice says:</strong> {bits.join(" · ")}
+                  {t.note && <div className="muted" style={{ fontSize: ".76rem" }}>{t.note}</div>}
+                  <button
+                    type="button"
+                    className="btn small secondary"
+                    style={{ marginTop: 6 }}
+                    onClick={() => {
+                      setTaxable(num(t.taxable_value));
+                      setCgst(num(t.cgst));
+                      setSgst(num(t.sgst));
+                      setIgst(num(t.igst));
+                    }}
+                  >
+                    Use these figures
+                  </button>
+                  <div className="muted" style={{ fontSize: ".72rem", marginTop: 4 }}>
+                    Read off the PDF, not calculated. Check it against the paper before you save — this only fills the boxes.
+                  </div>
+                </div>
+              );
+            })()
+          )}
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
             <div>
               <label style={label}>Taxable value</label>

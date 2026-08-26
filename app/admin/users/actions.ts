@@ -157,7 +157,22 @@ export async function sendSetPasswordEmail(formData: FormData) {
 // digit and a symbol, so "student123" is refused however long it is. That is
 // now said on the form and repeated in the error.
 export async function adminSetPassword(formData: FormData) {
-  if (!(await requireAdmin())) return;
+  // HIS RULING, 26 Aug 2026: the users desk (Hemlata) may set a student's
+  // password — that is the job. What it must never be is a ladder: an operator
+  // setting an ADMIN's password owns that admin account a minute later. So the
+  // desk grant works on students and supporters only; staff accounts stay with
+  // the admins, and the founder's account with the founder.
+  if (!(await requireUsersDesk())) return;
+  {
+    const targetId = str(formData.get("id"));
+    if (!(await requireAdmin()) && targetId) {
+      const { data: t } = await createServiceClient()
+        .from("profiles").select("role").eq("id", targetId).maybeSingle();
+      if (t && ["admin", "operator", "faculty"].includes(String(t.role))) {
+        redirect(`/admin/users/${targetId}?pwerr=${encodeURIComponent("Staff passwords can only be set by an admin.")}`);
+      }
+    }
+  }
   const id = str(formData.get("id"));
   const password = str(formData.get("password"));
   if (!id) return;
@@ -344,7 +359,9 @@ export async function resetStudyPlan(formData: FormData) {
 // copy are left in storage — they cost nothing, and deleting a student's own
 // work on a guessed target is exactly what must not happen here.
 export async function resetStudentTests(formData: FormData) {
-  if (!(await requireAdmin())) return;
+  // Resetting tests is desk work — his list of 26 Aug 2026 grants it to the
+  // users desk alongside passwords. Regrading and plan resets stay admin-only.
+  if (!(await requireUsersDesk())) return;
   const id = str(formData.get("id"));
   const what = str(formData.get("what")); // descriptive | mcq | case | all
   if (!id || !what) return;
@@ -549,7 +566,9 @@ export async function submitPaperForStudent(formData: FormData): Promise<{ ok: b
 // else. Deleting the row is the reset: the portal treats a missing attempt as
 // "never sat", so the test opens fresh.
 export async function resetOneAttempt(formData: FormData) {
-  if (!(await requireAdmin())) return;
+  // Resetting tests is desk work — his list of 26 Aug 2026 grants it to the
+  // users desk alongside passwords. Regrading and plan resets stay admin-only.
+  if (!(await requireUsersDesk())) return;
   const id = str(formData.get("id"));            // the student
   const kind = str(formData.get("kind"));        // descriptive | mcq
   const attemptId = str(formData.get("attempt_id"));

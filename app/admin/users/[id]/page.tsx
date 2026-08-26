@@ -7,7 +7,7 @@ import DeleteButton from "../../_components/DeleteButton";
 import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan, resetStudentTests, resetOneAttempt, regradeAttempt, makeLoginLink, deleteUserAccount } from "../actions";
 import { startViewAs } from "@/app/dashboard/viewAsActions";
 import PaperForStudent from "./PaperForStudent";
-import { ADMIN_AREAS, currentStaff } from "@/lib/adminAccess";
+import { ADMIN_AREAS, currentStaff, staffCanArea } from "@/lib/adminAccess";
 
 function fmt(s: string | null): string {
   if (!s) return "—";
@@ -47,7 +47,14 @@ export default async function UserDetail(
   // nothing — the "rights given but nothing happens" fault reported before. So
   // the page says plainly who to ask instead.
   const staff = await currentStaff();
-  if (staff?.role !== "admin") {
+  // TWO LEVELS, HIS LIST OF 26 Aug 2026. An admin is the EDITOR and sees
+  // everything. The users desk (Hemlata) opens the page for the daily work —
+  // view the profile, reset a password, reset tests, see subscriptions,
+  // address, watch and activity — and does NOT see: profile/role/rights
+  // editing, the supporter section, sign-in-as, regrade, plan reset, delete.
+  // The hiding is honest because the actions enforce the same split.
+  const editor = staff?.role === "admin";
+  if (!editor && !staffCanArea(staff, "users")) {
     return (
       <div className="container" style={{ padding: "24px 0" }}>
         <AdminHero
@@ -156,7 +163,7 @@ export default async function UserDetail(
       <AdminHero
         badge="👤 User"
         title={u.full_name || u.email || "User"}
-        subtitle={`${u.email ?? u.phone ?? ""}${levelLabel ? ` · 📘 ${levelLabel}` : ""}${u.target_attempt ? ` · 🎯 ${u.target_attempt}` : ""} · joined ${fmt(u.created_at)} · role: ${u.role}`}
+        subtitle={`${u.email ?? u.phone ?? ""}${levelLabel ? ` · 📘 ${levelLabel}` : ""}${u.target_attempt ? ` · 🎯 ${u.target_attempt}` : ""} · joined ${fmt(u.created_at)}${editor ? ` · role: ${u.role}` : ""}`}
         back={{ href: "/admin/users", label: "Users" }}
       />
 
@@ -164,6 +171,7 @@ export default async function UserDetail(
           "It's showing error" is nearly impossible to act on from a table of
           rows; the same fault is usually obvious on the student's own screen.
           Read-only, and every look is recorded in admin_view_as_log. */}
+      {editor && (
       <form action={startViewAs} style={{ marginTop: 16 }}>
         <input type="hidden" name="student_id" value={params.id} />
         <SubmitButton className="btn">👁️ Open this student&apos;s dashboard</SubmitButton>
@@ -172,8 +180,9 @@ export default async function UserDetail(
           screen can change their account. The look is recorded, and it ends by itself after an hour.
         </p>
       </form>
+      )}
 
-      {searchParams.loginlink && (
+      {editor && searchParams.loginlink && (
         <div className="notice" style={{ marginTop: 14, fontSize: ".88rem", lineHeight: 1.75 }}>
           <strong>🔑 One-time sign-in link made.</strong> Open it in an <strong>incognito / private window</strong> —
           in this window it would sign <em>you</em> out and put you inside their account here.
@@ -184,6 +193,7 @@ export default async function UserDetail(
         </div>
       )}
 
+      {editor && (
       <form action={makeLoginLink} style={{ marginTop: 10 }}>
         <input type="hidden" name="id" value={params.id} />
         <SubmitButton className="btn small secondary">🔑 Sign in as this user (one-time link)</SubmitButton>
@@ -192,12 +202,14 @@ export default async function UserDetail(
           the user&apos;s own session. Open the link in an incognito window. Every use is recorded.
         </p>
       </form>
+      )}
 
       {/* HAND IN A PAPER FOR THEM.
           Manvi Maroti tried for two days from a phone on a slow line and her
           paper still is not marked. Every fix for that runs on her handset; this
           does not. She sends the file however she can and it goes in from here,
           against the same key, to the same examiner. */}
+      {editor && (
       <details style={{ marginTop: 14 }}>
         <summary className="btn small secondary as-btn">📤 Upload a paper for this student</summary>
         <div className="form-card" style={{ marginTop: 10 }}>
@@ -215,6 +227,7 @@ export default async function UserDetail(
           />
         </div>
       </details>
+      )}
 
       {searchParams.pwset && (
         <div className="notice ok" style={{ marginTop: 16 }}>
@@ -269,6 +282,7 @@ export default async function UserDetail(
 
       {/* Fresh start: wipes the plan + its progress ticks, like a new student.
           Kept ALWAYS VISIBLE — the founder couldn't find it when collapsed. */}
+      {editor && (
       <div className="card" style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <strong>🗓️ Study plan</strong>
@@ -283,6 +297,7 @@ export default async function UserDetail(
           message="Reset this student's study plan? Their plan, remarks and done-ticks will be wiped so they start fresh. This cannot be undone."
         />
       </div>
+      )}
 
       {/* Let a student sit a test again.
           An attempt is one per student per test, so a wrong upload, a mis-click
@@ -312,6 +327,34 @@ export default async function UserDetail(
         </div>
       </div>
 
+      {/* THE DESK'S VIEW OF THE PROFILE — read only, and complete on the four
+          things he said must be verifiable at a glance: name, address, GST
+          number, phone. Editing them, the role, the supporter flag and the
+          rights stay on the admin's form below, which the desk never sees. */}
+      {!editor && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <h3 style={{ marginTop: 0 }}>👤 Profile (view only)</h3>
+          <div style={{ display: "grid", gap: "8px 20px", gridTemplateColumns: "1fr 1fr", fontSize: ".9rem" }}>
+            <div><span className="muted">Name</span><br /><strong>{u.full_name || "—"}</strong></div>
+            <div><span className="muted">Phone</span><br /><strong>{u.phone || "—"}</strong></div>
+            <div><span className="muted">Email</span><br /><strong>{u.email || "—"}</strong></div>
+            <div><span className="muted">Target attempt</span><br /><strong>{u.target_attempt || "—"}</strong></div>
+            <div><span className="muted">GSTIN</span><br /><strong>{u.gstin || "—"}</strong></div>
+            <div><span className="muted">Business name</span><br /><strong>{u.business_name || "—"}</strong></div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <span className="muted">Address</span><br />
+              <strong>
+                {[u.address_line1, u.address_line2, u.city, u.state, u.pincode].filter(Boolean).join(", ") || "—"}
+              </strong>
+            </div>
+          </div>
+          <p className="muted" style={{ fontSize: ".78rem", margin: "10px 0 0" }}>
+            Changes to the profile or address need an admin — ask Sir.
+          </p>
+        </div>
+      )}
+
+      {editor && (
       <form action={updateUser} style={{ marginTop: 16 }}>
         <input type="hidden" name="id" value={u.id} />
 
@@ -418,6 +461,7 @@ export default async function UserDetail(
           Save user
         </SubmitButton>
       </form>
+      )}
 
       {/* ONE TEST AT A TIME. Reset removes only the chosen attempt, so the rest
           of the record stands; re-evaluate clears one paper's marking and runs
@@ -441,11 +485,11 @@ export default async function UserDetail(
                       {a.review_status === "checked" ? " · released" : ""}
                     </td>
                     <td style={{ padding: "8px 6px", whiteSpace: "nowrap" }}>
-                      <form action={regradeAttempt} style={{ display: "inline" }}>
+                      {editor && (<><form action={regradeAttempt} style={{ display: "inline" }}>
                         <input type="hidden" name="id" value={u.id} />
                         <input type="hidden" name="attempt_id" value={a.id as string} />
                         <SubmitButton className="btn small secondary">🤖 Re-evaluate with AI</SubmitButton>
-                      </form>{" "}
+                      </form>{" "}</>)}
                       <form action={resetOneAttempt} style={{ display: "inline" }}>
                         <input type="hidden" name="id" value={u.id} />
                         <input type="hidden" name="kind" value="descriptive" />
@@ -508,6 +552,7 @@ export default async function UserDetail(
       {/* DELETING AN ACCOUNT — the most destructive thing here, so it says what
           it does before it does it, and the email must be typed to confirm.
           Admin only: the Users grant does not carry this. */}
+      {editor && (<>
       <h2 className="admin-section-title" style={{ color: "#b91c1c" }}>🗑️ Delete this account</h2>
       <div className="card" style={{ borderLeft: "3px solid #b91c1c" }}>
         <p style={{ marginTop: 0, fontSize: ".88rem", lineHeight: 1.75 }}>
@@ -532,6 +577,7 @@ export default async function UserDetail(
           </SubmitButton>
         </form>
       </div>
+      </>)}
 
       <h2 className="admin-section-title">🎟️ Subscriptions</h2>
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>

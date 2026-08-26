@@ -220,13 +220,47 @@ export async function recordToppers(day: string): Promise<TopperRow[]> {
  */
 export function toppersPushBody(rows: { track: Track; student_name: string }[]): string {
   const short: Record<Track, string> = { inter: "CA Inter", final: "CA Final" };
-  return (["inter", "final"] as Track[])
+  const lines = (["inter", "final"] as Track[])
     .map((t) => {
       const r = rows.find((x) => x.track === t);
       return r ? `${short[t]}: ${r.student_name}` : null;
     })
-    .filter(Boolean)
-    .join("\n");
+    .filter(Boolean) as string[];
+  // HIS WORDS, ON THE PHONE TOO.
+  //
+  // The long message has ended "Well done - keep going" since the first day,
+  // but the notification carried only the two names: a student saw who topped
+  // with nothing said to them. Added here rather than at the send sites so it
+  // cannot go missing from one of them, which is exactly how the CA Inter /
+  // CA Final labels were lost before.
+  return [...lines, "Well done students! \u{1F4AA}"].join("\n");
+}
+
+/**
+ * THE NOTIFICATION'S TITLE — AND WHOSE IT IS.
+ *
+ * 26 Aug 2026: "nowhere in the notifications on the mobile phone is it
+ * mentioned about CA Parveen Sharma". He was right. The phone showed only
+ * "Today's toppers", so a student glancing at a lock screen had nothing tying
+ * the congratulation to him.
+ *
+ * Written here once because the title was the last piece still built twice --
+ * the 3 AM cron said "Today's toppers" and the hand-send on the leaderboards
+ * page built its own dated version. That split is what silently dropped the
+ * subject labels from the body once already.
+ *
+ * The date rule matches the message body: "Today's" only when it really is
+ * today, so a day re-sent by hand does not tell every student that a
+ * three-day-old result is today's.
+ */
+export function toppersPushTitle(day: string): string {
+  const isToday = day === istDay();
+  const on = new Date(`${day}T12:00:00+05:30`).toLocaleDateString("en-IN", {
+    day: "numeric", month: "long", timeZone: "Asia/Kolkata",
+  });
+  return isToday
+    ? "\u{1F3C6} Today's toppers \u2014 CA Parveen Sharma"
+    : `\u{1F3C6} Toppers, ${on} \u2014 CA Parveen Sharma`;
 }
 
 export function toppersMessage(rows: { track: Track; student_name: string }[], day: string): string {

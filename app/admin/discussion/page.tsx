@@ -114,7 +114,7 @@ export default async function DiscussionAdmin(props: { searchParams: Promise<{ q
                       : "It needs 200+ members before Telegram offers the setting."}
                   </span>
                 )}
-                {anti == null && <span className="muted">Could not read the anti-spam setting from Telegram.</span>}
+                {anti == null && <span className="muted">Could not reach Telegram to read the anti-spam setting.</span>}
               </div>
               <form action={applyGroupPermissions} style={{ marginTop: 8 }}>
                 <input type="hidden" name="chat_id" value={g.chat} />

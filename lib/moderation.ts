@@ -23,7 +23,14 @@ const ABUSE_WORDS = [
   "fuck", "fucking", "bitch", "bastard", "asshole", "dick", "slut", "whore",
   "motherfucker", "bullshit", "cunt", "retard", "idiot", "stupid",
   // common Hindi/Hinglish slurs
-  "chutiya", "chutiye", "madarchod", "behenchod", "bhenchod", "bsdk", "mc", "bc", "gandu", "lund", "randi", "harami", "kamina", "kutta", "saala", "saale",
+  "chutiya", "chutiye", "madarchod", "behenchod", "bhenchod", "bsdk", "gandu", "lund", "randi", "harami", "kamina", "kutta", "saala", "saale",
+  // "bc" and "mc" were here and are GONE. This is an accounting group: BC is
+  // Borrowing Cost. On 21 Aug 2026 two genuine Ind AS 40 questions -- "as per
+  // Ind AS 40 we dont recognise the BC in IP, so how is this option correct?"
+  // -- were deleted from the Financial Reporting group and filed as "abusive
+  // language". A two-letter abbreviation cannot carry that weight in a room
+  // where students discuss Ind AS 23 every day; anyone actually swearing is
+  // caught by the spelled-out words above.
   "gaand", "jhant", "bhosdike", "bhosdi", "lauda", "laude", "tatti", "chodu", "raand",
 ];
 
@@ -49,6 +56,56 @@ function isRepetitionSpam(text: string): boolean {
   return /(.)\1{9,}/.test(text) || /(\b\w+\b)(\s+\1\b){4,}/i.test(text);
 }
 
+// SPAM WRITTEN IN CYRILLIC.
+//
+// On 21 Aug 2026 an account posted six pornography adverts into the Advanced
+// Accounting group. Four were caught. Two were not, and the difference was
+// spelling: "Lеаkеd 0NLYFАNS расk — full unсеns0rеd" uses Cyrillic е, А, с, р
+// and а, which look identical on screen and match nothing a filter is looking
+// for. Those two are still sitting in the group.
+//
+// A word list can never win that race — the same advert is rewritten endlessly
+// until something gets through, which is exactly why Telegram's own anti-spam
+// is the right tool for spam. But normalising the lookalikes costs one pass
+// and closes the cheapest evasion, and it protects the violence guard too:
+// "I will kіll you" with a Cyrillic і would otherwise sail past.
+const LOOKALIKES: Record<string, string> = {
+  "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x", "ѕ": "s",
+  "і": "i", "ј": "j", "ԁ": "d", "ց": "g", "һ": "h", "ӏ": "l", "ո": "n", "ν": "v",
+  "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H", "О": "O", "Р": "P",
+  "С": "C", "Т": "T", "У": "Y", "Х": "X", "Ѕ": "S", "І": "I", "Ј": "J",
+  "0": "o", "1": "l", "3": "e", "4": "a", "$": "s", "@": "a", "!": "i",
+};
+
+/**
+ * Fold lookalike characters to plain Latin so an obfuscated word still matches.
+ *
+ * Digits are folded ONLY inside a word that already contains letters — that is
+ * leetspeak ("unсеns0rеd" → "uncensored"), whereas a bare number is a number.
+ * Without that rule this is an accounting group: "Ind AS 40" became "Ind AS ao"
+ * and "100000" became "looooo", which is a false positive waiting to happen.
+ */
+export function normaliseLookalikes(text: string): string {
+  const LETTERS = /\p{L}/u;
+  return String(text ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/(\s+)/)
+    .map((token) => {
+      const foldDigits = LETTERS.test(token);
+      return token
+        .split("")
+        .map((ch) => {
+          const mapped = LOOKALIKES[ch];
+          if (mapped === undefined) return ch;
+          if (!foldDigits && /[0-9]/.test(ch)) return ch;
+          return mapped;
+        })
+        .join("");
+    })
+    .join("");
+}
+
 export function moderateMessage(text: string, extraTerms: string[] = []): ModerationResult {
   const t = (text || "").trim();
   const reasons: string[] = [];
@@ -56,9 +113,12 @@ export function moderateMessage(text: string, extraTerms: string[] = []): Modera
   if (EMAIL.test(t)) reasons.push("email address");
   if (URL.test(t)) reasons.push("external link");
   if (PHONE.test(t)) reasons.push("phone number");
-  if (PROMO.test(t)) reasons.push("advertisement / spam");
-  if (hasWord(t, ABUSE_WORDS)) reasons.push("abusive language");
-  if (hasWord(t, ADULT_WORDS)) reasons.push("adult content");
+  // Checked against the text as written AND with lookalike characters folded
+  // to Latin, so Cyrillic-disguised spam is caught by the same word lists.
+  const folded = normaliseLookalikes(t);
+  if (PROMO.test(t) || PROMO.test(folded)) reasons.push("advertisement / spam");
+  if (hasWord(t, ABUSE_WORDS) || hasWord(folded, ABUSE_WORDS)) reasons.push("abusive language");
+  if (hasWord(t, ADULT_WORDS) || hasWord(folded, ADULT_WORDS)) reasons.push("adult content");
   if (isShouting(t)) reasons.push("shouting");
   if (isRepetitionSpam(t)) reasons.push("spam (repetition)");
   // Admin-defined terms (competitor names, banned phrases) — substring match so
@@ -171,7 +231,7 @@ const LINK_RE = /(https?:\/\/\S+|www\.\S+|t\.me\/\S+|\b[a-z0-9][a-z0-9-]{1,}\.(?
 //     me" and "I will kill this paper" are how they talk. So a threat has to
 //     be aimed at a PERSON, not just contain a violent word.
 export function threatOfViolence(text: string): { threat: boolean; reason: string } {
-  const t = String(text ?? "").toLowerCase().replace(/\s+/g, " ");
+  const t = normaliseLookalikes(String(text ?? "")).toLowerCase().replace(/\s+/g, " ");
   if (!t.trim()) return { threat: false, reason: "" };
 
   // Someone describing what was done or threatened to them.

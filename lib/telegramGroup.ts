@@ -148,7 +148,11 @@ export async function tgChatSettings(chatId: string): Promise<GroupSettings | nu
     const r = chat.result ?? {};
     return {
       title: String(r.title ?? "Group"),
-      aggressiveAntiSpam: typeof r.has_aggressive_anti_spam_enabled === "boolean" ? r.has_aggressive_anti_spam_enabled : null,
+      // Telegram OMITS this field when the setting is off — it is one of the
+      // API's optional "True"-only booleans — so absent means OFF, not unknown.
+      // Reading it as unknown made the admin page say "could not read" for both
+      // groups when the honest answer was "it is not switched on".
+      aggressiveAntiSpam: r.has_aggressive_anti_spam_enabled === true,
       members: count?.ok ? Number(count.result) : null,
       permissions: (r.permissions as Record<string, boolean>) ?? null,
     };

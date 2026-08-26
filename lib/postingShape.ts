@@ -131,6 +131,20 @@ export type TdsWorking = {
  * ₹2,365 and ₹262.78 goes to the government. Booking that at ₹2,365 understates
  * the cost and leaves the withholding unfunded.
  */
+/**
+ * TDS, ROUNDED TO THE RUPEE — HIS RULE, IN ONE PLACE.
+ *
+ * "The TDS roundup is to be done." Section 288B rounds withholding to the
+ * nearest rupee, and that is what the challan carries.
+ *
+ * It lived only in the preview, so on FIRST FLY the screen showed ₹60.00 while
+ * ₹59.77 was stored and would have posted — the figure he approved and the
+ * figure that reached Zoho were not the same number. That is the same drift
+ * that put a different title on the phone from the one on Telegram, and it is
+ * fixed the same way: one function, used by both sides.
+ */
+export const roundTds = (n: number) => Math.round(Number(n) || 0);
+
 export function tdsWorking(invoiceInr: number, mode: TdsMode, rate: number, who: string): TdsWorking {
   const money = (n: number) => "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -141,7 +155,7 @@ export function tdsWorking(invoiceInr: number, mode: TdsMode, rate: number, who:
     };
   }
   if (mode === "deduct") {
-    const tds = Number((invoiceInr * rate / 100).toFixed(2));
+    const tds = roundTds(invoiceInr * rate / 100);
     return {
       mode, rate, bookedAmount: invoiceInr, vendorGets: Number((invoiceInr - tds).toFixed(2)), tds,
       sentence: `Cost ${money(invoiceInr)}. ${who} is paid ${money(invoiceInr - tds)} and ${money(tds)} goes to the government.`,

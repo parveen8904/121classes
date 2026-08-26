@@ -34,7 +34,10 @@ export const receivableFor = (who: string) => `${who || "the customer"} (receiva
    SOMETHING WE BOUGHT — a supplier's bill
    ═══════════════════════════════════════════════════════════════════════════ */
 /** Rounded to the nearest rupee — his ruling, 24 Aug 2026. */
-export const roundTds = (n: number) => Math.round(Number(n) || 0);
+// The rounding lives with the working that produces the posted figure, so the
+// screen and the entry cannot disagree. Re-exported for callers that had it here.
+import { roundTds } from "@/lib/postingShape";
+export { roundTds };
 
 export function purchaseEntry(p: {
   who: string;

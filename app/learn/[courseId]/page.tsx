@@ -29,6 +29,16 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // THE DOOR RAVI COULD NOT FIND. He stood on this page looking at "Question
+  // bank (5)" and had no way to reach the screen that edits it — the admin
+  // repository exists, but nothing on the student side points there. For staff
+  // holding the repository grant (admins included), each resource category now
+  // carries an ✏️ edit link that lands on /admin/repository already filtered
+  // to this subject and kind. Students never see it.
+  const { currentStaff: staffFn, staffCanArea: canFn } = await import("@/lib/adminAccess");
+  const viewerStaff = user ? await staffFn() : null;
+  const canEditRepo = !!viewerStaff && (viewerStaff.role === "admin" || canFn(viewerStaff, "repository"));
   if (!user) redirect(`/login?next=/learn/${params.courseId}`);
 
   // One parallel round trip for everything that only needs the user + course id
@@ -649,7 +659,12 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                       📚 Subject resources
                       {parentSubj && <span className="muted" style={{ fontWeight: 400, fontSize: ".8rem" }}> · shared with {parentSubj.title}</span>}
                     </strong>
-                    <p className="muted" style={{ fontSize: ".78rem", margin: "2px 0 8px" }}>Tap a category to open its papers / notes.</p>
+                    <p className="muted" style={{ fontSize: ".78rem", margin: "2px 0 8px" }}>
+                      Tap a category to open its papers / notes.
+                      {canEditRepo && (
+                        <>{" "}<a href={`/admin/repository?subject=${s.id}`} style={{ fontWeight: 700 }}>✏️ Edit resources (admin) →</a></>
+                      )}
+                    </p>
                     <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
                       {/* Standard categories → tap to open their papers/notes. */}
                       {RES_ORDER.filter((cat) => cat.kind !== "custom").map((cat) => {
@@ -664,6 +679,12 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
                               <span style={{ background: "var(--accent)", color: "#fff", borderRadius: 999, padding: "1px 10px", fontSize: ".8rem" }}>{rows.length}</span>
                             </summary>
                             <div style={{ display: "grid", gap: 6, padding: "0 12px 12px" }}>
+                              {canEditRepo && (
+                                <a href={`/admin/repository?subject=${s.id}&kind=${cat.kind}`}
+                                   style={{ fontSize: ".78rem", fontWeight: 700, color: "var(--accent)" }}>
+                                  ✏️ Edit these in the admin panel →
+                                </a>
+                              )}
                               {rows.map((r) => {
                                 // Suggested-answers papers keep their PDF in
                                 // solution_url, everything else in file_url.

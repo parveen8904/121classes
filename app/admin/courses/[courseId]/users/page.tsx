@@ -31,16 +31,40 @@ export default async function CourseUsersPage(props: { params: Promise<{ courseI
   const { courseId } = await props.params;
   const svc = createServiceClient();
 
-  const [{ data: course }, { data: subjects }, { data: subs }] = await Promise.all([
+  const [{ data: course }, { data: subjects }] = await Promise.all([
     svc.from("courses").select("id, title").eq("id", courseId).maybeSingle(),
     svc.from("subjects").select("id, title").eq("course_id", courseId),
-    svc
+  ]);
+
+  // THE COUNT THAT NEVER SHOWED, for two stacked reasons.
+  //
+  // First, `profiles(...)` with no path: subscriptions carries TWO foreign
+  // keys into profiles (student_id and granted_by_admin_id), so PostgREST
+  // refused the embed as ambiguous — and with it the WHOLE query. The page
+  // rendered politely around a null: zero students, blank list. "The total
+  // number of registered users is still not showing."
+  //
+  // Second, even valid, one request stops silently at a thousand rows and
+  // there are 2,637 active subscriptions. So it is read a page at a time.
+  type SubRow = {
+    student_id: string; subject_id: string | null; status: string; ends_at: string | null;
+    channel: string | null; created_at: string;
+    plans: { tier?: string } | null; subjects: { title?: string } | null;
+    profiles: { full_name?: string; email?: string; phone?: string } | null;
+  };
+  const subs: SubRow[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data: pageRows } = await svc
       .from("subscriptions")
-      .select("student_id, subject_id, status, ends_at, channel, created_at, plans(tier), subjects(title), profiles(full_name, email, phone)")
+      .select("student_id, subject_id, status, ends_at, channel, created_at, plans(tier), subjects(title), profiles:student_id(full_name, email, phone)")
       .eq("course_id", courseId)
       .in("status", ["active", "blocked"])
-      .order("created_at", { ascending: false }),
-  ]);
+      .order("created_at", { ascending: false })
+      .range(from, from + 999);
+    const page = (pageRows ?? []) as unknown as SubRow[];
+    subs.push(...page);
+    if (page.length < 1000) break;
+  }
 
   const subjectIds = (subjects ?? []).map((s) => s.id as string);
 
@@ -58,13 +82,18 @@ export default async function CourseUsersPage(props: { params: Promise<{ courseI
       .map((s) => s.id as string),
   );
 
-  const studentIds = [...new Set((subs ?? []).map((s) => s.student_id as string))];
+  const studentIds = [...new Set(subs.map((s) => s.student_id))];
   const watched = new Map<string, { classes: Set<string>; seconds: number }>();
   if (studentIds.length) {
-    const { data: watchRows } = await svc
-      .from("class_watch")
-      .select("student_id, section_id, video_seconds")
-      .in("student_id", studentIds);
+    // In chunks: 2,000+ UUIDs in one .in() builds a URL the server refuses,
+    // and it comes back as an empty column rather than an error.
+    const { inChunks } = await import("@/lib/pageAll");
+    // Batches of 50: each response is still capped at 1,000 rows, and fifty
+    // heavy watchers stay under it where two hundred would not.
+    const watchRows = await inChunks(studentIds, (batch) =>
+      svc.from("class_watch")
+        .select("student_id, section_id, video_seconds")
+        .in("student_id", batch), 50);
     for (const w of watchRows ?? []) {
       if (!courseSectionIds.has(w.section_id as string)) continue;
       const key = w.student_id as string;
@@ -75,7 +104,7 @@ export default async function CourseUsersPage(props: { params: Promise<{ courseI
     }
   }
 
-  const rows: Row[] = (subs ?? []).map((s) => {
+  const rows: Row[] = subs.map((s) => {
     const prof = (s as { profiles?: { full_name?: string; email?: string; phone?: string } | null }).profiles;
     const w = watched.get(s.student_id as string);
     return {

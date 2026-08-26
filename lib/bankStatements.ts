@@ -297,12 +297,27 @@ export async function ingestStatement(accountName: string, fileUrl: string, file
   const seen = new Set((existing ?? []).map((e) => `${e.line_date}|${str(e.narration)}|${e.debit}|${e.credit}`));
 
   // Pre-load the matching sources for the period.
-  const [{ data: settleRows }, rules, zohoExp] = await Promise.all([
-    svc.from("zoho_settlements").select("utr, settlement_id, status").in("status", ["posted", "matched"]),
+  const [{ data: settleRows }, rules, zohoExp, zohoTxns] = await Promise.all([
+    // The settlement's own amount and date, not just its UTR — see below.
+    svc.from("zoho_settlements").select("utr, settlement_id, status, settled_on, net_inr").in("status", ["posted", "matched"]),
     svc.from("merchant_rules").select("id, pattern, account_name, sub_account").then((r) => r.data ?? []),
     fetchZohoExpensesFor(accountName, first.date, last.date),
+    fetchZohoBankTxnsFor(accountName, first.date, last.date),
   ]);
   const utrs = new Map((settleRows ?? []).filter((s) => s.utr).map((s) => [String(s.utr), String(s.settlement_id)]));
+  // A SETTLEMENT IS RECOGNISABLE WITHOUT ITS UTR.
+  //
+  // Axis writes "Razorpay Software Pvt  Ltd  Fu" and no UTR, so matching on the
+  // UTR alone never fired and every settlement he had already posted came back
+  // as a fresh question. The amount and the date identify it perfectly well.
+  const settleByAmt = new Map<string, string>();
+  for (const r of settleRows ?? []) {
+    const d = String((r as { settled_on?: string }).settled_on ?? "").slice(0, 10);
+    // net_inr is what Razorpay actually deposits — gross less their fee and its
+    // GST — so it is the figure the bank statement shows.
+    const a = Number((r as { net_inr?: number }).net_inr ?? 0);
+    if (d && a > 0) settleByAmt.set(`${d}|${a.toFixed(2)}`, String(r.settlement_id));
+  }
 
   let matched = 0, auto = 0, ask = 0, dup = 0;
   const usedExp = new Set<string>();
@@ -320,6 +335,12 @@ export async function ingestStatement(accountName: string, fileUrl: string, file
       status = "matched"; matchedNote = `Razorpay settlement (UTR ${hitUtr})`;
     }
 
+    // 1b) A settlement we posted, recognised by its amount and date.
+    if (status === "ask" && l.credit > 0) {
+      const sid = settleByAmt.get(`${l.date}|${l.credit.toFixed(2)}`);
+      if (sid) { status = "matched"; matchedNote = `Razorpay settlement (already posted)`; }
+    }
+
     // 2) The office's existing Zoho expenses for this account: amount + date.
     if (status === "ask" && l.debit > 0) {
       const k = `${l.date}|${l.debit.toFixed(2)}`;
@@ -327,6 +348,20 @@ export async function ingestStatement(accountName: string, fileUrl: string, file
       if (exp) {
         usedExp.add(exp.id);
         status = "matched"; zohoId = exp.id; matchedNote = `already entered (${exp.account})`;
+      }
+    }
+
+    // 2b) ANYTHING ELSE ALREADY IN THIS ACCOUNT'S ZOHO REGISTER — a journal, a
+    // transfer, a receipt, a payment, or something typed in by hand. Both
+    // directions, each Zoho entry claimed at most once.
+    if (status === "ask") {
+      const dir = l.debit > 0 ? "out" : "in";
+      const amt = (l.debit > 0 ? l.debit : l.credit).toFixed(2);
+      const t = zohoTxns.get(`${l.date}|${amt}|${dir}`)?.find((x) => !usedExp.has(x.id));
+      if (t) {
+        usedExp.add(t.id);
+        status = "matched"; zohoId = t.id;
+        matchedNote = `already in Zoho — ${t.type}${t.note ? ` (${t.note})` : ""}`;
       }
     }
 
@@ -361,6 +396,58 @@ export async function ingestStatement(accountName: string, fileUrl: string, file
 }
 
 type ZExp = { id: string; account: string };
+/**
+ * EVERYTHING THAT HAS ALREADY MOVED THROUGH THIS BANK ACCOUNT IN ZOHO.
+ *
+ * His complaint, 26 Aug 2026: entries already passed — by the Razorpay
+ * clearing button, or typed into Zoho by hand — are asked for all over again
+ * when the statement is uploaded. "Entries which are already recognised in
+ * Zoho should not be again asked in portal."
+ *
+ * The old matching could not see them. It looked at two things: our own
+ * settlement journals, found only when the UTR happens to appear in the bank's
+ * narration — and Axis writes "Razorpay Software Pvt  Ltd  Fu", with no UTR at
+ * all — and Zoho EXPENSES, which by definition are only money going out. A
+ * receipt entered by hand, a journal, a transfer, a customer payment: none of
+ * them could ever match, so every one came back as a question.
+ *
+ * /banktransactions is the account's own register, which is where all of those
+ * land whatever document created them. Matched on date and amount, in the
+ * right direction, each Zoho entry claimed at most once.
+ */
+type ZTxn = { id: string; type: string; note: string };
+
+async function fetchZohoBankTxnsFor(accountName: string, from: string, to: string): Promise<Map<string, ZTxn[]>> {
+  const map = new Map<string, ZTxn[]>();
+  try {
+    const acct = await zohoAccountId(accountName);
+    for (let page = 1; page <= 10; page++) {
+      const r = await zohoFetch<{
+        banktransactions?: { transaction_id: string; date: string; amount: number; debit_or_credit?: string;
+          transaction_type?: string; description?: string; payee?: string }[];
+        page_context?: { has_more_page?: boolean };
+      }>("/banktransactions", {
+        query: { account_id: acct, date_start: from, date_end: to, per_page: "200", page: String(page) },
+      });
+      for (const t of r.banktransactions ?? []) {
+        // Zoho reports the direction from the BANK's side: a credit to the
+        // bank is money in, which is the statement's credit column.
+        const dir = String(t.debit_or_credit ?? "").toLowerCase() === "credit" ? "in" : "out";
+        const k = `${t.date}|${Math.abs(Number(t.amount)).toFixed(2)}|${dir}`;
+        const arr = map.get(k) ?? [];
+        arr.push({
+          id: String(t.transaction_id),
+          type: String(t.transaction_type ?? "entry"),
+          note: String(t.payee || t.description || "").slice(0, 60),
+        });
+        map.set(k, arr);
+      }
+      if (!r.page_context?.has_more_page) break;
+    }
+  } catch { /* matching is best-effort; unmatched lines simply ask */ }
+  return map;
+}
+
 async function fetchZohoExpensesFor(accountName: string, from: string, to: string): Promise<Map<string, ZExp[]>> {
   const map = new Map<string, ZExp[]>();
   try {
@@ -380,17 +467,27 @@ async function fetchZohoExpensesFor(accountName: string, from: string, to: strin
   return map;
 }
 
-const acctCache = new Map<string, string>();
-export async function zohoAccountId(name: string): Promise<string> {
+const acctCache = new Map<string, { id: string; type: string }>();
+
+/** The account, with its TYPE — which decides what shape the entry may take. */
+export async function zohoAccount(name: string): Promise<{ id: string; type: string }> {
   const hit = acctCache.get(name);
   if (hit) return hit;
-  const r = await zohoFetch<{ chartofaccounts?: { account_id: string; account_name: string }[] }>(
+  const r = await zohoFetch<{ chartofaccounts?: { account_id: string; account_name: string; account_type: string }[] }>(
     "/chartofaccounts", { query: { search_text: name, filter_by: "AccountType.All" } });
   const found = (r.chartofaccounts ?? []).find((a) => a.account_name === name);
   if (!found) throw new Error(`Zoho account "${name}" not found`);
-  acctCache.set(name, found.account_id);
-  return found.account_id;
+  const out = { id: found.account_id, type: String(found.account_type ?? "") };
+  acctCache.set(name, out);
+  return out;
 }
+
+export async function zohoAccountId(name: string): Promise<string> {
+  return (await zohoAccount(name)).id;
+}
+
+/** Only these can carry a Zoho Expense. Everything else has to be a journal. */
+const EXPENSE_TYPES = new Set(["expense", "other_expense", "cost_of_goods_sold"]);
 
 // ---- posting one line -------------------------------------------------------
 
@@ -478,7 +575,8 @@ export async function postBankLine(lineId: string, accountChoice: string, subAcc
       return;
     }
 
-    const otherId = await zohoAccountId(accountChoice);
+    const other = await zohoAccount(accountChoice);
+    const otherId = other.id;
 
     // A BANK'S OWN WORDING IS NOT A NARRATION.
     //
@@ -499,8 +597,21 @@ export async function postBankLine(lineId: string, accountChoice: string, subAcc
       extra: `bank statement: ${String(l.narration ?? "").slice(0, 220)}`,
     });
 
+    // AN EXPENSE IS ONLY ONE OF THE THINGS MONEY LEAVING A BANK CAN BE.
+    //
+    // Money out was always posted as a Zoho Expense, and Zoho only accepts an
+    // Expense against an expense-type account. So choosing "Drawings" — which
+    // is EQUITY, money the owner took out and not a cost of the business at
+    // all — was refused, and there was no way to book it. The same would have
+    // been true of a loan repayment (liability) or buying an asset.
+    //
+    // Money out to anything that is not an expense head is a journal:
+    // Dr that account, Cr the bank. Which is what it always was in double
+    // entry; only the Zoho document type was wrong.
+    const asExpense = debit > 0 && EXPENSE_TYPES.has(other.type);
+
     let zohoId = "";
-    if (debit > 0) {
+    if (asExpense) {
       const r = await zohoFetch<{ expense?: { expense_id: string } }>("/expenses", {
         method: "POST",
         body: {
@@ -515,22 +626,31 @@ export async function postBankLine(lineId: string, accountChoice: string, subAcc
       if (!r.expense?.expense_id) return fail("Zoho did not return the created expense");
       zohoId = r.expense.expense_id;
     } else {
+      // Money OUT to a non-expense head: Dr that account, Cr the bank.
+      // Money IN: Dr the bank, Cr that account. One journal shape, both ways.
+      const amount = debit > 0 ? debit : credit;
+      const lines = debit > 0
+        ? [
+            { account_id: otherId, debit_or_credit: "debit", amount, description: bankNarration },
+            { account_id: bankId, debit_or_credit: "credit", amount, description: bankNarration },
+          ]
+        : [
+            { account_id: bankId, debit_or_credit: "debit", amount, description: bankNarration },
+            { account_id: otherId, debit_or_credit: "credit", amount, description: bankNarration },
+          ];
       const r = await zohoFetch<{ journal?: { journal_id: string } }>("/journals", {
         method: "POST",
         body: {
           journal_date: l.line_date,
           reference_number: String(l.ref || "").slice(0, 90) || undefined,
           notes: bankNarration,
-          line_items: [
-            { account_id: bankId, debit_or_credit: "debit", amount: credit, description: bankNarration },
-            { account_id: otherId, debit_or_credit: "credit", amount: credit, description: bankNarration },
-          ],
+          line_items: lines,
         },
       });
       if (!r.journal?.journal_id) return fail("Zoho did not return the created journal");
       zohoId = r.journal.journal_id;
     }
-    const paper = await attachStatement(svc, l, debit > 0 ? "expense" : "journal", zohoId);
+    const paper = await attachStatement(svc, l, asExpense ? "expense" : "journal", zohoId);
     await svc.from("bank_lines").update({
       status: "posted", zoho_id: zohoId, error: paper,
       proposal: { ...(l.proposal as Record<string, unknown> ?? {}), account: accountChoice },

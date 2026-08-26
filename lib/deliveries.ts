@@ -89,17 +89,24 @@ export async function deliveriesFor(userId: string, email: string | null): Promi
   }
 
   // 2 — A subject order whose plan includes the printed books.
+  //
+  // BEFORE DISPATCH TOO. This listed subscription parcels only once a tracking
+  // number existed — so a Gold student who ticked the free printed books and
+  // paid saw a BLANK page until the warehouse shipped. Vikash Agarwal, order
+  // 10150, an hour after paying: "no orders for this account", with his order
+  // sitting right there as paid, books due, not yet dispatched. A paid order
+  // with books owed is a parcel being packed, and the page must say so.
   const { data: subj } = await svc
     .from("orders")
-    .select("id, order_no, created_at, courier_name, tracking_code, subjects:subject_id(title)")
+    .select("id, order_no, created_at, courier_name, tracking_code, status, books_due, subjects:subject_id(title)")
     .eq("student_id", userId)
-    .not("tracking_code", "is", null)
+    .or("tracking_code.not.is.null,and(status.eq.paid,books_due.eq.true)")
     .order("created_at", { ascending: false }).limit(100);
   for (const o of (subj ?? []) as unknown as {
     id: string; order_no: number | null; created_at: string;
     courier_name: string | null; tracking_code: string | null; subjects: { title: string } | null;
   }[]) {
-    add(o.id, o.order_no, `${o.subjects?.title ?? "Course"} — books`, o.created_at, o.courier_name, o.tracking_code, true);
+    add(o.id, o.order_no, `${o.subjects?.title ?? "Course"} — books`, o.created_at, o.courier_name, o.tracking_code, !!String(o.tracking_code ?? "").trim());
   }
 
   // 3 — Books that arrived as somebody's gift.
@@ -107,13 +114,13 @@ export async function deliveriesFor(userId: string, email: string | null): Promi
     .from("gift_orders")
     .select("id, order_no, created_at, courier_name, tracking_code, subjects:subject_id(title)")
     .eq("recipient_user_id", userId)
-    .not("tracking_code", "is", null)
+    .or("tracking_code.not.is.null,and(status.eq.paid,books_due.eq.true)")
     .order("created_at", { ascending: false }).limit(100);
   for (const g of (gifts ?? []) as unknown as {
     id: string; order_no: number | null; created_at: string;
     courier_name: string | null; tracking_code: string | null; subjects: { title: string } | null;
   }[]) {
-    add(g.id, g.order_no, `${g.subjects?.title ?? "Course"} — books (a gift)`, g.created_at, g.courier_name, g.tracking_code, true);
+    add(g.id, g.order_no, `${g.subjects?.title ?? "Course"} — books (a gift)`, g.created_at, g.courier_name, g.tracking_code, !!String(g.tracking_code ?? "").trim());
   }
 
   return out.sort((a, b) => +new Date(b.placedAt) - +new Date(a.placedAt));

@@ -565,6 +565,51 @@ export async function submitPaperForStudent(formData: FormData): Promise<{ ok: b
 // a student re-sitting ONE chapter test should lose that attempt and nothing
 // else. Deleting the row is the reset: the portal treats a missing attempt as
 // "never sat", so the test opens fresh.
+/**
+ * RESET ONE TOPIC'S TESTS — the middle size that was missing.
+ *
+ * The office had two extremes: one attempt at a time, or the whole record.
+ * "When we click on Reset, all tests get reset, which is not suitable" — a
+ * Silver student re-doing Amalgamation needs Amalgamation cleared, not their
+ * year's work. This deletes the attempts of ONE topic, one kind at a time,
+ * and leaves everything else standing.
+ *
+ * Mock-paper attempts carry no topic and are never touched by this — they are
+ * reset one at a time from the table below.
+ */
+export async function resetTopicTests(formData: FormData) {
+  if (!(await requireUsersDesk())) return;
+  const id = str(formData.get("id"));            // the student
+  const topicId = str(formData.get("topic_id"));
+  const kind = str(formData.get("kind"));        // descriptive | mcq
+  if (!id || !topicId || !["descriptive", "mcq"].includes(kind)) return;
+
+  const svc = createServiceClient();
+  // The topic's sections — ids only, never config (39 kB a row).
+  const { data: secs } = await svc.from("sections").select("id").eq("topic_id", topicId);
+  const sectionIds = (secs ?? []).map((x) => String(x.id));
+  const { data: topic } = await svc.from("topics").select("title").eq("id", topicId).maybeSingle();
+  const tName = String(topic?.title ?? "that topic");
+  if (!sectionIds.length) {
+    redirect(`/admin/users/${id}?testsreset=${encodeURIComponent(`nothing — ${tName} has no tests`)}`);
+  }
+
+  let n = 0;
+  if (kind === "mcq") {
+    const { data: gone } = await svc.from("mcq_attempts").delete()
+      .eq("student_id", id).in("section_id", sectionIds).select("id");
+    n = (gone ?? []).length;
+  } else {
+    const { data: gone } = await svc.from("descriptive_attempts").delete()
+      .eq("student_id", id).in("section_id", sectionIds).select("id");
+    n = (gone ?? []).length;
+  }
+  revalidatePath(`/admin/users/${id}`);
+  redirect(`/admin/users/${id}?testsreset=${encodeURIComponent(
+    `${n} ${kind === "mcq" ? "MCQ" : "descriptive"} attempt(s) of "${tName}"`,
+  )}`);
+}
+
 export async function resetOneAttempt(formData: FormData) {
   // Resetting tests is desk work — his list of 26 Aug 2026 grants it to the
   // users desk alongside passwords. Regrading and plan resets stay admin-only.

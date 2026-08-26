@@ -4,7 +4,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
-import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan, resetStudentTests, resetOneAttempt, regradeAttempt, makeLoginLink, deleteUserAccount } from "../actions";
+import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan, resetStudentTests, resetTopicTests, resetOneAttempt, regradeAttempt, makeLoginLink, deleteUserAccount } from "../actions";
 import { startViewAs } from "@/app/dashboard/viewAsActions";
 import PaperForStudent from "./PaperForStudent";
 import { ADMIN_AREAS, currentStaff, staffCanArea } from "@/lib/adminAccess";
@@ -144,13 +144,13 @@ export default async function UserDetail(
   // re-evaluation — the office asked to stop using the everything-at-once reset.
   const { data: descAttempts } = await svc2
     .from("descriptive_attempts")
-    .select("id, section_id, mock_paper_id, submitted_at, status, review_status, awarded_marks, total_marks, sections:section_id(title), mock_papers:mock_paper_id(title)")
+    .select("id, section_id, mock_paper_id, submitted_at, status, review_status, awarded_marks, total_marks, sections:section_id(title, topic_id, topics:topic_id(title)), mock_papers:mock_paper_id(title)")
     .eq("student_id", u.id)
     .order("submitted_at", { ascending: false })
     .limit(40);
   const { data: mcqAttempts } = await svc2
     .from("mcq_attempts")
-    .select("id, section_id, score, total, created_at, sections:section_id(title)")
+    .select("id, section_id, score, total, created_at, sections:section_id(title, topic_id, topics:topic_id(title))")
     .eq("student_id", u.id)
     .order("created_at", { ascending: false })
     .limit(40);
@@ -326,6 +326,59 @@ export default async function UserDetail(
           ))}
         </div>
       </div>
+
+      {/* ONE TOPIC AT A TIME — the middle size the office asked for on 26 Aug
+          2026: "reset only the specific topic/test... instead of resetting all
+          tests", for Silver students re-sitting one chapter. Built from the
+          attempts themselves, so only topics this student has actually sat
+          appear. Mock papers carry no topic; they reset one-by-one below. */}
+      {(() => {
+        type TA = { sections?: { topic_id?: string | null; topics?: { title?: string | null } | null } | null };
+        const topics = new Map<string, { title: string; desc: number; mcq: number }>();
+        for (const a of (descAttempts ?? []) as TA[]) {
+          const tid = a.sections?.topic_id; if (!tid) continue;
+          const t = topics.get(tid) ?? { title: a.sections?.topics?.title ?? "Topic", desc: 0, mcq: 0 };
+          t.desc++; topics.set(tid, t);
+        }
+        for (const a of (mcqAttempts ?? []) as TA[]) {
+          const tid = a.sections?.topic_id; if (!tid) continue;
+          const t = topics.get(tid) ?? { title: a.sections?.topics?.title ?? "Topic", desc: 0, mcq: 0 };
+          t.mcq++; topics.set(tid, t);
+        }
+        if (!topics.size) return null;
+        return (
+          <div className="card" style={{ marginTop: 14 }}>
+            <strong>🎯 Reset one topic</strong>
+            <p className="muted" style={{ fontSize: ".82rem", margin: "2px 0 10px" }}>
+              Clears only that topic&apos;s attempts — the rest of the record stands. What was sat is listed;
+              nothing else appears here.
+            </p>
+            <div style={{ display: "grid", gap: 8 }}>
+              {[...topics.entries()].map(([tid, t]) => (
+                <div key={tid} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ minWidth: 220, fontSize: ".88rem" }}><strong>{t.title}</strong></span>
+                  {t.desc > 0 && (
+                    <form action={resetTopicTests} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={u.id} />
+                      <input type="hidden" name="topic_id" value={tid} />
+                      <input type="hidden" name="kind" value="descriptive" />
+                      <SubmitButton className="btn small secondary" savedLabel="Reset">✍️ Reset descriptive ({t.desc})</SubmitButton>
+                    </form>
+                  )}
+                  {t.mcq > 0 && (
+                    <form action={resetTopicTests} style={{ margin: 0 }}>
+                      <input type="hidden" name="id" value={u.id} />
+                      <input type="hidden" name="topic_id" value={tid} />
+                      <input type="hidden" name="kind" value="mcq" />
+                      <SubmitButton className="btn small secondary" savedLabel="Reset">🧠 Reset MCQ ({t.mcq})</SubmitButton>
+                    </form>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* THE DESK'S VIEW OF THE PROFILE — read only, and complete on the four
           things he said must be verifiable at a glance: name, address, GST

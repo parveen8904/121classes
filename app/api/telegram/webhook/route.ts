@@ -4,7 +4,7 @@ import { sendTelegramMessage, notifyFaculty } from "@/lib/notify";
 import { answerDoubtFromMaterial, aiConfigured, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getSecret } from "@/lib/secrets";
-import { looksLikeAbuseReport, moderateMessageDyn, imageIsExplicit, containsLink } from "@/lib/moderation";
+import { looksLikeAbuseReport, threatOfViolence, moderateMessageDyn, imageIsExplicit, containsLink } from "@/lib/moderation";
 import { tgDeleteMessage, tgSendGroupReply, tgApproveJoin, tgDeclineJoin, tgRestrictUser, messageHasMedia, moderatableImageId, tgGetImageB64, tgIsGroupAdmin } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
 import { groupAiAnswer } from "@/lib/groupDoubt";
@@ -202,8 +202,16 @@ export async function POST(req: NextRequest) {
       // sexting" — and the later pieces carry no report words of their own. So
       // once somebody has reported, anything else they say for the next
       // fifteen minutes is treated as part of it.
-      let isReport = !mediaExplicit && !!combined && looksLikeAbuseReport(combined);
-      if (!isReport && mod.flagged && !mediaExplicit && fromId) {
+      //
+      // A THREAT OF PHYSICAL VIOLENCE OVERRIDES ALL OF THAT. It is settled
+      // first, and it switches the shield off, so that "I will beat you" can
+      // never be dressed up as reporting somebody. Removing the message and
+      // the sender is handled below, like an explicit image.
+      const violence = combined ? threatOfViolence(combined) : { threat: false, reason: "" };
+      if (violence.threat) { mod.flagged = true; mod.reasons = [...mod.reasons, violence.reason]; }
+
+      let isReport = !mediaExplicit && !violence.threat && !!combined && looksLikeAbuseReport(combined);
+      if (!isReport && mod.flagged && !mediaExplicit && !violence.threat && fromId) {
         const { data: recent } = await svc
           .from("group_messages")
           .select("body")
@@ -237,6 +245,25 @@ export async function POST(req: NextRequest) {
           });
         } catch { /* logging is best effort */ }
       }
+      // Threatening another student is a removable offence at once.
+      if (violence.threat && fromId) {
+        await tgRestrictUser(chatId, fromId, true).catch(() => false);
+        try {
+          await svc.from("banned_group_users").upsert(
+            { chat_id: chatId, user_id: null, tg_user_id: fromId, kind: "ban", reason: `Removed automatically: ${violence.reason}`, banned_by: null },
+            { onConflict: "chat_id,tg_user_id" },
+          );
+        } catch { /* the Telegram removal already happened; the record is best-effort */ }
+        try {
+          await notifyFaculty(
+            "🚨 A threat of violence was auto-removed from a Telegram group",
+            `${fromName} (Telegram id ${fromId}) was removed from ${msg.chat.title ?? chatId} on the spot.\n\n` +
+            `What they wrote:\n“${combined}”\n\n` +
+            "Open /admin/discussion to review. If this was wrongly removed, lift the ban there.",
+          );
+        } catch { /* alert is best-effort */ }
+      }
+
       // Explicit media is a removable offence at once — not a warning.
       if (mediaExplicit && fromId) {
         await tgRestrictUser(chatId, fromId, true).catch(() => false);

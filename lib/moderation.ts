@@ -148,6 +148,58 @@ export async function imageIsExplicit(b64: string, mediaType: string): Promise<{
 // www., t.me/ and bare domains with a common TLD. Deliberately does not trip on
 // "B.Com" / "M.Com" (needs 2+ characters before the dot) or a bare "file.pdf".
 const LINK_RE = /(https?:\/\/\S+|www\.\S+|t\.me\/\S+|\b[a-z0-9][a-z0-9-]{1,}\.(?:com|in|net|org|io|co|me|edu|gov|app|xyz|info|biz|link|ly|shop|store|online|site|club|live|tel|fun)\b(?:\/\S*)?)/i;
+// THREATS OF PHYSICAL VIOLENCE — ZERO TOLERANCE.
+//
+// His instruction, 26 Aug 2026: "if someone posting abusive messages that
+// should be blocked, any kind of abuse related to physical violence, you have
+// to control that group."
+//
+// The blocked-terms list was built for slurs, spam and adult content. It has
+// nothing for somebody saying they will beat, stab or throw acid at another
+// student, and that is the one thing in a group of teenagers that cannot be
+// left to a moderator noticing it the next morning. A threat here is treated
+// like an explicit image: the message goes, the sender goes, and the founder
+// is told.
+//
+// TWO THINGS IT MUST NOT DO, and both are tested:
+//
+//   · It must not catch the victim. "He said he will kill me" is a REPORT.
+//     A reporting frame — he/she/they/somebody plus said, told, threatened —
+//     means the violence is being described, not delivered.
+//
+//   · It must not catch a student being a student. "This question is killing
+//     me" and "I will kill this paper" are how they talk. So a threat has to
+//     be aimed at a PERSON, not just contain a violent word.
+export function threatOfViolence(text: string): { threat: boolean; reason: string } {
+  const t = String(text ?? "").toLowerCase().replace(/\s+/g, " ");
+  if (!t.trim()) return { threat: false, reason: "" };
+
+  // Someone describing what was done or threatened to them.
+  const reportFrame =
+    /\b(he|she|they|someone|somebody|this guy|that guy)\b[^.!?]{0,40}\b(said|says|saying|told|sent|threat\w*|wants?|is|was|keeps)\b/.test(t)
+    || /\bthreat\w*\b[^.!?]{0,20}\b(me|us|her|him)\b/.test(t)
+    || /\b(reported?|report|complain\w*)\b/.test(t);
+
+  // Words that are a threat whatever else is in the sentence.
+  const severe =
+    /\b(rape|raping|molest\w*|acid|tezaab|gangrape)\b/.test(t)
+    || /\b(jaan se maar|maar dunga|maar dungi|maar dalunga|khatam kar dunga|tod dunga|dekh lunga|utha lunga|goli maar|chaku|zinda nahi)\b/.test(t);
+
+  // Violent acts that need a person on the receiving end to count.
+  const violent =
+    /\b(kill|killing|murder|stab|stabbing|shoot|shooting|beat|beating|thrash|bash|lynch|strangle|choke|burn|smash|slap)\b/.test(t)
+    || /\bbreak (your|ur|his|her|their) (bones?|legs?|face|jaw|head|neck)\b/.test(t);
+
+  // Aimed at a person.
+  const atAPerson =
+    /\b(you|u|ur|your|tujhe|tumhe|tumko|aapko|usko|isko|him|her|them|bastard|sale|saale)\b/.test(t);
+
+  if (reportFrame) return { threat: false, reason: "" };
+  if (severe) return { threat: true, reason: "threat of physical violence" };
+  if (violent && atAPerson) return { threat: true, reason: "threat of physical violence" };
+  return { threat: false, reason: "" };
+}
+
 // REPORTING ABUSE IS NOT ABUSE.
 //
 // 21 Aug 2026, CA Intermediate group. A student wrote "hi sir please remove

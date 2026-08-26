@@ -2,8 +2,8 @@ import { formatDateTime } from "@/lib/dates";
 import AdminHero from "../_components/AdminHero";
 import SubmitButton from "@/app/components/SubmitButton";
 import { createServiceClient } from "@/lib/supabase/service";
-import { restoreMessage, hideMessage, banSender, unbanUser, saveBlockedTerms, makeStudentsOnlyLink, restoreAutoRemoved, banByTelegramId, unhideSenderMessages } from "./actions";
-import { botGroupStatus } from "@/lib/telegramGroup";
+import { restoreMessage, hideMessage, banSender, unbanUser, saveBlockedTerms, makeStudentsOnlyLink, restoreAutoRemoved, banByTelegramId, unhideSenderMessages, applyGroupPermissions } from "./actions";
+import { botGroupStatus, tgChatSettings } from "@/lib/telegramGroup";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Group moderation — Admin" };
@@ -24,6 +24,10 @@ export default async function DiscussionAdmin(props: { searchParams: Promise<{ q
   // Can the bot actually police each group? (admin + delete + ban rights)
   const groupChats = (subjects ?? []).filter((s) => s.telegram_group_chat_id).map((s) => ({ chat: s.telegram_group_chat_id as string, name: s.title as string, url: (s as { telegram_group_url?: string | null }).telegram_group_url ?? "" }));
   const botStatus = await botGroupStatus(groupChats.map((g) => g.chat));
+  // What Telegram itself is doing for each group — read live, not assumed.
+  const tgSettings = new Map(
+    (await Promise.all(groupChats.map(async (g) => [g.chat, await tgChatSettings(g.chat)] as const))),
+  );
   const groupName = (chat: string) => subjByChat.get(chat) || (groups ?? []).find((g) => g.chat_id === chat)?.title || chat;
 
   // Flagged / hidden — needs review.
@@ -83,6 +87,51 @@ export default async function DiscussionAdmin(props: { searchParams: Promise<{ q
       <AdminHero badge="🛡️ Group moderation" title="Discussion moderation" subtitle="Review flagged messages, search across all groups, hide messages and ban/mute users. Your DB is the record; Telegram is kept in sync." back={{ href: "/admin", label: "Admin" }} />
 
       {searchParams.done && <div className="notice ok" style={{ marginTop: 12 }}>{searchParams.done}</div>}
+
+      {/* WHO POLICES WHAT.
+          His decision, 26 Aug 2026: Telegram's own tools police behaviour; the
+          portal keeps only what needs to know the business. This shows what
+          Telegram is actually doing, read live rather than assumed. */}
+      <div style={{ ...card, marginTop: 16 }}>
+        <h3 style={{ marginTop: 0 }}>🛡️ What Telegram is enforcing</h3>
+        {groupChats.map((g) => {
+          const t = tgSettings.get(g.chat);
+          const anti = t?.aggressiveAntiSpam;
+          const enoughMembers = (t?.members ?? 0) >= 200;
+          return (
+            <div key={g.chat} style={{ borderTop: "1px solid var(--border, #e5e7eb)", paddingTop: 10, marginTop: 10 }}>
+              <strong>{g.name}</strong>{" "}
+              <span className="muted" style={{ fontSize: ".82rem" }}>
+                {t?.members != null ? `${t.members} members` : "member count unavailable"}
+              </span>
+              <div style={{ marginTop: 6, fontSize: ".88rem" }}>
+                {anti === true && <span style={{ color: "#15803d" }}>✅ Aggressive Anti-Spam is ON — Telegram is filtering spam itself.</span>}
+                {anti === false && (
+                  <span style={{ color: "#b45309" }}>
+                    ⚠️ Aggressive Anti-Spam is <strong>OFF</strong>.{" "}
+                    {enoughMembers
+                      ? "Turn it on in Telegram: open the group → Manage Group → Administrators → Aggressive Anti-Spam. A bot cannot set it."
+                      : "It needs 200+ members before Telegram offers the setting."}
+                  </span>
+                )}
+                {anti == null && <span className="muted">Could not read the anti-spam setting from Telegram.</span>}
+              </div>
+              <form action={applyGroupPermissions} style={{ marginTop: 8 }}>
+                <input type="hidden" name="chat_id" value={g.chat} />
+                <SubmitButton className="btn small secondary" savedLabel="✓ Applied">⚙️ Hand permissions to Telegram</SubmitButton>
+                <span className="muted" style={{ fontSize: ".8rem", marginLeft: 8 }}>
+                  Turns off polls, link-preview cards, renaming and pinning for members. Messages, photos,
+                  documents, voice notes, stickers and inviting friends stay on.
+                </span>
+              </form>
+            </div>
+          );
+        })}
+        <p className="muted" style={{ fontSize: ".8rem", marginTop: 12, marginBottom: 0 }}>
+          Telegram has no “block links” permission — that one stays with us, along with the AI answering from
+          your material, the record here, and the violence guard.
+        </p>
+      </div>
 
       {/* PUTTING RIGHT WHAT THE OLD MEMBERSHIP RULE DID.
           Until 26 Aug 2026 an unlinked sender was deleted and banned on their

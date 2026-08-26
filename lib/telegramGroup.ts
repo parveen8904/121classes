@@ -110,6 +110,87 @@ export async function tgInviteLink(chatId: string): Promise<string | null> {
   return j?.ok ? String(j.result?.invite_link ?? "") || null : null;
 }
 
+// WHAT TELEGRAM ITSELF IS DOING FOR A GROUP.
+//
+// 26 Aug 2026, his decision: let Telegram police behaviour with its own tools
+// rather than have us reimplement them badly, and keep in the portal only what
+// needs to know his business — the AI answering from his material, the record,
+// and the violence guard.
+//
+// Two honest limits, both checked against the Bot API rather than assumed:
+//
+//   · AGGRESSIVE ANTI-SPAM CANNOT BE TURNED ON FROM HERE. The API exposes
+//     has_aggressive_anti_spam_enabled to READ, and nothing to set it. It is a
+//     supergroup setting an admin flips in the Telegram app, and it needs 200+
+//     members. So this reports the truth and he does that one himself.
+//
+//   · TELEGRAM HAS NO "NO LINKS" PERMISSION. can_add_web_page_previews only
+//     controls the preview card, not posting the link. Blocking links stays
+//     our job, which is why lib/moderation containsLink() is still in use.
+export type GroupSettings = {
+  title: string;
+  aggressiveAntiSpam: boolean | null;   // null = could not read
+  members: number | null;
+  permissions: Record<string, boolean> | null;
+};
+
+export async function tgChatSettings(chatId: string): Promise<GroupSettings | null> {
+  const token = await getSecret("TELEGRAM_BOT_TOKEN");
+  if (!token) return null;
+  try {
+    const [chat, count] = await Promise.all([
+      fetch(`https://api.telegram.org/bot${token}/getChat?chat_id=${encodeURIComponent(chatId)}`,
+        { cache: "no-store", signal: AbortSignal.timeout(5000) }).then((r) => r.json()),
+      fetch(`https://api.telegram.org/bot${token}/getChatMemberCount?chat_id=${encodeURIComponent(chatId)}`,
+        { cache: "no-store", signal: AbortSignal.timeout(5000) }).then((r) => r.json()).catch(() => null),
+    ]);
+    if (!chat?.ok) return null;
+    const r = chat.result ?? {};
+    return {
+      title: String(r.title ?? "Group"),
+      aggressiveAntiSpam: typeof r.has_aggressive_anti_spam_enabled === "boolean" ? r.has_aggressive_anti_spam_enabled : null,
+      members: count?.ok ? Number(count.result) : null,
+      permissions: (r.permissions as Record<string, boolean>) ?? null,
+    };
+  } catch { return null; }
+}
+
+/**
+ * The permission set for a study group.
+ *
+ * Deliberately light. Everything students actually use stays ON — text, the
+ * photo of a sum, a PDF, a voice note asking a doubt — and inviting friends
+ * stays on too, because he wants the groups to GROW. Only the things with real
+ * spam value and no study value come off.
+ *
+ * After a day spent undoing a rule that was too strict, the bar for switching
+ * anything off here is that a student would not notice it was gone.
+ */
+export const RECOMMENDED_PERMISSIONS: Record<string, boolean> = {
+  can_send_messages: true,
+  can_send_audios: true,
+  can_send_documents: true,
+  can_send_photos: true,
+  can_send_videos: true,
+  can_send_video_notes: true,
+  can_send_voice_notes: true,
+  can_send_other_messages: true,   // stickers and GIFs: never been the problem
+  can_invite_users: true,          // he wants the group bigger, not smaller
+  can_send_polls: false,           // a promo vector with no study use
+  can_add_web_page_previews: false,// kills link-bait preview cards
+  can_change_info: false,
+  can_pin_messages: false,
+};
+
+export async function tgApplyRecommendedPermissions(chatId: string): Promise<boolean> {
+  const j = await tgApi("setChatPermissions", {
+    chat_id: chatId,
+    permissions: RECOMMENDED_PERMISSIONS,
+    use_independent_chat_permissions: true,
+  });
+  return !!j?.ok;
+}
+
 // ── Media moderation helpers ────────────────────────────────────────────────
 //
 // The group moderator was text-only: an explicit PHOTO or VIDEO with no caption

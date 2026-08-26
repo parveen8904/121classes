@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { tgDeleteMessage, tgRestrictUser, tgUnbanUser, tgMemberStatus } from "@/lib/telegramGroup";
+import { tgDeleteMessage, tgRestrictUser, tgUnbanUser, tgMemberStatus, tgApplyRecommendedPermissions } from "@/lib/telegramGroup";
 import { discordDeleteChannelMessage } from "@/lib/discord";
 import { str } from "../_lib/util";
 
@@ -209,4 +209,34 @@ export async function makeStudentsOnlyLink(formData: FormData) {
     redirect(`/admin/discussion?linked=1`);
   }
   redirect(`/admin/discussion?linkerr=1`);
+}
+
+
+// HAND THE BEHAVIOUR POLICING BACK TO TELEGRAM.
+//
+// Sets the group's own permissions through the Bot API, so Telegram enforces
+// them rather than us noticing afterwards. Light on purpose — see
+// RECOMMENDED_PERMISSIONS for what is switched off and why.
+//
+// It cannot turn on Aggressive Anti-Spam: the API can read that setting and
+// not write it. That one is a toggle in the Telegram app.
+export async function applyGroupPermissions(formData: FormData) {
+  await assertArea("moderation");
+  const me = await adminId();
+  if (!me) return;
+  const chatId = str(formData.get("chat_id")).trim();
+  if (!chatId) return;
+  const ok = await tgApplyRecommendedPermissions(chatId).catch(() => false);
+  await createServiceClient().from("message_moderation_log").insert({
+    message_id: null,
+    action: "group_permissions_applied",
+    reason: ok ? `Telegram accepted the permission set for ${chatId}` : `Telegram refused the permission set for ${chatId}`,
+    by_admin: me,
+  });
+  revalidatePath("/admin/discussion");
+  redirect(`/admin/discussion?done=${encodeURIComponent(
+    ok
+      ? "Telegram is now enforcing the group's permissions: polls, link-preview cards, renaming the group and pinning are off for members; messages, photos, documents, voice notes, stickers and inviting friends stay on."
+      : "Telegram refused the change — check the bot is still an admin with “Change group info” rights.",
+  )}`);
 }

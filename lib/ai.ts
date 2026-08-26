@@ -2848,13 +2848,26 @@ export type BankStmtLine = { date: string; narration: string; ref?: string; debi
 export type InvoiceTaxRead = {
   taxable_value: number | null; cgst: number | null; sgst: number | null; igst: number | null;
   total: number | null; invoice_no: string | null; invoice_date: string | null; note: string | null;
+  /** THE SUPPLIER, AS THE INVOICE NAMES THEM.
+   *  Zoho decides intra-state against inter-state from the vendor's own state,
+   *  so a vendor created with nothing but a name leaves Zoho guessing — which
+   *  is how a CGST/SGST invoice came to be posted as IGST and refused. All of
+   *  it is on the paper; none of it is inferred. */
+  vendor_name: string | null;
+  vendor_gstin: string | null;
+  vendor_state: string | null;
+  vendor_address: string | null;
+  vendor_phone: string | null;
+  vendor_email: string | null;
 };
 
 export async function parseInvoiceTaxText(text: string): Promise<InvoiceTaxRead | null> {
   const out = await callClaude(
     "You transcribe figures from an Indian supplier's tax invoice. Return ONLY a JSON object:\n" +
     '{"taxable_value":number|null,"cgst":number|null,"sgst":number|null,"igst":number|null,' +
-    '"total":number|null,"invoice_no":string|null,"invoice_date":"YYYY-MM-DD"|null,"note":string|null}\n\n' +
+    '"total":number|null,"invoice_no":string|null,"invoice_date":"YYYY-MM-DD"|null,"note":string|null,' +
+    '"vendor_name":string|null,"vendor_gstin":string|null,"vendor_state":string|null,' +
+    '"vendor_address":string|null,"vendor_phone":string|null,"vendor_email":string|null}\n\n' +
     "RULES — these matter more than being helpful:\n" +
     "1. TRANSCRIBE ONLY. Every number must appear on the invoice. Never calculate a taxable " +
     "value from a total and a rate. Never split a tax figure into CGST and SGST yourself. " +
@@ -2866,7 +2879,12 @@ export async function parseInvoiceTaxText(text: string): Promise<InvoiceTaxRead 
     "4. Amounts as plain numbers: no commas, no rupee sign.\n" +
     "5. If several lines carry tax, add each tax head up and say so in note.\n" +
     "6. Put anything odd in note — a page you could not read fully, two candidate totals, " +
-    "a credit note, a rounding line.",
+    "a credit note, a rounding line.\n" +
+    "7. THE SUPPLIER, exactly as printed: their legal name, their GSTIN, their state, " +
+    "their address, phone and email. vendor_state is the SUPPLIER's state, not the " +
+    "customer's — take it from their address or from their GSTIN's first two digits " +
+    "if the state is printed nowhere else, and say in note when you did that. Give the " +
+    "state's full name (e.g. \"Delhi\", \"Maharashtra\"). Never guess a GSTIN.",
     text.slice(0, 120_000),
     1_200,
     { model: await fastModel(), feature: "invoice_tax" },

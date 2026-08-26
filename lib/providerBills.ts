@@ -310,11 +310,81 @@ async function currencyIdFor(code: string): Promise<string | null> {
  * currency. So an overseas vendor is created in that currency, and an existing
  * one still sitting on INR is corrected (safe while they have no transactions).
  */
-async function findOrCreateVendor(name: string, overseas: boolean, currency: string): Promise<string> {
+/**
+ * The fields Zoho needs on an INDIAN vendor.
+ *
+ * gst_treatment must be stated: "business_gst" with a GSTIN, otherwise
+ * "business_none" for an unregistered supplier. place_of_contact is the state,
+ * and it is the one that settles CGST/SGST against IGST.
+ */
+function indianVendorFields(facts: VendorFacts): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const gstin = String(facts.gstin ?? "").trim().toUpperCase();
+  const poc = placeOfContact(facts);
+  if (gstin) { out.gst_no = gstin; out.gst_treatment = "business_gst"; }
+  if (poc) out.place_of_contact = poc;
+  if (facts.phone) out.phone = String(facts.phone).slice(0, 50);
+  if (facts.email) out.email = String(facts.email).slice(0, 100);
+  if (facts.address) {
+    out.billing_address = {
+      address: String(facts.address).slice(0, 250),
+      ...(poc ? { state_code: poc } : {}),
+      country: "India",
+    };
+  }
+  return out;
+}
+
+/** The supplier's own particulars, read off their invoice. */
+export type VendorFacts = {
+  gstin?: string | null; state?: string | null; address?: string | null;
+  phone?: string | null; email?: string | null;
+};
+
+/**
+ * Zoho's two-letter place of supply, from a state name.
+ *
+ * This is the field that decides intra-state against inter-state, and with it
+ * missing Zoho falls back to the organisation's own state and guesses. That
+ * guess is how a CGST/SGST invoice went up as IGST and was refused.
+ */
+const STATE_CODE: Record<string, string> = {
+  "andaman and nicobar islands": "AN", "andhra pradesh": "AP", "arunachal pradesh": "AR",
+  assam: "AS", bihar: "BR", chandigarh: "CH", chhattisgarh: "CG",
+  "dadra and nagar haveli and daman and diu": "DD", delhi: "DL", "new delhi": "DL",
+  goa: "GA", gujarat: "GJ", haryana: "HR", "himachal pradesh": "HP",
+  "jammu and kashmir": "JK", jharkhand: "JH", karnataka: "KA", kerala: "KL",
+  ladakh: "LA", lakshadweep: "LD", "madhya pradesh": "MP", maharashtra: "MH",
+  manipur: "MN", meghalaya: "ML", mizoram: "MZ", nagaland: "NL", odisha: "OD",
+  orissa: "OD", puducherry: "PY", punjab: "PB", rajasthan: "RJ", sikkim: "SK",
+  "tamil nadu": "TN", telangana: "TS", tripura: "TR", "uttar pradesh": "UP",
+  uttarakhand: "UK", "west bengal": "WB",
+};
+
+/** The first two digits of a GSTIN are the state, and are more reliable than prose. */
+const GSTIN_STATE: Record<string, string> = {
+  "01": "JK", "02": "HP", "03": "PB", "04": "CH", "05": "UK", "06": "HR", "07": "DL",
+  "08": "RJ", "09": "UP", "10": "BR", "11": "SK", "12": "AR", "13": "NL", "14": "MN",
+  "15": "MZ", "16": "TR", "17": "ML", "18": "AS", "19": "WB", "20": "JH", "21": "OD",
+  "22": "CG", "23": "MP", "24": "GJ", "26": "DD", "27": "MH", "29": "KA", "30": "GA",
+  "31": "LD", "32": "KL", "33": "TN", "34": "PY", "35": "AN", "36": "TS", "37": "AP",
+  "38": "LA",
+};
+
+export function placeOfContact(facts: VendorFacts): string | null {
+  const g = String(facts.gstin ?? "").trim();
+  if (g.length >= 2 && GSTIN_STATE[g.slice(0, 2)]) return GSTIN_STATE[g.slice(0, 2)];
+  const st = String(facts.state ?? "").trim().toLowerCase();
+  return STATE_CODE[st] ?? null;
+}
+
+async function findOrCreateVendor(name: string, overseas: boolean, currency: string, facts: VendorFacts = {}): Promise<string> {
   const r = await zohoFetch<{ contacts?: { contact_id: string; contact_name: string; currency_code?: string }[] }>(
     "/contacts", { query: { contact_name: name, contact_type: "vendor" } });
   const hit = (r.contacts ?? []).find((c) => c.contact_name.trim().toLowerCase() === name.trim().toLowerCase());
   const wantCurrency = overseas && currency !== "INR" ? currency : null;
+
+  const gstBits = !overseas ? indianVendorFields(facts) : {};
 
   if (hit) {
     if (wantCurrency && hit.currency_code && hit.currency_code !== wantCurrency) {
@@ -323,6 +393,12 @@ async function findOrCreateVendor(name: string, overseas: boolean, currency: str
         try { await zohoFetch(`/contacts/${hit.contact_id}`, { method: "PUT", body: { currency_id: cid, gst_treatment: "overseas" } }); }
         catch { /* an established vendor cannot change currency — the bill will say so */ }
       }
+    }
+    // A vendor already created with nothing but a name is the reason Zoho had
+    // to guess the place of supply. Where the invoice now tells us, fill it in.
+    if (Object.keys(gstBits).length) {
+      try { await zohoFetch(`/contacts/${hit.contact_id}`, { method: "PUT", body: gstBits }); }
+      catch { /* the bill will report it if Zoho still cannot place them */ }
     }
     return hit.contact_id;
   }
@@ -336,6 +412,9 @@ async function findOrCreateVendor(name: string, overseas: boolean, currency: str
       // charge outright ("should be applied on import of services…").
       ...(overseas ? { gst_treatment: "overseas" } : {}),
       ...(cid ? { currency_id: cid } : {}),
+      // An Indian supplier needs their GSTIN and their state, or Zoho cannot
+      // tell an intra-state bill from an inter-state one.
+      ...gstBits,
     },
   });
   if (!made.contact?.contact_id) throw new Error("could not create the vendor");
@@ -561,7 +640,24 @@ export async function postProviderBill(id: string): Promise<void> {
       rate = r.rate;
     }
 
-    const vendorId = await findOrCreateVendor(String(p.vendor_name), overseas, currency);
+    // THE VENDOR IS MADE PROPERLY, FROM THEIR OWN INVOICE.
+    //
+    // His reading of the failure, and it was right: "there is no vendor by the
+    // name FIRST FLY EXPRESS in Zoho, and we don't send any GST or address of
+    // the vendor… therefore the entry cannot be posted." A domestic vendor was
+    // being created with a name and nothing else, so Zoho had no state to place
+    // them in and fell back to ours.
+    const read = (b.tax_read ?? {}) as Record<string, unknown>;
+    const vendorId = await findOrCreateVendor(String(p.vendor_name), overseas, currency, {
+      gstin: (read.vendor_gstin as string) ?? null,
+      state: (read.vendor_state as string) ?? null,
+      address: (read.vendor_address as string) ?? null,
+      phone: (read.vendor_phone as string) ?? null,
+      email: (read.vendor_email as string) ?? null,
+    });
+    if (vendorId) {
+      await svc.from("provider_bills").update({ zoho_vendor_id: vendorId }).eq("id", id);
+    }
     // WHAT THIS DOCUMENT IS decides everything below it.
     const nature = String(b.nature ?? p.nature ?? "expense");
     const operating = String(b.operating ?? p.operating ?? "operating");
@@ -615,9 +711,27 @@ export async function postProviderBill(id: string): Promise<void> {
     // domestic bill; nothing when the vendor charges none.
     // Named per vendor where it matters: a Delhi supplier is CGST+SGST ("GST18"),
     // a Bengaluru one billing Delhi is IGST. Import of services is IGST too.
+    // WHICH GST THE INVOICE ACTUALLY CHARGED — read, not assumed.
+    //
+    // This fell back to IGST whenever no tax name was set on the vendor rule,
+    // and FIRST FLY has none. Its invoice prints CGST and SGST (a Delhi
+    // supplier billing a Delhi business), so Zoho threw it straight back:
+    // "IGST cannot be applied as this is an intrastate transaction".
+    //
+    // Now that the invoice is read, it answers the question itself. CGST or
+    // SGST on the paper means intra-state; IGST means inter-state. An explicit
+    // name on the rule still wins, because he may know something the paper
+    // does not say.
+    const keyedCgst = Number(b.cgst_amount ?? 0) + Number(b.sgst_amount ?? 0);
+    const keyedIgst = Number(b.igst_amount ?? 0);
+    const fromInvoice = keyedCgst > 0 ? `GST${Number(p.gst_rate ?? 18)}`
+      : keyedIgst > 0 ? `IGST${Number(p.gst_rate ?? 18)}`
+      : null;
     const taxName = p.gst_treatment === "none"
       ? null
-      : (str(p.gst_tax_name) || `IGST${Number(p.gst_rate ?? 18)}`);
+      // An import of services is always IGST, whatever a foreign invoice shows.
+      : overseas ? (str(p.gst_tax_name) || `IGST${Number(p.gst_rate ?? 18)}`)
+      : (str(p.gst_tax_name) || fromInvoice || `IGST${Number(p.gst_rate ?? 18)}`);
     const taxId = taxName ? await taxIdByName(taxName) : null;
 
     // DEDUCTED OR BORNE. Where the tax is borne, the supplier must still receive

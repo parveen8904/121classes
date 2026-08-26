@@ -28,6 +28,13 @@ export type InvoiceTax = {
   invoice_no: string | null;
   invoice_date: string | null;
   note: string | null;
+  /** The supplier as the invoice names them — see the note on InvoiceTaxRead. */
+  vendor_name: string | null;
+  vendor_gstin: string | null;
+  vendor_state: string | null;
+  vendor_address: string | null;
+  vendor_phone: string | null;
+  vendor_email: string | null;
   read_at: string;
 };
 
@@ -73,6 +80,17 @@ export async function readInvoiceTax(billId: string): Promise<InvoiceTax | null>
     invoice_no: s(j.invoice_no),
     invoice_date: s(j.invoice_date),
     note: s(j.note),
+    vendor_name: s(j.vendor_name),
+    // A GSTIN is 15 characters; anything else is not one, and a half-read one
+    // would create a vendor Zoho cannot file a return against.
+    vendor_gstin: (() => {
+      const g = (s(j.vendor_gstin) ?? "").toUpperCase().replace(/\s/g, "");
+      return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/.test(g) ? g : null;
+    })(),
+    vendor_state: s(j.vendor_state),
+    vendor_address: s(j.vendor_address),
+    vendor_phone: s(j.vendor_phone),
+    vendor_email: s(j.vendor_email),
     read_at: new Date().toISOString(),
   };
 }
@@ -111,11 +129,12 @@ export async function readAndStore(billId: string): Promise<{ ok: boolean; why: 
     tax.igst !== null ? `IGST ₹${tax.igst}` : null,
   ].filter(Boolean);
 
+  const who = [tax.vendor_name, tax.vendor_gstin, tax.vendor_state].filter(Boolean).join(" · ");
   return {
     ok: true,
     tax,
-    why: found.length
+    why: (who ? `Supplier: ${who}. ` : "") + (found.length
       ? `Read from the invoice: ${found.join(", ")}. Check them against the paper, then Save.`
-      : "The invoice was read but no tax figures are printed on it. Nothing has been filled in.",
+      : "The invoice was read but no tax figures are printed on it. Nothing has been filled in."),
   };
 }

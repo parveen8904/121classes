@@ -4,7 +4,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
-import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan, resetStudentTests, resetOneAttempt, regradeAttempt, makeLoginLink } from "../actions";
+import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan, resetStudentTests, resetOneAttempt, regradeAttempt, makeLoginLink, deleteUserAccount } from "../actions";
 import { startViewAs } from "@/app/dashboard/viewAsActions";
 import PaperForStudent from "./PaperForStudent";
 import { ADMIN_AREAS, currentStaff } from "@/lib/adminAccess";
@@ -503,6 +503,34 @@ export default async function UserDetail(
             <span className="muted">{fmtWhen(a.created_at)}</span>
           </div>
         )) : <p className="muted">No activity yet.</p>}
+      </div>
+
+      {/* DELETING AN ACCOUNT — the most destructive thing here, so it says what
+          it does before it does it, and the email must be typed to confirm.
+          Admin only: the Users grant does not carry this. */}
+      <h2 className="admin-section-title" style={{ color: "#b91c1c" }}>🗑️ Delete this account</h2>
+      <div className="card" style={{ borderLeft: "3px solid #b91c1c" }}>
+        <p style={{ marginTop: 0, fontSize: ".88rem", lineHeight: 1.75 }}>
+          This cannot be undone. It removes the sign-in and everything the account holds:
+          subscriptions, every test attempt, doubts, study plans, notifications, scholarship
+          applications and discussion posts.
+        </p>
+        <p className="muted" style={{ fontSize: ".84rem", lineHeight: 1.75 }}>
+          <strong>Their orders and invoices are kept.</strong> A GST invoice is not ours to destroy
+          because an account was closed, so sales records stay on the books with the student blanked.
+        </p>
+        <form action={deleteUserAccount} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+          <input type="hidden" name="id" value={params.id} />
+          <input
+            name="confirm_email"
+            placeholder={`Type ${u.email ?? "their email"} to confirm`}
+            style={{ marginBottom: 0, flex: 1, minWidth: 260, fontSize: ".85rem" }}
+            required
+          />
+          <SubmitButton className="btn small" style={{ background: "#b91c1c" }} savedLabel="Deleted">
+            🗑️ Delete permanently
+          </SubmitButton>
+        </form>
       </div>
 
       <h2 className="admin-section-title">🎟️ Subscriptions</h2>

@@ -1,6 +1,5 @@
 import { formatDate } from "@/lib/dates";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
 import SubmitButton from "@/app/components/SubmitButton";
 import { DURATIONS, durationLabel } from "@/lib/pricing";
 import AdminHero from "../_components/AdminHero";
@@ -34,7 +33,18 @@ export default async function EnrolmentPage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const supabase = createClient();
+  // READ WITH THE SERVICE CLIENT, NOT HER OWN SESSION.
+  //
+  // subscriptions RLS is "your own row, or is_admin()", and is_admin() is true
+  // only for role = 'admin'. An OPERATOR holding the Enrolment grant would
+  // open this page and see an empty list — the same fault that made the Users
+  // page show Hemlata nothing but herself. courses is worse still: unpublished
+  // ones are admin-only, so a course she is meant to grant would be missing
+  // from the picker entirely.
+  //
+  // Authorisation lives in the app layer, where the grant is: the admin layout
+  // refuses anyone without it and all seven actions here assertArea("enrolment").
+  const supabase = createServiceClient();
 
   const [{ data: courses }, { data: subs }] = await Promise.all([
     supabase.from("courses").select("id, title, subjects(id, title)").order("order_index").order("title"),

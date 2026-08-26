@@ -192,6 +192,73 @@ function passwordProblem(p: string): string | null {
   return null;
 }
 
+/**
+ * DELETE AN ACCOUNT, FOR GOOD.
+ *
+ * Asked for on 26 Aug 2026. It is the most destructive thing on this site, so
+ * what it does is spelled out rather than discovered afterwards.
+ *
+ * WHAT GOES, by the foreign keys' own cascade rules:
+ *   subscriptions, every test attempt (descriptive, MCQ, case, paper), doubts,
+ *   study plans, notifications, scholarship applications, discussion posts and
+ *   threads, device sessions, supporter records.
+ *
+ * WHAT STAYS, because those columns are ON DELETE SET NULL:
+ *   orders, book orders and gift orders — the SALES RECORD. A GST invoice is
+ *   not ours to destroy because somebody closed an account, so those rows
+ *   survive with the student id blanked. Their marks in daily_toppers survive
+ *   the same way.
+ *
+ * THREE THINGS IT REFUSES:
+ *   · the founder's own account, which nobody else may touch;
+ *   · your own account, because signing yourself out of the building by
+ *     accident is a bad afternoon;
+ *   · a mismatch between the email typed to confirm and the account named —
+ *     the confirmation is the whole safeguard, and "never delete per-student
+ *     data on a guessed target" is his standing rule.
+ *
+ * Admin only. The Users grant does NOT carry it — see requireUsersDesk above.
+ */
+export async function deleteUserAccount(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const id = str(formData.get("id"));
+  const typed = str(formData.get("confirm_email")).trim().toLowerCase();
+  if (!id) return;
+
+  const svc = createServiceClient();
+  const { data: who } = await svc
+    .from("profiles").select("id, email, full_name, role").eq("id", id).maybeSingle();
+  if (!who) redirect(`/admin/users?failed=${encodeURIComponent("That account no longer exists.")}`);
+
+  const target = String(who!.email ?? "").trim().toLowerCase();
+  if (!target || typed !== target) {
+    redirect(`/admin/users/${id}?pwerr=${encodeURIComponent(
+      "Nothing was deleted — the email you typed does not match this account. Type it exactly to confirm.",
+    )}`);
+  }
+  if (await foundersAccountIsProtected({ id })) {
+    redirect(`/admin/users/${id}?pwerr=${encodeURIComponent("This account is protected and cannot be deleted.")}`);
+  }
+  const me = createClient();
+  const { data: { user: actor } } = await me.auth.getUser();
+  if (actor?.id === id) {
+    redirect(`/admin/users/${id}?pwerr=${encodeURIComponent("You cannot delete the account you are signed in with.")}`);
+  }
+
+  // Auth first: with the auth user gone, every public.* row keyed to it
+  // cascades or nulls as the schema says. Deleting the profile first would
+  // leave an auth user able to sign in with no profile behind it.
+  const { error } = await svc.auth.admin.deleteUser(id);
+  if (error) {
+    redirect(`/admin/users/${id}?pwerr=${encodeURIComponent(`Could not delete: ${error.message}`)}`);
+  }
+  await svc.from("profiles").delete().eq("id", id);
+
+  redirect(`/admin/users?failed=${encodeURIComponent(
+    `Deleted ${who!.full_name || target}. Their orders and invoices were kept — a sales record is not deleted with an account.`,
+  )}`);
+}
+
 export async function updateUser(formData: FormData) {
   if (!(await requireAdmin())) return; // only the super admin manages users & rights
   const id = str(formData.get("id"));

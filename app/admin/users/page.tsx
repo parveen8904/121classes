@@ -1,6 +1,5 @@
 import Link from "next/link";
 import SubmitButton from "@/app/components/SubmitButton";
-import { createClient } from "@/lib/supabase/server";
 import AdminHero from "../_components/AdminHero";
 import { addUsers, rescueFirstLogins, importSupporters } from "./actions";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -14,7 +13,6 @@ export default async function UsersPage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const supabase = createClient();
   const q = (searchParams.q ?? "").trim();
 
   // How many students have never once signed in — the number that mattered
@@ -37,8 +35,20 @@ export default async function UsersPage(
   // So it is its own filter rather than another entry in the role list, which
   // is why "find my supporters" was impossible before.
   const supporter = searchParams.supporter ?? "";
+  const svcList = createServiceClient();
 
-  let query = supabase
+  // THE LIST MUST BE READ WITH THE SERVICE CLIENT, NOT HER OWN SESSION.
+  //
+  // profiles RLS is "your own row, or is_admin()", and is_admin() is true only
+  // for role = 'admin'. Hemlata is an OPERATOR holding the Users grant: the
+  // tile showed, the page opened, and the list came back with exactly one row —
+  // her own. "We gave permission and they are not appearing."
+  //
+  // Authorisation for this page is done in the app layer, where the grant
+  // actually lives: the admin layout refuses anyone without it, and every
+  // action here checks again. The same page already reads my_courses through
+  // the service client for exactly this reason, two dozen lines below.
+  let query = svcList
     .from("profiles")
     .select("id, full_name, email, phone, role, target_attempt, created_at, is_supporter")
     .order("created_at", { ascending: false })

@@ -170,6 +170,30 @@ const LATE_GRACE_SECONDS = 120;
  * countdown shown to the student comes from here, not from their own browser.
  * Re-pressing Start (reload, reopened app) returns the ORIGINAL deadline.
  */
+/**
+ * LOOK AT THE CLOCK WITHOUT STARTING IT.
+ *
+ * The form's mount used startMcqAttempt to resume a sitting — but that
+ * function CREATES the start when none exists, so merely opening the page
+ * began the countdown. Worst for a student whose test the office had just
+ * reset: the fresh clock started ticking while they read the first question,
+ * before they ever pressed Start. This answers "is a sitting in progress?"
+ * and refuses to create anything.
+ */
+export async function peekMcqStart(sectionId: string): Promise<{ deadlineMs: number } | null> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const svc = createServiceClient();
+  const { data: existing } = await svc
+    .from("mcq_starts")
+    .select("started_at, allowed_secs")
+    .eq("student_id", user.id).eq("section_id", sectionId)
+    .maybeSingle();
+  if (!existing) return null;
+  return { deadlineMs: new Date(existing.started_at as string).getTime() + Number(existing.allowed_secs) * 1000 };
+}
+
 export async function startMcqAttempt(sectionId: string): Promise<{ deadlineMs: number; allowedSecs: number }> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();

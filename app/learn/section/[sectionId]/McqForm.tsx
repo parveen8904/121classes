@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { startMcqAttempt, gradeMcqAttempt, type McqResult } from "./testActions";
+import { startMcqAttempt, gradeMcqAttempt, type McqResult, peekMcqStart } from "./testActions";
 
 type Question = { id: string; question: string; options: string[] };
 
@@ -57,8 +57,18 @@ export default function McqForm({
     let cancelled = false;
     (async () => {
       try {
-        const st = await startMcqAttempt(sectionId);
-        if (cancelled || !st) return;
+        // PEEK, never start: resuming is for a sitting that exists. The old
+        // call here CREATED the start, so opening the page began the clock —
+        // a freshly reset student lost minutes before pressing Start.
+        const st = await peekMcqStart(sectionId);
+        if (cancelled) return;
+        // The server says no sitting exists — an office reset, usually. The
+        // local fallback copy must not resurrect the old clock.
+        if (!st) {
+          try { localStorage.removeItem(deadlineKey); } catch { /* no-op */ }
+          if (!submittedRef.current) { deadlineRef.current = null; setStarted(false); setSecondsLeft(totalSeconds); }
+          return;
+        }
         const remaining = Math.round((st.deadlineMs - Date.now()) / 1000);
         if (remaining > 5 && !submittedRef.current) {
           deadlineRef.current = st.deadlineMs;

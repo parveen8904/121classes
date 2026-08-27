@@ -15,6 +15,7 @@ import { entryForApproval } from "@/lib/approvalEntry";
 import { saleEntry, bankEntry, type Entry } from "@/lib/entryPreview";
 import { INDIA_STATES } from "@/lib/indiaStates";
 import EntryLines from "./EntryLines";
+import BankAnswerPanel from "./BankAnswerPanel";
 import SectionToggle from "./SectionToggle";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
@@ -1026,36 +1027,14 @@ export default async function ZohoHubPage(props: {
                       <SubmitButton className="btn small secondary" savedLabel="✓">Skip</SubmitButton>
                     </form>
                   </div>
-                  <form action={answerLineAction} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
-                    <input type="hidden" name="id" value={l.id} />
-                    <input name="account" list="acct-names" required placeholder="Which account? (start typing…)" style={{ marginBottom: 0, flex: 1, minWidth: 220, fontSize: ".84rem" }} />
-                    {/* WHICH ONE OF THE THING IT IS — the same qualifier a
-                        supplier bill carries. Not a separate Zoho ledger: it
-                        reads on the entry, which is all anyone sees of it
-                        afterwards. Remembered with the rule, so a merchant
-                        answered once keeps it every month. */}
-                    <input name="sub_account" placeholder="Sub-account (optional) — e.g. Temple" style={{ marginBottom: 0, width: 190, fontSize: ".8rem" }} />
-                    {/* The invoice panel's two answers, here too. They decide
-                        the TYPE of a ledger that does not exist in Zoho yet —
-                        picking Drawings makes an equity head, never P&L. An
-                        existing ledger keeps its own type; these are ignored. */}
-                    <select name="nature" defaultValue="expense" style={{ marginBottom: 0, width: 130, fontSize: ".8rem" }}>
-                      <option value="expense">Expense</option>
-                      <option value="income">Income</option>
-                      <option value="asset">Asset</option>
-                      <option value="liability">Liability</option>
-                      <option value="drawings">Drawings (equity)</option>
-                    </select>
-                    <select name="operating" defaultValue="operating" style={{ marginBottom: 0, width: 140, fontSize: ".8rem" }}>
-                      <option value="operating">Operating</option>
-                      <option value="non_operating">Non-operating</option>
-                    </select>
-                    <label className="remember" style={{ margin: 0, fontSize: ".78rem", display: "inline-flex", gap: 5, alignItems: "center" }}>
-                      <input type="checkbox" name="remember" defaultChecked /> remember rule for
-                    </label>
-                    <input name="rule_pattern" defaultValue={suggestPattern(l.narration)} style={{ marginBottom: 0, width: 170, fontSize: ".8rem" }} />
-                    <SubmitButton className="btn small" savedLabel="✓">✅ Post</SubmitButton>
-                  </form>
+                  <BankAnswerPanel
+                    lineId={l.id}
+                    bankName={l.account_name}
+                    debit={Number(l.debit)}
+                    credit={Number(l.credit)}
+                    accountListId="acct-names"
+                    suggestedPattern={suggestPattern(l.narration)}
+                  />
                 </div>
               ))}
             </>

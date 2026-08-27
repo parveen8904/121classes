@@ -383,6 +383,10 @@ export async function resetStudentTests(formData: FormData) {
       .select("id", { count: "exact", head: true })
       .eq("student_id", id);
     await svc.from("mcq_attempts").delete().eq("student_id", id);
+    // THE CLOCK TOO. mcq_starts records when they pressed Start; leave it and
+    // the "reset" test reopens with the old, spent deadline — Sejal's case.
+    // A reset means a fresh sitting, timer included.
+    await svc.from("mcq_starts").delete().eq("student_id", id);
     done.push(`${count ?? 0} MCQ`);
   }
   if (what === "case" || what === "all") {
@@ -598,6 +602,9 @@ export async function resetTopicTests(formData: FormData) {
   if (kind === "mcq") {
     const { data: gone } = await svc.from("mcq_attempts").delete()
       .eq("student_id", id).in("section_id", sectionIds).select("id");
+    // And the topic's clocks — a reset with the old deadline standing is not
+    // a reset, it is an expired test wearing a new label.
+    await svc.from("mcq_starts").delete().eq("student_id", id).in("section_id", sectionIds);
     n = (gone ?? []).length;
   } else {
     const { data: gone } = await svc.from("descriptive_attempts").delete()
@@ -622,7 +629,14 @@ export async function resetOneAttempt(formData: FormData) {
   const svc = createServiceClient();
   let label = "";
   if (kind === "mcq") {
+    // The section first, then the attempt, then that section's clock — the
+    // attempt row is the only thing that knows which clock to wipe.
+    const { data: att } = await svc.from("mcq_attempts")
+      .select("section_id").eq("id", attemptId).eq("student_id", id).maybeSingle();
     await svc.from("mcq_attempts").delete().eq("id", attemptId).eq("student_id", id);
+    if (att?.section_id) {
+      await svc.from("mcq_starts").delete().eq("student_id", id).eq("section_id", att.section_id);
+    }
     label = "1 MCQ attempt";
   } else {
     await svc.from("descriptive_attempts").delete().eq("id", attemptId).eq("student_id", id);

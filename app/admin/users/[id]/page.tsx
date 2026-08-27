@@ -1,7 +1,7 @@
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { notFound } from "next/navigation";
 import SubmitButton from "@/app/components/SubmitButton";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
 import { updateUser, sendSetPasswordEmail, adminSetPassword, resetStudyPlan, resetStudentTests, resetTopicTests, resetOneAttempt, regradeAttempt, makeLoginLink, deleteUserAccount } from "../actions";
@@ -77,7 +77,13 @@ export default async function UserDetail(
     );
   }
 
-  const supabase = createClient();
+  // THE SERVICE CLIENT, NOT HER SESSION — the same fault as the users list,
+  // one page deeper. The gate above already decided she may be here; then the
+  // profile was read with her OWN session, profiles RLS ("your row, or
+  // is_admin()") returned nothing for an operator, and notFound() turned a
+  // permitted page into a 404. The subscriptions, watch and activity reads
+  // below had it too — they would simply have rendered empty.
+  const supabase = createServiceClient();
   const { data: u } = await supabase
     .from("profiles")
     .select(
@@ -90,8 +96,7 @@ export default async function UserDetail(
   // Level (CA Final / CA Inter) — from the student's course shelf. Service
   // client: my_courses RLS is own-rows-only, so the admin's user client
   // reads nothing for other students.
-  const { createServiceClient: svcClient } = await import("@/lib/supabase/service");
-  const { data: myCourseRows } = await svcClient()
+  const { data: myCourseRows } = await supabase
     .from("my_courses")
     .select("courses(title)")
     .eq("student_id", u.id);
@@ -132,7 +137,7 @@ export default async function UserDetail(
   type ActRow = { kind: string; detail: Record<string, unknown> | null; created_at: string; sections: { title: string } | null };
   // The papers a paper can be handed in against — same two lists the student's
   // own /check-my-paper page offers, and only tests with an approved key.
-  const svc2 = svcClient();
+  const svc2 = supabase;
   const { data: checkable } = await svc2.rpc("list_checkable_tests");
   const markableTests = ((checkable ?? []) as { id: string; title: string; subject: string }[])
     .map((t) => ({ id: t.id, title: t.title, subject: t.subject ?? "Tests" }));

@@ -165,7 +165,15 @@ export async function POST(req: NextRequest) {
       // TEXT / CAPTION moderation (blocked terms, spam, links) — now also
       // covering a photo's caption. Students may not post links; staff may.
       const combined = (text || caption).trim();
-      const mod = combined ? await moderateMessageDyn(combined) : { flagged: false, reasons: [] as string[] };
+      // STAFF ARE NOT MODERATED BY THEIR OWN BOT. The exemption used to cover
+      // only the link rule, so on 27 Aug the FOUNDER posted the WhatsApp
+      // number for queries in his own group and the bot deleted it as "phone
+      // number" — recognised him as admin, censored him anyway. A linked
+      // admin, operator or faculty member is trusted with links, numbers,
+      // wording and media alike; the machine polices students, not its owner.
+      const mod = !isStaffSender && combined
+        ? await moderateMessageDyn(combined)
+        : { flagged: false, reasons: [] as string[] };
       // Students may not post links (scam/spam route); staff may.
       if (!isStaffSender && combined && containsLink(combined)) {
         mod.flagged = true;
@@ -178,7 +186,7 @@ export async function POST(req: NextRequest) {
       // students' group), and the founder is alerted.
       let mediaExplicit = false;
       let mediaReason = "";
-      if (hasMedia) {
+      if (hasMedia && !isStaffSender) {
         const fileId = moderatableImageId(msg);
         if (fileId) {
           const img = await tgGetImageB64(fileId);
@@ -207,7 +215,7 @@ export async function POST(req: NextRequest) {
       // first, and it switches the shield off, so that "I will beat you" can
       // never be dressed up as reporting somebody. Removing the message and
       // the sender is handled below, like an explicit image.
-      const violence = combined ? threatOfViolence(combined) : { threat: false, reason: "" };
+      const violence = !isStaffSender && combined ? threatOfViolence(combined) : { threat: false, reason: "" };
       if (violence.threat) { mod.flagged = true; mod.reasons = [...mod.reasons, violence.reason]; }
 
       let isReport = !mediaExplicit && !violence.threat && !!combined && looksLikeAbuseReport(combined);

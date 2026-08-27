@@ -249,7 +249,9 @@ export async function ingestStatement(accountName: string, fileUrl: string, file
     else {
       const { parseBankStatementText } = await import("@/lib/ai");
       const ai = await parseBankStatementText(text);
-      if (!ai) note = "the PDF could not be transcribed";
+      // Evidence, not a shrug: the xlsx path taught us a failure that shows
+      // what it saw is a failure that gets fixed the same day.
+      if (!ai) note = `the PDF's text was read (${text.length} chars) but the transcription returned nothing — it starts: "${text.slice(0, 90).replace(/\s+/g, " ")}"`;
       else lines = ai.map((l) => ({
         date: parseIndianDate(l.date) || str(l.date),
         narration: str(l.narration), ref: str(l.ref),
@@ -524,7 +526,10 @@ async function attachStatement(
  * or the department ever sees of an entry, so "which one" belongs in it.
  * It is NOT a separate Zoho account; nothing new is created in the chart.
  */
-export async function postBankLine(lineId: string, accountChoice: string, subAccount?: string | null): Promise<void> {
+export async function postBankLine(
+  lineId: string, accountChoice: string, subAccount?: string | null,
+  opts?: { nature?: string | null; operating?: string | null },
+): Promise<void> {
   const svc = createServiceClient();
   const { data: l } = await svc.from("bank_lines").select("*").eq("id", lineId).maybeSingle();
   if (!l) throw new Error("line not found");
@@ -575,8 +580,38 @@ export async function postBankLine(lineId: string, accountChoice: string, subAcc
       return;
     }
 
-    const other = await zohoAccount(accountChoice);
+    // THE LEDGER HE PICKED, CREATED IF IT DOES NOT EXIST YET.
+    //
+    // Bills could always create a missing ledger; a bank line THREW "account
+    // not found" — so the desk could only file money against heads somebody
+    // had already made in Zoho by hand. The same nature and operating answers
+    // the invoice panel takes decide the new ledger's type here, and
+    // "drawings" maps to equity, never the P&L.
+    let other: { id: string; type: string };
+    try {
+      other = await zohoAccount(accountChoice);
+    } catch {
+      const { zohoAccountType } = await import("@/lib/postingShape");
+      const nature = String(opts?.nature ?? (l.proposal as { nature?: string } | null)?.nature ?? "expense");
+      const operating = String(opts?.operating ?? (l.proposal as { operating?: string } | null)?.operating ?? "operating");
+      const acctType = zohoAccountType(nature as never, operating as never);
+      const made = await zohoFetch<{ chart_of_account?: { account_id: string } }>("/chartofaccounts", {
+        method: "POST",
+        body: {
+          account_name: /\(AI\)$/.test(accountChoice.trim()) ? accountChoice.trim() : `${accountChoice.trim()} (AI)`,
+          account_type: acctType,
+        },
+      });
+      if (!made.chart_of_account?.account_id) return fail(`could not create the ledger "${accountChoice}"`);
+      other = { id: made.chart_of_account.account_id, type: acctType };
+    }
     const otherId = other.id;
+
+    // THE REFERENCE, ALWAYS. The bank's ref column is usually empty (Axis puts
+    // the wire number inside the narration), so reference_number was blank on
+    // most postings while the settlement journals all carry their UTR. The
+    // narration's lead is the reference when the column gives nothing.
+    const refNo = (String(l.ref ?? "").trim() || String(l.narration ?? "").trim()).slice(0, 90);
 
     // A BANK'S OWN WORDING IS NOT A NARRATION.
     //
@@ -620,7 +655,7 @@ export async function postBankLine(lineId: string, accountChoice: string, subAcc
           date: l.line_date,
           amount: debit,
           description: bankNarration,
-          ...(l.ref ? { reference_number: String(l.ref).slice(0, 90) } : {}),
+          ...(refNo ? { reference_number: refNo } : {}),
         },
       });
       if (!r.expense?.expense_id) return fail("Zoho did not return the created expense");
@@ -642,7 +677,7 @@ export async function postBankLine(lineId: string, accountChoice: string, subAcc
         method: "POST",
         body: {
           journal_date: l.line_date,
-          reference_number: String(l.ref || "").slice(0, 90) || undefined,
+          reference_number: refNo || undefined,
           notes: bankNarration,
           line_items: lines,
         },

@@ -18,7 +18,7 @@ import EntryLines from "./EntryLines";
 import SectionToggle from "./SectionToggle";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction, rematchBankAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction, rematchBankAction, removeStatementAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -971,10 +971,18 @@ export default async function ZohoHubPage(props: {
                         stored, so a parser fix is testable against the file
                         that broke it without hunting for it again. */}
                     {s.status === "failed" && (
-                      <form action={reparseStatementAction} style={{ margin: 0 }}>
-                        <input type="hidden" name="id" value={s.id} />
-                        <button className="btn small secondary" type="submit">↻ Try again</button>
-                      </form>
+                      <>
+                        <form action={reparseStatementAction} style={{ margin: 0 }}>
+                          <input type="hidden" name="id" value={s.id} />
+                          <button className="btn small secondary" type="submit">↻ Try again</button>
+                        </form>
+                        {/* A statement that never parsed can be thrown away and
+                            uploaded afresh; one with posted lines refuses. */}
+                        <form action={removeStatementAction} style={{ margin: 0 }}>
+                          <input type="hidden" name="id" value={s.id} />
+                          <button className="btn small secondary" type="submit">🗑 Remove</button>
+                        </form>
+                      </>
                     )}
                   </div>
                 ))}
@@ -1026,7 +1034,22 @@ export default async function ZohoHubPage(props: {
                         reads on the entry, which is all anyone sees of it
                         afterwards. Remembered with the rule, so a merchant
                         answered once keeps it every month. */}
-                    <input name="sub_account" placeholder="Sub-account (optional) — e.g. Delhi office" style={{ marginBottom: 0, width: 210, fontSize: ".8rem" }} />
+                    <input name="sub_account" placeholder="Sub-account (optional) — e.g. Temple" style={{ marginBottom: 0, width: 190, fontSize: ".8rem" }} />
+                    {/* The invoice panel's two answers, here too. They decide
+                        the TYPE of a ledger that does not exist in Zoho yet —
+                        picking Drawings makes an equity head, never P&L. An
+                        existing ledger keeps its own type; these are ignored. */}
+                    <select name="nature" defaultValue="expense" style={{ marginBottom: 0, width: 130, fontSize: ".8rem" }}>
+                      <option value="expense">Expense</option>
+                      <option value="income">Income</option>
+                      <option value="asset">Asset</option>
+                      <option value="liability">Liability</option>
+                      <option value="drawings">Drawings (equity)</option>
+                    </select>
+                    <select name="operating" defaultValue="operating" style={{ marginBottom: 0, width: 140, fontSize: ".8rem" }}>
+                      <option value="operating">Operating</option>
+                      <option value="non_operating">Non-operating</option>
+                    </select>
                     <label className="remember" style={{ margin: 0, fontSize: ".78rem", display: "inline-flex", gap: 5, alignItems: "center" }}>
                       <input type="checkbox" name="remember" defaultChecked /> remember rule for
                     </label>

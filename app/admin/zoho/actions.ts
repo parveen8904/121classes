@@ -1083,6 +1083,32 @@ export async function rematchBankAction() {
   redirect(`/admin/zoho?scan=${encodeURIComponent(msg)}#bank`);
 }
 
+// THROW AWAY A STATEMENT THAT NEVER PARSED.
+//
+// His ask, 27 Aug 2026: failed uploads sat on the list for ever, showing "Try
+// again" with nowhere to say "stop trying". Removing one deletes the record
+// and its unanswered lines so it can be uploaded afresh — but NEVER a
+// statement with posted or matched lines, because those are in the books and
+// their statement is the paper behind them.
+export async function removeStatementAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  const { count: settled } = await svc
+    .from("bank_lines").select("id", { count: "exact", head: true })
+    .eq("statement_id", id).in("status", ["posted", "matched"]);
+  if ((settled ?? 0) > 0) {
+    redirect(`/admin/zoho?scan=${encodeURIComponent(
+      `Not removed — ${settled} of its lines are already posted or matched in Zoho. A statement in the books stays.`,
+    )}#bank`);
+  }
+  await svc.from("bank_lines").delete().eq("statement_id", id);
+  await svc.from("bank_statements").delete().eq("id", id);
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent("Statement removed. Upload it again whenever you like.")}#bank`);
+}
+
 export async function reparseStatementAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));
@@ -1116,6 +1142,11 @@ export async function answerLineAction(formData: FormData) {
   // (Nirman Vihar). Not a separate Zoho ledger — it reads on the entry, which
   // is all anyone ever sees of it afterwards.
   const subAccount = str(formData.get("sub_account")).trim() || null;
+  // The same two answers the invoice panel takes. They matter only when the
+  // ledger does not exist in Zoho yet — they decide what TYPE it is created
+  // as, and "drawings" goes to equity, never the P&L.
+  const nature = str(formData.get("nature")).trim() || null;
+  const operating = str(formData.get("operating")).trim() || null;
   if (!id || !account) return;
   const { saveMerchantRule } = await import("@/lib/bankStatements");
   if (remember && rulePattern) {
@@ -1123,8 +1154,13 @@ export async function answerLineAction(formData: FormData) {
   }
   // Stored on the line so it survives the trip through his approval gate — the
   // release posts from the row, not from this form.
-  await createServiceClient().from("bank_lines").update({ sub_account: subAccount }).eq("id", id);
-  await requestApprovalFor("bank_line", "bank_lines", id, { accountChoice: account, subAccount });
+  const svcRow = createServiceClient();
+  const { data: cur } = await svcRow.from("bank_lines").select("proposal").eq("id", id).maybeSingle();
+  await svcRow.from("bank_lines").update({
+    sub_account: subAccount,
+    proposal: { ...((cur?.proposal as Record<string, unknown>) ?? {}), account, subAccount, nature, operating },
+  }).eq("id", id);
+  await requestApprovalFor("bank_line", "bank_lines", id, { accountChoice: account, subAccount, nature, operating });
   revalidatePath("/admin/zoho");
 }
 

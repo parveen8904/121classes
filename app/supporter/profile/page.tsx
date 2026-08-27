@@ -1,5 +1,6 @@
 import { formatDate } from "@/lib/dates";
 import Link from "next/link";
+import SetPassword from "@/app/dashboard/set-password";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -57,6 +58,16 @@ export default async function SupporterProfilePage(props: {
 
         {sp.err && <div className="notice err" style={{ marginTop: 12 }}>⚠️ {sp.err}</div>}
         {sp.verified === "1" && <div className="notice ok" style={{ marginTop: 12 }}>✅ Your website is verified.</div>}
+
+        {/* SET / CHANGE PASSWORD, RIGHT HERE. His ask, 28 Aug 2026: the reset
+            email does not always arrive, and a supporter locked to a mail they
+            cannot receive has no other door. This is the same card students
+            have on their dashboard — it changes only the signed-in account's
+            own password, through their own session, so being here is the
+            authorisation. */}
+        <div style={{ marginTop: 18 }}>
+          <SetPassword />
+        </div>
 
         {/* THEIR TRADING PRICE, NOT A PROMOTION.
             Shown openly because it cannot be used by anybody else: it only

@@ -1541,11 +1541,32 @@ export async function addVaultDoc(formData: FormData) {
 }
 
 export async function deleteVaultDoc(formData: FormData) {
-  await assertArea(null);
+  // The zoho desk's own housekeeping, not an admin ceremony: Bansal's invoice
+  // was uploaded three times because each failed read invited another try, and
+  // the desk then could not delete any of them — this was assertArea(null)
+  // (admin only), and even an admin's delete died silently on the foreign key
+  // from provider_bills. Two faults, one button that did nothing.
+  await assertArea("zoho");
   const id = str(formData.get("id"));
   if (!id) return;
+  const svc = createServiceClient();
+
+  // A doc whose bill is POSTED is the paper behind a ledger entry — it stays.
+  const { data: posted } = await svc
+    .from("provider_bills").select("id, bill_no").eq("vault_doc_id", id).eq("status", "posted");
+  if (posted?.length) {
+    redirect(`/admin/zoho?scan=${encodeURIComponent(
+      `Not deleted — bill ${posted[0].bill_no ?? ""} posted from this document is in Zoho. The paper behind a posted entry is never thrown away.`,
+    )}#bills`);
+  }
+  // Unposted bill rows born from this document go with it, or the foreign key
+  // blocks the delete and the button looks dead.
+  await svc.from("provider_bills").delete().eq("vault_doc_id", id).neq("status", "posted");
   // The row goes; the file in storage is left in place deliberately — a tax
   // paper is never destroyed by a mis-click. Storage cleanup is a manual act.
-  await createServiceClient().from("zoho_vault_docs").delete().eq("id", id);
+  const { error } = await svc.from("zoho_vault_docs").delete().eq("id", id);
   revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(
+    error ? `Could not delete: ${error.message}` : "Document removed, along with its unposted queue entries.",
+  )}#bills`);
 }

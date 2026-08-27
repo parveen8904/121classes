@@ -154,9 +154,17 @@ async function allowedSecondsFor(sectionId: string): Promise<number> {
   const svc = createServiceClient();
   const [{ count }, { data: cfg }] = await Promise.all([
     svc.from("mcq_questions").select("id", { count: "exact", head: true }).eq("section_id", sectionId),
-    svc.from("sections").select("minutes_per_question:config->>minutes_per_question").eq("id", sectionId).maybeSingle(),
+    svc.from("sections")
+      .select("minutes_per_question:config->>minutes_per_question, mcq_total_minutes:config->>mcq_total_minutes")
+      .eq("id", sectionId).maybeSingle(),
   ]);
-  const perQ = Number((cfg as { minutes_per_question?: string } | null)?.minutes_per_question) || 1;
+  const c = cfg as { minutes_per_question?: string; mcq_total_minutes?: string } | null;
+  // THE OFFICE'S NUMBER WINS. Set on the test's admin page, it is the exact
+  // duration — no per-question arithmetic, no rounding up to a slot. Only when
+  // nothing is set does the ~1-minute-per-question formula stand.
+  const fixed = Number(c?.mcq_total_minutes) || 0;
+  if (fixed > 0) return Math.round(fixed * 60);
+  const perQ = Number(c?.minutes_per_question) || 1;
   const raw = Math.max(1, Math.ceil((count ?? 0) * perQ));
   return Math.ceil(raw / 5) * 5 * 60;
 }

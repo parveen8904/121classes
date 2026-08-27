@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { str, num, nullable } from "../../_lib/util";
 import { generateMcqs, extractMcqsFromPdf } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
@@ -9,6 +10,30 @@ import { saveMcqExplanation } from "@/lib/answers";
 import { assertArea } from "@/lib/adminAccess";
 
 // Attach a reference PDF (question paper / answer key) to the test section.
+/**
+ * FIX THE TEST'S DURATION — the office's number, exactly as typed.
+ *
+ * Until now the clock was always ~1 minute per question rounded up to a
+ * 5-minute slot, and there was nowhere to say otherwise. Blank clears the
+ * override and the formula returns. Stored in the section's own config row —
+ * one row read, one row written; never config across rows.
+ */
+export async function setMcqDuration(formData: FormData) {
+  await assertArea(null);
+  const id = str(formData.get("sectionId"));
+  const raw = str(formData.get("minutes")).trim();
+  if (!id) return;
+  const minutes = raw === "" ? null : Math.max(1, Math.min(600, Math.round(Number(raw) || 0)));
+  if (raw !== "" && !minutes) return;
+
+  const svc = createServiceClient();
+  const { data: row } = await svc.from("sections").select("config").eq("id", id).maybeSingle();
+  const cfg = { ...((row?.config as Record<string, unknown>) ?? {}) };
+  if (minutes === null) delete cfg.mcq_total_minutes; else cfg.mcq_total_minutes = minutes;
+  await svc.from("sections").update({ config: cfg }).eq("id", id);
+  revalidatePath(`/admin/mcq/${id}`);
+}
+
 export async function attachSectionPdf(formData: FormData) {
   await assertArea(null);
   const sectionId = str(formData.get("section_id"));

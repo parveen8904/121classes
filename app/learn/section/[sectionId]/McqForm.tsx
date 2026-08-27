@@ -18,17 +18,23 @@ export default function McqForm({
   minutesPerQuestion = 1,
   topicId,
   lockedResult = null,
+  totalMinutesOverride = 0,
 }: {
   sectionId: string;
   questions: Question[];
   minutesPerQuestion?: number;
   topicId?: string;
+  /** A duration the office fixed on the test's admin page — overrides the formula. */
+  totalMinutesOverride?: number;
   lockedResult?: (McqResult & { alreadyDone?: boolean }) | null;
 }) {
   // Time limit = ~1 min per question, rounded UP to the next multiple of 5 minutes
-  // (always rounding up) so the test fits a clean scheduled slot.
+  // (always rounding up) so the test fits a clean scheduled slot — unless the
+  // office fixed a duration, whose number is used exactly as typed.
   const rawMinutes = Math.max(1, Math.ceil(questions.length * (minutesPerQuestion || 1)));
-  const limitMinutes = Math.ceil(rawMinutes / 5) * 5;
+  const limitMinutes = totalMinutesOverride && totalMinutesOverride > 0
+    ? totalMinutesOverride
+    : Math.ceil(rawMinutes / 5) * 5;
   const totalSeconds = limitMinutes * 60;
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [current, setCurrent] = useState(0);

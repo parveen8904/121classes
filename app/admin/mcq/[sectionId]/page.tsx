@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { aiConfigured } from "@/lib/ai";
 import AdminHero from "../../_components/AdminHero";
 import DeleteButton from "../../_components/DeleteButton";
-import { addMcq, updateMcq, bulkAddMcq, deleteMcq, generateMcqsFromTranscript, generateChapterTest, attachSectionPdf, importMcqsFromPdf } from "./actions";
+import { addMcq, updateMcq, bulkAddMcq, deleteMcq, generateMcqsFromTranscript, generateChapterTest, attachSectionPdf, importMcqsFromPdf, setMcqDuration } from "./actions";
 import PdfUpload from "../../_components/PdfUpload";
 import SubmitButton from "@/app/components/SubmitButton";
 import { getMcqExplanations } from "@/lib/answers";
@@ -23,6 +23,10 @@ export default async function McqAdminPage(props: { params: Promise<{ sectionId:
     | { imported?: number; skipped?: number; total?: number; error?: string }
     | undefined;
 
+  // The clock as the student will get it — the fixed override, or the formula.
+  const fixedMinutes = Number((section.config as Record<string, unknown> | null)?.mcq_total_minutes) || 0;
+  const perQ = Number((section.config as Record<string, unknown> | null)?.minutes_per_question) || 1;
+
   const { data: questions } = await supabase
     .from("mcq_questions")
     .select("id, question, options, correct_index, order_index, concept, source_class_no")
@@ -39,6 +43,26 @@ export default async function McqAdminPage(props: { params: Promise<{ sectionId:
         subtitle="Add multiple-choice questions. They're auto-graded for students. ✅"
         back={{ href: `/admin/topics/${section.topic_id}`, label: "Topic" }}
       />
+
+      {/* THE TEST'S CLOCK. Ravi's ask, 28 Aug 2026: nowhere on the admin side
+          set the duration — it was always ~1 min/question rounded to a 5-min
+          slot. A number typed here is enforced exactly, on start and after any
+          reset; blank returns to the automatic formula. */}
+      <div className="card" style={{ marginTop: 14 }}>
+        <strong>⏱️ Test duration</strong>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "2px 0 8px" }}>
+          {fixedMinutes > 0
+            ? `Fixed at ${fixedMinutes} minutes.`
+            : `Automatic: ${(questions ?? []).length} question(s) × ${perQ} min, rounded up to a 5-minute slot.`}
+          {" "}The student's countdown and the server's deadline both use this number — on start and after any reset.
+        </p>
+        <form action={setMcqDuration} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input type="hidden" name="sectionId" value={section.id} />
+          <input name="minutes" type="number" min={1} max={600} defaultValue={fixedMinutes > 0 ? String(fixedMinutes) : ""}
+                 placeholder="minutes — blank = automatic" style={{ marginBottom: 0, width: 220 }} />
+          <SubmitButton className="btn small" savedLabel="✓ Saved">Save duration</SubmitButton>
+        </form>
+      </div>
 
       {/* PRIMARY PATH: upload your own MCQ test as a PDF — AI digitises it ONCE. */}
       {ai && (

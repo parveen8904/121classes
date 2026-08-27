@@ -18,6 +18,9 @@ export default async function McqSection({
 
   const { data: cfgRow } = await supabase.from("sections").select("config").eq("id", section.id).maybeSingle();
   const minutesPerQuestion = Number((cfgRow?.config as Record<string, unknown> | null)?.minutes_per_question) || 1;
+  // The office may have fixed the duration outright — the display must show
+  // the same number the server will enforce.
+  const totalMinutesOverride = Number((cfgRow?.config as Record<string, unknown> | null)?.mcq_total_minutes) || 0;
 
   const questions = (data ?? []).map((q) => ({
     id: q.id,
@@ -51,7 +54,7 @@ export default async function McqSection({
             </form>
           )}
           {questions.length > 0 ? (
-            <McqForm sectionId={section.id} questions={questions} minutesPerQuestion={minutesPerQuestion} topicId={section.topic_id} lockedResult={lockedResult} />
+            <McqForm sectionId={section.id} questions={questions} minutesPerQuestion={minutesPerQuestion} totalMinutesOverride={totalMinutesOverride} topicId={section.topic_id} lockedResult={lockedResult} />
           ) : (
             <div className="card">
               <p className="muted">📭 No questions added to this test yet.</p>

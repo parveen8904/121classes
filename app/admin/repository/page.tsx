@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { viaProxy } from "@/lib/fileProxy";
 import { formatDateTime } from "@/lib/dates";
 import { createServiceClient } from "@/lib/supabase/service";
 import { aiConfigured } from "@/lib/ai";
@@ -364,7 +365,10 @@ export default async function RepositoryPage(
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  {it.file_url && <a className="btn small secondary" href={it.file_url} target="_blank" rel="noreferrer">View</a>}
+                  {/* file_url is "secure:<path>" — a storage ref, not a URL.
+                      As a bare href it opened a blank page ("View not
+                      working"); the proxy signs it and streams the PDF. */}
+                  {it.file_url && <a className="btn small secondary" href={viaProxy(it.file_url)} target="_blank" rel="noreferrer">View</a>}
                   {it.file_url && (!it.content_chars || it.is_unreadable) && /\.pdf($|\?)/i.test(it.file_url) && (
                     <form action={extractItemText} style={{ margin: 0 }}>
                       <input type="hidden" name="id" value={it.id} />

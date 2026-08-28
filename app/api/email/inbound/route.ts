@@ -327,6 +327,27 @@ export async function POST(req: NextRequest) {
 
   try {
     const { judgeStudentMessage, answerDoubtFromMaterial, aiConfigured, NEED_FACULTY } = await import("@/lib/ai");
+
+    // STRANGERS ARE NEVER AUTO-ANSWERED.
+    //
+    // 28 Aug 2026: "Investment mandate totaling $2.5 billion" arrived from
+    // info@investing.com — polished cold spam wearing none of the machine-mail
+    // headers — and the desk emailed its polite refusal back. A refusal sent
+    // to a spammer is not harmless: it confirms a live, answering address in
+    // the founder's name to whoever is harvesting.
+    //
+    // The address book is the circuit breaker the header games cannot beat:
+    // an email that matches no account goes to a PERSON. In thirty days only
+    // three answered mails were from unknown addresses, so this costs the
+    // office one forwarded mail a week and ends the entire class of
+    // replying-to-spam. A genuine prospect still gets an answer — a human one.
+    const { data: known } = await svc
+      .from("profiles").select("id").ilike("email", from).limit(1).maybeSingle();
+    if (!known) {
+      await escalate(from, subject, question);
+      return NextResponse.json({ ok: true, result: "unknown sender — sent to faculty, not auto-answered" });
+    }
+
     const judged = await judgeStudentMessage(question);
     if (judged.kind !== "question" || !(await aiConfigured())) {
       await escalate(from, subject, question);
@@ -353,7 +374,12 @@ export async function POST(req: NextRequest) {
       answer = await answerDoubtFromMaterial(question, who + material);
     }
 
-    if (!answer || answer.trim() === NEED_FACULTY) {
+    // A REFUSAL IS NOT AN ANSWER. The model sometimes declines in prose
+    // ("this is not something I can help with…") instead of the NEED_FACULTY
+    // sentinel — that is exactly the mail that went to the spammer. If the AI
+    // is declining, a person should see the thread, not the sender.
+    const refusal = !!answer && /not something i can help|only for financial reporting and advanced accounting|i am a study assistant/i.test(answer);
+    if (!answer || answer.trim() === NEED_FACULTY || refusal) {
       await escalate(from, subject, question);
       return NextResponse.json({ ok: true, result: "sent to faculty" });
     }

@@ -518,6 +518,10 @@ export const DEFAULT_BS_MAP: Record<string, BsBucket> = {
   "Security Deposit-Bikanerwala": "BIZ_OCL",
   "Security Deposit-Rohit Bhargav": "BIZ_OCL",
   "Customer-Imprest Payable": "BIZ_OCL",
+  // Created in Zoho on 30 Aug 2026 — the audit-fee provision the accountant had
+  // carried only in his own working. Now a real ledger, so it maps like one and
+  // the auditFeeProvision year-input can go back to zero.
+  "Provision for Expenses": "BIZ_OCL",
   "Drawings": "EQUITY",
   "Owner's Equity": "EQUITY",
   "Retained Earnings": "EQUITY",

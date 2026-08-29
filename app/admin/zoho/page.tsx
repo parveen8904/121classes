@@ -498,6 +498,7 @@ export default async function ZohoHubPage(props: {
           <a className="btn small secondary" href="#search">🔎 Search</a>
           <a className="btn small secondary" href="/admin/zoho/activity">📜 Zoho activity</a>
           <a className="btn small secondary" href="/admin/zoho/itr">📑 Return builder</a>
+          <a className="btn small secondary" href="/admin/zoho/entities">👪 Books &amp; entities</a>
         </div>
         <div className="nav-row"><span className="nav-lab" aria-hidden="true"></span><SectionToggle /></div>
       </nav>
@@ -2157,6 +2158,9 @@ export default async function ZohoHubPage(props: {
 
       {/* The books already hold the year; this turns them into the three things
           the accountant otherwise re-keys by hand. */}
+      {/* Four sets of books, one desk — his, his wife's and the children's. */}
+      <a className="sec-row-link" href="/admin/zoho/entities">👪 Books &amp; entities — whose books this desk works on, and who can be posted to<span className="sec-meta">open →</span></a>
+
       <a className="sec-row-link" href="/admin/zoho/itr">📑 Return builder — financials, computation and Schedule AL from the books<span className="sec-meta">open →</span></a>
 
       {/* ── Pradeep's backlog — as-of a chosen date ─────────────────── */}

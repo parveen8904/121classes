@@ -435,7 +435,18 @@ export const DEFAULT_PL_MAP: Record<string, PlBucket> = {
   "Telephone Expense": "BUS_OTHEXP",
   "Web Maintainence Expenses": "BUS_OTHEXP",
   "Zoho Software Expenses": "BUS_OTHEXP",
-  "Travel Expense": "BUS_OTHEXP",
+  // THE FOUNDER'S RULING, 30 Aug 2026: "travel expenses are personal hence these
+  // should be ignored." The accountant had left it out and was right to; there is
+  // already a separate "Travel cost" ledger on the personal side. Finding F5 of
+  // the audit is answered and withdrawn.
+  "Travel Expense": "PERSONAL",
+  // Provided for the first time this year — booked in Zoho on 30 Aug 2026, so it
+  // is a real ledger now rather than a figure the accountant carried by hand.
+  "Audit Fee": "BUS_OTHEXP",
+  // The 31-March revaluation of the foreign bank accounts. Those accounts are
+  // personal, so restating them is neither a business expense nor a deductible
+  // loss — it belongs on the drawings side, with the accounts it revalues.
+  "Exchange Gain or Loss": "PERSONAL",
   "Insurance-Vehicle": "BUS_OTHEXP",
   "ICAi-Fee": "BUS_OTHEXP",
   "Interest to Robinhood": "BUS_OTHEXP",

@@ -497,6 +497,7 @@ export default async function ZohoHubPage(props: {
           <a className="btn small secondary" href="#backlog">📋 Backlog</a>
           <a className="btn small secondary" href="#search">🔎 Search</a>
           <a className="btn small secondary" href="/admin/zoho/activity">📜 Zoho activity</a>
+          <a className="btn small secondary" href="/admin/zoho/itr">📑 Return builder</a>
         </div>
         <div className="nav-row"><span className="nav-lab" aria-hidden="true"></span><SectionToggle /></div>
       </nav>
@@ -2153,6 +2154,10 @@ export default async function ZohoHubPage(props: {
       {/* One click, another page — but it belongs with the records, said as a
           row so the zone reads as one list. */}
       <a className="sec-row-link" href="/admin/zoho/activity">📜 What has changed in Zoho — the activity log<span className="sec-meta">open →</span></a>
+
+      {/* The books already hold the year; this turns them into the three things
+          the accountant otherwise re-keys by hand. */}
+      <a className="sec-row-link" href="/admin/zoho/itr">📑 Return builder — financials, computation and Schedule AL from the books<span className="sec-meta">open →</span></a>
 
       {/* ── Pradeep's backlog — as-of a chosen date ─────────────────── */}
       {hubConnected && (

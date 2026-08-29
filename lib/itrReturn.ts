@@ -237,6 +237,20 @@ function surchargeRate(ti: number) {
   return 0;
 }
 
+/**
+ * Surcharge, with the 15% ceiling that applies to dividend income and to
+ * capital gains under s.111A, 112 and 112A. The rest of the income carries the
+ * full rate. Missing this costs about twenty thousand rupees on his figures —
+ * the accountant applies it and was right to.
+ */
+function surchargeOn(totalIncome: number, tax: number, cappedIncome: number, marginalRate: number) {
+  const rate = surchargeRate(totalIncome);
+  if (rate === 0) return 0;
+  const capped = Math.min(0.15, rate);
+  const taxOnCapped = Math.min(tax, Math.max(0, cappedIncome) * marginalRate);
+  return (tax - taxOnCapped) * rate + taxOnCapped * capped;
+}
+
 // ---------------------------------------------------------------- the build
 export function buildPack(p: {
   fy: string; from: string; to: string;
@@ -321,7 +335,9 @@ export function buildPack(p: {
   const grossTotalIncome = housePropertyTotal + businessIncome + capitalGains.taxable + otherSourcesTotal;
   const ti = Math.round(grossTotalIncome / 10) * 10;
   const tax = taxNewRegime(ti);
-  const surcharge = tax * surchargeRate(ti);
+  // Dividend and 111A/112A gains carry surcharge at 15% however high the income.
+  const marginalRate = ti > 2400000 ? 0.30 : 0.25;
+  const surcharge = surchargeOn(ti, tax, t("OS_DIV") + capitalGains.taxable, marginalRate);
   const cess = (tax + surcharge) * 0.04;
 
   // ---- Schedule AL
@@ -443,10 +459,23 @@ export const DEFAULT_PL_MAP: Record<string, PlBucket> = {
   // Provided for the first time this year — booked in Zoho on 30 Aug 2026, so it
   // is a real ledger now rather than a figure the accountant carried by hand.
   "Audit Fee": "BUS_OTHEXP",
-  // The 31-March revaluation of the foreign bank accounts. Those accounts are
-  // personal, so restating them is neither a business expense nor a deductible
-  // loss — it belongs on the drawings side, with the accounts it revalues.
+  // EXCHANGE MOVEMENT IS NEITHER TAXABLE NOR DEDUCTIBLE. The founder's ruling,
+  // 30 Aug 2026, and it is the right reading of the law.
+  //
+  // For a RESIDENT holding foreign shares there is no provision splitting the
+  // legs of the computation — the first proviso to s.48 does that only for
+  // non-residents, and only for shares of an Indian company. So s.48 computes
+  // the gain in the foreign currency and Rule 115 converts that gain at ONE
+  // rate: the TT buying rate on the last day of the month before the month of
+  // transfer. Converting purchase and sale at a single rate is therefore the
+  // CORRECT method, not an error, and the currency movement between the two
+  // dates never becomes income at all.
+  //
+  // These two ledgers only exist because Zoho books every leg at its own day's
+  // rate. They are a bookkeeping consequence, not a source of income, and both
+  // sit on the drawings side.
   "Exchange Gain or Loss": "PERSONAL",
+  "Foreign Exchange Difference": "PERSONAL",
   "Insurance-Vehicle": "BUS_OTHEXP",
   "ICAi-Fee": "BUS_OTHEXP",
   "Interest to Robinhood": "BUS_OTHEXP",
@@ -487,7 +516,6 @@ export const DEFAULT_PL_MAP: Record<string, PlBucket> = {
   "Profit on Sale of Shares-Tasty Trade": "CG",
   "Profit on Sale of Shares-Thinkorswim": "CG",
   "Profit from sale of US Treasury BOND": "CG",
-  "Foreign Exchange Difference": "CG",
   "Electric Supplies": "PERSONAL",
   "Gas Supplies": "PERSONAL",
   "Gift to Smridhi": "PERSONAL",

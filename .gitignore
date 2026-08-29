@@ -26,3 +26,9 @@ tsconfig.tsbuildinfo
 # secret, but it names the project and is regenerated from the console, so it
 # is kept out of git rather than drifting in two places.
 mobile/android/app/google-services.json
+
+# Call Bridge build output (the APK is rebuilt from source, not tracked)
+mobile/callbridge/build/
+mobile/callbridge/app/build/
+mobile/callbridge/.gradle/
+mobile/callbridge/local.properties

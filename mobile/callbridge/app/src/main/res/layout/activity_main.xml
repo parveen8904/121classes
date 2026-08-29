@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Call Bridge"
+            android:textSize="26sp"
+            android:textStyle="bold"
+            android:textColor="#0D9488" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="2dp"
+            android:paddingBottom="18dp"
+            android:textSize="13sp"
+            android:text="Every call on this phone becomes a ticket on the portal. Fill this in once and leave it alone." />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Portal address" android:textStyle="bold" android:paddingTop="8dp" />
+        <EditText android:id="@+id/base"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:inputType="textUri" android:hint="https://caparveensharma.com"
+            android:autofillHints="" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Webhook key" android:textStyle="bold" android:paddingTop="14dp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="12sp" android:textColor="#5C6B7A"
+            android:text="Admin → Integrations → IVR_WEBHOOK_KEY" />
+        <EditText android:id="@+id/key"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:inputType="textPassword" android:hint="paste the key"
+            android:autofillHints="" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="This phone's number" android:textStyle="bold" android:paddingTop="14dp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="12sp" android:textColor="#5C6B7A"
+            android:text="Shown on the ticket as the person who took the call. Also used by the test." />
+        <EditText android:id="@+id/agent"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:inputType="phone" android:hint="9810012674"
+            android:autofillHints="" />
+
+        <CheckBox android:id="@+id/enabled"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:paddingTop="18dp" android:text="Report calls to the portal" />
+
+        <CheckBox android:id="@+id/outgoing"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Also report outgoing calls" />
+
+        <LinearLayout
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:paddingTop="14dp">
+            <Button android:id="@+id/save"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:text="Save" />
+            <Button android:id="@+id/test"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:text="Send a test" />
+        </LinearLayout>
+
+        <Button android:id="@+id/battery"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Stop Android delaying this app" />
+
+        <TextView
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Status" android:textStyle="bold" android:paddingTop="22dp" />
+        <TextView android:id="@+id/status"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:paddingTop="6dp" android:paddingBottom="24dp"
+            android:textSize="14sp" android:lineSpacingExtra="3dp"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+</ScrollView>

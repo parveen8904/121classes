@@ -1,0 +1,31 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace "in.caclasses.callbridge"
+    compileSdk 36
+    defaultConfig {
+        applicationId "in.caclasses.callbridge"
+        minSdkVersion 26
+        targetSdkVersion 36
+        versionCode 1
+        versionName "1.0"
+    }
+    buildTypes {
+        release { minifyEnabled false }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// NO DEPENDENCIES AT ALL.
+//
+// The first cut pulled in androidx.appcompat, which drags a Kotlin standard
+// library behind it and failed to merge — two versions of kotlin-stdlib-jdk8
+// claiming the same classes. Nothing here needs appcompat: the screen is six
+// stock widgets and the platform theme, so the whole chain came out. The
+// result builds against the platform alone and the APK is a few hundred
+// kilobytes.
+dependencies {
+}

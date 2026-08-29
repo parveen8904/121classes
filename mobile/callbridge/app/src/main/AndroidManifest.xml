@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      CALL BRIDGE — the phone becomes the IVR.
+
+      One employee answers every call on one SIM. The portal already turns a
+      call event into a ticket at /api/calls/webhook, and already checks a key.
+      All that was ever bought from the telephony provider was something to
+      POST that event. This app is that something, and it costs nothing to run.
+
+      READ_CALL_LOG is a restricted permission on the Play Store and would need
+      a declared, approved use case there. This app is never going to the Play
+      Store — it is sideloaded onto one handset — so that does not arise.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@android:drawable/sym_action_call"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="false"
+        android:theme="@android:style/Theme.DeviceDefault">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          IMMEDIACY. PHONE_STATE is one of the few implicit broadcasts still
+          delivered to a manifest-registered receiver on Android 8 and later,
+          so a call that ends is reported within seconds rather than at the
+          next sweep.
+        -->
+        <receiver
+            android:name=".PhoneStateReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          COMPLETENESS. The receiver alone is not enough: the process can be
+          killed, the phone can be offline, a call can end while the radio is
+          down. A quarter-hourly sweep re-reads the call log from a watermark
+          and sends anything the receiver missed, so a missed call cannot be
+          silently lost — which is the one failure this whole system exists to
+          prevent.
+        -->
+        <receiver
+            android:name=".SweepReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>

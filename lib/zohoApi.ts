@@ -1,4 +1,5 @@
 import { assertZohoWriteAllowed } from "@/lib/zohoGuard";
+import { DEFAULT_ENTITY, getEntity, credentialFor, assertMayPost } from "@/lib/zohoEntities";
 import { getSecret } from "@/lib/secrets";
 
 // THE PORTAL'S OWN LINE TO ZOHO BOOKS (India data centre).
@@ -84,7 +85,10 @@ async function writeSharedToken(token: string, expiresInSec: number): Promise<vo
   } catch { /* a cache that cannot be written is not a reason to fail the call */ }
 }
 
-export async function zohoAccessToken(): Promise<string> {
+export async function zohoAccessToken(entitySlug?: string | null): Promise<string> {
+  // A second set of books has its own credential, so it cannot share the cache
+  // or the shared-token row — both are keyed to the founder's organisation.
+  if (entitySlug && entitySlug !== DEFAULT_ENTITY) return entityAccessToken(entitySlug);
   if (tokenCache && Date.now() < tokenCache.exp - 60_000) return tokenCache.token;
   const shared = await readSharedToken();
   if (shared) { tokenCache = { token: shared, exp: Date.now() + 5 * 60_000 }; return shared; }
@@ -113,6 +117,41 @@ export async function zohoAccessToken(): Promise<string> {
   tokenCache = { token: j.access_token, exp: Date.now() + ttl * 1000 };
   await writeSharedToken(j.access_token, ttl);
   return tokenCache.token;
+}
+
+// ANOTHER ENTITY'S TOKEN.
+//
+// Kept deliberately separate from the founder's: its own small cache, and it
+// never touches the shared-token row, so one set of books can never hand its
+// access token to another.
+const entityTokens = new Map<string, { token: string; exp: number }>();
+
+async function entityAccessToken(slug: string): Promise<string> {
+  const hit = entityTokens.get(slug);
+  if (hit && Date.now() < hit.exp - 60_000) return hit.token;
+  const entity = await getEntity(slug);
+  if (!entity) throw new Error(`No books are connected for "${slug}".`);
+  const cred = await credentialFor(entity);
+  if (!cred) throw new Error(`${entity.name}'s books are not connected yet.`);
+  const res = await fetch(`${ACCOUNTS}/oauth/v2/token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token", client_id: cred.clientId,
+      client_secret: cred.clientSecret, refresh_token: cred.refreshToken,
+    }),
+    cache: "no-store",
+  });
+  const j = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error?: string };
+  if (!j.access_token) {
+    const why = String(j.error || "no access token");
+    throw new Error(/access.?denied|rate/i.test(why)
+      ? `Zoho is rate-limiting the login for ${entity.name} just now (${why}) — the credential is fine. Try again in a minute.`
+      : `Zoho refused ${entity.name}'s stored credential (${why}).`);
+  }
+  const ttl = Number(j.expires_in) || 3600;
+  entityTokens.set(slug, { token: j.access_token, exp: Date.now() + ttl * 1000 });
+  return j.access_token;
 }
 
 /** Authenticated Zoho Books call. Path like "/chartofaccounts"; org id appended. */
@@ -159,16 +198,24 @@ async function reserveZohoSlot(): Promise<void> {
 
 export async function zohoFetch<T = Record<string, unknown>>(
   path: string,
-  init?: { method?: string; body?: Record<string, unknown>; query?: Record<string, string> },
+  init?: { method?: string; body?: Record<string, unknown>; query?: Record<string, string>; entity?: string | null },
   attempt = 0,
 ): Promise<T> {
   // The gate. Anything that would change the books needs his approval first.
   assertZohoWriteAllowed(init?.method, path);
+  // And a second gate for anyone else's books: a read-only credential is never
+  // asked to write, so the desk hears "read-only" rather than a Zoho refusal.
+  const entitySlug = init?.entity ?? null;
+  if (entitySlug && entitySlug !== DEFAULT_ENTITY && (init?.method ?? "GET").toUpperCase() !== "GET") {
+    await assertMayPost(entitySlug);
+  }
   // Paced to Zoho's published limit. A retry (attempt > 0) has already held a
   // slot and is not charged twice.
   if (attempt === 0) await reserveZohoSlot();
-  const token = await zohoAccessToken();
-  const orgId = await getSecret("ZOHO_ORG_ID");
+  const token = await zohoAccessToken(entitySlug);
+  const orgId = entitySlug && entitySlug !== DEFAULT_ENTITY
+    ? (await getEntity(entitySlug))?.organizationId
+    : await getSecret("ZOHO_ORG_ID");
   const q = new URLSearchParams({ ...(init?.query ?? {}), ...(orgId ? { organization_id: orgId } : {}) });
   const res = await fetch(`${API}/books/v3${path}?${q}`, {
     method: init?.method ?? "GET",
@@ -200,7 +247,7 @@ export async function zohoFetch<T = Record<string, unknown>>(
     const isRead = (init?.method ?? "GET").toUpperCase() === "GET";
     if (throttled && isRead && attempt < 2) {
       await new Promise((r) => setTimeout(r, (attempt + 1) * 3000));
-      return zohoFetch<T>(path, init, attempt + 1);
+  return zohoFetch<T>(path, init, attempt + 1);
     }
     if (throttled) {
       throw new Error(

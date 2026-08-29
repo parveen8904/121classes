@@ -83,6 +83,10 @@ export default async function ZohoHubPage(props: {
   const searching = Boolean((sp.q ?? "").trim() || sp.from || sp.to || (sp.part && sp.part !== "all"));
   const staff = await currentStaff();
   const isFounder = staff?.role === "admin";
+  // The gate's second key, handed out by name — see zoho_approve in
+  // lib/adminAccess.ts. Approval UI renders for either; everything the page
+  // keys on isFounder alone (vault, worksheets, connection) stays his.
+  const canApprove = isFounder || !!staff?.permissions.includes("zoho_approve");
 
   const hubConnected = await zohoConfigured();
   const connected = isFounder ? hubConnected : false;
@@ -607,7 +611,7 @@ export default async function ZohoHubPage(props: {
 
           {pendingApprovals.length === 0 ? (
             <div className="card"><p className="muted" style={{ margin: 0 }}>Nothing waiting. The books are as you left them.</p></div>
-          ) : !isFounder ? (
+          ) : !canApprove ? (
             <div className="card">
               <p className="muted" style={{ margin: 0 }}>
                 {pendingApprovals.length} item(s) are with CA Parveen Sharma for approval. They post once he releases them.

@@ -67,6 +67,13 @@ export const ADMIN_AREAS: AdminArea[] = [
   // Petty-cash RECIPIENTS: a team member who receives advances sees only their
   // own ledger — balance, bill upload, history. Managing people/advances and
   // approving bills stays inside the zoho area.
+  // THE GATE ITSELF, DELEGATED. 28 Aug 2026, the founder: "allow Pradeep to
+  // approve journal entries that only I can do now." A separate grant rather
+  // than part of "zoho", so working the queues and RELEASING money into the
+  // books stay two different trusts — he hands this one out by name and can
+  // take it back alone. Every approval still records who pressed it. The tax
+  // worksheets and the Zoho connection remain the founder's only.
+  { key: "zoho_approve", label: "✅ Zoho — approve & post entries (release the gate)", prefixes: ["/admin/zoho"] },
   { key: "petty", label: "👛 Petty cash — my advances (see balance, upload bills)", prefixes: ["/admin/petty"] },
 ];
 

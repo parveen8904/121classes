@@ -269,10 +269,23 @@ export async function uploadBillAction(formData: FormData) {
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);
 }
 
+/**
+ * WHO MAY RELEASE THE GATE. The founder always; since 28 Aug 2026 also anyone
+ * he has personally handed the zoho_approve grant — Pradeep, by his
+ * instruction: "allow Pradeep to approve journal entries that only I can do
+ * now." Every release records who pressed it, so the books always say whose
+ * hand opened the door. The tax worksheets, vendor rules and the Zoho
+ * connection remain the founder's alone.
+ */
+async function assertMayApprove(): Promise<void> {
+  const staff = await currentStaff();
+  const may = !!staff && (staff.role === "admin" || staff.permissions.includes("zoho_approve"));
+  if (!may) throw new Error("Not authorised — approving Zoho postings needs the founder or his approve grant.");
+}
+
 export async function approveZohoAction(formData: FormData) {
-  // THE ONLY DOOR TO ZOHO, AND ONLY HE HOLDS IT. Not the accounts desk, not a
-  // cron, not this system on its own judgement.
-  await assertArea(null);
+  // THE ONLY DOOR TO ZOHO — held by him, and by the hand he named.
+  await assertMayApprove();
   const me = await currentStaff();
   const id = str(formData.get("id"));
   if (!id) return;
@@ -300,7 +313,7 @@ export async function retryApprovalAction(formData: FormData) {
 }
 
 export async function approveAllZohoAction(formData: FormData) {
-  await assertArea(null);
+  await assertMayApprove();
   const me = await currentStaff();
   const ids = formData.getAll("ids").map((v) => String(v)).filter(Boolean);
   if (!ids.length) return;
@@ -340,7 +353,7 @@ export async function approveAllZohoAction(formData: FormData) {
 }
 
 export async function rejectZohoAction(formData: FormData) {
-  await assertArea(null);
+  await assertMayApprove();
   const me = await currentStaff();
   const id = str(formData.get("id"));
   if (!id) return;

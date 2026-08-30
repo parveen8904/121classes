@@ -357,7 +357,17 @@ export async function POST(req: NextRequest) {
       // messages. The answer is threaded, marked 🤖, mirrored to Discord and
       // stored for the website view. Controls: 'group_doubt' toggle + daily cap.
       const botUser = ((await getSecret("TELEGRAM_BOT_USERNAME")) || "").replace(/^@/, "").toLowerCase();
-      const mentioned = !!botUser && text.toLowerCase().includes(`@${botUser}`);
+
+      // THE WORDS, WHEREVER TELEGRAM PUT THEM.
+      //
+      // A message carrying a photo has no `text` at all — the words are in
+      // `caption`. Every gate below read `text` only, so a student who
+      // photographed the page and typed "Treatment of 3rd point
+      // @caparveensharmabot" tagged the bot and got silence, in front of 1,318
+      // people. The moderation code four screens up had this right already
+      // (`text || caption`); the AI gate never did.
+      const said = (text || caption).trim();
+      const mentioned = !!botUser && said.toLowerCase().includes(`@${botUser}`);
       const repliedToBot = !!botUser && String(msg?.reply_to_message?.from?.username ?? "").toLowerCase() === botUser;
 
       // /courses — THE COMMAND THE STUDENTS INVENTED.
@@ -374,7 +384,7 @@ export async function POST(req: NextRequest) {
       // So it is a feature now. Answered directly, before the AI, with the two
       // places courses actually live — and threaded to the asker so the group
       // is not spammed when four people press it in a night.
-      if (!mod.flagged && /^\/courses\b/i.test(text.trim())) {
+      if (!mod.flagged && /^\/courses\b/i.test(said)) {
         await tgSendGroupReply(
           chatId,
           "📚 CA Parveen Sharma's courses:\n\n" +
@@ -392,7 +402,7 @@ export async function POST(req: NextRequest) {
       // NOT a fixed script (the founder wants it worded freshly each time): it is
       // routed to the AI, which answers from his class material and the standing
       // amendments lesson (ai_lessons), threaded so repeats don't spam the room.
-      if (!mod.flagged && /^\/amendments\b/i.test(text.trim())) {
+      if (!mod.flagged && /^\/amendments\b/i.test(said)) {
         const body = subj?.id ? await groupAiAnswer(subj.id, AMENDMENTS_Q) : null;
         await tgSendGroupReply(chatId, body || AMENDMENTS_FALLBACK, msg.message_id);
         return NextResponse.json({ ok: true });
@@ -404,7 +414,7 @@ export async function POST(req: NextRequest) {
       // the silence. Now a bare command aimed at us (or with no bot named) that
       // we don't recognise gets ONE short, threaded reply telling them what IS
       // here, so the void stops inviting repeats.
-      const bareCmd = text.trim().match(/^\/([a-z0-9_]+)(?:@([a-z0-9_]+))?\s*$/i);
+      const bareCmd = said.match(/^\/([a-z0-9_]+)(?:@([a-z0-9_]+))?\s*$/i);
       const cmdForUs = bareCmd && (!bareCmd[2] || bareCmd[2].toLowerCase() === botUser);
       if (!mod.flagged && cmdForUs) {
         await tgSendGroupReply(
@@ -421,7 +431,18 @@ export async function POST(req: NextRequest) {
       if (!mod.flagged && subj?.id && (mentioned || repliedToBot)) {
         try {
           // Remove the tag itself so the AI sees a clean question.
-          const question = mentioned ? text.replace(new RegExp(`@${botUser}`, "ig"), " ").replace(/\s+/g, " ").trim() : text;
+          const question = mentioned ? said.replace(new RegExp(`@${botUser}`, "ig"), " ").replace(/\s+/g, " ").trim() : said;
+
+          // THE QUESTION IS USUALLY IN THE PICTURE.
+          //
+          // Students photograph the page and type three words. The portal has
+          // read photographed questions since the doubt box was built, and the
+          // group is where most of them are actually asked — it just never
+          // passed the photo through. Now it does, and the caption is treated
+          // as what it is: a pointer at the part of the page they mean.
+          const photoId = moderatableImageId(msg);
+          const shot = photoId ? await tgGetImageB64(photoId).catch(() => null) : null;
+          const attachment = shot ? { dataB64: shot.b64, mediaType: shot.mediaType } : null;
 
           // Abuse is dealt with before anything else: warned once, removed the
           // second time. Tagging the bot with abuse is still abuse.
@@ -437,7 +458,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: true });
           }
 
-          const body = await groupAiAnswer(subj.id, question); // toggle+cap inside
+          const body = await groupAiAnswer(subj.id, question, "telegram_group", attachment); // toggle+cap inside
           if (body) {
             const sentId = await tgSendGroupReply(chatId, body, msg.message_id);
             if (sentId) {

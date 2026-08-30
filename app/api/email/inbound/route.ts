@@ -272,6 +272,56 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, result: "recorded, loop guard tripped" });
   }
 
+  // course@ IS NOT A SALES DESK, AND THE MACHINE MUST NOT MAKE IT ONE.
+  //
+  // Every address that forwards in here was answered the same way: the AI read
+  // the message and replied. On course@ that meant somebody who wrote in about
+  // a class got a list of the courses back — a brochure in answer to a
+  // question, which is precisely what he has ruled out ("never send feature or
+  // marketing copy in answer to a specific question"). It also answers on his
+  // behalf on the one topic where price and eligibility are his to state.
+  //
+  // So course@ gets no automatic answer at all. It gets one short note telling
+  // the writer where a question actually gets answered, and the message goes to
+  // a person. His instruction, 30 Aug 2026.
+  const inboxName = (to.split("@")[0] ?? "").toLowerCase().replace(/\+.*$/, "");
+  if (inboxName === "course" || inboxName === "courses") {
+    try {
+      const { sendEmail, emailShell, aiReplyBcc, notifyFaculty } = await import("@/lib/notify");
+      await sendEmail(
+        from,
+        replySubject(subject, "Where to ask, so you get a proper answer"),
+        emailShell(
+          "Ask here and you will get a real answer",
+          "<p>Thank you for writing. This address is not watched through the day, so here is the quickest way to get what you need.</p>" +
+          "<p><strong>A question about the subject</strong> — Ind AS, a sum you are stuck on, a treatment you want checked — " +
+          "ask it on your dashboard at <a href='https://caparveensharma.com/dashboard'>caparveensharma.com/dashboard</a>. " +
+          "The assistant there answers from CA Parveen Sharma's own class material, and it can see which classes you have, " +
+          "so the answer fits your course. You can photograph the question and attach it.</p>" +
+          "<p><strong>A question about your account</strong> — access, validity, books, an order, a payment — " +
+          "use <a href='https://caparveensharma.com/support'>caparveensharma.com/support</a>. That opens a ticket " +
+          "against your own record, so whoever picks it up can already see your position.</p>" +
+          "<p><strong>Anything else, or you would rather write</strong> — reply to this email and tell us plainly what you " +
+          "need and, if you are already a student, the email address on your account. It will reach a person.</p>" +
+          "<p>Please do not send the same question to several addresses at once — it lands in several places and gets " +
+          "answered slower, not faster.</p>",
+        ),
+        { bcc: await aiReplyBcc() },
+      );
+      await notifyFaculty(
+        "Mail to course@ — pointed at the right channel, NOT answered",
+        `From: ${from}\nSubject: ${subject}\n\n${question}\n\n` +
+        `Nothing was answered automatically. They have been told where to ask. ` +
+        `If this needs a real reply, it is in Admin → Messages → Inbox.`,
+      ).catch(() => {});
+    } catch (e) {
+      console.error("[email/inbound] course@ handoff failed", e instanceof Error ? e.message : e);
+    }
+    // Left OPEN, not "answered": a signpost is not an answer, and somebody
+    // should still read it.
+    return NextResponse.json({ ok: true, result: "course@ — told how to ask, sent to faculty" });
+  }
+
   // An answer book arrived by email. It is NOT a doubt and must not be answered
   // like one: a paper is marked against CA Parveen Sharma's approved key for
   // that specific test, and nothing in an email says which test it is. Guessing

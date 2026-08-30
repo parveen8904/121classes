@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { answerDoubtFromMaterial, aiFeatureEnabled, judgeStudentMessage, ABUSE_WARNING, NEED_FACULTY } from "@/lib/ai";
+import { answerDoubtFromMaterial, answerDoubtWithAttachment, aiFeatureEnabled, judgeStudentMessage, ABUSE_WARNING, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 
 // Shared brain for AI answers in the STUDY GROUPS (Telegram webhook + the
@@ -101,22 +101,40 @@ export async function groupAiAnswer(
   question: string,
   /** Which group platform, for the record. */
   channel: "telegram_group" | "discord" = "telegram_group",
+  /**
+   * A PHOTOGRAPHED QUESTION. Students photograph the page and type three
+   * words — "Treatment of 3rd point" — because the question is in the picture,
+   * not in the caption. Answering from the caption alone is answering a
+   * question nobody asked.
+   */
+  attachment?: { dataB64: string; mediaType: string } | null,
 ): Promise<string | null> {
-  if (question.trim().length < 5) return null;
-  // Cheapest test first: a thank-you costs nothing to recognise and is
-  // answered with silence, per his instruction.
-  if (isAcknowledgement(question)) return null;
+  // A photo IS the question, so the guards that protect against replying to
+  // a shrug must not fire on it. Three words under a picture of a scheme of
+  // reconstruction is not chit-chat, and a bare photo with no caption at all
+  // is still a question.
+  if (!attachment) {
+    if (question.trim().length < 5) return null;
+    // Cheapest test first: a thank-you costs nothing to recognise and is
+    // answered with silence, per his instruction.
+    if (isAcknowledgement(question)) return null;
+  }
   if (!(await aiFeatureEnabled("group_doubt"))) return null;
   if (!(await budgetLeft())) return null;
 
   // Answer real questions; say nothing to chit-chat; warn once on abuse.
   // Replying earnestly to "Hi" and "classes" made the bot look silly and cost
-  // money on every shrug.
-  const judged = await judgeStudentMessage(question);
+  // money on every shrug. Abuse is still abuse when it arrives under a photo,
+  // so that test runs either way — only the chatter verdict is set aside.
+  const judged = await judgeStudentMessage(question || "(a photographed question)");
   if (judged.kind === "abusive") return ABUSE_WARNING;
-  if (judged.kind === "chatter") return null;
+  if (!attachment && judged.kind === "chatter") return null;
+  // The caption alone is a poor search key for a photographed question, so the
+  // subject's whole context is fetched on the topic words that are there.
   const material = await getRepositoryContext(subjectId, 12000, { query: question });
-  const raw = await answerDoubtFromMaterial(question, material, "group_doubt");
+  const raw = attachment
+    ? await answerDoubtWithAttachment(question, material, attachment)
+    : await answerDoubtFromMaterial(question, material, "group_doubt");
   const answer = raw && raw.trim() !== NEED_FACULTY ? raw.trim() : null;
   if (!answer) return null;
   // A group answer is read by a whole room, so it belongs in the record he

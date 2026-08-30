@@ -30,6 +30,15 @@ export const SECRET_KEYS = [
   "YOUTUBE_CLIENT_ID",
   "YOUTUBE_CLIENT_SECRET",
   "YOUTUBE_REFRESH_TOKEN",
+  // WORK ORDERED BY EMAIL (see lib/agentJobs.ts). AGENT_EMAIL_SECRET is the
+  // passphrase he types into the message; AGENT_RUNNER_KEY is the credential
+  // his Mac uses. They are deliberately different: one leaking must not be
+  // the other leaking. AGENT_EMAIL_LOCAL is the address's local part ("do"),
+  // AGENT_EMAIL_ALLOWED the senders permitted to order anything at all.
+  "AGENT_EMAIL_LOCAL",
+  "AGENT_EMAIL_SECRET",
+  "AGENT_EMAIL_ALLOWED",
+  "AGENT_RUNNER_KEY",
   "MAILGUN_API_KEY",
   "MAILGUN_WEBHOOK_KEY",
   "MAILGUN_DOMAIN",

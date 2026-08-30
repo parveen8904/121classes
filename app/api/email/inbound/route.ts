@@ -272,6 +272,64 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, result: "recorded, loop guard tripped" });
   }
 
+  // ---- WORK ORDERED BY EMAIL ----
+  //
+  // A private address that queues an instruction for the runner on his Mac.
+  // This is checked BEFORE anything else answers, and it never falls through:
+  // whatever happens here, the message ends at this branch. An order to do
+  // work must not also become a doubt in the student queue.
+  //
+  // Everything that decides whether it is really him lives in lib/agentJobs.ts.
+  {
+    const { agentInboxName, mayOrderWork, buildInstruction, queueJob, recordRefusal } =
+      await import("@/lib/agentJobs");
+    const localPart = (to.split("@")[0] ?? "").toLowerCase().replace(/\+.*$/, "");
+    if (localPart && localPart === (await agentInboxName())) {
+      const verdict = await mayOrderWork(form, from);
+      const secret = ((await getSecret("AGENT_EMAIL_SECRET")) || "").trim().toLowerCase();
+      const instruction = buildInstruction(subject, question, secret);
+
+      if (!verdict.ok) {
+        await recordRefusal({ from, subject, instruction, why: verdict.why });
+        console.error("[agent-email] refused:", verdict.why, "from", from);
+        // NO REPLY TO A REFUSED ORDER. Telling a stranger which of four checks
+        // they failed is telling them how to pass it next time. He is told
+        // instead, and only when the refusal looks like it might be him.
+        if (verdict.tellHim) {
+          try {
+            const { notifyFaculty } = await import("@/lib/notify");
+            await notifyFaculty(
+              "🚫 An email tried to order work and was refused",
+              `From: ${from}\nSubject: ${subject}\nReason: ${verdict.why}\n\n` +
+              `If this was you, check the passphrase. If it was not, the address is known to somebody else — ` +
+              `change AGENT_EMAIL_SECRET on Admin → Integrations, or set agent_email_enabled to off.`,
+            ).catch(() => {});
+          } catch { /* an alert that fails must not change the outcome */ }
+        }
+        return NextResponse.json({ ok: true, result: "refused" });
+      }
+
+      if (!instruction) {
+        return NextResponse.json({ ok: true, result: "nothing to do — the message was empty" });
+      }
+
+      const id = await queueJob({ from, subject, instruction });
+      try {
+        const { sendEmail, emailShell } = await import("@/lib/notify");
+        await sendEmail(
+          from,
+          replySubject(subject, "Queued"),
+          emailShell(
+            "Queued",
+            `<p>Picked up. I'll write back when it's done, or when I need something from you.</p>` +
+            `<p class="muted">Job ${id ? id.slice(0, 8) : "?"} · ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</p>`,
+          ),
+        );
+      } catch { /* a missing acknowledgement must not lose the job */ }
+      return NextResponse.json({ ok: true, result: "queued", id });
+    }
+  }
+
   // course@ IS NOT A SALES DESK, AND THE MACHINE MUST NOT MAKE IT ONE.
   //
   // Every address that forwards in here was answered the same way: the AI read

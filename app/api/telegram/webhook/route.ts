@@ -370,33 +370,20 @@ export async function POST(req: NextRequest) {
       const mentioned = !!botUser && said.toLowerCase().includes(`@${botUser}`);
       const repliedToBot = !!botUser && String(msg?.reply_to_message?.from?.username ?? "").toLowerCase() === botUser;
 
-      // /courses — THE COMMAND THE STUDENTS INVENTED.
+      // /courses IS NOT ANSWERED WITH A COURSE LIST. His instruction, 30 Aug.
       //
-      // Nobody built it and nothing registered it. One student typed
-      // "/courses@caparveensharmabot" in the Financial Reporting group hoping
-      // for a course list, got silence, and others copied — four of them inside
-      // twelve hours, and then the founder himself, also to silence. The
-      // mention detector saw the @botname, handed "/courses" to the AI judge,
-      // which found no question in it and said nothing. A command that LOOKS
-      // like a feature and answers nothing reads as a broken bot to the whole
+      // Students invented the command, and it was made real: it replied with
+      // the three courses and a link to the fees page. That is a brochure
+      // posted into a study group, and it went out twice in one night — at
+      // 00:31, and again to Bhavani at 01:13 — so the room scrolled past a
+      // price list to reach the teaching.
+      //
+      // The rule he set for course@ by email holds here too: a study channel
+      // does not sell, and price and eligibility are his to state, not the
+      // bot's. So /courses is deliberately NOT handled. It falls through to the
+      // reply below, which tells them how to ask something that can actually be
+      // answered — still threaded, so four presses in a night do not spam the
       // room.
-      //
-      // So it is a feature now. Answered directly, before the AI, with the two
-      // places courses actually live — and threaded to the asker so the group
-      // is not spammed when four people press it in a night.
-      if (!mod.flagged && /^\/courses\b/i.test(said)) {
-        await tgSendGroupReply(
-          chatId,
-          "📚 CA Parveen Sharma's courses:\n\n" +
-          "• CA Final — Financial Reporting\n" +
-          "• CA Inter — Advanced Accounting\n" +
-          "• Financial Instruments — Live Batch\n\n" +
-          "Details, demos and fees: caparveensharma.com/courses\n" +
-          "Your own classes after buying: caparveensharma.com/dashboard",
-          msg.message_id,
-        );
-        return NextResponse.json({ ok: true });
-      }
 
       // /amendments — a command students type expecting the amendments position.
       // NOT a fixed script (the founder wants it worded freshly each time): it is
@@ -419,10 +406,12 @@ export async function POST(req: NextRequest) {
       if (!mod.flagged && cmdForUs) {
         await tgSendGroupReply(
           chatId,
-          "🤖 Please don't type commands like this — I don't run them, so they just fill the group.\n\n" +
-          "Instead, tell me clearly in your own words what you need" +
-          (botUser ? ` (tag me @${botUser})` : "") +
-          " — for example: \"What are the latest FR amendments?\" or \"Explain Ind AS 109 briefly.\" — and I'll answer.",
+          "🤖 I don't run commands — they only fill the group. Here is how to get a real answer.\n\n" +
+          "📚 On the subject — tag me" + (botUser ? ` @${botUser}` : "") + " and ask in your own words:\n" +
+          "   \"Explain Ind AS 109 briefly\"   ·   \"What are the latest FR amendments?\"\n\n" +
+          "📷 Stuck on a sum? Photograph the question, send the photo, and tag me in the caption — I read the picture.\n\n" +
+          "🔐 Access, validity, books, an order or a payment is not for a public group. " +
+          "Open caparveensharma.com/support and it reaches a person who can already see your record.",
           msg.message_id,
         );
         return NextResponse.json({ ok: true });
@@ -526,19 +515,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // /courses in a private chat — same answer as in the groups, same reason.
-  if (/^\/courses\b/i.test(text.trim())) {
-    await sendTelegramMessage(
-      chatId,
-      "📚 CA Parveen Sharma's courses:\n\n" +
-      "• CA Final — Financial Reporting\n" +
-      "• CA Inter — Advanced Accounting\n" +
-      "• Financial Instruments — Live Batch\n\n" +
-      "Details, demos and fees: caparveensharma.com/courses\n" +
-      "Your own classes after buying: caparveensharma.com/dashboard",
-    );
-    return NextResponse.json({ ok: true });
-  }
+  // /courses in a private chat — NOT answered with a course list either, for
+  // the same reason as the group and as course@ by email. It falls through to
+  // the bare-command reply below, which says how to ask.
 
   // /amendments in a private chat — routed to the AI (fresh wording each time),
   // grounded in the class material and the standing amendments lesson.
@@ -558,8 +537,12 @@ export async function POST(req: NextRequest) {
   if (/^\/[a-z0-9_]+(@[a-z0-9_]+)?\s*$/i.test(text.trim())) {
     await sendTelegramMessage(
       chatId,
-      "🤖 Please don't type commands like this — I don't run them.\n\n" +
-      "Just tell me clearly, in your own words, what you need — for example: \"What are the latest FR amendments?\" or \"Explain Ind AS 109 briefly.\" — and I'll answer.",
+      "🤖 I don't run commands. Here is how to get a real answer.\n\n" +
+      "📚 On the subject — just ask in your own words:\n" +
+      "   \"Explain Ind AS 109 briefly\"   ·   \"What are the latest FR amendments?\"\n\n" +
+      "📷 Stuck on a sum? Photograph the question and send me the picture — I read it.\n\n" +
+      "🔐 Access, validity, books, an order or a payment — open caparveensharma.com/support " +
+      "and it reaches a person who can already see your record.",
     );
     return NextResponse.json({ ok: true });
   }

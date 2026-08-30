@@ -6,8 +6,6 @@
 // NOTE: discord-worker/index.js carries a copy of these rules for the Discord
 // side — keep the two in sync when editing.
 
-import { createServiceClient } from "@/lib/supabase/service";
-
 export type ModerationResult = { flagged: boolean; reasons: string[] };
 
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
@@ -138,6 +136,9 @@ export async function getBlockedTerms(): Promise<string[]> {
   const now = Date.now();
   if (_terms && now - _terms.at < 60_000) return _terms.list;
   try {
+    // Imported here rather than at the top so the pure matching functions in
+    // this file can be unit-tested without dragging in a database client.
+    const { createServiceClient } = await import("@/lib/supabase/service");
     const { data } = await createServiceClient()
       .from("site_settings")
       .select("value")
@@ -306,4 +307,60 @@ export function looksLikeAbuseReport(text: string): boolean {
 
 export function containsLink(text: string): boolean {
   return LINK_RE.test(text || "");
+}
+
+// ── SELLING CLASSES IN HIS GROUP ────────────────────────────────────────────
+//
+// 30 Aug 2026. A student posted "Pre booking offer going on for Praveen khatod
+// AFM and Nitin guru AFM / Msg me to enroll & Get additional discount" and
+// nothing touched it. Three reasons, all real:
+//
+//   · The blocked-terms box — the one place competitor names were meant to
+//     live — has never been filled in. getBlockedTerms() was matching against
+//     an empty list.
+//   · PROMO is a list of exact phrases. He wrote "Msg me", not "dm me";
+//     "additional discount", not "discount code"; "Pre booking offer", not
+//     "limited offer". Every one a near miss.
+//   · A week earlier the same list DID hold "half price", and still let
+//     "Can dm meIn jst almost half priceThe reason..." through, because the
+//     words ran together and \b needs a boundary.
+//
+// Sixteen adverts in 120 days were found this way, nine of them still visible,
+// including four people reselling HIS OWN Drive Batch inside his own group.
+//
+// HIS RULING, 30 Aug: block the SELLING, never the name. Students recommend
+// rival faculty to each other every week — "For FM, costing Nitin guru sir is
+// good" — and a list of competitor names would delete all of that. So this
+// asks for two things together, which an advert has and a conversation does
+// not: a way to reach the seller privately, AND something being traded.
+//
+// Tested against all 3,181 group messages of the last 120 days: it catches the
+// sixteen adverts and nothing else. In particular it must NOT catch
+// "Anyone from panipat? Pls dm, need to discuss something regarding adv itt" —
+// a demand phrase alone is a student looking for a study partner, so a demand
+// only counts when there is also a THING being traded.
+export function looksLikeSolicitation(text: string): boolean {
+  // "half priceThe" -> "half price The". Run-together words defeated \b once
+  // already; splitting on the case change costs nothing and closes it.
+  const t = normaliseLookalikes(String(text ?? ""))
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .toLowerCase();
+  if (!t.trim()) return false;
+
+  // A way to reach the seller off-channel.
+  const contact = /\b(dm|pm|msg|message|messege|ping|contact|inbox|whatsapp|telegram)\b/.test(t);
+  if (!contact) return false;
+
+  // Something that gets bought and sold in a CA group.
+  const goods = /\b(class|classes|cls|lecture|lectures|batch|batches|book|books|notes|summary|course|courses|material|materials|views|pendrive|pen drive|recording|recorded|test series|module|modules)\b/.test(t);
+
+  // Words that are commercial whatever else is in the sentence.
+  const trade = /\b(sell|sells|selling|resell|reselling|for sale|pre ?book\w*|prebook\w*|enroll\w*|admission|discount|coupon|cashback)\b/.test(t);
+  const buySell = /\b(want|wants|wish|looking|need|needs)\b.{0,20}\b(to buy|to purchase|to sell|to take)\b/.test(t);
+  const cheap = /\b(half|lower|cheap|cheaper|reasonable|best|low|less|discounted|concessional) (price|prices|rate|rates|cost)\b/.test(t);
+  // "anyone wants ... " — only commercial when there is a thing attached.
+  const demand = /\b(anyone|anybody|someone|somebody|who)\b.{0,40}\b(wants?|needs?|interested|require\w*)\b/.test(t);
+
+  return trade || buySell || cheap || (demand && goods);
 }

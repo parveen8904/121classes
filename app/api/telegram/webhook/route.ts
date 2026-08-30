@@ -4,7 +4,7 @@ import { sendTelegramMessage, notifyFaculty } from "@/lib/notify";
 import { answerDoubtFromMaterial, aiConfigured, NEED_FACULTY } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
 import { getSecret } from "@/lib/secrets";
-import { looksLikeAbuseReport, threatOfViolence, moderateMessageDyn, imageIsExplicit, containsLink } from "@/lib/moderation";
+import { looksLikeAbuseReport, threatOfViolence, moderateMessageDyn, imageIsExplicit, containsLink, looksLikeSolicitation } from "@/lib/moderation";
 import { tgDeleteMessage, tgSendGroupReply, tgApproveJoin, tgDeclineJoin, tgRestrictUser, messageHasMedia, moderatableImageId, tgGetImageB64, tgIsGroupAdmin } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
 import { groupAiAnswer } from "@/lib/groupDoubt";
@@ -179,6 +179,15 @@ export async function POST(req: NextRequest) {
         mod.flagged = true;
         mod.reasons = [...mod.reasons, "link"];
       }
+      // NOBODY SELLS CLASSES IN HIS GROUP — his own included. The phrase list
+      // in moderateMessage only matches wording it has seen before; this asks
+      // for the shape of an advert instead, so "Msg me to enroll" cannot walk
+      // past it just because the list happens to say "dm me".
+      const solicit = !isStaffSender && !!combined && looksLikeSolicitation(combined);
+      if (solicit) {
+        mod.flagged = true;
+        mod.reasons = [...mod.reasons, "selling classes"];
+      }
 
       // IMAGE / VIDEO moderation — the gap that let porn through. Any picture,
       // video, GIF or sticker is checked by AI vision; explicit content is
@@ -218,8 +227,13 @@ export async function POST(req: NextRequest) {
       const violence = !isStaffSender && combined ? threatOfViolence(combined) : { threat: false, reason: "" };
       if (violence.threat) { mod.flagged = true; mod.reasons = [...mod.reasons, violence.reason]; }
 
-      let isReport = !mediaExplicit && !violence.threat && !!combined && looksLikeAbuseReport(combined);
-      if (!isReport && mod.flagged && !mediaExplicit && !violence.threat && fromId) {
+      // AND AN ADVERT IS NEVER A REPORT. The shield asks for a call for help
+      // plus a third party, and an advert has both by accident: "Anyone want
+      // to purchase ... of amit mahajan SIR ... contact ME at lower prices"
+      // matches "sir" and "me" and would have been protected as a report.
+      let isReport = !mediaExplicit && !violence.threat && !solicit
+        && !!combined && looksLikeAbuseReport(combined);
+      if (!isReport && mod.flagged && !mediaExplicit && !violence.threat && !solicit && fromId) {
         const { data: recent } = await svc
           .from("group_messages")
           .select("body")

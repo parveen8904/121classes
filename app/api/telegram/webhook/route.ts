@@ -8,6 +8,7 @@ import { looksLikeAbuseReport, threatOfViolence, moderateMessageDyn, imageIsExpl
 import { tgDeleteMessage, tgSendGroupReply, tgApproveJoin, tgDeclineJoin, tgRestrictUser, messageHasMedia, moderatableImageId, tgGetImageB64, tgIsGroupAdmin } from "@/lib/telegramGroup";
 import { discordSendToChannel } from "@/lib/discord";
 import { groupAiAnswer } from "@/lib/groupDoubt";
+import { answerKey, alreadyAnswered, pointerReply } from "@/lib/answeredAlready";
 import { judgeStudentMessage } from "@/lib/ai";
 import { handleAbuse } from "@/lib/abuseEscalation";
 
@@ -443,6 +444,17 @@ export async function POST(req: NextRequest) {
           // group is where most of them are actually asked — it just never
           // passed the photo through. Now it does, and the caption is treated
           // as what it is: a pointer at the part of the page they mean.
+          // ONE QUESTION, ONE ANSWER. Asked again within twelve hours, the
+          // student is pointed at the answer already above rather than given a
+          // second wall of text — see lib/answeredAlready.ts and the two sums
+          // this group got solved twice.
+          const key = answerKey(msg, question);
+          const prior = await alreadyAnswered(chatId, key);
+          if (prior) {
+            await tgSendGroupReply(chatId, pointerReply(chatId, prior), msg.message_id);
+            return NextResponse.json({ ok: true });
+          }
+
           const photoId = moderatableImageId(msg);
           const shot = photoId ? await tgGetImageB64(photoId).catch(() => null) : null;
           const attachment = shot ? { dataB64: shot.b64, mediaType: shot.mediaType } : null;
@@ -477,6 +489,9 @@ export async function POST(req: NextRequest) {
                   sender_name: "🤖 AI assistant",
                   body,
                   reply_to_tg_id: msg.message_id,
+                  // What this reply ANSWERED — the next identical question is
+                  // pointed here instead of being solved a second time.
+                  answer_key: key,
                   flagged: false,
                   flag_reasons: [],
                   status: "visible",

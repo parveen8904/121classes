@@ -67,13 +67,30 @@ is dropped on the phone rather than posted and discarded at the far end.
 
 ```bash
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-cd mobile/callbridge && ./gradlew assembleDebug
+cd mobile/callbridge && ./gradlew assembleRelease
 ```
 
-Output: `app/build/outputs/apk/debug/app-debug.apk`.
+Output: `app/build/outputs/apk/release/app-release.apk`.
 
-Debug signing is deliberate — this is sideloaded onto one handset, so there is
-no keystore to manage and no release build to make.
+**Signed with the company key, not the debug key** — read from
+`mobile/android/keystore.properties`, the same one the Play app uploads with.
+That file is not in git; copy it from `~/Keystores/READ-ME-KEYSTORE-DETAILS.txt`
+on any machine that builds. Without it the release comes out unsigned and fails
+loudly at install, which is the right way round.
+
+Debug signing was the original choice and it was wrong on two counts. Google's
+developer-verification deadline of **30 September 2026** registers package name
+and signing key as a PAIR, and `CN=Android Debug` is the key that ships with
+every Android SDK on earth — not something anyone can register. And Android
+refuses to update an app whose signature has changed, so a debug build put on
+the phone today could not be replaced by a signed one later without
+uninstalling it first and losing its settings.
+
+| | |
+|---|---|
+| Package | `in.caclasses.callbridge` |
+| Signer | `CN=Aldine Ventures Private Limited` |
+| SHA-256 | `B8:59:86:92:E8:01:F1:C1:6D:5E:A8:37:9C:FB:2E:AA:BE:44:DB:3C:16:F8:3F:4E:E6:5F:DC:D3:05:AC:AA:4C` |
 
 ## Installing it
 

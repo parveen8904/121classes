@@ -10,8 +10,49 @@ android {
         versionCode 1
         versionName "1.0"
     }
+    // SIGNED WITH THE COMPANY KEY, NOT THE DEBUG KEY.
+    //
+    // The APK built on 30 August was `assembleDebug`, so it carries
+    // "CN=Android Debug" — the key that ships with every Android SDK on earth.
+    // Two reasons that has to change before it goes on a phone.
+    //
+    // First, Google's developer-verification deadline of 30 September 2026:
+    // package name and signing key are registered as a PAIR, and a shared
+    // debug key is not something anyone can or should register.
+    //
+    // Second, and sooner: Android refuses to update an installed app whose
+    // signature has changed. Install the debug build now and the signed one
+    // later cannot replace it — it has to be uninstalled first, taking its
+    // watermark and settings with it.
+    //
+    // The key is the same one the Play app uploads with, read from the same
+    // file. mobile/android/keystore.properties is NOT in git; it is copied
+    // from ~/Keystores/READ-ME-KEYSTORE-DETAILS.txt on a machine that builds.
+    def ksProps = new Properties()
+    def ksFile = [
+        rootProject.file("keystore.properties"),
+        rootProject.file("../android/keystore.properties"),
+    ].find { it.exists() }
+    if (ksFile != null) ksFile.withInputStream { ksProps.load(it) }
+
+    signingConfigs {
+        release {
+            if (ksFile != null) {
+                storeFile file(ksProps['storeFile'])
+                storePassword ksProps['storePassword']
+                keyAlias ksProps['keyAlias']
+                keyPassword ksProps['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
-        release { minifyEnabled false }
+        release {
+            minifyEnabled false
+            // No keystore on this machine = an UNSIGNED release, which fails
+            // loudly at install rather than quietly shipping the debug key.
+            if (ksFile != null) signingConfig signingConfigs.release
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

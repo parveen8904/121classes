@@ -103,12 +103,14 @@ export async function postBill(billId: string, expenseAccount: string): Promise<
   }
 }
 
-export type PettyBalance = { personId: string; name: string; zohoAccount: string; profileId: string | null; advanced: number; spent: number; balance: number };
+export type PettyBalance = { personId: string; name: string; zohoAccount: string; profileId: string | null; email: string | null; advanced: number; spent: number; balance: number };
 
 export async function pettyBalances(): Promise<PettyBalance[]> {
   const svc = createServiceClient();
   const [{ data: people }, { data: advs }, { data: bills }] = await Promise.all([
-    svc.from("petty_people").select("id, name, zoho_account_name, profile_id").eq("active", true).order("name"),
+    // The email is shown on the balances list and pre-fills the edit form —
+    // without it there was no way to see WHICH login a ledger was tied to.
+    svc.from("petty_people").select("id, name, zoho_account_name, profile_id, profiles(email)").eq("active", true).order("name"),
     svc.from("petty_advances").select("person_id, amount").eq("status", "posted"),
     svc.from("petty_bills").select("person_id, amount").eq("status", "approved"),
   ]);
@@ -118,6 +120,8 @@ export async function pettyBalances(): Promise<PettyBalance[]> {
   for (const b of bills ?? []) billBy.set(b.person_id, (billBy.get(b.person_id) ?? 0) + Number(b.amount));
   return (people ?? []).map((p) => {
     const advanced = advBy.get(p.id) ?? 0, spent = billBy.get(p.id) ?? 0;
-    return { personId: p.id, name: p.name, zohoAccount: p.zoho_account_name, profileId: p.profile_id, advanced, spent, balance: advanced - spent };
+    const prof = p.profiles as unknown as { email: string | null } | null;
+    return { personId: p.id, name: p.name, zohoAccount: p.zoho_account_name, profileId: p.profile_id,
+      email: prof?.email ?? null, advanced, spent, balance: advanced - spent };
   });
 }

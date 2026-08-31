@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { zohoFetch } from "@/lib/zohoApi";
 import { resolveFileUrl, isSecureRef } from "@/lib/storage";
+import { zohoReference } from "@/lib/zohoReference";
 
 // BANK STATEMENTS → THE THREE QUEUES.
 //
@@ -54,6 +55,7 @@ export function parseIndianDate(raw: string): string {
 // ---- tabular parsing (CSV / XLSX → rows → lines) ---------------------------
 
 export type StmtLine = { date: string; narration: string; ref: string; debit: number; credit: number; balance: number | null };
+
 
 const HEAD = {
   date: /^(txn ?date|tran\.? ?date|transaction ?date|date|value ?date|posting ?date|date ?of ?transaction)$/i,
@@ -559,7 +561,7 @@ export async function postBankLine(
         amount: debit > 0 ? debit : credit,
         date: String(l.line_date),
         bankAccountId: bankId,
-        reference: String(l.ref ?? "").slice(0, 90),
+        reference: zohoReference(l.ref as string | null, l.narration as string | null),
         // A receipt or a payment says what it settles, not merely that money
         // moved: the head it clears and the document count, then the bank's own
         // words kept as the source.
@@ -609,9 +611,10 @@ export async function postBankLine(
 
     // THE REFERENCE, ALWAYS. The bank's ref column is usually empty (Axis puts
     // the wire number inside the narration), so reference_number was blank on
-    // most postings while the settlement journals all carry their UTR. The
-    // narration's lead is the reference when the column gives nothing.
-    const refNo = (String(l.ref ?? "").trim() || String(l.narration ?? "").trim()).slice(0, 90);
+    // most postings while the settlement journals all carry their UTR. The wire
+    // number is lifted out of the narration when the column gives nothing —
+    // see zohoReference, and the five expenses it stopped failing.
+    const refNo = zohoReference(l.ref as string | null, l.narration as string | null);
 
     // A BANK'S OWN WORDING IS NOT A NARRATION.
     //

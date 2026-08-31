@@ -29,7 +29,7 @@ type CourseRow = { id: string; title: string; subjects: { id: string; title: str
 
 export default async function EnrolmentPage(
   props: {
-    searchParams: Promise<{ granted?: string; missing?: string; error?: string; dupe?: string; until?: string; tier?: string; months?: string; course?: string; blocked?: string; restored?: string; queued?: string; requeued?: string; badlines?: string }>;
+    searchParams: Promise<{ granted?: string; missing?: string; error?: string; dupe?: string; until?: string; dupe_id?: string; dupe_name?: string; extended?: string; extended_to?: string; q?: string; tier?: string; months?: string; course?: string; blocked?: string; restored?: string; queued?: string; requeued?: string; badlines?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -46,15 +46,40 @@ export default async function EnrolmentPage(
   // refuses anyone without it and all seven actions here assertArea("enrolment").
   const supabase = createServiceClient();
 
+  // THE HUNDRED MOST RECENT IS NOT ENOUGH TO FIND ANYONE BY.
+  //
+  // The desk was told to "use Extend on the row below" for a student who had
+  // enrolled eighteen months earlier and was nowhere near this list. Searching
+  // by name or email finds the row wherever it sits.
+  const query = (searchParams.q ?? "").trim();
+  const SELECT =
+    "id, ends_at, status, auto_renew, channel, blocked_reason, profiles(email, full_name), courses(title), subjects(title), plans(tier)";
+
+  // Matched in two steps rather than by filtering the embedded profile: find
+  // the people, then their subscriptions. Filtering an embedded table only
+  // narrows what is embedded unless the join is inner, and getting that subtly
+  // wrong here would silently show the desk an empty list for a student who
+  // does exist — the exact failure this search is meant to end.
+  let studentIds: string[] | null = null;
+  if (query) {
+    const like = `%${query.replace(/[%_,()]/g, "")}%`;
+    const { data: people } = await supabase
+      .from("profiles").select("id")
+      .or(`email.ilike.${like},full_name.ilike.${like}`)
+      .limit(200);
+    studentIds = (people ?? []).map((p) => p.id as string);
+  }
+
+  const subsQuery = studentIds
+    ? supabase.from("subscriptions").select(SELECT)
+        .in("student_id", studentIds.length ? studentIds : ["00000000-0000-0000-0000-000000000000"])
+        .order("ends_at", { ascending: false, nullsFirst: false }).limit(50)
+    : supabase.from("subscriptions").select(SELECT)
+        .order("created_at", { ascending: false }).limit(100);
+
   const [{ data: courses }, { data: subs }] = await Promise.all([
     supabase.from("courses").select("id, title, subjects(id, title)").order("order_index").order("title"),
-    supabase
-      .from("subscriptions")
-      .select(
-        "id, ends_at, status, auto_renew, channel, blocked_reason, profiles(email, full_name), courses(title), subjects(title), plans(tier)",
-      )
-      .order("created_at", { ascending: false })
-      .limit(100),
+    subsQuery,
   ]);
 
   // Drip-queue progress (service client — the queue table is server-only).
@@ -95,7 +120,11 @@ export default async function EnrolmentPage(
       )}
       {grantedCount !== null && (
         <div className="notice ok" style={{ marginTop: 16 }}>
-          ✅ Granted {grantedCount} subscription{grantedCount === 1 ? "" : "s"}.
+          ✅ Granted {grantedCount} new subscription{grantedCount === 1 ? "" : "s"}.
+          {searchParams.extended && (
+            <> <strong>{searchParams.extended}</strong> already had access and were{" "}
+            <strong>extended from their own expiry date</strong> rather than given a second subscription.</>
+          )}
           {missing.length > 0 && <> Not found (no account yet): {missing.join(", ")}.</>}
         </div>
       )}
@@ -103,7 +132,33 @@ export default async function EnrolmentPage(
         <div className="notice err" style={{ marginTop: 16, fontSize: ".95rem" }}>
           ⚠️ <strong>Subscription already added.</strong> {searchParams.dupe} already has an active subscription for
           that course and subject{searchParams.until ? <>, running until <strong>{searchParams.until}</strong></> : null}.
-          Nothing was changed. To extend it, use <strong>Extend</strong> on the row below.
+          Nothing was changed.
+          {/* Telling the desk to "use Extend on the row below" was no help when
+              the student was not among the hundred most recent. Extend it right
+              here, on the row we just found. */}
+          {searchParams.dupe_id ? (
+            <form
+              action={extendSubscription}
+              style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}
+            >
+              <input type="hidden" name="id" value={searchParams.dupe_id} />
+              <span>Extend it by</span>
+              <select name="months" defaultValue="12" style={{ marginBottom: 0, width: "auto" }}>
+                {DURATIONS.map((m) => <option key={m} value={m}>{durationLabel(m)}</option>)}
+              </select>
+              <SubmitButton className="btn small">Extend now</SubmitButton>
+              <span className="muted" style={{ fontSize: ".8rem" }}>
+                — counted from {searchParams.until || "the current expiry"}, not from today
+              </span>
+            </form>
+          ) : (
+            <> To extend it, find the student below and use <strong>Extend</strong>.</>
+          )}
+        </div>
+      )}
+      {searchParams.extended_to && (
+        <div className="notice ok" style={{ marginTop: 16 }}>
+          ✅ Extended — access now runs until <strong>{searchParams.extended_to}</strong>.
         </div>
       )}
       {searchParams.blocked && (
@@ -219,7 +274,25 @@ export default async function EnrolmentPage(
         </div>
       </div>
 
-      <h2 className="admin-section-title">🎫 Recent subscriptions</h2>
+      <h2 className="admin-section-title">
+        🎫 {query ? `Subscriptions matching “${query}”` : "Recent subscriptions"}
+      </h2>
+      <form method="get" style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+        <input
+          name="q"
+          defaultValue={query}
+          placeholder="Find a student by name or email — then Extend their row"
+          style={{ marginBottom: 0, flex: 1, minWidth: 260 }}
+        />
+        <SubmitButton className="btn small secondary">🔍 Find</SubmitButton>
+        {query && <Link className="btn small secondary" href="/admin/enrolment">Clear</Link>}
+      </form>
+      {query && (
+        <p className="muted" style={{ fontSize: ".8rem", marginTop: 6 }}>
+          Showing every active and past subscription for anyone matching, longest-running first — not just the
+          hundred most recent.
+        </p>
+      )}
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
         {subscriptions.length > 0 ? (
           subscriptions.map((s) => (
@@ -243,9 +316,12 @@ export default async function EnrolmentPage(
                       </option>
                     ))}
                   </select>
-                  <SubmitButton className="btn small secondary">
-                    Extend
-                  </SubmitButton>
+                  <SubmitButton className="btn small secondary">Extend</SubmitButton>
+                  <span className="muted" style={{ fontSize: ".72rem" }} title="Months are added on top of the current expiry, never from today">
+                    {s.status === "active" && s.ends_at && new Date(s.ends_at) > new Date()
+                      ? `from ${fmtDate(s.ends_at)}`
+                      : "from today"}
+                  </span>
                 </form>
                 {s.status === "blocked" && (
                   <form action={restoreSubscription} style={{ display: "inline", margin: 0 }}>

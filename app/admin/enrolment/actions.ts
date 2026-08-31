@@ -9,6 +9,7 @@ import { str, num } from "../_lib/util";
 import { loadTemplate, renderTemplate } from "@/lib/emailTemplates";
 import { notifyByEmail, emailShell } from "@/lib/notify";
 import { assertArea } from "@/lib/adminAccess";
+import { addMonths, extendedEndsAt, endsAtFromNow } from "@/lib/subscriptionDates";
 
 // A granted subscription must also appear on the student's "My courses" shelf,
 // or they can't see what they were given (service client — shelf RLS is
@@ -43,15 +44,7 @@ const TIERS = ["bronze", "silver", "gold"];
 // lib/grantEmail.ts. `expires` is spelled out for the reader rather than left
 // as "6 months", because "until 31 January 2027" is what they actually need.
 function expiryLabel(months: number): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() + months);
-  return formatDate(d);
-}
-
-function endsAtFromNow(months: number): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString();
+  return formatDate(addMonths(new Date(), months));
 }
 
 // Look up the active plan row for a tier.
@@ -101,20 +94,39 @@ export async function grantSubscription(formData: FormData) {
   // ended up with four identical subscriptions eleven seconds apart. An active
   // subscription for this exact course/subject already covers them, so say so
   // instead of stacking another one on top.
+  //
+  // maybeSingle() USED TO DEFEAT THIS ENTIRELY. It errors when the query
+  // matches more than one row and hands back data: null — so the moment a
+  // student had two stacked subscriptions the guard read "none" and cheerfully
+  // added a third. Yashasvi Chaudhary reached three that way, and the dashboard
+  // then showed her the latest of them rather than the longest. Take the
+  // longest-running row instead, which is the one an extension should land on.
   const dupeQuery = supabase
     .from("subscriptions")
     .select("id, ends_at")
     .eq("student_id", profile.id)
     .eq("course_id", courseId)
-    .eq("status", "active");
-  const { data: existing } = subjectId
-    ? await dupeQuery.eq("subject_id", subjectId).maybeSingle()
-    : await dupeQuery.is("subject_id", null).maybeSingle();
+    .eq("status", "active")
+    .order("ends_at", { ascending: false, nullsFirst: false })
+    .limit(1);
+  const { data: existingRows } = subjectId
+    ? await dupeQuery.eq("subject_id", subjectId)
+    : await dupeQuery.is("subject_id", null);
+  const existing = (existingRows ?? [])[0];
   if (existing) {
     const until = existing.ends_at
       ? formatDate(existing.ends_at as string)
       : "";
-    redirect(`/admin/enrolment?dupe=${encodeURIComponent(profile.email ?? email)}&until=${encodeURIComponent(until)}`);
+    // Carry the row id back so the page can offer Extend on the spot. Telling
+    // the admin to "use Extend on the row below" was useless when the student
+    // was not among the hundred most recent subscriptions.
+    const q = new URLSearchParams({
+      dupe: profile.email ?? email,
+      until,
+      dupe_id: existing.id as string,
+      dupe_name: profile.full_name || "",
+    });
+    redirect(`/admin/enrolment?${q.toString()}`);
   }
 
   await supabase.from("subscriptions").insert({
@@ -196,21 +208,64 @@ export async function bulkGrant(formData: FormData) {
   const foundEmails = new Set(found.map((p) => (p.email ?? "").toLowerCase()));
   const missing = emails.filter((e) => !foundEmails.has(e));
 
+  let extended = 0;
   if (found.length) {
-    const ends = endsAtFromNow(months);
-    await supabase.from("subscriptions").insert(
-      found.map((p) => ({
-        student_id: p.id,
-        course_id: courseId,
-        subject_id: subjectId,
-        plan_id: planId,
-        channel: "admin_grant",
-        ends_at: ends,
-        status: "active",
-        auto_renew: false,
-        granted_by_admin_id: user?.id ?? null,
-      })),
+    // BULK USED TO STACK, NEVER EXTEND.
+    //
+    // Every email got a brand-new subscription running from TODAY, whatever
+    // they already held. A student with access to 25 November given twelve
+    // months in bulk ended up with two overlapping rows, and the dashboard
+    // showed whichever the access check happened to pick — which is how a
+    // 24-month FR student came to see an expiry eleven months early.
+    //
+    // So: an active row for this exact course and subject is EXTENDED from its
+    // own expiry; only a student with none gets a new one.
+    const existingQuery = supabase
+      .from("subscriptions")
+      .select("id, student_id, ends_at")
+      .in("student_id", found.map((p) => p.id))
+      .eq("course_id", courseId)
+      .eq("status", "active");
+    const { data: existingRows } = subjectId
+      ? await existingQuery.eq("subject_id", subjectId)
+      : await existingQuery.is("subject_id", null);
+
+    // Longest-running row per student — the one an extension should land on.
+    const longest = new Map<string, { id: string; ends_at: string | null }>();
+    for (const row of existingRows ?? []) {
+      const cur = longest.get(row.student_id as string);
+      const a = row.ends_at as string | null;
+      if (!cur || (a && (!cur.ends_at || new Date(a) > new Date(cur.ends_at)))) {
+        longest.set(row.student_id as string, { id: row.id as string, ends_at: a });
+      }
+    }
+
+    await Promise.all(
+      [...longest.values()].map((row) =>
+        supabase.from("subscriptions")
+          .update({ ends_at: extendedEndsAt(row.ends_at, months), status: "active" })
+          .eq("id", row.id),
+      ),
     );
+    extended = longest.size;
+
+    const fresh = found.filter((p) => !longest.has(p.id));
+    if (fresh.length) {
+      const ends = endsAtFromNow(months);
+      await supabase.from("subscriptions").insert(
+        fresh.map((p) => ({
+          student_id: p.id,
+          course_id: courseId,
+          subject_id: subjectId,
+          plan_id: planId,
+          channel: "admin_grant",
+          ends_at: ends,
+          status: "active",
+          auto_renew: false,
+          granted_by_admin_id: user?.id ?? null,
+        })),
+      );
+    }
     await addToShelf(found.map((p) => p.id), courseId, subjectId);
 
     const { data: course } = await supabase.from("courses").select("title").eq("id", courseId).maybeSingle();
@@ -233,7 +288,8 @@ export async function bulkGrant(formData: FormData) {
   }
 
   revalidatePath("/admin/enrolment");
-  const params = new URLSearchParams({ granted: String(found.length) });
+  const params = new URLSearchParams({ granted: String(found.length - extended) });
+  if (extended) params.set("extended", String(extended));
   if (missing.length) params.set("missing", missing.join(","));
   redirect(`/admin/enrolment?${params.toString()}`);
 }
@@ -288,14 +344,15 @@ export async function extendSubscription(formData: FormData) {
     .select("ends_at")
     .eq("id", id)
     .maybeSingle();
-  const now = new Date();
-  const base = sub?.ends_at && new Date(sub.ends_at) > now ? new Date(sub.ends_at) : now;
-  base.setMonth(base.getMonth() + months);
+  // Runs on from the existing expiry where there is one left to run on from,
+  // and from today where access has already lapsed — see extendedEndsAt.
+  const ends = extendedEndsAt((sub?.ends_at as string | null) ?? null, months);
   await supabase
     .from("subscriptions")
-    .update({ ends_at: base.toISOString(), status: "active" })
+    .update({ ends_at: ends, status: "active" })
     .eq("id", id);
   revalidatePath("/admin/enrolment");
+  redirect(`/admin/enrolment?extended_to=${encodeURIComponent(formatDate(ends))}`);
 }
 
 // Save the wording of the granted-access email. Blank fields fall back to the

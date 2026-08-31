@@ -1267,6 +1267,25 @@ export async function retryLineAction(formData: FormData) {
 
 // ---- Petty cash (managed inside the zoho area) ------------------------------
 
+// ONE EMAIL, ONE PERSON.
+//
+// Nothing stopped the same login being attached to two petty-cash people, and
+// a bill filed by that login lands on whichever row the lookup happened to
+// return first — so an advance could be cleared against the wrong ledger with
+// no sign anything was wrong. Compared case-insensitively, because
+// "ABC@gmail.com" and "abc@gmail.com" are one mailbox everywhere but a
+// case-sensitive string compare.
+async function pettyEmailClash(email: string, exceptPersonId?: string): Promise<string | null> {
+  if (!email) return null;
+  const svc = createServiceClient();
+  const { data: prof } = await svc.from("profiles").select("id").ilike("email", email).maybeSingle();
+  if (!prof) return null;
+  let q = svc.from("petty_people").select("id, name").eq("profile_id", prof.id).eq("active", true);
+  if (exceptPersonId) q = q.neq("id", exceptPersonId);
+  const { data: clash } = await q.limit(1);
+  return (clash ?? [])[0]?.name ?? null;
+}
+
 export async function addPettyPersonAction(formData: FormData) {
   await assertArea("zoho");
   const name = str(formData.get("name"));
@@ -1274,6 +1293,19 @@ export async function addPettyPersonAction(formData: FormData) {
   let zohoAccount = str(formData.get("zoho_account_name"));
   if (!name) return;
   const svc = createServiceClient();
+
+  const clash = await pettyEmailClash(email);
+  if (clash) {
+    redirect(`/admin/zoho?scan=${encodeURIComponent(
+      `This email ID is already registered — it belongs to ${clash}. One login can hold only one petty-cash ledger.`)}#petty`);
+  }
+  // The same name twice is nearly always a double-submit, and two ledgers with
+  // one name are impossible to tell apart on the balances list.
+  const { data: sameName } = await svc.from("petty_people")
+    .select("id").ilike("name", name).eq("active", true).limit(1);
+  if ((sameName ?? []).length) {
+    redirect(`/admin/zoho?scan=${encodeURIComponent(`${name} is already on the petty-cash list.`)}#petty`);
+  }
   // A fresh person gets a fresh "(AI)" advance account unless an existing
   // account (Arun / Madan / Pradeep / Shripal…) is named.
   if (!zohoAccount) {
@@ -1290,6 +1322,68 @@ export async function addPettyPersonAction(formData: FormData) {
   revalidatePath("/admin/zoho");
   redirect(`/admin/zoho?scan=${encodeURIComponent(
     `${name} added (account: ${zohoAccount}).${email && !profileId ? " ⚠️ No portal login found for that email — they can't upload bills until it matches." : ""}${profileId ? " Remember to grant them the 👛 Petty cash area in Admin → Users." : ""}`)}#petty`);
+}
+
+export async function editPettyPersonAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  const name = str(formData.get("name"));
+  const email = str(formData.get("email")).toLowerCase();
+  const zohoAccount = str(formData.get("zoho_account_name"));
+  if (!id || !name) return;
+  const svc = createServiceClient();
+
+  const clash = await pettyEmailClash(email, id);
+  if (clash) {
+    redirect(`/admin/zoho?scan=${encodeURIComponent(
+      `This email ID is already registered — it belongs to ${clash}.`)}#petty`);
+  }
+
+  // Clearing the email box unlinks the login rather than silently keeping the
+  // old one; that is what an empty field means everywhere else on this page.
+  let profileId: string | null = null;
+  if (email) {
+    const { data: prof } = await svc.from("profiles").select("id").ilike("email", email).maybeSingle();
+    profileId = prof?.id ?? null;
+  }
+
+  const patch: Record<string, unknown> = { name, profile_id: profileId };
+  // The Zoho advance account is where their money actually sits. Renaming it by
+  // accident would orphan every entry already posted there, so a blank box
+  // leaves it alone instead of clearing it.
+  if (zohoAccount) patch.zoho_account_name = zohoAccount;
+  await svc.from("petty_people").update(patch).eq("id", id);
+
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(
+    `${name} updated.${email && !profileId ? " ⚠️ No portal login found for that email — they can't upload bills until it matches." : ""}`)}#petty`);
+}
+
+// DEACTIVATE, NOT DESTROY.
+//
+// Their advances and bills are posted entries in Zoho and cannot be unmade by
+// deleting a row here; removing the person would only strand them. So the row
+// is marked inactive — it leaves the balances list and the pickers, and the
+// history behind it stays readable. A ledger still holding money says so
+// first, because that is a real balance somebody has to account for.
+export async function deletePettyPersonAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  // The tick box is `required` in the markup, but a form can be posted without
+  // one — the confirmation has to hold on the server too.
+  if (!id || str(formData.get("confirm")) !== "yes") return;
+  const svc = createServiceClient();
+  const { data: person } = await svc.from("petty_people").select("name").eq("id", id).maybeSingle();
+  const { pettyBalances } = await import("@/lib/pettyCash");
+  const bal = (await pettyBalances().catch(() => [])).find((b) => b.personId === id);
+  if (bal && Math.round(bal.balance) !== 0 && str(formData.get("force")) !== "yes") {
+    redirect(`/admin/zoho?scan=${encodeURIComponent(
+      `${bal.name} still holds ${Math.round(bal.balance)} of unspent advance. Settle it first, or tick "remove anyway".`)}#petty`);
+  }
+  await svc.from("petty_people").update({ active: false }).eq("id", id);
+  revalidatePath("/admin/zoho");
+  redirect(`/admin/zoho?scan=${encodeURIComponent(
+    `${person?.name ?? "That person"} removed from petty cash. Their posted advances and bills are untouched.`)}#petty`);
 }
 
 export async function recordAdvanceAction(formData: FormData) {

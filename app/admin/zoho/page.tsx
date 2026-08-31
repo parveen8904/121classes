@@ -19,7 +19,7 @@ import BankAnswerPanel from "./BankAnswerPanel";
 import SectionToggle from "./SectionToggle";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction, rematchBankAction, removeStatementAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, editPettyPersonAction, deletePettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction, rematchBankAction, removeStatementAction } from "./actions";
 import { listZohoAccounts } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -1081,12 +1081,50 @@ export default async function ZohoHubPage(props: {
           {pBalances.length > 0 && (
             <div style={{ display: "grid", gap: 6 }}>
               {pBalances.map((p) => (
-                <div className="card" key={p.personId} style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
-                  <strong style={{ minWidth: 130 }}>{p.name}</strong>
-                  <span className="muted" style={{ fontSize: ".78rem", flex: 1, minWidth: 160 }}>{p.zohoAccount}{!p.profileId && " · ⚠️ no portal login linked"}</span>
-                  <span style={{ fontSize: ".82rem" }}>advanced {formatINR(p.advanced)}</span>
-                  <span style={{ fontSize: ".82rem" }}>spent {formatINR(p.spent)}</span>
-                  <strong>👛 {formatINR(p.balance)}</strong>
+                <div className="card" key={p.personId} style={{ padding: "10px 14px" }}>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                    <strong style={{ minWidth: 130 }}>{p.name}</strong>
+                    {/* The email is the thing that decides whose ledger a bill
+                        lands on, so it belongs on the row, not hidden. */}
+                    <span style={{ fontSize: ".8rem", minWidth: 190 }}>
+                      {p.email ? <>📧 {p.email}</> : <span className="muted">⚠️ no portal login linked</span>}
+                    </span>
+                    <span className="muted" style={{ fontSize: ".78rem", flex: 1, minWidth: 140 }}>{p.zohoAccount}</span>
+                    <span style={{ fontSize: ".82rem" }}>advanced {formatINR(p.advanced)}</span>
+                    <span style={{ fontSize: ".82rem" }}>spent {formatINR(p.spent)}</span>
+                    <strong>👛 {formatINR(p.balance)}</strong>
+                    <details style={{ marginLeft: "auto" }}>
+                      <summary className="btn small secondary" style={{ listStyle: "none", cursor: "pointer" }}>✏️ Edit</summary>
+                      <div style={{ display: "grid", gap: 8, marginTop: 8, minWidth: 300 }}>
+                        <form action={editPettyPersonAction} style={{ display: "grid", gap: 6 }}>
+                          <input type="hidden" name="id" value={p.personId} />
+                          <label style={{ fontSize: ".72rem", margin: 0 }}>Name</label>
+                          <input name="name" defaultValue={p.name} required style={{ marginBottom: 0 }} />
+                          <label style={{ fontSize: ".72rem", margin: 0 }}>Portal login email (empty = unlink)</label>
+                          <input name="email" type="email" defaultValue={p.email ?? ""} placeholder="person@example.com" style={{ marginBottom: 0 }} />
+                          <label style={{ fontSize: ".72rem", margin: 0 }}>Zoho advance account (empty = leave as it is)</label>
+                          <input name="zoho_account_name" list="adv-accts" placeholder={p.zohoAccount} style={{ marginBottom: 0 }} />
+                          <SubmitButton className="btn small" savedLabel="✓ Saved">💾 Save</SubmitButton>
+                        </form>
+                        {/* Deletion is a two-step: the box must be ticked, and a
+                            ledger still holding money refuses unless forced. */}
+                        <form action={deletePettyPersonAction} style={{ display: "grid", gap: 6, borderTop: "1px solid #eee", paddingTop: 8 }}>
+                          <input type="hidden" name="id" value={p.personId} />
+                          <label style={{ fontSize: ".74rem", display: "flex", gap: 6, alignItems: "flex-start", margin: 0 }}>
+                            <input type="checkbox" name="confirm" value="yes" required style={{ marginTop: 3 }} />
+                            <span>Remove {p.name} from petty cash. Posted advances and bills stay in Zoho.</span>
+                          </label>
+                          {Math.round(p.balance) !== 0 && (
+                            <label style={{ fontSize: ".74rem", display: "flex", gap: 6, alignItems: "flex-start", margin: 0, color: "#b91c1c" }}>
+                              <input type="checkbox" name="force" value="yes" style={{ marginTop: 3 }} />
+                              <span>They still hold {formatINR(p.balance)} — remove anyway.</span>
+                            </label>
+                          )}
+                          <SubmitButton className="btn small secondary" savedLabel="✓ Removed">🗑️ Remove</SubmitButton>
+                        </form>
+                      </div>
+                    </details>
+                  </div>
                 </div>
               ))}
             </div>

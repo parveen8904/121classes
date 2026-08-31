@@ -59,8 +59,11 @@ export type StmtLine = { date: string; narration: string; ref: string; debit: nu
 
 const HEAD = {
   date: /^(txn ?date|tran\.? ?date|transaction ?date|date|value ?date|posting ?date|date ?of ?transaction)$/i,
-  narration: /^(particulars?|narration|description|details|transaction ?(details|remarks|particulars?)|remarks|transaction)$/i,
-  ref: /^(chq\.?\/?ref\.? ?(no\.?)?|ref(erence)? ?(no\.?)?|cheque ?(no\.?|number)|utr|chqno)$/i,
+  // "Statement Description" is the column name the accounts desk uses in the
+  // upload template — the transaction particulars belong here, NOT in the
+  // reference, which Zoho caps at fifty characters.
+  narration: /^(statement ?description|particulars?|narration|description|details|transaction ?(details|remarks|particulars?|description)|remarks|transaction)$/i,
+  ref: /^(chq\.?\/?ref\.? ?(no\.?)?|ref(erence)? ?(no\.?|number)?|cheque ?(no\.?|number)|utr|chqno)$/i,
   debit: /^(withdrawal ?(amt\.?)? ?(\(?inr\)?)?|debit ?(amt\.?)?|dr|dr\.? ?amount|withdrawals?|debits?)$/i,
   credit: /^(deposit ?(amt\.?)? ?(\(?inr\)?)?|credit ?(amt\.?)?|cr|cr\.? ?amount|deposits?|credits?)$/i,
   balance: /^(closing ?balance|balance|bal|running ?balance|balance ?(\(?inr\)?)?)$/i,

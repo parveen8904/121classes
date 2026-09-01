@@ -80,5 +80,34 @@ check("extendSubscription goes through extendedEndsAt",
 check("the duplicate warning carries the row id so Extend can be offered inline",
   /dupe_id: existing\.id/.test(actions));
 
+// ── any whole number of months, not just 1/3/6/12 ──────────────────────────
+// His ask, 1 September: "Custom month required here, so we enter 2 months,
+// 4 months, 5 months etc." The grant forms took a free number from 20 August;
+// the two Extend controls were still fixed dropdowns.
+const page = readFileSync(join(import.meta.dirname, "..", "app/admin/enrolment/page.tsx"), "utf8");
+check("neither Extend control is a fixed dropdown any more",
+  !/<select name="months"/.test(page),
+  "a select cannot express 2, 4 or 5 months");
+// Three number boxes on this page take months: the two Extend controls and the
+// past-students queue. The two that matter are identified by the datalist below.
+check("every months box on the page is a free number",
+  (page.match(/name="months"\s+type="number"/g) ?? []).length === 3,
+  `found ${(page.match(/name="months"\s+type="number"/g) ?? []).length}`);
+check("the common terms survive as a hint, not a limit",
+  /<datalist id="extend-month-presets">/.test(page) &&
+  (page.match(/list="extend-month-presets"/g) ?? []).length === 2);
+check("the action clamps to the range the box allows",
+  /Math\.min\(36, Math\.max\(1,[\s\S]{0,60}formData\.get\("months"\)/.test(actions),
+  "a hand-posted 9999 must not set a subscription running to the next century");
+
+// two, four and five months all land where they should
+// 30 September plus four months is 30 JANUARY — the day is kept, not pushed to
+// the month end. Plus five is 28 February, because February has no 30th.
+for (const [m, expect] of [[2, "2026-11-30"], [4, "2027-01-30"], [5, "2027-02-28"]] as [number, string][]) {
+  check(`+${m} months from 30 September 2026`,
+    day(extendedEndsAt("2026-09-30T00:00:00.000Z", m, new Date("2026-08-30T00:00:00Z"))) === expect,
+    day(extendedEndsAt("2026-09-30T00:00:00.000Z", m, new Date("2026-08-30T00:00:00Z"))));
+}
+
 console.log(fails === 0 ? "ok — subscription dates" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

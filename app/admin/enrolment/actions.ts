@@ -337,7 +337,10 @@ export async function restoreSubscription(formData: FormData) {
 export async function extendSubscription(formData: FormData) {
   await assertArea("enrolment");
   const id = str(formData.get("id"));
-  const months = num(formData.get("months"), 1);
+  // Any whole number of months, not a fixed 1/3/6/12 — his ask, 1 September.
+  // Clamped to the same 1-36 the box allows, so a hand-posted 9999 cannot set
+  // a subscription running to the next century.
+  const months = Math.min(36, Math.max(1, Math.round(num(formData.get("months"), 1))));
   const supabase = createClient();
   const { data: sub } = await supabase
     .from("subscriptions")

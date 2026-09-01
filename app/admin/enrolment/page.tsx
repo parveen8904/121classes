@@ -143,9 +143,21 @@ export default async function EnrolmentPage(
             >
               <input type="hidden" name="id" value={searchParams.dupe_id} />
               <span>Extend it by</span>
-              <select name="months" defaultValue="12" style={{ marginBottom: 0, width: "auto" }}>
-                {DURATIONS.map((m) => <option key={m} value={m}>{durationLabel(m)}</option>)}
-              </select>
+              {/* A FREE NUMBER, NOT 1/3/6/12. His ask, 1 September: two months,
+                  four, five — a part payment or a goodwill month is whatever it
+                  is. The grant forms were given a free number on 20 August for
+                  the same reason; the two Extend controls were missed. */}
+              <input
+                name="months"
+                type="number"
+                min={1}
+                max={36}
+                defaultValue={12}
+                list="extend-month-presets"
+                required
+                style={{ marginBottom: 0, width: 90 }}
+              />
+              <span>months</span>
               <SubmitButton className="btn small">Extend now</SubmitButton>
               <span className="muted" style={{ fontSize: ".8rem" }}>
                 — counted from {searchParams.until || "the current expiry"}, not from today
@@ -274,6 +286,11 @@ export default async function EnrolmentPage(
         </div>
       </div>
 
+      {/* Common terms as a hint on both Extend boxes; any whole number up to
+          36 is accepted, and extendSubscription clamps to that range. */}
+      <datalist id="extend-month-presets">
+        {DURATIONS.map((m) => <option key={m} value={m}>{durationLabel(m)}</option>)}
+      </datalist>
       <h2 className="admin-section-title">
         🎫 {query ? `Subscriptions matching “${query}”` : "Recent subscriptions"}
       </h2>
@@ -309,13 +326,18 @@ export default async function EnrolmentPage(
               <div className="row-actions">
                 <form action={extendSubscription} style={{ display: "flex", gap: 6, alignItems: "center", margin: 0 }}>
                   <input type="hidden" name="id" value={s.id} />
-                  <select name="months" defaultValue="3" style={{ marginBottom: 0, width: "auto" }}>
-                    {DURATIONS.map((m) => (
-                      <option key={m} value={m}>
-                        +{durationLabel(m)}
-                      </option>
-                    ))}
-                  </select>
+                  <input
+                    name="months"
+                    type="number"
+                    min={1}
+                    max={36}
+                    defaultValue={3}
+                    list="extend-month-presets"
+                    required
+                    aria-label="Months to add"
+                    style={{ marginBottom: 0, width: 74 }}
+                  />
+                  <span className="muted" style={{ fontSize: ".76rem" }}>months</span>
                   <SubmitButton className="btn small secondary">Extend</SubmitButton>
                   <span className="muted" style={{ fontSize: ".72rem" }} title="Months are added on top of the current expiry, never from today">
                     {s.status === "active" && s.ends_at && new Date(s.ends_at) > new Date()

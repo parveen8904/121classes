@@ -35,6 +35,12 @@ export const AI_TOGGLES: { key: string; label: string; desc: string }[] = [
 ];
 
 let _aiDisabled: { at: number; set: Set<string> } | null = null;
+/** Is this feature switched off in Admin -> AI training? Exported so a caller
+ *  can say WHY the AI produced nothing instead of reporting a bare blank. */
+export async function aiFeatureDisabled(feature: string): Promise<boolean> {
+  return (await aiDisabledSet()).has(feature);
+}
+
 async function aiDisabledSet(): Promise<Set<string>> {
   const now = Date.now();
   if (_aiDisabled && now - _aiDisabled.at < 30000) return _aiDisabled.set;

@@ -284,7 +284,21 @@ export async function ingestStatement(accountName: string, fileUrl: string, file
       const ai = await parseBankStatementText(text);
       // Evidence, not a shrug: the xlsx path taught us a failure that shows
       // what it saw is a failure that gets fixed the same day.
-      if (!ai) note = `the PDF's text was read (${text.length} chars) but the transcription returned nothing — it starts: "${text.slice(0, 90).replace(/\s+/g, " ")}"`;
+      if (!ai) {
+        // "Returned nothing" was true and useless: it covers an absent API key,
+        // a switched-off feature, an HTTP failure and a reply that would not
+        // parse, and the desk cannot tell which. Name the cause it can act on.
+        const { aiConfigured, aiFeatureDisabled } = await import("@/lib/ai");
+        const why = !(await aiConfigured())
+          ? "the AI key is not configured"
+          : (await aiFeatureDisabled("bankstmt"))
+            ? "bank-statement reading is switched OFF in Admin → AI training"
+            : "the model returned nothing usable — it may have been too long, or the reply was not valid JSON";
+        note =
+          `the PDF's text was read (${text.length} chars) but no transactions came back: ${why}. ` +
+          `It starts: "${text.slice(0, 90).replace(/\s+/g, " ")}". ` +
+          `If this is an Axis Smart Statement, upload the EXCEL version instead — that is read by code, with no AI involved.`;
+      }
       else lines = ai.map((l) => ({
         date: parseIndianDate(l.date) || str(l.date),
         narration: str(l.narration), ref: str(l.ref),
@@ -308,20 +322,47 @@ export async function ingestStatement(accountName: string, fileUrl: string, file
   const opening = first.balance !== null ? first.balance + first.debit - first.credit : null;
   const closing = last.balance;
 
-  // Continuity: against the latest previous statement for the same account.
+  // CONTINUITY IS AGAINST THE STATEMENT THAT ACTUALLY COMES BEFORE THIS ONE.
+  //
+  // It used to compare against the LATEST statement by period_end, whatever
+  // period this one covers. So the moment a statement was uploaded twice — and
+  // on 1 September it was, after three wrongly-mapped entries were deleted from
+  // Zoho and the file re-sent — the new copy was measured against a period that
+  // overlaps or IS itself, and reported a break that did not exist:
+  //
+  //   "opening 6195817.53 ≠ previous closing 4044998.03"
+  //
+  // Both figures were real; they simply belonged to overlapping periods. The
+  // predecessor is the statement whose period ENDS BEFORE this one begins.
   const { data: prev } = await svc.from("bank_statements")
     .select("closing_balance, period_end").eq("account_name", accountName).eq("status", "parsed")
-    .not("closing_balance", "is", null).order("period_end", { ascending: false }).limit(1).maybeSingle();
+    .not("closing_balance", "is", null)
+    .lt("period_end", first.date)
+    .order("period_end", { ascending: false }).limit(1).maybeSingle();
   const continuity = prev?.closing_balance !== undefined && prev?.closing_balance !== null && opening !== null
     ? Math.abs(Number(prev.closing_balance) - opening) < 0.01
     : null;
+
+  // A RE-UPLOAD IS NOT A GAP. Sending the same period again is routine — a
+  // mis-posted entry is deleted in Zoho and the file goes back through. Say so
+  // on the row, so the desk is not hunting for a statement that was never
+  // missing. The lines themselves are deduplicated a few lines below, so
+  // nothing is booked twice either.
+  const { data: samePeriod } = await svc.from("bank_statements")
+    .select("id").eq("account_name", accountName).eq("status", "parsed")
+    .eq("period_start", first.date).eq("period_end", last.date).limit(1);
+  const isReupload = (samePeriod ?? []).length > 0;
 
   const { data: stmt } = await svc.from("bank_statements").insert({
     account_name: accountName, file_url: fileUrl, file_name: fileName,
     period_start: first.date, period_end: last.date,
     opening_balance: opening, closing_balance: closing,
     continuity_ok: continuity, lines_total: lines.length,
-    note: continuity === false ? `opening ${opening} ≠ previous closing ${prev?.closing_balance} — a statement may be missing in between` : null,
+    note: isReupload
+      ? `this period was uploaded before — the lines already filed were not booked again${continuity === false ? `; opening ${opening} ≠ closing ${prev?.closing_balance} of the statement ending ${prev?.period_end}` : ""}`
+      : continuity === false
+        ? `opening ${opening} ≠ closing ${prev?.closing_balance} of the statement ending ${prev?.period_end} — a statement may be missing in between`
+        : null,
   }).select("id").single();
   if (!stmt) return "Could not record the statement.";
 

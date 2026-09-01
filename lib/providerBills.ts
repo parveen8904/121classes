@@ -228,7 +228,22 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
       }
     } catch { /* an unreadable PDF still queues — the figures can be typed in */ }
 
-    const currency = (str(facts.currency) || "USD").toUpperCase();
+    // AN INVOICE NOBODY COULD READ IS NOT AN AMERICAN ONE.
+    //
+    // This defaulted to USD, and the default decided far more than a symbol:
+    // isForeign below is `currency !== "INR"`, so every invoice whose text the
+    // AI failed to transcribe was routed to the FOREIGN VENDOR DESK. On 1
+    // September that put "Warehouse Pitam pura" — a warehouse in Delhi — behind
+    // a country picker that lists fourteen treaty countries and, correctly for
+    // a foreign desk, no India. There was no answer the desk could give.
+    //
+    // The earlier default was INR and that was wrong too: it booked twelve
+    // Bunny invoices as rupees. Both defaults guess. An unread currency is
+    // UNKNOWN, and unknown means a person types it — which the rest of this
+    // function is already built for, since the amount and the GST breakup are
+    // left null on the same principle.
+    const readCurrency = str(facts.currency).toUpperCase();
+    const currency = readCurrency || "";
     // Where the invoice's own date could not be read, the filing date stands in
     // — and the row SAYS SO, because the date decides both the GST period and
     // the conversion rate.
@@ -240,7 +255,8 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
       ? `the title says ${fromTitle} but the invoice reads ${total}` : null;
 
     let rate: number | null = null, rateDate: string | null = null, inr: number | null = null;
-    if (currency !== "INR" && total) {
+    // Only convert what we actually know the currency of.
+    if (currency && currency !== "INR" && total) {
       try {
         const r = await rule115Rate(billDate, currency);
         if (r) { rate = r.rate; rateDate = r.rateDate; inr = Number((total * r.rate).toFixed(2)); }
@@ -257,7 +273,9 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
     // answered where the vendor is, what they actually did and what papers are
     // on file, there is no way to know what to withhold — so it waits, even
     // when a treatment rule already exists.
-    const isForeign = currency !== "INR";
+    // Foreign only when the currency was actually READ and is not rupees. An
+    // unknown currency waits for a human rather than being assumed either way.
+    const isForeign = !!currency && currency !== "INR";
     const needsForeignAnswers = isForeign && !foreignAnswered(rule);
     const { data: madeRow } = await svc.from("provider_bills").insert({
       vault_doc_id: d.id, institution,
@@ -855,7 +873,16 @@ export async function postProviderBill(id: string): Promise<void> {
       );
     }
 
-    const currency = str(b.currency) || "USD";
+    // NOTHING POSTS ON A GUESSED CURRENCY. Falling back to USD here would take
+    // an invoice whose paper nobody could read and book it in dollars at a
+    // Rule-115 rate, in the books, under his approval. If it was never read,
+    // it waits for a person — same rule as the tax breakup just above.
+    const currency = str(b.currency);
+    if (!currency) {
+      return fail(
+        "the currency on this bill was never read off the invoice — open it, set the currency and the amount as printed, then approve it again",
+      );
+    }
     const overseas = p.gst_treatment === "rcm";
     let rate = b.rate ? Number(b.rate) : null;
     if (currency !== "INR" && !rate) {

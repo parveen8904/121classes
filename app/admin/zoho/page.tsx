@@ -201,17 +201,25 @@ export default async function ZohoHubPage(props: {
 
   // Petty cash: balances + pending bills + failed advances.
   type BillRow = { id: string; bill_date: string; amount: number; purpose: string; status: string; file_url: string | null; error: string | null; person: { name: string } | null };
-  const pBalances = hubConnected ? await pettyBalances().catch(() => []) : [];
-  const { data: pendingBillData } = hubConnected
-    ? await createServiceClient().from("petty_bills")
-        .select("id, bill_date, amount, purpose, status, file_url, error, person:person_id(name)")
-        .in("status", ["pending", "failed"]).order("created_at")
-    : { data: [] as never[] };
+  // PETTY CASH IS OUR OWN DATA, NOT ZOHO'S.
+  //
+  // These three reads were gated on hubConnected, so the moment Zoho's keys
+  // were missing or a token refresh failed, the whole roster vanished: the
+  // Person picker emptied and the form announced "There is nobody to record an
+  // advance against yet" while five people sat in petty_people. He saw exactly
+  // that on 1 September — an empty picker directly above a list of five.
+  //
+  // pettyBalances() reads petty_people, petty_advances and petty_bills and
+  // never calls Zoho at all. Nor do the two below. Zoho is needed to POST a
+  // journal, not to say who exists, so they load regardless and only the
+  // posting degrades when the hub is down.
+  const pBalances = await pettyBalances().catch(() => []);
+  const { data: pendingBillData } = await createServiceClient().from("petty_bills")
+    .select("id, bill_date, amount, purpose, status, file_url, error, person:person_id(name)")
+    .in("status", ["pending", "failed"]).order("created_at");
   const pendingBills = (pendingBillData ?? []) as unknown as BillRow[];
-  const { data: failedAdvData } = hubConnected
-    ? await createServiceClient().from("petty_advances")
-        .select("id, adv_date, amount, error, person:person_id(name)").eq("status", "failed")
-    : { data: [] as never[] };
+  const { data: failedAdvData } = await createServiceClient().from("petty_advances")
+    .select("id, adv_date, amount, error, person:person_id(name)").eq("status", "failed");
   const failedAdvs = (failedAdvData ?? []) as unknown as { id: string; adv_date: string; amount: number; error: string | null; person: { name: string } | null }[];
   const advanceAccountChoices = zohoAccounts.filter((a) => a.type === "other_current_asset").map((a) => a.name);
 

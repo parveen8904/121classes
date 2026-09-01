@@ -63,7 +63,9 @@ const HEAD = {
   // upload template — the transaction particulars belong here, NOT in the
   // reference, which Zoho caps at fifty characters.
   narration: /^(statement ?description|particulars?|narration|description|details|transaction ?(details|remarks|particulars?|description)|remarks|transaction)$/i,
-  ref: /^(chq\.?\/?ref\.? ?(no\.?)?|ref(erence)? ?(no\.?|number)?|cheque ?(no\.?|number)|utr|chqno)$/i,
+  // Any of these IS a reference column; which one WINS is decided by REF_TIERS
+  // below, because first-past-the-post picks the wrong one.
+  ref: /^(internal ?ref(erence)? ?(no\.?|number)?|chq\.?\/?ref\.? ?(no\.?)?|ref(erence)? ?(no\.?|number)?|cheque ?(no\.?|number)|utr ?(no\.?|number)?|chqno|transaction ?ref(erence)? ?(no\.?|number)?)$/i,
   debit: /^(withdrawal ?(amt\.?)? ?(\(?inr\)?)?|debit ?(amt\.?)?|dr|dr\.? ?amount|withdrawals?|debits?)$/i,
   credit: /^(deposit ?(amt\.?)? ?(\(?inr\)?)?|credit ?(amt\.?)?|cr|cr\.? ?amount|deposits?|credits?)$/i,
   balance: /^(closing ?balance|balance|bal|running ?balance|balance ?(\(?inr\)?)?)$/i,
@@ -71,6 +73,25 @@ const HEAD = {
   // "Transaction Type" is what Axis calls the CR/DR column.
   drcr: /^(dr\/?cr|type|cr\/?dr|transaction ?type|txn ?type|type ?of ?transaction)$/i,
 };
+
+// WHICH REFERENCE COLUMN WINS, WHEN A STATEMENT CARRIES FOUR OF THEM.
+//
+// His Axis "Smart Statement" has Cheque Number, Internal Reference Number, UTR
+// Number and Transaction ID. Taking the first column that looked like a
+// reference took CHEQUE NUMBER — which is empty on every electronic line — so
+// the reference came out blank and the posting fell back to digging a wire
+// number out of the narration.
+//
+// Ravi asked for the internal reference number, and that is the right choice:
+// it is filled on every line and it is what the bank quotes back. UTR next,
+// because it is meaningful across banks; the cheque column last, since it only
+// carries anything on an actual cheque.
+const REF_TIERS: RegExp[] = [
+  /^internal ?ref(erence)? ?(no\.?|number)?$/i,
+  /^(ref(erence)? ?(no\.?|number)?|transaction ?ref(erence)? ?(no\.?|number)?)$/i,
+  /^utr ?(no\.?|number)?$/i,
+  /^(chq\.?\/?ref\.? ?(no\.?)?|cheque ?(no\.?|number)|chqno)$/i,
+];
 
 export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string } {
   // FINDING THE HEADER ROW, AND SAYING WHAT WENT WRONG WHEN IT IS NOT FOUND.
@@ -127,6 +148,13 @@ export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string
         for (const [k, re] of Object.entries(HEAD)) {
           const idx = find(re);
           if (idx >= 0) cols[k] = idx;
+        }
+        // The reference column is chosen by priority, not by position — see
+        // REF_TIERS. Without this, "Cheque Number" beats "Internal Reference
+        // Number" simply by sitting further left, and it is always empty.
+        for (const tier of REF_TIERS) {
+          const idx = find(tier);
+          if (idx >= 0) { cols.ref = idx; break; }
         }
         return true;
       }

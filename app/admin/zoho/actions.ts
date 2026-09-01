@@ -1419,11 +1419,31 @@ export async function approveBillAction(formData: FormData) {
   const expenseAccount = str(formData.get("expense_account"));
   if (!id || !expenseAccount) return;
   const staff = await currentStaff();
-  await createServiceClient().from("petty_bills").update({ decided_by: staff?.id ?? null, updated_at: new Date().toISOString() }).eq("id", id);
-  const { postBill } = await import("@/lib/pettyCash");
-  try { await postBill(id, expenseAccount); } catch { /* row carries failed + error */ }
+  await createServiceClient().from("petty_bills").update({
+    expense_account: expenseAccount,
+    decided_by: staff?.id ?? null,
+    updated_at: new Date().toISOString(),
+  }).eq("id", id);
+
+  // THE SIXTH DOOR, AND THE LAST ONE STILL OPEN.
+  //
+  // This called postBill() directly, which POSTs a journal — and nothing
+  // reaches Zoho without the founder's approval, so every petty-cash bill the
+  // desk approved failed on the gate instead. Three of Ravi's sat there on 1
+  // September, each reading "Blocked: POST /journals would change the books",
+  // with no way forward: the accounts desk could approve them all day and they
+  // would never post.
+  //
+  // The machinery for this already existed — zohoApprovals has a petty_bill
+  // executor — and recordAdvanceAction was moved onto it when the same fault
+  // was found in advances. The bill path was simply missed. It asks now, like
+  // everything else, and the expense account travels with the request so the
+  // posting uses the head the desk chose rather than asking again.
+  await requestApprovalFor("petty_bill", "petty_bills", id, { expenseAccount }, staff?.id ?? null);
   revalidatePath("/admin/zoho");
   revalidatePath("/admin/petty");
+  redirect("/admin/zoho?scan=" + encodeURIComponent(
+    "Bill approved by the desk and sent to the founder's gate — it posts when he releases it.") + "#approvals");
 }
 
 export async function rejectBillAction(formData: FormData) {

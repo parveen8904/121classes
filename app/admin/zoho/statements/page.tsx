@@ -1,0 +1,530 @@
+import { assertArea } from "@/lib/adminAccess";
+import { createServiceClient } from "@/lib/supabase/service";
+import { zohoConfigured } from "@/lib/zohoApi";
+import { formatINR } from "@/lib/pricing";
+import { listZohoAccounts, reconcileAccount } from "@/lib/bankStatements";
+import { bankEntry } from "@/lib/entryPreview";
+import SubmitButton from "@/app/components/SubmitButton";
+import Money from "@/app/components/Money";
+import EntryLines from "../EntryLines";
+import BankAnswerPanel from "../BankAnswerPanel";
+import StatementUpload from "../StatementUpload";
+import QueuePicker from "../QueuePicker";
+import DeskShell from "../_shell";
+import {
+  matchBankAction, chooseMatchAction, rematchBankAction, reparseStatementAction, removeStatementAction,
+  repostLineAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction,
+  retryLineAction, approveSelectedLinesAction, skipSelectedLinesAction,
+} from "../actions";
+
+// BANK AND CARD STATEMENTS, ON THEIR OWN PAGE.
+//
+// Split out of the 2,813-line /admin/zoho on 2 September 2026 — "make this page
+// simple and clean, use multiple pages with links". This one loads statements,
+// their lines and, when asked, a reconciliation against Zoho: nothing about
+// sales, investments, invoices or the vault, which is what the old page fetched
+// on every visit whichever section you came for.
+
+export const dynamic = "force-dynamic";
+
+export default async function StatementsPage(props: {
+  searchParams: Promise<{ scan?: string; rec?: string; rf?: string; rt?: string }>;
+}) {
+  await assertArea("zoho");
+  const sp = await props.searchParams;
+  const hubConnected = await zohoConfigured();
+
+  type StmtRow = { id: string; account_name: string; file_name: string | null; period_start: string | null; period_end: string | null; opening_balance: number | null; closing_balance: number | null; note: string | null; status: string; lines_total: number; recon_missing: number | null; recon_extra: number | null };
+  type LineRow = { id: string; account_name: string; line_date: string; narration: string; ref: string | null; debit: number; credit: number; status: string; proposal: { account?: string } | null; matched_note: string | null; error: string | null };
+  const [{ data: stmtData }, { data: lineData }] = hubConnected
+    ? await Promise.all([
+        createServiceClient().from("bank_statements").select("id, account_name, file_name, period_start, period_end, opening_balance, closing_balance, note, status, lines_total, recon_missing, recon_extra").order("created_at", { ascending: false }).limit(20),
+        createServiceClient().from("bank_lines").select("id, account_name, line_date, narration, ref, debit, credit, status, proposal, matched_note, error").in("status", ["ask", "auto", "failed"]).order("line_date").limit(200),
+      ])
+    : [{ data: [] as StmtRow[] }, { data: [] as LineRow[] }];
+  const stmts = (stmtData ?? []) as StmtRow[];
+
+  // Whether a statement can be removed has to be known BEFORE the button is
+  // pressed: the action refuses one whose lines are already in Zoho.
+  const settledByStmt = new Map<string, number>();
+  if (stmts.length) {
+    const { data: settledRows } = await createServiceClient()
+      .from("bank_lines").select("statement_id")
+      .in("statement_id", stmts.map((s) => s.id))
+      .in("status", ["posted", "matched"]);
+    for (const r of settledRows ?? []) {
+      const k = String((r as { statement_id: string }).statement_id);
+      settledByStmt.set(k, (settledByStmt.get(k) ?? 0) + 1);
+    }
+  }
+  const bankLines = (lineData ?? []) as LineRow[];
+  const askLines = bankLines.filter((l) => l.status === "ask");
+  const autoLines = bankLines.filter((l) => l.status === "auto");
+  const failedLines = bankLines.filter((l) => l.status === "failed");
+
+  type MatchedLine = { id: string; line_date: string; narration: string; debit: number; credit: number;
+    match_kind: string | null; match_label: string | null; match_confidence: string | null;
+    match_candidates: { id: string; kind: string; number: string; party: string; balance: number; why: string[] }[] | null };
+  const { data: matchedData } = hubConnected
+    ? await createServiceClient().from("bank_lines")
+        .select("id, line_date, narration, debit, credit, match_kind, match_label, match_confidence, match_candidates")
+        .in("status", ["ask", "auto"]).not("match_confidence", "is", null)
+        .order("line_date", { ascending: false }).limit(40)
+    : { data: [] as never[] };
+  const matchedLines = (matchedData ?? []) as unknown as MatchedLine[];
+
+  const { count: postedLineCount } = hubConnected
+    ? await createServiceClient().from("bank_lines").select("id", { count: "exact", head: true }).in("status", ["posted", "matched"])
+    : { count: 0 };
+
+  const zohoAccounts = hubConnected ? await listZohoAccounts().catch(() => []) : [];
+  const bankChoices = zohoAccounts.filter((a) => a.type === "bank" || a.type === "credit_card").map((a) => a.name);
+
+  /** A sensible rule-pattern suggestion: the narration's most merchant-ish token. */
+  const suggestPattern = (narration: string) => {
+    const cleaned = narration.replace(/^(UPI|INB|NEFT|IMPS|RTGS|POS|ATM)[\/ -]*/i, "").replace(/^(P2M|P2A|IFT|NEFT|IMPS)[\/ -]*/i, "");
+    const seg = cleaned.split("/").map((s) => s.trim()).filter((s) => s.length >= 4 && !/^\d+$/.test(s));
+    return (seg[0] ?? cleaned).slice(0, 40);
+  };
+
+  // The reconciliation, driven by the query string so a result can be linked to.
+  const iso = (v: string | undefined) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+  const recAccounts = [...new Set(stmts.map((s) => s.account_name))];
+  const recAcct = sp.rec && recAccounts.includes(sp.rec) ? sp.rec : "";
+  const recFor = recAcct ? stmts.filter((s) => s.account_name === recAcct) : [];
+  const recFrom = iso(sp.rf) || recFor.map((s) => s.period_start ?? "").filter(Boolean).sort()[0] || "";
+  const recTo = iso(sp.rt) || recFor.map((s) => s.period_end ?? "").filter(Boolean).sort().reverse()[0] || "";
+  let reconError = "";
+  let recon: Awaited<ReturnType<typeof reconcileAccount>> | null = null;
+  if (hubConnected && recAcct && recFrom && recTo) {
+    try { recon = await reconcileAccount(recAcct, recFrom, recTo); }
+    catch (e) { recon = null; reconError = e instanceof Error ? e.message : String(e); }
+  }
+  type ReconLineRow = {
+    id: string; account_name: string; narration: string; debit: number; credit: number; status: string;
+    match_kind: string | null; match_label: string | null; match_confidence: string | null;
+    match_currency: string | null; fx_rate: number | null;
+    match_candidates: { id: string; kind: string; number: string; party: string; balance: number; currency?: string; why: string[] }[] | null;
+  };
+  const reconRows = new Map<string, ReconLineRow>();
+  const reconIds = (recon?.statementOnly ?? []).map((l) => l.lineId).filter(Boolean) as string[];
+  if (reconIds.length) {
+    const { data: rr } = await createServiceClient().from("bank_lines")
+      .select("id, account_name, narration, debit, credit, status, match_kind, match_label, match_confidence, match_currency, fx_rate, match_candidates")
+      .in("id", reconIds);
+    for (const r of (rr ?? []) as ReconLineRow[]) reconRows.set(String(r.id), r);
+  }
+
+  return (
+    <DeskShell
+      badge="🏧 Bank & card statements"
+      title="Statements"
+      subtitle="Upload each account's statement — Excel, CSV, PDF or photographs of the pages. Every line ends in one of three places: matched, rule-proposed, or asked about once."
+      current="/admin/zoho/statements"
+      message={sp.scan}
+    >
+
+  <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
+    Upload each account&apos;s statement (CSV, Excel or PDF). Every line ends in one of three places:
+    <strong> matched</strong> (already in Zoho — left alone), <strong>auto</strong> (a taught rule proposes
+    the account; one tick posts it), or <strong>ask</strong> (name the account once — the answer becomes a
+    rule and that merchant never asks again). Openings must tie to the previous closing, so a missing
+    statement cannot hide. ✅ posted/matched so far: {postedLineCount ?? 0}
+  </p>
+
+  <div className="card" style={{ marginBottom: 10 }}>
+    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+      <form action={matchBankAction} style={{ margin: 0 }}>
+        <SubmitButton className="btn small secondary" savedLabel="Matched">🔗 Find what these payments settle</SubmitButton>
+      </form>
+      <span className="muted" style={{ fontSize: ".8rem" }}>
+        Asks Zoho what is still unpaid and looks for the bill or invoice each line clears.
+      </span>
+    </div>
+    {matchedLines.length > 0 && (
+      <div style={{ marginTop: 10 }}>
+        <strong style={{ fontSize: ".85rem" }}>Settlements found ({matchedLines.length})</strong>
+        <p className="muted" style={{ fontSize: ".78rem", margin: "4px 0 8px" }}>
+          A payment to a supplier is <strong>not</strong> an expense — the expense came with their bill. These
+          post as a payment against the bill, or a receipt against the invoice, so the document is actually
+          cleared. Approve them in the list below as usual.
+        </p>
+        {matchedLines.map((m) => (
+          <div key={m.id} style={{ padding: "6px 0", borderTop: "1px solid rgba(0,0,0,.06)", fontSize: ".83rem" }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
+              <span style={{ minWidth: 88 }}>{m.line_date}</span>
+              <Money n={Number(m.debit) > 0 ? -Number(m.debit) : Number(m.credit)} width={116} sign bold />
+              <span className="muted" style={{ flex: "1 1 220px" }}>{String(m.narration).slice(0, 70)}</span>
+              {m.match_confidence === "choose" ? (
+                <form action={chooseMatchAction} style={{ margin: 0, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  <input type="hidden" name="id" value={m.id} />
+                  <select name="doc_id" defaultValue="" style={{ marginBottom: 0, minWidth: 260 }}>
+                    <option value="">— which one does this settle? —</option>
+                    {(m.match_candidates ?? []).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.number || c.kind} · {c.party} · ₹{Number(c.balance).toLocaleString("en-IN")}
+                      </option>
+                    ))}
+                    <option value="__none">None of these — treat it normally</option>
+                  </select>
+                  <SubmitButton className="btn small secondary" savedLabel="✓">Use this</SubmitButton>
+                </form>
+              ) : (
+                <>
+                  <span style={{ color: "#0e6e52" }}>{m.match_label}</span>
+                  <span className="muted" style={{ fontSize: ".75rem" }}>
+                    {m.match_confidence === "certain" ? "certain" : "likely"}
+                    {(m.match_candidates?.[0]?.why ?? []).length ? ` — ${m.match_candidates![0].why.join(", ")}` : ""}
+                  </span>
+                  <form action={chooseMatchAction} style={{ margin: 0 }}>
+                    <input type="hidden" name="id" value={m.id} />
+                    <input type="hidden" name="doc_id" value="__none" />
+                    <SubmitButton className="btn small secondary" savedLabel="✓">Not this</SubmitButton>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+
+  <StatementUpload accounts={bankChoices} />
+
+  {/* Matching runs at ingest, which is before he posts things in Zoho.
+      This looks again, so money already in the books stops being asked
+      about. It only ever marks a line matched — never posts. */}
+  <form action={rematchBankAction} style={{ marginTop: 8 }}>
+    <SubmitButton className="btn small secondary" savedLabel="✓ Checked">🔁 Re-check waiting lines against Zoho</SubmitButton>
+    <span className="muted" style={{ fontSize: ".78rem", marginLeft: 8 }}>
+      Anything already in Zoho — a settlement you posted, an entry typed in by hand — stops being asked about.
+    </span>
+  </form>
+
+  {stmts.length > 0 && (
+    <details style={{ marginTop: 8 }}>
+      <summary className="btn small secondary as-btn">🗂️ Statements uploaded ({stmts.length})</summary>
+      <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
+        {stmts.map((s) => (
+          <div key={s.id} style={{ display: "flex", gap: 10, fontSize: ".82rem", padding: "5px 10px", background: "var(--bg-soft)", borderRadius: 6, flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 700, minWidth: 180 }}>{s.account_name}</span>
+            <span>{s.period_start} → {s.period_end}</span>
+            <span className="muted">{s.lines_total} lines</span>
+            {/* WHAT THIS STATEMENT MEANS FOR THE BOOKS, NOT WHETHER IT ABUTS
+                THE LAST ONE. Continuity is gone (2 Sep) — statements
+                arrive in any order, from any start date, and the
+                opening-vs-previous-closing test flagged perfectly good
+                files while naming nothing. These two counts are the
+                reconciliation against Zoho for this statement's own
+                dates, computed on upload. */}
+            <span>
+              {s.status === "failed" ? "❌ failed"
+                : s.recon_missing === null ? "· uploaded"
+                : (s.recon_missing || s.recon_extra) ? (
+                  <>
+                    {!!s.recon_missing && <span style={{ color: "#b45309" }}>{s.recon_missing} not yet in Zoho</span>}
+                    {!!s.recon_missing && !!s.recon_extra && " · "}
+                    {!!s.recon_extra && <span style={{ color: "#b91c1c" }}>{s.recon_extra} in Zoho with no line here</span>}
+                  </>
+                ) : <span style={{ color: "#15803d" }}>✓ agrees with Zoho</span>}
+            </span>
+            {s.note && <span style={{ color: "#b45309", fontSize: ".78rem" }}>{s.note}</span>}
+            {/* A failed statement can be re-read from the file already
+                stored, so a parser fix is testable against the file
+                that broke it without hunting for it again. */}
+            {s.status === "failed" && (
+              <form action={reparseStatementAction} style={{ margin: 0, display: "flex", gap: 6, alignItems: "center" }}>
+                <input type="hidden" name="id" value={s.id} />
+                {/* Re-read from the file already stored, so a parser fix
+                    — or the password nobody knew was needed — is tried
+                    against the file that broke, without hunting for it. */}
+                {/password|encrypt/i.test(String(s.note ?? "")) && (
+                  <input type="password" name="pdf_password" autoComplete="off" placeholder="PDF password"
+                    style={{ marginBottom: 0, width: 150, fontSize: ".8rem" }} />
+                )}
+                <button className="btn small secondary" type="submit">↻ Try again</button>
+              </form>
+            )}
+            {/* On EVERY row, not only the failed ones. A duplicate or
+                overlapping upload is a statement that parsed perfectly
+                and still wants throwing away. Lines already in the
+                books hold it: those are settled facts, and the button
+                says so instead of refusing after the press. */}
+            {s.period_start && s.period_end && (
+              <a className="btn small secondary" href={`/admin/zoho?rec=${encodeURIComponent(s.account_name)}&rf=${s.period_start}&rt=${s.period_end}#reconcile`}
+                title="Line-by-line against Zoho's own register for these dates">⚖️ Reconcile</a>
+            )}
+            {(settledByStmt.get(s.id) ?? 0) > 0 ? (
+              <span className="muted" style={{ fontSize: ".76rem" }}>
+                🔒 {settledByStmt.get(s.id)} line(s) already in Zoho — cannot be removed
+              </span>
+            ) : (
+              <form action={removeStatementAction} style={{ margin: 0 }}>
+                <input type="hidden" name="id" value={s.id} />
+                <button className="btn small secondary" type="submit"
+                  title="Deletes this statement and its unposted lines. Upload it again whenever you like.">
+                  🗑 Remove
+                </button>
+              </form>
+            )}
+          </div>
+        ))}
+      </div>
+    </details>
+  )}
+
+  {/* RECONCILE — what replaced the continuity check.
+      Pick the account and the period; the page asks Zoho for that
+      bank's own register and lists what only the statement has (money
+      still needing an entry) and what only Zoho has (an entry with no
+      bank line behind it, or a statement never uploaded). */}
+  {recAccounts.length > 0 && (
+    <details id="reconcile" style={{ marginTop: 8 }} open={!!recon || !!reconError}>
+      <summary className="btn small secondary as-btn">⚖️ Reconcile an account against Zoho</summary>
+      <form method="get" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
+        <label style={{ margin: 0 }}>Account
+          <select name="rec" defaultValue={recAcct} style={{ marginBottom: 0 }}>
+            {recAccounts.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </label>
+        <label style={{ margin: 0 }}>From
+          <input name="rf" type="date" defaultValue={recFrom} style={{ marginBottom: 0 }} />
+        </label>
+        <label style={{ margin: 0 }}>To
+          <input name="rt" type="date" defaultValue={recTo} style={{ marginBottom: 0 }} />
+        </label>
+        <button className="btn small" type="submit">Reconcile</button>
+        <span className="muted" style={{ fontSize: ".78rem" }}>
+          Reads only. Nothing is posted or removed by this.
+        </span>
+      </form>
+
+      {reconError && <p style={{ color: "#b91c1c", fontSize: ".82rem", marginTop: 8 }}>Could not read Zoho: {reconError}</p>}
+
+      {recon && (
+        <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: ".84rem" }}>
+            <span><strong>{recon.matched}</strong> agreed</span>
+            <span style={{ color: recon.statementOnly.length ? "#b45309" : undefined }}>
+              <strong>{recon.statementOnly.length}</strong> in the statement, not in Zoho
+            </span>
+            <span style={{ color: recon.zohoOnly.length ? "#b91c1c" : undefined }}>
+              <strong>{recon.zohoOnly.length}</strong> in Zoho, not in the statement
+            </span>
+          </div>
+          <div className="muted" style={{ fontSize: ".78rem" }}>
+            Statement · in ₹{recon.statementTotalIn.toLocaleString("en-IN")} · out ₹{recon.statementTotalOut.toLocaleString("en-IN")}
+            {" — "}Zoho · in ₹{recon.zohoTotalIn.toLocaleString("en-IN")} · out ₹{recon.zohoTotalOut.toLocaleString("en-IN")}
+          </div>
+          {recon.problem && <p style={{ color: "#b45309", fontSize: ".82rem", margin: 0 }}>{recon.problem}</p>}
+
+          {recon.statementOnly.length > 0 && (
+            <div>
+              <strong style={{ fontSize: ".85rem" }}>The bank has it, Zoho does not — suggested entries ({recon.statementOnly.length})</strong>
+              <p className="muted" style={{ fontSize: ".78rem", margin: "3px 0 6px" }}>
+                Each one is answered here. Pick the ledger and the sub-ledger, or say which bill or invoice it
+                settles; tick <em>remember</em> and the same merchant never asks again. Everything still goes
+                through the approval gate — nothing posts from this screen alone.
+              </p>
+              {recon.statementOnly.slice(0, 40).map((l, i) => {
+                const row = l.lineId ? reconRows.get(l.lineId) : undefined;
+                const settled = row && (row.status === "posted" || row.status === "matched");
+                const cands = row?.match_candidates ?? [];
+                return (
+                  <div className="card" key={`so${i}`} style={{ marginTop: 6, padding: "9px 13px" }}>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: ".8rem", whiteSpace: "nowrap" }}>{l.date}</span>
+                      <span style={{ flex: 1, minWidth: 220, fontSize: ".84rem" }}>{l.narration}</span>
+                      <strong style={{ whiteSpace: "nowrap", color: l.dir === "in" ? "#15803d" : "#b91c1c" }}>
+                        {l.dir === "in" ? "+ " : "− "}{formatINR(l.amount)}
+                      </strong>
+                    </div>
+
+                    {/* A LINE THE PORTAL THINKS IT ALREADY POSTED, WITH
+                        NOTHING IN ZOHO TO SHOW FOR IT. Not a suggestion
+                        — a discrepancy, and offering to post it again
+                        would be the wrong answer. */}
+                    {settled ? (
+                      <div style={{ marginTop: 6 }}>
+                        <p style={{ fontSize: ".8rem", color: "#b45309", margin: 0 }}>
+                          Marked <strong>{row!.status}</strong> here, but no entry of this amount and date is in
+                          Zoho{"'"}s register for this account — it was almost certainly deleted in Zoho after
+                          posting.
+                        </p>
+                        <form action={repostLineAction} style={{ margin: "6px 0 0" }}>
+                          <input type="hidden" name="id" value={row!.id} />
+                          <SubmitButton className="btn small secondary" savedLabel="✓ Reopened">↻ Post it again</SubmitButton>
+                          <span className="muted" style={{ fontSize: ".76rem", marginLeft: 8 }}>
+                            Zoho is checked once more at the press: if the entry turns out to be there, nothing
+                            is reopened. Otherwise it goes back into the queue with the head and sub-ledger it
+                            already had, and posts through the usual approval.
+                          </span>
+                        </form>
+                      </div>
+                    ) : (
+                      <>
+                        {/* WHAT IT SETTLES, IF IT SETTLES ANYTHING.
+                            Money paid to a supplier is not an expense —
+                            the expense was booked when the bill
+                            arrived, and booking it again doubles the
+                            cost and leaves the bill open for ever. */}
+                        {cands.length > 0 && (
+                          <form action={chooseMatchAction} style={{ margin: "7px 0 0", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                            <input type="hidden" name="id" value={row!.id} />
+                            <span style={{ fontSize: ".78rem" }}>Settles</span>
+                            <select name="doc_id" defaultValue={row!.match_kind ? String(cands[0].id) : "__none"} style={{ marginBottom: 0, fontSize: ".8rem", maxWidth: 340 }}>
+                              <option value="__none">— nothing, treat it as its own entry —</option>
+                              {cands.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.kind === "bill" ? "Bill" : "Invoice"} {c.number} · {c.party} · {(c.currency ?? "INR") === "INR" ? `₹${Number(c.balance).toLocaleString("en-IN")}` : `${c.currency} ${Number(c.balance).toLocaleString("en-US")}`}
+                                </option>
+                              ))}
+                            </select>
+                            {/* THE RATE, ONLY WHERE THERE IS ONE TO ASK
+                                FOR. A bill owed in dollars cannot be
+                                settled by a rupee payment without it. */}
+                            {cands.some((c) => (c.currency ?? "INR") !== "INR") && (
+                              <label style={{ margin: 0, fontSize: ".78rem", display: "inline-flex", gap: 5, alignItems: "center" }}>
+                                ₹ per unit
+                                <input name="fx_rate" type="number" step="0.0001" min="0"
+                                  defaultValue={row!.fx_rate ?? ""} placeholder="e.g. 86.20"
+                                  style={{ marginBottom: 0, width: 105, fontSize: ".8rem" }} />
+                              </label>
+                            )}
+                            <SubmitButton className="btn small secondary" savedLabel="✓">Use this</SubmitButton>
+                            {row!.match_label && <span className="muted" style={{ fontSize: ".76rem" }}>now: {row!.match_label}</span>}
+                          </form>
+                        )}
+
+                        {/* Ledger, sub-ledger, the rule for next time,
+                            and the entry drawn as it will be posted. */}
+                        {row!.match_kind && row!.match_confidence === "certain" ? (
+                          <p className="muted" style={{ fontSize: ".78rem", margin: "6px 0 0" }}>
+                            Settles an open document, so it posts as a {row!.match_kind === "bill" ? "payment" : "receipt"} against it — no ledger to pick.
+                            {row!.match_currency && row!.match_currency !== "INR" && !row!.fx_rate && (
+                              <strong style={{ color: "#b91c1c" }}> A rate is still needed before it can go.</strong>
+                            )}
+                            {" "}Approve it in the queue below.
+                          </p>
+                        ) : (
+                          <BankAnswerPanel
+                            lineId={row!.id}
+                            bankName={row!.account_name}
+                            debit={Number(row!.debit)}
+                            credit={Number(row!.credit)}
+                            accountListId="acct-names"
+                            suggestedPattern={suggestPattern(String(row!.narration))}
+                          />
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+              {recon.statementOnly.length > 40 && <span className="muted" style={{ fontSize: ".76rem" }}>…and {recon.statementOnly.length - 40} more — narrow the dates.</span>}
+            </div>
+          )}
+
+          {recon.zohoOnly.length > 0 && (
+            <div>
+              <strong style={{ fontSize: ".85rem" }}>In Zoho with no bank line behind it ({recon.zohoOnly.length})</strong>
+              <div style={{ display: "grid", gap: 3, marginTop: 5 }}>
+                {recon.zohoOnly.slice(0, 60).map((l, i) => (
+                  <div key={`zo${i}`} style={{ display: "flex", gap: 10, fontSize: ".8rem", padding: "4px 9px", background: "var(--bg-soft)", borderRadius: 5, flexWrap: "wrap" }}>
+                    <span style={{ minWidth: 88 }}>{l.date}</span>
+                    <span style={{ flex: 1, minWidth: 200 }}>{(l.zohoNote || l.narration || l.zohoType || "").slice(0, 90)}</span>
+                    <span style={{ fontWeight: 700, color: l.dir === "in" ? "#15803d" : "#b91c1c" }}>
+                      {l.dir === "in" ? "+" : "−"}₹{l.amount.toLocaleString("en-IN")}
+                    </span>
+                    <span className="muted" style={{ fontSize: ".74rem" }}>{l.zohoType}</span>
+                  </div>
+                ))}
+                {recon.zohoOnly.length > 60 && <span className="muted" style={{ fontSize: ".76rem" }}>…and {recon.zohoOnly.length - 60} more</span>}
+              </div>
+              <p className="muted" style={{ fontSize: ".78rem", marginTop: 5 }}>
+                Either the statement covering these was never uploaded, or the entry in Zoho is wrong and should come out.
+              </p>
+            </div>
+          )}
+
+          {recon.statementOnly.length === 0 && recon.zohoOnly.length === 0 && !recon.problem && (
+            <p style={{ color: "#15803d", fontSize: ".85rem", margin: 0 }}>
+              ✓ Every line in this period agrees with Zoho.
+            </p>
+          )}
+        </div>
+      )}
+    </details>
+  )}
+
+  {autoLines.length > 0 && (
+    <>
+      <strong style={{ display: "block", marginTop: 14 }}>⚡ Rule-proposed — tick what you want posted ({autoLines.length})</strong>
+      <QueuePicker
+        rows={autoLines.map((l) => ({
+          id: l.id, date: l.line_date,
+          label: `${l.account_name} · ${String(l.narration).slice(0, 80)}`,
+          sub: l.proposal?.account ? `→ ${l.proposal.account}` : null,
+          amount: Number(l.debit) > 0 ? -Number(l.debit) : Number(l.credit),
+          status: l.status, error: l.error,
+          // The account is the editable half — the ✏️ answer flow on the
+          // line changes it; this shows what the rule's answer books.
+          detail: l.proposal?.account
+            ? <EntryLines entry={bankEntry({ bank: l.account_name, account: l.proposal.account, debit: Number(l.debit), credit: Number(l.credit) })} title="What the proposed account books" compact />
+            : undefined,
+        }))}
+        approveSelected={approveSelectedLinesAction}
+        skipSelected={skipSelectedLinesAction}
+      />
+    </>
+  )}
+
+  {askLines.length > 0 && (
+    <>
+      <strong style={{ display: "block", marginTop: 14 }}>❓ Needs an answer ({askLines.length}) — answer once, it becomes a rule</strong>
+      {askLines.map((l) => (
+        <div className="card" key={l.id} style={{ marginTop: 6, padding: "10px 14px" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: ".8rem", whiteSpace: "nowrap" }}>{l.line_date}</span>
+            <span style={{ flex: 1, minWidth: 220, fontSize: ".84rem" }}>{l.narration}</span>
+            <strong style={{ whiteSpace: "nowrap" }}>{l.debit > 0 ? `− ${formatINR(Number(l.debit))}` : `+ ${formatINR(Number(l.credit))}`}</strong>
+            <form action={skipLineAction} style={{ margin: 0 }}>
+              <input type="hidden" name="id" value={l.id} />
+              <SubmitButton className="btn small secondary" savedLabel="✓">Skip</SubmitButton>
+            </form>
+          </div>
+          <BankAnswerPanel
+            lineId={l.id}
+            bankName={l.account_name}
+            debit={Number(l.debit)}
+            credit={Number(l.credit)}
+            accountListId="acct-names"
+            suggestedPattern={suggestPattern(l.narration)}
+          />
+        </div>
+      ))}
+    </>
+  )}
+
+  {failedLines.length > 0 && (
+    <>
+      <strong style={{ display: "block", marginTop: 14, color: "#b91c1c" }}>❌ Failed ({failedLines.length})</strong>
+      {failedLines.map((l) => (
+        <div className="card" key={l.id} style={{ marginTop: 6, padding: "10px 14px", borderLeft: "4px solid #b91c1c" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: ".8rem" }}>{l.line_date}</span>
+            <span style={{ flex: 1, minWidth: 200, fontSize: ".84rem" }}>{l.narration}</span>
+            <span style={{ fontSize: ".78rem", color: "#b91c1c" }}>{l.error}</span>
+            <form action={retryLineAction} style={{ margin: 0 }}>
+              <input type="hidden" name="id" value={l.id} />
+              <SubmitButton className="btn small secondary" savedLabel="✓">↻ Back to queue</SubmitButton>
+            </form>
+          </div>
+        </div>
+      ))}
+    </>
+  )}
+    </DeskShell>
+  );
+}

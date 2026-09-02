@@ -105,7 +105,7 @@ export default async function ZohoActivityPage() {
           </div>
           <p className="muted" style={{ fontSize: ".78rem", marginTop: 10 }}>
             Zoho records who <em>raised</em> an entry, not who last edited it — so &ldquo;altered&rdquo; rows name the
-            person who first created the document. <Link href="/admin/zoho#bills">← back to the bills</Link>
+            person who first created the document. <Link href="/admin/zoho/invoices">← back to the bills</Link>
           </p>
         </>
       )}

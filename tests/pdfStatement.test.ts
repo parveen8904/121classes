@@ -210,7 +210,7 @@ check("it respects the same feature switch", /aiFeatureDisabled\("bankstmt"\)/.t
 // other way — five accepted extensions, a password box on every upload, and a
 // failure that told the desk to go and find a different file.
 const upload = readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/StatementUpload.tsx"), "utf8");
-const zohoPage = readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/page.tsx"), "utf8");
+const zohoPage = readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/statements/page.tsx"), "utf8");
 check("the box takes a photograph as readily as a spreadsheet",
   /accept="\.csv,\.txt,\.xls,\.xlsx,\.pdf,image\/\*"/.test(upload));
 check("several photographs become one file, in page order",

@@ -32,6 +32,9 @@ const check = (name: string, ok: boolean, why = "") => {
 const root = join(import.meta.dirname, "..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
 
+// /admin/zoho was split into a page per room on 2 September 2026 — petty cash
+// now lives at its own route, so that is where these read from.
+
 // ── the list must not depend on a decoration ──────────────────────────────
 const petty = read("lib/pettyCash.ts");
 check("the people are read without an embedded join",
@@ -46,7 +49,7 @@ check("a broken people query is thrown, not silently emptied",
   "‘nobody is set up yet’ and ‘the query broke’ look identical on screen");
 
 // ── and the page must say so rather than showing an empty list ────────────
-const page = read("app/admin/zoho/page.tsx");
+const page = read("app/admin/zoho/petty/page.tsx");
 check("the page no longer swallows the failure to an empty array",
   !/pettyBalances\(\)\.catch\(\(\) => \[\]\)/.test(page),
   "that is how a failed query came to look like ‘nobody has been added yet’");
@@ -63,23 +66,33 @@ check("deleting a login never deletes a petty cash ledger",
   "the advances and bills against it are accounting records");
 
 // ── the message appears where the work was done ───────────────────────────
+//
+// "The message that the person is already existing is shown in the sales line
+//  on same page." Every action redirected to ?scan= and one page could only
+// draw it in one place — under "Scan for new sales", screens above the form in
+// use, and in green whatever it said.
+//
+// The desk was split into a page per room on 2 September, which settles this
+// more firmly than the &sec= tag did: an action redirects to ITS OWN ROUTE, so
+// there is only one place the message can appear and it is the right one.
 const actions = read("app/admin/zoho/actions.ts");
-for (const sec of ["petty", "bank", "bills", "brokerage"]) {
-  const hashes = (actions.match(new RegExp(`#${sec}\``, "g")) ?? []).length;
-  const tagged = (actions.match(new RegExp(`&sec=${sec}#${sec}\``, "g")) ?? []).length;
-  check(`every ${sec} message names its section`, hashes > 0 && hashes === tagged,
-    `${tagged} of ${hashes} tagged — the hash never reaches the server, so it cannot place the message`);
+check("no message is left pointing at an anchor on a page that no longer holds it",
+  !/\?scan=[^`]*#\w+`/.test(actions),
+  "an anchor cannot carry a message to another page");
+for (const [what, route] of [["petty cash", "petty"], ["statements", "statements"],
+                             ["invoices", "invoices"], ["investments", "investments"]] as [string, string][]) {
+  check(`${what} messages go to the ${what} page`,
+    new RegExp(`/admin/zoho/${route}\\?scan=`).test(actions));
 }
-check("the page reads the section back", /const deskSec = \(sp\.sec \?\? ""\)\.trim\(\)/.test(page));
-check("and draws the message inside that section",
-  (page.match(/<DeskNotice sec="/g) ?? []).length >= 6);
+check("the shell draws it, once, wherever it is",
+  /export function DeskNotice/.test(read("app/admin/zoho/_shell.tsx")));
 check("a refusal is not dressed as a success",
-  /deskBad \? "notice err" : "notice ok"/.test(page),
+  /bad \? "notice err" : "notice ok"/.test(read("app/admin/zoho/_shell.tsx")),
   "‘This email ID is already registered’ was shown in green, in the sales section");
-check("‘already’ reads as a refusal", /already\|could not\|cannot\|failed/.test(page));
-check("the sales banner keeps only its own messages",
-  /deskMsg && !deskSec &&/.test(page),
-  "it used to catch every message from every section on the page");
+check("‘already’ reads as a refusal", /already\|could not\|cannot\|failed/.test(read("app/admin/zoho/_shell.tsx")));
+check("every room refreshes when any of them changes",
+  /function revalidateDesk\(\)/.test(actions),
+  "a bill approved in petty cash appears at the gate");
 
 // ── a failed bill is still a bill to approve ──────────────────────────────
 //

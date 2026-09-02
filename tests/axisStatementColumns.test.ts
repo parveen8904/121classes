@@ -135,7 +135,7 @@ check("on a card, Cr is a payment against it — the credit column, like money i
   /\/\\bcr\\b\|\\bcredit\\b\/\.test\(t\)\) credit = Math\.abs\(amt\)/.test(src));
 check("credit-card accounts are offered for upload beside the banks",
   /a\.type === "bank" \|\| a\.type === "credit_card"/.test(
-    readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/page.tsx"), "utf8")));
+    readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/statements/page.tsx"), "utf8")));
 
 console.log(fails === 0 ? "ok — Axis statement columns" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

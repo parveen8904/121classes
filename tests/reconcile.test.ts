@@ -126,7 +126,7 @@ check("nothing computes a continuity verdict any more",
 check("no statement is measured against the one before it",
   !/\.lt\("period_end", first\.date\)/.test(bank),
   "statements arrive in any order, from any start date");
-const page = readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/page.tsx"), "utf8");
+const page = readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/statements/page.tsx"), "utf8");
 check("the desk is never shown a continuity break again",
   !/continuity break/i.test(page));
 

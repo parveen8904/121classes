@@ -1538,13 +1538,40 @@ export async function rejectBillAction(formData: FormData) {
   revalidatePath("/admin/petty");
 }
 
-export async function retryBillAction(formData: FormData) {
+/**
+ * AN ADVANCE THAT WAS NEVER REAL.
+ *
+ * A duplicate — the same payment recorded twice, which is what happened to
+ * Ravi's ₹600 on 27 August — sits in "pending" for ever. It cannot post,
+ * because it never happened; it does not show in the balance, because only
+ * posted advances count; and until now it appeared on no screen at all, so
+ * there was nothing to press.
+ *
+ * Only an UNPOSTED one can go. A posted advance is in Zoho, and the way to
+ * undo something in Zoho is another entry, never a quiet deletion here.
+ */
+export async function rejectAdvanceAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));
   if (!id) return;
-  await createServiceClient().from("petty_bills").update({ status: "pending", error: null, updated_at: new Date().toISOString() }).eq("id", id);
+  const svc = createServiceClient();
+  const { data: adv } = await svc.from("petty_advances").select("status").eq("id", id).maybeSingle();
+  if (!adv) return;
+  if (adv.status === "posted") {
+    redirect(`/admin/zoho?scan=${encodeURIComponent(
+      "That advance is already posted in Zoho — reverse it there with a journal, not by deleting the record here.")}&sec=petty#petty`);
+  }
+  await svc.from("petty_advances").delete().eq("id", id);
   revalidatePath("/admin/zoho");
+  revalidatePath("/admin/petty");
+  redirect(`/admin/zoho?scan=${encodeURIComponent("Advance removed — it was never posted, so nothing in Zoho changes.")}&sec=petty#petty`);
 }
+
+// retryBillAction is gone (2 Sep 2026). It set a failed bill back to "pending"
+// so the approve form would reappear — two presses to do one thing, and its
+// label, "↻ Back to pending", read like a dead end. The approve form is on
+// every bill row now, failed ones included.
+
 
 // ---- Brokerage engine -------------------------------------------------------
 

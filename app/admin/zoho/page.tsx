@@ -19,7 +19,7 @@ import BankAnswerPanel from "./BankAnswerPanel";
 import SectionToggle from "./SectionToggle";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, editPettyPersonAction, deletePettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction, rematchBankAction, removeStatementAction, repostLineAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, editPettyPersonAction, deletePettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, rejectAdvanceAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction, rematchBankAction, removeStatementAction, repostLineAction } from "./actions";
 import { listZohoAccounts, reconcileAccount } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -284,7 +284,7 @@ export default async function ZohoHubPage(props: {
   };
 
   // Petty cash: balances + pending bills + failed advances.
-  type BillRow = { id: string; bill_date: string; amount: number; purpose: string; status: string; file_url: string | null; error: string | null; person: { name: string } | null };
+  type BillRow = { id: string; bill_date: string; amount: number; purpose: string; status: string; file_url: string | null; error: string | null; expense_account: string | null; person: { name: string } | null };
   // PETTY CASH IS OUR OWN DATA, NOT ZOHO'S.
   //
   // These three reads were gated on hubConnected, so the moment Zoho's keys
@@ -305,12 +305,17 @@ export default async function ZohoHubPage(props: {
   try { pBalances = await pettyBalances(); }
   catch (e) { pettyErr = e instanceof Error ? e.message : String(e); }
   const { data: pendingBillData } = await createServiceClient().from("petty_bills")
-    .select("id, bill_date, amount, purpose, status, file_url, error, person:person_id(name)")
+    .select("id, bill_date, amount, purpose, status, file_url, error, expense_account, person:person_id(name)")
     .in("status", ["pending", "failed"]).order("created_at");
   const pendingBills = (pendingBillData ?? []) as unknown as BillRow[];
-  const { data: failedAdvData } = await createServiceClient().from("petty_advances")
-    .select("id, adv_date, amount, error, person:person_id(name)").eq("status", "failed");
-  const failedAdvs = (failedAdvData ?? []) as unknown as { id: string; adv_date: string; amount: number; error: string | null; person: { name: string } | null }[];
+  // PENDING AS WELL AS FAILED. An advance that never posted sat in "pending"
+  // and appeared NOWHERE: not in the balances, which count only posted ones,
+  // and not here, which looked only at failures. Ravi has a duplicate ₹600 from
+  // 27 August in exactly that state — recorded twice, one posted, one stranded
+  // where nobody could see it to reject it.
+  const { data: openAdvData } = await createServiceClient().from("petty_advances")
+    .select("id, adv_date, amount, status, error, person:person_id(name)").in("status", ["failed", "pending"]);
+  const openAdvs = (openAdvData ?? []) as unknown as { id: string; adv_date: string; amount: number; status: string; error: string | null; person: { name: string } | null }[];
   const advanceAccountChoices = zohoAccounts.filter((a) => a.type === "other_current_asset").map((a) => a.name);
 
   // Rule 115: the USD rate applicable to income arising THIS month (= SBI TT
@@ -1412,7 +1417,7 @@ export default async function ZohoHubPage(props: {
       {/* ── Petty cash (imprest) ────────────────────────────────────── */}
       {hubConnected && (
         <details id="petty" data-sec className="zoho-sec">
-          <summary className="sec-head">4 · 👛 Petty cash — advances{(pendingBills.length + failedAdvs.length) > 0 && <span className="sec-count">{pendingBills.length + failedAdvs.length}</span>}</summary>
+          <summary className="sec-head">4 · 👛 Petty cash — advances{(pendingBills.length + openAdvs.length) > 0 && <span className="sec-count">{pendingBills.length + openAdvs.length}</span>}</summary>
           <DeskNotice sec="petty" />
           {pettyErr && (
             <div className="notice err" style={{ marginTop: 10 }}>
@@ -1547,9 +1552,22 @@ export default async function ZohoHubPage(props: {
             </form>
           </div>
 
-          {failedAdvs.length > 0 && failedAdvs.map((a) => (
-            <div className="card" key={a.id} style={{ marginTop: 8, borderLeft: "4px solid #b91c1c", padding: "10px 14px" }}>
-              <span style={{ fontSize: ".84rem" }}>❌ Advance {formatINR(Number(a.amount))} to {a.person?.name} ({a.adv_date}) failed: <span style={{ color: "#b91c1c" }}>{a.error}</span> — record it again once fixed.</span>
+          {openAdvs.length > 0 && openAdvs.map((a) => (
+            <div className="card" key={a.id} style={{ marginTop: 8, borderLeft: `4px solid ${a.status === "failed" ? "#b91c1c" : "#b45309"}`, padding: "10px 14px" }}>
+              {a.status === "failed" ? (
+                <span style={{ fontSize: ".84rem" }}>❌ Advance {formatINR(Number(a.amount))} to {a.person?.name} ({a.adv_date}) failed: <span style={{ color: "#b91c1c" }}>{a.error}</span> — record it again once fixed.</span>
+              ) : (
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: ".84rem" }}>
+                    ⏳ Advance {formatINR(Number(a.amount))} to {a.person?.name} ({a.adv_date}) is recorded but not posted —
+                    it is waiting at the founder&apos;s gate, or it was never sent there. It does NOT count in the balance below.
+                  </span>
+                  <form action={rejectAdvanceAction} style={{ margin: 0 }}>
+                    <input type="hidden" name="id" value={a.id} />
+                    <SubmitButton className="btn small secondary" savedLabel="✓">🗑 Not a real advance — remove</SubmitButton>
+                  </form>
+                </div>
+              )}
             </div>
           ))}
 
@@ -1566,24 +1584,36 @@ export default async function ZohoHubPage(props: {
                     {b.file_url && <a className="grad" href={`/api/file?u=${encodeURIComponent(b.file_url)}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: ".8rem", fontWeight: 700 }}>📎 bill</a>}
                     {b.status === "failed" && <span style={{ fontSize: ".78rem", color: "#b91c1c" }}>{b.error}</span>}
                   </div>
-                  {b.status === "pending" ? (
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
-                      <form action={approveBillAction} style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, minWidth: 260, margin: 0 }}>
-                        <input type="hidden" name="id" value={b.id} />
-                        <input name="expense_account" list="acct-names" required placeholder="Expense account (start typing…)" style={{ marginBottom: 0, flex: 1, fontSize: ".84rem" }} />
-                        <SubmitButton className="btn small" savedLabel="✓">✅ Approve &amp; post</SubmitButton>
-                      </form>
-                      <form action={rejectBillAction} style={{ display: "flex", gap: 6, alignItems: "center", margin: 0 }}>
-                        <input type="hidden" name="id" value={b.id} />
-                        <input name="note" placeholder="reason (optional)" style={{ marginBottom: 0, width: 150, fontSize: ".8rem" }} />
-                        <SubmitButton className="btn small secondary" savedLabel="✓">❌ Reject</SubmitButton>
-                      </form>
-                    </div>
-                  ) : (
-                    <form action={retryBillAction} style={{ marginTop: 8 }}>
+                  {/* A FAILED BILL IS STILL A BILL TO APPROVE.
+                      Ravi's three FR book bills were approved by the desk on 29
+                      August, hit the founder's gate — "POST /journals would
+                      change the books" — and landed here as failed. All this
+                      row then offered was "↻ Back to pending", which reads like
+                      a dead end and made him report that there was no way to
+                      approve them at all. The approve form is on every row now,
+                      with the head the desk already chose filled in, because
+                      re-approving is exactly the right move: it goes through
+                      the gate properly and posts when the founder releases it. */}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+                    <form action={approveBillAction} style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, minWidth: 260, margin: 0 }}>
                       <input type="hidden" name="id" value={b.id} />
-                      <SubmitButton className="btn small secondary" savedLabel="✓">↻ Back to pending</SubmitButton>
+                      <input name="expense_account" list="acct-names" required defaultValue={b.expense_account ?? ""}
+                        placeholder="Expense account (start typing…)" style={{ marginBottom: 0, flex: 1, fontSize: ".84rem" }} />
+                      <SubmitButton className="btn small" savedLabel="✓">
+                        {b.status === "failed" ? "✅ Approve again" : "✅ Approve"}
+                      </SubmitButton>
                     </form>
+                    <form action={rejectBillAction} style={{ display: "flex", gap: 6, alignItems: "center", margin: 0 }}>
+                      <input type="hidden" name="id" value={b.id} />
+                      <input name="note" placeholder="reason (optional)" style={{ marginBottom: 0, width: 150, fontSize: ".8rem" }} />
+                      <SubmitButton className="btn small secondary" savedLabel="✓">❌ Reject</SubmitButton>
+                    </form>
+                  </div>
+                  {b.status === "failed" && (
+                    <p className="muted" style={{ fontSize: ".78rem", margin: "6px 0 0" }}>
+                      This one failed on the founder&apos;s approval gate before the bill path was wired to it.
+                      Approving it now queues it there properly — it posts when he releases it in ✅ Approvals.
+                    </p>
                   )}
                 </div>
               ))}

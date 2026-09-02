@@ -81,5 +81,41 @@ check("the sales banner keeps only its own messages",
   /deskMsg && !deskSec &&/.test(page),
   "it used to catch every message from every section on the page");
 
+// ── a failed bill is still a bill to approve ──────────────────────────────
+//
+// "Ravi has already submitted some invoices, but there is no way to approve
+//  it." — 2 September. His three FR book bills (₹1,495, ₹1,399, ₹2,248) were
+// approved by the desk on 29 August, hit the founder's gate — "POST /journals
+// would change the books in Zoho" — and landed as `failed`. All the row then
+// offered was "↻ Back to pending": two presses to do one thing, with a label
+// that reads like a dead end.
+check("the approve form is on every bill row, not only the pending ones",
+  !/\{b\.status === "pending" \? \(/.test(page),
+  "a failed bill is the one that most needs approving again");
+check("the head the desk already chose comes back with it",
+  /defaultValue=\{b\.expense_account \?\? ""\}/.test(page));
+check("the button says what it does on a failed row",
+  /b\.status === "failed" \? "✅ Approve again"/.test(page));
+check("and the row explains why it failed and what approving now does",
+  /Approving it now queues it there properly/.test(page));
+check("the two-step retry is gone",
+  !/retryBillAction/.test(page) && /retryBillAction is gone/.test(actions),
+  "‘Back to pending’ was a label nobody could read as ‘approve this’");
+check("approving still goes through the founder's gate, never straight to Zoho",
+  /requestApprovalFor\("petty_bill", "petty_bills", id, \{ expenseAccount \}/.test(actions));
+
+// ── and an unposted advance is no longer invisible ───────────────────────
+check("pending advances are read, not just failed ones",
+  /\.in\("status", \["failed", "pending"\]\)/.test(page),
+  "Ravi's duplicate ₹600 from 27 August showed on no screen at all");
+check("a pending advance says it does not count in the balance",
+  /It does NOT count in the balance below/.test(page),
+  "only posted advances are counted, which is why it was invisible AND uncounted");
+check("it can be removed when it was never real",
+  /action=\{rejectAdvanceAction\}/.test(page));
+check("but a POSTED advance can never be quietly deleted",
+  /reverse it there with a journal, not by deleting the record here/.test(actions),
+  "the way to undo something in Zoho is another entry");
+
 console.log(fails === 0 ? "ok — petty cash list" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

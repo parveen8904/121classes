@@ -6,9 +6,10 @@ import Link from "next/link";
 import Script from "next/script";
 import { formatINR, parseSlabs, slabTotal, slabMonthOptions, type Slab } from "@/lib/pricing";
 import { TIER_META, TIER_RANK } from "@/lib/tiers";
-import { createPlanOrder, verifyPlanPayment, createExtendOrder, verifyExtendPayment, saveBillingAddress } from "./payActions";
+import { createPlanOrder, verifyPlanPayment, createExtendOrder, verifyExtendPayment } from "./payActions";
+import CheckoutAddressStep from "@/app/components/CheckoutAddressStep";
+import { saveConfirmedDetails } from "@/app/books/cartActions";
 import Help from "@/app/components/Help";
-import { INDIA_STATES } from "@/lib/indiaStates";
 
 type Subject = {
   id: string;
@@ -96,8 +97,6 @@ export default function PricingCards({
   const [wantBooks, setWantBooks] = useState(true);
   // Which tier is waiting on an address. Null = nothing is being asked.
   const [askAddress, setAskAddress] = useState<string | null>(null);
-  const [addr, setAddr] = useState({ line1: "", line2: "", city: "", state: "", pincode: "", country: "India" });
-  const inIndia = addr.country === "India";
   const [addrErr, setAddrErr] = useState("");
   const [savingAddr, setSavingAddr] = useState(false);
 
@@ -143,25 +142,25 @@ export default function PricingCards({
     if (Number.isFinite(n) && n > 0) setSilverMonths(Math.min(60, n));
   }
 
-  /** Save the address they just typed, then open the payment they asked for. */
-  async function saveAddressAndBuy(e: React.FormEvent) {
-    e.preventDefault();
-    const tier = askAddress;
-    if (!tier) return;
-    setSavingAddr(true); setAddrErr("");
-    try {
-      const r = await saveBillingAddress(addr);
-      if (!r.ok) { setAddrErr(r.error ?? "Could not save that."); return; }
-      setAskAddress(null);
-      // Straight on. They pressed Pay a moment ago; they should not have to
-      // find the button again.
-      await buy(tier);
-    } finally {
-      setSavingAddr(false);
-    }
+  /**
+   * EVERY ENROLMENT IS CONFIRMED BEFORE THE GATEWAY OPENS.
+   *
+   * Ravi's spec of 2 September, marked Critical: "No payment should be
+   * initiated until the user confirms the Billing and Shipping details on
+   * every enrollment... even if the student has enrolled previously and their
+   * address details are already saved."
+   *
+   * That last clause is the point. The address was only ever asked for when the
+   * server refused for want of one — so a student who moved in March and
+   * enrolled again in September was never asked anything, and their books went
+   * to the old flat. Now pressing Buy always opens the review; the payment
+   * follows the confirmation.
+   */
+  function buy(tier: string) {
+    setAskAddress(tier);
   }
 
-  async function buy(tier: string) {
+  async function payNow(tier: string) {
     if (!window.Razorpay) {
       alert("Payment library is still loading — please try again in a moment.");
       return;
@@ -181,15 +180,9 @@ export default function PricingCards({
         else if (res.reason === "notopen") alert("This batch has not opened for enrolment yet. Please check back on the start date.");
         else if (res.reason === "closed") alert("Enrolment for this batch has closed. Write to us and we will tell you when the next one opens.");
         else if (res.reason === "address") {
-          // ASK HERE, DO NOT SEND THEM AWAY.
-          //
-          // Every payment raises a GST invoice and an invoice must carry the
-          // buyer's address and state, whatever the plan and whether or not
-          // any books are being posted. This used to send the student off to
-          // their profile to find the right card, fill it, and make their own
-          // way back to the plan — three pages for five boxes, and one student
-          // reported it as the payment not working. The boxes now open on this
-          // page and the payment follows the moment they are saved.
+          // Should be unreachable now that the review runs first — but the
+          // server is entitled to refuse, and sending them back to the same
+          // screen is the right answer if it ever does.
           setAskAddress(tier);
         }
         else alert("Could not start checkout. Please try again or contact us.");
@@ -403,79 +396,29 @@ export default function PricingCards({
           Nothing to do with books: a student who declines the printed copies
           still needs an invoice, and a three-month plan has no books at all. */}
       {askAddress && (
-        <form
-          onSubmit={saveAddressAndBuy}
-          className="card"
-          style={{ maxWidth: 560, margin: "0 auto 18px", border: "2px solid var(--accent)" }}
-        >
-          <h3 style={{ marginTop: 0, fontSize: "1.05rem" }}>🧾 Your billing address</h3>
-          <p className="muted" style={{ fontSize: ".86rem", lineHeight: 1.6 }}>
-            Needed before we can take the payment — your invoice is a GST invoice and has to carry your address and
-            your state. Fill it once and you will never be asked again.
-          </p>
-
-          <label htmlFor="ba1">Address<span style={{ color: "#b91c1c" }}> *</span></label>
-          <input id="ba1" value={addr.line1} onChange={(e) => setAddr({ ...addr, line1: e.target.value })}
-            required autoFocus placeholder="Flat / house, building, street" />
-
-          <label htmlFor="ba2">Area, landmark <span className="muted" style={{ fontWeight: 400 }}>— optional</span></label>
-          <input id="ba2" value={addr.line2} onChange={(e) => setAddr({ ...addr, line2: e.target.value })} />
-
-          <label htmlFor="bacn">Country<span style={{ color: "#b91c1c" }}> *</span></label>
-          <select id="bacn" value={addr.country}
-            onChange={(e) => setAddr({ ...addr, country: e.target.value, state: "", pincode: "" })} required>
-            <option value="India">India</option>
-            <option value="">Outside India</option>
-          </select>
-
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
-            <div>
-              <label htmlFor="bac">City<span style={{ color: "#b91c1c" }}> *</span></label>
-              <input id="bac" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} required />
-            </div>
-            <div>
-              {/* A LIST, NOT A TEXT BOX.
-                  This was free text, and on 10 August a student in Lucknow typed
-                  his PIN code into it and "+91" into the PIN box. His invoice
-                  then went out with no state code on it — which on a GST invoice
-                  is not a cosmetic fault, it is an incomplete tax document, and
-                  the state is also what decides CGST+SGST against IGST. A box
-                  that can be filled wrongly eventually will be. Thirty-six
-                  entries; nobody can mistype one. */}
-              <label htmlFor="bas">State<span style={{ color: "#b91c1c" }}> *</span></label>
-              {inIndia ? (
-                <select id="bas" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} required>
-                  <option value="">Select your state…</option>
-                  {INDIA_STATES.map((st) => <option key={st} value={st}>{st}</option>)}
-                </select>
-              ) : (
-                <input id="bas" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })}
-                  required placeholder="State / province / county" />
-              )}
-            </div>
-            <div>
-              <label htmlFor="bap">{inIndia ? "PIN code" : "ZIP / postcode"}<span style={{ color: "#b91c1c" }}> *</span></label>
-              <input id="bap" value={addr.pincode}
-                onChange={(e) => setAddr({ ...addr, pincode: inIndia ? e.target.value.replace(/\D/g, "").slice(0, 6) : e.target.value })}
-                inputMode={inIndia ? "numeric" : "text"}
-                placeholder={inIndia ? "6 digits" : ""} required />
-            </div>
-          </div>
-
-          {addrErr && <div className="notice err" style={{ marginTop: 4 }}>⚠️ {addrErr}</div>}
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
-            <button className="btn" type="submit" disabled={savingAddr}>
-              {savingAddr ? "Saving…" : "Save and continue to payment →"}
-            </button>
-            <button className="btn secondary" type="button" onClick={() => { setAskAddress(null); setAddrErr(""); }}>
-              Cancel
-            </button>
-          </div>
-          <p className="muted" style={{ fontSize: ".78rem", marginTop: 8 }}>
-            Outside India? Put your own country&apos;s province and postcode — both boxes take anything.
-          </p>
-        </form>
+        <div style={{ maxWidth: 620, margin: "0 auto 18px" }}>
+          <CheckoutAddressStep
+            heading="Billing & delivery for this enrolment"
+            onConfirmedChange={async (d) => {
+              if (!d) return;
+              setSavingAddr(true); setAddrErr("");
+              try {
+                const r = await saveConfirmedDetails(d);
+                if (!r.ok) { setAddrErr(r.error ?? "Could not save that."); return; }
+                const tier = askAddress;
+                setAskAddress(null);
+                // They pressed Pay a moment ago; they should not have to find
+                // the button again.
+                if (tier) await payNow(tier);
+              } finally { setSavingAddr(false); }
+            }}
+          />
+          {addrErr && <div className="notice err" style={{ marginTop: 8 }}>⚠️ {addrErr}</div>}
+          {savingAddr && <p className="muted" style={{ fontSize: ".82rem", marginTop: 8 }}>Saving…</p>}
+          <button className="btn secondary block" type="button" style={{ marginTop: 8 }} onClick={() => setAskAddress(null)}>
+            ← Back to the plans
+          </button>
+        </div>
       )}
 
       {configured && (

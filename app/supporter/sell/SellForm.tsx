@@ -5,7 +5,8 @@ import { useState, useEffect } from "react";
 import Script from "next/script";
 import Link from "next/link";
 import { formatINR } from "@/lib/pricing";
-import { INDIA_STATES, formatPostalAddress, isIndianPincode } from "@/lib/indiaStates";
+import { INDIA_STATES, isIndianPincode } from "@/lib/indiaStates";
+import { toAddress, type Address } from "@/lib/address";
 import { createGiftOrder, verifyGiftPayment, previewGiftPrice } from "@/app/gift/actions";
 
 // The supporter's order form, in the order they actually work.
@@ -15,7 +16,19 @@ import { createGiftOrder, verifyGiftPayment, previewGiftPrice } from "@/app/gift
 // nothing else changes what is sold: it is always Gold, always twelve months.
 
 type Product = { id: string; title: string; course: string; priceInr: number; months: number; options?: { months: number; priceInr: number }[] };
-type Billing = { name: string; gstin: string; address: string; state: string };
+// THE SPONSOR'S OWN BILLING ADDRESS, IN PARTS.
+//
+// Ravi's spec, 2 Sep 2026: "Sponsor Billing section currently has only one
+// Address field. Add separate fields for Address, City, State and PIN Code.
+// These details should be maintained separately and used for the Sponsor's
+// invoice/billing."
+//
+// Maintained separately is exactly what happens: it comes from the vendor's own
+// profile and is never editable on this page, because the invoice is theirs and
+// the parcel is the student's. Only the shape changes here — a paragraph
+// becomes the parts, so the invoice and the label are built from fields rather
+// than from one string doing two jobs.
+type Billing = { name: string; gstin: string; state: string; addr: Address };
 
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -115,8 +128,10 @@ export default function SellForm({
     try {
       const res = await createGiftOrder({
         subjectId, tier: "gold", months: term?.months ?? product.months, couponCode: coupon, startsOn,
-        recipient: { name: name.trim(), email: email.trim(), phone: phone.trim(), address: formatPostalAddress({ ...addr, country: addr.inIndia ? "India" : addr.country }) },
-        billing: { name: billing.name || name, gstin: billing.gstin, address: billing.address, state: bState },
+        // The parcel goes to the STUDENT — these parts, not the vendor's.
+        recipient: { name: name.trim(), email: email.trim(), phone: phone.trim(),
+          addr: toAddress({ name: name.trim(), phone: phone.trim(), ...addr, country: addr.inIndia ? "India" : addr.country }) },
+        billing: { name: billing.name || name, gstin: billing.gstin, tradeName: billing.name, addr: { ...billing.addr, state: bState } },
       });
       if (!res.ok) {
         setErr(res.reason === "blocked"

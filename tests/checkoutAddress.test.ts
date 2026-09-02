@@ -220,5 +220,76 @@ check("and gstin.ts itself imports nothing, so a test can load it",
   !/^import /m.test(gst),
   "a module that reaches for secrets is a module no test can run — this is how 28 test files died");
 
+// ── the profile pages, both of them ───────────────────────────────────────
+// "State is currently a manual text field → change State field to a dropdown."
+// "Country selection is currently not available → add Country field with
+//  India / Other Country options." — Ravi, 2 September 2026, both Medium.
+const block = readFileSync(join(import.meta.dirname, "..", "app/components/ProfileAddressBlock.tsx"), "utf8");
+check("a profile's Indian state is a dropdown", /<select id=\{`\$\{idPrefix\}-state`\} name="state"/.test(block));
+check("country is India or elsewhere", /<option value="Other">Other country<\/option>/.test(block));
+check("choosing elsewhere frees the state and postcode",
+  /setCountry\(e\.target\.value === "India" \? "India" : ""\); setState\(""\); setPincode\(""\)/.test(block));
+check("it still posts the same field names, so the save actions are untouched",
+  /name="address_line1"/.test(block) && /name="city"/.test(block) && /name="pincode"/.test(block) && /name="gstin"/.test(block),
+  "Ravi: the existing vendor flow must keep working, with GST verification added");
+check("the GST number can be verified from a profile too", /const r = await verifyGstin\(gstin\)/.test(block));
+
+const studentProfile = readFileSync(join(import.meta.dirname, "..", "app/dashboard/profile/page.tsx"), "utf8");
+check("the student profile uses it", /<ProfileAddressBlock/.test(studentProfile));
+check("and no longer holds a free-text state box",
+  !/name="state" defaultValue/.test(studentProfile),
+  "one student's invoice read ‘State Code:-’ because this was free text");
+const vendorProfile = readFileSync(join(import.meta.dirname, "..", "app/supporter/profile/page.tsx"), "utf8");
+check("the vendor profile uses it", /<ProfileAddressBlock/.test(vendorProfile));
+check("the vendor's short 25-state list is gone",
+  !/const STATES = \["Delhi"/.test(vendorProfile),
+  "it omitted eleven states and offered ‘Other’, which is not a GST state");
+
+const profileAction = readFileSync(join(import.meta.dirname, "..", "app/dashboard/profile/actions.ts"), "utf8");
+check("the student's country is saved", /country: nullable\(formData\.get\("country"\)\) \?\? "India"/.test(profileAction));
+const supporterAction = readFileSync(join(import.meta.dirname, "..", "app/supporter/actions.ts"), "utf8");
+check("the vendor's country and registered name are saved",
+  /country: s\("country"\)/.test(supporterAction) && /trade_name: s\("trade_name"\)/.test(supporterAction));
+
+// ── sponsor and recipient, kept apart ─────────────────────────────────────
+// "Recipient section currently has only one Address field… Sponsor Billing
+//  section currently has only one Address field… These details should be
+//  maintained separately and used for the Sponsor's invoice/billing."
+const giftAct = readFileSync(join(import.meta.dirname, "..", "app/gift/actions.ts"), "utf8");
+check("a gift carries two addresses in parts, not two paragraphs",
+  /recipient: \{ name: string; email: string; phone\?: string; attempt\?: string; addr\?: Address \}/.test(giftAct) &&
+  /billing: \{ name: string; gstin\?: string; tradeName\?: string; addr\?: Address \}/.test(giftAct));
+check("the tax split is decided by the SPONSOR's state", /computeGst\(amount, bAddr\.state, s\)/.test(giftAct));
+check("whether a parcel can go is now read, not guessed",
+  /\(rAddr\.country \|\| "India"\)\.toLowerCase\(\) === "india" && \/\^\\d\{6\}\$\/\.test\(rAddr\.pincode\)/.test(giftAct),
+  "looksPostableInIndia was inspecting a blob of prose");
+check("both are stored in parts as well as in words",
+  /recipient_addr: rAddr/.test(giftAct) && /billing_addr: bAddr/.test(giftAct));
+const giftForm = readFileSync(join(import.meta.dirname, "..", "app/gift/GiftForm.tsx"), "utf8");
+check("the gift form asks each in separate fields",
+  /<AddressFields idPrefix="gr"/.test(giftForm) && /<AddressFields idPrefix="gb"/.test(giftForm));
+check("the sponsor's GST can be verified there too", /await verifyGstin\(bGstin\)/.test(giftForm));
+check("no textarea is left pretending to be an address",
+  !/<textarea rows=\{2\} value=\{rAddr\}/.test(giftForm) && !/<textarea rows=\{2\} value=\{bAddr\}/.test(giftForm));
+
+const sell = readFileSync(join(import.meta.dirname, "..", "app/supporter/sell/SellForm.tsx"), "utf8");
+check("a vendor sale bills the vendor and ships to the student",
+  /recipient: \{ name: name\.trim\(\)[\s\S]{0,200}addr: toAddress\(/.test(sell) &&
+  /billing: \{ name: billing\.name[\s\S]{0,140}addr: \{ \.\.\.billing\.addr/.test(sell),
+  "his rule: the billing address is the vendor's, the shipping address is the student's");
+
+// ── every enrolment, not only the first ───────────────────────────────────
+const plans = readFileSync(join(import.meta.dirname, "..", "app/learn/[courseId]/plans/PricingCards.tsx"), "utf8");
+check("buying a plan opens the review before anything else",
+  /function buy\(tier: string\) \{\s*\n\s*setAskAddress\(tier\);/.test(plans),
+  "the address used to be asked ONLY when the server refused for want of one — so a returning student was never asked at all");
+check("the plan page uses the same shared step", /<CheckoutAddressStep/.test(plans));
+check("the confirmed details are saved before the gateway opens",
+  /await saveConfirmedDetails\(d\)/.test(plans));
+check("payment happens after the save, not beside it",
+  /if \(tier\) await payNow\(tier\);/.test(plans));
+check("the billing address still lands in the columns the invoice reads",
+  /address_line1: billing\.line1/.test(cart) && /state: billing\.state \|\| null/.test(cart));
+
 console.log(fails === 0 ? "ok — checkout addresses" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

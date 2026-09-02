@@ -4,20 +4,30 @@ import { useState } from "react";
 import { parseSlabs, slabTotal, slabMonthOptions, formatINR } from "@/lib/pricing";
 import Script from "next/script";
 import AttemptPicker from "@/app/components/AttemptPicker";
-import { createGiftOrder, verifyGiftPayment } from "./actions";
+import AddressFields from "@/app/components/AddressFields";
+import { createGiftOrder, verifyGiftPayment, } from "./actions";
+import { verifyGstin } from "@/app/books/cartActions";
+import { EMPTY_ADDRESS, addressProblems, type Address } from "@/lib/address";
 
 type Subject = { id: string; title: string; course: string; gold: number | null; validityMonths: number; goldSlabs: unknown; batchMonths?: number | null; batchPriceInr?: number | null };
 type Plan = { tier: string; name: string; price: number | null };
-
-const STATES = ["Delhi", "Haryana", "Uttar Pradesh", "Punjab", "Rajasthan", "Maharashtra", "Gujarat", "Karnataka", "Tamil Nadu", "Telangana", "West Bengal", "Bihar", "Madhya Pradesh", "Kerala", "Andhra Pradesh", "Uttarakhand", "Himachal Pradesh", "Jharkhand", "Chhattisgarh", "Odisha", "Assam", "Goa", "Chandigarh", "Jammu and Kashmir", "Other"];
 
 export default function GiftForm({ configured, subjects, plans }: { configured: boolean; subjects: Subject[]; plans: Plan[] }) {
   const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
   const tier = "gold"; // sponsors gift Gold only
   const [months, setMonths] = useState(12);
   const [rName, setRName] = useState(""); const [rEmail, setREmail] = useState(""); const [rPhone, setRPhone] = useState("");
-  const [rAttempt, setRAttempt] = useState(""); const [rAddr, setRAddr] = useState("");
-  const [bName, setBName] = useState(""); const [bGstin, setBGstin] = useState(""); const [bAddr, setBAddr] = useState(""); const [bState, setBState] = useState("Delhi");
+  const [rAttempt, setRAttempt] = useState("");
+  // TWO ADDRESSES, KEPT APART ON PURPOSE. Ravi's spec, 2 Sep 2026: the
+  // recipient section and the sponsor billing section each get their own
+  // Address, City, State and PIN. The invoice is the sponsor's; the parcel is
+  // the student's; they are rarely the same place, and one textarea could not
+  // express that.
+  const [rAddr, setRAddr] = useState<Address>(EMPTY_ADDRESS);
+  const [bAddr, setBAddr] = useState<Address>(EMPTY_ADDRESS);
+  const [bName, setBName] = useState(""); const [bGstin, setBGstin] = useState("");
+  const [gstNote, setGstNote] = useState<{ tone: "ok" | "warn" | "bad"; text: string } | null>(null);
+  const [gstBusy, setGstBusy] = useState(false);
   const [coupon, setCoupon] = useState("");
   const [busy, setBusy] = useState(false); const [done, setDone] = useState(false); const [err, setErr] = useState<string | null>(null);
 
@@ -25,13 +35,17 @@ export default function GiftForm({ configured, subjects, plans }: { configured: 
     e.preventDefault();
     setErr(null);
     if (!window.Razorpay) { setErr("Payment library still loading — try again in a moment."); return; }
-    if (!subjectId || !rName || !rEmail || !bState) { setErr("Please fill the recipient's name & email and your state."); return; }
+    if (!subjectId || !rName || !rEmail) { setErr("Please fill the recipient's name and email."); return; }
+    const bad = addressProblems(bAddr, { needPhone: false, indiaOnly: false });
+    if (bad.length) { setErr(`Your billing address still needs: ${bad.join(", ")}.`); return; }
     setBusy(true);
     try {
       const res = await createGiftOrder({
         subjectId, tier, months, couponCode: coupon,
-        recipient: { name: rName, email: rEmail, phone: rPhone, attempt: rAttempt, address: rAddr },
-        billing: { name: bName || rName, gstin: bGstin, address: bAddr, state: bState },
+        recipient: { name: rName, email: rEmail, phone: rPhone, attempt: rAttempt,
+          addr: { ...rAddr, name: rAddr.name || rName, phone: rAddr.phone || rPhone } },
+        billing: { name: bName || rName, gstin: bGstin, tradeName: bName,
+          addr: { ...bAddr, name: bAddr.name || bName || rName } },
       });
       if (!res.ok) {
         setErr(res.reason === "unconfigured" ? "Payment isn't enabled yet."
@@ -135,17 +149,62 @@ export default function GiftForm({ configured, subjects, plans }: { configured: 
           <div><label>Phone</label><input value={rPhone} onChange={(e) => setRPhone(e.target.value)} /></div>
           <div><label>Exam attempt</label><AttemptPicker name="rAttempt" defaultValue={rAttempt} allowNone /></div>
         </div>
-        <div><label>Address (optional)</label><textarea rows={2} value={rAddr} onChange={(e) => setRAddr(e.target.value)} /></div>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 0" }}>
+          Where the books go. A Gold gift of nine months or more includes the printed set, free — and a courier needs
+          the parts, not a paragraph.
+        </p>
+        <AddressFields idPrefix="gr" value={rAddr} onChange={setRAddr} />
 
         <h3 style={{ margin: "8px 0 0" }}>3️⃣ Your billing details (for the invoice)</h3>
+        <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 0" }}>
+          Kept separately from the address above: the invoice is yours, the parcel is theirs.
+        </p>
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
           <div><label>Your name / company</label><input value={bName} onChange={(e) => setBName(e.target.value)} placeholder="as it should appear on the invoice" /></div>
-          <div><label>Your GSTIN (optional)</label><input value={bGstin} onChange={(e) => setBGstin(e.target.value)} placeholder="for input credit" /></div>
-          <div style={{ gridColumn: "1 / -1" }}><label>Billing address</label><textarea rows={2} value={bAddr} onChange={(e) => setBAddr(e.target.value)} /></div>
-          <div><label>Your state * (decides CGST+SGST vs IGST)</label>
-            <select value={bState} onChange={(e) => setBState(e.target.value)}>{STATES.map((st) => <option key={st} value={st}>{st}</option>)}</select>
+          <div>
+            <label>Your GST number (optional)</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={bGstin} style={{ fontFamily: "ui-monospace, monospace", letterSpacing: ".04em" }}
+                onChange={(e) => { setBGstin(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15)); setGstNote(null); }}
+                placeholder="15 characters" />
+              <button className="btn small secondary" type="button" disabled={gstBusy || bGstin.length !== 15}
+                style={{ whiteSpace: "nowrap" }}
+                onClick={async () => {
+                  setGstBusy(true);
+                  try {
+                    const r = await verifyGstin(bGstin);
+                    if (!r.valid) { setGstNote({ tone: "bad", text: r.problem ?? "That GST number is not valid." }); return; }
+                    if (r.fetched && r.party) {
+                      // Exactly as the register spells it — see lib/gstin.ts.
+                      setBName(r.party.tradeName ?? r.party.legalName ?? bName);
+                      setBAddr((a) => ({
+                        ...a,
+                        name: r.party!.tradeName || r.party!.legalName || a.name,
+                        line1: r.party!.line1 || a.line1, line2: r.party!.line2 || a.line2,
+                        city: r.party!.city || a.city, state: r.party!.state || a.state,
+                        pincode: r.party!.pincode || a.pincode, country: "India",
+                      }));
+                      setGstNote({ tone: "ok", text: `Verified — ${r.party.tradeName || r.party.legalName}. Billing address filled in from the GST records.` });
+                    } else {
+                      setGstNote({ tone: "warn", text: `${r.note ?? "The trade name could not be fetched."} Registered in ${r.state}.` });
+                    }
+                  } catch { setGstNote({ tone: "warn", text: "Could not reach the GST service just now." }); }
+                  finally { setGstBusy(false); }
+                }}>
+                {gstBusy ? "Checking…" : "Verify"}
+              </button>
+            </div>
+            {gstNote && (
+              <p style={{ fontSize: ".8rem", margin: "4px 0 0", color: gstNote.tone === "ok" ? "#15803d" : gstNote.tone === "warn" ? "#b45309" : "#b91c1c" }}>
+                {gstNote.text}
+              </p>
+            )}
           </div>
         </div>
+        {/* The state here is what decides CGST+SGST against IGST on YOUR
+            invoice, which is why it is chosen and not typed. */}
+        <AddressFields idPrefix="gb" value={bAddr} onChange={setBAddr}
+          requirePhone={false} showLandmark={false} allowOutsideIndia />
 
         <div style={{ maxWidth: 260 }}>
           <label>Coupon code (optional)</label>

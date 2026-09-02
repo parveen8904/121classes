@@ -25,9 +25,14 @@ export async function updateProfile(formData: FormData) {
       address_line2: nullable(formData.get("address_line2")),
       city: nullable(formData.get("city")),
       state: nullable(formData.get("state")),
+      // India or elsewhere — the form now asks, so a province from abroad is
+      // no longer silently filed as if it were an Indian state.
+      country: nullable(formData.get("country")) ?? "India",
       pincode: nullable(formData.get("pincode")),
       gstin: nullable(formData.get("gstin")),
       business_name: nullable(formData.get("business_name")),
+      // Exactly as the GST register spells it, when a verification has run.
+      trade_name: nullable(formData.get("trade_name")),
     })
     .eq("id", user.id);
 

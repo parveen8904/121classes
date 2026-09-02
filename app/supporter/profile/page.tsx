@@ -1,4 +1,5 @@
 import { formatDate } from "@/lib/dates";
+import ProfileAddressBlock from "@/app/components/ProfileAddressBlock";
 import Link from "next/link";
 import SetPassword from "@/app/dashboard/set-password";
 import { redirect } from "next/navigation";
@@ -10,7 +11,6 @@ import { saveSupporterProfile, verifySupporterSite } from "../actions";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My details — Supporter" };
 
-const STATES = ["Delhi", "Haryana", "Uttar Pradesh", "Punjab", "Rajasthan", "Maharashtra", "Gujarat", "Karnataka", "Tamil Nadu", "Telangana", "West Bengal", "Bihar", "Madhya Pradesh", "Kerala", "Andhra Pradesh", "Uttarakhand", "Himachal Pradesh", "Jharkhand", "Chhattisgarh", "Odisha", "Assam", "Goa", "Chandigarh", "Jammu and Kashmir", "Other"];
 
 // A supporter's own details — asked once, then used on every invoice.
 //
@@ -28,7 +28,7 @@ export default async function SupporterProfilePage(props: {
   const svc = createServiceClient();
   const { data: me } = await svc
     .from("profiles")
-    .select("full_name, business_name, designation, email, phone, gstin, address_line1, address_line2, city, state, pincode, is_supporter, role, supporter_site, supporter_site_ok_at")
+    .select("full_name, business_name, trade_name, designation, email, phone, gstin, address_line1, address_line2, city, state, country, pincode, is_supporter, role, supporter_site, supporter_site_ok_at")
     .eq("id", user.id).maybeSingle();
   if (!me?.is_supporter && me?.role !== "admin" && me?.role !== "supporter") redirect("/dashboard");
 
@@ -152,17 +152,6 @@ export default async function SupporterProfilePage(props: {
             </div>
           </div>
 
-          <h2 style={{ fontSize: "1.02rem", marginTop: 18 }}>Billing</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10 }}>
-            <div>
-              <label htmlFor="business_name">Business name (if you invoice as a firm)</label>
-              <input id="business_name" name="business_name" defaultValue={me?.business_name ?? ""} />
-            </div>
-            <div>
-              <label htmlFor="gstin">GSTIN (optional)</label>
-              <input id="gstin" name="gstin" defaultValue={me?.gstin ?? ""} placeholder="15-digit GSTIN" />
-            </div>
-          </div>
           {/* A stray "Billing address" label used to sit here, with no field
               under it — the address itself is further down, under its own
               heading. It read as a box that had failed to render, and clicking
@@ -205,21 +194,22 @@ export default async function SupporterProfilePage(props: {
             </div>
           )}
 
-          <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>Billing address</h2>
-          <input id="address_line1" name="address_line1" defaultValue={me?.address_line1 ?? ""} placeholder="Building, street" />
-          <input name="address_line2" defaultValue={me?.address_line2 ?? ""} placeholder="Area, landmark (optional)" />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10 }}>
-            <div><label htmlFor="city">City</label><input id="city" name="city" defaultValue={me?.city ?? ""} /></div>
-            <div><label htmlFor="pincode">PIN code</label><input id="pincode" name="pincode" defaultValue={me?.pincode ?? ""} /></div>
-            <div>
-              <label htmlFor="state">State</label>
-              {/* The state decides whether your invoice carries CGST + SGST or
-                  IGST, so it is the one field here that is not optional. */}
-              <select id="state" name="state" defaultValue={me?.state ?? "Delhi"} required>
-                {STATES.map((x) => <option key={x} value={x}>{x}</option>)}
-              </select>
-            </div>
-          </div>
+          <h2 style={{ fontSize: "1.05rem", marginTop: 18 }}>Billing address &amp; GST</h2>
+          {/* Ravi's spec, 2 Sep 2026: "Add GST Number verification and auto-fetch
+              functionality… Existing Vendor flow should continue to work as it
+              currently does, with GST verification added." So this is the same
+              set of fields under the same names, posting to the same action —
+              the only change is that the GST number can now be verified, and
+              on success fills the trade name and registered address in, spelled
+              as the register spells them. */}
+          <ProfileAddressBlock
+            idPrefix="v"
+            initial={{
+              address_line1: me?.address_line1, address_line2: me?.address_line2,
+              city: me?.city, state: me?.state ?? "Delhi", pincode: me?.pincode, country: me?.country,
+              gstin: me?.gstin, business_name: me?.business_name, trade_name: me?.trade_name,
+            }}
+          />
 
           {/* "WHERE BOOKS SHOULD BE SENT" WAS ASKED HERE AND USED NOWHERE.
               Books go to the STUDENT, at the address the vendor types when they

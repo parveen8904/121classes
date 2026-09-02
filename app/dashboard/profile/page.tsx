@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ProfileAddressBlock from "@/app/components/ProfileAddressBlock";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SubmitButton from "@/app/components/SubmitButton";
@@ -20,7 +21,7 @@ export default async function ProfilePage(props: { searchParams: Promise<{ saved
   const { data: p } = await supabase
     .from("profiles")
     .select(
-      "full_name, phone, target_attempt, address_line1, address_line2, city, state, pincode, gstin, business_name",
+      "full_name, phone, target_attempt, address_line1, address_line2, city, state, country, pincode, gstin, business_name, trade_name",
     )
     .eq("id", user.id)
     .single();
@@ -130,47 +131,21 @@ export default async function ProfilePage(props: { searchParams: Promise<{ saved
               Needed before any payment — your invoice is a GST invoice and must carry it. Printed books, where a
               plan includes them, are sent here too.
             </p>
-            <label htmlFor="address_line1">Address line 1{needAddress && <span style={{ color: "#b91c1c" }}> *</span>}</label>
-            <input id="address_line1" name="address_line1" defaultValue={p?.address_line1 ?? ""} required={needAddress} />
-            <label htmlFor="address_line2">Address line 2</label>
-            <input id="address_line2" name="address_line2" defaultValue={p?.address_line2 ?? ""} />
-            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr 1fr" }}>
-              <div>
-                <label htmlFor="city">City{needAddress && <span style={{ color: "#b91c1c" }}> *</span>}</label>
-                <input id="city" name="city" defaultValue={p?.city ?? ""} required={needAddress} />
-              </div>
-              <div>
-                {/* Free text, and labelled for everybody: students outside India
-                    have provinces and counties, not states, and a form that
-                    only names one of them reads as "not for you". */}
-                <label htmlFor="state">State / province{needAddress && <span style={{ color: "#b91c1c" }}> *</span>}</label>
-                <input id="state" name="state" defaultValue={p?.state ?? ""} required={needAddress} placeholder="e.g. Karnataka" />
-              </div>
-              <div>
-                <label htmlFor="pincode">PIN / ZIP{needAddress && <span style={{ color: "#b91c1c" }}> *</span>}</label>
-                <input id="pincode" name="pincode" defaultValue={p?.pincode ?? ""} required={needAddress} />
-              </div>
-            </div>
-            <p className="muted" style={{ fontSize: ".8rem", marginTop: 6 }}>
-              Outside India? Put your own country&apos;s province and postcode — both boxes take anything.
-            </p>
-          </div>
-
-          <div className="card" style={{ marginTop: 16 }}>
-            <h3 style={{ marginBottom: 4 }}>GST details (optional)</h3>
-            <p className="muted" style={{ fontSize: ".85rem", marginBottom: 14 }}>
-              Fill these only if you need a GST invoice.
-            </p>
-            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
-              <div>
-                <label htmlFor="gstin">GSTIN</label>
-                <input id="gstin" name="gstin" defaultValue={p?.gstin ?? ""} placeholder="15-digit GSTIN" />
-              </div>
-              <div>
-                <label htmlFor="business_name">Registered business name</label>
-                <input id="business_name" name="business_name" defaultValue={p?.business_name ?? ""} />
-              </div>
-            </div>
+            {/* The state is CHOSEN, not typed. It decides CGST+SGST against
+                IGST and prints as the state code on the invoice — one student's
+                came out reading "State Code:-" because this was a text box and
+                he typed his PIN into it. Country India/Other keeps the form
+                usable for students abroad, who have provinces, not states.
+                Ravi's spec, 2 Sep 2026. */}
+            <ProfileAddressBlock
+              idPrefix="me"
+              required={needAddress}
+              initial={{
+                address_line1: p?.address_line1, address_line2: p?.address_line2,
+                city: p?.city, state: p?.state, pincode: p?.pincode, country: p?.country,
+                gstin: p?.gstin, business_name: p?.business_name, trade_name: p?.trade_name,
+              }}
+            />
           </div>
 
           <SubmitButton className="btn" style={{ marginTop: 18 }}>

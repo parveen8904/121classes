@@ -25,7 +25,7 @@ export default async function SellPage(props: {
   const svc = createServiceClient();
   const { data: me } = await svc
     .from("profiles")
-    .select("full_name, business_name, phone, email, address_line1, address_line2, city, state, pincode, gstin, is_supporter, role, supporter_site, supporter_site_ok_at, supporter_terms_at, supporter_blocked_at, supporter_block_reason")
+    .select("full_name, business_name, trade_name, phone, email, address_line1, address_line2, city, state, country, pincode, gstin, is_supporter, role, supporter_site, supporter_site_ok_at, supporter_terms_at, supporter_blocked_at, supporter_block_reason")
     .eq("id", user.id).maybeSingle();
   if (!me?.is_supporter && me?.role !== "admin" && me?.role !== "supporter") redirect("/dashboard");
 
@@ -121,10 +121,18 @@ export default async function SellPage(props: {
             }
             configured={await razorpayConfigured()}
             billing={{
-              name: (me?.business_name as string) || (me?.full_name as string) || "",
+              name: (me?.trade_name as string) || (me?.business_name as string) || (me?.full_name as string) || "",
               gstin: (me?.gstin as string) || "",
-              address: billingAddress,
               state: (me?.state as string) || "Delhi",
+              // In parts, from their own profile — the sponsor's invoice
+              // address, kept apart from wherever the books go.
+              addr: {
+                name: (me?.trade_name as string) || (me?.business_name as string) || (me?.full_name as string) || "",
+                line1: (me?.address_line1 as string) || "", line2: (me?.address_line2 as string) || "",
+                landmark: "", city: (me?.city as string) || "", state: (me?.state as string) || "Delhi",
+                pincode: (me?.pincode as string) || "", country: (me?.country as string) || "India",
+                phone: (me?.phone as string) || "",
+              },
             }}
           />
       </section>

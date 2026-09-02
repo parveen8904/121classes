@@ -27,48 +27,12 @@ const PAID_TIERS = ["silver", "gold"];
 //
 // It used to be collected by sending the student away to their profile and
 // hoping they came back. Now the five boxes appear on the plan page itself and
-// the payment opens the moment they are saved.
-export async function saveBillingAddress(input: {
-  line1: string; line2?: string; city: string; state: string; pincode: string; country?: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Please sign in again." };
+// saveBillingAddress lived here until 2 September 2026. The plan page now runs
+// the shared CheckoutAddressStep before every enrolment — billing, GST,
+// shipping choice and a review the student has to confirm — and that saves
+// through saveConfirmedDetails in app/books/cartActions.ts, so the books and
+// the courses cannot drift apart in what they ask or where they put it.
 
-  const clean = (v: string | undefined, max = 120) => String(v ?? "").trim().slice(0, max);
-  const line1 = clean(input.line1), city = clean(input.city, 80);
-  const state = clean(input.state, 80), pincode = clean(input.pincode, 20);
-  if (!line1 || !city || !state || !pincode) {
-    return { ok: false, error: "Please fill address, city, state and PIN code." };
-  }
-
-  // THE STATE MUST BE A STATE.
-  //
-  // The screen offers a list of the thirty-six, but a form post is not the only
-  // way in, and the consequence of a wrong value here is not a tidiness problem:
-  // the state decides CGST+SGST against IGST, and it prints as the state code on
-  // a GST invoice. One student got an invoice with "State Code:-" on it because
-  // this was a text box and he typed his PIN into it. Checked again here, where
-  // it cannot be got around.
-  const india = String(input.country ?? "India").trim().toLowerCase() !== "" &&
-                String(input.country ?? "India").trim().toLowerCase() !== "outside india";
-  if (india) {
-    if (!isIndianState(state)) {
-      return { ok: false, error: "Please choose your state from the list — it decides the tax on your invoice." };
-    }
-    if (!isIndianPincode(pincode)) {
-      return { ok: false, error: "A PIN code is six digits, like 226029." };
-    }
-  }
-
-  const { error } = await supabase.from("profiles").update({
-    address_line1: line1,
-    address_line2: clean(input.line2) || null,
-    city, state, pincode,
-  }).eq("id", user.id);
-  if (error) return { ok: false, error: "Could not save that — please try again." };
-  return { ok: true };
-}
 
 export type CreateOrderResult =
   | { ok: true; orderId: string; amount: number; keyId: string; name: string; description: string; prefill: { name?: string; email?: string; contact?: string } }

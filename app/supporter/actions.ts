@@ -113,6 +113,9 @@ export async function saveSupporterProfile(formData: FormData) {
     phone: s("phone") || null,
     email: s("email") || null,
     gstin: s("gstin").toUpperCase() || null,
+    // Exactly as the GST register spells it, when a verification has run.
+    trade_name: s("trade_name") || null,
+    country: s("country") || "India",
     address_line1: s("address_line1") || null,
     address_line2: s("address_line2") || null,
     city: s("city") || null,

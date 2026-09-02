@@ -104,6 +104,50 @@ export async function verifyGstin(raw: string): Promise<{
   return { valid: true, problem: null, state: c.state, pan: c.pan, fetched: false, note: look.reason, party: null };
 }
 
+/**
+ * PERSIST WHAT THE CONFIRM STEP PRODUCED, BEFORE A PAYMENT OPENS.
+ *
+ * The book checkouts carry the confirmed details in the Razorpay order notes,
+ * because a book order may be placed by a guest with no profile at all. A
+ * course enrolment is different: the buyer is signed in by definition and
+ * createPlanOrder reads the address off the PROFILE, so the confirmed details
+ * have to be on the profile before the gateway opens.
+ *
+ * Same destinations as the book flow — the billing address goes to the flat
+ * columns the invoice reads, so the two routes cannot disagree.
+ */
+export async function saveConfirmedDetails(d: CheckoutDetails): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Please sign in again." };
+
+  const billing = toAddress(d?.billing);
+  const shipping = d?.shipTo === "different" ? toAddress(d?.shipping) : { ...billing };
+  const bad = addressProblems(billing, { needPhone: false, indiaOnly: false });
+  if (bad.length) return { ok: false, error: `Billing address still needs: ${bad.join(", ")}.` };
+
+  const gstinRaw = String(d?.gstin ?? "").trim();
+  const gst = gstinRaw ? checkGstin(gstinRaw) : null;
+  if (gst && !gst.ok) return { ok: false, error: gst.problem ?? "That GST number is not valid." };
+
+  const patch: Record<string, unknown> = {
+    address_line1: billing.line1,
+    address_line2: billing.line2 || null,
+    city: billing.city,
+    state: billing.state || null,
+    country: billing.country || "India",
+    pincode: billing.pincode || null,
+    shipping_address: shipping,
+  };
+  if (gst?.ok) patch.gstin = gst.gstin;
+  const trade = String(d?.tradeName ?? "");
+  if (trade) { patch.trade_name = trade; patch.business_name = trade; }
+
+  const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
+  if (error) return { ok: false, error: "Could not save that — please try again." };
+  return { ok: true };
+}
+
 export type CartBook = { id: string; title: string; author: string | null; cover_url: string | null; price_inr: number; stock_qty: number };
 
 // Fresh titles/prices/stock for the ids in the visitor's cart.

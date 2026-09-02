@@ -1,5 +1,6 @@
 "use server";
 import { formatDate } from "@/lib/dates";
+import { toAddress, formatAddress, type Address } from "@/lib/address";
 
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -20,8 +21,15 @@ type GiftInput = {
   // starting in October; without this the clock started at payment and the
   // student quietly lost those months.
   startsOn?: string;
-  recipient: { name: string; email: string; phone?: string; attempt?: string; address?: string };
-  billing: { name: string; gstin?: string; address?: string; state: string };
+  // ADDRESSES IN PARTS, NOT PARAGRAPHS. Ravi's spec, 2 Sep 2026: separate
+  // Address, City, State and PIN Code for BOTH the recipient and the sponsor's
+  // billing. A warehouse cannot sort a paragraph by pincode, and deciding
+  // whether a blob of text is even in India was guesswork.
+  //
+  // The two are deliberately independent: the invoice is the SPONSOR's, the
+  // parcel is the STUDENT's, and they are rarely the same place.
+  recipient: { name: string; email: string; phone?: string; attempt?: string; addr?: Address };
+  billing: { name: string; gstin?: string; tradeName?: string; addr?: Address };
 };
 
 export type GiftOrderResult =
@@ -33,7 +41,9 @@ export type GiftOrderResult =
 export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult> {
   if (!(await razorpayConfigured())) return { ok: false, reason: "unconfigured" };
   if (input.tier !== "gold") return { ok: false, reason: "error" }; // sponsors gift Gold only
-  if (!input.recipient?.email || !input.recipient?.name || !input.billing?.state) return { ok: false, reason: "missing" };
+  const rAddr = toAddress(input.recipient?.addr);
+  const bAddr = toAddress(input.billing?.addr);
+  if (!input.recipient?.email || !input.recipient?.name || !bAddr.state) return { ok: false, reason: "missing" };
 
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -112,7 +122,7 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
   }
 
   const s = await getGstSettings();
-  const gst = computeGst(amount, input.billing.state, s);
+  const gst = computeGst(amount, bAddr.state, s);
 
   // 9+ month Gold gifts ship FREE printed books — the recipient's address is
   // mandatory BEFORE payment so no order ever needs a chase-up call.
@@ -133,9 +143,11 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
   //
   // So the address is still required, and still checked — but only for being
   // there. Whether a parcel goes is decided separately, below.
-  if (!(input.recipient.address ?? "").trim()) return { ok: false, reason: "address" };
-  const { looksPostableInIndia } = await import("@/lib/indiaStates");
-  const canPost = looksPostableInIndia(input.recipient.address);
+  if (!rAddr.line1.trim() || !rAddr.city.trim()) return { ok: false, reason: "address" };
+  // Asked in parts, so this is no longer a guess at a paragraph: a parcel goes
+  // when the address is in India with a six-digit pincode, and does not when it
+  // is not. The sale still stands either way — see the note above.
+  const canPost = (rAddr.country || "India").toLowerCase() === "india" && /^\d{6}$/.test(rAddr.pincode);
 
   try {
     const order = await createRazorpayOrder(amount, `gift_${Date.now()}`, {
@@ -146,10 +158,13 @@ export async function createGiftOrder(input: GiftInput): Promise<GiftOrderResult
       gifter_id: user.id,
       recipient_name: input.recipient.name, recipient_email: input.recipient.email.trim().toLowerCase(),
       recipient_phone: input.recipient.phone || null, recipient_attempt: input.recipient.attempt || null,
-      recipient_address: input.recipient.address || null,
+      recipient_address: formatAddress(rAddr) || null,
+      recipient_addr: rAddr,
       course_id: subject.course_id, subject_id: subject.id, plan_id: plan.id, tier: input.tier, months,
-      billing_name: input.billing.name || input.recipient.name, billing_gstin: input.billing.gstin || null,
-      billing_address: input.billing.address || null, billing_state: input.billing.state,
+      billing_name: input.billing.tradeName || input.billing.name || input.recipient.name,
+      billing_gstin: input.billing.gstin || null,
+      billing_address: formatAddress(bAddr) || null, billing_state: bAddr.state,
+      billing_addr: bAddr,
       amount_inr: amount, taxable_value: gst.taxable, gst_rate: gst.rate, cgst: gst.cgst, sgst: gst.sgst, igst: gst.igst,
       razorpay_order_id: order.id, status: "created",
       starts_on: input.startsOn || null,

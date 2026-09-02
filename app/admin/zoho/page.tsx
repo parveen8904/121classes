@@ -20,7 +20,7 @@ import SectionToggle from "./SectionToggle";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
 import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, editPettyPersonAction, deletePettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction, rematchBankAction, removeStatementAction } from "./actions";
-import { listZohoAccounts } from "@/lib/bankStatements";
+import { listZohoAccounts, reconcileAccount } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
 import QueuePicker from "./QueuePicker";
@@ -74,7 +74,7 @@ type PostingRow = {
 };
 
 export default async function ZohoHubPage(props: {
-  searchParams: Promise<{ zoho_ok?: string; zoho_err?: string; scan?: string; upto?: string; q?: string; from?: string; to?: string; part?: string }>;
+  searchParams: Promise<{ zoho_ok?: string; zoho_err?: string; scan?: string; upto?: string; q?: string; from?: string; to?: string; part?: string; rec?: string; rf?: string; rt?: string }>;
 }) {
   await assertArea("zoho");
   const sp = await props.searchParams;
@@ -131,6 +131,46 @@ export default async function ZohoHubPage(props: {
       ])
     : [{ data: [] as StmtRow[] }, { data: [] as LineRow[] }];
   const stmts = (stmtData ?? []) as StmtRow[];
+  // WHY A STATEMENT CAN OR CANNOT BE REMOVED, ON THE ROW ITSELF.
+  //
+  // Remove used to appear only on a FAILED statement, so the rows anybody
+  // actually wants rid of — a duplicate upload, an overlapping range — had no
+  // button at all. It is on every row now, and it needs to say in advance
+  // whether it will work: the action refuses a statement whose lines are
+  // already posted or matched in Zoho, and a button that refuses without
+  // warning is worse than no button.
+  const settledByStmt = new Map<string, number>();
+  if (stmts.length) {
+    const { data: settledRows } = await createServiceClient()
+      .from("bank_lines").select("statement_id")
+      .in("statement_id", stmts.map((s) => s.id))
+      .in("status", ["posted", "matched"]);
+    for (const r of settledRows ?? []) {
+      const k = String((r as { statement_id: string }).statement_id);
+      settledByStmt.set(k, (settledByStmt.get(k) ?? 0) + 1);
+    }
+  }
+  // RECONCILE THE STATEMENT AGAINST ZOHO'S OWN REGISTER.
+  //
+  // His words, 1 September: "why don't you simply reconcile statements with
+  // Zoho books with same bank and find missing entries and suggest entries".
+  // The continuity check only ever said the arithmetic did not close; this
+  // asks the books what they hold and names the difference both ways.
+  //
+  // Driven by the query string so the result is a page anybody can link to or
+  // reload, not something that vanishes on the next click.
+  let reconError = "";
+  const iso = (v: string | undefined) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+  const recAccounts = [...new Set(stmts.map((s) => s.account_name))];
+  const recAcct = sp.rec && recAccounts.includes(sp.rec) ? sp.rec : "";
+  const recFor = recAcct ? stmts.filter((s) => s.account_name === recAcct) : [];
+  const recFrom = iso(sp.rf) || recFor.map((s) => s.period_start ?? "").filter(Boolean).sort()[0] || "";
+  const recTo = iso(sp.rt) || recFor.map((s) => s.period_end ?? "").filter(Boolean).sort().reverse()[0] || "";
+  let recon: Awaited<ReturnType<typeof reconcileAccount>> | null = null;
+  if (hubConnected && recAcct && recFrom && recTo) {
+    try { recon = await reconcileAccount(recAcct, recFrom, recTo); }
+    catch (e) { recon = null; reconError = e instanceof Error ? e.message : String(e); }
+  }
   const bankLines = (lineData ?? []) as LineRow[];
   const askLines = bankLines.filter((l) => l.status === "ask");
   const autoLines = bankLines.filter((l) => l.status === "auto");
@@ -986,22 +1026,133 @@ export default async function ZohoHubPage(props: {
                         stored, so a parser fix is testable against the file
                         that broke it without hunting for it again. */}
                     {s.status === "failed" && (
-                      <>
-                        <form action={reparseStatementAction} style={{ margin: 0 }}>
-                          <input type="hidden" name="id" value={s.id} />
-                          <button className="btn small secondary" type="submit">↻ Try again</button>
-                        </form>
-                        {/* A statement that never parsed can be thrown away and
-                            uploaded afresh; one with posted lines refuses. */}
-                        <form action={removeStatementAction} style={{ margin: 0 }}>
-                          <input type="hidden" name="id" value={s.id} />
-                          <button className="btn small secondary" type="submit">🗑 Remove</button>
-                        </form>
-                      </>
+                      <form action={reparseStatementAction} style={{ margin: 0 }}>
+                        <input type="hidden" name="id" value={s.id} />
+                        <button className="btn small secondary" type="submit">↻ Try again</button>
+                      </form>
+                    )}
+                    {/* On EVERY row, not only the failed ones. A duplicate or
+                        overlapping upload is a statement that parsed perfectly
+                        and still wants throwing away. Lines already in the
+                        books hold it: those are settled facts, and the button
+                        says so instead of refusing after the press. */}
+                    {(settledByStmt.get(s.id) ?? 0) > 0 ? (
+                      <span className="muted" style={{ fontSize: ".76rem" }}>
+                        🔒 {settledByStmt.get(s.id)} line(s) already in Zoho — cannot be removed
+                      </span>
+                    ) : (
+                      <form action={removeStatementAction} style={{ margin: 0 }}>
+                        <input type="hidden" name="id" value={s.id} />
+                        <button className="btn small secondary" type="submit"
+                          title="Deletes this statement and its unposted lines. Upload it again whenever you like.">
+                          🗑 Remove
+                        </button>
+                      </form>
                     )}
                   </div>
                 ))}
               </div>
+            </details>
+          )}
+
+          {/* RECONCILE — the answer to a continuity break, with evidence.
+              Pick the account and the period; the page asks Zoho for that
+              bank's own register and lists what only the statement has (money
+              still needing an entry) and what only Zoho has (an entry with no
+              bank line behind it, or a statement never uploaded). */}
+          {recAccounts.length > 0 && (
+            <details style={{ marginTop: 8 }} open={!!recon || !!reconError}>
+              <summary className="btn small secondary as-btn">⚖️ Reconcile an account against Zoho</summary>
+              <form method="get" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
+                <label style={{ margin: 0 }}>Account
+                  <select name="rec" defaultValue={recAcct} style={{ marginBottom: 0 }}>
+                    {recAccounts.map((a) => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </label>
+                <label style={{ margin: 0 }}>From
+                  <input name="rf" type="date" defaultValue={recFrom} style={{ marginBottom: 0 }} />
+                </label>
+                <label style={{ margin: 0 }}>To
+                  <input name="rt" type="date" defaultValue={recTo} style={{ marginBottom: 0 }} />
+                </label>
+                <button className="btn small" type="submit">Reconcile</button>
+                <span className="muted" style={{ fontSize: ".78rem" }}>
+                  Reads only. Nothing is posted or removed by this.
+                </span>
+              </form>
+
+              {reconError && <p style={{ color: "#b91c1c", fontSize: ".82rem", marginTop: 8 }}>Could not read Zoho: {reconError}</p>}
+
+              {recon && (
+                <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: ".84rem" }}>
+                    <span><strong>{recon.matched}</strong> agreed</span>
+                    <span style={{ color: recon.statementOnly.length ? "#b45309" : undefined }}>
+                      <strong>{recon.statementOnly.length}</strong> in the statement, not in Zoho
+                    </span>
+                    <span style={{ color: recon.zohoOnly.length ? "#b91c1c" : undefined }}>
+                      <strong>{recon.zohoOnly.length}</strong> in Zoho, not in the statement
+                    </span>
+                  </div>
+                  <div className="muted" style={{ fontSize: ".78rem" }}>
+                    Statement · in ₹{recon.statementTotalIn.toLocaleString("en-IN")} · out ₹{recon.statementTotalOut.toLocaleString("en-IN")}
+                    {" — "}Zoho · in ₹{recon.zohoTotalIn.toLocaleString("en-IN")} · out ₹{recon.zohoTotalOut.toLocaleString("en-IN")}
+                  </div>
+                  {recon.problem && <p style={{ color: "#b45309", fontSize: ".82rem", margin: 0 }}>{recon.problem}</p>}
+
+                  {recon.statementOnly.length > 0 && (
+                    <div>
+                      <strong style={{ fontSize: ".85rem" }}>Needs an entry in Zoho ({recon.statementOnly.length})</strong>
+                      <div style={{ display: "grid", gap: 3, marginTop: 5 }}>
+                        {recon.statementOnly.slice(0, 60).map((l, i) => (
+                          <div key={`so${i}`} style={{ display: "flex", gap: 10, fontSize: ".8rem", padding: "4px 9px", background: "var(--bg-soft)", borderRadius: 5, flexWrap: "wrap" }}>
+                            <span style={{ minWidth: 88 }}>{l.date}</span>
+                            <span style={{ flex: 1, minWidth: 200 }}>{l.narration.slice(0, 90)}</span>
+                            <span style={{ fontWeight: 700, color: l.dir === "in" ? "#15803d" : "#b91c1c" }}>
+                              {l.dir === "in" ? "+" : "−"}₹{l.amount.toLocaleString("en-IN")}
+                            </span>
+                            <span className="muted" style={{ fontSize: ".74rem" }}>
+                              {l.lineStatus === "ask" ? "waiting for an account" : l.lineStatus === "auto" ? "rule proposed, not yet approved" : l.lineStatus}
+                            </span>
+                          </div>
+                        ))}
+                        {recon.statementOnly.length > 60 && <span className="muted" style={{ fontSize: ".76rem" }}>…and {recon.statementOnly.length - 60} more</span>}
+                      </div>
+                      <p className="muted" style={{ fontSize: ".78rem", marginTop: 5 }}>
+                        These are already in the queues above — answer or approve them there and they post.
+                      </p>
+                    </div>
+                  )}
+
+                  {recon.zohoOnly.length > 0 && (
+                    <div>
+                      <strong style={{ fontSize: ".85rem" }}>In Zoho with no bank line behind it ({recon.zohoOnly.length})</strong>
+                      <div style={{ display: "grid", gap: 3, marginTop: 5 }}>
+                        {recon.zohoOnly.slice(0, 60).map((l, i) => (
+                          <div key={`zo${i}`} style={{ display: "flex", gap: 10, fontSize: ".8rem", padding: "4px 9px", background: "var(--bg-soft)", borderRadius: 5, flexWrap: "wrap" }}>
+                            <span style={{ minWidth: 88 }}>{l.date}</span>
+                            <span style={{ flex: 1, minWidth: 200 }}>{(l.zohoNote || l.narration || l.zohoType || "").slice(0, 90)}</span>
+                            <span style={{ fontWeight: 700, color: l.dir === "in" ? "#15803d" : "#b91c1c" }}>
+                              {l.dir === "in" ? "+" : "−"}₹{l.amount.toLocaleString("en-IN")}
+                            </span>
+                            <span className="muted" style={{ fontSize: ".74rem" }}>{l.zohoType}</span>
+                          </div>
+                        ))}
+                        {recon.zohoOnly.length > 60 && <span className="muted" style={{ fontSize: ".76rem" }}>…and {recon.zohoOnly.length - 60} more</span>}
+                      </div>
+                      <p className="muted" style={{ fontSize: ".78rem", marginTop: 5 }}>
+                        Either the statement covering these was never uploaded, or the entry in Zoho is wrong and should come out.
+                      </p>
+                    </div>
+                  )}
+
+                  {recon.statementOnly.length === 0 && recon.zohoOnly.length === 0 && !recon.problem && (
+                    <p style={{ color: "#15803d", fontSize: ".85rem", margin: 0 }}>
+                      ✓ Every line in this period agrees with Zoho.
+                    </p>
+                  )}
+                </div>
+              )}
             </details>
           )}
 

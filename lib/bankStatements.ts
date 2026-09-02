@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { zohoFetch } from "@/lib/zohoApi";
 import { resolveFileUrl, isSecureRef } from "@/lib/storage";
 import { zohoReference } from "@/lib/zohoReference";
+import { pairLines, type Pairing, type StatementSide, type ZohoSide } from "@/lib/reconcile";
 
 // BANK STATEMENTS → THE THREE QUEUES.
 //
@@ -904,4 +905,74 @@ export async function listZohoAccounts(): Promise<{ name: string; type: string; 
   }
   acctList = { names, at: Date.now() };
   return names;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RECONCILE ONE ACCOUNT AGAINST ZOHO
+   ═══════════════════════════════════════════════════════════════════════════
+
+   His question, 1 September 2026: "why don't you simply reconcile statements
+   with Zoho books with same bank and find missing entries and suggest entries".
+
+   The right question. The continuity check only ever compared one statement's
+   opening balance with the previous one's closing — it INFERS that something is
+   missing from a gap in the arithmetic, and then cannot say what. Worse, it
+   reports a break when the truth is a duplicate upload, which is what happened
+   here.
+
+   The books themselves are the answer. Everything already exists to ask them:
+   fetchZohoBankTxnsFor reads the account's own register from /banktransactions,
+   keyed date|amount|direction, which is how a statement line is matched today.
+   Nothing ever looked the OTHER way — at what Zoho holds that the statement
+   does not — so a deleted or mis-entered Zoho entry was invisible.
+
+   This does both directions and says which is which:
+
+     IN BOTH        agreed, nothing to do
+     STATEMENT ONLY the bank has it, Zoho does not — this is money that still
+                    needs an entry, and it is what "suggest entries" means
+     ZOHO ONLY      Zoho has it, the bank statement does not — either the
+                    statement covering it was never uploaded, or the entry is
+                    wrong and should not be there
+*/
+export type Recon = {
+  account: string; from: string; to: string;
+  problem?: string;
+} & Pairing;
+
+export async function reconcileAccount(accountName: string, from: string, to: string): Promise<Recon> {
+  const svc = createServiceClient();
+
+  const { data: lines } = await svc.from("bank_lines")
+    .select("line_date, narration, debit, credit, status")
+    .eq("account_name", accountName)
+    .gte("line_date", from).lte("line_date", to)
+    .order("line_date");
+
+  const statement: StatementSide[] = (lines ?? []).map((l) => {
+    const debit = Number(l.debit) || 0, credit = Number(l.credit) || 0;
+    return {
+      date: String(l.line_date),
+      narration: String(l.narration ?? ""),
+      amount: credit > 0 ? credit : debit,
+      dir: (credit > 0 ? "in" : "out") as "in" | "out",
+      lineStatus: String(l.status ?? ""),
+    };
+  });
+
+  // fetchZohoBankTxnsFor already keys the register date|amount|direction, which
+  // is the same key the pairing uses — so it is unpacked back into entries and
+  // paired, rather than the pairing being written twice.
+  const zohoMap = await fetchZohoBankTxnsFor(accountName, from, to);
+  const zoho: ZohoSide[] = [];
+  for (const [k, txns] of zohoMap) {
+    const [date, amt, dir] = k.split("|");
+    for (const t of txns) zoho.push({ date, amount: Number(amt), dir: dir as "in" | "out", type: t.type, note: t.note });
+  }
+
+  return {
+    account: accountName, from, to,
+    problem: zoho.length ? undefined : "Zoho returned no entries for this account and period — check the hub is connected.",
+    ...pairLines(statement, zoho),
+  };
 }

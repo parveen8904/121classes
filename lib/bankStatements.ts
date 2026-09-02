@@ -25,6 +25,9 @@ const num = (v: unknown) => {
   // sat there in plain sight.
   const cleaned = String(v ?? "")
     .replace(/^\s*(INR|RS\.?|₹)\s*/i, "")
+    // "12,340.00 Cr" — a card statement's direction marker, which is read
+    // where the amount is read and must not turn the figure into NaN here.
+    .replace(/\s*(cr|dr)\.?\s*$/i, "")
     .replace(/[₹,\s]/g, "")
     .replace(/^\((.*)\)$/, "-$1");
   const n = Number(cleaned);
@@ -63,14 +66,15 @@ const HEAD = {
   // "Statement Description" is the column name the accounts desk uses in the
   // upload template — the transaction particulars belong here, NOT in the
   // reference, which Zoho caps at fifty characters.
-  narration: /^(statement ?description|particulars?|narration|description|details|transaction ?(details|remarks|particulars?|description)|remarks|transaction)$/i,
+  narration: /^(statement ?description|particulars?|narration|description|details|transaction ?(details|remarks|particulars?|description)|description ?of ?transaction|merchant ?(name)?|remarks|transaction)$/i,
   // Any of these IS a reference column; which one WINS is decided by REF_TIERS
   // below, because first-past-the-post picks the wrong one.
   ref: /^(internal ?ref(erence)? ?(no\.?|number)?|chq\.?\/?ref\.? ?(no\.?)?|ref(erence)? ?(no\.?|number)?|cheque ?(no\.?|number)|utr ?(no\.?|number)?|chqno|transaction ?ref(erence)? ?(no\.?|number)?)$/i,
   debit: /^(withdrawal ?(amt\.?)? ?(\(?inr\)?)?|debit ?(amt\.?)?|dr|dr\.? ?amount|withdrawals?|debits?)$/i,
   credit: /^(deposit ?(amt\.?)? ?(\(?inr\)?)?|credit ?(amt\.?)?|cr|cr\.? ?amount|deposits?|credits?)$/i,
   balance: /^(closing ?balance|balance|bal|running ?balance|balance ?(\(?inr\)?)?)$/i,
-  amount: /^(amount|amount ?\(?inr\)?|txn ?amount)$/i,
+  // Card statements write the unit into the header: "Amount (in Rs.)".
+  amount: /^(amount|amount ?\(?(in )?(inr|rs\.?)\)?|txn ?amount|transaction ?amount)$/i,
   // "Transaction Type" is what Axis calls the CR/DR column.
   drcr: /^(dr\/?cr|type|cr\/?dr|transaction ?type|txn ?type|type ?of ?transaction)$/i,
 };
@@ -195,10 +199,17 @@ export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string
     if (!date) continue; // totals/footers
     let debit = num(cell("debit")), credit = num(cell("credit"));
     if (!cols.debit && !cols.credit && cols.amount !== undefined) {
-      // Single amount column with a Dr/Cr marker (many card statements).
-      const amt = num(cell("amount"));
-      const t = cell("drcr").toLowerCase();
-      if (t.startsWith("cr")) credit = Math.abs(amt);
+      // ONE AMOUNT COLUMN, AND THE DIRECTION WHEREVER THE CARD PUTS IT.
+      //
+      // Card statements mark it either in their own Dr/Cr column or inside the
+      // amount cell — "12,340.00 Cr" — and the second form used to parse as
+      // NaN, which became zero, which dropped the row. On a card a "Cr" is a
+      // payment or a refund: it reduces what is owed, which is the credit
+      // column here, the same as money arriving in a bank.
+      const raw = cell("amount");
+      const amt = num(raw);
+      const t = (cell("drcr") || raw).toLowerCase();
+      if (/\bcr\b|\bcredit\b/.test(t)) credit = Math.abs(amt);
       else debit = Math.abs(amt);
     }
     if (!debit && !credit) continue;
@@ -609,6 +620,81 @@ export async function zohoAccountId(name: string): Promise<string> {
   return (await zohoAccount(name)).id;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE SUB-LEDGER, POSTED AS A SUB-LEDGER
+   ═══════════════════════════════════════════════════════════════════════════
+
+   His complaint, 2 September 2026: "I asked a sub ledger. It was there but
+   posting was not made in sub ledger. You just posted it in the narration
+   name. The account name was drawings and sub ledger name is donation."
+
+   Exactly right, and it made the field close to useless. The answer was taken,
+   stored on the line, and written into the entry's description — so a human
+   reading that one entry could see "Drawings (Donation)", and nothing else
+   could. The ledger itself was Drawings. Run the Drawings account in Zoho and
+   the donations are indistinguishable from every other withdrawal; there is
+   nothing to total, nothing to filter, nothing to report on. A qualifier that
+   exists only inside a sentence is a note, not a sub-ledger.
+
+   Zoho's chart of accounts has real sub-accounts — a child account with a
+   parent_account_id, of the parent's own type. That is what the answer creates
+   now, and what the entry is posted to. Drawings still totals everything
+   underneath it, and Donation stands on its own.
+
+   An existing child of that parent is always reused, so answering "Donation"
+   twice does not make two of them. The name is taken as typed; if Zoho refuses
+   it because some unrelated account already has that name, it is retried as
+   "Parent - Child" before giving up. It never falls back to posting against
+   the parent: that is the behaviour being complained about, and doing it
+   silently after being asked for a sub-ledger would be worse than failing.
+*/
+export async function zohoSubAccount(parentName: string, subName: string): Promise<{ id: string; type: string }> {
+  const parent = await zohoAccount(parentName);
+  const want = subName.trim();
+  if (!want) return parent;
+
+  const key = `${parent.id}»${want.toLowerCase()}`;
+  const cached = acctCache.get(key);
+  if (cached) return cached;
+
+  type Row = { account_id: string; account_name: string; account_type: string; parent_account_id?: string };
+  const search = async (text: string): Promise<Row[]> => {
+    const r = await zohoFetch<{ chartofaccounts?: Row[] }>(
+      "/chartofaccounts", { query: { search_text: text, filter_by: "AccountType.All", per_page: "200" } });
+    return r.chartofaccounts ?? [];
+  };
+
+  // Already a child of this parent? Reuse it — an exact name first, so
+  // "Donation" is never satisfied by "Donation to temple".
+  const found = await search(want);
+  const mine = found.filter((a) => String(a.parent_account_id ?? "") === parent.id);
+  const exact = mine.find((a) => a.account_name.trim().toLowerCase() === want.toLowerCase())
+    ?? mine.find((a) => a.account_name.trim().toLowerCase() === `${parentName} - ${want}`.toLowerCase());
+  if (exact) {
+    const out = { id: exact.account_id, type: String(exact.account_type || parent.type) };
+    acctCache.set(key, out);
+    return out;
+  }
+
+  // Otherwise create it under the parent, in the parent's own type — a
+  // sub-account of Drawings is equity, like its parent.
+  let lastErr = "";
+  for (const name of [want, `${parentName} - ${want}`]) {
+    try {
+      const made = await zohoFetch<{ chart_of_account?: { account_id: string } }>("/chartofaccounts", {
+        method: "POST",
+        body: { account_name: name, account_type: parent.type, parent_account_id: parent.id },
+      });
+      if (made.chart_of_account?.account_id) {
+        const out = { id: made.chart_of_account.account_id, type: parent.type };
+        acctCache.set(key, out);
+        return out;
+      }
+    } catch (e) { lastErr = e instanceof Error ? e.message : String(e); }
+  }
+  throw new Error(`could not make "${want}" a sub-ledger of "${parentName}" in Zoho${lastErr ? ` — ${lastErr}` : ""}. Rename it and answer again; it has NOT been posted to ${parentName} on its own.`);
+}
+
 /** Only these can carry a Zoho Expense. Everything else has to be a journal. */
 const EXPENSE_TYPES = new Set(["expense", "other_expense", "cost_of_goods_sold"]);
 
@@ -729,6 +815,19 @@ export async function postBankLine(
       if (!made.chart_of_account?.account_id) return fail(`could not create the ledger "${accountChoice}"`);
       other = { id: made.chart_of_account.account_id, type: acctType };
     }
+
+    // THE SUB-LEDGER IS THE ACCOUNT THIS POSTS TO, NOT A WORD IN THE NARRATION.
+    //
+    // Answered "Drawings / Donation", the entry goes to Donation, which is a
+    // real sub-account of Drawings in Zoho. Drawings still totals it; running
+    // Donation on its own now shows something. Before this the entry went to
+    // Drawings and the word "Donation" appeared only inside the description,
+    // where nothing can total it — which is what he objected to.
+    const subName = ((subAccount ?? (l.sub_account as string | null) ?? "") || "").trim();
+    if (subName) {
+      try { other = await zohoSubAccount(accountChoice, subName); }
+      catch (e) { return fail(e instanceof Error ? e.message : String(e)); }
+    }
     const otherId = other.id;
 
     // THE REFERENCE, ALWAYS. The bank's ref column is usually empty (Axis puts
@@ -747,7 +846,7 @@ export async function postBankLine(
     // instead of it.
     // The stored answer wins where the caller passes nothing, so a line
     // re-posted later keeps the qualifier it was answered with.
-    const sub = (subAccount ?? (l.sub_account as string | null) ?? "") || null;
+    const sub = subName || null;
     const bankNarration = lineNarration({
       who: accountChoice,
       what: debit > 0 ? "paid from the bank" : "received into the bank",
@@ -988,6 +1087,18 @@ export type Recon = {
   account: string; from: string; to: string;
   problem?: string;
 } & Pairing;
+
+/**
+ * IS THIS EXACT MOVEMENT IN ZOHO'S REGISTER FOR THIS ACCOUNT?
+ *
+ * Asked before a line marked "posted" is reopened. The whole risk of a re-post
+ * button is booking something twice, and the one fact that settles it is
+ * whether the entry is there right now.
+ */
+export async function zohoHasEntryFor(accountName: string, date: string, amount: number, dir: "in" | "out"): Promise<boolean> {
+  const map = await fetchZohoBankTxnsFor(accountName, date, date);
+  return (map.get(`${date}|${amount.toFixed(2)}|${dir}`) ?? []).length > 0;
+}
 
 export async function reconcileAccount(accountName: string, from: string, to: string): Promise<Recon> {
   const svc = createServiceClient();

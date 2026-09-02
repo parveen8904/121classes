@@ -88,5 +88,52 @@ check("‘Statement Description’ is accepted as the particulars",
 check("‘Reference Number’ is accepted as the reference",
   ref.test("Reference Number"));
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   A CREDIT CARD STATEMENT GOES THROUGH THE SAME DOOR
+   ═══════════════════════════════════════════════════════════════════════════
+
+   His question, 2 September 2026: "can I use the same framework that you are
+   already having for the banks to post my credit card statements? Also, will
+   you be able to do and reconcile accordingly?"
+
+   Yes. The account picker has always offered credit-card accounts beside the
+   banks, and the entry a card needs is the one already made — money spent is
+   Dr the head, Cr the card, which is what increases the liability. What was
+   missing was the way cards WRITE a statement, and that is what these hold.
+
+   Read against the real regexes and the real source, the same way as above.
+*/
+const CARD_HEADERS = ["Transaction Date", "Description of Transaction", "Amount (in Rs.)"];
+const CARD_HEADERS_2 = ["Date", "Merchant Name", "Amount", "Dr/Cr"];
+const amount = headRegex("amount");
+const drcr = headRegex("drcr");
+
+check("a card's date column is found", CARD_HEADERS.some((h) => date.test(h)));
+check("‘Description of Transaction’ is the narration",
+  CARD_HEADERS.findIndex((h) => narration.test(h)) === CARD_HEADERS.indexOf("Description of Transaction"),
+  `matched ${CARD_HEADERS.find((h) => narration.test(h))}`);
+check("‘Merchant Name’ is the narration on the cards that call it that",
+  narration.test("Merchant Name") && narration.test("Merchant"));
+check("‘Amount (in Rs.)’ is an amount column",
+  amount.test("Amount (in Rs.)") && amount.test("Amount"),
+  "the unit written into the header used to lose the whole column");
+check("a card's own Dr/Cr column is still recognised",
+  CARD_HEADERS_2.some((h) => drcr.test(h)));
+check("the narration regex does not swallow the amount column",
+  !narration.test("Amount (in Rs.)"));
+
+// "12,340.00 Cr" — the direction written inside the amount cell. It used to
+// parse as NaN, which became 0, which dropped the row entirely.
+check("a trailing Cr/Dr marker is stripped before the figure is read",
+  /\.replace\(\/\\s\*\(cr\|dr\)\\\.\?\\s\*\$\/i, ""\)/.test(src),
+  "otherwise the amount is NaN, becomes zero, and the line is silently skipped");
+check("the direction is taken from the marker column OR from the amount cell",
+  /const t = \(cell\("drcr"\) \|\| raw\)\.toLowerCase\(\)/.test(src));
+check("on a card, Cr is a payment against it — the credit column, like money in",
+  /\/\\bcr\\b\|\\bcredit\\b\/\.test\(t\)\) credit = Math\.abs\(amt\)/.test(src));
+check("credit-card accounts are offered for upload beside the banks",
+  /a\.type === "bank" \|\| a\.type === "credit_card"/.test(
+    readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/page.tsx"), "utf8")));
+
 console.log(fails === 0 ? "ok — Axis statement columns" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

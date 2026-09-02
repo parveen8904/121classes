@@ -198,5 +198,44 @@ check("a line already posted is not offered for posting again",
   /const settled = row && \(row\.status === "posted" \|\| row\.status === "matched"\)/.test(page),
   "that is a discrepancy to look at in Zoho, not an entry to make twice");
 
+// ── the sub-ledger is an account, not a phrase ─────────────────────────────
+// "I asked a sub ledger. It was there but posting was not made in sub ledger.
+//  You just posted it in the narration name. The account name was drawings and
+//  sub ledger name is donation." — 2 September 2026.
+check("a sub-ledger becomes a real Zoho sub-account of the head",
+  /parent_account_id: parent\.id/.test(bank),
+  "written into the description alone, nothing can total it");
+check("it takes the parent's own type — a sub-account of Drawings is equity",
+  /account_type: parent\.type/.test(bank));
+check("an existing child of that parent is reused, not duplicated",
+  /mine\.find\(\(a\) => a\.account_name\.trim\(\)\.toLowerCase\(\) === want\.toLowerCase\(\)\)/.test(bank));
+check("a child of some OTHER parent is never borrowed",
+  /String\(a\.parent_account_id \?\? ""\) === parent\.id/.test(bank),
+  "two heads can both have a 'Delhi office'");
+check("the bank line posts to the sub-ledger it resolved",
+  /other = await zohoSubAccount\(accountChoice, subName\)/.test(bank));
+check("failing to make the sub-ledger does NOT quietly post to the parent",
+  /has NOT been posted to \$\{parentName\} on its own/.test(bank),
+  "that is the behaviour being complained about");
+const bills = readFileSync(join(import.meta.dirname, "..", "lib/providerBills.ts"), "utf8");
+check("a supplier bill posts to its sub-ledger too, same fault same fix",
+  /accountId = \(await zohoSubAccount\(String\(p\.expense_account\), String\(b\.sub_account\)\)\)\.id/.test(bills));
+
+// ── posting again what Zoho lost ───────────────────────────────────────────
+const acts = readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/actions.ts"), "utf8");
+const repost = acts.slice(acts.indexOf("export async function repostLineAction"));
+check("Zoho is asked again at the press, not trusted from the page",
+  /await zohoHasEntryFor\(String\(l\.account_name\)/.test(repost),
+  "the page may have been open an hour; the risk is booking the same money twice");
+check("if the entry IS there, nothing is reopened",
+  /if \(present\) \{[\s\S]{0,200}status: "matched"/.test(repost));
+check("a failed lookup refuses rather than reopens",
+  /could not check Zoho just now — not reopened/.test(repost),
+  "reopening on a failed check is exactly how a payment gets made twice");
+check("only a posted or matched line can be reopened at all",
+  /l\.status !== "posted" && l\.status !== "matched"/.test(repost));
+check("it comes back with the answer it already had",
+  /status: hasProposal \? "auto" : "ask"/.test(repost));
+
 console.log(fails === 0 ? "ok — bank reconciliation" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

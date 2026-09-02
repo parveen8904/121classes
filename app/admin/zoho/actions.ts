@@ -1266,6 +1266,69 @@ export async function skipLineAction(formData: FormData) {
   revalidatePath("/admin/zoho");
 }
 
+/**
+ * POST IT AGAIN — because the entry was deleted in Zoho.
+ *
+ * His instruction, 2 September 2026: "since Zoho is unable to show it we must
+ * have deleted it… we have to post it to Zoho, also give us option to post it
+ * again because there was some issue, it was deleted."
+ *
+ * The line says posted; Zoho has nothing. Somebody removed the entry there —
+ * on this account it had already happened once, when three wrongly-mapped
+ * entries were deleted by hand. Until now the line was stuck: "posted" is a
+ * closed state, and postBankLine returns immediately for one.
+ *
+ * The single danger is booking the same money twice, so the register is asked
+ * again at the moment of the press rather than trusted from the page, which
+ * may have been sitting open for an hour. If the entry IS there, the line is
+ * put back to matched and nothing is reopened.
+ */
+export async function repostLineAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  const { data: l } = await svc.from("bank_lines")
+    .select("id, account_name, line_date, debit, credit, status, proposal").eq("id", id).maybeSingle();
+  if (!l || (l.status !== "posted" && l.status !== "matched")) return;
+
+  const debit = Number(l.debit) || 0, credit = Number(l.credit) || 0;
+  const amount = debit > 0 ? debit : credit;
+  const dir: "in" | "out" = debit > 0 ? "out" : "in";
+
+  const { zohoHasEntryFor } = await import("@/lib/bankStatements");
+  let present = false;
+  try { present = await zohoHasEntryFor(String(l.account_name), String(l.line_date), amount, dir); }
+  catch {
+    // Zoho could not be read. Refusing is the safe answer: reopening on a
+    // failed lookup is exactly how a payment gets made twice.
+    await svc.from("bank_lines").update({ error: "could not check Zoho just now — not reopened", updated_at: new Date().toISOString() }).eq("id", id);
+    revalidatePath("/admin/zoho");
+    return;
+  }
+
+  if (present) {
+    await svc.from("bank_lines").update({
+      status: "matched",
+      matched_note: "found in Zoho on re-check — nothing was reopened",
+      error: null, updated_at: new Date().toISOString(),
+    }).eq("id", id);
+    revalidatePath("/admin/zoho");
+    return;
+  }
+
+  // Genuinely gone. Put it back in the queue with the answer it already had,
+  // so the head and the sub-ledger do not have to be typed a second time.
+  const hasProposal = !!(l.proposal as { account?: string } | null)?.account;
+  await svc.from("bank_lines").update({
+    status: hasProposal ? "auto" : "ask",
+    zoho_id: null,
+    error: "the entry was deleted in Zoho — reopened for posting",
+    updated_at: new Date().toISOString(),
+  }).eq("id", id);
+  revalidatePath("/admin/zoho");
+}
+
 export async function retryLineAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));

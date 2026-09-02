@@ -19,7 +19,7 @@ import BankAnswerPanel from "./BankAnswerPanel";
 import SectionToggle from "./SectionToggle";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, editPettyPersonAction, deletePettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction, rematchBankAction, removeStatementAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, editPettyPersonAction, deletePettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, retryBillAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction, rematchBankAction, removeStatementAction, repostLineAction } from "./actions";
 import { listZohoAccounts, reconcileAccount } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -1172,12 +1172,22 @@ export default async function ZohoHubPage(props: {
                                 — a discrepancy, and offering to post it again
                                 would be the wrong answer. */}
                             {settled ? (
-                              <p style={{ fontSize: ".8rem", color: "#b45309", margin: "6px 0 0" }}>
-                                This line is marked <strong>{row!.status}</strong> here, but no entry of this amount and
-                                date is in Zoho{"'"}s register for this account. Either it was posted to a different
-                                account, or it was deleted in Zoho after posting. Worth opening in Zoho before anything
-                                is re-entered.
-                              </p>
+                              <div style={{ marginTop: 6 }}>
+                                <p style={{ fontSize: ".8rem", color: "#b45309", margin: 0 }}>
+                                  Marked <strong>{row!.status}</strong> here, but no entry of this amount and date is in
+                                  Zoho{"'"}s register for this account — it was almost certainly deleted in Zoho after
+                                  posting.
+                                </p>
+                                <form action={repostLineAction} style={{ margin: "6px 0 0" }}>
+                                  <input type="hidden" name="id" value={row!.id} />
+                                  <SubmitButton className="btn small secondary" savedLabel="✓ Reopened">↻ Post it again</SubmitButton>
+                                  <span className="muted" style={{ fontSize: ".76rem", marginLeft: 8 }}>
+                                    Zoho is checked once more at the press: if the entry turns out to be there, nothing
+                                    is reopened. Otherwise it goes back into the queue with the head and sub-ledger it
+                                    already had, and posts through the usual approval.
+                                  </span>
+                                </form>
+                              </div>
                             ) : (
                               <>
                                 {/* WHAT IT SETTLES, IF IT SETTLES ANYTHING.

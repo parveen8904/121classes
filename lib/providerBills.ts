@@ -963,7 +963,18 @@ export async function postProviderBill(id: string): Promise<void> {
       if (b.vault_doc_id) await svc.from("zoho_vault_docs").update({ is_processed: true }).eq("id", b.vault_doc_id);
       return;
     }
-    const accountId = await ledgerId(String(p.expense_account), nature, operating);
+    let accountId = await ledgerId(String(p.expense_account), nature, operating);
+
+    // THE SUB-LEDGER IS AN ACCOUNT, NOT A PHRASE IN THE DESCRIPTION.
+    //
+    // Same fault as the bank line, same fix (2 Sep 2026): the sub-account was
+    // written into the line description and the bill still went to the parent
+    // head, so nothing could be totalled by it. It now posts to a real Zoho
+    // sub-account of that head, created once and reused.
+    if (String(b.sub_account ?? "").trim()) {
+      const { zohoSubAccount } = await import("@/lib/bankStatements");
+      accountId = (await zohoSubAccount(String(p.expense_account), String(b.sub_account))).id;
+    }
 
     // GST: reverse charge for an import of services; the charged tax for a
     // domestic bill; nothing when the vendor charges none.

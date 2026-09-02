@@ -1028,7 +1028,12 @@ export async function uploadStatementAction(formData: FormData) {
   if (error) redirect(`/admin/zoho?scan=${encodeURIComponent(`Upload failed: ${error.message}`)}#bank`);
   const { ingestStatement } = await import("@/lib/bankStatements");
   let note: string;
-  try { note = await ingestStatement(accountName, `secure:${path}`, file!.name); }
+  // THE PASSWORD IS NEVER STORED. It travels with this one request and is
+  // gone — a bank statement password is a credential, not a setting. Axis
+  // encrypts its netbanking and mobile exports as a matter of course, which is
+  // why three of his uploads on 2 Sep failed.
+  const pdfPassword = str(formData.get("pdf_password"));
+  try { note = await ingestStatement(accountName, `secure:${path}`, file!.name, { pdfPassword }); }
   catch (e) { note = `Statement failed: ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");
   redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bank`);
@@ -1147,7 +1152,8 @@ export async function reparseStatementAction(formData: FormData) {
   const { ingestStatement } = await import("@/lib/bankStatements");
   let note: string;
   try {
-    note = await ingestStatement(String(st!.account_name), String(st!.file_url), String(st!.file_name ?? "statement"));
+    note = await ingestStatement(String(st!.account_name), String(st!.file_url), String(st!.file_name ?? "statement"),
+      { pdfPassword: str(formData.get("pdf_password")) });
   } catch (e) {
     note = `Statement failed again: ${e instanceof Error ? e.message : "unknown"}`;
   }

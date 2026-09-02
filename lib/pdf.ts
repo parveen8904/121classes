@@ -1,4 +1,4 @@
-import { extractText, getDocumentProxy } from "unpdf";
+import { extractText, extractTextItems, getDocumentProxy } from "unpdf";
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 
@@ -170,19 +170,147 @@ export function trailingErrataPages(pageTexts: string[]): number {
   return n;
 }
 
-export async function extractPdfText(url: string): Promise<string> {
+/* ═══════════════════════════════════════════════════════════════════════════
+   READING A PDF, AND SAYING WHAT WENT WRONG WHEN IT CANNOT BE READ
+   ═══════════════════════════════════════════════════════════════════════════
+
+   His report, 2 September 2026: "I tried uploading the PDF for my credit cards
+   as well as my bank statements which were not excel sheet and you did not
+   properly understand it. Why are you unable to read it?"
+
+   Three statements failed that afternoon — the Axis 8882 card, and the NRE and
+   NRO accounts — and every one of them came back saying:
+
+       "could not read text from this PDF (scanned images?)"
+
+   That sentence was a GUESS, and a bad one. extractPdfText caught every
+   possible failure and returned an empty string, so the caller had exactly one
+   fact — no text — and invented a cause for it. A file that could not be
+   fetched, a file that was not a PDF, a corrupt file and a PASSWORD-PROTECTED
+   file all arrived at the same wrong sentence.
+
+   Axis statements downloaded from netbanking and from the mobile app are
+   encrypted as a matter of course — the file name of the one that failed,
+   "AXISMB_…PARV8882.pdf", is the mobile app's own export. pdf.js throws a
+   PasswordException for those, which we were swallowing and reporting as
+   scanned images. Nobody could have got from that message to the answer.
+
+   So: every failure now names itself, a password can be supplied, and "the
+   text layer is genuinely empty" is one specific outcome rather than the
+   catch-all.
+*/
+export type PdfRead =
+  | { ok: true; text: string; pages: number }
+  | { ok: false; reason: string; needsPassword?: boolean };
+
+/** pdf.js reports the reason in `name`; the message alone is not enough. */
+const pdfErrorName = (e: unknown): string =>
+  (e as { name?: string })?.name ?? (e instanceof Error ? e.name : "");
+
+export async function readPdf(url: string, opts?: { password?: string }): Promise<PdfRead> {
+  let buf: ArrayBuffer;
   try {
-    // Files moved behind login are stored as "secure:<path>" — resolve to a
-    // signed URL first (public URLs pass through unchanged). Without this the
-    // fetch fails and the caller concludes the PDF is unreadable.
     const { resolveFileUrl } = await import("@/lib/storage");
     const fetchable = await resolveFileUrl(url);
-    if (!fetchable) return "";
-    const buf = await fetch(fetchable, { cache: "no-store" }).then((r) => r.arrayBuffer());
-    const pdf = await getDocumentProxy(new Uint8Array(buf));
-    const { text } = await extractText(pdf, { mergePages: true });
-    return cleanPdfText(typeof text === "string" ? text : (text as string[]).join("\n"));
-  } catch {
-    return "";
+    if (!fetchable) return { ok: false, reason: "the stored file could not be located" };
+    const r = await fetch(fetchable, { cache: "no-store" });
+    if (!r.ok) return { ok: false, reason: `the file could not be downloaded (${r.status})` };
+    buf = await r.arrayBuffer();
+  } catch (e) {
+    return { ok: false, reason: `the file could not be downloaded — ${e instanceof Error ? e.message : "unknown error"}` };
   }
+
+  if (buf.byteLength === 0) return { ok: false, reason: "the file is empty" };
+  // "%PDF" — a renamed .xls or a half-finished download is a common upload and
+  // says nothing useful about text layers.
+  const head = new TextDecoder().decode(new Uint8Array(buf.slice(0, 5)));
+  if (!head.startsWith("%PDF")) {
+    return { ok: false, reason: "this is not a PDF file — it may have been renamed, or the download did not finish" };
+  }
+
+  try {
+    const pdf = await getDocumentProxy(new Uint8Array(buf), opts?.password ? { password: opts.password } : undefined);
+    const { text } = await extractText(pdf, { mergePages: true });
+    const out = cleanPdfText(typeof text === "string" ? text : (text as string[]).join("\n"));
+    if (!out.replace(/\s/g, "")) {
+      return {
+        ok: false,
+        reason: `the PDF opened but carries no text — its ${pdf.numPages} page(s) are images, so it is a scan or a screenshot`,
+      };
+    }
+    return { ok: true, text: out, pages: pdf.numPages };
+  } catch (e) {
+    const name = pdfErrorName(e);
+    if (name === "PasswordException") {
+      return {
+        ok: false,
+        needsPassword: true,
+        reason: opts?.password
+          ? "that password did not open the PDF"
+          : "this PDF is password-protected — Axis statements from netbanking and the mobile app are encrypted by default",
+      };
+    }
+    if (name === "InvalidPDFException") return { ok: false, reason: "the PDF is damaged and cannot be opened" };
+    return { ok: false, reason: `the PDF could not be read — ${e instanceof Error ? e.message : "unknown error"}` };
+  }
+}
+
+/**
+ * THE PDF AS A TABLE, NOT AS PROSE.
+ *
+ * Every fragment in a PDF carries an x and a y, so a statement's columns are
+ * still there — they are simply not in the string you get from extractText.
+ * Putting them back means a PDF statement can go through the same parser as
+ * the Excel one instead of being handed to a model as one long line.
+ * See lib/pdfTable.ts for the rules.
+ */
+export async function readPdfRows(url: string, opts?: { password?: string }): Promise<
+  { ok: true; rows: string[][]; pages: number } | { ok: false; reason: string; needsPassword?: boolean }
+> {
+  let buf: ArrayBuffer;
+  try {
+    const { resolveFileUrl } = await import("@/lib/storage");
+    const fetchable = await resolveFileUrl(url);
+    if (!fetchable) return { ok: false, reason: "the stored file could not be located" };
+    const r = await fetch(fetchable, { cache: "no-store" });
+    if (!r.ok) return { ok: false, reason: `the file could not be downloaded (${r.status})` };
+    buf = await r.arrayBuffer();
+  } catch (e) {
+    return { ok: false, reason: `the file could not be downloaded — ${e instanceof Error ? e.message : "unknown error"}` };
+  }
+  const head = new TextDecoder().decode(new Uint8Array(buf.slice(0, 5)));
+  if (!head.startsWith("%PDF")) {
+    return { ok: false, reason: "this is not a PDF file — it may have been renamed, or the download did not finish" };
+  }
+  try {
+    const pdf = await getDocumentProxy(new Uint8Array(buf), opts?.password ? { password: opts.password } : undefined);
+    const { items, totalPages } = await extractTextItems(pdf);
+    const { pagesToRows } = await import("@/lib/pdfTable");
+    const rows = pagesToRows(items as unknown as { str: string; x: number; y: number; width?: number; height?: number }[][]);
+    if (!rows.length) {
+      return { ok: false, reason: `the PDF opened but carries no text — its ${totalPages} page(s) are images, so it is a scan or a screenshot` };
+    }
+    return { ok: true, rows, pages: totalPages };
+  } catch (e) {
+    const name = pdfErrorName(e);
+    if (name === "PasswordException") {
+      return {
+        ok: false, needsPassword: true,
+        reason: opts?.password
+          ? "that password did not open the PDF"
+          : "this PDF is password-protected — Axis statements from netbanking and the mobile app are encrypted by default",
+      };
+    }
+    if (name === "InvalidPDFException") return { ok: false, reason: "the PDF is damaged and cannot be opened" };
+    return { ok: false, reason: `the PDF could not be read — ${e instanceof Error ? e.message : "unknown error"}` };
+  }
+}
+
+/**
+ * The older shape: text or "". Kept for the callers that only ever fell back to
+ * pasted text and have nothing useful to do with a reason.
+ */
+export async function extractPdfText(url: string, opts?: { password?: string }): Promise<string> {
+  const r = await readPdf(url, opts);
+  return r.ok ? r.text : "";
 }

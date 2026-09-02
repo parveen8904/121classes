@@ -1031,6 +1031,17 @@ export default async function ZohoHubPage(props: {
               <label style={{ fontSize: ".75rem" }}>Statement file (CSV / Excel / PDF)</label>
               <input type="file" name="file" required accept=".csv,.txt,.xls,.xlsx,.pdf" style={{ marginBottom: 0 }} />
             </div>
+            {/* AXIS ENCRYPTS ITS OWN EXPORTS. Three uploads failed on 2 Sep
+                saying "scanned images?", which was a guess — they were
+                password-protected. The box is here rather than hidden behind a
+                failure, because anybody downloading from Axis netbanking or the
+                mobile app already knows they typed a password to open it.
+                Nothing is stored: it is used for this one read. */}
+            <div>
+              <label style={{ fontSize: ".75rem" }}>PDF password <span className="muted">(only if the PDF asks for one)</span></label>
+              <input type="password" name="pdf_password" autoComplete="off" placeholder="Axis: usually name + date of birth"
+                style={{ marginBottom: 0, width: 210 }} />
+            </div>
             <SubmitButton className="btn small" savedLabel="✓ Read">📥 Upload &amp; read</SubmitButton>
           </form>
 
@@ -1076,8 +1087,15 @@ export default async function ZohoHubPage(props: {
                         stored, so a parser fix is testable against the file
                         that broke it without hunting for it again. */}
                     {s.status === "failed" && (
-                      <form action={reparseStatementAction} style={{ margin: 0 }}>
+                      <form action={reparseStatementAction} style={{ margin: 0, display: "flex", gap: 6, alignItems: "center" }}>
                         <input type="hidden" name="id" value={s.id} />
+                        {/* Re-read from the file already stored, so a parser fix
+                            — or the password nobody knew was needed — is tried
+                            against the file that broke, without hunting for it. */}
+                        {/password|encrypt/i.test(String(s.note ?? "")) && (
+                          <input type="password" name="pdf_password" autoComplete="off" placeholder="PDF password"
+                            style={{ marginBottom: 0, width: 150, fontSize: ".8rem" }} />
+                        )}
                         <button className="btn small secondary" type="submit">↻ Try again</button>
                       </form>
                     )}

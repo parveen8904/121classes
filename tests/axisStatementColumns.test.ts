@@ -16,8 +16,16 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+// THE REAL RULES, IMPORTED.
+//
+// This used to dig the regexes out of the source with another regex, because
+// they lived in a file that pulls in Supabase and the Zoho client and could not
+// be loaded. They now live on their own in lib/bankStatementRows.ts, so the
+// test reads the actual objects — and a rule that is renamed or deleted breaks
+// the test instead of quietly matching nothing.
+import { HEAD, REF_TIERS } from "../lib/bankStatementRows.ts";
 
-const src = readFileSync(join(import.meta.dirname, "..", "lib/bankStatements.ts"), "utf8");
+const src = readFileSync(join(import.meta.dirname, "..", "lib/bankStatementRows.ts"), "utf8");
 
 let fails = 0;
 const check = (name: string, ok: boolean, why = "") => {
@@ -26,18 +34,12 @@ const check = (name: string, ok: boolean, why = "") => {
   console.error(`FAIL  ${name}${why ? ` — ${why}` : ""}`);
 };
 
-/** Pull a named regex literal out of the source so the test reads the real one. */
-function headRegex(key: string): RegExp {
-  const m = new RegExp(`^\\s*${key}: (/.*/i),`, "m").exec(src);
-  if (!m) throw new Error(`could not find HEAD.${key}`);
-  const body = m[1].slice(1, m[1].lastIndexOf("/"));
-  return new RegExp(body, "i");
-}
-function refTiers(): RegExp[] {
-  const block = /const REF_TIERS: RegExp\[\] = \[([\s\S]*?)\];/.exec(src);
-  if (!block) throw new Error("could not find REF_TIERS");
-  return [...block[1].matchAll(/\/(.+?)\/i,/g)].map((m) => new RegExp(m[1], "i"));
-}
+const headRegex = (key: string): RegExp => {
+  const re = (HEAD as Record<string, RegExp>)[key];
+  if (!re) throw new Error(`HEAD.${key} no longer exists`);
+  return re;
+};
+const refTiers = (): RegExp[] => REF_TIERS;
 
 const HEADER = [
   "S. No.", "Transaction Date", "Value Date", "Cheque Number",

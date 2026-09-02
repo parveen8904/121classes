@@ -102,6 +102,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { icon: "📄", title: "Mock test papers", desc: "Full 100-mark papers in the ICAI pattern — 30 marks case-scenario MCQs, 70 descriptive. Drafted from past exam patterns; nothing reaches a student until you approve it.", href: "/admin/mock-papers" },
       { icon: "🗝️", title: "Answer keys", desc: "AI-drafted solutions for uploaded papers that have no answer key — read, edit, approve. Approved keys are what students see and what the AI marks descriptive papers against.", href: "/admin/solutions" },
       { icon: "📚", title: "AI repository", desc: "Feed the AI: transcripts, notes, books, RTP/MTP/papers — coverage panel shows what's missing.", href: "/admin/repository" },
+      { icon: "📅", title: "After the exam", desc: "Everything tagged with one attempt, and what should become of it — close off, carry forward, or leave open.", href: "/admin/attempts" },
       { icon: "🎓", title: "Teach the AI", desc: "Correct it once and it stays corrected. Standing rules it must always follow, and answers it got wrong — applied on every channel before it replies to anybody.", href: "/admin/ai-training" },
       { icon: "🗓️", title: "Study planner", desc: "Set the rules the day-by-day study plan engine follows (stages, hours, speeds).", href: "/admin/planner" },
       { icon: "📡", title: "Live classes", desc: "Schedule live sessions (white-label Zoom or link) and attach recordings after.", href: "/admin/live" },

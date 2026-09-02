@@ -46,7 +46,7 @@ export const ADMIN_AREAS: AdminArea[] = [
   { key: "warehouse", label: "🏭 Warehouse & shipping", prefixes: ["/admin/warehouse"] },
   { key: "career", label: "🎓 Career & placement", prefixes: ["/admin/content", "/admin/placement"] },
   { key: "planner", label: "🗓️ Study planner settings", prefixes: ["/admin/planner"] },
-  { key: "repository", label: "📚 AI repository", prefixes: ["/admin/repository"] },
+  { key: "repository", label: "📚 AI repository", prefixes: ["/admin/repository", "/admin/attempts"] },
   // The founder's asset register (20 Aug 2026). Two distinct grants because two
   // distinct jobs: a handler works only the assets assigned to them; accounts
   // verifies every transaction. Ownership, valuations and returns render for

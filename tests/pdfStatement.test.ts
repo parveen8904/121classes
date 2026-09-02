@@ -260,17 +260,61 @@ check("and a locked one still gets the picture route",
   /const pages = await readPdfPageImages\(fileUrl, \{ password: opts\?\.pdfPassword \}\)/.test(bank));
 
 check("only the page-sized picture is taken, not the bank's logo",
-  /img\.width < 400 \|\| img\.height < 400/.test(pdf));
+  /w < 300 \|\| h < 300/.test(pdf));
 check("the biggest picture on the page wins",
-  /img\.width \* img\.height > found\.width \* found\.height/.test(pdf));
+  /w \* h > found\.width \* found\.height/.test(pdf));
 check("a page that will not give up its images is skipped, not fatal",
   /catch \{ \/\* a page that will not give up its images is skipped/.test(pdf));
-check("the pixels are encoded with node's own zlib, not a native canvas",
-  /encodePng/.test(pdf) && !/napi-rs\/canvas/.test(pdf),
-  "pulling a native canvas into a serverless bundle to draw a picture we already have");
+check("a picture that IS in the file is encoded with node's own zlib",
+  /encodePng/.test(pdf),
+  "no need to draw a page we can simply lift");
 check("several pages go up together as images",
   /dataB64\.map\(\(p\) => \(\{ type: "image"/.test(
     readFileSync(join(import.meta.dirname, "..", "lib/ai.ts"), "utf8")));
+
+// ── and a page holding neither text nor pictures ─────────────────────────
+//
+// After the picture reader landed, the NRE statement still came back: "the PDF
+// opened but carries no text — its 2 page(s) are images … nothing could be
+// lifted off its 2 page(s) as a picture either." Both true, and together they
+// mean the page is drawn as LINES AND SHAPES: type converted to outlines, so
+// there is no text to parse and no picture to lift. Nothing can be extracted
+// from it, because there is nothing in it to extract. It has to be DRAWN.
+check("there is a renderer of last resort", /async function renderPdfPages/.test(pdf));
+check("it runs only when nothing could be extracted",
+  /if \(!out\.length\) \{[\s\S]{0,400}renderPdfPages/.test(pdf),
+  "drawing every page is the most expensive route on the desk");
+check("pdf.js is given the browser globals it draws against",
+  /"Path2D", "DOMMatrix", "ImageData"/.test(pdf),
+  "without Path2D a vector page fails with ‘Path2D is not defined’, which reads like a fault in the statement");
+check("and a canvas factory for the ones it makes itself",
+  /class NodeCanvasFactory/.test(pdf) && /CanvasFactory: NodeCanvasFactory/.test(pdf),
+  "without it an image on the page stops the whole render");
+check("the page is painted white first",
+  /ctx\.fillStyle = "#ffffff"/.test(pdf),
+  "a PDF page is transparent — the type would come out black on black");
+check("it is drawn at 2× so the type is legible to a reader that only gets pixels",
+  /getViewport\(\{ scale: 2 \}\)/.test(pdf));
+check("a platform with no renderer loses this route, not the upload",
+  /catch \{ \/\* no renderer here/.test(pdf));
+
+// The extractor ahead of it now looks at every way a PDF puts a picture down.
+check("image masks are read — a black-and-white scan is one",
+  /OPS\.paintImageMaskXObject/.test(pdf),
+  "unpdf's own extractImages looks at paintImageXObject alone");
+check("inline images too", /OPS\.paintInlineImageXObject/.test(pdf));
+check("one bit a pixel is unpacked rather than skipped",
+  /ONE BIT A PIXEL/.test(pdf) && /Math\.ceil\(w \/ 8\)/.test(pdf));
+check("a mask's set bit is ink; a 1-bit image's is white",
+  /isMask \? \(bit \? 0 : 255\) : \(bit \? 255 : 0\)/.test(pdf));
+check("the failure says what was actually on the page",
+  /the \$\{seen\} picture\(s\) on them are too small to be pages \(largest/.test(pdf),
+  "‘nothing could be lifted off’ is true and useless — it decides nothing");
+
+const cfg = readFileSync(join(import.meta.dirname, "..", "next.config.mjs"), "utf8");
+check("the native module is left out of the bundle",
+  /serverExternalPackages: \["@napi-rs\/canvas"\]/.test(cfg),
+  "a prebuilt binary cannot be bundled — the build fails following its .node binding");
 
 console.log(fails === 0 ? "ok — PDF statements" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

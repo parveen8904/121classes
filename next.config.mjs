@@ -14,6 +14,14 @@ const nextConfig = {
   // Allow bigger server-action payloads so students can attach an image/PDF to
   // a doubt (photographed question). Downscaled client-side; 8mb is plenty.
   experimental: { serverActions: { bodySizeLimit: "8mb" } },
+  // A NATIVE MODULE CANNOT BE BUNDLED.
+  //
+  // @napi-rs/canvas is a prebuilt binary, and it is what lets pdf.js DRAW a
+  // page — the only way to read a statement that carries neither text nor
+  // pictures, because its type has been converted to outlines. The bundler
+  // tries to follow its .node binding and fails; left external, it is required
+  // at runtime as it expects to be.
+  serverExternalPackages: ["@napi-rs/canvas"],
   // Public images are served from OUR domain, not the storage host.
   //
   // Every uploaded photo went out as

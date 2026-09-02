@@ -146,7 +146,7 @@ export async function ingestStatement(
         else {
           const seen = await parseBankStatementFile(pages.images.map((i) => ({ b64: i.b64, mediaType: "image/png" })));
           if (seen?.length) lines = aiToLines(seen);
-          else why.push(`reading its ${pages.images.length} page(s) as pictures found no transactions either`);
+          else why.push(`its ${pages.images.length} page(s) were read as pictures and no transactions came back`);
         }
       }
     }

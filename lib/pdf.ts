@@ -1,4 +1,4 @@
-import { extractText, extractTextItems, extractImages, getDocumentProxy } from "unpdf";
+import { extractText, extractTextItems, getDocumentProxy, getResolvedPDFJS } from "unpdf";
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 
@@ -325,6 +325,61 @@ export async function readPdfRows(url: string, opts?: { password?: string }): Pr
  * scan, and the rest are the bank's logo and a signature block. Anything small
  * is left behind rather than sent as a page.
  */
+/**
+ * DRAW THE PAGES OURSELVES, THE WAY A READER'S SCREEN WOULD.
+ *
+ * The last resort, and the only one that reads a page holding neither text nor
+ * pictures — a statement whose type has been converted to outlines is drawn
+ * entirely as lines and shapes, so there is nothing in it to extract.
+ *
+ * pdf.js draws against browser globals. A Node canvas has every one of them;
+ * they are simply not on globalThis, and without Path2D a vector page fails
+ * with "Path2D is not defined" — which reads like a bug in the statement.
+ * pdf.js also makes canvases of its own for masks and patterns, so it is given
+ * a factory as well; without it an image on the page stops the whole render.
+ */
+async function renderPdfPages(bytes: Uint8Array, pages: number, password?: string): Promise<{ b64: string; page: number }[]> {
+  const C = await import("@napi-rs/canvas");
+  const g = globalThis as unknown as Record<string, unknown>;
+  for (const k of ["Path2D", "DOMMatrix", "ImageData"] as const) {
+    if (!g[k] && (C as unknown as Record<string, unknown>)[k]) g[k] = (C as unknown as Record<string, unknown>)[k];
+  }
+  class NodeCanvasFactory {
+    create(width: number, height: number) {
+      const canvas = C.createCanvas(Math.ceil(width) || 1, Math.ceil(height) || 1);
+      return { canvas, context: canvas.getContext("2d") };
+    }
+    reset(cc: { canvas: { width: number; height: number } }, width: number, height: number) {
+      cc.canvas.width = Math.ceil(width) || 1; cc.canvas.height = Math.ceil(height) || 1;
+    }
+    destroy(cc: { canvas: { width: number; height: number } }) { cc.canvas.width = 0; cc.canvas.height = 0; }
+  }
+
+  const doc = await getDocumentProxy(bytes, {
+    ...(password ? { password } : {}),
+    CanvasFactory: NodeCanvasFactory,
+  } as Parameters<typeof getDocumentProxy>[1]);
+
+  const out: { b64: string; page: number }[] = [];
+  for (let p = 1; p <= Math.min(doc.numPages, pages); p++) {
+    const page = await doc.getPage(p);
+    // 2× so the type is legible to a reader that only gets pixels.
+    const viewport = page.getViewport({ scale: 2 });
+    const canvas = C.createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+    const ctx = canvas.getContext("2d");
+    // A PDF page is transparent; without this the type comes out black on black.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({
+      canvas: canvas as unknown as HTMLCanvasElement,
+      canvasContext: ctx as unknown as CanvasRenderingContext2D,
+      viewport,
+    }).promise;
+    out.push({ b64: canvas.toBuffer("image/png").toString("base64"), page: p });
+  }
+  return out;
+}
+
 export async function readPdfPageImages(
   url: string,
   opts?: { password?: string; maxPages?: number },
@@ -344,24 +399,106 @@ export async function readPdfPageImages(
   try {
     const { encodePng } = await import("@/lib/pngEncode");
     const pdf = await getDocumentProxy(new Uint8Array(buf), opts?.password ? { password: opts.password } : undefined);
+    const { OPS } = await getResolvedPDFJS();
     const pages = Math.min(pdf.numPages, opts?.maxPages ?? 8);
+
+    // WHAT WE ACTUALLY SAW, so a failure can be diagnosed instead of guessed at.
+    let seen = 0, biggest = { w: 0, h: 0 };
     const out: { b64: string; page: number }[] = [];
+
     for (let p = 1; p <= pages; p++) {
-      let found: { data: Uint8ClampedArray; width: number; height: number; channels: 1 | 3 | 4 } | null = null;
+      let found: { data: Uint8Array | Uint8ClampedArray; width: number; height: number; channels: 1 | 3 | 4 } | null = null;
       try {
-        for (const img of await extractImages(pdf, p)) {
-          // The bank's logo is a hundred pixels wide; the page is a thousand.
-          if (img.width < 400 || img.height < 400) continue;
-          if (!found || img.width * img.height > found.width * found.height) found = img;
+        const page = await pdf.getPage(p);
+        const ops = await page.getOperatorList();
+        for (let i = 0; i < ops.fnArray.length; i++) {
+          const op = ops.fnArray[i];
+          // EVERY WAY A PDF CAN PUT A PICTURE ON A PAGE, not just one.
+          //
+          // unpdf's own extractImages looks at paintImageXObject alone. A
+          // black-and-white scan — which is how a bank scans — is usually an
+          // image MASK, and a small one may be inline. Both were being skipped
+          // in silence, which is a page that "carries no images" while plainly
+          // being a picture.
+          const isXObj = op === OPS.paintImageXObject;
+          const isMask = op === OPS.paintImageMaskXObject;
+          const isInline = op === OPS.paintInlineImageXObject;
+          if (!isXObj && !isMask && !isInline) continue;
+
+          const arg = ops.argsArray[i][0];
+          let img: { data?: Uint8Array | Uint8ClampedArray; width?: number; height?: number } | null = null;
+          if (isInline && arg && typeof arg === "object") {
+            img = arg as { data?: Uint8Array; width?: number; height?: number };
+          } else if (typeof arg === "string") {
+            const store = arg.startsWith("g_") ? page.commonObjs : page.objs;
+            img = await new Promise((res) => { try { store.get(arg, res); } catch { res(null); } });
+          }
+          if (!img?.data || !img.width || !img.height) continue;
+
+          const w = img.width, h = img.height;
+          seen++;
+          if (w * h > biggest.w * biggest.h) biggest = { w, h };
+          // A logo is a couple of hundred pixels; a scanned page is thousands.
+          if (w < 300 || h < 300) continue;
+
+          const per = img.data.length / (w * h);
+          let data: Uint8Array | Uint8ClampedArray = img.data;
+          let channels: 1 | 3 | 4;
+          if (per === 1 || per === 3 || per === 4) {
+            channels = per as 1 | 3 | 4;
+          } else if (img.data.length >= Math.ceil(w / 8) * h) {
+            // ONE BIT A PIXEL — a fax-style scan, packed eight to the byte and
+            // padded to a byte at the end of every row. Unpacked to grey here,
+            // because a PNG cannot carry it and the model cannot read it.
+            const stride = Math.ceil(w / 8);
+            const grey = new Uint8Array(w * h);
+            for (let y = 0; y < h; y++) {
+              for (let x = 0; x < w; x++) {
+                const bit = (img.data[y * stride + (x >> 3)] >> (7 - (x & 7))) & 1;
+                // In an image mask a set bit is ink; in a 1-bit image it is white.
+                grey[y * w + x] = isMask ? (bit ? 0 : 255) : (bit ? 255 : 0);
+              }
+            }
+            data = grey;
+            channels = 1;
+          } else {
+            continue;
+          }
+          if (!found || w * h > found.width * found.height) found = { data, width: w, height: h, channels };
         }
       } catch { /* a page that will not give up its images is skipped, not fatal */ }
+
       if (!found) continue;
       try {
         out.push({ b64: encodePng(found.data, found.width, found.height, found.channels).toString("base64"), page: p });
       } catch { /* an image we cannot honestly encode is left out */ }
     }
+
+    // LAST OF ALL, DRAW THE PAGE OURSELVES.
+    //
+    // A page can carry no text AND no pictures — a statement whose type has
+    // been converted to outlines is drawn entirely as lines and shapes. Nothing
+    // can be extracted from it, because there is nothing in it to extract; it
+    // has to be RENDERED, exactly as a reader's screen would.
+    //
+    // Kept last because it is the most expensive step and the one with a native
+    // dependency, and wrapped so that a platform without that binary loses this
+    // one route rather than the whole upload.
     if (!out.length) {
-      return { ok: false, reason: `nothing could be lifted off its ${pdf.numPages} page(s) as a picture either` };
+      try {
+        const rendered = await renderPdfPages(new Uint8Array(buf), pages, opts?.password);
+        out.push(...rendered);
+      } catch { /* no renderer here — fall through to the explanation below */ }
+    }
+
+    if (!out.length) {
+      // SAY WHAT WAS THERE. "Nothing could be lifted off" is true and useless;
+      // whether a page held no pictures at all or held one too small to be a
+      // page decides completely different next steps.
+      const detail = seen === 0
+        ? "its pages hold no text and no pictures — the statement is drawn as lines and shapes — and it could not be rendered here either"
+        : `the ${seen} picture(s) on them are too small to be pages (largest ${biggest.w}×${biggest.h})`;
+      return { ok: false, reason: `nothing could be read off its ${pdf.numPages} page(s): ${detail}` };
     }
     return { ok: true, images: out };
   } catch (e) {

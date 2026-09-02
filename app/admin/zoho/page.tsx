@@ -16,10 +16,11 @@ import { saleEntry, bankEntry, type Entry } from "@/lib/entryPreview";
 import { INDIA_STATES } from "@/lib/indiaStates";
 import EntryLines from "./EntryLines";
 import BankAnswerPanel from "./BankAnswerPanel";
+import StatementUpload from "./StatementUpload";
 import SectionToggle from "./SectionToggle";
 import PdfUpload from "../_components/PdfUpload";
 import DeleteButton from "../_components/DeleteButton";
-import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, uploadStatementAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, editPettyPersonAction, deletePettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, rejectAdvanceAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction, rematchBankAction, removeStatementAction, repostLineAction } from "./actions";
+import { addVaultDoc, deleteVaultDoc, connectZoho, scanSalesAction, approvePostingAction, approveAllDraftsAction, skipPostingAction, retryPostingAction, scanSettlementsAction, approveSettlementAction, approveAllSettlementsAction, skipSettlementAction, retrySettlementAction, approveSelectedSettlementsAction, skipSelectedSettlementsAction, approveSelectedLinesAction, skipSelectedLinesAction, approveSelectedBrokerageAction, skipSelectedBrokerageAction, decideBillAction, removeBillAction, matchBankAction, chooseMatchAction, buildBrokerageNoteAction, setSellCostAction, approveBrokerageNoteAction, ingestActivityCsvAction, setUncostedCostAction, rebuildBrokerageNoteAction, attachPaperAction, raiseDocumentAction, retryDocumentAction, approveZohoAction, approveAllZohoAction, rejectZohoAction, saveBillRuleAction, saveForeignAnswersAction, markFormFiledAction, uploadBillAction, approveSelectedBillsAction, skipSelectedBillsAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction, retryLineAction, addPettyPersonAction, editPettyPersonAction, deletePettyPersonAction, recordAdvanceAction, approveBillAction, rejectBillAction, rejectAdvanceAction, uploadBrokerageAction, postBrokerageLineAction, approveAllBrokerageAction, skipBrokerageLineAction, retryBrokerageLineAction, saveTaxAssumptionsAction, fetchProviderInvoicesAction, editSalePayloadAction, retryApprovalAction, reparseStatementAction, readInvoiceTaxAction, createTdsTaxAction, rematchBankAction, removeStatementAction, repostLineAction } from "./actions";
 import { listZohoAccounts, reconcileAccount } from "@/lib/bankStatements";
 import { pettyBalances } from "@/lib/pettyCash";
 import SettlementPicker from "./SettlementPicker";
@@ -1052,31 +1053,7 @@ export default async function ZohoHubPage(props: {
             )}
           </div>
 
-          <form action={uploadStatementAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-            <div style={{ minWidth: 260 }}>
-              <label style={{ fontSize: ".75rem" }}>Account</label>
-              <select name="account_name" required style={{ marginBottom: 0 }}>
-                <option value="">— pick the bank / card —</option>
-                {bankChoices.map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: ".75rem" }}>Statement file (CSV / Excel / PDF)</label>
-              <input type="file" name="file" required accept=".csv,.txt,.xls,.xlsx,.pdf" style={{ marginBottom: 0 }} />
-            </div>
-            {/* AXIS ENCRYPTS ITS OWN EXPORTS. Three uploads failed on 2 Sep
-                saying "scanned images?", which was a guess — they were
-                password-protected. The box is here rather than hidden behind a
-                failure, because anybody downloading from Axis netbanking or the
-                mobile app already knows they typed a password to open it.
-                Nothing is stored: it is used for this one read. */}
-            <div>
-              <label style={{ fontSize: ".75rem" }}>PDF password <span className="muted">(only if the PDF asks for one)</span></label>
-              <input type="password" name="pdf_password" autoComplete="off" placeholder="Axis: usually name + date of birth"
-                style={{ marginBottom: 0, width: 210 }} />
-            </div>
-            <SubmitButton className="btn small" savedLabel="✓ Read">📥 Upload &amp; read</SubmitButton>
-          </form>
+          <StatementUpload accounts={bankChoices} />
 
           {/* Matching runs at ingest, which is before he posts things in Zoho.
               This looks again, so money already in the books stops being asked

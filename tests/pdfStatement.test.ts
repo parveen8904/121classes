@@ -172,10 +172,10 @@ check("the statement row rules import nothing, so they can be tested",
 // and the NRO one had never been retried. Some banks draw the transaction table
 // as a picture, and no amount of parsing helps with that.
 check("there is a reader for a statement whose pages are pictures",
-  /parseBankStatementPdf/.test(bank) && /readPdfBase64/.test(bank));
+  /parseBankStatementFile/.test(bank) && /readPdfBase64/.test(bank));
 check("it runs LAST, after the table and the text",
   bank.indexOf("readPdfRows") < bank.indexOf("parseBankStatementText") &&
-  bank.indexOf("parseBankStatementText") < bank.indexOf("parseBankStatementPdf"),
+  bank.indexOf("parseBankStatementText") < bank.lastIndexOf("parseBankStatementFile"),
   "whole pages as images is the most expensive and least certain route");
 check("each reader's failure is kept, so the note says what was tried",
   /const why: string\[\] = \[\]/.test(bank) && /why\.join\("; "\)/.test(bank),
@@ -187,7 +187,7 @@ check("a switched-off or unconfigured AI is named, not blamed on the file",
   /Statement reading is switched OFF in Admin → AI training/.test(bank));
 
 const ai = readFileSync(join(import.meta.dirname, "..", "lib/ai.ts"), "utf8");
-const vision = ai.slice(ai.indexOf("export async function parseBankStatementPdf"));
+const vision = ai.slice(ai.indexOf("export async function parseBankStatementFile"));
 check("the PDF goes as a document, which is what makes the pages readable",
   /type: "document", source: \{ type: "base64", media_type: "application\/pdf"/.test(vision));
 check("a card purchase is a debit and a payment to the card a credit",
@@ -198,6 +198,43 @@ check("an unreadable figure is left out rather than guessed",
   "a plausible wrong amount is worse than a gap");
 check("its cost is logged like every other call", /logUsage\("bankstmt", model/.test(vision));
 check("it respects the same feature switch", /aiFeatureDisabled\("bankstmt"\)/.test(vision));
+
+// ── one box, whatever they have ──────────────────────────────────────────
+//
+// "Why don't you simplify the system? Just like you are checking the student
+//  paper, which is so bad handwriting. You should put one method where you can
+//  upload the document. You should go to the next step." — 2 September 2026.
+//
+// The comparison is the argument: the paper checker reads handwriting off a
+// phone camera and asks the student nothing. The statement upload had grown the
+// other way — five accepted extensions, a password box on every upload, and a
+// failure that told the desk to go and find a different file.
+const upload = readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/StatementUpload.tsx"), "utf8");
+const zohoPage = readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/page.tsx"), "utf8");
+check("the box takes a photograph as readily as a spreadsheet",
+  /accept="\.csv,\.txt,\.xls,\.xlsx,\.pdf,image\/\*"/.test(upload));
+check("several photographs become one file, in page order",
+  /photosToPdf\(sorted\.length \? sorted : photos\)/.test(upload),
+  "a statement runs to more than one page and nobody should upload them one at a time");
+check("and they are shrunk first, because a phone photo is megabytes",
+  /shrinkPdf\(pdf/.test(upload), "a server action takes 8MB in total");
+check("the password is folded away until it is wanted",
+  /<summary className="btn small secondary as-btn"[^>]*>🔒 It has a password/.test(upload),
+  "asked on every upload, it is a question nobody should be asked twice");
+check("the page uses it", /<StatementUpload accounts=\{bankChoices\} \/>/.test(zohoPage));
+
+check("a picture goes straight to the reader that can see it",
+  /\.\(png\|jpe\?g\|webp\|heic\|heif\|gif\|bmp\|tiff\?\)\$/.test(bank));
+check("and an unrecognised extension is TRIED, not refused",
+  !/unsupported file type/.test(code(bank)),
+  "refusing a file for its name is exactly the ceremony being removed");
+check("the desk is no longer told to go and find an Excel version",
+  !/upload the EXCEL version instead/.test(code(bank)) &&
+  !/always the surer route/.test(code(bank)),
+  "that is the portal asking the desk to do its job");
+check("one reader serves a page and a photograph alike",
+  /export async function parseBankStatementFile\(dataB64: string, mediaType = "application\/pdf"\)/.test(
+    readFileSync(join(import.meta.dirname, "..", "lib/ai.ts"), "utf8")));
 
 console.log(fails === 0 ? "ok — PDF statements" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

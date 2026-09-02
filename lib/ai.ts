@@ -2940,11 +2940,13 @@ export async function parseBankStatementText(text: string): Promise<BankStmtLine
  * page by page and looked at. The portal already does this for a photographed
  * doubt; a scanned statement is the same problem.
  *
- * Last resort on purpose. It is the most expensive path — whole pages as
- * images — and the least certain, so it runs only after the table rebuild and
- * the text pass have both come back with nothing.
+ * Last resort for a PDF, and the FIRST and only reader for a photograph — a
+ * picture of a statement has nothing to parse, and telling somebody to go and
+ * find a different file is not an answer. The paper checker has read appalling
+ * handwriting off a phone camera for months; a statement is an easier document
+ * than that.
  */
-export async function parseBankStatementPdf(dataB64: string): Promise<BankStmtLine[] | null> {
+export async function parseBankStatementFile(dataB64: string, mediaType = "application/pdf"): Promise<BankStmtLine[] | null> {
   const apiKey = await getSecret("ANTHROPIC_API_KEY");
   if (!apiKey || (await aiFeatureDisabled("bankstmt"))) return null;
   const model = await fastModel();
@@ -2965,7 +2967,12 @@ export async function parseBankStatementPdf(dataB64: string): Promise<BankStmtLi
         messages: [{
           role: "user",
           content: [
-            { type: "document", source: { type: "base64", media_type: "application/pdf", data: dataB64 } },
+            // A PDF goes as a document and is rendered page by page; a
+            // photograph goes as an image. Same reader either way, which is
+            // the point — the desk should not have to know the difference.
+            mediaType === "application/pdf"
+              ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: dataB64 } }
+              : { type: "image", source: { type: "base64", media_type: mediaType, data: dataB64 } },
             { type: "text", text: "Transcribe every transaction in this statement." },
           ],
         }],

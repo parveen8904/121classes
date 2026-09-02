@@ -92,7 +92,7 @@ export async function ingestStatement(
     //      as a document and is read page by page. Most expensive, least
     //      certain, and last — but it is the only thing that reads a scan.
     const { readPdfRows, readPdf, readPdfBase64 } = await import("@/lib/pdf");
-    const { parseBankStatementText, parseBankStatementPdf, aiConfigured, aiFeatureDisabled } = await import("@/lib/ai");
+    const { parseBankStatementText, parseBankStatementFile, aiConfigured, aiFeatureDisabled } = await import("@/lib/ai");
     const why: string[] = [];
 
     const table = await readPdfRows(fileUrl, { password: opts?.pdfPassword });
@@ -128,7 +128,7 @@ export async function ingestStatement(
       const file = await readPdfBase64(fileUrl);
       if (!file.ok) why.push(file.reason);
       else {
-        const seen = await parseBankStatementPdf(file.b64);
+        const seen = await parseBankStatementFile(file.b64);
         if (seen?.length) lines = aiToLines(seen);
         else why.push("reading the pages as pictures found no transactions either");
       }
@@ -142,11 +142,47 @@ export async function ingestStatement(
           ? " Statement reading is switched OFF in Admin → AI training, so only the code reader ran."
           : "";
       const seen = text ? ` It starts: "${text.slice(0, 90).replace(/\s+/g, " ")}".` : "";
-      note = `${why.join("; ")}.${aiWhy}${seen}` +
-        (encrypted ? "" : " If this bank also offers an Excel or CSV statement, that is read by code and is always the surer route.");
+      note = `${why.join("; ")}.${aiWhy}${seen}`;
+    }
+  } else if (/\.(png|jpe?g|webp|heic|heif|gif|bmp|tiff?)$/i.test(lower)) {
+    // A PHOTOGRAPH OF A STATEMENT IS A STATEMENT.
+    //
+    // His point, 2 September 2026: "Just like you are checking the student
+    // paper, which is so bad handwriting — you should put one method where you
+    // can upload the document. You should go to the next step."
+    //
+    // Exactly right, and the comparison is the argument. The paper checker has
+    // been reading appalling handwriting off a phone camera for months. A bank
+    // statement is an easier document than a student's answer sheet, and the
+    // desk was being asked to know which of five file types the portal could
+    // cope with, hunt for an Excel version, and read a paragraph about why the
+    // PDF was the wrong one. One box. Whatever they have.
+    const { readPdfBase64 } = await import("@/lib/pdf");
+    const { parseBankStatementFile } = await import("@/lib/ai");
+    const media =
+      /\.png$/i.test(lower) ? "image/png"
+      : /\.webp$/i.test(lower) ? "image/webp"
+      : /\.gif$/i.test(lower) ? "image/gif"
+      : "image/jpeg";
+    const file = await readPdfBase64(fileUrl);
+    if (!file.ok) note = file.reason;
+    else {
+      const seen = await parseBankStatementFile(file.b64, media);
+      if (seen?.length) lines = aiToLines(seen);
+      else note = "no transactions could be read from that picture — a clearer photograph of the rows, or the file the bank gives you, will read better";
     }
   } else {
-    note = "unsupported file type — upload CSV, Excel or PDF";
+    // Anything else still gets tried as a picture rather than refused on its
+    // extension — a .jfif, a screenshot saved oddly, whatever the phone called
+    // it. Refusing a file for its name is exactly the ceremony being removed.
+    const { readPdfBase64 } = await import("@/lib/pdf");
+    const { parseBankStatementFile } = await import("@/lib/ai");
+    const file = await readPdfBase64(fileUrl);
+    if (file.ok) {
+      const seen = await parseBankStatementFile(file.b64, "image/jpeg");
+      if (seen?.length) lines = aiToLines(seen);
+    }
+    if (!lines.length) note = `nothing could be read from ${fileName} — a CSV, an Excel sheet, a PDF or a photograph of the rows all work`;
   }
 
   if (!lines.length) {

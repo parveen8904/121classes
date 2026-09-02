@@ -142,5 +142,61 @@ check("duplicates are reconciled too, or a re-upload orphans everything already 
   /lines\.map\(\(l\) => \(\{/.test(ingest),
   "the pairing must run over every line in the file, not only the newly filed ones");
 
+// ── which way the money went ───────────────────────────────────────────────
+// The bug his screenshots exposed on 2 September. Every one of the seven
+// "entries in Zoho with no bank line behind it" was the exact mirror of a
+// statement line — same date, same amount, opposite sign — because
+// debit_or_credit was read from the bank's side instead of the books'. The
+// bank account is an asset: a DEBIT to it is money IN.
+check("a debit to the bank ledger is money in",
+  /dc === "debit" \? "in" : "out"/.test(bank),
+  "reading it the other way turns every reconciled line into a false finding");
+check("Zoho's own transaction_type wins where it is unambiguous",
+  /IN_TYPES\.has\(tt\)/.test(bank) && /OUT_TYPES\.has\(tt\)/.test(bank));
+check("a withdrawal is money out and a deposit is money in",
+  /OUT_TYPES = new Set\(\[[^\]]*"withdrawal"/.test(bank) &&
+  /IN_TYPES = new Set\(\[[^\]]*"deposit"/.test(bank));
+check("a vendor payment is money out, not in",
+  /OUT_TYPES = new Set\(\[[^\]]*"vendor_payment"/.test(bank) &&
+  !/IN_TYPES = new Set\(\[[^\]]*"vendor_payment"/.test(bank));
+
+// A statement line and the Zoho entry our own posting made from it must pair.
+{
+  const r = pairLines(
+    [S("2026-08-31", 150000, "out", "SAK/CASH WDL/SELF", "posted")],
+    [Z("2026-08-31", 150000, "out", "", "journal")],
+  );
+  check("a cash withdrawal we posted ourselves reconciles, it is not a finding",
+    r.matched === 1 && !r.statementOnly.length && !r.zohoOnly.length);
+}
+
+// ── the rate, when a rupee payment settles a foreign bill ──────────────────
+const settle = readFileSync(join(import.meta.dirname, "..", "lib/bankSettle.ts"), "utf8");
+check("a foreign document cannot be settled without a rate",
+  /if \(foreign && !\(Number\(p\.exchangeRate\) > 0\)\)/.test(settle),
+  "applying 103440 against a bill that owes $1,200 is nonsense, not a rounding argument");
+check("the amount applied is converted into the document's currency",
+  /const amount = Number\(\(p\.amount \/ rate\)\.toFixed\(2\)\)/.test(settle));
+check("the rate goes on the payment so Zoho can work out its own difference",
+  /exchange_rate: rate/.test(settle));
+check("documents in two currencies are not settled together",
+  /different currencies/.test(settle));
+check("the overpayment guard speaks in the document's currency",
+  /at \$\{rate\} per \$\{currency\}/.test(settle));
+check("the rate reaches the settlement from the line",
+  /exchangeRate: l\.fx_rate/.test(bank));
+
+// ── the suggestion is answerable where it is found ─────────────────────────
+check("each unbooked line carries the ledger and sub-ledger panel",
+  /<BankAnswerPanel[\s\S]{0,400}suggestPattern\(String\(row!\.narration\)\)/.test(page),
+  "a list of what is missing is a report; he asked for suggestions he can act on");
+check("and the choice of which bill or invoice it settles",
+  /action=\{chooseMatchAction\}[\s\S]{0,900}name="doc_id"/.test(page));
+check("the rate is asked for only when a foreign document is on offer",
+  /cands\.some\(\(c\) => \(c\.currency \?\? "INR"\) !== "INR"\)/.test(page));
+check("a line already posted is not offered for posting again",
+  /const settled = row && \(row\.status === "posted" \|\| row\.status === "matched"\)/.test(page),
+  "that is a discrepancy to look at in Zoho, not an entry to make twice");
+
 console.log(fails === 0 ? "ok — bank reconciliation" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

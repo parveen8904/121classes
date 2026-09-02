@@ -171,6 +171,30 @@ export default async function ZohoHubPage(props: {
     try { recon = await reconcileAccount(recAcct, recFrom, recTo); }
     catch (e) { recon = null; reconError = e instanceof Error ? e.message : String(e); }
   }
+  // THE FINDING AND THE ANSWER IN ONE PLACE.
+  //
+  // His words, 2 Sep: "Where are suggested journal entries. Each suggestion
+  // should give choice to select ledger and amount and dollar rate if any. It
+  // should match with vendor payment or make rules for future. Give choice of
+  // sub ledger also."
+  //
+  // A list of what is missing is a report, and a report is somebody else's job
+  // to act on. So each unbooked line is fetched in full — what it looks like it
+  // settles, what has been proposed for it — and answered where it is found.
+  type ReconLineRow = {
+    id: string; account_name: string; narration: string; debit: number; credit: number; status: string;
+    match_kind: string | null; match_label: string | null; match_confidence: string | null;
+    match_currency: string | null; fx_rate: number | null;
+    match_candidates: { id: string; kind: string; number: string; party: string; balance: number; currency?: string; why: string[] }[] | null;
+  };
+  const reconRows = new Map<string, ReconLineRow>();
+  const reconIds = (recon?.statementOnly ?? []).map((l) => l.lineId).filter(Boolean) as string[];
+  if (reconIds.length) {
+    const { data: rr } = await createServiceClient().from("bank_lines")
+      .select("id, account_name, narration, debit, credit, status, match_kind, match_label, match_confidence, match_currency, fx_rate, match_candidates")
+      .in("id", reconIds);
+    for (const r of (rr ?? []) as ReconLineRow[]) reconRows.set(String(r.id), r);
+  }
   const bankLines = (lineData ?? []) as LineRow[];
   const askLines = bankLines.filter((l) => l.status === "ask");
   const autoLines = bankLines.filter((l) => l.status === "auto");
@@ -1123,25 +1147,98 @@ export default async function ZohoHubPage(props: {
 
                   {recon.statementOnly.length > 0 && (
                     <div>
-                      <strong style={{ fontSize: ".85rem" }}>Needs an entry in Zoho ({recon.statementOnly.length})</strong>
-                      <div style={{ display: "grid", gap: 3, marginTop: 5 }}>
-                        {recon.statementOnly.slice(0, 60).map((l, i) => (
-                          <div key={`so${i}`} style={{ display: "flex", gap: 10, fontSize: ".8rem", padding: "4px 9px", background: "var(--bg-soft)", borderRadius: 5, flexWrap: "wrap" }}>
-                            <span style={{ minWidth: 88 }}>{l.date}</span>
-                            <span style={{ flex: 1, minWidth: 200 }}>{l.narration.slice(0, 90)}</span>
-                            <span style={{ fontWeight: 700, color: l.dir === "in" ? "#15803d" : "#b91c1c" }}>
-                              {l.dir === "in" ? "+" : "−"}₹{l.amount.toLocaleString("en-IN")}
-                            </span>
-                            <span className="muted" style={{ fontSize: ".74rem" }}>
-                              {l.lineStatus === "ask" ? "waiting for an account" : l.lineStatus === "auto" ? "rule proposed, not yet approved" : l.lineStatus}
-                            </span>
-                          </div>
-                        ))}
-                        {recon.statementOnly.length > 60 && <span className="muted" style={{ fontSize: ".76rem" }}>…and {recon.statementOnly.length - 60} more</span>}
-                      </div>
-                      <p className="muted" style={{ fontSize: ".78rem", marginTop: 5 }}>
-                        These are already in the queues above — answer or approve them there and they post.
+                      <strong style={{ fontSize: ".85rem" }}>The bank has it, Zoho does not — suggested entries ({recon.statementOnly.length})</strong>
+                      <p className="muted" style={{ fontSize: ".78rem", margin: "3px 0 6px" }}>
+                        Each one is answered here. Pick the ledger and the sub-ledger, or say which bill or invoice it
+                        settles; tick <em>remember</em> and the same merchant never asks again. Everything still goes
+                        through the approval gate — nothing posts from this screen alone.
                       </p>
+                      {recon.statementOnly.slice(0, 40).map((l, i) => {
+                        const row = l.lineId ? reconRows.get(l.lineId) : undefined;
+                        const settled = row && (row.status === "posted" || row.status === "matched");
+                        const cands = row?.match_candidates ?? [];
+                        return (
+                          <div className="card" key={`so${i}`} style={{ marginTop: 6, padding: "9px 13px" }}>
+                            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                              <span style={{ fontSize: ".8rem", whiteSpace: "nowrap" }}>{l.date}</span>
+                              <span style={{ flex: 1, minWidth: 220, fontSize: ".84rem" }}>{l.narration}</span>
+                              <strong style={{ whiteSpace: "nowrap", color: l.dir === "in" ? "#15803d" : "#b91c1c" }}>
+                                {l.dir === "in" ? "+ " : "− "}{formatINR(l.amount)}
+                              </strong>
+                            </div>
+
+                            {/* A LINE THE PORTAL THINKS IT ALREADY POSTED, WITH
+                                NOTHING IN ZOHO TO SHOW FOR IT. Not a suggestion
+                                — a discrepancy, and offering to post it again
+                                would be the wrong answer. */}
+                            {settled ? (
+                              <p style={{ fontSize: ".8rem", color: "#b45309", margin: "6px 0 0" }}>
+                                This line is marked <strong>{row!.status}</strong> here, but no entry of this amount and
+                                date is in Zoho{"'"}s register for this account. Either it was posted to a different
+                                account, or it was deleted in Zoho after posting. Worth opening in Zoho before anything
+                                is re-entered.
+                              </p>
+                            ) : (
+                              <>
+                                {/* WHAT IT SETTLES, IF IT SETTLES ANYTHING.
+                                    Money paid to a supplier is not an expense —
+                                    the expense was booked when the bill
+                                    arrived, and booking it again doubles the
+                                    cost and leaves the bill open for ever. */}
+                                {cands.length > 0 && (
+                                  <form action={chooseMatchAction} style={{ margin: "7px 0 0", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                                    <input type="hidden" name="id" value={row!.id} />
+                                    <span style={{ fontSize: ".78rem" }}>Settles</span>
+                                    <select name="doc_id" defaultValue={row!.match_kind ? String(cands[0].id) : "__none"} style={{ marginBottom: 0, fontSize: ".8rem", maxWidth: 340 }}>
+                                      <option value="__none">— nothing, treat it as its own entry —</option>
+                                      {cands.map((c) => (
+                                        <option key={c.id} value={c.id}>
+                                          {c.kind === "bill" ? "Bill" : "Invoice"} {c.number} · {c.party} · {(c.currency ?? "INR") === "INR" ? `₹${Number(c.balance).toLocaleString("en-IN")}` : `${c.currency} ${Number(c.balance).toLocaleString("en-US")}`}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {/* THE RATE, ONLY WHERE THERE IS ONE TO ASK
+                                        FOR. A bill owed in dollars cannot be
+                                        settled by a rupee payment without it. */}
+                                    {cands.some((c) => (c.currency ?? "INR") !== "INR") && (
+                                      <label style={{ margin: 0, fontSize: ".78rem", display: "inline-flex", gap: 5, alignItems: "center" }}>
+                                        ₹ per unit
+                                        <input name="fx_rate" type="number" step="0.0001" min="0"
+                                          defaultValue={row!.fx_rate ?? ""} placeholder="e.g. 86.20"
+                                          style={{ marginBottom: 0, width: 105, fontSize: ".8rem" }} />
+                                      </label>
+                                    )}
+                                    <SubmitButton className="btn small secondary" savedLabel="✓">Use this</SubmitButton>
+                                    {row!.match_label && <span className="muted" style={{ fontSize: ".76rem" }}>now: {row!.match_label}</span>}
+                                  </form>
+                                )}
+
+                                {/* Ledger, sub-ledger, the rule for next time,
+                                    and the entry drawn as it will be posted. */}
+                                {row!.match_kind && row!.match_confidence === "certain" ? (
+                                  <p className="muted" style={{ fontSize: ".78rem", margin: "6px 0 0" }}>
+                                    Settles an open document, so it posts as a {row!.match_kind === "bill" ? "payment" : "receipt"} against it — no ledger to pick.
+                                    {row!.match_currency && row!.match_currency !== "INR" && !row!.fx_rate && (
+                                      <strong style={{ color: "#b91c1c" }}> A rate is still needed before it can go.</strong>
+                                    )}
+                                    {" "}Approve it in the queue below.
+                                  </p>
+                                ) : (
+                                  <BankAnswerPanel
+                                    lineId={row!.id}
+                                    bankName={row!.account_name}
+                                    debit={Number(row!.debit)}
+                                    credit={Number(row!.credit)}
+                                    accountListId="acct-names"
+                                    suggestedPattern={suggestPattern(String(row!.narration))}
+                                  />
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {recon.statementOnly.length > 40 && <span className="muted" style={{ fontSize: ".76rem" }}>…and {recon.statementOnly.length - 40} more — narrow the dates.</span>}
                     </div>
                   )}
 

@@ -14,9 +14,11 @@ type Settle = {
   bankAccountId: string;
   reference: string;
   narration: string;
+  /** Rupees per unit of the document's currency, when it is not INR. */
+  exchangeRate?: number | null;
 };
 
-type Doc = { id: string; balance: number; partyId: string };
+type Doc = { id: string; balance: number; partyId: string; currency: string };
 
 async function readDocs(kind: "bill" | "invoice", ids: string[]): Promise<Doc[]> {
   const out: Doc[] = [];
@@ -29,6 +31,7 @@ async function readDocs(kind: "bill" | "invoice", ids: string[]): Promise<Doc[]>
       id,
       balance: Number(d.balance ?? 0),
       partyId: String(kind === "bill" ? d.vendor_id ?? "" : d.customer_id ?? ""),
+      currency: String(d.currency_code ?? "INR").toUpperCase(),
     });
   }
   return out;
@@ -36,14 +39,39 @@ async function readDocs(kind: "bill" | "invoice", ids: string[]): Promise<Doc[]>
 
 export async function settleFromBank(p: Settle): Promise<string> {
   const docs = await readDocs(p.kind, p.documentIds);
+
+  // A FOREIGN BILL IS OWED IN ITS OWN CURRENCY; THE BANK PAYS RUPEES.
+  //
+  // His ask, 2 Sep 2026: "dollar rate if any". A supplier billed in USD has a
+  // balance of $1,200, and the Axis account shows ₹1,03,440 leaving. Applying
+  // 103440 against a bill that owes 1200 is not a rounding argument — it is
+  // nonsense, and Zoho rejects it or, worse, records a wild overpayment.
+  //
+  // So the amount applied is converted at the rate given, the rate goes on the
+  // payment so Zoho can compute its own exchange difference, and no foreign
+  // document can be settled without one.
+  const currency = docs[0]?.currency || "INR";
+  const foreign = currency !== "INR";
+  if (foreign && !(Number(p.exchangeRate) > 0)) {
+    throw new Error(`that ${p.kind} is in ${currency} — give the rate (rupees per ${currency}) so the payment can be applied against it`);
+  }
+  if (docs.some((d) => d.currency !== currency)) {
+    throw new Error("those documents are in different currencies — settle them separately");
+  }
+  const rate = foreign ? Number(p.exchangeRate) : 1;
+  // Everything below works in the DOCUMENT's currency.
+  const amount = Number((p.amount / rate).toFixed(2));
+
   const owed = docs.reduce((t, d) => t + d.balance, 0);
   if (owed <= 0) throw new Error("nothing is outstanding on that document any more — it may already have been settled in Zoho");
-  if (p.amount - owed > 0.5) {
-    throw new Error(`the payment is ₹${(p.amount - owed).toFixed(2)} more than those documents still owe — pick another, or book the difference separately`);
+  if (amount - owed > 0.5) {
+    throw new Error(foreign
+      ? `at ${rate} per ${currency} the payment comes to ${currency} ${amount.toFixed(2)}, which is ${(amount - owed).toFixed(2)} more than those documents still owe — check the rate, or book the difference separately`
+      : `the payment is ₹${(amount - owed).toFixed(2)} more than those documents still owe — pick another, or book the difference separately`);
   }
 
   // Spread the money across the documents, oldest first, never overpaying one.
-  let left = p.amount;
+  let left = amount;
   const applied = docs.map((d) => {
     const take = Math.min(left, d.balance);
     left = Number((left - take).toFixed(2));
@@ -60,7 +88,8 @@ export async function settleFromBank(p: Settle): Promise<string> {
         vendor_id: partyId,
         payment_mode: "banktransfer",
         date: p.date,
-        amount: p.amount,
+        amount,
+        ...(foreign ? { exchange_rate: rate } : {}),
         paid_through_account_id: p.bankAccountId,
         ...(p.reference ? { reference_number: p.reference } : {}),
         description: p.narration,
@@ -77,7 +106,8 @@ export async function settleFromBank(p: Settle): Promise<string> {
       customer_id: partyId,
       payment_mode: "banktransfer",
       date: p.date,
-      amount: p.amount,
+      amount,
+      ...(foreign ? { exchange_rate: rate } : {}),
       account_id: p.bankAccountId,
       ...(p.reference ? { reference_number: p.reference } : {}),
       description: p.narration,

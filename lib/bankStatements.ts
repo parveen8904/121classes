@@ -515,6 +515,11 @@ type ZExp = { id: string; account: string };
  */
 type ZTxn = { id: string; type: string; note: string };
 
+// Zoho's own names for what a bank entry is. Where the name says which way the
+// money went there is nothing to infer, so these win over debit_or_credit.
+const IN_TYPES = new Set(["deposit", "customer_payment", "invoice_payment", "sales_without_invoices", "interest_income", "other_income", "transfer_fund_to"]);
+const OUT_TYPES = new Set(["withdrawal", "vendor_payment", "bill_payment", "expense", "card_payment", "expense_refund", "owner_drawings", "transfer_fund_from"]);
+
 async function fetchZohoBankTxnsFor(accountName: string, from: string, to: string): Promise<Map<string, ZTxn[]>> {
   const map = new Map<string, ZTxn[]>();
   try {
@@ -528,9 +533,29 @@ async function fetchZohoBankTxnsFor(accountName: string, from: string, to: strin
         query: { account_id: acct, date_start: from, date_end: to, per_page: "200", page: String(page) },
       });
       for (const t of r.banktransactions ?? []) {
-        // Zoho reports the direction from the BANK's side: a credit to the
-        // bank is money in, which is the statement's credit column.
-        const dir = String(t.debit_or_credit ?? "").toLowerCase() === "credit" ? "in" : "out";
+        // WHICH WAY THE MONEY WENT — and this was backwards until 2 Sep 2026.
+        //
+        // debit_or_credit is stated from the BOOKS' side, not the bank's. The
+        // bank account is an asset: a DEBIT to it is money IN, a CREDIT is
+        // money OUT. The comment that used to sit here said the opposite, and
+        // so did the code.
+        //
+        // It showed the moment reconciliation looked both ways. Every one of
+        // the seven "entries in Zoho with no bank line behind it" was the
+        // exact mirror of a statement line — same date, same amount, opposite
+        // sign — and the totals cross-footed perfectly: statement out
+        // ₹3,05,000 against "Zoho in ₹3,05,000". Cash withdrawals we had
+        // posted ourselves, and therefore knew to be money OUT, were coming
+        // back from Zoho classified as money in.
+        //
+        // transaction_type settles it where it is unambiguous, so a single
+        // odd document cannot flip a line back.
+        const dc = String(t.debit_or_credit ?? "").toLowerCase();
+        const tt = String(t.transaction_type ?? "").toLowerCase();
+        const dir: "in" | "out" =
+          IN_TYPES.has(tt) ? "in"
+          : OUT_TYPES.has(tt) ? "out"
+          : dc === "debit" ? "in" : "out";
         const k = `${t.date}|${Math.abs(Number(t.amount)).toFixed(2)}|${dir}`;
         const arr = map.get(k) ?? [];
         arr.push({
@@ -655,6 +680,9 @@ export async function postBankLine(
         amount: debit > 0 ? debit : credit,
         date: String(l.line_date),
         bankAccountId: bankId,
+        // Rupees per unit of the document's currency — nothing for an INR bill,
+        // and settleFromBank refuses a foreign one without it.
+        exchangeRate: l.fx_rate === null || l.fx_rate === undefined ? null : Number(l.fx_rate),
         reference: zohoReference(l.ref as string | null, l.narration as string | null),
         // A receipt or a payment says what it settles, not merely that money
         // moved: the head it clears and the document count, then the bank's own
@@ -965,7 +993,7 @@ export async function reconcileAccount(accountName: string, from: string, to: st
   const svc = createServiceClient();
 
   const { data: lines } = await svc.from("bank_lines")
-    .select("line_date, narration, debit, credit, status")
+    .select("id, line_date, narration, debit, credit, status")
     .eq("account_name", accountName)
     .gte("line_date", from).lte("line_date", to)
     .order("line_date");
@@ -978,6 +1006,7 @@ export async function reconcileAccount(accountName: string, from: string, to: st
       amount: credit > 0 ? credit : debit,
       dir: (credit > 0 ? "in" : "out") as "in" | "out",
       lineStatus: String(l.status ?? ""),
+      lineId: String(l.id),
     };
   });
 

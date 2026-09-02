@@ -741,14 +741,24 @@ export async function chooseMatchAction(formData: FormData) {
   }
 
   const { data: l } = await svc.from("bank_lines").select("match_candidates").eq("id", id).maybeSingle();
-  const cands = (l?.match_candidates ?? []) as { id: string; kind: string; number: string; party: string; balance: number }[];
+  const cands = (l?.match_candidates ?? []) as { id: string; kind: string; number: string; party: string; balance: number; currency?: string }[];
   const pick = cands.find((c) => String(c.id) === docId);
   if (!pick) return;
 
+  // THE RATE TRAVELS WITH THE CHOICE. A bill owed in dollars cannot be settled
+  // by a rupee payment without one — see lib/bankSettle.ts.
+  const cur = String(pick.currency ?? "INR").toUpperCase();
+  const rate = Number(str(formData.get("fx_rate")));
+  const shown = cur === "INR"
+    ? `₹${Number(pick.balance).toLocaleString("en-IN")}`
+    : `${cur} ${Number(pick.balance).toLocaleString("en-US")}`;
+
   await svc.from("bank_lines").update({
     match_kind: pick.kind, match_ids: [pick.id], match_party: pick.party,
-    match_label: `${pick.kind === "bill" ? "settles" : "receipt against"} ${pick.number || pick.kind} · ${pick.party} · ₹${Number(pick.balance).toLocaleString("en-IN")}`,
+    match_label: `${pick.kind === "bill" ? "settles" : "receipt against"} ${pick.number || pick.kind} · ${pick.party} · ${shown}`,
     match_confidence: "certain",
+    match_currency: cur,
+    fx_rate: cur === "INR" ? null : (rate > 0 ? rate : null),
     updated_at: new Date().toISOString(),
   }).eq("id", id);
   revalidatePath("/admin/zoho");

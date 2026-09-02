@@ -16,12 +16,14 @@
 //     on is what tells you what to do about it
 
 export type Side = "in" | "out";
-export type StatementSide = { date: string; narration: string; amount: number; dir: Side; lineStatus?: string };
+// lineId travels through the pairing untouched so a finding can be acted on
+// where it is found — the reconcile panel posts the entry from the row itself.
+export type StatementSide = { date: string; narration: string; amount: number; dir: Side; lineStatus?: string; lineId?: string };
 export type ZohoSide = { date: string; amount: number; dir: Side; type: string; note: string };
 
 export type ReconLine = {
   date: string; narration: string; amount: number; dir: Side;
-  zohoType?: string; zohoNote?: string; lineStatus?: string;
+  zohoType?: string; zohoNote?: string; lineStatus?: string; lineId?: string;
 };
 
 export type Pairing = {
@@ -58,7 +60,7 @@ export function pairLines(statement: StatementSide[], zoho: ZohoSide[]): Pairing
       hit.shift();
       out.matched++;
     } else {
-      out.statementOnly.push({ date: l.date, narration: l.narration, amount: l.amount, dir: l.dir, lineStatus: l.lineStatus });
+      out.statementOnly.push({ date: l.date, narration: l.narration, amount: l.amount, dir: l.dir, lineStatus: l.lineStatus, lineId: l.lineId });
     }
   }
 

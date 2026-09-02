@@ -24,6 +24,8 @@ export type OpenItem = {
   date: string;
   total: number;
   balance: number;
+  /** The document's own currency. A non-INR document needs a rate to settle. */
+  currency: string;
 };
 
 export type Candidate = {
@@ -56,6 +58,7 @@ export async function openItems(force = false): Promise<OpenItem[]> {
         kind: "bill", id: String(b.bill_id), number: String(b.bill_number ?? ""),
         party: String(b.vendor_name ?? ""), partyId: String(b.vendor_id ?? ""),
         date: String(b.date ?? ""), total: Number(b.total ?? 0), balance,
+        currency: String(b.currency_code ?? "INR").toUpperCase(),
       });
     }
   } catch { /* the caller is told when nothing could be read */ }
@@ -71,6 +74,7 @@ export async function openItems(force = false): Promise<OpenItem[]> {
         kind: "invoice", id: String(i.invoice_id), number: String(i.invoice_number ?? ""),
         party: String(i.customer_name ?? ""), partyId: String(i.customer_id ?? ""),
         date: String(i.date ?? ""), total: Number(i.total ?? 0), balance,
+        currency: String(i.currency_code ?? "INR").toUpperCase(),
       });
     }
   } catch { /* as above */ }
@@ -82,6 +86,10 @@ export async function openItems(force = false): Promise<OpenItem[]> {
 /* ═══════════════════════════════════════════════════════════════════════════
    MATCHING
    ═══════════════════════════════════════════════════════════════════════════ */
+/** A balance shown in the currency it is actually owed in. */
+const money = (i: { balance: number; currency: string }) =>
+  i.currency === "INR" ? `₹${i.balance.toLocaleString("en-IN")}` : `${i.currency} ${i.balance.toLocaleString("en-US")}`;
+
 const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 
 /** Words worth matching on — a party's name minus the words every party has. */
@@ -184,11 +192,12 @@ export async function matchWaitingLines(): Promise<string> {
       match_ids: confidence === "choose" ? null : [best.item.id],
       match_party: best.item.party,
       match_label: confidence === "choose" ? null
-        : `${best.item.kind === "bill" ? "settles" : "receipt against"} ${best.item.number || best.item.kind} · ${best.item.party} · ₹${best.item.balance.toLocaleString("en-IN")}`,
+        : `${best.item.kind === "bill" ? "settles" : "receipt against"} ${best.item.number || best.item.kind} · ${best.item.party} · ${money(best.item)}`,
       match_confidence: confidence,
+      match_currency: confidence === "choose" ? null : best.item.currency,
       match_candidates: cands.map((c) => ({
         id: c.item.id, kind: c.item.kind, number: c.item.number, party: c.item.party,
-        date: c.item.date, balance: c.item.balance, score: c.score, why: c.why,
+        date: c.item.date, balance: c.item.balance, currency: c.item.currency, score: c.score, why: c.why,
       })),
       updated_at: new Date().toISOString(),
     }).eq("id", l.id);

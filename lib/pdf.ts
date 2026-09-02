@@ -1,4 +1,4 @@
-import { extractText, extractTextItems, getDocumentProxy } from "unpdf";
+import { extractText, extractTextItems, extractImages, getDocumentProxy } from "unpdf";
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 
@@ -303,6 +303,76 @@ export async function readPdfRows(url: string, opts?: { password?: string }): Pr
     }
     if (name === "InvalidPDFException") return { ok: false, reason: "the PDF is damaged and cannot be opened" };
     return { ok: false, reason: `the PDF could not be read — ${e instanceof Error ? e.message : "unknown error"}` };
+  }
+}
+
+/**
+ * THE PAGES OF A LOCKED PDF, AS PICTURES.
+ *
+ * His Axis credit-card statement, 2 September 2026: password-protected, and its
+ * transaction table drawn as a picture. Every reader had an answer for one half
+ * of that and not the other — the parsers need text and there is none, and the
+ * page reader sends the FILE to the model, which would meet the same lock we
+ * needed the password to get past. So it told him to "save an unlocked copy",
+ * which is the portal asking him to do its job.
+ *
+ * pdf.js decrypts as it reads. extractImages hands back what is drawn on a page
+ * as raw pixels — already decrypted, already ours — and encodePng puts them in
+ * a container the model can open, with node's own zlib. No native canvas, no
+ * unlocked copy, no asking.
+ *
+ * Only the biggest picture on each page is taken: a statement page is one large
+ * scan, and the rest are the bank's logo and a signature block. Anything small
+ * is left behind rather than sent as a page.
+ */
+export async function readPdfPageImages(
+  url: string,
+  opts?: { password?: string; maxPages?: number },
+): Promise<{ ok: true; images: { b64: string; page: number }[] } | { ok: false; reason: string }> {
+  let buf: ArrayBuffer;
+  try {
+    const { resolveFileUrl } = await import("@/lib/storage");
+    const fetchable = await resolveFileUrl(url);
+    if (!fetchable) return { ok: false, reason: "the stored file could not be located" };
+    const r = await fetch(fetchable, { cache: "no-store" });
+    if (!r.ok) return { ok: false, reason: `the file could not be downloaded (${r.status})` };
+    buf = await r.arrayBuffer();
+  } catch (e) {
+    return { ok: false, reason: `the file could not be downloaded — ${e instanceof Error ? e.message : "unknown error"}` };
+  }
+
+  try {
+    const { encodePng } = await import("@/lib/pngEncode");
+    const pdf = await getDocumentProxy(new Uint8Array(buf), opts?.password ? { password: opts.password } : undefined);
+    const pages = Math.min(pdf.numPages, opts?.maxPages ?? 8);
+    const out: { b64: string; page: number }[] = [];
+    for (let p = 1; p <= pages; p++) {
+      let found: { data: Uint8ClampedArray; width: number; height: number; channels: 1 | 3 | 4 } | null = null;
+      try {
+        for (const img of await extractImages(pdf, p)) {
+          // The bank's logo is a hundred pixels wide; the page is a thousand.
+          if (img.width < 400 || img.height < 400) continue;
+          if (!found || img.width * img.height > found.width * found.height) found = img;
+        }
+      } catch { /* a page that will not give up its images is skipped, not fatal */ }
+      if (!found) continue;
+      try {
+        out.push({ b64: encodePng(found.data, found.width, found.height, found.channels).toString("base64"), page: p });
+      } catch { /* an image we cannot honestly encode is left out */ }
+    }
+    if (!out.length) {
+      return { ok: false, reason: `nothing could be lifted off its ${pdf.numPages} page(s) as a picture either` };
+    }
+    return { ok: true, images: out };
+  } catch (e) {
+    const name = pdfErrorName(e);
+    if (name === "PasswordException") {
+      return {
+        ok: false,
+        reason: opts?.password ? "that password did not open the PDF" : "this PDF is password-protected",
+      };
+    }
+    return { ok: false, reason: `the pages could not be read as pictures — ${e instanceof Error ? e.message : "unknown error"}` };
   }
 }
 

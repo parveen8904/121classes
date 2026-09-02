@@ -2946,7 +2946,10 @@ export async function parseBankStatementText(text: string): Promise<BankStmtLine
  * handwriting off a phone camera for months; a statement is an easier document
  * than that.
  */
-export async function parseBankStatementFile(dataB64: string, mediaType = "application/pdf"): Promise<BankStmtLine[] | null> {
+export async function parseBankStatementFile(
+  dataB64: string | { b64: string; mediaType: string }[],
+  mediaType = "application/pdf",
+): Promise<BankStmtLine[] | null> {
   const apiKey = await getSecret("ANTHROPIC_API_KEY");
   if (!apiKey || (await aiFeatureDisabled("bankstmt"))) return null;
   const model = await fastModel();
@@ -2970,9 +2973,14 @@ export async function parseBankStatementFile(dataB64: string, mediaType = "appli
             // A PDF goes as a document and is rendered page by page; a
             // photograph goes as an image. Same reader either way, which is
             // the point — the desk should not have to know the difference.
-            mediaType === "application/pdf"
-              ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: dataB64 } }
-              : { type: "image", source: { type: "base64", media_type: mediaType, data: dataB64 } },
+            // One PDF as a document (rendered page by page), one photograph as
+            // an image, or the PAGES of a locked PDF lifted out as pictures —
+            // which is the only way past a password the model cannot be given.
+            ...(Array.isArray(dataB64)
+              ? dataB64.map((p) => ({ type: "image", source: { type: "base64", media_type: p.mediaType, data: p.b64 } }))
+              : [mediaType === "application/pdf"
+                  ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: dataB64 } }
+                  : { type: "image", source: { type: "base64", media_type: mediaType, data: dataB64 } }]),
             { type: "text", text: "Transcribe every transaction in this statement." },
           ],
         }],

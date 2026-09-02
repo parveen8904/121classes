@@ -91,7 +91,7 @@ export async function ingestStatement(
     //   3. THE PAGES. Where there is no text at all, the PDF goes to the model
     //      as a document and is read page by page. Most expensive, least
     //      certain, and last — but it is the only thing that reads a scan.
-    const { readPdfRows, readPdf, readPdfBase64 } = await import("@/lib/pdf");
+    const { readPdfRows, readPdf, readPdfBase64, readPdfPageImages } = await import("@/lib/pdf");
     const { parseBankStatementText, parseBankStatementFile, aiConfigured, aiFeatureDisabled } = await import("@/lib/ai");
     const why: string[] = [];
 
@@ -118,19 +118,36 @@ export async function ingestStatement(
       }
     }
 
-    // A LOCKED FILE CANNOT GO TO THE MODEL. We can open it here with the
-    // password, but the model receives the FILE and would meet the same lock.
-    // Say so — nobody would guess it from a blank result — rather than sending
-    // it and reporting a failure that means something else.
-    if (!lines.length && !encrypted && opts?.pdfPassword) {
-      why.push("its pages could not be read as pictures either, because an encrypted PDF cannot be sent for that — save an unlocked copy and upload again");
-    } else if (!lines.length && !encrypted) {
-      const file = await readPdfBase64(fileUrl);
-      if (!file.ok) why.push(file.reason);
-      else {
-        const seen = await parseBankStatementFile(file.b64);
-        if (seen?.length) lines = aiToLines(seen);
-        else why.push("reading the pages as pictures found no transactions either");
+    // 3. THE PAGES.
+    //
+    // A LOCKED FILE CANNOT BE HANDED TO THE MODEL — it would meet the same lock
+    // the password got us past — and that is where this stopped on 2 September,
+    // telling him to "save an unlocked copy and upload again". That is the
+    // portal asking him to do its job, which is the thing he had already
+    // objected to.
+    //
+    // pdf.js decrypts as it reads, so the pages can be lifted OUT as pictures
+    // and sent as pictures. An unlocked PDF still goes whole, which is better —
+    // the model gets the text layer as well as the page — but a locked one is
+    // no longer a dead end.
+    if (!lines.length) {
+      const locked = encrypted || !!opts?.pdfPassword;
+      if (!locked) {
+        const file = await readPdfBase64(fileUrl);
+        if (!file.ok) why.push(file.reason);
+        else {
+          const seen = await parseBankStatementFile(file.b64);
+          if (seen?.length) lines = aiToLines(seen);
+        }
+      }
+      if (!lines.length) {
+        const pages = await readPdfPageImages(fileUrl, { password: opts?.pdfPassword });
+        if (!pages.ok) why.push(pages.reason);
+        else {
+          const seen = await parseBankStatementFile(pages.images.map((i) => ({ b64: i.b64, mediaType: "image/png" })));
+          if (seen?.length) lines = aiToLines(seen);
+          else why.push(`reading its ${pages.images.length} page(s) as pictures found no transactions either`);
+        }
       }
     }
 

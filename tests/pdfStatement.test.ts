@@ -180,9 +180,9 @@ check("it runs LAST, after the table and the text",
 check("each reader's failure is kept, so the note says what was tried",
   /const why: string\[\] = \[\]/.test(bank) && /why\.join\("; "\)/.test(bank),
   "‘it did not work’ is not something a desk can act on");
-check("an encrypted PDF is never sent to be read as pictures",
-  /an encrypted PDF cannot be sent for that — save an unlocked copy/.test(bank),
-  "we can open it here with the password; the model receives the file and meets the same lock");
+check("an encrypted PDF is never handed to the model as a FILE",
+  /if \(!locked\) \{/.test(bank),
+  "it would meet the same lock the password got us past — its pages go instead");
 check("a switched-off or unconfigured AI is named, not blamed on the file",
   /Statement reading is switched OFF in Admin → AI training/.test(bank));
 
@@ -232,8 +232,44 @@ check("the desk is no longer told to go and find an Excel version",
   !/upload the EXCEL version instead/.test(code(bank)) &&
   !/always the surer route/.test(code(bank)),
   "that is the portal asking the desk to do its job");
-check("one reader serves a page and a photograph alike",
-  /export async function parseBankStatementFile\(dataB64: string, mediaType = "application\/pdf"\)/.test(
+check("one reader serves a document, a photograph and lifted pages alike",
+  /export async function parseBankStatementFile\(/.test(
+    readFileSync(join(import.meta.dirname, "..", "lib/ai.ts"), "utf8")));
+
+// ── a locked PDF whose pages are pictures ────────────────────────────────
+//
+// His Axis credit-card statement, and the case that had an answer for neither
+// half: password-protected AND drawn as a picture. The parsers had no text to
+// read, and the page reader hands the model the FILE, which would meet the same
+// lock the password got us past. So it said "save an unlocked copy and upload
+// again" — the portal asking him to do its job, which is what he had already
+// objected to.
+//
+// pdf.js decrypts as it reads, so the pages can be lifted OUT and sent as
+// pictures. Verified end to end against a locked, image-only PDF: the page came
+// back legible.
+check("a locked PDF's pages are lifted out rather than refused",
+  /readPdfPageImages/.test(bank) && /const locked = encrypted \|\| !!opts\?\.pdfPassword/.test(bank));
+check("the old dead end is gone",
+  !/save an unlocked copy and upload again/.test(code(bank)),
+  "that sentence was the portal asking him to do its job");
+check("an UNLOCKED pdf still goes whole, which is better",
+  /if \(!locked\) \{[\s\S]{0,300}readPdfBase64/.test(bank),
+  "the model gets the text layer as well as the page");
+check("and a locked one still gets the picture route",
+  /const pages = await readPdfPageImages\(fileUrl, \{ password: opts\?\.pdfPassword \}\)/.test(bank));
+
+check("only the page-sized picture is taken, not the bank's logo",
+  /img\.width < 400 \|\| img\.height < 400/.test(pdf));
+check("the biggest picture on the page wins",
+  /img\.width \* img\.height > found\.width \* found\.height/.test(pdf));
+check("a page that will not give up its images is skipped, not fatal",
+  /catch \{ \/\* a page that will not give up its images is skipped/.test(pdf));
+check("the pixels are encoded with node's own zlib, not a native canvas",
+  /encodePng/.test(pdf) && !/napi-rs\/canvas/.test(pdf),
+  "pulling a native canvas into a serverless bundle to draw a picture we already have");
+check("several pages go up together as images",
+  /dataB64\.map\(\(p\) => \(\{ type: "image"/.test(
     readFileSync(join(import.meta.dirname, "..", "lib/ai.ts"), "utf8")));
 
 console.log(fails === 0 ? "ok — PDF statements" : `${fails} failed`);

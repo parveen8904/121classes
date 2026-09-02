@@ -2927,6 +2927,65 @@ export async function parseBankStatementText(text: string): Promise<BankStmtLine
   return Array.isArray(j) ? (j as BankStmtLine[]) : null;
 }
 
+/**
+ * A STATEMENT WITH NO TEXT IN IT AT ALL.
+ *
+ * His three uploads of 2 September 2026 got as far as honest error messages and
+ * stopped there: the NRE statement's two pages "are images, so it is a scan or
+ * a screenshot", and the Axis 8882 card yielded 488 characters — the name and
+ * address block — and nothing else. Some banks draw the transaction table as a
+ * picture. There is no text layer to parse, so no amount of parsing helps.
+ *
+ * The model can still read it, because a PDF sent as a DOCUMENT is rendered
+ * page by page and looked at. The portal already does this for a photographed
+ * doubt; a scanned statement is the same problem.
+ *
+ * Last resort on purpose. It is the most expensive path — whole pages as
+ * images — and the least certain, so it runs only after the table rebuild and
+ * the text pass have both come back with nothing.
+ */
+export async function parseBankStatementPdf(dataB64: string): Promise<BankStmtLine[] | null> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey || (await aiFeatureDisabled("bankstmt"))) return null;
+  const model = await fastModel();
+  const system =
+    "You transcribe Indian bank/credit-card statements into JSON. Return ONLY a JSON array; each element " +
+    '{"date":"YYYY-MM-DD","narration":"string","ref":"string optional","debit":number optional,"credit":number optional,"balance":number optional}. ' +
+    "Rules: every transaction row exactly once, in statement order; dates converted to YYYY-MM-DD; amounts as plain numbers " +
+    "(no commas/₹); debit = money OUT, credit = money IN; narration verbatim; skip headers, footers, totals and opening-balance rows. " +
+    "On a CREDIT CARD statement a purchase is a debit and a payment or refund to the card is a credit. " +
+    "If a figure is genuinely unreadable, leave that field out rather than guessing at it.";
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model, max_tokens: 16_000,
+        system: [{ type: "text", text: system }],
+        messages: [{
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: dataB64 } },
+            { type: "text", text: "Transcribe every transaction in this statement." },
+          ],
+        }],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("bankstmt", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0,
+      Number(u.cache_read_input_tokens) || 0, Number(u.cache_creation_input_tokens) || 0);
+    const out = (data.content ?? []).filter((b: { type: string }) => b.type === "text")
+      .map((b: { text: string }) => b.text).join("\n").trim();
+    const j = parseLooseJson(out);
+    return Array.isArray(j) ? (j as BankStmtLine[]) : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---- Brokerage statement → structured transactions (accounting hub) ---------
 // Transcription only — categorising into Zoho accounts happens in the queue.
 export type BrokerageLine = {

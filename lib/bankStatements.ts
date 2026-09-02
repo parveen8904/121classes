@@ -36,6 +36,16 @@ async function fetchFile(fileUrl: string): Promise<{ buf: ArrayBuffer } | null> 
  * queue. Returns a human summary for the banner.
  */
 
+/** What the model returns → statement lines, with anything unusable dropped. */
+function aiToLines(rows: { date: string; narration?: string; ref?: string; debit?: number; credit?: number; balance?: number | null }[]): StmtLine[] {
+  return rows.map((l) => ({
+    date: parseIndianDate(String(l.date)) || str(l.date),
+    narration: str(l.narration), ref: str(l.ref),
+    debit: Math.abs(Number(l.debit) || 0), credit: Math.abs(Number(l.credit) || 0),
+    balance: l.balance !== undefined && l.balance !== null ? Number(l.balance) : null,
+  })).filter((l) => /^\d{4}-\d{2}-\d{2}$/.test(l.date) && (l.debit || l.credit));
+}
+
 export async function ingestStatement(
   accountName: string, fileUrl: string, fileName: string,
   // Never stored. It travels with the one request that needs it and is gone —
@@ -60,71 +70,80 @@ export async function ingestStatement(
     const r = rowsToLines(rows.map((x) => (x ?? []).map((c) => str(c))));
     lines = r.lines; note = r.note;
   } else if (lower.endsWith(".pdf")) {
-    // WHY THE PDF WOULD NOT OPEN, IN ITS OWN WORDS.
+    // THREE READERS, IN ORDER OF HOW SURE EACH ONE IS.
     //
-    // His report, 2 Sep 2026: three statements — the Axis 8882 card and the NRE
-    // and NRO accounts — all failed with "could not read text from this PDF
-    // (scanned images?)". That sentence was a guess. The old reader caught
-    // every failure and returned an empty string, so a file that could not be
-    // downloaded, a file that was not a PDF, a damaged file and a
-    // PASSWORD-PROTECTED file all produced the same wrong explanation.
+    // His uploads of 2 September failed, and once the error messages stopped
+    // guessing they showed three different problems, not one:
     //
-    // Axis statements from netbanking and from the mobile app are encrypted as
-    // a matter of course — "AXISMB_…PARV8882.pdf" is the mobile app's own
-    // export — and pdf.js throws a PasswordException for those. Nobody could
-    // have got from "scanned images?" to "type your date of birth".
-    // CODE FIRST, MODEL ONLY IF CODE CANNOT.
+    //   · the Axis 8882 card yielded 488 characters — the name and address
+    //     block — and nothing else
+    //   · the NRE statement's two pages carry no text at all
+    //   · the NRO one had never been retried since the fix
     //
-    // The other half of why the PDFs read badly: an Excel statement went
-    // through rowsToLines() — real code, with the header detection tuned
-    // against his own Axis exports, the reference-column priority the accounts
-    // desk asked for, and Dr/Cr handling — while a PDF was flattened to one
-    // long string and handed to a model. Flattening a table throws away the
-    // one thing that makes it a table, which is where each number sits, and
-    // then asks the model to guess it back.
+    // Some banks draw the transaction table as a picture. No amount of parsing
+    // helps with that, so there is a third reader now, and the order matters:
     //
-    // A PDF does not lose that: every fragment carries an x and a y. Rebuild
-    // the rows from those and the PDF goes through the SAME parser as the
-    // spreadsheet, with no model involved. The AI stays as the fallback for a
-    // statement whose layout defeats the reconstruction.
-    const { readPdfRows, readPdf } = await import("@/lib/pdf");
+    //   1. THE TABLE. Every fragment in a PDF carries an x and a y, so the
+    //      columns can be rebuilt and fed to the same parser the Excel files
+    //      use (lib/pdfTable.ts). Code, no model, exactly reproducible.
+    //   2. THE TEXT. Where the layout defeats the rebuild, the text still says
+    //      what happened, and the model transcribes it.
+    //   3. THE PAGES. Where there is no text at all, the PDF goes to the model
+    //      as a document and is read page by page. Most expensive, least
+    //      certain, and last — but it is the only thing that reads a scan.
+    const { readPdfRows, readPdf, readPdfBase64 } = await import("@/lib/pdf");
+    const { parseBankStatementText, parseBankStatementPdf, aiConfigured, aiFeatureDisabled } = await import("@/lib/ai");
+    const why: string[] = [];
+
     const table = await readPdfRows(fileUrl, { password: opts?.pdfPassword });
     if (table.ok) {
       const r = rowsToLines(table.rows);
-      lines = r.lines; note = r.note;
+      lines = r.lines;
+      if (!lines.length) why.push(`the table could not be rebuilt from the page (${r.note || "no header row found"})`);
+    } else {
+      why.push(table.reason);
     }
-    if (!table.ok || !lines.length) {
-      if (!table.ok) note = table.reason;
-      const read = table.ok ? await readPdf(fileUrl, { password: opts?.pdfPassword }) : table;
-      if (!read.ok) note = read.reason;
+
+    const encrypted = !table.ok && !!table.needsPassword;
+    let text = "";
+    if (!lines.length && !encrypted) {
+      const read = await readPdf(fileUrl, { password: opts?.pdfPassword });
+      if (read.ok) {
+        text = read.text;
+        const ai = await parseBankStatementText(text);
+        if (ai?.length) lines = aiToLines(ai);
+        else why.push(`its text (${text.length} chars) gave no transactions`);
+      } else if (!why.includes(read.reason)) {
+        why.push(read.reason);
+      }
+    }
+
+    // A LOCKED FILE CANNOT GO TO THE MODEL. We can open it here with the
+    // password, but the model receives the FILE and would meet the same lock.
+    // Say so — nobody would guess it from a blank result — rather than sending
+    // it and reporting a failure that means something else.
+    if (!lines.length && !encrypted && opts?.pdfPassword) {
+      why.push("its pages could not be read as pictures either, because an encrypted PDF cannot be sent for that — save an unlocked copy and upload again");
+    } else if (!lines.length && !encrypted) {
+      const file = await readPdfBase64(fileUrl);
+      if (!file.ok) why.push(file.reason);
       else {
-      const text = read.text;
-      const { parseBankStatementText } = await import("@/lib/ai");
-      const ai = await parseBankStatementText(text);
-      // Evidence, not a shrug: the xlsx path taught us a failure that shows
-      // what it saw is a failure that gets fixed the same day.
-      if (!ai) {
-        // "Returned nothing" was true and useless: it covers an absent API key,
-        // a switched-off feature, an HTTP failure and a reply that would not
-        // parse, and the desk cannot tell which. Name the cause it can act on.
-        const { aiConfigured, aiFeatureDisabled } = await import("@/lib/ai");
-        const why = !(await aiConfigured())
-          ? "the AI key is not configured"
-          : (await aiFeatureDisabled("bankstmt"))
-            ? "bank-statement reading is switched OFF in Admin → AI training"
-            : "the model returned nothing usable — it may have been too long, or the reply was not valid JSON";
-        note =
-          `the PDF's text was read (${text.length} chars) but no transactions came back: ${why}. ` +
-          `It starts: "${text.slice(0, 90).replace(/\s+/g, " ")}". ` +
-          `If this is an Axis Smart Statement, upload the EXCEL version instead — that is read by code, with no AI involved.`;
+        const seen = await parseBankStatementPdf(file.b64);
+        if (seen?.length) lines = aiToLines(seen);
+        else why.push("reading the pages as pictures found no transactions either");
       }
-      else lines = ai.map((l) => ({
-        date: parseIndianDate(l.date) || str(l.date),
-        narration: str(l.narration), ref: str(l.ref),
-        debit: Math.abs(Number(l.debit) || 0), credit: Math.abs(Number(l.credit) || 0),
-        balance: l.balance !== undefined && l.balance !== null ? Number(l.balance) : null,
-      })).filter((l) => /^\d{4}-\d{2}-\d{2}$/.test(l.date) && (l.debit || l.credit));
-      }
+    }
+
+    if (!lines.length) {
+      // Name the cause the desk can act on, not merely that it did not work.
+      const aiWhy = !(await aiConfigured())
+        ? " The AI key is not configured, so only the code reader ran."
+        : (await aiFeatureDisabled("bankstmt"))
+          ? " Statement reading is switched OFF in Admin → AI training, so only the code reader ran."
+          : "";
+      const seen = text ? ` It starts: "${text.slice(0, 90).replace(/\s+/g, " ")}".` : "";
+      note = `${why.join("; ")}.${aiWhy}${seen}` +
+        (encrypted ? "" : " If this bank also offers an Excel or CSV statement, that is read by code and is always the surer route.");
     }
   } else {
     note = "unsupported file type — upload CSV, Excel or PDF";

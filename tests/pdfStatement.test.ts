@@ -164,5 +164,40 @@ check("the statement row rules import nothing, so they can be tested",
   !/^import /m.test(readFileSync(join(import.meta.dirname, "..", "lib/bankStatementRows.ts"), "utf8")),
   "they used to sit in a file that pulls in Supabase and Zoho, so no test could load them");
 
+// ── the third reader, for a statement with no text in it at all ──────────
+//
+// Once the messages stopped guessing, his three uploads showed three different
+// problems: the Axis 8882 card gave 488 characters — the name and address block
+// — and nothing else, the NRE statement's two pages carry no text whatsoever,
+// and the NRO one had never been retried. Some banks draw the transaction table
+// as a picture, and no amount of parsing helps with that.
+check("there is a reader for a statement whose pages are pictures",
+  /parseBankStatementPdf/.test(bank) && /readPdfBase64/.test(bank));
+check("it runs LAST, after the table and the text",
+  bank.indexOf("readPdfRows") < bank.indexOf("parseBankStatementText") &&
+  bank.indexOf("parseBankStatementText") < bank.indexOf("parseBankStatementPdf"),
+  "whole pages as images is the most expensive and least certain route");
+check("each reader's failure is kept, so the note says what was tried",
+  /const why: string\[\] = \[\]/.test(bank) && /why\.join\("; "\)/.test(bank),
+  "‘it did not work’ is not something a desk can act on");
+check("an encrypted PDF is never sent to be read as pictures",
+  /an encrypted PDF cannot be sent for that — save an unlocked copy/.test(bank),
+  "we can open it here with the password; the model receives the file and meets the same lock");
+check("a switched-off or unconfigured AI is named, not blamed on the file",
+  /Statement reading is switched OFF in Admin → AI training/.test(bank));
+
+const ai = readFileSync(join(import.meta.dirname, "..", "lib/ai.ts"), "utf8");
+const vision = ai.slice(ai.indexOf("export async function parseBankStatementPdf"));
+check("the PDF goes as a document, which is what makes the pages readable",
+  /type: "document", source: \{ type: "base64", media_type: "application\/pdf"/.test(vision));
+check("a card purchase is a debit and a payment to the card a credit",
+  /On a CREDIT CARD statement a purchase is a debit and a payment or refund to the card is a credit/.test(vision),
+  "the sign convention is the one thing a model must not invent on a card");
+check("an unreadable figure is left out rather than guessed",
+  /leave that field out rather than guessing at it/.test(vision),
+  "a plausible wrong amount is worse than a gap");
+check("its cost is logged like every other call", /logUsage\("bankstmt", model/.test(vision));
+check("it respects the same feature switch", /aiFeatureDisabled\("bankstmt"\)/.test(vision));
+
 console.log(fails === 0 ? "ok — PDF statements" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

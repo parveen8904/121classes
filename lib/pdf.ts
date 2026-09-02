@@ -307,6 +307,39 @@ export async function readPdfRows(url: string, opts?: { password?: string }): Pr
 }
 
 /**
+ * THE FILE ITSELF, FOR A PDF NOTHING CAN PARSE.
+ *
+ * When a statement's pages are pictures there is no text to work with, and the
+ * only reader left is one that can look at a page. Claude reads a PDF sent as
+ * a document block, so the bytes go as they are.
+ *
+ * An ENCRYPTED PDF cannot go: we can open it here with a password, but the
+ * model receives the file and would meet the same lock. That is reported
+ * rather than left to fail silently — the answer is to save an unlocked copy,
+ * and nobody would guess that from a blank result.
+ */
+export async function readPdfBase64(url: string): Promise<
+  { ok: true; b64: string; bytes: number } | { ok: false; reason: string }
+> {
+  try {
+    const { resolveFileUrl } = await import("@/lib/storage");
+    const fetchable = await resolveFileUrl(url);
+    if (!fetchable) return { ok: false, reason: "the stored file could not be located" };
+    const r = await fetch(fetchable, { cache: "no-store" });
+    if (!r.ok) return { ok: false, reason: `the file could not be downloaded (${r.status})` };
+    const buf = await r.arrayBuffer();
+    // Anthropic's limit is 32MB; a statement is far smaller, and a file this
+    // size is not a statement.
+    if (buf.byteLength > 25 * 1024 * 1024) {
+      return { ok: false, reason: `the PDF is ${(buf.byteLength / 1e6).toFixed(1)} MB, too large to read page by page` };
+    }
+    return { ok: true, b64: Buffer.from(buf).toString("base64"), bytes: buf.byteLength };
+  } catch (e) {
+    return { ok: false, reason: `the file could not be read — ${e instanceof Error ? e.message : "unknown error"}` };
+  }
+}
+
+/**
  * The older shape: text or "". Kept for the callers that only ever fell back to
  * pasted text and have nothing useful to do with a reason.
  */

@@ -4,6 +4,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import AnswerKey from "@/app/components/AnswerKey";
 import AdminHero from "../_components/AdminHero";
 import { createSet, approvePaper, unapprovePaper, savePaper, uploadPaperFiles, removeUploadedPaper, createUploadedPaper, rereadUploadedPdfs, setPublishDate } from "./actions";
+import { NEXT } from "@/lib/attempts";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mock test papers — Admin" };
@@ -63,7 +64,7 @@ export default async function MockPapersPage(props: {
             <div><label>Title</label><input name="title" required placeholder="Mock Test Paper 1" /></div>
             <div><label>Course</label><input name="course" defaultValue="CA Final" /></div>
             <div><label>Subject</label><input name="subject" defaultValue="Financial Reporting" /></div>
-            <div><label>Attempt</label><input name="attempt_label" defaultValue="September 2026" /></div>
+            <div><label>Attempt</label><input name="attempt_label" defaultValue={NEXT.inter} /></div>
             <div><label>Paper no.</label><input name="paper_no" type="number" defaultValue={1} min={1} /></div>
             <div><label>Total marks</label><input name="total_marks" type="number" defaultValue={100} /></div>
             <div><label>Minutes</label><input name="duration_min" type="number" defaultValue={180} /></div>
@@ -102,11 +103,11 @@ export default async function MockPapersPage(props: {
         <div className="card" style={{ marginTop: 16 }}>
           <strong>Nothing here yet</strong>
           <p className="muted" style={{ fontSize: ".88rem", margin: "4px 0 10px" }}>
-            Create the three CA Intermediate — Advanced Accounting papers for the September 2026 attempt, then
+            Create the three CA Intermediate — Advanced Accounting papers for the {NEXT.inter} attempt, then
             upload your question paper and answer key onto each one.
           </p>
           <form action={createSet}>
-            <SubmitButton className="btn" savedLabel="Created">➕ Create the September 2026 set</SubmitButton>
+            <SubmitButton className="btn" savedLabel="Created">➕ Create the {NEXT.inter} set</SubmitButton>
           </form>
         </div>
       )}
@@ -249,7 +250,7 @@ export default async function MockPapersPage(props: {
 
       {papers.length > 0 && (
         <form action={createSet} style={{ marginTop: 16 }}>
-          <SubmitButton className="btn small secondary" savedLabel="Checked">➕ Make sure the September 2026 set exists</SubmitButton>
+          <SubmitButton className="btn small secondary" savedLabel="Checked">➕ Make sure the {NEXT.inter} set exists</SubmitButton>
         </form>
       )}
     </section>

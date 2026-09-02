@@ -2,14 +2,15 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import AnswerKey from "@/app/components/AnswerKey";
+import { NEXT } from "@/lib/attempts";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
   alternates: { canonical: "/mock-tests" },
-  title: "CA Intermediate mock tests — September 2026",
+  title: `CA Intermediate mock tests — ${NEXT.inter}`,
   description:
-    "Free full-length mock test papers for CA Intermediate Advanced Accounting, September 2026 — 100 marks in the ICAI pattern. Write it, send it in, get it back checked.",
+    `Free full-length mock test papers for CA Intermediate Advanced Accounting, ${NEXT.inter} — 100 marks in the ICAI pattern. Write it, send it in, get it back checked.`,
 };
 
 // The mock papers, for anybody with an account.
@@ -66,7 +67,7 @@ export default async function MockTestsPage(props: {
   return (
     <main>
       <section className="container" style={{ paddingTop: 36, paddingBottom: 60, maxWidth: 820 }}>
-        <span className="badge">📅 September 2026</span>
+        <span className="badge">📅 {NEXT.inter}</span>
         <h1 style={{ margin: "12px 0 8px" }}>CA Intermediate mock tests</h1>
         <p className="muted" style={{ fontSize: "1rem", lineHeight: 1.7 }}>
           Full 100-mark papers in the ICAI pattern — <strong>30 marks of case-scenario MCQs</strong> and{" "}
@@ -168,7 +169,7 @@ export default async function MockTestsPage(props: {
             {papers.length === 0 && upcoming.length === 0 && (
               <div className="card" style={{ marginTop: 20 }}>
                 <p className="muted">
-                  The September 2026 papers are being finalised and will be here shortly. In the meantime you can send in
+                  The {NEXT.inter} papers are being finalised and will be here shortly. In the meantime you can send in
                   any paper you have written — <Link href="/check-my-paper">get it checked free</Link>.
                 </p>
               </div>

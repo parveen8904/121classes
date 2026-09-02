@@ -11,6 +11,7 @@ import { addMySubject, removeMySubject } from "../mycourses";
 import AskDoubts from "./AskDoubts";
 import { fmtMins, fmtAt125, AT125_NOTE } from "@/lib/duration";
 import { summarizeSchedule, type ScheduleSummary } from "@/lib/schedule";
+import { levelWindow } from "@/lib/attempts";
 
 export const dynamic = "force-dynamic";
 
@@ -268,12 +269,7 @@ export default async function LearnCourse(props: { params: Promise<{ courseId: s
 
   // Default applicability shown when a subject has no explicit window set — by
   // course level. The admin overrides per subject anytime (subject applicability).
-  const courseLevelDefault = (() => {
-    const t = (course.title || "").toLowerCase();
-    if (t.includes("final")) return { from: "November 2026", to: "November 2028" };
-    if (t.includes("inter")) return { from: "September 2026", to: "May 2028" };
-    return null;
-  })();
+  const courseLevelDefault = levelWindow(course.title || "");
 
   // Continuous class numbering across a subject's topics, in display order:
   // topic 1 → "Classes 1 to 10", topic 2 → "Classes 11 to 15", etc. Based on how

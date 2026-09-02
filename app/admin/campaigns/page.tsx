@@ -7,6 +7,7 @@ import { deleteCampaign, markTeamDone, saveSituation, savePosterEmails } from ".
 import { FIELD_LABEL } from "@/lib/campaignChannels";
 import { channelStatus, STATE_ICON } from "@/lib/channelStatus";
 import { loadBrief } from "@/lib/marketingBrief";
+import { NEXT } from "@/lib/attempts";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Marketing & campaigns — Admin" };
@@ -79,7 +80,7 @@ export default async function MarketingHome() {
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 2fr" }}>
             <div>
               <label>Which attempt?</label>
-              <input name="attempt" defaultValue={brief.attempt} placeholder="e.g. September 2026 attempt" />
+              <input name="attempt" defaultValue={brief.attempt} placeholder={`e.g. ${NEXT.inter} attempt`} />
             </div>
             <div>
               <label>What stage are they at?</label>

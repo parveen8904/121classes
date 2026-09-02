@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
 import { NOT_TAUGHT } from "@/lib/ai";
 import { getRepositoryContext } from "@/lib/repository";
+import { NEXT } from "@/lib/attempts";
 
 // Full-length mock exam papers, set the way ICAI sets them.
 //
@@ -282,15 +283,15 @@ export async function draftMockPaper(id: string): Promise<{ ok: boolean; stage?:
   return { ok: true, stage: done ? "complete" : `answers part ${progress + 1}` };
 }
 
-/** Create the three September 2026 slots if they are not there yet. */
+/** Create the three slots for the current attempt if they are not there yet. */
 export async function ensureSeptember2026Set(): Promise<number> {
   const svc = createServiceClient();
   const rows = [1, 2, 3].map((n) => ({
     course: "CA Intermediate",
     subject: "Advanced Accounting",
-    attempt_label: "September 2026",
+    attempt_label: NEXT.inter,
     paper_no: n,
-    title: `CA Intermediate — Advanced Accounting — Mock Test Paper ${n} (September 2026)`,
+    title: `CA Intermediate — Advanced Accounting — Mock Test Paper ${n} (${NEXT.inter})`,
     total_marks: 100,
     duration_min: 180,
     status: "queued",

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildMockPaperPdf } from "@/lib/mockPaperPdf";
+import { NEXT } from "@/lib/attempts";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -77,7 +78,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ paperId: st
     text,
     // The watermark carries the attempt, so a paper cannot be quietly reused
     // for a later sitting by somebody else.
-    attempt: `${String(paper.attempt_label ?? "September 2026")} EXAM`,
+    attempt: `${String(paper.attempt_label ?? NEXT.inter)} EXAM`,
     footer: paper.status === "approved"
       ? "caparveensharma.com — write your answers by hand, then send them in to be checked"
       : "DRAFT — not yet approved",

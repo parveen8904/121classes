@@ -6,6 +6,7 @@ import { assertArea } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
 import { str } from "../_lib/util";
 import { draftMockPaper, ensureSeptember2026Set } from "@/lib/mockPapers";
+import { NEXT } from "@/lib/attempts";
 
 // Draft one paper. It is two long AI calls — the questions, then the answers to
 // those exact questions — so it is one press per paper rather than a batch that
@@ -320,7 +321,7 @@ export async function createUploadedPaper(formData: FormData) {
   const { data: row } = await svc.from("mock_papers").insert({
     course: str(formData.get("course")) || "CA Final",
     subject: str(formData.get("subject")) || "Financial Reporting",
-    attempt_label: str(formData.get("attempt_label")) || "September 2026",
+    attempt_label: str(formData.get("attempt_label")) || NEXT.inter,
     paper_no: Number(formData.get("paper_no")) || 1,
     title,
     total_marks: Number(formData.get("total_marks")) || 100,

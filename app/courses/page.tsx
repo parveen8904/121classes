@@ -3,6 +3,7 @@ import { lightImg } from "@/lib/img";
 import { tryServiceClient } from "@/lib/supabase/service";
 import CountUp from "@/app/components/CountUp";
 import { studentsTaught } from "@/lib/studentsTaught";
+import { levelWindowLabel } from "@/lib/attempts";
 
 // Public marketing page (service client only, no cookies/auth) — serve it from
 // the cache and refresh every 5 minutes instead of hitting the DB on every view.
@@ -76,9 +77,7 @@ export default async function CoursesPage() {
     const { data: cs } = await svc.from("case_studies").select("set_id").in("set_id", caseSetIds);
     for (const r of cs ?? []) { const sid = caseSetSub.get((r as any).set_id); if (sid) casesBySubject.set(sid, (casesBySubject.get(sid) ?? 0) + 1); }
   }
-  const levelDefault = (courseTitleLower: string) =>
-    courseTitleLower.includes("final") ? "November 2026 up to November 2028"
-    : courseTitleLower.includes("inter") ? "September 2026 up to May 2028" : "";
+  const levelDefault = (courseTitleLower: string) => levelWindowLabel(courseTitleLower);
 
   const { data: results } = await svc.from("results").select("student_name, headline, attempt, marks, photo_url, quote, level").eq("is_published", true).order("order_index").limit(60);
 

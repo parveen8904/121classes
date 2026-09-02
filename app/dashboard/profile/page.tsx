@@ -5,6 +5,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import AttemptPicker from "@/app/components/AttemptPicker";
 import CourseSubjectsPicker from "./CourseSubjectsPicker";
 import { updateProfile } from "./actions";
+import { isPastAttempt } from "@/lib/attempts";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,20 @@ export default async function ProfilePage(props: { searchParams: Promise<{ saved
         ) : searchParams.need && (
           <div className="notice" style={{ marginTop: 18, background: "rgba(234,179,8,0.14)", border: "2px solid #eab308", color: "var(--text)" }}>
             ⚠️ Both your <strong>target exam attempt</strong> and your <strong>course / level</strong> are required. Please set them below, then tap <strong>Save profile</strong>. We use these to tailor your classes, amendments, study plan and tests to your attempt.
+          </div>
+        )}
+
+        {/* AN ATTEMPT THAT HAS ALREADY BEEN SAT IS AS WRONG AS A MISSING ONE.
+            Only an EMPTY attempt was ever checked, so on 1 September 2026 there
+            were 242 students still set to "September 2026" — planner counting
+            down to a date behind them, amendments filtered for a sitting that
+            was over. This asks, and does not block: some of them have passed
+            and some are re-sitting, and only they know which. */}
+        {isPastAttempt(p?.target_attempt) && (
+          <div className="notice" style={{ marginTop: 18, background: "rgba(234,179,8,0.14)", border: "2px solid #eab308", color: "var(--text)" }}>
+            📅 Your target attempt is set to <strong>{p?.target_attempt}</strong>, which has now been sat.
+            If you are preparing for the next one, please update it below and tap <strong>Save profile</strong> —
+            your study plan, amendments and tests all follow this date.
           </div>
         )}
 

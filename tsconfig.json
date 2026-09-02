@@ -10,6 +10,12 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // A lib file that other lib files import by a RELATIVE path with its
+    // extension can be run directly by node --experimental-strip-types, which
+    // is how every test in tests/ runs. Without this, a shared module has to
+    // use the "@/" alias, node cannot resolve it, and the module becomes
+    // untestable — which is exactly how 28 test files came to be dead.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

@@ -10,33 +10,36 @@ import {
   verifyRazorpaySignature,
 } from "@/lib/razorpay";
 import { notifyByEmail, emailShell } from "@/lib/notify";
-
-type Buyer = {
-  name: string;
-  email: string;
-  phone: string;
-  line1: string;
-  line2?: string;
-  city: string;
-  state: string;
-  pincode: string;
-};
+import { toAddress, addressProblems } from "@/lib/address";
+import { checkGstin } from "@/lib/gstin";
+import type { CheckoutDetails } from "@/app/books/cartActions";
 
 export type BookOrderResult =
   | { ok: true; orderId: string; amount: number; keyId: string; name: string; description: string; prefill: { name: string; email: string; contact: string } }
-  | { ok: false; reason: "unconfigured" | "oos" | "invalid" | "error" };
+  | { ok: false; reason: "unconfigured" | "oos" | "invalid" | "error"; missing?: string[] };
 
 export async function createBookOrder(input: {
   bookId: string;
   qty: number;
-  buyer: Buyer;
+  buyer: CheckoutDetails;
 }): Promise<BookOrderResult> {
   if (!(await razorpayConfigured())) return { ok: false, reason: "unconfigured" };
   const qty = Math.max(1, Math.min(20, Math.floor(input.qty || 1)));
-  const b = input.buyer;
-  if (!b?.name || !b?.email || !b?.phone || !b?.line1 || !b?.city || !b?.pincode) {
-    return { ok: false, reason: "invalid" };
-  }
+  const d = input.buyer;
+
+  // Same two addresses and the same rules as the cart — one book or ten, the
+  // buyer should not meet a different form.
+  const shipping = toAddress(d?.shipping);
+  const billing = d?.sameAsShipping ? { ...shipping } : toAddress(d?.billing);
+  const missing = [
+    ...addressProblems(shipping).map((m) => `delivery: ${m}`),
+    ...(d?.sameAsShipping ? [] : addressProblems(billing, { needPhone: false }).map((m) => `billing: ${m}`)),
+  ];
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(d?.email ?? "").trim())) missing.push("an email address for the invoice");
+  const gstinRaw = String(d?.gstin ?? "").trim();
+  const gst = gstinRaw ? checkGstin(gstinRaw) : null;
+  if (gst && !gst.ok) missing.push(`GST number — ${gst.problem}`);
+  if (missing.length) return { ok: false, reason: "invalid", missing };
 
   const supabase = createClient();
   const { data: book } = await supabase
@@ -47,15 +50,6 @@ export async function createBookOrder(input: {
   if (!book || !book.is_active || book.stock_qty < qty) return { ok: false, reason: "oos" };
 
   const amountInr = book.price_inr * qty;
-  const ship = {
-    name: b.name,
-    line1: b.line1,
-    line2: b.line2 ?? "",
-    city: b.city,
-    state: b.state,
-    pincode: b.pincode,
-    phone: b.phone,
-  };
 
   // Link to a logged-in buyer if present; otherwise it's a guest order.
   const {
@@ -68,10 +62,12 @@ export async function createBookOrder(input: {
       bookId: book.id,
       qty: String(qty),
       price: String(book.price_inr),
-      name: b.name,
-      email: b.email,
-      phone: b.phone,
-      ship: JSON.stringify(ship),
+      name: shipping.name,
+      email: String(d.email).trim(),
+      phone: shipping.phone,
+      ship: JSON.stringify(shipping),
+      bill: JSON.stringify(billing),
+      gstin: gst?.ok ? gst.gstin : "",
       userId: user?.id ?? "",
     });
     return {
@@ -81,7 +77,7 @@ export async function createBookOrder(input: {
       keyId: await razorpayKeyId(),
       name: "CA Parveen Sharma — Books",
       description: `${book.title} × ${qty}`,
-      prefill: { name: b.name, email: b.email, contact: b.phone },
+      prefill: { name: shipping.name, email: String(d.email).trim(), contact: shipping.phone },
     };
   } catch {
     return { ok: false, reason: "error" };
@@ -114,13 +110,9 @@ export async function verifyBookPayment(input: {
 
   const qty = Number(n.qty) || 1;
   const price = Number(n.price) || 0;
-  const ship = (() => {
-    try {
-      return JSON.parse(n.ship);
-    } catch {
-      return {};
-    }
-  })();
+  const ship = toAddress((() => { try { return JSON.parse(n.ship); } catch { return {}; } })());
+  const bill = toAddress((() => { try { return JSON.parse(n.bill ?? "{}"); } catch { return {}; } })());
+  const gstin = String(n.gstin ?? "").trim();
 
   // Service role: guest orders have no auth cookie, so RLS would block them.
   const svc = createServiceClient();
@@ -131,8 +123,25 @@ export async function verifyBookPayment(input: {
     amount_inr: order.amount / 100,
     razorpay_order_id: order.id,
     ship_to: ship,
+    bill_to: bill,
+    gstin: gstin || null,
     status: "paid",
   });
+
+  // Back to the profile, so it is typed once — see cartActions.verifyCartPayment.
+  if (n.userId) {
+    const patch: Record<string, unknown> = { shipping_address: ship };
+    if (bill.line1 && bill.city) {
+      patch.address_line1 = bill.line1;
+      patch.address_line2 = bill.line2 || null;
+      patch.city = bill.city;
+      patch.state = bill.state || null;
+      patch.pincode = bill.pincode || null;
+    }
+    if (gstin) patch.gstin = gstin;
+    try { await svc.from("profiles").update(patch).eq("id", n.userId); }
+    catch { /* the order stands whatever the profile does */ }
+  }
 
   // Decrement stock (best-effort).
   const { data: book } = await svc

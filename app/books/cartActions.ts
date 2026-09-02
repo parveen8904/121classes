@@ -10,17 +10,56 @@ import {
   verifyRazorpaySignature,
 } from "@/lib/razorpay";
 import { notifyByEmail, emailShell } from "@/lib/notify";
+import { toAddress, addressProblems, sameAddress, type Address } from "@/lib/address";
+import { checkGstin } from "@/lib/gstin";
 
-type Buyer = {
-  name: string;
-  email: string;
-  phone: string;
-  line1: string;
-  line2?: string;
-  city: string;
-  state: string;
-  pincode: string;
-};
+/**
+ * WHAT WE ALREADY KNOW ABOUT THE BUYER, SO THEY TYPE IT ONCE IN A LIFETIME.
+ *
+ * His instruction, 2 September 2026: the addresses are posted to the profile,
+ * and a GST number held on the profile "must be there" on the next order
+ * without being asked for again.
+ *
+ * A guest gets empty fields, which is correct — we know nothing about them and
+ * must not pretend to.
+ */
+export async function myAddressBook(): Promise<{
+  signedIn: boolean; name: string; email: string;
+  shipping: Address; billing: Address; gstin: string; hasProfileGstin: boolean;
+}> {
+  const blank = {
+    signedIn: false, name: "", email: "",
+    shipping: toAddress(null), billing: toAddress(null), gstin: "", hasProfileGstin: false,
+  };
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return blank;
+  const { data: p } = await supabase.from("profiles")
+    .select("full_name, email, phone, shipping_address, business_name, address_line1, address_line2, city, state, pincode, gstin")
+    .eq("id", user.id).maybeSingle();
+  const name = String(p?.full_name ?? "");
+  const phone = String(p?.phone ?? "");
+  const ship = toAddress(p?.shipping_address);
+  // The billing address is the profile's own flat columns — the ones the tax
+  // invoice reads, and the ones whose STATE decides CGST+SGST against IGST.
+  // There is no second copy of it.
+  const bill = toAddress({
+    name: p?.business_name || name,
+    line1: p?.address_line1, line2: p?.address_line2,
+    city: p?.city, state: p?.state, pincode: p?.pincode, phone,
+  });
+  return {
+    signedIn: true,
+    name,
+    email: String(p?.email ?? user.email ?? ""),
+    // A profile that has a name and phone but no address yet still fills in
+    // the two fields it can.
+    shipping: { ...ship, name: ship.name || name, phone: ship.phone || phone },
+    billing: { ...bill, name: bill.name || name, phone: bill.phone || phone },
+    gstin: String(p?.gstin ?? ""),
+    hasProfileGstin: !!String(p?.gstin ?? "").trim(),
+  };
+}
 
 export type CartBook = { id: string; title: string; author: string | null; cover_url: string | null; price_inr: number; stock_qty: number };
 
@@ -38,15 +77,49 @@ export async function getCartBooks(ids: string[]): Promise<CartBook[]> {
 
 export type CartOrderResult =
   | { ok: true; orderId: string; amount: number; keyId: string; name: string; description: string; prefill: { name: string; email: string; contact: string } }
-  | { ok: false; reason: "unconfigured" | "oos" | "invalid" | "empty" | "error"; title?: string };
+  | { ok: false; reason: "unconfigured" | "oos" | "invalid" | "empty" | "error"; title?: string; missing?: string[] };
+
+/** What the checkout sends: two addresses, a flag, and an optional GST number. */
+export type CheckoutDetails = {
+  email: string;
+  shipping: Address;
+  /** Ignored when sameAsShipping — the buyer should not have to fill it twice. */
+  billing: Address;
+  sameAsShipping: boolean;
+  gstin: string;
+};
 
 // One Razorpay order for the whole cart. Prices come from the DB — never from
 // the client. Items are carried in the order notes and written to book_orders
 // after the payment verifies.
-export async function createCartOrder(input: { items: { bookId: string; qty: number }[]; buyer: Buyer }): Promise<CartOrderResult> {
+export async function createCartOrder(input: { items: { bookId: string; qty: number }[]; buyer: CheckoutDetails }): Promise<CartOrderResult> {
   if (!(await razorpayConfigured())) return { ok: false, reason: "unconfigured" };
-  const b = input.buyer;
-  if (!b?.name || !b?.email || !b?.phone || !b?.line1 || !b?.city || !b?.pincode) return { ok: false, reason: "invalid" };
+  const d = input.buyer;
+
+  // TWO ADDRESSES, AND THE SECOND ONE IS OPTIONAL WORK.
+  //
+  // His instruction: "I also want that student be given choice of telling
+  // whether the billing address and shipping address is same so that he has
+  // not to fill the address again." So when the box is ticked the billing
+  // address is simply the shipping one — copied here, on the server, rather
+  // than trusted from a form that could send anything.
+  const shipping = toAddress(d?.shipping);
+  const billing = d?.sameAsShipping ? { ...shipping } : toAddress(d?.billing);
+
+  const missing = [
+    ...addressProblems(shipping).map((m) => `delivery: ${m}`),
+    ...(d?.sameAsShipping ? [] : addressProblems(billing, { needPhone: false }).map((m) => `billing: ${m}`)),
+  ];
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(d?.email ?? "").trim())) missing.push("an email address for the invoice");
+
+  // A GST number is optional; a WRONG one is not. It carries its own check
+  // digit, so a mistyped character is caught before the invoice is raised
+  // rather than after it has been filed.
+  const gstinRaw = String(d?.gstin ?? "").trim();
+  const gst = gstinRaw ? checkGstin(gstinRaw) : null;
+  if (gst && !gst.ok) missing.push(`GST number — ${gst.problem}`);
+
+  if (missing.length) return { ok: false, reason: "invalid", missing };
   const wanted = (input.items ?? [])
     .map((i) => ({ bookId: String(i.bookId), qty: Math.max(1, Math.min(20, Math.floor(i.qty || 1))) }))
     .slice(0, 10);
@@ -72,17 +145,21 @@ export async function createCartOrder(input: { items: { bookId: string; qty: num
   }
   if (total <= 0) return { ok: false, reason: "empty" };
 
-  const ship = { name: b.name, line1: b.line1, line2: b.line2 ?? "", city: b.city, state: b.state, pincode: b.pincode, phone: b.phone };
   const { data: { user } } = await supabase.auth.getUser();
 
   try {
     const order = await createRazorpayOrder(total, `cart_${Date.now()}`, {
       kind: "book_cart",
       items: JSON.stringify(items),
-      name: b.name,
-      email: b.email,
-      phone: b.phone,
-      ship: JSON.stringify(ship),
+      name: shipping.name,
+      email: String(d.email).trim(),
+      phone: shipping.phone,
+      ship: JSON.stringify(shipping),
+      // Carried separately so an invoice can be made out to one place while
+      // the parcel goes to another — which is the whole point of a sponsored
+      // order: billed to the supporter, delivered to the student.
+      bill: JSON.stringify(billing),
+      gstin: gst?.ok ? gst.gstin : "",
       userId: user?.id ?? "",
     });
     return {
@@ -92,7 +169,7 @@ export async function createCartOrder(input: { items: { bookId: string; qty: num
       keyId: await razorpayKeyId(),
       name: "CA Parveen Sharma — Books",
       description: titles.join(", ").slice(0, 250),
-      prefill: { name: b.name, email: b.email, contact: b.phone },
+      prefill: { name: shipping.name, email: String(d.email).trim(), contact: shipping.phone },
     };
   } catch {
     return { ok: false, reason: "error" };
@@ -114,7 +191,9 @@ export async function verifyCartPayment(input: {
   if (n.kind !== "book_cart" || order.status !== "paid") return { ok: false };
 
   const items = (() => { try { return JSON.parse(n.items) as { b: string; q: number; p: number }[]; } catch { return []; } })();
-  const ship = (() => { try { return JSON.parse(n.ship); } catch { return {}; } })();
+  const ship = toAddress((() => { try { return JSON.parse(n.ship); } catch { return {}; } })());
+  const bill = toAddress((() => { try { return JSON.parse(n.bill ?? "{}"); } catch { return {}; } })());
+  const gstin = String(n.gstin ?? "").trim();
   if (!items.length) return { ok: false };
 
   const svc = createServiceClient();
@@ -125,8 +204,32 @@ export async function verifyCartPayment(input: {
     amount_inr: order.amount / 100,
     razorpay_order_id: order.id,
     ship_to: ship,
+    // Frozen at the order. The profile may be edited tomorrow; an invoice must
+    // keep saying what it said on the day.
+    bill_to: bill,
+    gstin: gstin || null,
     status: "paid",
   });
+
+  // THE ADDRESSES GO BACK TO THE PROFILE. His instruction: "you will post
+  // these addresses to the profile." Only for someone signed in — a guest has
+  // no profile to write to — and only what they actually gave us, so a blank
+  // billing address never wipes a good one already on file.
+  if (n.userId) {
+    const patch: Record<string, unknown> = { shipping_address: ship };
+    // The billing address goes back to the flat columns the invoice reads —
+    // state included, because that is what decides the tax split.
+    if (bill.line1 && bill.city) {
+      patch.address_line1 = bill.line1;
+      patch.address_line2 = bill.line2 || null;
+      patch.city = bill.city;
+      patch.state = bill.state || null;
+      patch.pincode = bill.pincode || null;
+    }
+    if (gstin) patch.gstin = gstin;
+    try { await svc.from("profiles").update(patch).eq("id", n.userId); }
+    catch { /* the order stands whatever the profile does */ }
+  }
 
   // Decrement stock per title (best-effort) and gather names for the email.
   const { data: books } = await svc.from("books").select("id, title, stock_qty").in("id", items.map((i) => i.b));

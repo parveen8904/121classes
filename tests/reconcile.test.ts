@@ -237,5 +237,30 @@ check("only a posted or matched line can be reopened at all",
 check("it comes back with the answer it already had",
   /status: hasProposal \? "auto" : "ask"/.test(repost));
 
+// ── one route to a Razorpay deposit, not two ───────────────────────────────
+// "remove razorpay clearing since bank statement already includes" — 2 Sep.
+// All 114 settlements carry a zero fee, so the journal this queue made was
+// Dr bank / Cr Razorpay Clearing: the same entry the bank line already posts.
+// Two routes double-counted twice in a fortnight (25 Aug ₹15,411, 1 Sep
+// ₹45,456), because the statement was uploaded before the settlement was
+// released and neither could see the other.
+const settlements = readFileSync(join(import.meta.dirname, "..", "lib/zohoSettlements.ts"), "utf8");
+check("nothing is ever queued for posting from a settlement again",
+  !/status: "draft"/.test(settlements),
+  "a draft is the thing that gets approved and posted");
+check("posting a settlement is refused outright, not merely unreachable",
+  /throw new Error\(`settlements are no longer posted from here/.test(settlements),
+  "an approval raised before the change must not go through after it");
+check("an old draft left in the table is stood down, not left postable",
+  /\.in\("status", \["draft", "unverified"\]\)/.test(settlements));
+check("the scan still records what Razorpay says, as a cross-check",
+  /status: "record"/.test(settlements));
+check("a settlement that DOES carry a fee is called out — the bank cannot show it",
+  /carry a Razorpay fee, which the bank statement cannot show/.test(settlements),
+  "if Razorpay ever starts netting its charges, the fee needs booking separately");
+check("the settlements section no longer offers approval",
+  !/approveAllSettlementsAction/.test(page.slice(page.indexOf('id="settlements"'), page.indexOf('id="settlements"') + 4000)),
+  "a button that posts is the whole problem");
+
 console.log(fails === 0 ? "ok — bank reconciliation" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

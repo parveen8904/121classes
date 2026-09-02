@@ -118,8 +118,10 @@ export default async function ZohoHubPage(props: {
     : { data: [] as SettleRow[] };
   const settles = (settleData ?? []) as SettleRow[];
   const sBy = (s: string) => settles.filter((x) => x.status === s);
-  const sDrafts = sBy("draft"); const sFailed = sBy("failed");
-  const sPosted = sBy("posted"); const sMatched = sBy("matched");
+  // "draft" and "failed" are retired states — nothing creates them since
+  // 2 Sep 2026, when the bank statement became the only route. "record" is
+  // what the cross-check writes now.
+  const sPosted = sBy("posted"); const sMatched = sBy("matched"); const sRecord = sBy("record");
 
   // Bank statements + the three queues.
   type StmtRow = { id: string; account_name: string; file_name: string | null; period_start: string | null; period_end: string | null; opening_balance: number | null; closing_balance: number | null; note: string | null; status: string; lines_total: number; recon_missing: number | null; recon_extra: number | null };
@@ -883,38 +885,45 @@ export default async function ZohoHubPage(props: {
       {/* ── Razorpay settlements → Zoho ─────────────────────────────── */}
       {hubConnected && (
         <details id="settlements" data-sec className="zoho-sec">
-          <summary className="sec-head">2 · 🏦 Razorpay settlements → Zoho{sDrafts.length > 0 && <span className="sec-count">{sDrafts.length}</span>}</summary>
+          <summary className="sec-head">2 · 🏦 Razorpay settlements — cross-check</summary>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 26 }}>
             <form action={scanSettlementsAction} style={{ margin: 0 }}>
               <SubmitButton className="btn small secondary" savedLabel="Scanned">🔄 Fetch settlements</SubmitButton>
             </form>
-            {sDrafts.length > 0 && (
-              <form action={approveAllSettlementsAction} style={{ margin: 0 }}>
-                <SubmitButton className="btn small" savedLabel="📤 Sent for approval">📤 Send all {sDrafts.length} for approval</SubmitButton>
-              </form>
-            )}
-            <span className="muted" style={{ fontSize: ".8rem" }}>✅ posted {sPosted.length} · 🤝 matched {sMatched.length}</span>
+            <span className="muted" style={{ fontSize: ".8rem" }}>{sRecord.length} recorded · {sPosted.length} posted before the change · {sMatched.length} matched</span>
           </div>
+          {/* WHY THIS QUEUE NO LONGER POSTS. His instruction, 2 Sep:
+              "remove razorpay clearing since bank statement already includes".
+              All 114 settlements carry a zero fee — Razorpay bills its charges
+              separately — so the journal this made was Dr bank, Cr Razorpay
+              Clearing, which is exactly what the bank line posts. Two routes to
+              one entry double-counted twice in a fortnight. */}
           <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 10px" }}>
-            Fetched straight from Razorpay (from 1 April 2026). Each settlement posts one journal — net to Axis
-            Current, fee + GST to Payment Gateway Charges (AI), gross out of Razorpay Clearing — reference = the bank
-            UTR. A settlement the office already booked (same UTR on a journal) is recognised and left alone.
-            Approve against the Razorpay dashboard figures the first few times.
+            <strong>Nothing posts from here.</strong> The bank statement books the deposit into Razorpay Clearing, and
+            that is the only route — Razorpay reports a zero fee on every settlement, so there was never a second leg
+            for this to add. What it still does is record what Razorpay says, so a deposit can be checked against the
+            books. Razorpay Clearing itself is unchanged: the sale receipt goes in when the student pays, the bank
+            statement takes it out when the money lands.
           </p>
 
-          {sDrafts.length === 0 && sFailed.length === 0 ? (
-            <div className="card"><p className="muted" style={{ margin: 0 }}>No settlements waiting. 🔄 Fetch pulls the latest from Razorpay.</p></div>
-          ) : (
-            <SettlementPicker
-              rows={[...sFailed, ...sDrafts].map((r) => ({
-                id: r.id, settled_on: r.settled_on, net: Number(r.net_inr),
-                fees: Number(r.fees_inr) + Number(r.tax_inr), gross: Number(r.gross_inr),
-                utr: r.utr, settlement_id: r.settlement_id, status: r.status, error: r.error,
-                detail: <EntryLines entry={settlementPreview(Number(r.net_inr), Number(r.fees_inr) + Number(r.tax_inr), Number(r.gross_inr))} title="What posting this settlement writes" compact />,
-              }))}
-              approveSelected={approveSelectedSettlementsAction}
-              skipSelected={skipSelectedSettlementsAction}
-            />
+          {sRecord.length > 0 && (
+            <details style={{ marginBottom: 8 }}>
+              <summary className="btn small secondary as-btn">📄 Recorded ({sRecord.length})</summary>
+              <div style={{ display: "grid", gap: 3, marginTop: 8 }}>
+                {sRecord.slice(0, 60).map((r) => (
+                  <div key={r.id} style={{ display: "flex", gap: 10, fontSize: ".8rem", padding: "4px 10px", background: "var(--bg-soft)", borderRadius: 6, flexWrap: "wrap" }}>
+                    <span>{r.settled_on}</span>
+                    <span style={{ flex: 1, minWidth: 160 }}>
+                      {formatINR(Number(r.net_inr))}
+                      {Number(r.fees_inr) + Number(r.tax_inr) > 0 && (
+                        <strong style={{ color: "#b45309" }}> · fee {formatINR(Number(r.fees_inr) + Number(r.tax_inr))} — needs booking separately</strong>
+                      )}
+                    </span>
+                    <span className="muted">UTR {r.utr || "—"}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
           )}
 
           {(sPosted.length > 0 || sMatched.length > 0) && (

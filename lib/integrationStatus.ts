@@ -108,6 +108,9 @@ export const INTEGRATIONS: Integration[] = [
   { id: "placement", icon: "🎓", name: "Job feed (Jooble)", needs: ["JOOBLE_API_KEY"], optional: true,
     unlocks: "CA openings pulled in automatically for the Career page.",
     howTo: "jooble.org/api/about — free key." },
+  { id: "gstlookup", icon: "🧾", name: "GST lookup", needs: ["GST_LOOKUP_URL", "GST_LOOKUP_KEY"], optional: true,
+    unlocks: "A GST number typed at checkout fills in the registered trade name, address, city, state and PIN — exactly as the register spells them. Without it the number is still checksum-verified and its state read from it; only the auto-fill waits.",
+    howTo: "The GSTN's own API is open only to a GST Suvidha Provider, so use a reseller (ClearTax, Masters India, Signzy and others). Paste their taxpayer endpoint and key." },
 
   // ── Housekeeping ──────────────────────────────────────────────────────────
   { id: "supabase", icon: "🛠️", name: "Supabase management", needs: ["SUPABASE_ACCESS_TOKEN"], optional: true,

@@ -400,6 +400,11 @@ export default async function IntegrationsPage(
           <KeyField name="ZOOM_WEBHOOK_SECRET_TOKEN" label="Zoom webhook secret token (auto-import class recordings to Bunny)" placeholder="Zoom app → Feature → Event Subscriptions → Secret Token" />
           <KeyField name="SERPAPI_KEY" label="Google Jobs (SerpAPI) key — placement" placeholder="from serpapi.com" />
           <KeyField name="JOOBLE_API_KEY" label="Jooble key (free fallback) — placement" placeholder="from jooble.org/api/about" />
+          {/* A GST number is verified WITHOUT this — check digit and state come
+              out of the number itself. These two only add the auto-fill of the
+              registered trade name and address. */}
+          <KeyField name="GST_LOOKUP_URL" label="GST lookup — base URL (auto-fills trade name & registered address)" placeholder="your provider's taxpayer endpoint, e.g. https://api.provider.com/gst/v1/taxpayer" />
+          <KeyField name="GST_LOOKUP_KEY" label="GST lookup — API key" placeholder="from the provider; the GSTN's own API needs a GST Suvidha Provider" />
           <KeyField name="ZOHO_CLIENT_ID" label="Zoho Books — client ID (approved sales & expenses post to your books)" placeholder="api-console.zoho.in → Self Client (free)" />
           <KeyField name="ZOHO_CLIENT_SECRET" label="Zoho Books — client secret" placeholder="same Self Client screen" />
           <KeyField name="ZOHO_REFRESH_TOKEN" label="Zoho Books — refresh token" placeholder="generated for scope ZohoBooks.fullaccess.all" />

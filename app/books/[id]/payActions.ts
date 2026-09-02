@@ -29,11 +29,11 @@ export async function createBookOrder(input: {
 
   // Same two addresses and the same rules as the cart — one book or ten, the
   // buyer should not meet a different form.
-  const shipping = toAddress(d?.shipping);
-  const billing = d?.sameAsShipping ? { ...shipping } : toAddress(d?.billing);
+  const billing = toAddress(d?.billing);
+  const shipping = d?.shipTo === "different" ? toAddress(d?.shipping) : { ...billing };
   const missing = [
+    ...addressProblems(billing, { needPhone: false, indiaOnly: false }).map((m) => `billing: ${m}`),
     ...addressProblems(shipping).map((m) => `delivery: ${m}`),
-    ...(d?.sameAsShipping ? [] : addressProblems(billing, { needPhone: false }).map((m) => `billing: ${m}`)),
   ];
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(d?.email ?? "").trim())) missing.push("an email address for the invoice");
   const gstinRaw = String(d?.gstin ?? "").trim();
@@ -68,6 +68,7 @@ export async function createBookOrder(input: {
       ship: JSON.stringify(shipping),
       bill: JSON.stringify(billing),
       gstin: gst?.ok ? gst.gstin : "",
+      trade: String(d?.tradeName ?? "").slice(0, 200),
       userId: user?.id ?? "",
     });
     return {
@@ -113,6 +114,8 @@ export async function verifyBookPayment(input: {
   const ship = toAddress((() => { try { return JSON.parse(n.ship); } catch { return {}; } })());
   const bill = toAddress((() => { try { return JSON.parse(n.bill ?? "{}"); } catch { return {}; } })());
   const gstin = String(n.gstin ?? "").trim();
+  // Exactly as the register spells it — never tidied. See lib/gstin.ts.
+  const tradeName = String(n.trade ?? "");
 
   // Service role: guest orders have no auth cookie, so RLS would block them.
   const svc = createServiceClient();
@@ -139,6 +142,7 @@ export async function verifyBookPayment(input: {
       patch.pincode = bill.pincode || null;
     }
     if (gstin) patch.gstin = gstin;
+    if (tradeName) { patch.trade_name = tradeName; patch.business_name = tradeName; }
     try { await svc.from("profiles").update(patch).eq("id", n.userId); }
     catch { /* the order stands whatever the profile does */ }
   }

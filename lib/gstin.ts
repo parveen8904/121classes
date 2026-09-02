@@ -116,25 +116,109 @@ export function gstinMatchesPan(gstin: string, pan: string | null | undefined): 
 }
 
 /**
- * The trade name and registered address live in the GST records and cannot be
- * derived. Fetching them needs a lookup provider — the GSTN's own API is only
- * open to a GST Suvidha Provider, so in practice it is a commercial one with
- * an API key. Nothing is wired to one yet, so this reports that plainly rather
- * than pretending to look.
+ * THE TRADE NAME AND THE REGISTERED ADDRESS — WHICH ONLY THE REGISTER KNOWS.
+ *
+ * Ravi's spec, 2 September 2026: "If GST Number is entered, it should be
+ * verified. After successful verification, Trade Name, Billing Address, State,
+ * City, PIN Code and other relevant GST details should automatically fetch/
+ * update. Trade/Legal Name should appear exactly as registered in GST records,
+ * including capitalization, small letters, spacing and spelling."
+ *
+ * The last sentence is the important one and it is why nothing here tidies
+ * anything. A GST-registered name is a legal identifier: "M/s. RAVI ENTERPRISES"
+ * and "M/s Ravi Enterprises" are not the same string, and an invoice that
+ * title-cases what the register wrote is an invoice that disagrees with the
+ * register. So the value is stored exactly as it arrives — no trimming of inner
+ * spacing, no case folding, no "cleaning".
+ *
+ * The GSTN's own API is open only to a GST Suvidha Provider, so in practice this
+ * is a commercial reseller with an API key. The shape below is the shape they
+ * all share — GET with the number, get back the taxpayer record — so wiring one
+ * is a key and a base URL, not a rewrite.
+ *
+ * Until a key exists this returns `configured: false` and says so plainly. It
+ * does NOT invent a name, and it does not report failure as "invalid GSTIN":
+ * the number has already been checked by arithmetic, and conflating "we could
+ * not look it up" with "it is wrong" would make a correct number look forged.
  */
 export type GstParty = {
   tradeName: string | null; legalName: string | null;
-  address: string | null; city: string | null; state: string | null; pincode: string | null;
+  address: string | null; line1: string | null; line2: string | null;
+  city: string | null; state: string | null; pincode: string | null;
   status: string | null;
 };
 
-export async function fetchGstParty(_gstin: string): Promise<
-  { ok: true; party: GstParty } | { ok: false; reason: string }
-> {
-  return {
-    ok: false,
-    reason:
-      "No GST lookup provider is configured, so the trade name and address cannot be fetched. " +
-      "The number itself has been checked and the state read from it.",
-  };
+export type GstLookup =
+  | { ok: true; party: GstParty }
+  | { ok: false; configured: boolean; reason: string };
+
+/** Straight from the record, untouched — see the note above about spelling. */
+const asIs = (v: unknown): string | null => {
+  if (v === null || v === undefined) return null;
+  const s = String(v);
+  return s.length ? s : null;
+};
+
+/**
+ * The provider's base URL and key are PASSED IN rather than read here, so this
+ * file imports nothing and can be run directly under
+ * `node --experimental-strip-types` — which is how every test in tests/ runs.
+ * A module that reaches for secrets is a module no test can load.
+ */
+export async function fetchGstParty(
+  gstin: string,
+  cfg?: { baseUrl?: string | null; key?: string | null },
+): Promise<GstLookup> {
+  const check = checkGstin(gstin);
+  if (!check.ok) return { ok: false, configured: true, reason: check.problem ?? "That is not a valid GST number." };
+
+  const base = String(cfg?.baseUrl ?? "").trim();
+  const key = String(cfg?.key ?? "").trim();
+  if (!base || !key) {
+    return {
+      ok: false, configured: false,
+      reason:
+        "The number is well formed and its state has been read from it, but the trade name and registered " +
+        "address cannot be fetched — no GST lookup provider is connected yet.",
+    };
+  }
+
+  try {
+    const url = `${base.replace(/\/$/, "")}/${encodeURIComponent(check.gstin)}`;
+    const r = await fetch(url, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${key}`, "x-api-key": key },
+      cache: "no-store",
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!r.ok) return { ok: false, configured: true, reason: `The GST lookup service answered ${r.status}.` };
+    const body = await r.json() as Record<string, unknown>;
+
+    // Providers wrap the taxpayer record differently — data, result, taxpayerInfo
+    // — and all of them carry the GSTN's own field names inside.
+    const d = (body.data ?? body.result ?? body.taxpayerInfo ?? body) as Record<string, unknown>;
+    const addr = ((d.pradr as Record<string, unknown> | undefined)?.addr ?? {}) as Record<string, unknown>;
+
+    const party: GstParty = {
+      tradeName: asIs(d.tradeNam ?? d.tradeName ?? d.trade_name),
+      legalName: asIs(d.lgnm ?? d.legalName ?? d.legal_name),
+      address: asIs((d.pradr as Record<string, unknown> | undefined)?.adr ?? d.address),
+      line1: asIs([addr.bno, addr.bnm, addr.st].map((x) => (x ? String(x) : "")).filter(Boolean).join(", ") || null),
+      line2: asIs([addr.loc, addr.landMark].map((x) => (x ? String(x) : "")).filter(Boolean).join(", ") || null),
+      city: asIs(addr.dst ?? addr.city),
+      // The register's state name and the state the NUMBER encodes should agree;
+      // where the record is silent, the number is the better authority.
+      state: asIs(addr.stcd ?? d.state) ?? check.state,
+      pincode: asIs(addr.pncd ?? addr.pincode),
+      status: asIs(d.sts ?? d.status),
+    };
+    if (!party.tradeName && !party.legalName) {
+      return { ok: false, configured: true, reason: "The lookup returned no name for that number." };
+    }
+    return { ok: true, party };
+  } catch (e) {
+    return {
+      ok: false, configured: true,
+      reason: `Could not reach the GST lookup service — ${e instanceof Error ? e.message : "unknown error"}.`,
+    };
+  }
 }

@@ -47,8 +47,12 @@ export function toAddress(raw: unknown): Address {
     city: s(r.city),
     state: s(r.state),
     // Indian pincodes are six digits and people type them with a space in the
-    // middle; the digits are the address, the spacing is not.
-    pincode: String(r.pincode ?? "").replace(/\D/g, "").slice(0, 6),
+    // middle; the digits are the address, the spacing is not. A postcode from
+    // anywhere else may legitimately carry letters — "SW1A 1AA" — so only an
+    // Indian one is stripped to digits.
+    pincode: (s(r.country) || "India").toLowerCase() === "india"
+      ? String(r.pincode ?? "").replace(/\D/g, "").slice(0, 6)
+      : s(r.pincode).toUpperCase().slice(0, 12),
     country: s(r.country) || "India",
     phone: String(r.phone ?? "").replace(/[^\d+]/g, ""),
   };
@@ -63,17 +67,34 @@ export function isBlank(a: Address): boolean {
  * required delivery details" makes the buyer hunt for the empty box; the boxes
  * are known, so they are named.
  */
-export function addressProblems(a: Address, opts?: { needPhone?: boolean }): string[] {
+export function addressProblems(
+  a: Address,
+  opts?: {
+    needPhone?: boolean;
+    /**
+     * True for a shipping address: the books go by courier inside India and
+     * there is no international service on this account, so an order taken for
+     * an address abroad is one that cannot be fulfilled. A BILLING address has
+     * no such limit — see lib/indiaStates.ts and Ravi's spec of 2 Sep 2026.
+     */
+    indiaOnly?: boolean;
+  },
+): string[] {
   const out: string[] = [];
+  const inIndia = (a.country || "India").toLowerCase() === "india";
   if (!a.name) out.push("name");
   if (!a.line1) out.push("address line 1");
   if (!a.city) out.push("city");
-  if (!a.state) out.push("state");
-  else if (!(INDIA_STATES as readonly string[]).includes(a.state)) out.push("state (pick one from the list)");
-  if (!/^\d{6}$/.test(a.pincode)) out.push("a six-digit pincode");
+  if (!a.state) out.push(inIndia ? "state" : "state / province / region");
+  else if (inIndia && !(INDIA_STATES as readonly string[]).includes(a.state)) out.push("state (pick one from the list)");
+  if (inIndia) {
+    if (!/^\d{6}$/.test(a.pincode)) out.push("a six-digit pincode");
+  } else {
+    if (!a.pincode) out.push("a postal code");
+    if (!a.country) out.push("a country");
+  }
   if (opts?.needPhone !== false && !/^\+?\d{10,13}$/.test(a.phone)) out.push("a phone number the courier can call");
-  // The books go by courier inside India — see lib/indiaStates.ts.
-  if (a.country && a.country.toLowerCase() !== "india") out.push("an address in India (we cannot post abroad)");
+  if (opts?.indiaOnly !== false && !inIndia) out.push("an address in India (we cannot post abroad)");
   return out;
 }
 

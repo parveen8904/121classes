@@ -78,6 +78,13 @@ export const SECRET_KEYS = [
   "R2_BUCKET",
   "R2_PUBLIC_BASE",
   "JOOBLE_API_KEY",
+  // GST lookup — the trade name and registered address behind a GSTIN. The
+  // GSTN's own API is open only to a GST Suvidha Provider, so this is a
+  // commercial reseller: a base URL and a key. Without both, a GST number is
+  // still checksum-verified and its state read from it; only the auto-fill
+  // waits. See lib/gstin.ts.
+  "GST_LOOKUP_URL",
+  "GST_LOOKUP_KEY",
   "SERPAPI_KEY",
   "BUNNY_STREAM_API_KEY",
   "BUNNY_LIBRARY_ID",

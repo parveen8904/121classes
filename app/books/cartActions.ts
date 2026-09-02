@@ -25,17 +25,17 @@ import { checkGstin } from "@/lib/gstin";
  */
 export async function myAddressBook(): Promise<{
   signedIn: boolean; name: string; email: string;
-  shipping: Address; billing: Address; gstin: string; hasProfileGstin: boolean;
+  shipping: Address; billing: Address; gstin: string; hasProfileGstin: boolean; tradeName: string;
 }> {
   const blank = {
     signedIn: false, name: "", email: "",
-    shipping: toAddress(null), billing: toAddress(null), gstin: "", hasProfileGstin: false,
+    shipping: toAddress(null), billing: toAddress(null), gstin: "", hasProfileGstin: false, tradeName: "",
   };
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return blank;
   const { data: p } = await supabase.from("profiles")
-    .select("full_name, email, phone, shipping_address, business_name, address_line1, address_line2, city, state, pincode, gstin")
+    .select("full_name, email, phone, shipping_address, business_name, trade_name, address_line1, address_line2, city, state, country, pincode, gstin")
     .eq("id", user.id).maybeSingle();
   const name = String(p?.full_name ?? "");
   const phone = String(p?.phone ?? "");
@@ -44,9 +44,9 @@ export async function myAddressBook(): Promise<{
   // invoice reads, and the ones whose STATE decides CGST+SGST against IGST.
   // There is no second copy of it.
   const bill = toAddress({
-    name: p?.business_name || name,
+    name: p?.trade_name || p?.business_name || name,
     line1: p?.address_line1, line2: p?.address_line2,
-    city: p?.city, state: p?.state, pincode: p?.pincode, phone,
+    city: p?.city, state: p?.state, pincode: p?.pincode, country: p?.country, phone,
   });
   return {
     signedIn: true,
@@ -58,7 +58,50 @@ export async function myAddressBook(): Promise<{
     billing: { ...bill, name: bill.name || name, phone: bill.phone || phone },
     gstin: String(p?.gstin ?? ""),
     hasProfileGstin: !!String(p?.gstin ?? "").trim(),
+    // Exactly as the GST register spelled it, when a lookup has ever run.
+    tradeName: String(p?.trade_name ?? ""),
   };
+}
+
+/**
+ * VERIFY A GST NUMBER, AND FETCH WHAT ONLY THE REGISTER KNOWS.
+ *
+ * Ravi's spec: the number is verified, and on success the trade name, billing
+ * address, state, city and PIN fill themselves in — with the name spelled
+ * exactly as the register spells it.
+ *
+ * Two outcomes are deliberately different, because conflating them would make
+ * a correct number look forged: `ok:false, configured:false` means we could not
+ * LOOK, and `ok:false, configured:true` means the lookup answered and refused.
+ * Either way the check digit and the state have already been read out of the
+ * number itself, which needs nobody.
+ */
+export async function verifyGstin(raw: string): Promise<{
+  valid: boolean; problem: string | null; state: string | null; pan: string | null;
+  fetched: boolean; note: string | null;
+  party: { tradeName: string | null; legalName: string | null; line1: string | null; line2: string | null;
+           city: string | null; state: string | null; pincode: string | null; status: string | null } | null;
+}> {
+  const { checkGstin, fetchGstParty } = await import("@/lib/gstin");
+  const { getSecret } = await import("@/lib/secrets");
+  const c = checkGstin(raw);
+  if (!c.ok) {
+    return { valid: false, problem: c.problem, state: null, pan: null, fetched: false, note: null, party: null };
+  }
+  const [baseUrl, key] = await Promise.all([getSecret("GST_LOOKUP_URL"), getSecret("GST_LOOKUP_KEY")]);
+  const look = await fetchGstParty(c.gstin, { baseUrl, key });
+  if (look.ok) {
+    return {
+      valid: true, problem: null, state: c.state, pan: c.pan, fetched: true, note: null,
+      party: {
+        tradeName: look.party.tradeName, legalName: look.party.legalName,
+        line1: look.party.line1, line2: look.party.line2,
+        city: look.party.city, state: look.party.state ?? c.state, pincode: look.party.pincode,
+        status: look.party.status,
+      },
+    };
+  }
+  return { valid: true, problem: null, state: c.state, pan: c.pan, fetched: false, note: look.reason, party: null };
 }
 
 export type CartBook = { id: string; title: string; author: string | null; cover_url: string | null; price_inr: number; stock_qty: number };
@@ -79,14 +122,31 @@ export type CartOrderResult =
   | { ok: true; orderId: string; amount: number; keyId: string; name: string; description: string; prefill: { name: string; email: string; contact: string } }
   | { ok: false; reason: "unconfigured" | "oos" | "invalid" | "empty" | "error"; title?: string; missing?: string[] };
 
-/** What the checkout sends: two addresses, a flag, and an optional GST number. */
+/**
+ * WHAT THE CHECKOUT SENDS.
+ *
+ * Ravi's spec puts BILLING first and derives shipping from it: "Add Same as
+ * Billing Address and Ship to a Different Address options. Neither option
+ * should be selected by default... No option selected → Billing Address should
+ * be considered as Shipping Address."
+ *
+ * So `shipTo` has three states and the third is not an error — it is the
+ * documented default behaviour, and it is why this is a string rather than a
+ * boolean. A boolean would have to pick a side, which is exactly what the spec
+ * says not to do.
+ */
+export type ShipChoice = "same" | "different" | "unset";
+
 export type CheckoutDetails = {
   email: string;
-  shipping: Address;
-  /** Ignored when sameAsShipping — the buyer should not have to fill it twice. */
   billing: Address;
-  sameAsShipping: boolean;
+  shipTo: ShipChoice;
+  /** Read only when shipTo === "different". */
+  shipping: Address;
   gstin: string;
+  /** Exactly as the GST register spells it; blank when there is no GSTIN. */
+  tradeName: string;
+  legalName: string;
 };
 
 // One Razorpay order for the whole cart. Prices come from the DB — never from
@@ -96,19 +156,21 @@ export async function createCartOrder(input: { items: { bookId: string; qty: num
   if (!(await razorpayConfigured())) return { ok: false, reason: "unconfigured" };
   const d = input.buyer;
 
-  // TWO ADDRESSES, AND THE SECOND ONE IS OPTIONAL WORK.
+  // BILLING IS THE ADDRESS; SHIPPING IS DERIVED FROM IT.
   //
-  // His instruction: "I also want that student be given choice of telling
-  // whether the billing address and shipping address is same so that he has
-  // not to fill the address again." So when the box is ticked the billing
-  // address is simply the shipping one — copied here, on the server, rather
-  // than trusted from a form that could send anything.
-  const shipping = toAddress(d?.shipping);
-  const billing = d?.sameAsShipping ? { ...shipping } : toAddress(d?.billing);
+  // Ravi's spec: "Neither option should be selected by default... No option
+  // selected → Billing Address should be considered as Shipping Address." So
+  // "unset" is not a failure to answer, it is the documented default, and the
+  // copy is made HERE — a form can send anything, and the two addresses on the
+  // invoice and the label must be the ones we decided, not the ones posted.
+  const billing = toAddress(d?.billing);
+  const shipping = d?.shipTo === "different" ? toAddress(d?.shipping) : { ...billing };
 
   const missing = [
+    ...addressProblems(billing, { needPhone: false, indiaOnly: false }).map((m) => `billing: ${m}`),
+    // The parcel goes to the shipping address, so that one needs a phone the
+    // courier can ring — even when it is a copy of the billing address.
     ...addressProblems(shipping).map((m) => `delivery: ${m}`),
-    ...(d?.sameAsShipping ? [] : addressProblems(billing, { needPhone: false }).map((m) => `billing: ${m}`)),
   ];
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(d?.email ?? "").trim())) missing.push("an email address for the invoice");
 
@@ -160,6 +222,7 @@ export async function createCartOrder(input: { items: { bookId: string; qty: num
       // order: billed to the supporter, delivered to the student.
       bill: JSON.stringify(billing),
       gstin: gst?.ok ? gst.gstin : "",
+      trade: String(d?.tradeName ?? "").slice(0, 200),
       userId: user?.id ?? "",
     });
     return {
@@ -194,6 +257,8 @@ export async function verifyCartPayment(input: {
   const ship = toAddress((() => { try { return JSON.parse(n.ship); } catch { return {}; } })());
   const bill = toAddress((() => { try { return JSON.parse(n.bill ?? "{}"); } catch { return {}; } })());
   const gstin = String(n.gstin ?? "").trim();
+  // Exactly as the register spells it — never tidied. See lib/gstin.ts.
+  const tradeName = String(n.trade ?? "");
   if (!items.length) return { ok: false };
 
   const svc = createServiceClient();
@@ -227,6 +292,7 @@ export async function verifyCartPayment(input: {
       patch.pincode = bill.pincode || null;
     }
     if (gstin) patch.gstin = gstin;
+    if (tradeName) { patch.trade_name = tradeName; patch.business_name = tradeName; }
     try { await svc.from("profiles").update(patch).eq("id", n.userId); }
     catch { /* the order stands whatever the profile does */ }
   }

@@ -21,6 +21,7 @@ import type { Address } from "@/lib/address";
 // drift apart in what they ask for.
 export default function AddressFields({
   value, onChange, idPrefix, disabled = false, requirePhone = true, showLandmark = true,
+  allowOutsideIndia = false,
 }: {
   value: Address;
   onChange: (next: Address) => void;
@@ -29,7 +30,20 @@ export default function AddressFields({
   requirePhone?: boolean;
   /** Off for a billing address — an invoice has no use for a landmark. */
   showLandmark?: boolean;
+  /**
+   * Ravi's spec: "Add Country field with India / Other Country options. India →
+   * show Indian State dropdown. Other Country → show appropriate international
+   * Country, State/Province/Region, City, PIN/ZIP and Address fields."
+   *
+   * True for a BILLING address, which can be anywhere. False for a shipping
+   * one, because the books go by courier inside India and there is no
+   * international service on this account — an order taken for an address
+   * abroad is one that cannot be fulfilled, and the buyer finds out weeks
+   * later.
+   */
+  allowOutsideIndia?: boolean;
 }) {
+  const inIndia = (value.country || "India").trim().toLowerCase() === "india";
   const set = (k: keyof Address, v: string) => onChange({ ...value, [k]: v });
   const row: React.CSSProperties = { display: "grid", gap: 10, marginBottom: 10 };
   const two: React.CSSProperties = { display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" };
@@ -71,27 +85,51 @@ export default function AddressFields({
             onChange={(e) => set("city", e.target.value)} />
         </label>
         <label style={{ margin: 0 }}>
-          PIN code
+          {inIndia ? "PIN code" : "PIN / ZIP code"}
           <input id={`${idPrefix}-pincode`} value={value.pincode} disabled={disabled} autoComplete="postal-code"
-            inputMode="numeric" maxLength={6} placeholder="6 digits"
-            onChange={(e) => set("pincode", e.target.value.replace(/\D/g, "").slice(0, 6))} />
+            inputMode={inIndia ? "numeric" : "text"} maxLength={inIndia ? 6 : 12}
+            placeholder={inIndia ? "6 digits" : "Postal code"}
+            onChange={(e) => set("pincode", inIndia
+              ? e.target.value.replace(/\D/g, "").slice(0, 6)
+              : e.target.value.toUpperCase().replace(/[^0-9A-Z -]/g, "").slice(0, 12))} />
         </label>
       </div>
       <div style={{ ...two, marginBottom: 10 }}>
         <label style={{ margin: 0 }}>
-          State
-          <select id={`${idPrefix}-state`} value={value.state} disabled={disabled} autoComplete="address-level1"
-            onChange={(e) => set("state", e.target.value)}>
-            <option value="">— select your state —</option>
-            {INDIA_STATES.map((st) => <option key={st} value={st}>{st}</option>)}
-          </select>
+          {inIndia ? "State" : "State / province / region"}
+          {inIndia ? (
+            // NEVER A TEXT BOX. The state decides CGST+SGST against IGST and
+            // prints as the state code on a GST invoice — one student got
+            // "State Code:-" on his because this was free text and he typed his
+            // PIN into it.
+            <select id={`${idPrefix}-state`} value={value.state} disabled={disabled} autoComplete="address-level1"
+              onChange={(e) => set("state", e.target.value)}>
+              <option value="">— select your state —</option>
+              {INDIA_STATES.map((st) => <option key={st} value={st}>{st}</option>)}
+            </select>
+          ) : (
+            <input id={`${idPrefix}-state`} value={value.state} disabled={disabled} autoComplete="address-level1"
+              onChange={(e) => set("state", e.target.value)} placeholder="Province, region or state" />
+          )}
         </label>
         <label style={{ margin: 0 }}>
           Country
-          {/* The books go by courier inside India: there is no international
-              service on this account, so an order taken for an address abroad
-              is one that cannot be fulfilled. */}
-          <input id={`${idPrefix}-country`} value="India" readOnly disabled title="We post within India only" />
+          {allowOutsideIndia ? (
+            <>
+              <select id={`${idPrefix}-country-choice`} disabled={disabled}
+                value={inIndia ? "India" : "Other"}
+                onChange={(e) => onChange({ ...value, country: e.target.value === "India" ? "India" : "", state: "", pincode: "" })}>
+                <option value="India">India</option>
+                <option value="Other">Other country</option>
+              </select>
+              {!inIndia && (
+                <input id={`${idPrefix}-country`} value={value.country} disabled={disabled} autoComplete="country-name"
+                  onChange={(e) => set("country", e.target.value)} placeholder="Which country?" style={{ marginTop: 8 }} />
+              )}
+            </>
+          ) : (
+            <input id={`${idPrefix}-country`} value="India" readOnly disabled title="Parcels go by courier inside India only" />
+          )}
         </label>
       </div>
       <div style={row}>

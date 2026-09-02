@@ -255,7 +255,7 @@ async function fetchFile(fileUrl: string): Promise<{ buf: ArrayBuffer } | null> 
 }
 
 /**
- * Parse an uploaded statement, run continuity, and file every line into its
+ * Parse an uploaded statement, reconcile it against Zoho, and file every line into its
  * queue. Returns a human summary for the banner.
  */
 export async function ingestStatement(accountName: string, fileUrl: string, fileName: string): Promise<string> {
@@ -323,26 +323,22 @@ export async function ingestStatement(accountName: string, fileUrl: string, file
   const opening = first.balance !== null ? first.balance + first.debit - first.credit : null;
   const closing = last.balance;
 
-  // CONTINUITY IS AGAINST THE STATEMENT THAT ACTUALLY COMES BEFORE THIS ONE.
+  // NO CONTINUITY CHECK. HIS INSTRUCTION, 2 SEPTEMBER 2026.
   //
-  // It used to compare against the LATEST statement by period_end, whatever
-  // period this one covers. So the moment a statement was uploaded twice — and
-  // on 1 September it was, after three wrongly-mapped entries were deleted from
-  // Zoho and the file re-sent — the new copy was measured against a period that
-  // overlaps or IS itself, and reported a break that did not exist:
+  //   "why you need continuity break. I may keep on uploading any statement
+  //    from any start date. You have to reconciliation and find missing
+  //    entries."
   //
-  //   "opening 6195817.53 ≠ previous closing 4044998.03"
+  // The old test compared this statement's opening balance with the closing
+  // balance of the statement before it, which assumes statements arrive in an
+  // unbroken chain. They do not: a fortnight is re-sent after a wrong entry is
+  // deleted, a quarter is pulled to check one payment, a month is uploaded on
+  // its own. Every one of those raised "⚠️ continuity break" on a perfectly
+  // good file — and the warning could not name a single line either way, so
+  // there was nothing to do about it but ignore it.
   //
-  // Both figures were real; they simply belonged to overlapping periods. The
-  // predecessor is the statement whose period ENDS BEFORE this one begins.
-  const { data: prev } = await svc.from("bank_statements")
-    .select("closing_balance, period_end").eq("account_name", accountName).eq("status", "parsed")
-    .not("closing_balance", "is", null)
-    .lt("period_end", first.date)
-    .order("period_end", { ascending: false }).limit(1).maybeSingle();
-  const continuity = prev?.closing_balance !== undefined && prev?.closing_balance !== null && opening !== null
-    ? Math.abs(Number(prev.closing_balance) - opening) < 0.01
-    : null;
+  // What is worth knowing is the difference against the books, and that is
+  // computed below from the register this function already fetches.
 
   // A RE-UPLOAD IS NOT A GAP. Sending the same period again is routine — a
   // mis-posted entry is deleted in Zoho and the file goes back through. Say so
@@ -358,12 +354,8 @@ export async function ingestStatement(accountName: string, fileUrl: string, file
     account_name: accountName, file_url: fileUrl, file_name: fileName,
     period_start: first.date, period_end: last.date,
     opening_balance: opening, closing_balance: closing,
-    continuity_ok: continuity, lines_total: lines.length,
-    note: isReupload
-      ? `this period was uploaded before — the lines already filed were not booked again${continuity === false ? `; opening ${opening} ≠ closing ${prev?.closing_balance} of the statement ending ${prev?.period_end}` : ""}`
-      : continuity === false
-        ? `opening ${opening} ≠ closing ${prev?.closing_balance} of the statement ending ${prev?.period_end} — a statement may be missing in between`
-        : null,
+    lines_total: lines.length,
+    note: isReupload ? "this period was uploaded before — the lines already filed were not booked again" : null,
   }).select("id").single();
   if (!stmt) return "Could not record the statement.";
 
@@ -468,8 +460,37 @@ export async function ingestStatement(accountName: string, fileUrl: string, file
     if (status === "matched") matched++; else if (status === "auto") auto++; else ask++;
   }
 
-  const cont = continuity === false ? " ⚠️ CONTINUITY BREAK — see the statement note." : continuity ? " Continuity ✓." : "";
-  return `${lines.length} line(s): ${matched} matched, ${auto} auto-proposed, ${ask} to answer${dup ? `, ${dup} duplicate(s) skipped` : ""}.${cont}`;
+  // RECONCILE THIS PERIOD AGAINST THE BOOKS, EVERY TIME, FREE.
+  //
+  // zohoTxns is the account's own Zoho register for exactly these dates and it
+  // is already in hand from the matching above, so the reconciliation costs
+  // nothing extra. It runs over ALL the lines in the file, duplicates included:
+  // a line filed by an earlier overlapping statement is still a line the bank
+  // says exists, and its Zoho entry must still be claimed or the re-upload
+  // would report every previously-filed entry as an orphan.
+  //
+  // Same pairing as the Reconcile panel — lib/reconcile.ts, one set of rules
+  // with one set of tests behind it.
+  const recon = pairLines(
+    lines.map((l) => ({
+      date: l.date, narration: l.narration,
+      amount: l.debit > 0 ? l.debit : l.credit,
+      dir: (l.debit > 0 ? "out" : "in") as "in" | "out",
+    })),
+    [...zohoTxns].flatMap(([k, txns]) => {
+      const [date, amt, dir] = k.split("|");
+      return txns.map((t) => ({ date, amount: Number(amt), dir: dir as "in" | "out", type: t.type, note: t.note }));
+    }),
+  );
+  await svc.from("bank_statements").update({
+    recon_missing: recon.statementOnly.length,
+    recon_extra: recon.zohoOnly.length,
+  }).eq("id", stmt.id);
+
+  const found = recon.zohoOnly.length
+    ? ` ${recon.zohoOnly.length} entr${recon.zohoOnly.length === 1 ? "y" : "ies"} in Zoho for these dates ${recon.zohoOnly.length === 1 ? "has" : "have"} no line in this statement — Reconcile shows which.`
+    : "";
+  return `${lines.length} line(s): ${matched} matched, ${auto} auto-proposed, ${ask} to answer${dup ? `, ${dup} duplicate(s) skipped` : ""}.${found}`;
 }
 
 type ZExp = { id: string; account: string };

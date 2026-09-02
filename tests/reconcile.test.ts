@@ -117,5 +117,30 @@ check("it never writes: no insert, update, delete or Zoho POST",
   !/\.insert\(|\.update\(|\.delete\(|method: "POST"/.test(fn.slice(0, fn.indexOf("\n}\n"))),
   "reconciliation reads the books, it does not change them");
 
+// ── continuity is gone, 2 September ────────────────────────────────────────
+// "why you need continuity break. I may keep on uploading any statement from
+//  any start date. You have to reconciliation and find missing entries."
+check("nothing computes a continuity verdict any more",
+  !/const continuity\s*=/.test(bank) && !/continuity_ok:/.test(bank),
+  "an opening-vs-previous-closing test flags a good file and names no line");
+check("no statement is measured against the one before it",
+  !/\.lt\("period_end", first\.date\)/.test(bank),
+  "statements arrive in any order, from any start date");
+const page = readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/page.tsx"), "utf8");
+check("the desk is never shown a continuity break again",
+  !/continuity break/i.test(page));
+
+// ── every upload reconciles, and it costs nothing extra ────────────────────
+const ingest = bank.slice(0, bank.indexOf("export async function reconcileAccount"));
+check("the upload pairs through the same tested function", /const recon = pairLines\(/.test(ingest));
+check("it reuses the register already fetched for matching, not a second call",
+  /\[\.\.\.zohoTxns\]\.flatMap/.test(ingest) && !/await fetchZohoBankTxnsFor[\s\S]{0,200}pairLines/.test(ingest),
+  "a second call would double the Zoho traffic on every upload");
+check("both counts are stored on the statement",
+  /recon_missing: recon\.statementOnly\.length/.test(ingest) && /recon_extra: recon\.zohoOnly\.length/.test(ingest));
+check("duplicates are reconciled too, or a re-upload orphans everything already filed",
+  /lines\.map\(\(l\) => \(\{/.test(ingest),
+  "the pairing must run over every line in the file, not only the newly filed ones");
+
 console.log(fails === 0 ? "ok — bank reconciliation" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

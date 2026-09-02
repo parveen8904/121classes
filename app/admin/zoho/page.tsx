@@ -38,7 +38,7 @@ export const metadata = { title: "Zoho accounting hub — Admin" };
 // The founder's rule: he and the accounts team work ONLY here; Zoho Books is a
 // ledger this system writes to, never a place anyone types in. The full design
 // — posting rulebook, three queues (auto / confirm / ask-me), statement
-// ingestion with continuity checks, petty-cash imprest, rent roll, Rule-115
+// ingestion with Zoho reconciliation, petty-cash imprest, rent roll, Rule-115
 // rates, dual India/US tax engines — was agreed with the founder on 22 Aug.
 // Cutover: 1 APRIL 2026 (founder, 22 Aug — books locked before that date, so
 // the system owns the whole FY 2026-27; Apr-Aug backfills via the recon queues
@@ -53,7 +53,7 @@ const PHASE_PLAN: { name: string; what: string; state: "done" | "building" | "wa
   { name: "Rulebook", what: "Learned from the office's own FY26-27 entries and locked: same series, same accounts, same style — automatically.", state: "done" },
   { name: "Sales posting", what: "Every paid portal sale becomes a draft in the queue below; approving posts the CAPS invoice + payment to Zoho.", state: "done" },
   { name: "Razorpay settlements", what: "Fetched from Razorpay, one journal each: net to Axis, fee+GST to Payment Gateway Charges (AI), gross out of clearing — queue below.", state: "done" },
-  { name: "Bank statements", what: "Upload per account (CSV/Excel/PDF) → matched / rule-proposed / ask-once queues, continuity checks — section below.", state: "done" },
+  { name: "Bank statements", what: "Upload per account (CSV/Excel/PDF) → matched / rule-proposed / ask-once queues, reconciled against Zoho on every upload — section below.", state: "done" },
   { name: "Petty cash (advances)", what: "Record advances, per-person balances, bill uploads on /admin/petty, approve → posts to Zoho — section below.", state: "done" },
   { name: "Rule-115 rates", what: "SBI TT buying rates auto-fetched from officialforexrates.com (the founder's sole authority), stored with provenance, holiday walk-back — card below.", state: "done" },
   { name: "Rent roll & GST/TDS", what: "Co-owned commercial rent (two invoices, TDS per PAN), residential rent.", state: "planned" },
@@ -122,11 +122,11 @@ export default async function ZohoHubPage(props: {
   const sPosted = sBy("posted"); const sMatched = sBy("matched");
 
   // Bank statements + the three queues.
-  type StmtRow = { id: string; account_name: string; file_name: string | null; period_start: string | null; period_end: string | null; opening_balance: number | null; closing_balance: number | null; continuity_ok: boolean | null; note: string | null; status: string; lines_total: number };
+  type StmtRow = { id: string; account_name: string; file_name: string | null; period_start: string | null; period_end: string | null; opening_balance: number | null; closing_balance: number | null; note: string | null; status: string; lines_total: number; recon_missing: number | null; recon_extra: number | null };
   type LineRow = { id: string; account_name: string; line_date: string; narration: string; ref: string | null; debit: number; credit: number; status: string; proposal: { account?: string } | null; matched_note: string | null; error: string | null };
   const [{ data: stmtData }, { data: lineData }] = hubConnected
     ? await Promise.all([
-        createServiceClient().from("bank_statements").select("id, account_name, file_name, period_start, period_end, opening_balance, closing_balance, continuity_ok, note, status, lines_total").order("created_at", { ascending: false }).limit(20),
+        createServiceClient().from("bank_statements").select("id, account_name, file_name, period_start, period_end, opening_balance, closing_balance, note, status, lines_total, recon_missing, recon_extra").order("created_at", { ascending: false }).limit(20),
         createServiceClient().from("bank_lines").select("id, account_name, line_date, narration, ref, debit, credit, status, proposal, matched_note, error").in("status", ["ask", "auto", "failed"]).order("line_date").limit(200),
       ])
     : [{ data: [] as StmtRow[] }, { data: [] as LineRow[] }];
@@ -1020,7 +1020,24 @@ export default async function ZohoHubPage(props: {
                     <span style={{ fontWeight: 700, minWidth: 180 }}>{s.account_name}</span>
                     <span>{s.period_start} → {s.period_end}</span>
                     <span className="muted">{s.lines_total} lines</span>
-                    <span>{s.status === "failed" ? "❌ failed" : s.continuity_ok === false ? "⚠️ continuity break" : s.continuity_ok ? "🔗 continuity ✓" : "· first statement"}</span>
+                    {/* WHAT THIS STATEMENT MEANS FOR THE BOOKS, NOT WHETHER IT ABUTS
+                        THE LAST ONE. Continuity is gone (2 Sep) — statements
+                        arrive in any order, from any start date, and the
+                        opening-vs-previous-closing test flagged perfectly good
+                        files while naming nothing. These two counts are the
+                        reconciliation against Zoho for this statement's own
+                        dates, computed on upload. */}
+                    <span>
+                      {s.status === "failed" ? "❌ failed"
+                        : s.recon_missing === null ? "· uploaded"
+                        : (s.recon_missing || s.recon_extra) ? (
+                          <>
+                            {!!s.recon_missing && <span style={{ color: "#b45309" }}>{s.recon_missing} not yet in Zoho</span>}
+                            {!!s.recon_missing && !!s.recon_extra && " · "}
+                            {!!s.recon_extra && <span style={{ color: "#b91c1c" }}>{s.recon_extra} in Zoho with no line here</span>}
+                          </>
+                        ) : <span style={{ color: "#15803d" }}>✓ agrees with Zoho</span>}
+                    </span>
                     {s.note && <span style={{ color: "#b45309", fontSize: ".78rem" }}>{s.note}</span>}
                     {/* A failed statement can be re-read from the file already
                         stored, so a parser fix is testable against the file
@@ -1036,6 +1053,10 @@ export default async function ZohoHubPage(props: {
                         and still wants throwing away. Lines already in the
                         books hold it: those are settled facts, and the button
                         says so instead of refusing after the press. */}
+                    {s.period_start && s.period_end && (
+                      <a className="btn small secondary" href={`/admin/zoho?rec=${encodeURIComponent(s.account_name)}&rf=${s.period_start}&rt=${s.period_end}#reconcile`}
+                        title="Line-by-line against Zoho's own register for these dates">⚖️ Reconcile</a>
+                    )}
                     {(settledByStmt.get(s.id) ?? 0) > 0 ? (
                       <span className="muted" style={{ fontSize: ".76rem" }}>
                         🔒 {settledByStmt.get(s.id)} line(s) already in Zoho — cannot be removed
@@ -1055,13 +1076,13 @@ export default async function ZohoHubPage(props: {
             </details>
           )}
 
-          {/* RECONCILE — the answer to a continuity break, with evidence.
+          {/* RECONCILE — what replaced the continuity check.
               Pick the account and the period; the page asks Zoho for that
               bank's own register and lists what only the statement has (money
               still needing an entry) and what only Zoho has (an entry with no
               bank line behind it, or a statement never uploaded). */}
           {recAccounts.length > 0 && (
-            <details style={{ marginTop: 8 }} open={!!recon || !!reconError}>
+            <details id="reconcile" style={{ marginTop: 8 }} open={!!recon || !!reconError}>
               <summary className="btn small secondary as-btn">⚖️ Reconcile an account against Zoho</summary>
               <form method="get" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
                 <label style={{ margin: 0 }}>Account

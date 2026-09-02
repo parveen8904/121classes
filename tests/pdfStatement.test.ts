@@ -296,7 +296,8 @@ check("the page is painted white first",
 check("it is drawn at 2× so the type is legible to a reader that only gets pixels",
   /getViewport\(\{ scale: 2 \}\)/.test(pdf));
 check("a platform with no renderer loses this route, not the upload",
-  /catch \{ \/\* no renderer here/.test(pdf));
+  /renderFailure = e instanceof Error/.test(pdf),
+  "the upload still reports what it found; only the drawing is lost");
 
 // The extractor ahead of it now looks at every way a PDF puts a picture down.
 check("image masks are read — a black-and-white scan is one",
@@ -308,13 +309,30 @@ check("one bit a pixel is unpacked rather than skipped",
 check("a mask's set bit is ink; a 1-bit image's is white",
   /isMask \? \(bit \? 0 : 255\) : \(bit \? 255 : 0\)/.test(pdf));
 check("the failure says what was actually on the page",
-  /the \$\{seen\} picture\(s\) on them are too small to be pages \(largest/.test(pdf),
+  /the \$\{seen\} picture\(s\) on them are only \$\{biggest\.w\}×\$\{biggest\.h\}/.test(pdf),
   "‘nothing could be lifted off’ is true and useless — it decides nothing");
 
 const cfg = readFileSync(join(import.meta.dirname, "..", "next.config.mjs"), "utf8");
 check("the native module is left out of the bundle",
   /serverExternalPackages: \["@napi-rs\/canvas"\]/.test(cfg),
   "a prebuilt binary cannot be bundled — the build fails following its .node binding");
+
+// ── and when the drawing fails, say why ──────────────────────────────────
+//
+// The first attempt at rendering came back as "it could not be rendered here
+// either" — true, and impossible to act on. A missing native binary, a page
+// pdf.js will not draw, and a memory limit are three different problems with
+// three different answers.
+check("the reason the drawing failed is carried into the message",
+  /renderFailure = e instanceof Error/.test(pdf) && /Drawing the pages failed too/.test(pdf));
+check("a missing library is told apart from a page that would not draw",
+  /the drawing library is not available on this server/.test(pdf),
+  "one is a deployment, the other is a statement");
+check("and produced-nothing is told apart from threw",
+  /Drawing the pages produced nothing/.test(pdf));
+check("a letterhead is named as a letterhead",
+  /which is a letterhead rather than a page/.test(pdf),
+  "693×94 is a banner across the top, not the statement");
 
 console.log(fails === 0 ? "ok — PDF statements" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

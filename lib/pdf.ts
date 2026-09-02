@@ -339,7 +339,17 @@ export async function readPdfRows(url: string, opts?: { password?: string }): Pr
  * a factory as well; without it an image on the page stops the whole render.
  */
 async function renderPdfPages(bytes: Uint8Array, pages: number, password?: string): Promise<{ b64: string; page: number }[]> {
-  const C = await import("@napi-rs/canvas");
+  // TWO FAILURES THAT LOOK ALIKE AND ARE NOT.
+  //
+  // "The drawing library is not on this server" and "this page could not be
+  // drawn" need completely different answers — one is a deployment, the other
+  // is a statement. Caught apart so the message can say which.
+  let C: typeof import("@napi-rs/canvas");
+  try {
+    C = await import("@napi-rs/canvas");
+  } catch (e) {
+    throw new Error(`the drawing library is not available on this server (${e instanceof Error ? e.message : "unknown"})`);
+  }
   const g = globalThis as unknown as Record<string, unknown>;
   for (const k of ["Path2D", "DOMMatrix", "ImageData"] as const) {
     if (!g[k] && (C as unknown as Record<string, unknown>)[k]) g[k] = (C as unknown as Record<string, unknown>)[k];
@@ -404,6 +414,7 @@ export async function readPdfPageImages(
 
     // WHAT WE ACTUALLY SAW, so a failure can be diagnosed instead of guessed at.
     let seen = 0, biggest = { w: 0, h: 0 };
+    let renderFailure = "";
     const out: { b64: string; page: number }[] = [];
 
     for (let p = 1; p <= pages; p++) {
@@ -488,7 +499,14 @@ export async function readPdfPageImages(
       try {
         const rendered = await renderPdfPages(new Uint8Array(buf), pages, opts?.password);
         out.push(...rendered);
-      } catch { /* no renderer here — fall through to the explanation below */ }
+      } catch (e) {
+        // SAY WHY THE DRAWING FAILED. Swallowing this is what left "it could
+        // not be rendered here either" on the screen — true, and impossible to
+        // act on. A missing native binary, a page pdf.js will not draw and a
+        // memory limit are three different problems with three different
+        // answers, and only the message can tell them apart.
+        renderFailure = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      }
     }
 
     if (!out.length) {
@@ -496,9 +514,12 @@ export async function readPdfPageImages(
       // whether a page held no pictures at all or held one too small to be a
       // page decides completely different next steps.
       const detail = seen === 0
-        ? "its pages hold no text and no pictures — the statement is drawn as lines and shapes — and it could not be rendered here either"
-        : `the ${seen} picture(s) on them are too small to be pages (largest ${biggest.w}×${biggest.h})`;
-      return { ok: false, reason: `nothing could be read off its ${pdf.numPages} page(s): ${detail}` };
+        ? "its pages hold no text and no pictures — the statement is drawn as lines and shapes"
+        : `the ${seen} picture(s) on them are only ${biggest.w}×${biggest.h}, which is a letterhead rather than a page`;
+      const drawn = renderFailure
+        ? ` Drawing the pages failed too — ${renderFailure}`
+        : " Drawing the pages produced nothing.";
+      return { ok: false, reason: `nothing could be read off its ${pdf.numPages} page(s): ${detail}.${drawn}` };
     }
     return { ok: true, images: out };
   } catch (e) {

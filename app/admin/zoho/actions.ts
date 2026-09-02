@@ -31,7 +31,7 @@ export async function scanSalesAction() {
   let note: string;
   try { note = await scanPortalSales(); } catch (e) { note = `Scan failed: ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#queue`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=queue#queue`);
 }
 
 export async function approvePostingAction(formData: FormData) {
@@ -116,7 +116,7 @@ export async function scanSettlementsAction() {
   let note: string;
   try { note = await scanSettlements(); } catch (e) { note = `Settlement scan failed: ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#settlements`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=settlements#settlements`);
 }
 
 export async function approveSettlementAction(formData: FormData) {
@@ -194,7 +194,7 @@ export async function fetchProviderInvoicesAction() {
   catch (e) { notes.push(`Razorpay failed: ${e instanceof Error ? e.message : "unknown"}`); }
   const note = notes.join(" ");
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#vault`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=vault#vault`);
 }
 
 // ---- Provider invoices → Zoho bills ----------------------------------------
@@ -206,7 +206,7 @@ export async function scanBillsAction() {
   try { note = await scanVaultForBills(); }
   catch (e) { note = `Bill scan failed: ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=bills#bills`);
 }
 
 export async function readbackBillsAction() {
@@ -225,7 +225,7 @@ export async function readbackBillsAction() {
       : "No posted bills to check yet.";
   } catch (e) { note = `Read-back failed: ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=bills#bills`);
 }
 
 export async function uploadBillAction(formData: FormData) {
@@ -239,7 +239,7 @@ export async function uploadBillAction(formData: FormData) {
   const institution = str(formData.get("institution"));
   const file = formData.get("file") as File | null;
   if (!institution || !file || !file.size) {
-    redirect(`/admin/zoho?scan=${encodeURIComponent("Name the supplier and choose the file.")}#bills`);
+    redirect(`/admin/zoho?scan=${encodeURIComponent("Name the supplier and choose the file.")}&sec=bills#bills`);
   }
   const safe = (file!.name || "invoice.pdf").replace(/[^\w.\-]+/g, "_").slice(-80);
   const path = `zoho-vault/${Date.now()}-${safe}`;
@@ -248,7 +248,7 @@ export async function uploadBillAction(formData: FormData) {
   const up = await svc.storage.from("secure").upload(path, buf, {
     contentType: file!.type || "application/pdf", upsert: false,
   });
-  if (up.error) redirect(`/admin/zoho?scan=${encodeURIComponent(`Upload failed: ${up.error.message}`)}#bills`);
+  if (up.error) redirect(`/admin/zoho?scan=${encodeURIComponent(`Upload failed: ${up.error.message}`)}&sec=bills#bills`);
 
   const { data: doc } = await svc.from("zoho_vault_docs").insert({
     title: `${institution} — ${str(formData.get("title")) || file!.name}`,
@@ -266,7 +266,7 @@ export async function uploadBillAction(formData: FormData) {
     try { note = await scanVaultForBills(3); } catch { note = "Filed in the vault; press 🔄 to read it for the bill."; }
   }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bills`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=bills#bills`);
 }
 
 /**
@@ -298,7 +298,7 @@ export async function approveZohoAction(formData: FormData) {
     note = "Approved and queued — Zoho's minute was full, so it posts by itself shortly. Nothing further is needed.";
   }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#approvals`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=approvals#approvals`);
 }
 
 /** Put a refused release back on his desk once he has dealt with the reason. */
@@ -349,7 +349,7 @@ export async function approveAllZohoAction(formData: FormData) {
           + `over the next few minutes. Nothing further is needed from you.`
         : ".");
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#approvals`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=approvals#approvals`);
 }
 
 export async function rejectZohoAction(formData: FormData) {
@@ -495,7 +495,7 @@ export async function ingestActivityCsvAction(formData: FormData) {
   const to = str(formData.get("to"));
   const file = formData.get("file") as File | null;
   if (!account || !file || !file.size || !from || !to) {
-    redirect(`/admin/zoho?scan=${encodeURIComponent("Pick the account, the period, and the activity file.")}#brokerage`);
+    redirect(`/admin/zoho?scan=${encodeURIComponent("Pick the account, the period, and the activity file.")}&sec=brokerage#brokerage`);
   }
 
   const safe = (file!.name || "activity.csv").replace(/[^\w.\-]+/g, "_").slice(-80);
@@ -505,7 +505,7 @@ export async function ingestActivityCsvAction(formData: FormData) {
   const { error } = await svc.storage.from("secure").upload(path, buf, {
     contentType: file!.type || "text/csv", upsert: false,
   });
-  if (error) redirect(`/admin/zoho?scan=${encodeURIComponent(`Upload failed: ${error.message}`)}#brokerage`);
+  if (error) redirect(`/admin/zoho?scan=${encodeURIComponent(`Upload failed: ${error.message}`)}&sec=brokerage#brokerage`);
 
   const { ingestActivityCsv } = await import("@/lib/brokerageWorkbook");
   let note: string;
@@ -517,7 +517,7 @@ export async function ingestActivityCsvAction(formData: FormData) {
         (r.note.partial ? " Some sales have no purchase cost in the file — they are listed for you." : "");
   } catch (e) { note = `The note could not be prepared — ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#brokerage`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=brokerage#brokerage`);
 }
 
 export async function rebuildBrokerageNoteAction(formData: FormData) {
@@ -536,12 +536,12 @@ export async function rebuildBrokerageNoteAction(formData: FormData) {
   const svc = createServiceClient();
   const { data: n } = await svc.from("brokerage_notes")
     .select("account_name, period_start, period_end, status, source_url, workbook").eq("id", id).maybeSingle();
-  if (!n) redirect(`/admin/zoho?scan=${encodeURIComponent("That working note could not be found.")}#brokerage`);
+  if (!n) redirect(`/admin/zoho?scan=${encodeURIComponent("That working note could not be found.")}&sec=brokerage#brokerage`);
   if (n!.status !== "draft") {
-    redirect(`/admin/zoho?scan=${encodeURIComponent("That note has already been approved and journalled — it is not rebuilt.")}#brokerage`);
+    redirect(`/admin/zoho?scan=${encodeURIComponent("That note has already been approved and journalled — it is not rebuilt.")}&sec=brokerage#brokerage`);
   }
   if (!n!.source_url) {
-    redirect(`/admin/zoho?scan=${encodeURIComponent("That note was summarised from statement lines, not from an activity file — upload the CSV to rebuild it.")}#brokerage`);
+    redirect(`/admin/zoho?scan=${encodeURIComponent("That note was summarised from statement lines, not from an activity file — upload the CSV to rebuild it.")}&sec=brokerage#brokerage`);
   }
 
   const keptCost = (n!.workbook as { equity?: { uncostedCost?: number | null } } | null)?.equity?.uncostedCost ?? null;
@@ -576,7 +576,7 @@ export async function rebuildBrokerageNoteAction(formData: FormData) {
     }
   } catch (e) { note = `It could not be rebuilt — ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#brokerage`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=brokerage#brokerage`);
 }
 
 export async function setUncostedCostAction(formData: FormData) {
@@ -619,7 +619,7 @@ export async function buildBrokerageNoteAction(formData: FormData) {
     note = made ? `Working note prepared for ${account}, ${from} to ${to}.` : `Nothing found for ${account} between those dates.`;
   } catch (e) { note = `Could not prepare the note — ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#brokerage`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=brokerage#brokerage`);
 }
 
 export async function setSellCostAction(formData: FormData) {
@@ -719,7 +719,7 @@ export async function matchBankAction() {
   try { note = await matchWaitingLines(); }
   catch (e) { note = `Could not read the open items from Zoho — ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bank`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=bank#bank`);
 }
 
 export async function chooseMatchAction(formData: FormData) {
@@ -1016,7 +1016,7 @@ export async function uploadStatementAction(formData: FormData) {
   const accountName = str(formData.get("account_name"));
   const file = formData.get("file") as File | null;
   if (!accountName || !file || !file.size) {
-    redirect(`/admin/zoho?scan=${encodeURIComponent("Pick the account and choose a statement file.")}#bank`);
+    redirect(`/admin/zoho?scan=${encodeURIComponent("Pick the account and choose a statement file.")}&sec=bank#bank`);
   }
   const safe = (file!.name || "statement").replace(/[^\w.\-]+/g, "_").slice(-80);
   const path = `zoho-bank/${Date.now()}-${safe}`;
@@ -1025,7 +1025,7 @@ export async function uploadStatementAction(formData: FormData) {
   const { error } = await svc.storage.from("secure").upload(path, buf, {
     contentType: file!.type || "application/octet-stream", upsert: false,
   });
-  if (error) redirect(`/admin/zoho?scan=${encodeURIComponent(`Upload failed: ${error.message}`)}#bank`);
+  if (error) redirect(`/admin/zoho?scan=${encodeURIComponent(`Upload failed: ${error.message}`)}&sec=bank#bank`);
   const { ingestStatement } = await import("@/lib/bankStatements");
   let note: string;
   // THE PASSWORD IS NEVER STORED. It travels with this one request and is
@@ -1036,7 +1036,7 @@ export async function uploadStatementAction(formData: FormData) {
   try { note = await ingestStatement(accountName, `secure:${path}`, file!.name, { pdfPassword }); }
   catch (e) { note = `Statement failed: ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bank`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=bank#bank`);
 }
 
 // TRY A STATEMENT AGAIN, WITHOUT UPLOADING IT AGAIN.
@@ -1076,7 +1076,7 @@ export async function createTdsTaxAction(formData: FormData) {
     msg = `Could not reach Zoho: ${e instanceof Error ? e.message : "unknown"}`;
   }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(msg)}#bills`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(msg)}&sec=bills#bills`);
 }
 
 export async function readInvoiceTaxAction(formData: FormData) {
@@ -1093,7 +1093,7 @@ export async function readInvoiceTaxAction(formData: FormData) {
     msg = `Could not read that invoice: ${e instanceof Error ? e.message : "unknown"}`;
   }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(msg)}#bills`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(msg)}&sec=bills#bills`);
 }
 
 // ASK ZOHO AGAIN ABOUT WHAT IS STILL WAITING.
@@ -1108,7 +1108,7 @@ export async function rematchBankAction() {
   try { msg = await rematchWaitingLines(); }
   catch (e) { msg = `Could not re-check: ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(msg)}#bank`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(msg)}&sec=bank#bank`);
 }
 
 // THROW AWAY A STATEMENT THAT NEVER PARSED.
@@ -1129,12 +1129,12 @@ export async function removeStatementAction(formData: FormData) {
   if ((settled ?? 0) > 0) {
     redirect(`/admin/zoho?scan=${encodeURIComponent(
       `Not removed — ${settled} of its lines are already posted or matched in Zoho. A statement in the books stays.`,
-    )}#bank`);
+    )}&sec=bank#bank`);
   }
   await svc.from("bank_lines").delete().eq("statement_id", id);
   await svc.from("bank_statements").delete().eq("id", id);
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent("Statement removed. Upload it again whenever you like.")}#bank`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent("Statement removed. Upload it again whenever you like.")}&sec=bank#bank`);
 }
 
 export async function reparseStatementAction(formData: FormData) {
@@ -1145,7 +1145,7 @@ export async function reparseStatementAction(formData: FormData) {
   const { data: st } = await svc
     .from("bank_statements").select("account_name, file_url, file_name").eq("id", id).maybeSingle();
   if (!st?.file_url) {
-    redirect(`/admin/zoho?scan=${encodeURIComponent("That statement has no stored file.")}#bank`);
+    redirect(`/admin/zoho?scan=${encodeURIComponent("That statement has no stored file.")}&sec=bank#bank`);
   }
   // The old failed row goes, so a successful retry does not leave a twin.
   await svc.from("bank_statements").delete().eq("id", id);
@@ -1158,7 +1158,7 @@ export async function reparseStatementAction(formData: FormData) {
     note = `Statement failed again: ${e instanceof Error ? e.message : "unknown"}`;
   }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#bank`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=bank#bank`);
 }
 
 export async function answerLineAction(formData: FormData) {
@@ -1376,21 +1376,21 @@ export async function addPettyPersonAction(formData: FormData) {
   const clash = await pettyEmailClash(email);
   if (clash) {
     redirect(`/admin/zoho?scan=${encodeURIComponent(
-      `This email ID is already registered — it belongs to ${clash}. One login can hold only one petty-cash ledger.`)}#petty`);
+      `This email ID is already registered — it belongs to ${clash}. One login can hold only one petty-cash ledger.`)}&sec=petty#petty`);
   }
   // The same name twice is nearly always a double-submit, and two ledgers with
   // one name are impossible to tell apart on the balances list.
   const { data: sameName } = await svc.from("petty_people")
     .select("id").ilike("name", name).eq("active", true).limit(1);
   if ((sameName ?? []).length) {
-    redirect(`/admin/zoho?scan=${encodeURIComponent(`${name} is already on the petty-cash list.`)}#petty`);
+    redirect(`/admin/zoho?scan=${encodeURIComponent(`${name} is already on the petty-cash list.`)}&sec=petty#petty`);
   }
   // A fresh person gets a fresh "(AI)" advance account unless an existing
   // account (Arun / Madan / Pradeep / Shripal…) is named.
   if (!zohoAccount) {
     const { ensureAdvanceAccount } = await import("@/lib/pettyCash");
     try { zohoAccount = await ensureAdvanceAccount(name); }
-    catch { redirect(`/admin/zoho?scan=${encodeURIComponent("Could not create the advance account in Zoho.")}#petty`); }
+    catch { redirect(`/admin/zoho?scan=${encodeURIComponent("Could not create the advance account in Zoho.")}&sec=petty#petty`); }
   }
   let profileId: string | null = null;
   if (email) {
@@ -1400,7 +1400,7 @@ export async function addPettyPersonAction(formData: FormData) {
   await svc.from("petty_people").insert({ name, zoho_account_name: zohoAccount, profile_id: profileId });
   revalidatePath("/admin/zoho");
   redirect(`/admin/zoho?scan=${encodeURIComponent(
-    `${name} added (account: ${zohoAccount}).${email && !profileId ? " ⚠️ No portal login found for that email — they can't upload bills until it matches." : ""}${profileId ? " Remember to grant them the 👛 Petty cash area in Admin → Users." : ""}`)}#petty`);
+    `${name} added (account: ${zohoAccount}).${email && !profileId ? " ⚠️ No portal login found for that email — they can't upload bills until it matches." : ""}${profileId ? " Remember to grant them the 👛 Petty cash area in Admin → Users." : ""}`)}&sec=petty#petty`);
 }
 
 export async function editPettyPersonAction(formData: FormData) {
@@ -1415,7 +1415,7 @@ export async function editPettyPersonAction(formData: FormData) {
   const clash = await pettyEmailClash(email, id);
   if (clash) {
     redirect(`/admin/zoho?scan=${encodeURIComponent(
-      `This email ID is already registered — it belongs to ${clash}.`)}#petty`);
+      `This email ID is already registered — it belongs to ${clash}.`)}&sec=petty#petty`);
   }
 
   // Clearing the email box unlinks the login rather than silently keeping the
@@ -1435,7 +1435,7 @@ export async function editPettyPersonAction(formData: FormData) {
 
   revalidatePath("/admin/zoho");
   redirect(`/admin/zoho?scan=${encodeURIComponent(
-    `${name} updated.${email && !profileId ? " ⚠️ No portal login found for that email — they can't upload bills until it matches." : ""}`)}#petty`);
+    `${name} updated.${email && !profileId ? " ⚠️ No portal login found for that email — they can't upload bills until it matches." : ""}`)}&sec=petty#petty`);
 }
 
 // DEACTIVATE, NOT DESTROY.
@@ -1457,12 +1457,12 @@ export async function deletePettyPersonAction(formData: FormData) {
   const bal = (await pettyBalances().catch(() => [])).find((b) => b.personId === id);
   if (bal && Math.round(bal.balance) !== 0 && str(formData.get("force")) !== "yes") {
     redirect(`/admin/zoho?scan=${encodeURIComponent(
-      `${bal.name} still holds ${Math.round(bal.balance)} of unspent advance. Settle it first, or tick "remove anyway".`)}#petty`);
+      `${bal.name} still holds ${Math.round(bal.balance)} of unspent advance. Settle it first, or tick "remove anyway".`)}&sec=petty#petty`);
   }
   await svc.from("petty_people").update({ active: false }).eq("id", id);
   revalidatePath("/admin/zoho");
   redirect(`/admin/zoho?scan=${encodeURIComponent(
-    `${person?.name ?? "That person"} removed from petty cash. Their posted advances and bills are untouched.`)}#petty`);
+    `${person?.name ?? "That person"} removed from petty cash. Their posted advances and bills are untouched.`)}&sec=petty#petty`);
 }
 
 export async function recordAdvanceAction(formData: FormData) {
@@ -1555,7 +1555,7 @@ export async function uploadBrokerageAction(formData: FormData) {
   const accountName = str(formData.get("account_name_other")) || str(formData.get("account_name"));
   const file = formData.get("file") as File | null;
   if (!accountName || !file || !file.size) {
-    redirect(`/admin/zoho?scan=${encodeURIComponent("Pick the brokerage account and choose a statement file.")}#brokerage`);
+    redirect(`/admin/zoho?scan=${encodeURIComponent("Pick the brokerage account and choose a statement file.")}&sec=brokerage#brokerage`);
   }
   const safe = (file!.name || "statement").replace(/[^\w.\-]+/g, "_").slice(-80);
   const path = `zoho-brokerage/${Date.now()}-${safe}`;
@@ -1564,13 +1564,13 @@ export async function uploadBrokerageAction(formData: FormData) {
   const { error } = await svc.storage.from("secure").upload(path, buf, {
     contentType: file!.type || "application/octet-stream", upsert: false,
   });
-  if (error) redirect(`/admin/zoho?scan=${encodeURIComponent(`Upload failed: ${error.message}`)}#brokerage`);
+  if (error) redirect(`/admin/zoho?scan=${encodeURIComponent(`Upload failed: ${error.message}`)}&sec=brokerage#brokerage`);
   const { ingestBrokerageStatement } = await import("@/lib/brokerage");
   let note: string;
   try { note = await ingestBrokerageStatement(accountName, `secure:${path}`, file!.name); }
   catch (e) { note = `Statement failed: ${e instanceof Error ? e.message : "unknown"}`; }
   revalidatePath("/admin/zoho");
-  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}#brokerage`);
+  redirect(`/admin/zoho?scan=${encodeURIComponent(note)}&sec=brokerage#brokerage`);
 }
 
 export async function postBrokerageLineAction(formData: FormData) {
@@ -1763,7 +1763,7 @@ export async function deleteVaultDoc(formData: FormData) {
   if (posted?.length) {
     redirect(`/admin/zoho?scan=${encodeURIComponent(
       `Not deleted — bill ${posted[0].bill_no ?? ""} posted from this document is in Zoho. The paper behind a posted entry is never thrown away.`,
-    )}#bills`);
+    )}&sec=bills#bills`);
   }
   // Unposted bill rows born from this document go with it, or the foreign key
   // blocks the delete and the button looks dead.
@@ -1774,5 +1774,5 @@ export async function deleteVaultDoc(formData: FormData) {
   revalidatePath("/admin/zoho");
   redirect(`/admin/zoho?scan=${encodeURIComponent(
     error ? `Could not delete: ${error.message}` : "Document removed, along with its unposted queue entries.",
-  )}#bills`);
+  )}&sec=bills#bills`);
 }

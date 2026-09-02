@@ -74,10 +74,28 @@ type PostingRow = {
 };
 
 export default async function ZohoHubPage(props: {
-  searchParams: Promise<{ zoho_ok?: string; zoho_err?: string; scan?: string; upto?: string; q?: string; from?: string; to?: string; part?: string; rec?: string; rf?: string; rt?: string }>;
+  searchParams: Promise<{ zoho_ok?: string; zoho_err?: string; scan?: string; upto?: string; q?: string; from?: string; to?: string; part?: string; rec?: string; rf?: string; rt?: string; sec?: string }>;
 }) {
   await assertArea("zoho");
   const sp = await props.searchParams;
+  // THE ANSWER APPEARS WHERE THE QUESTION WAS ASKED.
+  //
+  // His report, 2 Sep 2026: adding a petty-cash person who already exists put
+  // "This email ID is already registered" up in the SALES section — because
+  // every action on this page redirected to ?scan= and the only place that was
+  // rendered was under "Scan for new sales", several screens above the form he
+  // was using. It was also styled as a success, in green, whatever it said.
+  //
+  // Each redirect now names its section, and the message is drawn there. A
+  // message that reads like a refusal is drawn as one.
+  const deskMsg = (sp.scan ?? "").trim();
+  const deskSec = (sp.sec ?? "").trim();
+  const deskBad = /already|could not|cannot|failed|no portal login|not found|still holds|⚠️|refused|invalid/i.test(deskMsg);
+  const DeskNotice = ({ sec }: { sec: string }) =>
+    deskMsg && deskSec === sec
+      ? <div className={deskBad ? "notice err" : "notice ok"} style={{ marginTop: 10 }}>{deskBad ? "⚠️" : "✅"} {deskMsg}</div>
+      : null;
+
   const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
   const upto = sp.upto && /^\d{4}-\d{2}-\d{2}$/.test(sp.upto) ? sp.upto : todayIST;
   const searching = Boolean((sp.q ?? "").trim() || sp.from || sp.to || (sp.part && sp.part !== "all"));
@@ -279,7 +297,13 @@ export default async function ZohoHubPage(props: {
   // never calls Zoho at all. Nor do the two below. Zoho is needed to POST a
   // journal, not to say who exists, so they load regardless and only the
   // posting degrades when the hub is down.
-  const pBalances = await pettyBalances().catch(() => []);
+  // AND WHEN IT BREAKS, SAY SO. Swallowing the error to an empty array is how
+  // a failed query came to look like "nobody has been added yet" — the balances
+  // list vanished, the picker emptied, and the page said nothing was wrong.
+  let pBalances: Awaited<ReturnType<typeof pettyBalances>> = [];
+  let pettyErr = "";
+  try { pBalances = await pettyBalances(); }
+  catch (e) { pettyErr = e instanceof Error ? e.message : String(e); }
   const { data: pendingBillData } = await createServiceClient().from("petty_bills")
     .select("id, bill_date, amount, purpose, status, file_url, error, person:person_id(name)")
     .in("status", ["pending", "failed"]).order("created_at");
@@ -645,6 +669,7 @@ export default async function ZohoHubPage(props: {
           {/* He ruled that this collapses like everything else. The amber pill
               carries the count, so a closed gate still says work is waiting. */}
           <summary className="sec-head">✋ Waiting for your approval{pendingApprovals.length > 0 && <span className="sec-count warn">{pendingApprovals.length}</span>}</summary>
+          <DeskNotice sec="approvals" />
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Nothing is written to Zoho from anywhere in this system — no posting, no date, no amount, no vendor,
             no TDS — until you release it here. The desk prepares the work and asks; this page is the only door,
@@ -768,7 +793,8 @@ export default async function ZohoHubPage(props: {
               ✅ posted {posted.length} · 🤝 matched to manual entries {matchedRows.length}
             </span>
           </div>
-          {sp.scan && <div className="notice ok" style={{ marginTop: 10 }}>🔄 {sp.scan}</div>}
+          {deskMsg && !deskSec && <div className="notice ok" style={{ marginTop: 10 }}>🔄 {deskMsg}</div>}
+          <DeskNotice sec="queue" />
           <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 10px" }}>
             Each paid portal sale becomes a draft here. Approving posts it to Zoho exactly as the office does by
             hand: the portal&apos;s own CAPS invoice number, booked to Sales-Classes (Sales-Validity for extensions),
@@ -886,6 +912,7 @@ export default async function ZohoHubPage(props: {
       {hubConnected && (
         <details id="settlements" data-sec className="zoho-sec">
           <summary className="sec-head">2 · 🏦 Razorpay settlements — cross-check</summary>
+          <DeskNotice sec="settlements" />
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 26 }}>
             <form action={scanSettlementsAction} style={{ margin: 0 }}>
               <SubmitButton className="btn small secondary" savedLabel="Scanned">🔄 Fetch settlements</SubmitButton>
@@ -953,6 +980,7 @@ export default async function ZohoHubPage(props: {
       {hubConnected && (
         <details id="bank" data-sec className="zoho-sec">
           <summary className="sec-head">3 · 🏧 Bank &amp; card statements{bankLines.length > 0 && <span className="sec-count">{bankLines.length}</span>}</summary>
+          <DeskNotice sec="bank" />
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Upload each account&apos;s statement (CSV, Excel or PDF). Every line ends in one of three places:
             <strong> matched</strong> (already in Zoho — left alone), <strong>auto</strong> (a taught rule proposes
@@ -1385,6 +1413,13 @@ export default async function ZohoHubPage(props: {
       {hubConnected && (
         <details id="petty" data-sec className="zoho-sec">
           <summary className="sec-head">4 · 👛 Petty cash — advances{(pendingBills.length + failedAdvs.length) > 0 && <span className="sec-count">{pendingBills.length + failedAdvs.length}</span>}</summary>
+          <DeskNotice sec="petty" />
+          {pettyErr && (
+            <div className="notice err" style={{ marginTop: 10 }}>
+              ⚠️ The petty-cash list could not be read, so the people below and the picker above are empty —
+              this is a fault, not an empty list: {pettyErr}
+            </div>
+          )}
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Record an advance <em>after</em> it is paid (it posts to the person&apos;s own Zoho advance account at
             once). The person uploads bills on their <strong>/admin/petty</strong> page; approving a bill books the
@@ -1561,6 +1596,7 @@ export default async function ZohoHubPage(props: {
       {hubConnected && (
         <details id="brokerage" data-sec className="zoho-sec">
           <summary className="sec-head">5 · 📈 Investments — brokerage &amp; retirement{brokLines.length > 0 && <span className="sec-count">{brokLines.length}</span>}</summary>
+          <DeskNotice sec="brokerage" />
           <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
             Upload statements from any investment home — brokerages, <strong>retirement accounts (IRA/401k)</strong>,
             managed funds, Treasury Direct, anything else via the free account box. Every transaction is converted at its
@@ -2056,6 +2092,7 @@ export default async function ZohoHubPage(props: {
       {hubConnected && (
         <details id="bills" data-sec>
           <summary className="sec-head">6 · 🧾 Invoices &amp; documents — upload{billsWaiting.length > 0 && <span className="sec-count warn">{billsWaiting.length}</span>}</summary>
+          <DeskNotice sec="bills" />
           {/* HIS RULING: the vault is a repository only. Anything uploaded in
               order to be POSTED — a supplier invoice, any document that must
               become an entry — is uploaded here, and the provider-invoice API
@@ -2654,6 +2691,7 @@ export default async function ZohoHubPage(props: {
       {/* ── The document vault — the whole zoho area (founder + Pradeep) ── */}
       <details id="vault" data-sec>
         <summary className="sec-head">🗄️ Document vault — the repository{docs.length > 0 && <span className="sec-count">{docs.length}</span>}</summary>
+          <DeskNotice sec="vault" />
       {/* ONE LINE OF WHAT IT IS; THE MECHANICS FOLD AWAY.
           The guarded route and who may delete are true and worth recording, but
           they are not what somebody filing a statement needs to read first. */}

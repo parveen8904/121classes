@@ -107,21 +107,43 @@ export type PettyBalance = { personId: string; name: string; zohoAccount: string
 
 export async function pettyBalances(): Promise<PettyBalance[]> {
   const svc = createServiceClient();
-  const [{ data: people }, { data: advs }, { data: bills }] = await Promise.all([
-    // The email is shown on the balances list and pre-fills the edit form —
-    // without it there was no way to see WHICH login a ledger was tied to.
-    svc.from("petty_people").select("id, name, zoho_account_name, profile_id, profiles(email)").eq("active", true).order("name"),
+  // THE LIST MUST NOT DEPEND ON A DECORATION.
+  //
+  // On 1 September this asked for the login email as an EMBEDDED row —
+  // `profiles(email)` — so the desk could see which account a ledger was tied
+  // to. PostgREST resolves an embed through a foreign key, and petty_people had
+  // none to profiles. The query failed, `data` came back null, this returned an
+  // empty array, and the whole petty cash section went blank: no balances, and
+  // an empty person picker that told him nobody existed while three people sat
+  // in the table.
+  //
+  // The key is there now (migration 0058), but the shape of that failure is the
+  // real lesson: an optional nicety must never be able to take the essential
+  // list with it. So the people are read on their own, and the emails are a
+  // second, separate query whose failure costs only the emails.
+  const [{ data: people, error: peopleErr }, { data: advs }, { data: bills }] = await Promise.all([
+    svc.from("petty_people").select("id, name, zoho_account_name, profile_id").eq("active", true).order("name"),
     svc.from("petty_advances").select("person_id, amount").eq("status", "posted"),
     svc.from("petty_bills").select("person_id, amount").eq("status", "approved"),
   ]);
+  // Loudly, because "nobody is set up yet" and "the query broke" look identical
+  // on screen and only one of them is worth acting on.
+  if (peopleErr) throw new Error(`could not read the petty cash people — ${peopleErr.message}`);
+
+  const emailBy = new Map<string, string>();
+  const profileIds = (people ?? []).map((p) => p.profile_id).filter(Boolean) as string[];
+  if (profileIds.length) {
+    const { data: profs } = await svc.from("profiles").select("id, email").in("id", profileIds);
+    for (const pr of profs ?? []) if (pr.email) emailBy.set(String(pr.id), String(pr.email));
+  }
   const advBy = new Map<string, number>();
   for (const a of advs ?? []) advBy.set(a.person_id, (advBy.get(a.person_id) ?? 0) + Number(a.amount));
   const billBy = new Map<string, number>();
   for (const b of bills ?? []) billBy.set(b.person_id, (billBy.get(b.person_id) ?? 0) + Number(b.amount));
   return (people ?? []).map((p) => {
     const advanced = advBy.get(p.id) ?? 0, spent = billBy.get(p.id) ?? 0;
-    const prof = p.profiles as unknown as { email: string | null } | null;
     return { personId: p.id, name: p.name, zohoAccount: p.zoho_account_name, profileId: p.profile_id,
-      email: prof?.email ?? null, advanced, spent, balance: advanced - spent };
+      email: p.profile_id ? emailBy.get(String(p.profile_id)) ?? null : null,
+      advanced, spent, balance: advanced - spent };
   });
 }

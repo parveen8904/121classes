@@ -201,10 +201,31 @@ export async function ingestStatement(
     }
     if (!lines.length) note = `nothing could be read from ${fileName} — a CSV, an Excel sheet, a PDF or a photograph of the rows all work`;
   }
+  return (await fileStatementLines(accountName, lines, fileUrl, fileName, note)).note;
+}
 
+/**
+ * FILING WHAT HAS ALREADY BEEN READ.
+ *
+ * Split out on 2 September 2026 for his two-step design: the vault reads a
+ * document once and stores the table, and this takes that table — never the
+ * original file again. The old single function fetched, read and filed on one
+ * press, so a file it could not read left nothing behind at all.
+ */
+export async function ingestRows(
+  accountName: string, rows: string[][], fileUrl: string, fileName: string,
+): Promise<{ note: string; statementId: string | null }> {
+  const { lines: parsed, note } = rowsToLines(rows);
+  return fileStatementLines(accountName, parsed, fileUrl, fileName, note);
+}
+
+async function fileStatementLines(
+  accountName: string, lines: StmtLine[], fileUrl: string, fileName: string, note: string,
+): Promise<{ note: string; statementId: string | null }> {
+  const svc = createServiceClient();
   if (!lines.length) {
     await svc.from("bank_statements").insert({ account_name: accountName, file_url: fileUrl, file_name: fileName, status: "failed", note: note || "no transaction lines found" });
-    return `Statement could not be parsed: ${note || "no transaction lines found"}.`;
+    return { note: `Statement could not be parsed: ${note || "no transaction lines found"}.`, statementId: null };
   }
 
   lines.sort((a, b) => a.date.localeCompare(b.date));
@@ -248,7 +269,7 @@ export async function ingestStatement(
     lines_total: lines.length,
     note: isReupload ? "this period was uploaded before — the lines already filed were not booked again" : null,
   }).select("id").single();
-  if (!stmt) return "Could not record the statement.";
+  if (!stmt) return { note: "Could not record the statement.", statementId: null };
 
   // Duplicate guard: a line already ingested (overlapping statements) is filed once.
   const { data: existing } = await svc.from("bank_lines")
@@ -381,7 +402,10 @@ export async function ingestStatement(
   const found = recon.zohoOnly.length
     ? ` ${recon.zohoOnly.length} entr${recon.zohoOnly.length === 1 ? "y" : "ies"} in Zoho for these dates ${recon.zohoOnly.length === 1 ? "has" : "have"} no line in this statement — Reconcile shows which.`
     : "";
-  return `${lines.length} line(s): ${matched} matched, ${auto} auto-proposed, ${ask} to answer${dup ? `, ${dup} duplicate(s) skipped` : ""}.${found}`;
+  return {
+    note: `${lines.length} line(s): ${matched} matched, ${auto} auto-proposed, ${ask} to answer${dup ? `, ${dup} duplicate(s) skipped` : ""}.${found}`,
+    statementId: String(stmt.id),
+  };
 }
 
 type ZExp = { id: string; account: string };

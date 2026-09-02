@@ -133,9 +133,10 @@ check("the direction is taken from the marker column OR from the amount cell",
   /const t = \(cell\("drcr"\) \|\| raw\)\.toLowerCase\(\)/.test(src));
 check("on a card, Cr is a payment against it — the credit column, like money in",
   /\/\\bcr\\b\|\\bcredit\\b\/\.test\(t\)\) credit = Math\.abs\(amt\)/.test(src));
-check("credit-card accounts are offered for upload beside the banks",
+check("credit-card accounts are offered beside the banks when a document is named",
   /a\.type === "bank" \|\| a\.type === "credit_card"/.test(
-    readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/statements/page.tsx"), "utf8")));
+    readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/vault/page.tsx"), "utf8")),
+  "the vault asks which account a statement belongs to; the list must include cards");
 
 console.log(fails === 0 ? "ok — Axis statement columns" : `${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

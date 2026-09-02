@@ -8,7 +8,6 @@ import SubmitButton from "@/app/components/SubmitButton";
 import Money from "@/app/components/Money";
 import EntryLines from "../EntryLines";
 import BankAnswerPanel from "../BankAnswerPanel";
-import StatementUpload from "../StatementUpload";
 import QueuePicker from "../QueuePicker";
 import DeskShell from "../_shell";
 import {
@@ -78,7 +77,6 @@ export default async function StatementsPage(props: {
     : { count: 0 };
 
   const zohoAccounts = hubConnected ? await listZohoAccounts().catch(() => []) : [];
-  const bankChoices = zohoAccounts.filter((a) => a.type === "bank" || a.type === "credit_card").map((a) => a.name);
 
   /** A sensible rule-pattern suggestion: the narration's most merchant-ish token. */
   const suggestPattern = (narration: string) => {
@@ -190,7 +188,21 @@ export default async function StatementsPage(props: {
     )}
   </div>
 
-  <StatementUpload accounts={bankChoices} />
+  {/* THE WAY IN IS THE VAULT NOW. His two steps, 2 Sep 2026: a document is
+      uploaded and READ once at the door, and only then asked what it is.
+      A second uploader here would put the old one-press behaviour back beside
+      the new one, and a file that failed would again leave nothing behind. */}
+  <div className="card" style={{ marginTop: 14, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+    <span style={{ fontSize: "1.6rem" }}>🗄️</span>
+    <div style={{ flex: 1, minWidth: 240 }}>
+      <strong>Statements come in through the vault</strong>
+      <p className="muted" style={{ fontSize: ".82rem", margin: "3px 0 0" }}>
+        Upload it there — Excel, CSV, PDF or photographs of the pages — and it is read on the way in. You then say
+        which account it belongs to, and its lines land here.
+      </p>
+    </div>
+    <a className="btn small" href="/admin/zoho/vault">📥 Upload a statement →</a>
+  </div>
 
   {/* Matching runs at ingest, which is before he posts things in Zoho.
       This looks again, so money already in the books stops being asked

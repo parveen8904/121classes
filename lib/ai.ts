@@ -3001,6 +3001,63 @@ export async function parseBankStatementFile(
   }
 }
 
+/**
+ * A DOCUMENT → ROWS, whatever form it arrives in.
+ *
+ * The vault reads once and stores the table; this is the part of that which
+ * needs a model. Text, a PDF, a photograph or the pages of a locked file all
+ * come back as the same thing: rows, first row the header.
+ *
+ * Rows rather than parsed transactions on purpose. What the document IS has not
+ * been asked yet — a person answers that on the vault page afterwards — so this
+ * must not assume a bank statement, and the same call reads an invoice.
+ */
+export async function transcribeStatement(
+  input: string | { b64: string; mediaType: string } | { b64: string; mediaType: string }[],
+): Promise<string[][] | null> {
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey || (await aiFeatureDisabled("bankstmt"))) return null;
+  const model = await fastModel();
+  const system =
+    "You transcribe an Indian financial document — a bank or credit-card statement, or a supplier invoice — into a TABLE. " +
+    'Return ONLY a JSON array of arrays of strings: the first inner array is the column headers, every following one is a row. ' +
+    "Rules: keep the document's own column names and its own wording, verbatim; one row per line of the document, in its order; " +
+    "keep amounts exactly as printed, including commas and any Cr/Dr marker; leave a cell as an empty string where the document " +
+    "leaves it empty, so every row has the same number of cells as the header; skip page headers, footers and repeated column " +
+    "titles on later pages. If a figure is genuinely unreadable, put an empty string rather than guessing at it.";
+  const content = typeof input === "string"
+    ? [{ type: "text", text: input.slice(0, 180_000) }]
+    : (Array.isArray(input) ? input : [input]).map((p) =>
+        p.mediaType === "application/pdf"
+          ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: p.b64 } }
+          : { type: "image", source: { type: "base64", media_type: p.mediaType, data: p.b64 } });
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model, max_tokens: 16_000,
+        system: [{ type: "text", text: system }],
+        messages: [{ role: "user", content: [...content, { type: "text", text: "Transcribe this document as a table." }] }],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const u = data.usage ?? {};
+    await logUsage("bankstmt", model, Number(u.input_tokens) || 0, Number(u.output_tokens) || 0,
+      Number(u.cache_read_input_tokens) || 0, Number(u.cache_creation_input_tokens) || 0);
+    const out = (data.content ?? []).filter((b: { type: string }) => b.type === "text")
+      .map((b: { text: string }) => b.text).join("\n").trim();
+    const j = parseLooseJson(out);
+    if (!Array.isArray(j) || !j.length) return null;
+    const rows = (j as unknown[]).filter(Array.isArray).map((r) => (r as unknown[]).map((c) => String(c ?? "")));
+    return rows.length ? rows : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---- Brokerage statement → structured transactions (accounting hub) ---------
 // Transcription only — categorising into Zoho accounts happens in the queue.
 export type BrokerageLine = {

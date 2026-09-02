@@ -1757,6 +1757,150 @@ export async function connectZoho(formData: FormData) {
 // opened through /api/zoho-vault, which re-checks role=admin on every request —
 // NOT through the general /api/file proxy, which any logged-in student can use.
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE VAULT: READ IT ONCE, THEN ASK WHAT IT IS
+   ═══════════════════════════════════════════════════════════════════════════
+
+   His design, 2 September 2026: "there should be one page to upload any
+   document... when we upload you have to convert it into Excel format or the
+   format that is readable by you. Then in the same page you will ask what is
+   this document... Once you have saved the document, then you will go to that
+   particular page of the bank statement or invoice where it's already
+   available in the readable form, then you will generate the entries."
+
+   The uploader had been doing three jobs on one press — get the file,
+   understand the file, book what is in it — so a file it could not read left
+   NOTHING behind: no record, no partial result, nothing on a screen. The same
+   PDF was read three times in an evening and thrown away three times.
+
+   Split in two, as he said. This is the first half.
+*/
+export async function vaultUploadAction(formData: FormData) {
+  await assertArea("zoho");
+  const file = formData.get("file") as File | null;
+  if (!file || !file.size) {
+    redirect(`/admin/zoho/vault?scan=${encodeURIComponent("Choose a document first.")}`);
+  }
+  const safe = (file!.name || "document").replace(/[^\w.\-]+/g, "_").slice(-80);
+  const path = `zoho-vault/${Date.now()}-${safe}`;
+  const svc = createServiceClient();
+  const { error } = await svc.storage.from("secure").upload(path, Buffer.from(await file!.arrayBuffer()), {
+    contentType: file!.type || "application/octet-stream", upsert: false,
+  });
+  if (error) redirect(`/admin/zoho/vault?scan=${encodeURIComponent(`Upload failed: ${error.message}`)}`);
+
+  const staff = await currentStaff();
+  const { data: doc } = await svc.from("zoho_vault_docs").insert({
+    title: file!.name || "document",
+    file_url: `secure:${path}`,
+    uploaded_by: staff?.id ?? null,
+  }).select("id").single();
+  if (!doc) redirect(`/admin/zoho/vault?scan=${encodeURIComponent("Could not record the document.")}`);
+
+  // READ IT NOW, AND KEEP THE RESULT. Whatever happens next, the file is in the
+  // vault and what was got out of it is beside it — including a failure, which
+  // is a thing to look at rather than a thing that vanished.
+  const { readDocument } = await import("@/lib/docRead");
+  let note = "";
+  try {
+    const r = await readDocument(`secure:${path}`, file!.name, { password: str(formData.get("pdf_password")) });
+    await svc.from("zoho_vault_docs").update({
+      rows_json: r.rows.length ? r.rows : null,
+      doc_text: r.text || null,
+      read_how: r.ok ? r.how : null,
+      read_note: r.ok ? null : (r.note || "nothing could be read from it"),
+      read_at: new Date().toISOString(),
+    }).eq("id", doc.id);
+    note = r.ok
+      ? `Read ${r.rows.length} row(s) — now say what it is.`
+      : `Filed, but nothing could be read: ${r.note}`;
+  } catch (e) {
+    await svc.from("zoho_vault_docs").update({
+      read_note: e instanceof Error ? e.message : String(e), read_at: new Date().toISOString(),
+    }).eq("id", doc.id);
+    note = "Filed, but the reader failed — see the note on the document.";
+  }
+  revalidateDesk();
+  redirect(`/admin/zoho/vault?scan=${encodeURIComponent(note)}&doc=${doc.id}`);
+}
+
+/** Re-read a document already in the vault — after a password, or a fix here. */
+export async function vaultRereadAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const svc = createServiceClient();
+  const { data: d } = await svc.from("zoho_vault_docs").select("id, title, file_url").eq("id", id).maybeSingle();
+  if (!d?.file_url) return;
+  const { readDocument } = await import("@/lib/docRead");
+  let note = "";
+  try {
+    const r = await readDocument(String(d.file_url), String(d.title ?? "document"), { password: str(formData.get("pdf_password")) });
+    await svc.from("zoho_vault_docs").update({
+      rows_json: r.rows.length ? r.rows : null,
+      doc_text: r.text || null,
+      read_how: r.ok ? r.how : null,
+      read_note: r.ok ? null : (r.note || "nothing could be read from it"),
+      read_at: new Date().toISOString(),
+    }).eq("id", id);
+    note = r.ok ? `Read ${r.rows.length} row(s).` : `Still nothing: ${r.note}`;
+  } catch (e) { note = e instanceof Error ? e.message : String(e); }
+  revalidateDesk();
+  redirect(`/admin/zoho/vault?scan=${encodeURIComponent(note)}&doc=${id}`);
+}
+
+/**
+ * WHAT IT IS, AND WHERE IT GOES. The second half of his two steps.
+ *
+ * The reading has already happened, so this never touches the original file
+ * again: a bank statement's lines are filed from the STORED table, and an
+ * invoice is raised from it. If the answer is neither, the document is simply
+ * filed under the type he names — which is most of what a vault is for.
+ */
+export async function vaultClassifyAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  const kind = str(formData.get("kind"));
+  const account = str(formData.get("account_name"));
+  const docType = str(formData.get("doc_type"));
+  const institution = str(formData.get("institution"));
+  const year = str(formData.get("year_label"));
+  if (!id || !kind) return;
+
+  const svc = createServiceClient();
+  await svc.from("zoho_vault_docs").update({
+    kind, account_name: account || null,
+    doc_type: docType || kind, institution: institution || account || null,
+    year_label: year || null,
+  }).eq("id", id);
+
+  if (kind === "bank_statement" || kind === "credit_card") {
+    if (!account) {
+      redirect(`/admin/zoho/vault?scan=${encodeURIComponent("Choose which bank or card it belongs to.")}&doc=${id}`);
+    }
+    const { data: d } = await svc.from("zoho_vault_docs").select("rows_json, title, file_url").eq("id", id).maybeSingle();
+    const rows = (d?.rows_json ?? null) as string[][] | null;
+    if (!rows?.length) {
+      redirect(`/admin/zoho/vault?scan=${encodeURIComponent("Nothing was read from this document, so there are no lines to file. Re-read it first.")}&doc=${id}`);
+    }
+    const { ingestRows } = await import("@/lib/bankStatements");
+    let note: string;
+    try {
+      const r = await ingestRows(account, rows!, String(d!.file_url), String(d!.title ?? "document"));
+      note = r.note;
+      if (r.statementId) await svc.from("zoho_vault_docs").update({ used_table: "bank_statements", used_id: r.statementId, is_processed: true }).eq("id", id);
+    } catch (e) { note = `Could not file the lines: ${e instanceof Error ? e.message : "unknown"}`; }
+    revalidateDesk();
+    redirect(`/admin/zoho/statements?scan=${encodeURIComponent(note)}`);
+  }
+
+  revalidateDesk();
+  redirect(`/admin/zoho/vault?scan=${encodeURIComponent(
+    kind === "invoice"
+      ? "Filed as an invoice. Its rows are on the document below — raise the bill from the Invoices page."
+      : "Filed.")}&doc=${id}`);
+}
+
 export async function addVaultDoc(formData: FormData) {
   // Opened to the zoho AREA on the founder's instruction (23 Aug) — Pradeep
   // files and reads documents too. Deleting stays founder-only.

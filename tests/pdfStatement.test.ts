@@ -210,7 +210,7 @@ check("it respects the same feature switch", /aiFeatureDisabled\("bankstmt"\)/.t
 // other way — five accepted extensions, a password box on every upload, and a
 // failure that told the desk to go and find a different file.
 const upload = readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/StatementUpload.tsx"), "utf8");
-const zohoPage = readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/statements/page.tsx"), "utf8");
+const vaultPage = readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/vault/page.tsx"), "utf8");
 check("the box takes a photograph as readily as a spreadsheet",
   /accept="\.csv,\.txt,\.xls,\.xlsx,\.pdf,image\/\*"/.test(upload));
 check("several photographs become one file, in page order",
@@ -221,7 +221,11 @@ check("and they are shrunk first, because a phone photo is megabytes",
 check("the password is folded away until it is wanted",
   /<summary className="btn small secondary as-btn"[^>]*>🔒 It has a password/.test(upload),
   "asked on every upload, it is a question nobody should be asked twice");
-check("the page uses it", /<StatementUpload accounts=\{bankChoices\} \/>/.test(zohoPage));
+// The upload moved to the vault on 2 September: a document is read ONCE at the
+// door and only then asked what it is, so a second uploader on the statements
+// page would put the old one-press behaviour back beside the new one.
+check("the vault is the one door, and it takes anything",
+  /accept="\.csv,\.txt,\.xls,\.xlsx,\.pdf,image\/\*"/.test(vaultPage));
 
 check("a picture goes straight to the reader that can see it",
   /\.\(png\|jpe\?g\|webp\|heic\|heif\|gif\|bmp\|tiff\?\)\$/.test(bank));

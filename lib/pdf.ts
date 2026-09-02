@@ -199,6 +199,20 @@ export function trailingErrataPages(pageTexts: string[]): number {
    text layer is genuinely empty" is one specific outcome rather than the
    catch-all.
 */
+/** The file's bytes, wherever it is stored. Used by every reader. */
+export async function readFileBytes(url: string): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }> {
+  try {
+    const { resolveFileUrl } = await import("@/lib/storage");
+    const fetchable = await resolveFileUrl(url);
+    if (!fetchable) return { ok: false, reason: "the stored file could not be located" };
+    const r = await fetch(fetchable, { cache: "no-store" });
+    if (!r.ok) return { ok: false, reason: `the file could not be downloaded (${r.status})` };
+    return { ok: true, bytes: new Uint8Array(await r.arrayBuffer()) };
+  } catch (e) {
+    return { ok: false, reason: `the file could not be downloaded — ${e instanceof Error ? e.message : "unknown error"}` };
+  }
+}
+
 export type PdfRead =
   | { ok: true; text: string; pages: number }
   | { ok: false; reason: string; needsPassword?: boolean };
@@ -393,7 +407,7 @@ async function renderPdfPages(bytes: Uint8Array, pages: number, password?: strin
 export async function readPdfPageImages(
   url: string,
   opts?: { password?: string; maxPages?: number },
-): Promise<{ ok: true; images: { b64: string; page: number }[] } | { ok: false; reason: string }> {
+): Promise<{ ok: true; images: { b64: string; page: number }[]; drawn: boolean } | { ok: false; reason: string }> {
   let buf: ArrayBuffer;
   try {
     const { resolveFileUrl } = await import("@/lib/storage");
@@ -415,6 +429,7 @@ export async function readPdfPageImages(
     // WHAT WE ACTUALLY SAW, so a failure can be diagnosed instead of guessed at.
     let seen = 0, biggest = { w: 0, h: 0 };
     let renderFailure = "";
+    let wasDrawn = false;
     const out: { b64: string; page: number }[] = [];
 
     for (let p = 1; p <= pages; p++) {
@@ -499,6 +514,7 @@ export async function readPdfPageImages(
       try {
         const rendered = await renderPdfPages(new Uint8Array(buf), pages, opts?.password);
         out.push(...rendered);
+        wasDrawn = rendered.length > 0;
       } catch (e) {
         // SAY WHY THE DRAWING FAILED. Swallowing this is what left "it could
         // not be rendered here either" on the screen — true, and impossible to
@@ -521,7 +537,7 @@ export async function readPdfPageImages(
         : " Drawing the pages produced nothing.";
       return { ok: false, reason: `nothing could be read off its ${pdf.numPages} page(s): ${detail}.${drawn}` };
     }
-    return { ok: true, images: out };
+    return { ok: true, images: out, drawn: wasDrawn };
   } catch (e) {
     const name = pdfErrorName(e);
     if (name === "PasswordException") {

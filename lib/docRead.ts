@@ -76,8 +76,28 @@ export async function readDocument(
       const p = await readDocumentParty(payload);
       if (!p) return null;
       const name = String(p.party ?? "").trim();
-      const gstin = String(p.gstin ?? "").trim().toUpperCase();
       const docNo = String(p.doc_no ?? "").trim();
+
+      // A GSTIN TRANSCRIBED OFF A PICTURE IS CHECKED BEFORE IT IS BELIEVED.
+      //
+      // One Bansal invoice, BSTI/26-27/16282, was read three times on 3
+      // September and gave three different numbers:
+      //
+      //   07AMGPS2446C1Z6    valid — PAN AMGPS2446C, Delhi
+      //   07AAMGPS2446C1Z6   sixteen characters; cannot be a GSTIN at all
+      //   07AAGPS2446C1Z6    fifteen, but the check digit does not match
+      //
+      // Two of the three were impossible, and the impossible one was the one
+      // stored. Nothing looked: checkGstin has been in the tree for months and
+      // was wired only into the checkout. A supplier GSTIN is not cosmetic —
+      // it is what the input credit is matched on in GSTR-2B, so a wrong one
+      // quietly forfeits the credit on that purchase.
+      //
+      // A number that fails its own checksum is not a reading, it is noise.
+      // Nothing is better than wrong here: the vault shows an empty box, and
+      // an empty box gets typed into.
+      const raw = String(p.gstin ?? "").trim().toUpperCase();
+      const gstin = raw && (await import("@/lib/gstin")).checkGstin(raw).ok ? raw : "";
       const docDate = /^\d{4}-\d{2}-\d{2}$/.test(String(p.doc_date ?? "")) ? String(p.doc_date) : "";
       return name || gstin || docNo || docDate ? { name, gstin, docNo, docDate } : null;
     } catch { return null; }

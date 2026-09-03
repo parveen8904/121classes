@@ -159,6 +159,26 @@ export async function redetermineWaiting(institution: string): Promise<number> {
   }
   return moved;
 }
+/**
+ * What the scanner needs off a vault document.
+ *
+ * It used to ask for five columns — id, title, institution, file_url,
+ * created_at — and then RE-READ the paper from scratch. On a picture-only PDF
+ * that second read gets nothing at all, so the bill was raised blank: no
+ * invoice number, no invoice date, no figures.
+ *
+ * Meanwhile the vault had already read it. Filing runs readDocument, which
+ * takes a picture invoice apart with the model and stores what it found:
+ * doc_no, doc_date, party_gstin and the table itself in rows_json. All of it
+ * sat one column away and was ignored.
+ *
+ * That is why every Bansal and Warehouse Pitam pura bill came through empty
+ * while the vault screen showed "no. BSTI/26-27/16282 · 26 August 2026" in as
+ * many words, and why the duplicate guard never fired on three copies of one
+ * invoice — it keys on the invoice number, and the number was always null.
+ */
+const VAULT_COLS = "id, title, institution, file_url, created_at, doc_no, doc_date, party_gstin, rows_json, doc_text";
+
 
 /**
  * Queue every vault invoice that is not queued yet: read its figures, convert
@@ -187,8 +207,8 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
   // a space and a slash and PostgREST filter quoting is a poor thing to stake
   // a supplier's bill on.
   const [byKind, byType] = await Promise.all([
-    svc.from("zoho_vault_docs").select("id, title, institution, file_url, created_at").eq("kind", "invoice"),
-    svc.from("zoho_vault_docs").select("id, title, institution, file_url, created_at").eq("doc_type", "Invoice / bill"),
+    svc.from("zoho_vault_docs").select(VAULT_COLS).eq("kind", "invoice"),
+    svc.from("zoho_vault_docs").select(VAULT_COLS).eq("doc_type", "Invoice / bill"),
   ]);
   const seenDoc = new Set<string>();
   const docs = [...(byKind.data ?? []), ...(byType.data ?? [])]
@@ -242,13 +262,43 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
       if (dash && /[A-Z0-9-]{4,}/.test(dash) && !/\)/.test(dash)) facts.invoice_no = dash;
     }
     const fromTitle = facts.total ?? null;
+
+    // WHAT THE VAULT ALREADY READ COUNTS AS READING THE INVOICE.
+    //
+    // The number and the date are transcribed off the paper by the filing
+    // step, so they are the invoice's OWN, not a label and not today's date.
+    // They beat the title on both — a title never carries the invoice date,
+    // and every bill raised from a picture PDF was being stamped with the day
+    // it happened to be filed.
+    if (str(d.doc_no)) facts.invoice_no = str(d.doc_no);
+    if (str(d.doc_date)) facts.date = str(d.doc_date);
     try {
       if (facts.total && facts.currency && facts.date) throw new Error("figures already known");
-      const text = await fetchText(str(d.file_url));
+
+      // A picture invoice has no text layer, so fetchText returns nothing and
+      // the figures went unread. The vault's rows_json IS the invoice's table,
+      // taken off that picture — taxable value, CGST, SGST, total, all of it.
+      // Rendered back to text it is exactly what parseInvoiceText wants, and
+      // it costs no second look at the paper.
+      //
+      // This still READS the figures off the supplier's invoice. Nothing here
+      // derives a tax from a rate: an invoice whose table nobody could read
+      // goes on asking for the amount to be typed in.
+      let text = await fetchText(str(d.file_url));
+      if (!text) {
+        const rows = Array.isArray(d.rows_json) ? (d.rows_json as unknown as string[][]) : null;
+        if (rows?.length) {
+          const { rowsToCsv } = await import("@/lib/rowsCsv");
+          text = rowsToCsv(rows);
+        } else if (str(d.doc_text)) text = str(d.doc_text);
+      }
       if (text) {
         const { parseInvoiceText } = await import("@/lib/ai");
         const read = await parseInvoiceText(text);
         if (read) facts = { ...facts, ...read };
+        // The paper's own number and date still win over a second-guess.
+        if (str(d.doc_no)) facts.invoice_no = str(d.doc_no);
+        if (str(d.doc_date)) facts.date = str(d.doc_date);
       }
     } catch { /* an unreadable PDF still queues — the figures can be typed in */ }
 

@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { formatINR } from "@/lib/pricing";
 import AdminHero from "../../_components/AdminHero";
 import { listRazorpayPayments, type RazorpayPayment } from "@/lib/razorpay";
+import SubmitButton from "@/app/components/SubmitButton";
+import { recoverBookOrdersAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 // Fifty pages of a hundred payments takes time — let it finish.
@@ -32,7 +34,7 @@ const METHOD_OPTIONS = [
 ];
 
 export default async function RazorpayDataPage(props: {
-  searchParams: Promise<{ days?: string; status?: string; method?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ days?: string; status?: string; method?: string; from?: string; to?: string; scan?: string }>;
 }) {
   const sp = await props.searchParams;
   const supabase = createClient();
@@ -92,6 +94,11 @@ export default async function RazorpayDataPage(props: {
       </div>
 
       {/* What to pull */}
+      {sp.scan && (
+        <div className={/could not|Could not/.test(sp.scan) ? "notice err" : "notice ok"} style={{ marginTop: 14 }}>
+          {sp.scan}
+        </div>
+      )}
       <div className="card" style={{ marginTop: 14 }}>
         <strong>🔧 What do you want to pull?</strong>
         <form style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -128,6 +135,24 @@ export default async function RazorpayDataPage(props: {
           Custom dates win over the preset period. For a single day&apos;s collections, set From and To to the same date.
         </p>
       </div>
+
+      {/* MONEY TAKEN, ORDER MISSING.
+          A book checkout used to write its order only in the buyer's browser,
+          after paying — so a closed tab left the money at Razorpay and nothing
+          here at all. The quarter-hourly sweep now catches those, and this is
+          the same sweep on demand, because "wait fifteen minutes" is not an
+          answer to give somebody who has already paid. */}
+      <form action={recoverBookOrdersAction} className="card"
+            style={{ marginTop: 10, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <SubmitButton className="btn small secondary" savedLabel="✓ Checked">
+          🔎 Paid here but no order? Rebuild them
+        </SubmitButton>
+        <span className="muted" style={{ fontSize: ".78rem", flex: 1, minWidth: 260 }}>
+          Checks every captured payment of the last fortnight against our own orders and rebuilds any book
+          order that never got written — invoice and confirmation email included. It runs by itself every
+          quarter hour; this is the same thing now.
+        </span>
+      </form>
 
       <h2 className="admin-section-title" style={{ marginTop: 22 }}>
         {payments.length} payment{payments.length === 1 ? "" : "s"} · {formatINR(receivedTotal)} received · {rangeLabel}

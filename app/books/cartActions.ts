@@ -6,10 +6,8 @@ import {
   razorpayConfigured,
   razorpayKeyId,
   createRazorpayOrder,
-  fetchRazorpayOrder,
   verifyRazorpaySignature,
 } from "@/lib/razorpay";
-import { notifyByEmail, emailShell } from "@/lib/notify";
 import { toAddress, addressProblems, sameAddress, type Address } from "@/lib/address";
 import { checkGstin } from "@/lib/gstin";
 
@@ -291,94 +289,15 @@ export async function verifyCartPayment(input: {
   if (!(await verifyRazorpaySignature(input.razorpay_order_id, input.razorpay_payment_id, input.razorpay_signature))) {
     return { ok: false };
   }
-  let order;
-  try { order = await fetchRazorpayOrder(input.razorpay_order_id); }
-  catch { return { ok: false }; }
-  const n = order.notes ?? {};
-  if (n.kind !== "book_cart" || order.status !== "paid") return { ok: false };
-
-  const items = (() => { try { return JSON.parse(n.items) as { b: string; q: number; p: number }[]; } catch { return []; } })();
-  const ship = toAddress((() => { try { return JSON.parse(n.ship); } catch { return {}; } })());
-  const bill = toAddress((() => { try { return JSON.parse(n.bill ?? "{}"); } catch { return {}; } })());
-  const gstin = String(n.gstin ?? "").trim();
-  // Exactly as the register spells it — never tidied. See lib/gstin.ts.
-  const tradeName = String(n.trade ?? "");
-  if (!items.length) return { ok: false };
-
-  const svc = createServiceClient();
-  await svc.from("book_orders").insert({
-    student_id: n.userId || null,
-    guest_contact: { name: n.name, email: n.email, phone: n.phone },
-    items: items.map((i) => ({ book_id: i.b, qty: i.q, price_inr: i.p })),
-    amount_inr: order.amount / 100,
-    razorpay_order_id: order.id,
-    ship_to: ship,
-    // Frozen at the order. The profile may be edited tomorrow; an invoice must
-    // keep saying what it said on the day.
-    bill_to: bill,
-    gstin: gstin || null,
-    status: "paid",
-  });
-
-  // THE ADDRESSES GO BACK TO THE PROFILE. His instruction: "you will post
-  // these addresses to the profile." Only for someone signed in — a guest has
-  // no profile to write to — and only what they actually gave us, so a blank
-  // billing address never wipes a good one already on file.
-  if (n.userId) {
-    const patch: Record<string, unknown> = { shipping_address: ship };
-    // The billing address goes back to the flat columns the invoice reads —
-    // state included, because that is what decides the tax split.
-    if (bill.line1 && bill.city) {
-      patch.address_line1 = bill.line1;
-      patch.address_line2 = bill.line2 || null;
-      patch.city = bill.city;
-      patch.state = bill.state || null;
-      patch.pincode = bill.pincode || null;
-    }
-    if (gstin) patch.gstin = gstin;
-    if (tradeName) { patch.trade_name = tradeName; patch.business_name = tradeName; }
-    try { await svc.from("profiles").update(patch).eq("id", n.userId); }
-    catch { /* the order stands whatever the profile does */ }
-  }
-
-  // Decrement stock per title (best-effort) and gather names for the email.
-  const { data: books } = await svc.from("books").select("id, title, stock_qty").in("id", items.map((i) => i.b));
-  const titleById = new Map((books ?? []).map((x) => [x.id as string, x]));
-  for (const i of items) {
-    const bk = titleById.get(i.b);
-    if (bk) await svc.from("books").update({ stock_qty: Math.max(0, (bk.stock_qty as number) - i.q) }).eq("id", i.b);
-  }
-  const lines = items.map((i) => `<li><strong>${titleById.get(i.b)?.title ?? "Book"}</strong> × ${i.q}</li>`).join("");
-
-  // GST invoice → emailed to the payer (works for guests too); admin-only view.
-  {
-    const { issueOrderInvoice } = await import("@/lib/orderInvoice");
-    await issueOrderInvoice({
-      razorpayOrderId: order.id,
-      payerUserId: (n.userId as string) || null,
-      payerName: (n.name as string) || null,
-      payerEmail: (n.email as string) || null,
-      description: `Books: ${items.map((i) => `${titleById.get(i.b)?.title ?? "Book"} × ${i.q}`).join(", ")}`.slice(0, 180),
-      amountInr: order.amount / 100,
-      table: "book_orders",
-      paymentRef: input.razorpay_payment_id,
-    });
-  }
-
-  await notifyByEmail({
-    studentId: n.userId || null,
-    email: n.email || null,
-    subject: "📦 Your book order is confirmed",
-    html: emailShell(
-      "Order confirmed! 🎉",
-      `<p>Hi ${n.name || "there"},</p>
-       <p>We've received your order:</p><ul>${lines}</ul>
-       <p>Total: <strong>₹${(order.amount / 100).toLocaleString("en-IN")}</strong></p>
-       <p>It ships soon with free delivery 🚚. Thank you for shopping with us! 📚</p>`,
-    ),
-    template: "book_ordered",
-    payload: { items },
-  });
-
-  return { ok: true };
+  // EVERYTHING AFTER THE SIGNATURE NOW LIVES IN ONE PLACE.
+  //
+  // It used to live here, and only here — which is why a book paid for on 2
+  // September existed at Razorpay and nowhere else: this code only ever runs
+  // in the buyer's browser, and a browser that never comes back never runs it.
+  // The same work is now done by lib/bookOrderFinish.ts, which a sweep can
+  // also call from the server when the browser drops. One implementation, so
+  // a recovered order and a normal one cannot drift apart.
+  const { finishBookOrderFromRazorpay } = await import("@/lib/bookOrderFinish");
+  const r = await finishBookOrderFromRazorpay(input.razorpay_order_id, input.razorpay_payment_id);
+  return { ok: r.ok };
 }

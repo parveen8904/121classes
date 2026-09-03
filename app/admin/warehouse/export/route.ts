@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
 
   const out = [[
     "Order no", "Ordered on", "Parcel", "Send to", "Phone", "Email",
-    "Address", "City", "State", "PIN code",
+    "Ship to", "City", "State", "PIN code", "Address is",
     "Contents", "Status", "Tracking ID",
   ].join(",")];
 
@@ -66,6 +66,7 @@ export async function GET(req: NextRequest) {
       esc(i.orderNo), esc(day(i.createdAt)), esc(kind(i.table)),
       esc(i.name), esc(i.phone), esc(i.email),
       esc(i.address), esc(i.city), esc(i.state), esc(i.pincode),
+      esc(i.addressSource === "shipping" ? "shipping address" : "BILLING — no shipping address on file"),
       esc(i.contents),
       esc(i.tracking ? "Dispatched" : "Awaiting dispatch"),
       esc(i.tracking ?? ""),

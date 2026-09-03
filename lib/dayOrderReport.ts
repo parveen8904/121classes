@@ -49,6 +49,24 @@ export type DayOrderRow = {
   city: string;
   state: string;
   pincode: string;
+  /**
+   * WHERE THE PARCEL IS ACTUALLY GOING, AND WHETHER WE KNOW IT.
+   *
+   * "warehouse ko jo auto email jaati hai usme shipping address ka column bhi
+   * add karwana hai" — the team, 3 September 2026.
+   *
+   * The address columns above were the BILLING address on every subscription:
+   * this report read profiles.address_line1…pincode, which is where the
+   * invoice goes. Since 2 September a buyer gives a separate shipping address
+   * and it is kept on profiles.shipping_address — and nothing here had ever
+   * looked at it, so a Gold subscriber's free books were being addressed to
+   * the place they pay from rather than the place they asked for.
+   *
+   * The address columns are now the SHIPPING address wherever there is one.
+   * This says which it turned out to be, because a packer must never have to
+   * guess whether the label in front of them is a delivery address.
+   */
+  addressSource: "shipping" | "billing";
   placedAt: string;
 };
 
@@ -87,7 +105,40 @@ export function istDayJustEnded(now = new Date()): string {
   return istToday(new Date(now.getTime() - 60 * 60 * 1000));
 }
 
-const SUBS_COLS = "id, order_no, amount_inr, status, books_due, created_at, months:subject_id, subjects:subject_id(title, courses(title)), profiles:student_id(full_name, email, phone, address_line1, address_line2, city, state, pincode)";
+/**
+ * The address to put on the parcel, from a profile.
+ *
+ * `shipping_address` is what the buyer asked us to deliver to; the flat
+ * address_line1…pincode columns are the billing address the invoice carries.
+ * They are frequently different — a student who pays from home and reads at a
+ * hostel — and until 3 September this report only ever knew the second one.
+ */
+export function shipOrBill(p: Record<string, unknown> | null): {
+  address: string; city: string; state: string; pincode: string; addressSource: "shipping" | "billing";
+} {
+  const join = (line1?: string | null, line2?: string | null, city?: string | null, state?: string | null, pin?: string | null) =>
+    [line1, line2, [city, state, pin].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+
+  const ship = (p?.shipping_address ?? null) as Record<string, string | undefined> | null;
+  // A shipping address with no street and no PIN is not an address; it is an
+  // empty object left behind by a form. Falling back is right, and saying so
+  // is what stops a parcel being sent confidently to nowhere.
+  if (ship && (ship.line1 || ship.pincode)) {
+    return {
+      address: join(ship.line1, ship.line2, ship.city, ship.state, ship.pincode),
+      city: ship.city ?? "", state: ship.state ?? "", pincode: ship.pincode ?? "",
+      addressSource: "shipping",
+    };
+  }
+  const s = (k: string) => (p?.[k] as string | null) ?? null;
+  return {
+    address: join(s("address_line1"), s("address_line2"), s("city"), s("state"), s("pincode")),
+    city: s("city") ?? "", state: s("state") ?? "", pincode: s("pincode") ?? "",
+    addressSource: "billing",
+  };
+}
+
+const SUBS_COLS = "id, order_no, amount_inr, status, books_due, created_at, months:subject_id, subjects:subject_id(title, courses(title)), profiles:student_id(full_name, email, phone, address_line1, address_line2, city, state, pincode, shipping_address)";
 const BOOKS_COLS = "id, order_no, amount_inr, status, created_at, ship_to, guest_contact, items";
 const GIFTS_COLS = "id, order_no, amount_inr, status, books_due, months, created_at, recipient_name, recipient_email, recipient_phone, recipient_address, subjects:subject_id(title, courses(title)), profiles:gifter_id(full_name, business_name)";
 
@@ -147,11 +198,9 @@ function buildRows(subs: Res, books: Res, gifts: Res): DayOrderRow[] {
       amount: Number(r.amount_inr) || 0,
       status: String(r.status ?? ""),
       booksDue: Boolean(r.books_due),
-      address: [p?.address_line1, p?.address_line2, [p?.city, p?.state, p?.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", "),
-      // Held as separate fields on the profile, so they are simply read.
-      city: String(p?.city ?? ""),
-      state: String(p?.state ?? ""),
-      pincode: String(p?.pincode ?? ""),
+      // The shipping address if the buyer gave one, the billing address only
+      // as a fallback — and the row says which, so nobody has to wonder.
+      ...shipOrBill(p),
       placedAt: String(r.created_at),
     });
   }
@@ -173,10 +222,11 @@ function buildRows(subs: Res, books: Res, gifts: Res): DayOrderRow[] {
       status: String(r.status ?? ""),
       booksDue: true,
       address: [s.line1, s.line2, [s.city, s.state, s.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", "),
-      // ship_to is the address the buyer typed at checkout, already in fields.
+      // ship_to IS the shipping address — the buyer typed it at checkout.
       city: s.city ?? "",
       state: s.state ?? "",
       pincode: s.pincode ?? "",
+      addressSource: "shipping" as const,
       placedAt: String(r.created_at),
     });
   }
@@ -207,6 +257,9 @@ function buildRows(subs: Res, books: Res, gifts: Res): DayOrderRow[] {
       // rather than filled with a guess — a blank cell tells the packer to look
       // at the address column, and a wrong PIN sends the parcel to Kerala.
       ...parsePostalParts(String(r.recipient_address ?? "")),
+      // A gift IS addressed to where it should be delivered — the recipient's
+      // address is the only one such an order has.
+      addressSource: "shipping" as const,
       placedAt: String(r.created_at),
     });
   }
@@ -296,14 +349,19 @@ export async function dispatchWorkbook(rows: DayOrderRow[], label: string): Prom
   filename: string; contentType: string; content: Buffer;
 }> {
   const XLSX = await import("xlsx");
+  // "Ship to", not "Address" — the column now carries the address the buyer
+  // asked us to deliver to, and "Address is" says so on the row. See
+  // shipOrBill: a subscription used to be labelled from the BILLING address.
   const head = ["Order no", "Type", "Student", "Email", "Phone", "Course", "Term", "Amount", "Status", "Books to send",
-                "Address", "City", "State", "PIN code", "Placed at", "Reported"];
+                "Ship to", "City", "State", "PIN code", "Address is", "Placed at", "Reported"];
   const aoa: unknown[][] = [head];
   for (const r of rows) {
     aoa.push([
       r.orderNo, r.kind, r.student, r.email, r.phone, r.course, r.months,
       Math.round(r.amount), r.status, r.booksDue ? "YES" : "no",
-      r.address, r.city, r.state, r.pincode, formatDate(r.placedAt),
+      r.address, r.city, r.state, r.pincode,
+      r.addressSource === "shipping" ? "shipping address" : "BILLING — no shipping address on file",
+      formatDate(r.placedAt),
       // NEW TONIGHT is the packer's cue; a row sent to them earlier the same
       // day says when, so the sheet is the whole day without double work.
       r.reportedAt ? `earlier today · ${formatDateTime(r.reportedAt)}` : "NEW — pack this",
@@ -312,7 +370,7 @@ export async function dispatchWorkbook(rows: DayOrderRow[], label: string): Prom
   const ws = XLSX.utils.aoa_to_sheet(aoa);
 
   // Force the identifier columns to text so Excel stops "helping".
-  const textCols = [0, 4, 13]; // Order no, Phone, PIN code
+  const textCols = [0, 4, 13]; // Order no, Phone, PIN code — all before "Address is"
   const range = XLSX.utils.decode_range(ws["!ref"] ?? "A1");
   for (let R = 1; R <= range.e.r; R++) {
     for (const C of textCols) {
@@ -383,6 +441,13 @@ export function dayReportHtml(day: string, rows: DayOrderRow[]): string {
         r.pincode || r.state
           ? `<br><span style="color:#111">${[r.city, r.state].filter(Boolean).join(", ")}${r.pincode ? ` · <strong>${r.pincode}</strong>` : ""}</span>`
           : ""
+      }${
+        // A packer must never have to guess whether the label in front of them
+        // is a delivery address. Said only when it is NOT — the ordinary case
+        // needs no warning, and a warning on every row is read by nobody.
+        r.addressSource === "billing" && r.address
+          ? `<br><span style="color:#b45309;font-size:11px">billing address — no shipping address on file</span>`
+          : ""
       }</td>
     </tr>`).join("");
 
@@ -401,7 +466,7 @@ export function dayReportHtml(day: string, rows: DayOrderRow[]): string {
         <th style="${cell};text-align:left">Course</th>
         <th style="${cell};text-align:right">Amount</th>
         <th style="${cell};text-align:left">Status</th>
-        <th style="${cell};text-align:left">Address</th>
+        <th style="${cell};text-align:left">Ship to</th>
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>

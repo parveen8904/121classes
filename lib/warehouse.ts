@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { parsePostalParts } from "@/lib/indiaStates";
+import { shipOrBill } from "@/lib/dayOrderReport";
 import { sendEmail, emailConfigured, emailShell } from "@/lib/notify";
 import { getSecret } from "@/lib/secrets";
 
@@ -37,6 +38,10 @@ export type DispatchItem = {
   city: string;
   state: string;
   pincode: string;
+  /** Whether the address above is the one the buyer asked us to DELIVER to,
+   *  or the billing address standing in because there is no other. A packer
+   *  must never have to guess that. See shipOrBill in lib/dayOrderReport.ts. */
+  addressSource: "shipping" | "billing";
 };
 
 // Everything awaiting courier: paid book orders + paid books-due Gold sales,
@@ -49,7 +54,7 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       .in("status", ["paid", "dispatched"])
       .order("created_at", { ascending: false }).limit(200),
     svc.from("orders")
-      .select("id, order_no, created_at, tracking_code, courier_name, invoice_no, invoice_url, subjects:subject_id(title), profiles:student_id(full_name, email, phone, address_line1, address_line2, city, state, pincode)")
+      .select("id, order_no, created_at, tracking_code, courier_name, invoice_no, invoice_url, subjects:subject_id(title), profiles:student_id(full_name, email, phone, address_line1, address_line2, city, state, pincode, shipping_address)")
       .eq("books_due", true).eq("status", "paid")
       .order("created_at", { ascending: false }).limit(200),
     // Gifted 9+ month Gold also ships books — to the RECIPIENT's address.
@@ -76,6 +81,8 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       table: "book_orders", id: o.id, orderNo: o.order_no ? `#${o.order_no}` : "—",
       name: s.name ?? o.guest_contact?.name ?? "Customer",
       address: [s.line1, s.line2, [s.city, s.state, s.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+      // ship_to IS the shipping address — the buyer typed it at checkout.
+      addressSource: "shipping" as const,
       phone: s.phone ?? o.guest_contact?.phone ?? "",
       email: s.email ?? o.guest_contact?.email ?? "",
       contents: (o.items ?? []).map((i) => `${titleById.get(i.book_id ?? "") ?? "Book"} × ${i.qty ?? 1}`).join(", ") || "Books",
@@ -84,19 +91,23 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       city: s.city ?? "", state: s.state ?? "", pincode: s.pincode ?? "",
     });
   }
-  type GoldRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; courier_name?: string | null; invoice_no?: string | null; invoice_url?: string | null; subjects: { title: string } | null; profiles: { full_name: string | null; email: string | null; phone: string | null; address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; pincode: string | null } | null };
+  type GoldRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; courier_name?: string | null; invoice_no?: string | null; invoice_url?: string | null; subjects: { title: string } | null; profiles: { full_name: string | null; email: string | null; phone: string | null; address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; pincode: string | null; shipping_address: Record<string, string> | null } | null };
   for (const g of (goldRows ?? []) as unknown as GoldRow[]) {
     const p = g.profiles;
     out.push({
       table: "orders", id: g.id, orderNo: g.order_no ? `#${g.order_no}` : "—",
       name: p?.full_name ?? "Student",
-      address: p ? [p.address_line1, p.address_line2, [p.city, p.state, p.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "",
+      // THE SHIPPING ADDRESS, WHERE THERE IS ONE. This built the label from
+      // profiles.address_line1…pincode, which is the BILLING address — so a
+      // student who pays from home and reads at a hostel had their free books
+      // sent to the wrong one. Same rule as the nightly sheet, on purpose:
+      // one definition of "where does this parcel go".
+      ...shipOrBill(p as unknown as Record<string, unknown> | null),
       phone: p?.phone ?? "",
       email: p?.email ?? "",
       contents: `${g.subjects?.title ?? "Gold"} — FREE printed books set (9+ month Gold)`,
       createdAt: g.created_at, tracking: g.tracking_code, courier: g.courier_name ?? null,
       invoiceNo: g.invoice_no ?? null, invoiceUrl: g.invoice_url ?? null,
-      city: p?.city ?? "", state: p?.state ?? "", pincode: p?.pincode ?? "",
     });
   }
   type GiftRow = { id: string; order_no: number | null; created_at: string; tracking_code: string | null; courier_name?: string | null; invoice_no?: string | null; invoice_url?: string | null; recipient_name: string | null; recipient_email: string | null; recipient_phone: string | null; recipient_address: string | null; subjects: { title: string } | null };
@@ -113,6 +124,8 @@ export async function listDispatchQueue(pendingOnly = true): Promise<DispatchIte
       // A supporter sale stores the address as one written block, so it is read
       // back rather than joined up.
       ...parsePostalParts(g.recipient_address),
+      // A gift has only one address, and it is the delivery one.
+      addressSource: "shipping" as const,
     });
   }
   out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));

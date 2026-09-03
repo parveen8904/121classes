@@ -6,10 +6,8 @@ import {
   razorpayConfigured,
   razorpayKeyId,
   createRazorpayOrder,
-  fetchRazorpayOrder,
   verifyRazorpaySignature,
 } from "@/lib/razorpay";
-import { notifyByEmail, emailShell } from "@/lib/notify";
 import { toAddress, addressProblems } from "@/lib/address";
 import { checkGstin } from "@/lib/gstin";
 import type { CheckoutDetails } from "@/app/books/cartActions";
@@ -99,80 +97,10 @@ export async function verifyBookPayment(input: {
   ) {
     return { ok: false };
   }
-
-  let order;
-  try {
-    order = await fetchRazorpayOrder(input.razorpay_order_id);
-  } catch {
-    return { ok: false };
-  }
-  const n = order.notes ?? {};
-  if (n.kind !== "book" || order.status !== "paid") return { ok: false };
-
-  const qty = Number(n.qty) || 1;
-  const price = Number(n.price) || 0;
-  const ship = toAddress((() => { try { return JSON.parse(n.ship); } catch { return {}; } })());
-  const bill = toAddress((() => { try { return JSON.parse(n.bill ?? "{}"); } catch { return {}; } })());
-  const gstin = String(n.gstin ?? "").trim();
-  // Exactly as the register spells it — never tidied. See lib/gstin.ts.
-  const tradeName = String(n.trade ?? "");
-
-  // Service role: guest orders have no auth cookie, so RLS would block them.
-  const svc = createServiceClient();
-  await svc.from("book_orders").insert({
-    student_id: n.userId || null,
-    guest_contact: { name: n.name, email: n.email, phone: n.phone },
-    items: [{ book_id: n.bookId, qty, price_inr: price }],
-    amount_inr: order.amount / 100,
-    razorpay_order_id: order.id,
-    ship_to: ship,
-    bill_to: bill,
-    gstin: gstin || null,
-    status: "paid",
-  });
-
-  // Back to the profile, so it is typed once — see cartActions.verifyCartPayment.
-  if (n.userId) {
-    const patch: Record<string, unknown> = { shipping_address: ship };
-    if (bill.line1 && bill.city) {
-      patch.address_line1 = bill.line1;
-      patch.address_line2 = bill.line2 || null;
-      patch.city = bill.city;
-      patch.state = bill.state || null;
-      patch.pincode = bill.pincode || null;
-    }
-    if (gstin) patch.gstin = gstin;
-    if (tradeName) { patch.trade_name = tradeName; patch.business_name = tradeName; }
-    try { await svc.from("profiles").update(patch).eq("id", n.userId); }
-    catch { /* the order stands whatever the profile does */ }
-  }
-
-  // Decrement stock (best-effort).
-  const { data: book } = await svc
-    .from("books")
-    .select("stock_qty, title")
-    .eq("id", n.bookId)
-    .maybeSingle();
-  if (book) {
-    await svc
-      .from("books")
-      .update({ stock_qty: Math.max(0, book.stock_qty - qty) })
-      .eq("id", n.bookId);
-  }
-
-  await notifyByEmail({
-    studentId: n.userId || null,
-    email: n.email || null,
-    subject: "📦 Your book order is confirmed",
-    html: emailShell(
-      "Order confirmed! 🎉",
-      `<p>Hi ${n.name || "there"},</p>
-       <p>We've received your order for <strong>${book?.title ?? "your book"} × ${qty}</strong>.</p>
-       <p>It ships soon with free delivery 🚚. Thank you for shopping with us! 📚</p>`,
-    ),
-    template: "book_ordered",
-    payload: { bookId: n.bookId, qty },
-  });
-
-  return { ok: true };
+  // One implementation for both doors — see lib/bookOrderFinish.ts and the
+  // note in cartActions. This one also gains the tax invoice it never issued:
+  // a buyer's right to one does not depend on which button they pressed.
+  const { finishBookOrderFromRazorpay } = await import("@/lib/bookOrderFinish");
+  const r = await finishBookOrderFromRazorpay(input.razorpay_order_id, input.razorpay_payment_id);
+  return { ok: r.ok };
 }

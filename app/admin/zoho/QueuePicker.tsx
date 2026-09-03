@@ -12,8 +12,10 @@ import SubmitButton from "@/app/components/SubmitButton";
 export type QueueRow = {
   id: string; date: string; label: string; sub?: string | null;
   amount: number; badge?: string | null; status: string; error?: string | null;
-  /** Prerendered journal-entry preview (server-built EntryLines). */
+  /** Prerendered journal-entry preview (server-built EntryLines), and on the
+   *  bank queue the whole answer panel — a rule's proposal must be arguable. */
   detail?: React.ReactNode;
+  detailLabel?: string;
 };
 
 export default function QueuePicker({
@@ -92,7 +94,17 @@ export default function QueuePicker({
             <span style={{ flex: 1, minWidth: 200, fontSize: ".85rem" }}>
               {r.label}{r.sub ? <span className="muted"> · {r.sub}</span> : null}
             </span>
-            <strong style={{ whiteSpace: "nowrap" }}>{r.amount < 0 ? `− ${formatINR(-r.amount)}` : formatINR(r.amount)}</strong>
+            {/* AN AMOUNT IS A MAGNITUDE. It used to print "− ₹6,900" for money
+                out, which reads as a negative quantity; a ledger states a
+                figure and a side. The sign is still how the rows arrive here —
+                that is this component's contract with every queue that uses
+                it — but it is spent on a WORD, not a minus. */}
+            <strong style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+              {formatINR(Math.abs(r.amount))}
+              <span className="muted" style={{ fontWeight: 400, fontSize: ".76rem", marginLeft: 6 }}>
+                {r.amount < 0 ? "out" : "in"}
+              </span>
+            </strong>
             {r.badge && <span className="badge" style={{ fontSize: ".7rem" }}>{r.badge}</span>}
             {r.status === "failed" && <span style={{ fontSize: ".76rem", color: "#b91c1c" }}>{r.error}</span>}
           </label>
@@ -101,7 +113,7 @@ export default function QueuePicker({
                 accounting. */}
             {r.detail && (
               <details style={{ margin: "0 0 2px 34px" }}>
-                <summary className="btn small secondary as-btn">📖 Journal entry</summary>
+                <summary className="btn small secondary as-btn">{r.detailLabel ?? "📖 Journal entry"}</summary>
                 <div style={{ marginTop: 6 }}>{r.detail}</div>
               </details>
             )}

@@ -113,12 +113,28 @@ export default async function VaultPage(props: { searchParams: Promise<{ scan?: 
                 {focus.rows_json.length} row(s) · {HOW[focus.read_how ?? ""] ?? "read"} ·{" "}
                 <a className="grad" href={`/admin/zoho/vault/${focus.id}/csv`} style={{ fontWeight: 700 }}>⬇ download as a spreadsheet</a>
               </p>
-              <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: 8 }}>
+              {/* THE WHOLE STATEMENT, SCROLLED BY THE PAGE.
+                  His report, 3 September 2026: "when I was able to see the
+                  bank statement, I was unable to scroll it upwards."
+
+                  Two things did that. It showed the first TWELVE rows and then
+                  said "…and 38 more rows" — there was nothing to scroll to,
+                  because the rest was never rendered. And the box around it
+                  set only overflow-x: by the CSS overflow rules, a box with
+                  one axis scrollable and the other visible has the visible one
+                  computed to auto, so it quietly became a vertical scroller
+                  too and swallowed the wheel while the pointer was over it.
+
+                  So: every row is drawn, and the box scrolls sideways ONLY.
+                  Nothing nests a vertical scroller inside the page, which is
+                  the only arrangement in which "scroll up" always means the
+                  page. */}
+              <div style={{ overflowX: "auto", overflowY: "hidden", border: "1px solid var(--border)", borderRadius: 8 }}>
                 <table style={{ borderCollapse: "collapse", fontSize: ".78rem", width: "100%" }}>
                   <tbody>
-                    {focus.rows_json.slice(0, 12).map((r, i) => (
+                    {focus.rows_json.slice(0, 400).map((r, i) => (
                       <tr key={i} style={{ background: i === 0 ? "var(--bg-soft)" : undefined, fontWeight: i === 0 ? 700 : 400 }}>
-                        {r.slice(0, 10).map((c, j) => (
+                        {r.slice(0, 12).map((c, j) => (
                           <td key={j} style={{ border: "1px solid var(--border)", padding: "3px 7px", whiteSpace: "nowrap" }}>{c}</td>
                         ))}
                       </tr>
@@ -126,8 +142,10 @@ export default async function VaultPage(props: { searchParams: Promise<{ scan?: 
                   </tbody>
                 </table>
               </div>
-              {focus.rows_json.length > 12 && (
-                <p className="muted" style={{ fontSize: ".76rem", margin: "4px 0 0" }}>…and {focus.rows_json.length - 12} more rows.</p>
+              {focus.rows_json.length > 400 && (
+                <p className="muted" style={{ fontSize: ".76rem", margin: "4px 0 0" }}>
+                  Showing the first 400 of {focus.rows_json.length} rows — download the spreadsheet above for the rest.
+                </p>
               )}
             </>
           ) : (

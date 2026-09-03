@@ -188,7 +188,7 @@ export default async function InvestmentsPage(props: { searchParams: Promise<{ s
               </tr>
             );
             return (
-              <div style={{ marginTop: 10, overflowX: "auto" }}>
+              <div style={{ marginTop: 10, overflowX: "auto", overflowY: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem" }}>
                   <thead>
                     <tr><th style={{ textAlign: "left", padding: "4px 8px", fontSize: ".72rem", letterSpacing: ".06em", color: "#666" }}>PARTICULARS</th>
@@ -259,7 +259,7 @@ export default async function InvestmentsPage(props: { searchParams: Promise<{ s
                         date</strong>, so there is no single rate for the period and no average is used. Every one
                         is here, against the head it converted.
                       </p>
-                      <div style={{ overflowX: "auto" }}>
+                      <div style={{ overflowX: "auto", overflowY: "hidden" }}>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".8rem" }}>
                           <thead><tr>
                             <th style={{ textAlign: "left", padding: "4px 8px", fontSize: ".7rem", color: "#666" }}>HEAD</th>
@@ -369,7 +369,7 @@ export default async function InvestmentsPage(props: { searchParams: Promise<{ s
                               It is worked out by the same code that posts it, so what you see here is what goes in.</>
                           : <>This is the entry that was posted{n.zoho_number ? ` as ${n.zoho_number}` : ""}.</>}
                       </p>
-                      <div style={{ overflowX: "auto" }}>
+                      <div style={{ overflowX: "auto", overflowY: "hidden" }}>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".82rem" }}>
                           <thead><tr>
                             <th style={{ textAlign: "left", padding: "4px 8px", fontSize: ".7rem", color: "#666" }}>LEDGER</th>
@@ -431,7 +431,7 @@ export default async function InvestmentsPage(props: { searchParams: Promise<{ s
               </div>
             );
           })() : (
-          <div style={{ marginTop: 10, overflowX: "auto" }}>
+          <div style={{ marginTop: 10, overflowX: "auto", overflowY: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem" }}>
               <tbody>
                 {rows.map(([k, b]) => (

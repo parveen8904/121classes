@@ -1043,10 +1043,13 @@ export async function saveMerchantRule(pattern: string, accountName: string, sub
 }
 
 // ---- account lists for the UI (cached — 3 Zoho calls per 10 minutes max) ----
-let acctList: { names: { name: string; type: string; currency: string }[]; at: number } | null = null;
-export async function listZohoAccounts(): Promise<{ name: string; type: string; currency: string }[]> {
+/** A Zoho ledger, and — for a child account — the ledger it hangs under. */
+export type ZohoAccountRow = { name: string; type: string; currency: string; parent: string | null };
+
+let acctList: { names: ZohoAccountRow[]; at: number } | null = null;
+export async function listZohoAccounts(): Promise<ZohoAccountRow[]> {
   if (acctList && Date.now() - acctList.at < 10 * 60_000) return acctList.names;
-  const names: { name: string; type: string; currency: string }[] = [];
+  const names: ZohoAccountRow[] = [];
   // TWO ZOHO QUIRKS, BOTH OF WHICH QUIETLY LOSE ACCOUNTS.
   //
   // 1. "AccountType.Active" sounds like active accounts and is not: under it
@@ -1063,14 +1066,17 @@ export async function listZohoAccounts(): Promise<{ name: string; type: string; 
   // Maintainence Expenses" could never be picked from a list.
   const seen = new Set<string>();
   for (let page = 1; page <= 8; page++) {
-    const r = await zohoFetch<{ chartofaccounts?: { account_name: string; account_type: string; currency_code?: string }[] }>(
+    // parent_account_name comes back on every CHILD account, and it is what
+    // lets the desk offer a sub-ledger DROPDOWN instead of a free-text box —
+    // "give the ledger drop down as well as subledger drop-down", 3 Sep 2026.
+    const r = await zohoFetch<{ chartofaccounts?: { account_name: string; account_type: string; currency_code?: string; parent_account_name?: string }[] }>(
       "/chartofaccounts", { query: { filter_by: "AccountType.All", per_page: "200", page: String(page) } });
     const batch = r.chartofaccounts ?? [];
     if (batch.length === 0) break;
     for (const a of batch) {
       if (seen.has(a.account_name)) continue;
       seen.add(a.account_name);
-      names.push({ name: a.account_name, type: a.account_type, currency: a.currency_code || "INR" });
+      names.push({ name: a.account_name, type: a.account_type, currency: a.currency_code || "INR", parent: (a.parent_account_name ?? "").trim() || null });
     }
   }
   acctList = { names, at: Date.now() };

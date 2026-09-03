@@ -5,6 +5,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import EntryLines from "./EntryLines";
 import { bankEntry, type BankEntryKind } from "@/lib/entryPreview";
 import { answerLineAction } from "./actions";
+import LedgerPicker, { type Acct } from "./LedgerPicker";
 
 // THE INVOICE PANEL'S MANNERS, ON A BANK LINE — AND AN ARGUMENT WITH IT.
 //
@@ -40,7 +41,8 @@ export default function BankAnswerPanel(props: {
   bankName: string;
   debit: number;
   credit: number;
-  accountListId: string;
+  /** Every Zoho ledger, so both dropdowns are the chart itself and not a guess. */
+  accounts: Acct[];
   suggestedPattern: string;
   /** Saved answers, so a line answered once opens where it was left. */
   initial?: {
@@ -64,6 +66,11 @@ export default function BankAnswerPanel(props: {
   const [narration, setNarration] = useState(i.narration ?? "");
   const [nature, setNature] = useState("expense");
   const [operating, setOperating] = useState("operating");
+  // A ledger that is not in the chart yet. Re-opens true for a line answered
+  // earlier with a head Zoho still does not have.
+  const [creatingLedger, setCreatingLedger] = useState(
+    !!(i.account ?? "") && !props.accounts.some((a) => a.name === i.account),
+  );
 
   const isPayment = kind === "vendor_payment" || kind === "customer_payment";
   const shownAccount = account.trim()
@@ -154,30 +161,34 @@ export default function BankAnswerPanel(props: {
             </div>
           </div>
         ) : (
-          <>
-            <div>
-              <label style={label}>Which ledger — the other side</label>
-              <input name="account" list={props.accountListId} required
-                     placeholder="start typing, or name a new one"
-                     value={account} onChange={(e) => setAccount(e.target.value)}
-                     style={{ marginBottom: 0, fontSize: ".82rem" }} />
-            </div>
-            <div>
-              <label style={label}>Sub-ledger (optional)</label>
-              <input name="sub_account" placeholder="e.g. Temple" value={sub}
-                     onChange={(e) => setSub(e.target.value)}
-                     style={{ marginBottom: 0, fontSize: ".8rem" }} />
-            </div>
-          </>
+          <LedgerPicker
+            accounts={props.accounts}
+            ledgerName="account" subName="sub_account"
+            value={account} sub={sub}
+            onLedger={setAccount} onSub={setSub}
+            creating={creatingLedger} onCreating={setCreatingLedger}
+          />
         )}
       </div>
 
-      {/* Nature and operating decide what a NEW ledger is created as. Useless
-          for a payment, which has no ledger to create, so they go away. */}
-      {!isPayment && (
-        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", marginTop: 10 }}>
+      {/* WHAT KIND OF LEDGER — ASKED ONLY WHEN ONE IS BEING MADE.
+          "if the ledger does not exist at that point, ask whether you want to
+          create a new ledger and what should it be?" — 3 Sep 2026. It used to
+          sit there on every line whether or not anything was being created,
+          which is how a question stops being read. */}
+      {!isPayment && creatingLedger && (
+        <div className="notice" style={{ marginTop: 10, padding: "10px 12px" }}>
+          <strong style={{ fontSize: ".82rem" }}>
+            &ldquo;{account.trim() || "…"}&rdquo; is not in Zoho — it will be created.
+          </strong>
+          <p className="muted" style={{ fontSize: ".76rem", margin: "3px 0 8px", lineHeight: 1.6 }}>
+            Say what kind of account it is. It decides where the head sits in the books and cannot be
+            guessed from its name — Drawings is equity and never an expense; a loan repaid is a
+            liability, not a cost.
+          </p>
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))" }}>
           <div>
-            <label style={label}>If that ledger is new, create it as</label>
+            <label style={label}>Create it as</label>
             <select name="nature" value={nature} onChange={(e) => setNature(e.target.value)}
                     style={{ marginBottom: 0, fontSize: ".8rem" }}>
               <option value="expense">Expense</option>
@@ -194,6 +205,7 @@ export default function BankAnswerPanel(props: {
               <option value="operating">Operating — part of the trade</option>
               <option value="non_operating">Non-operating — below the trading result</option>
             </select>
+          </div>
           </div>
         </div>
       )}
@@ -222,7 +234,11 @@ export default function BankAnswerPanel(props: {
             A rule names a ledger, and a payment does not go to one — so there is nothing to remember here.
           </span>
         )}
-        <SubmitButton className="btn small" savedLabel="✓">✅ Post</SubmitButton>
+        {/* IT DOES NOT POST. Saying "Post" on a button that files an approval
+            request is the sort of small lie that makes a desk untrustworthy —
+            he presses it, looks in Zoho, and finds nothing. Only the founder's
+            gate posts; this saves the answer and puts it there. */}
+        <SubmitButton className="btn small" savedLabel="📤 Sent">📤 Save &amp; send for approval</SubmitButton>
       </div>
 
       {/* The entry, live — the whole point of the invoice panel. */}
@@ -230,7 +246,7 @@ export default function BankAnswerPanel(props: {
         <EntryLines entry={entry} title="The entry this makes" compact />
         <p className="muted" style={{ fontSize: ".74rem", margin: "4px 0 0" }}>
           {docNote}
-          {!isPayment && " Nature and operating only matter for a ledger that does not exist in Zoho yet — they decide what type it is created as."}
+          {!isPayment && !creatingLedger && " Both dropdowns are the Zoho chart itself — pick the last option in the ledger list to make a head that is not there yet."}
         </p>
       </div>
     </form>

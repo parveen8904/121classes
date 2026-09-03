@@ -65,7 +65,7 @@ export default async function ZohoActivityPage() {
             already existed was changed. <strong>This desk</strong> marks the ones posted from the portal on your
             approval — anything else was done inside Zoho.
           </p>
-          <div className="card" style={{ overflowX: "auto", padding: 0 }}>
+          <div className="card" style={{ overflowX: "auto", overflowY: "hidden", padding: 0 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem" }}>
               <thead>
                 <tr style={{ textAlign: "left" }}>

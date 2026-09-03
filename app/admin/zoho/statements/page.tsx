@@ -277,7 +277,7 @@ export default async function StatementsPage(props: {
                 books hold it: those are settled facts, and the button
                 says so instead of refusing after the press. */}
             {s.period_start && s.period_end && (
-              <a className="btn small secondary" href={`/admin/zoho?rec=${encodeURIComponent(s.account_name)}&rf=${s.period_start}&rt=${s.period_end}#reconcile`}
+              <a className="btn small secondary" href={`/admin/zoho/statements?rec=${encodeURIComponent(s.account_name)}&rf=${s.period_start}&rt=${s.period_end}#reconcile`}
                 title="Line-by-line against Zoho's own register for these dates">⚖️ Reconcile</a>
             )}
             {(settledByStmt.get(s.id) ?? 0) > 0 ? (
@@ -438,7 +438,7 @@ export default async function StatementsPage(props: {
                             bankName={row!.account_name}
                             debit={Number(row!.debit)}
                             credit={Number(row!.credit)}
-                            accountListId="acct-names"
+                            accounts={zohoAccounts}
                             suggestedPattern={suggestPattern(String(row!.narration))}
                           />
                         )}
@@ -495,11 +495,39 @@ export default async function StatementsPage(props: {
           // here is presentation for that one component, never the figure.
           amount: wentOut(l) ? -magnitude(l) : magnitude(l),
           status: l.status, error: l.error,
-          // The account is the editable half — the ✏️ answer flow on the
-          // line changes it; this shows what the rule's answer books.
-          detail: l.proposal?.account
-            ? <EntryLines entry={bankEntry({ bank: l.account_name, account: l.proposal.account, debit: Number(l.debit), credit: Number(l.credit), direction: l.direction, kind: (l.entry_kind ?? "auto") as Parameters<typeof bankEntry>[0]["kind"], party: l.party_name })} title="What the proposed account books" compact />
-            : undefined,
+          // A RULE'S ANSWER IS A PROPOSAL, NOT A VERDICT.
+          //
+          // "When any entries already rule was, it simply says me to send for
+          // approval if I want to change, it should be allowed." — 3 Sep 2026.
+          //
+          // A rule-proposed line offered a tick and nothing else: the only way
+          // to disagree with the rule was to skip the line and lose it. The
+          // whole answer panel now opens on the row, pre-filled with what the
+          // rule proposed, so any of it can be changed and posted from here.
+          detailLabel: "✏️ Change this one",
+          detail: (
+            <>
+              <EntryLines
+                entry={bankEntry({ bank: l.account_name, account: l.proposal?.account ?? "", debit: Number(l.debit), credit: Number(l.credit), direction: l.direction, kind: (l.entry_kind ?? "auto") as Parameters<typeof bankEntry>[0]["kind"], party: l.party_name })}
+                title="What the rule proposes" compact />
+              <BankAnswerPanel
+                lineId={l.id}
+                bankName={l.account_name}
+                debit={Number(l.debit)}
+                credit={Number(l.credit)}
+                accounts={zohoAccounts}
+                suggestedPattern={suggestPattern(l.narration)}
+                initial={{
+                  account: l.proposal?.account ?? null,
+                  subAccount: l.sub_account,
+                  direction: l.direction,
+                  kind: l.entry_kind,
+                  party: l.party_name,
+                  narration: l.own_narration,
+                }}
+              />
+            </>
+          ),
         }))}
         approveSelected={approveSelectedLinesAction}
         skipSelected={skipSelectedLinesAction}
@@ -531,7 +559,7 @@ export default async function StatementsPage(props: {
             bankName={l.account_name}
             debit={Number(l.debit)}
             credit={Number(l.credit)}
-            accountListId="acct-names"
+            accounts={zohoAccounts}
             suggestedPattern={suggestPattern(l.narration)}
             initial={{
               account: l.proposal?.account ?? null,

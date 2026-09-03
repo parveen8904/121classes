@@ -55,7 +55,7 @@ export default function EntryLines({
         {title}
       </div>
       {intro && <p className="muted" style={{ fontSize: ".78rem", margin: "3px 0 4px" }}>{intro}</p>}
-      <div style={{ overflowX: "auto" }}>
+      <div style={{ overflowX: "auto", overflowY: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: compact ? ".78rem" : ".82rem" }}>
           <thead>
             <tr>

@@ -19,7 +19,7 @@ import { pairLines, type Pairing, type StatementSide, type ZohoSide } from "@/li
 // lib/bankStatementRows.ts. Re-exported here because callers and the existing
 // tests know these names at this address.
 export { parseIndianDate, rowsToLines, type StmtLine } from "@/lib/bankStatementRows";
-import { str, num, parseIndianDate, rowsToLines, csvToRows, type StmtLine } from "@/lib/bankStatementRows";
+import { str, num, parseIndianDate, rowsToLines, csvToRows, correctByBalance, asMagnitudes, type StmtLine } from "@/lib/bankStatementRows";
 
 // ---- ingestion --------------------------------------------------------------
 
@@ -41,7 +41,10 @@ function aiToLines(rows: { date: string; narration?: string; ref?: string; debit
   return rows.map((l) => ({
     date: parseIndianDate(String(l.date)) || str(l.date),
     narration: str(l.narration), ref: str(l.ref),
-    debit: Math.abs(Number(l.debit) || 0), credit: Math.abs(Number(l.credit) || 0),
+    // Math.abs on BOTH sides used to leave a line that was a withdrawal and a
+    // deposit at once whenever the model filled both — and a negative it had
+    // read correctly lost its meaning. asMagnitudes settles it to one side.
+    ...asMagnitudes(Number(l.debit) || 0, Number(l.credit) || 0),
     balance: l.balance !== undefined && l.balance !== null ? Number(l.balance) : null,
   })).filter((l) => /^\d{4}-\d{2}-\d{2}$/.test(l.date) && (l.debit || l.credit));
 }
@@ -229,6 +232,21 @@ async function fileStatementLines(
   }
 
   lines.sort((a, b) => a.date.localeCompare(b.date));
+
+  // THE STATEMENT'S OWN BALANCES DECIDE DIRECTION, WHEREVER IT CARRIES THEM.
+  //
+  // Every reader above — CSV, Excel, the rebuilt PDF table, the model — hands
+  // its lines to this one function, so the check belongs here rather than in
+  // any one of them. Two ₹6,900 receipts in the NRO account on 18 August were
+  // filed as payments because a PDF printed their figures a little left of the
+  // deposit column; the balance beside each one rose by exactly 6,900 and said
+  // so. See correctByBalance.
+  const { lines: settled, fixed: dirFixed } = correctByBalance(lines);
+  lines = settled;
+  if (dirFixed > 0) {
+    note = `${note ? `${note} · ` : ""}${dirFixed} line${dirFixed === 1 ? "" : "s"} had money in and out the wrong way round against the running balance — corrected to follow the balance`;
+  }
+
   const first = lines[0], last = lines[lines.length - 1];
   // Opening = first balance rolled back by the first movement; null when the
   // statement carries no balance column (continuity then stays unknown).
@@ -639,7 +657,14 @@ async function attachStatement(
  */
 export async function postBankLine(
   lineId: string, accountChoice: string, subAccount?: string | null,
-  opts?: { nature?: string | null; operating?: string | null },
+  opts?: {
+    nature?: string | null; operating?: string | null;
+    /** All four override what is stored on the row — see the migration 0059. */
+    direction?: "in" | "out" | null;
+    entryKind?: string | null;
+    partyName?: string | null;
+    ownNarration?: string | null;
+  },
 ): Promise<void> {
   const svc = createServiceClient();
   const { data: l } = await svc.from("bank_lines").select("*").eq("id", lineId).maybeSingle();
@@ -656,6 +681,23 @@ export async function postBankLine(
     const debit = Number(l.debit) || 0, credit = Number(l.credit) || 0;
     const { lineNarration } = await import("@/lib/zohoNarration");
 
+    // THE DESK'S ANSWERS BEAT THE STATEMENT'S COLUMNS.
+    //
+    // His instruction, 3 September 2026: "we should be able to generalise the
+    // entry on ourselves if your entry is incorrect".
+    //
+    // An amount is a magnitude — the SIDE carries the meaning — so the figure
+    // is taken as |debit| or |credit| and the direction is a separate answer.
+    // Where nobody has overridden, `direction` is null and it falls back to
+    // whichever column the parser filled, which is what it always did.
+    const amount = Math.abs(debit) || Math.abs(credit);
+    const chosenDir = String(opts?.direction ?? l.direction ?? "");
+    const isOut = chosenDir ? chosenDir === "out" : debit > 0;
+    const kind = String(opts?.entryKind ?? l.entry_kind ?? "auto") || "auto";
+    const partyName = String(opts?.partyName ?? l.party_name ?? "").trim();
+    const ownWords = String(opts?.ownNarration ?? l.own_narration ?? "").trim();
+    if (!(amount > 0)) return fail("that line has no amount to post");
+
     // A LINE THAT SETTLES SOMETHING IS NOT AN EXPENSE.
     //
     // The expense was booked when the supplier's bill arrived. Paying it is a
@@ -667,7 +709,7 @@ export async function postBankLine(
       const zid = await settleFromBank({
         kind: String(l.match_kind) as "bill" | "invoice",
         documentIds: (l.match_ids as string[]).map(String),
-        amount: debit > 0 ? debit : credit,
+        amount,
         date: String(l.line_date),
         bankAccountId: bankId,
         // Rupees per unit of the document's currency — nothing for an INR bill,
@@ -690,6 +732,60 @@ export async function postBankLine(
       const paper = await attachStatement(svc, l, String(l.match_kind) === "bill" ? "vendorpayment" : "customerpayment", zid);
       await svc.from("bank_lines").update({
         status: "posted", zoho_id: zid, error: paper, updated_at: new Date().toISOString(),
+      }).eq("id", lineId);
+      return;
+    }
+
+    // THE REFERENCE, ALWAYS. The bank's ref column is usually empty (Axis puts
+    // the wire number inside the narration), so reference_number was blank on
+    // most postings while the settlement journals all carry their UTR. The wire
+    // number is lifted out of the narration when the column gives nothing —
+    // see zohoReference, and the five expenses it stopped failing.
+    const refNo = zohoReference(l.ref as string | null, l.narration as string | null);
+    const bankSource = `bank statement: ${String(l.narration ?? "").slice(0, 220)}`;
+
+    // A SUPPLIER'S OR A CUSTOMER'S PAYMENT, WHERE HE HAS SAID SO.
+    //
+    // "if it is Vendor payment, we should be able to process it as Vendor
+    // payment or customer payment" — 3 September 2026.
+    //
+    // A line that matched an open document never reaches here: it was settled
+    // above, against the bill or invoice itself. This is the other case, money
+    // that moved with no particular document to point at. Zoho holds it as an
+    // unapplied payment on that party's account, which is the honest record,
+    // and it can be knocked off a bill later.
+    //
+    // This sits ABOVE the ledger lookup on purpose. The contra side of a
+    // vendor payment is that supplier's own control account, which Zoho
+    // derives from the contact — there is no ledger to pick, and resolving one
+    // here would create a head named after the supplier that nothing needs.
+    if (kind === "vendor_payment" || kind === "customer_payment") {
+      const { findOrCreateParty, unappliedPayment } = await import("@/lib/zohoParty");
+      const side = kind === "vendor_payment" ? "vendor" : "customer";
+      let partyId = "";
+      try {
+        ({ id: partyId } = await findOrCreateParty(partyName, side));
+      } catch (e) {
+        return fail(e instanceof Error ? e.message : `could not find or create the ${side}`);
+      }
+      const payId = await unappliedPayment({
+        kind: side, partyId, amount, date: String(l.line_date),
+        bankAccountId: bankId, reference: refNo,
+        narration: ownWords
+          ? [ownWords, bankSource].join(" · ").slice(0, 480)
+          : lineNarration({
+              who: partyName,
+              what: side === "vendor" ? "paid from the bank" : "received into the bank",
+              docNo: String(l.ref ?? "") || null, docLabel: "bank ref",
+              docDate: String(l.line_date),
+              extra: bankSource,
+            }),
+      });
+      const paper = await attachStatement(svc, l, side === "vendor" ? "vendorpayment" : "customerpayment", payId);
+      await svc.from("bank_lines").update({
+        status: "posted", zoho_id: payId, error: paper,
+        proposal: { ...(l.proposal as Record<string, unknown> ?? {}), kind, partyName },
+        updated_at: new Date().toISOString(),
       }).eq("id", lineId);
       return;
     }
@@ -734,13 +830,6 @@ export async function postBankLine(
     }
     const otherId = other.id;
 
-    // THE REFERENCE, ALWAYS. The bank's ref column is usually empty (Axis puts
-    // the wire number inside the narration), so reference_number was blank on
-    // most postings while the settlement journals all carry their UTR. The wire
-    // number is lifted out of the narration when the column gives nothing —
-    // see zohoReference, and the five expenses it stopped failing.
-    const refNo = zohoReference(l.ref as string | null, l.narration as string | null);
-
     // A BANK'S OWN WORDING IS NOT A NARRATION.
     //
     // "NEFT-AXISP0012345-VERCEL INC" tells a reader which wire it was and
@@ -751,14 +840,30 @@ export async function postBankLine(
     // The stored answer wins where the caller passes nothing, so a line
     // re-posted later keeps the qualifier it was answered with.
     const sub = subName || null;
-    const bankNarration = lineNarration({
-      who: accountChoice,
-      what: debit > 0 ? "paid from the bank" : "received into the bank",
-      subAccount: sub,
-      docNo: String(l.ref ?? "") || null, docLabel: "bank ref",
-      docDate: String(l.line_date),
-      extra: `bank statement: ${String(l.narration ?? "").slice(0, 220)}`,
-    });
+
+    // HIS OWN WORDS FIRST, WHERE HE HAS WRITTEN ANY.
+    //
+    // "There is no choice of putting narration from ourselves." — 3 September
+    // 2026. The generated sentence is a good default and a poor substitute: it
+    // can say the money went to Drawings, and never that it was ₹6,900 Baldev
+    // sent back. So where he has written a narration it LEADS, the head and
+    // sub-head follow it, and the bank's own string is still kept at the end.
+    //
+    // The bank's string is never dropped, whoever wrote what. It is the
+    // evidence the entry came from, and an entry that cannot be traced back to
+    // the statement line is worth much less in an audit.
+    const bankNarration = ownWords
+      ? [ownWords, `${accountChoice}${sub ? ` (${sub})` : ""}`, bankSource]
+          .filter(Boolean).join(" · ").slice(0, 480)
+      : lineNarration({
+          who: accountChoice,
+          what: isOut ? "paid from the bank" : "received into the bank",
+          subAccount: sub,
+          docNo: String(l.ref ?? "") || null, docLabel: "bank ref",
+          docDate: String(l.line_date),
+          extra: bankSource,
+        });
+
 
     // AN EXPENSE IS ONLY ONE OF THE THINGS MONEY LEAVING A BANK CAN BE.
     //
@@ -771,7 +876,21 @@ export async function postBankLine(
     // Money out to anything that is not an expense head is a journal:
     // Dr that account, Cr the bank. Which is what it always was in double
     // entry; only the Zoho document type was wrong.
-    const asExpense = debit > 0 && EXPENSE_TYPES.has(other.type);
+    //
+    // WHAT HE ASKED FOR OVERRIDES WHAT WOULD BE GUESSED. "auto" is the old
+    // behaviour and stays the default; "expense" forces the Expense document;
+    // "income", "journal" and a corrected direction all take the journal, which
+    // can express anything. The one combination that cannot work is an Expense
+    // against a head Zoho does not consider an expense — it refuses the
+    // document — so that is caught here with a sentence he can act on, rather
+    // than as Zoho's own error a minute later.
+    if (kind === "expense" && !isOut) {
+      return fail("an expense is money going out — this line is money coming in. Book it as income, or turn the direction round.");
+    }
+    if (kind === "expense" && !EXPENSE_TYPES.has(other.type)) {
+      return fail(`Zoho will only accept an expense against an expense head, and "${accountChoice}" is ${other.type.replace(/_/g, " ")}. Leave the kind on "work it out" and it posts as a journal instead.`);
+    }
+    const asExpense = kind === "expense" || (kind === "auto" && isOut && EXPENSE_TYPES.has(other.type));
 
     let zohoId = "";
     if (asExpense) {
@@ -781,7 +900,7 @@ export async function postBankLine(
           account_id: otherId,
           paid_through_account_id: bankId,
           date: l.line_date,
-          amount: debit,
+          amount,
           description: bankNarration,
           ...(refNo ? { reference_number: refNo } : {}),
         },
@@ -791,8 +910,7 @@ export async function postBankLine(
     } else {
       // Money OUT to a non-expense head: Dr that account, Cr the bank.
       // Money IN: Dr the bank, Cr that account. One journal shape, both ways.
-      const amount = debit > 0 ? debit : credit;
-      const lines = debit > 0
+      const lines = isOut
         ? [
             { account_id: otherId, debit_or_credit: "debit", amount, description: bankNarration },
             { account_id: bankId, debit_or_credit: "credit", amount, description: bankNarration },

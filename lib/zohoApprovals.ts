@@ -32,7 +32,23 @@ const EXECUTORS: Record<ApprovalKind, (refId: string, details: Record<string, un
   bill_open: async (id) => (await import("@/lib/providerBills")).openPostedBill(id),
   attach_paper: async (id) => (await import("@/lib/providerBills")).attachBillPaper(id),
   settlement: async (id) => (await import("@/lib/zohoSettlements")).postSettlement(id),
-  bank_line: async (id, d) => (await import("@/lib/bankStatements")).postBankLine(id, String(d.accountChoice ?? ""), (d.subAccount as string | null) ?? null, { nature: (d.nature as string | null) ?? null, operating: (d.operating as string | null) ?? null }),
+  // The desk's own answers travel through the gate with the line — direction,
+  // what kind of document, whose payment, and his wording. Without them the
+  // release would post what the STATEMENT said, quietly undoing the correction
+  // he made before sending it for approval.
+  bank_line: async (id, d) => (await import("@/lib/bankStatements")).postBankLine(
+    id,
+    String(d.accountChoice ?? ""),
+    (d.subAccount as string | null) ?? null,
+    {
+      nature: (d.nature as string | null) ?? null,
+      operating: (d.operating as string | null) ?? null,
+      direction: (d.direction as "in" | "out" | null) ?? null,
+      entryKind: (d.entryKind as string | null) ?? null,
+      partyName: (d.partyName as string | null) ?? null,
+      ownNarration: (d.ownNarration as string | null) ?? null,
+    },
+  ),
   brokerage_line: async (id, d) => { await (await import("@/lib/brokerage")).postBrokerageLine(id, d as never); },
   sale: async (id) => (await import("@/lib/zohoPosting")).postSale(id),
   petty_bill: async (id, d) => (await import("@/lib/pettyCash")).postBill(id, String(d.expenseAccount ?? "")),

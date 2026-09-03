@@ -108,9 +108,29 @@ export async function entryForApproval(a: {
           kind: String(l.match_kind) === "bill" ? "bill" : "invoice",
         });
       }
+      // THE GATE MUST SHOW WHAT HE ANSWERED, NOT WHAT THE STATEMENT READ.
+      //
+      // The desk can now turn a line's direction round, call it a vendor
+      // payment, and name the party (migration 0059). None of that reached
+      // here, so the founder would have been shown the ENTRY THE PARSER
+      // PROPOSED while approving the one the desk corrected — the two ₹6,900
+      // receipts would have appeared at the gate as payments even after being
+      // put right. The gate is the last place a preview may disagree with the
+      // posting.
+      const kind = s(l.entry_kind) || "auto";
+      const party = s(l.party_name);
+      const isPayment = kind === "vendor_payment" || kind === "customer_payment";
       const account = s(l.account_choice) || s(l.proposal && (l.proposal as Record<string, unknown>).account) || "";
-      if (!account) return null;
-      return bankEntry({ bank: s(l.account_name), account, debit: n(l.debit), credit: n(l.credit) });
+      if (!account && !isPayment) return null;
+      return bankEntry({
+        bank: s(l.account_name),
+        account,
+        debit: n(l.debit),
+        credit: n(l.credit),
+        direction: l.direction === "in" || l.direction === "out" ? l.direction : null,
+        kind: kind as Parameters<typeof bankEntry>[0]["kind"],
+        party,
+      });
     }
 
     /* A PORTAL SALE QUEUED FOR HIS GATE — the kind that was showing nothing.

@@ -1186,20 +1186,58 @@ export async function answerLineAction(formData: FormData) {
   // as, and "drawings" goes to equity, never the P&L.
   const nature = str(formData.get("nature")).trim() || null;
   const operating = str(formData.get("operating")).trim() || null;
-  if (!id || !account) return;
+
+  // THE FOUR ANSWERS THE DESK USED TO HAVE NO WAY OF GIVING. See migration
+  // 0059 and his instruction of 3 September 2026.
+  const dirRaw = str(formData.get("direction")).trim();
+  const direction = dirRaw === "in" || dirRaw === "out" ? dirRaw : null;
+  const kindRaw = str(formData.get("entry_kind")).trim();
+  const KINDS = ["auto", "expense", "income", "vendor_payment", "customer_payment", "journal"];
+  const entryKind = KINDS.includes(kindRaw) ? kindRaw : "auto";
+  const partyName = str(formData.get("party_name")).trim() || null;
+  const ownNarration = str(formData.get("own_narration")).trim() || null;
+  const isPayment = entryKind === "vendor_payment" || entryKind === "customer_payment";
+
+  if (!id) return;
+  // A payment is against a PARTY, not a ledger; everything else needs the head.
+  // Refusing quietly is what the old `if (!id || !account) return` did, and a
+  // press that does nothing at all is indistinguishable from a broken button.
+  const svcRow = createServiceClient();
+  const complain = async (why: string) => {
+    await svcRow.from("bank_lines").update({ error: why, updated_at: new Date().toISOString() }).eq("id", id);
+    revalidateDesk();
+  };
+  if (isPayment && !partyName) {
+    return complain(entryKind === "vendor_payment"
+      ? "Name the supplier — a vendor payment has to be against somebody."
+      : "Name the customer — a receipt has to be from somebody.");
+  }
+  if (!isPayment && !account) return complain("Pick the ledger for the other side of the entry.");
+
   const { saveMerchantRule } = await import("@/lib/bankStatements");
-  if (remember && rulePattern) {
+  // A rule names a ledger. A payment does not go to one, so there is nothing
+  // worth remembering — and saving the party's name as a ledger rule would
+  // send the NEXT line from that merchant to a head that should not exist.
+  if (remember && rulePattern && !isPayment) {
     try { await saveMerchantRule(rulePattern, account, subAccount); } catch { /* the posting still proceeds */ }
   }
   // Stored on the line so it survives the trip through his approval gate — the
   // release posts from the row, not from this form.
-  const svcRow = createServiceClient();
   const { data: cur } = await svcRow.from("bank_lines").select("proposal").eq("id", id).maybeSingle();
   await svcRow.from("bank_lines").update({
     sub_account: subAccount,
-    proposal: { ...((cur?.proposal as Record<string, unknown>) ?? {}), account, subAccount, nature, operating },
+    direction, entry_kind: entryKind, party_name: partyName, own_narration: ownNarration,
+    error: null,
+    proposal: {
+      ...((cur?.proposal as Record<string, unknown>) ?? {}),
+      account, subAccount, nature, operating,
+      direction, entryKind, partyName, ownNarration,
+    },
   }).eq("id", id);
-  await requestApprovalFor("bank_line", "bank_lines", id, { accountChoice: account, subAccount, nature, operating });
+  await requestApprovalFor("bank_line", "bank_lines", id, {
+    accountChoice: account, subAccount, nature, operating,
+    direction, entryKind, partyName, ownNarration,
+  });
   revalidateDesk();
 }
 

@@ -23,7 +23,7 @@ import { join } from "node:path";
 // be loaded. They now live on their own in lib/bankStatementRows.ts, so the
 // test reads the actual objects — and a rule that is renamed or deleted breaks
 // the test instead of quietly matching nothing.
-import { HEAD, REF_TIERS } from "../lib/bankStatementRows.ts";
+import { HEAD, REF_TIERS, rowsToLines } from "../lib/bankStatementRows.ts";
 
 const src = readFileSync(join(import.meta.dirname, "..", "lib/bankStatementRows.ts"), "utf8");
 
@@ -129,10 +129,38 @@ check("the narration regex does not swallow the amount column",
 check("a trailing Cr/Dr marker is stripped before the figure is read",
   /\.replace\(\/\\s\*\(cr\|dr\)\\\.\?\\s\*\$\/i, ""\)/.test(src),
   "otherwise the amount is NaN, becomes zero, and the line is silently skipped");
-check("the direction is taken from the marker column OR from the amount cell",
-  /const t = \(cell\("drcr"\) \|\| raw\)\.toLowerCase\(\)/.test(src));
+// THESE TWO USED TO READ THE SOURCE. THEY NOW READ THE RESULT.
+//
+// They asserted the literal text `const t = (cell("drcr") || raw)` and
+// `credit = Math.abs(amt)`. Both broke on 3 September when the direction logic
+// was rewritten to stop discarding the sign of a signed amount column — while
+// the behaviour they were guarding was still perfectly correct. A test that
+// fails when a variable is renamed, and would pass if the rule were inverted,
+// is guarding the spelling and not the rule. So: run the parser.
+const marker = (drcr: string) => rowsToLines([
+  ["Transaction Date", "Transaction Particulars", "Amount", "Transaction Type"],
+  ["01/08/2026", "A card transaction", "12340.00", drcr],
+  ["02/08/2026", "Another one", "500.00", drcr],
+]).lines[0];
+
+check("the direction is taken from the marker column",
+  marker("Cr")?.credit === 12340 && marker("Dr")?.debit === 12340,
+  JSON.stringify({ cr: marker("Cr"), dr: marker("Dr") }));
+
 check("on a card, Cr is a payment against it — the credit column, like money in",
-  /\/\\bcr\\b\|\\bcredit\\b\/\.test\(t\)\) credit = Math\.abs\(amt\)/.test(src));
+  marker("Cr")?.credit === 12340 && marker("Cr")?.debit === 0,
+  JSON.stringify(marker("Cr")));
+
+// …and the marker written inside the amount cell, where there is no Dr/Cr
+// column at all. "12,340.00 Cr" used to parse as NaN, become zero, and drop.
+const inCell = rowsToLines([
+  ["Transaction Date", "Transaction Particulars", "Amount"],
+  ["01/08/2026", "A refund", "12,340.00 Cr"],
+  ["02/08/2026", "A purchase", "900.00 Dr"],
+]).lines;
+check("the direction is taken from the amount cell when there is no marker column",
+  inCell[0]?.credit === 12340 && inCell[1]?.debit === 900,
+  JSON.stringify(inCell));
 check("credit-card accounts are offered beside the banks when a document is named",
   /a\.type === "bank" \|\| a\.type === "credit_card"/.test(
     readFileSync(join(import.meta.dirname, "..", "app/admin/zoho/vault/page.tsx"), "utf8")),

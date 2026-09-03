@@ -1,5 +1,12 @@
 import type { Nature, TdsWorking } from "@/lib/postingShape";
 
+// The entry's shape, and the bank line's entry, live in lib/entryShape.ts so a
+// test can load them without the "@/" alias. Re-exported here because every
+// caller — the panels, the approvals, the statements page — knows this address.
+import { r2, finish, payableFor, receivableFor, type Entry, type EntryLine } from "@/lib/entryShape";
+export { payableFor, receivableFor, bankEntry } from "@/lib/entryShape";
+export type { Entry, EntryLine, BankEntryKind } from "@/lib/entryShape";
+
 // THE ENTRY AS DEBITS AND CREDITS, BEFORE ANYBODY APPROVES ANYTHING.
 //
 // The desk already stated each posting in a sentence, and a sentence is not
@@ -13,22 +20,6 @@ import type { Nature, TdsWorking } from "@/lib/postingShape";
 // treatment, the withholding — so it shows what the document will do to the
 // ledgers. Where Zoho's own machinery makes a line (the reverse-charge pair,
 // its TDS ledger), that is said on the line rather than implied.
-
-export type EntryLine = { account: string; side: "debit" | "credit"; amount: number; note?: string };
-export type Entry = { lines: EntryLine[]; dr: number; cr: number; balanced: boolean; caveats: string[] };
-
-const r2 = (n: number) => Number((Number(n) || 0).toFixed(2));
-
-function finish(lines: EntryLine[], caveats: string[]): Entry {
-  const kept = lines.filter((l) => Math.abs(l.amount) >= 0.01).map((l) => ({ ...l, amount: r2(l.amount) }));
-  const dr = r2(kept.filter((l) => l.side === "debit").reduce((t, l) => t + l.amount, 0));
-  const cr = r2(kept.filter((l) => l.side === "credit").reduce((t, l) => t + l.amount, 0));
-  return { lines: kept, dr, cr, balanced: Math.abs(dr - cr) < 0.02, caveats };
-}
-
-/** Where the other side of a purchase sits until it is paid. */
-export const payableFor = (who: string) => `${who || "the supplier"} (payable)`;
-export const receivableFor = (who: string) => `${who || "the customer"} (receivable)`;
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SOMETHING WE BOUGHT — a supplier's bill
@@ -296,25 +287,6 @@ export function saleEntry(p: {
 /* ═══════════════════════════════════════════════════════════════════════════
    MONEY THAT MOVED — a bank line, and a settlement against open documents
    ═══════════════════════════════════════════════════════════════════════════ */
-export function bankEntry(p: {
-  bank: string;
-  account: string;
-  debit: number;
-  credit: number;
-}): Entry {
-  const out = r2(p.debit), inn = r2(p.credit);
-  const head = p.account || "— no ledger chosen —";
-  return out > 0
-    ? finish([
-        { account: head, side: "debit", amount: out, note: "what the money was spent on" },
-        { account: p.bank, side: "credit", amount: out, note: "left the bank" },
-      ], [])
-    : finish([
-        { account: p.bank, side: "debit", amount: inn, note: "reached the bank" },
-        { account: head, side: "credit", amount: inn, note: "what the money was for" },
-      ], []);
-}
-
 export function settlementEntry(p: {
   bank: string;
   party: string;

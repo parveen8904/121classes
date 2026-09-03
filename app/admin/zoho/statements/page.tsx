@@ -34,11 +34,24 @@ export default async function StatementsPage(props: {
   const hubConnected = await zohoConfigured();
 
   type StmtRow = { id: string; account_name: string; file_name: string | null; period_start: string | null; period_end: string | null; opening_balance: number | null; closing_balance: number | null; note: string | null; status: string; lines_total: number; recon_missing: number | null; recon_extra: number | null };
-  type LineRow = { id: string; account_name: string; line_date: string; narration: string; ref: string | null; debit: number; credit: number; status: string; proposal: { account?: string } | null; matched_note: string | null; error: string | null };
+  type LineRow = { id: string; account_name: string; line_date: string; narration: string; ref: string | null; debit: number; credit: number; status: string; proposal: { account?: string } | null; matched_note: string | null; error: string | null;
+    sub_account: string | null; direction: "in" | "out" | null; entry_kind: string | null; party_name: string | null; own_narration: string | null };
+
+  // AN AMOUNT IS A MAGNITUDE; THE SIDE CARRIES THE MEANING.
+  //
+  // His instruction, 3 September 2026: "the amounts are showing negative
+  // sometimes positive, whereas the amount should be positive". The queue used
+  // to print "− ₹6,900" for money out and "+ ₹6,900" for money in, which reads
+  // like a signed quantity and is not how a ledger states anything. The figure
+  // is now always positive and the direction is a word beside it.
+  const magnitude = (l: { debit: number; credit: number }) =>
+    Math.abs(Number(l.debit)) || Math.abs(Number(l.credit));
+  const wentOut = (l: { debit: number; credit: number; direction?: "in" | "out" | null }) =>
+    l.direction ? l.direction === "out" : Math.abs(Number(l.debit)) > 0;
   const [{ data: stmtData }, { data: lineData }] = hubConnected
     ? await Promise.all([
         createServiceClient().from("bank_statements").select("id, account_name, file_name, period_start, period_end, opening_balance, closing_balance, note, status, lines_total, recon_missing, recon_extra").order("created_at", { ascending: false }).limit(20),
-        createServiceClient().from("bank_lines").select("id, account_name, line_date, narration, ref, debit, credit, status, proposal, matched_note, error").in("status", ["ask", "auto", "failed"]).order("line_date").limit(200),
+        createServiceClient().from("bank_lines").select("id, account_name, line_date, narration, ref, debit, credit, status, proposal, matched_note, error, sub_account, direction, entry_kind, party_name, own_narration").in("status", ["ask", "auto", "failed"]).order("line_date").limit(200),
       ])
     : [{ data: [] as StmtRow[] }, { data: [] as LineRow[] }];
   const stmts = (stmtData ?? []) as StmtRow[];
@@ -478,12 +491,14 @@ export default async function StatementsPage(props: {
           id: l.id, date: l.line_date,
           label: `${l.account_name} · ${String(l.narration).slice(0, 80)}`,
           sub: l.proposal?.account ? `→ ${l.proposal.account}` : null,
-          amount: Number(l.debit) > 0 ? -Number(l.debit) : Number(l.credit),
+          // QueuePicker colours by sign; the desk reads a magnitude. The sign
+          // here is presentation for that one component, never the figure.
+          amount: wentOut(l) ? -magnitude(l) : magnitude(l),
           status: l.status, error: l.error,
           // The account is the editable half — the ✏️ answer flow on the
           // line changes it; this shows what the rule's answer books.
           detail: l.proposal?.account
-            ? <EntryLines entry={bankEntry({ bank: l.account_name, account: l.proposal.account, debit: Number(l.debit), credit: Number(l.credit) })} title="What the proposed account books" compact />
+            ? <EntryLines entry={bankEntry({ bank: l.account_name, account: l.proposal.account, debit: Number(l.debit), credit: Number(l.credit), direction: l.direction, kind: (l.entry_kind ?? "auto") as Parameters<typeof bankEntry>[0]["kind"], party: l.party_name })} title="What the proposed account books" compact />
             : undefined,
         }))}
         approveSelected={approveSelectedLinesAction}
@@ -500,7 +515,12 @@ export default async function StatementsPage(props: {
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontSize: ".8rem", whiteSpace: "nowrap" }}>{l.line_date}</span>
             <span style={{ flex: 1, minWidth: 220, fontSize: ".84rem" }}>{l.narration}</span>
-            <strong style={{ whiteSpace: "nowrap" }}>{l.debit > 0 ? `− ${formatINR(Number(l.debit))}` : `+ ${formatINR(Number(l.credit))}`}</strong>
+            <strong style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+              {formatINR(magnitude(l))}
+              <span className="muted" style={{ fontWeight: 400, fontSize: ".76rem", marginLeft: 6 }}>
+                {wentOut(l) ? "out" : "in"}
+              </span>
+            </strong>
             <form action={skipLineAction} style={{ margin: 0 }}>
               <input type="hidden" name="id" value={l.id} />
               <SubmitButton className="btn small secondary" savedLabel="✓">Skip</SubmitButton>
@@ -513,6 +533,14 @@ export default async function StatementsPage(props: {
             credit={Number(l.credit)}
             accountListId="acct-names"
             suggestedPattern={suggestPattern(l.narration)}
+            initial={{
+              account: l.proposal?.account ?? null,
+              subAccount: l.sub_account,
+              direction: l.direction,
+              kind: l.entry_kind,
+              party: l.party_name,
+              narration: l.own_narration,
+            }}
           />
         </div>
       ))}

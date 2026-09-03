@@ -6,6 +6,7 @@ import { listZohoAccounts } from "@/lib/bankStatements";
 import SubmitButton from "@/app/components/SubmitButton";
 import DeleteButton from "../../_components/DeleteButton";
 import DeskShell from "../_shell";
+import VaultClassify from "../VaultClassify";
 import { deleteVaultDoc, vaultUploadAction, vaultRereadAction, vaultClassifyAction } from "../actions";
 
 // THE VAULT — ONE DOOR FOR EVERY DOCUMENT, IN TWO STEPS.
@@ -38,7 +39,8 @@ export const dynamic = "force-dynamic";
 type VaultDoc = { id: string; title: string; note: string | null; institution: string | null;
   doc_type: string | null; year_label: string | null; is_processed: boolean; created_at: string;
   kind: string | null; account_name: string | null; rows_json: string[][] | null;
-  read_how: string | null; read_note: string | null; used_table: string | null; used_id: string | null };
+  read_how: string | null; read_note: string | null; used_table: string | null; used_id: string | null;
+  party_guess: string | null; party_gstin: string | null; doc_no: string | null; doc_date: string | null };
 
 const HOW: Record<string, string> = {
   table: "read as a table — code, no model",
@@ -56,12 +58,17 @@ export default async function VaultPage(props: { searchParams: Promise<{ scan?: 
 
   const { data: docsData } = await createServiceClient()
     .from("zoho_vault_docs")
-    .select("id, title, note, institution, doc_type, year_label, is_processed, created_at, kind, account_name, rows_json, read_how, read_note, used_table, used_id")
+    .select("id, title, note, institution, doc_type, year_label, is_processed, created_at, kind, account_name, rows_json, read_how, read_note, used_table, used_id, party_guess, party_gstin, doc_no, doc_date")
     .order("created_at", { ascending: false });
   const docs = (docsData ?? []) as VaultDoc[];
 
   const zohoAccounts = hubConnected ? await listZohoAccounts().catch(() => []) : [];
   const bankChoices = zohoAccounts.filter((a) => a.type === "bank" || a.type === "credit_card").map((a) => a.name);
+  // A CHART OF ACCOUNTS HAS NO SUPPLIERS IN IT. The party box offered bank
+  // accounts whatever the document was, so filing an invoice had nothing to
+  // pick from — see VaultClassify.
+  const { listZohoParties } = await import("@/lib/zohoParty");
+  const partyChoices = hubConnected ? (await listZohoParties().catch(() => [])).map((p) => p.name) : [];
 
   // The one just uploaded, or the newest still waiting to be named.
   const focus = sp.doc ? docs.find((d) => d.id === sp.doc) : docs.find((d) => !d.kind);
@@ -110,7 +117,15 @@ export default async function VaultPage(props: { searchParams: Promise<{ scan?: 
           {focus.rows_json?.length ? (
             <>
               <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 8px" }}>
-                {focus.rows_json.length} row(s) · {HOW[focus.read_how ?? ""] ?? "read"} ·{" "}
+                {focus.rows_json.length} row(s) · {HOW[focus.read_how ?? ""] ?? "read"}
+                {/* THE LETTERHEAD, WHICH THE TABLE NEVER CONTAINS. On an
+                    invoice the table is the line items; who sent it, its
+                    number and its date are printed above them and no reader
+                    here had ever looked. */}
+                {focus.party_guess && <> · from <strong>{focus.party_guess}</strong></>}
+                {focus.doc_no && <> · no. {focus.doc_no}</>}
+                {focus.doc_date && <> · {formatDate(focus.doc_date)}</>}
+                {" "}·{" "}
                 <a className="grad" href={`/admin/zoho/vault/${focus.id}/csv`} style={{ fontWeight: 700 }}>⬇ download as a spreadsheet</a>
               </p>
               {/* THE WHOLE STATEMENT, SCROLLED BY THE PAGE.
@@ -169,42 +184,18 @@ export default async function VaultPage(props: { searchParams: Promise<{ scan?: 
 
           {/* The question, asked with the reading on the screen — which is the
               whole point of doing it in two steps. */}
-          <form action={vaultClassifyAction} style={{ marginTop: 12, display: "grid", gap: 10 }}>
-            <input type="hidden" name="id" value={focus.id} />
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-              <label style={{ margin: 0, minWidth: 200 }}>
-                What is this document?
-                <select name="kind" defaultValue={focus.kind ?? ""} required style={{ marginBottom: 0 }}>
-                  <option value="">— choose —</option>
-                  <option value="bank_statement">Bank statement</option>
-                  <option value="credit_card">Credit-card statement</option>
-                  <option value="invoice">Supplier invoice</option>
-                  <option value="other">Something else</option>
-                </select>
-              </label>
-              <label style={{ margin: 0, minWidth: 240 }}>
-                Which account / party?
-                <input name="account_name" list="vault-accounts" defaultValue={focus.account_name ?? ""}
-                  placeholder="the bank, the card, or the supplier" style={{ marginBottom: 0 }} />
-              </label>
-              <datalist id="vault-accounts">
-                {bankChoices.map((n) => <option key={n} value={n} />)}
-              </datalist>
-              <label style={{ margin: 0, width: 130 }}>
-                Year
-                <input name="year_label" defaultValue={focus.year_label ?? ""} placeholder="2026-27" style={{ marginBottom: 0 }} />
-              </label>
-              <label style={{ margin: 0, width: 170 }}>
-                If something else, what?
-                <input name="doc_type" defaultValue={focus.doc_type ?? ""} placeholder="e.g. TDS certificate" style={{ marginBottom: 0 }} />
-              </label>
-              <SubmitButton className="btn small" savedLabel="✓ Filed">💾 Save &amp; use it</SubmitButton>
-            </div>
-            <p className="muted" style={{ fontSize: ".78rem", margin: 0 }}>
-              A bank or card statement files its lines straight away, from the table above — the original file is not
-              read again. An invoice waits on the Invoices page. Anything else is simply filed here.
-            </p>
-          </form>
+          <VaultClassify
+            docId={focus.id}
+            banks={bankChoices}
+            parties={partyChoices}
+            suggested={{ name: focus.party_guess, gstin: focus.party_gstin }}
+            initial={{
+              kind: focus.kind ?? "",
+              accountName: focus.account_name ?? "",
+              yearLabel: focus.year_label ?? "",
+              docType: focus.doc_type ?? "",
+            }}
+          />
         </div>
       )}
 

@@ -125,3 +125,44 @@ export async function unappliedPayment(p: {
   if (!r.payment?.payment_id) throw new Error("Zoho did not return the receipt");
   return r.payment.payment_id;
 }
+
+// ---- the parties themselves, for a picker ----------------------------------
+
+let partyList: { rows: PartyRow[]; at: number } | null = null;
+
+export type PartyRow = { id: string; name: string; type: string };
+
+/**
+ * Every supplier and customer in Zoho.
+ *
+ * The vault asked "Which account / party?" with a datalist of BANK ACCOUNTS
+ * behind it — so filing a supplier invoice offered nothing to pick, and the
+ * only way through was to type the name and hope it matched something later.
+ * A chart of accounts has no suppliers in it; they are contacts.
+ *
+ * Cached for ten minutes like listZohoAccounts, because this is drawn on a
+ * page and a person can classify a dozen documents in that time.
+ */
+export async function listZohoParties(): Promise<PartyRow[]> {
+  if (partyList && Date.now() - partyList.at < 10 * 60_000) return partyList.rows;
+  const rows: PartyRow[] = [];
+  const seen = new Set<string>();
+  // Pages are read until one comes back empty — has_more_page is not trusted,
+  // for the same reason listZohoAccounts does not trust it.
+  for (let page = 1; page <= 8; page++) {
+    const r = await zohoFetch<{ contacts?: { contact_id: string; contact_name: string; contact_type?: string }[] }>(
+      "/contacts", { query: { per_page: "200", page: String(page) } },
+    ).catch(() => null);
+    const batch = r?.contacts ?? [];
+    if (!batch.length) break;
+    for (const c of batch) {
+      const name = String(c.contact_name ?? "").trim();
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      rows.push({ id: c.contact_id, name, type: String(c.contact_type ?? "") });
+    }
+  }
+  rows.sort((a, b) => a.name.localeCompare(b.name));
+  partyList = { rows, at: Date.now() };
+  return rows;
+}

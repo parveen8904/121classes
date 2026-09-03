@@ -1859,10 +1859,16 @@ export async function vaultUploadAction(formData: FormData) {
       doc_text: r.text || null,
       read_how: r.ok ? r.how : null,
       read_note: r.ok ? null : (r.note || "nothing could be read from it"),
+      // Who the document says issued it. A proposal shown beside the table —
+      // "Supplier name, not visible" was the whole complaint — never a decision.
+      party_guess: r.party?.name || null,
+      party_gstin: r.party?.gstin || null,
+      doc_no: r.party?.docNo || null,
+      doc_date: r.party?.docDate || null,
       read_at: new Date().toISOString(),
     }).eq("id", doc.id);
     note = r.ok
-      ? `Read ${r.rows.length} row(s) — now say what it is.`
+      ? `Read ${r.rows.length} row(s)${r.party?.name ? ` — it looks like ${r.party.name}` : ""}. Now say what it is.`
       : `Filed, but nothing could be read: ${r.note}`;
   } catch (e) {
     await svc.from("zoho_vault_docs").update({
@@ -1891,9 +1897,15 @@ export async function vaultRereadAction(formData: FormData) {
       doc_text: r.text || null,
       read_how: r.ok ? r.how : null,
       read_note: r.ok ? null : (r.note || "nothing could be read from it"),
+      party_guess: r.party?.name || null,
+      party_gstin: r.party?.gstin || null,
+      doc_no: r.party?.docNo || null,
+      doc_date: r.party?.docDate || null,
       read_at: new Date().toISOString(),
     }).eq("id", id);
-    note = r.ok ? `Read ${r.rows.length} row(s).` : `Still nothing: ${r.note}`;
+    note = r.ok
+      ? `Read ${r.rows.length} row(s)${r.party?.name ? ` — it looks like ${r.party.name}` : ""}.`
+      : `Still nothing: ${r.note}`;
   } catch (e) { note = e instanceof Error ? e.message : String(e); }
   revalidateDesk();
   redirect(`/admin/zoho/vault?scan=${encodeURIComponent(note)}&doc=${id}`);

@@ -31,6 +31,16 @@ export type DocRead = {
   text: string;
   how: "table" | "text" | "picture" | "drawn" | "";
   note: string;
+  /** WHO ISSUED IT. Read from the letterhead, not from the table.
+   *
+   *  Every reader here was written to get a TABLE out of a file, because they
+   *  were written for bank statements. On an invoice the table is the line
+   *  items and the one fact needed to file it — the supplier — is in the
+   *  letterhead, which nothing looked at: "Supplier name, not visible."
+   *
+   *  A proposal, never a decision. The vault shows it and fills the party box
+   *  with it; a person confirms it before anything is filed. */
+  party?: { name?: string; gstin?: string; docNo?: string; docDate?: string } | null;
 };
 
 const IMAGE = /\.(png|jpe?g|webp|heic|heif|gif|bmp|tiff?)$/i;
@@ -54,6 +64,24 @@ export async function readDocument(
 ): Promise<DocRead> {
   const lower = (fileName || "").toLowerCase();
   const fail = (note: string): DocRead => ({ ok: false, rows: [], text: "", how: "", note });
+
+  /** Who issued it, from whatever of the document we already have in hand.
+   *  Never allowed to fail the read: a document with no name on it is still a
+   *  document, and the box beside it is there to be typed into. */
+  const whose = async (
+    payload: string | { b64: string; mediaType: string } | { b64: string; mediaType: string }[],
+  ): Promise<DocRead["party"]> => {
+    try {
+      const { readDocumentParty } = await import("@/lib/ai");
+      const p = await readDocumentParty(payload);
+      if (!p) return null;
+      const name = String(p.party ?? "").trim();
+      const gstin = String(p.gstin ?? "").trim().toUpperCase();
+      const docNo = String(p.doc_no ?? "").trim();
+      const docDate = /^\d{4}-\d{2}-\d{2}$/.test(String(p.doc_date ?? "")) ? String(p.doc_date) : "";
+      return name || gstin || docNo || docDate ? { name, gstin, docNo, docDate } : null;
+    } catch { return null; }
+  };
 
   // ── a spreadsheet or a CSV is already a table ────────────────────────────
   if (/\.(csv|txt)$/i.test(lower) || /\.(xlsx?|xlsm)$/i.test(lower)) {
@@ -81,9 +109,10 @@ export async function readDocument(
     const file = await readFileBytes(fileUrl);
     if (!file.ok) return fail(file.reason);
     const b64 = Buffer.from(file.bytes).toString("base64");
-    const seen = await transcribeStatement([{ b64, mediaType: mediaOf(lower) }]);
+    const shot = { b64, mediaType: mediaOf(lower) };
+    const seen = await transcribeStatement([shot]);
     if (!seen?.length) return fail("no rows could be read from that picture");
-    return { ok: true, rows: seen, text: "", how: "picture", note: "" };
+    return { ok: true, rows: seen, text: "", how: "picture", note: "", party: await whose([shot]) };
   }
 
   if (!/\.pdf$/i.test(lower)) {
@@ -92,9 +121,10 @@ export async function readDocument(
     const { transcribeStatement } = await import("@/lib/ai");
     const file = await readFileBytes(fileUrl);
     if (!file.ok) return fail(file.reason);
-    const seen = await transcribeStatement([{ b64: Buffer.from(file.bytes).toString("base64"), mediaType: "image/jpeg" }]);
+    const shot = { b64: Buffer.from(file.bytes).toString("base64"), mediaType: "image/jpeg" };
+    const seen = await transcribeStatement([shot]);
     if (!seen?.length) return fail(`nothing could be read from ${fileName}`);
-    return { ok: true, rows: seen, text: "", how: "picture", note: "" };
+    return { ok: true, rows: seen, text: "", how: "picture", note: "", party: await whose([shot]) };
   }
 
   // ── a PDF, down the ladder ───────────────────────────────────────────────
@@ -107,7 +137,14 @@ export async function readDocument(
     // A rebuilt table is only worth keeping if the parser can find a header in
     // it; a page of prose comes back as rows too.
     const { lines } = rowsToLines(table.rows);
-    if (lines.length) return { ok: true, rows: table.rows, text: "", how: "table", note: "" };
+    if (lines.length) {
+      // The rebuilt table is the transaction grid; the letterhead sits outside
+      // it. Read the page's own text for the name rather than paying for a
+      // second look at the file.
+      const head = await readPdf(fileUrl, { password: opts?.password }).catch(() => null);
+      const text = head?.ok ? head.text : "";
+      return { ok: true, rows: table.rows, text, how: "table", note: "", party: text ? await whose(text) : null };
+    }
     why.push("the columns could not be rebuilt into a table");
   } else {
     why.push(table.reason);
@@ -121,7 +158,7 @@ export async function readDocument(
     if (read.ok) {
       text = read.text;
       const seen = await transcribeStatement(text);
-      if (seen?.length) return { ok: true, rows: seen, text, how: "text", note: "" };
+      if (seen?.length) return { ok: true, rows: seen, text, how: "text", note: "", party: await whose(text) };
       why.push(`its text (${text.length} chars) gave no rows`);
     } else if (!why.includes(read.reason)) {
       why.push(read.reason);
@@ -132,15 +169,26 @@ export async function readDocument(
     const file = await readPdfBase64(fileUrl);
     if (file.ok) {
       const seen = await transcribeStatement({ b64: file.b64, mediaType: "application/pdf" });
-      if (seen?.length) return { ok: true, rows: seen, text, how: "text", note: "" };
+      // "read from its text" was a lie on this branch — there was no text layer,
+      // which is why we are handing the whole file over. Say what happened.
+      if (seen?.length) {
+        return {
+          ok: true, rows: seen, text, how: "picture", note: "",
+          party: await whose(text || { b64: file.b64, mediaType: "application/pdf" }),
+        };
+      }
     }
   }
 
   const pages = await readPdfPageImages(fileUrl, { password: opts?.password });
   if (pages.ok) {
-    const seen = await transcribeStatement(pages.images.map((i) => ({ b64: i.b64, mediaType: "image/png" })));
+    const shots = pages.images.map((i) => ({ b64: i.b64, mediaType: "image/png" }));
+    const seen = await transcribeStatement(shots);
     if (seen?.length) {
-      return { ok: true, rows: seen, text, how: pages.drawn ? "drawn" : "picture", note: "" };
+      return {
+        ok: true, rows: seen, text, how: pages.drawn ? "drawn" : "picture", note: "",
+        party: await whose(text || shots.slice(0, 2)),
+      };
     }
     why.push(`its ${pages.images.length} page(s) were read as pictures and gave no rows`);
   } else {

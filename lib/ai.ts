@@ -3088,6 +3088,93 @@ export type InvoiceFacts = {
   /** The Indian GST breakup, COPIED off the invoice — see the prompt below. */
   taxable_value?: number; cgst?: number; sgst?: number; igst?: number;
 };
+/**
+ * WHOSE DOCUMENT IS THIS?
+ *
+ * His report, 3 September 2026, with the vault open on a supplier invoice:
+ * "Supplier name, not visible."
+ *
+ * He was right, and the reason is dull: the readers were all written to get a
+ * TABLE out of a file, because they were written for bank statements. On an
+ * invoice the table is the line items — "PACKING & FOWARDING-LOGISTIC CHARGES,
+ * 57000" — and the one fact a person needs in order to file it, who sent it,
+ * is in the letterhead, which nothing looked at. So the screen showed thirteen
+ * rows of an invoice and could not say whose it was.
+ *
+ * This reads the HEAD of a document and nothing else. Deliberately separate
+ * from parseInvoiceText, which reads the tax and must never guess: the two
+ * have different rules. A name misread here is corrected by picking the right
+ * one from the list beside it; a tax figure invented there lands in a ledger.
+ *
+ * Still: OMIT, never invent. A blank box a person fills in is a better answer
+ * than a plausible wrong name that gets accepted because it looked filled in.
+ */
+export type DocParty = {
+  /** Who issued it — the supplier on an invoice, the bank on a statement. */
+  party?: string;
+  /** Their GSTIN, if the document prints one. */
+  gstin?: string;
+  /** The document's own number and date, where it has them. */
+  doc_no?: string;
+  doc_date?: string;
+};
+
+export async function readDocumentParty(
+  payload: string | { b64: string; mediaType: string } | { b64: string; mediaType: string }[],
+): Promise<DocParty | null> {
+  const system =
+    "You are looking at ONE business document — an invoice, a statement, a certificate. " +
+    'Return ONLY JSON: {"party":"string","gstin":"string","doc_no":"string","doc_date":"YYYY-MM-DD"}. ' +
+    "party is WHO ISSUED the document: the supplier named in the letterhead on an invoice, the bank on a " +
+    "statement. It is NOT the addressee, NOT the recipient, and NOT a description of what was supplied. " +
+    "Give the business name as printed, without its address. " +
+    "gstin is a 15-character Indian GST number belonging to the ISSUER, where the document prints one. " +
+    "OMIT any field you cannot actually see. An omitted field is the correct answer and a person fills it " +
+    "in; a guessed one is worse than nothing, because it looks like it was read.";
+
+  // Plain text goes down the ordinary path, which already carries the usage
+  // accounting and the per-feature switch.
+  if (typeof payload === "string") {
+    const out = await callClaude(system, payload.slice(0, 40_000), 400,
+      { model: await fastModel(), feature: "invoice" });
+    if (!out) return null;
+    const j = parseLooseJson(out);
+    return j && typeof j === "object" ? (j as DocParty) : null;
+  }
+
+  // A file has to be sent as content blocks, the same way parseBankStatementFile
+  // sends one — a PDF as a document, pages or a photograph as images.
+  const apiKey = await getSecret("ANTHROPIC_API_KEY");
+  if (!apiKey || (await aiFeatureDisabled("invoice"))) return null;
+  const parts = Array.isArray(payload) ? payload : [payload];
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model: await fastModel(),
+        max_tokens: 400,
+        system: [{ type: "text", text: system }],
+        messages: [{
+          role: "user",
+          content: [
+            ...parts.map((p) => (p.mediaType === "application/pdf"
+              ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: p.b64 } }
+              : { type: "image", source: { type: "base64", media_type: p.mediaType, data: p.b64 } })),
+            { type: "text", text: "Who issued this document?" },
+          ],
+        }],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { content?: { text?: string }[] };
+    const text = (data.content ?? []).map((c) => c.text ?? "").join("").trim();
+    const j = parseLooseJson(text);
+    return j && typeof j === "object" ? (j as DocParty) : null;
+  } catch { return null; }
+}
+
 export async function parseInvoiceText(text: string): Promise<InvoiceFacts | null> {
   const out = await callClaude(
     // TRANSCRIBE, DO NOT CALCULATE.

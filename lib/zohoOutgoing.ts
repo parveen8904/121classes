@@ -121,11 +121,29 @@ export async function postOutgoing(id: string): Promise<void> {
     let tdsTaxId: string | null = null;
     let tdsNote = "";
     if (n(d.tds_rate) > 0) {
-      const t = await zohoFetch<{ taxes?: { tax_id: string; tax_name: string; tax_percentage: number }[] }>(
-        "/settings/taxes", { query: { filter_by: "Taxes.Tds" } }).catch(() => null);
-      const match = (t?.taxes ?? []).find((x) => Number(x.tax_percentage) === n(d.tds_rate));
+      // "you said tds not enabled but it is. u are looking at gst instead of
+      // tds" — 3 September 2026, and quite right.
+      //
+      // This asked /settings/taxes?filter_by=Taxes.Tds. That filter returns
+      // NOTHING on his organisation, so every sale a customer withholds on
+      // reported "no matching TDS tax in Zoho" and asked to be done by hand —
+      // while his books hold a full TDS master and the org itself reports
+      // is_invoice_pmt_tds_allowed. TDS was never the thing that was missing.
+      //
+      // Worse was the shape of the fallback it invited: without that filter the
+      // SAME endpoint answers with the six GST rates, and this matched on the
+      // percentage alone — so a 5% withholding would have picked up GST5. Which
+      // is precisely looking at GST and calling it TDS.
+      //
+      // listZohoTds asks the way Zoho's own screen asks (is_tds_request=true);
+      // matchTds is section-strict and window-aware. Both are shared with the
+      // supplier-bill path now, so there is one answer to this question.
+      const { listZohoTds, matchTds } = await import("@/lib/zohoTds");
+      const taxes = await listZohoTds().catch(() => []);
+      const match = matchTds(taxes, s(d.tds_section) || "", n(d.tds_rate), s(d.doc_date) || undefined);
       if (match) tdsTaxId = match.tax_id;
-      else tdsNote = ` — the customer's ${d.tds_rate}% TDS must be recorded by hand (no matching TDS tax in Zoho)`;
+      else tdsNote = ` — the customer's ${d.tds_rate}% TDS must be recorded by hand (Zoho holds ` +
+        `${taxes.length ? `no rate answering to ${s(d.tds_section) || `${d.tds_rate}%`}: ${taxes.map((t) => `${t.tax_name} ${t.tax_percentage}%`).join(", ")}` : "no TDS rates at all"})`;
     }
 
     const line = {
@@ -144,7 +162,10 @@ export async function postOutgoing(id: string): Promise<void> {
         gstRate: n(d.gst_rate) || 18,
         side: "sale",
         gstSplit: d.gst_treatment === "charged" ? (intra ? "CGST+SGST" : "IGST") : null,
-        tds: { section: null, rate: n(d.tds_rate), whose: "theirs" },
+        // The section was recorded on the document and then dropped here, so
+        // the ledger read "TDS 10%" with nothing saying under what. It is the
+        // section that ties an entry to a challan and to 26AS.
+        tds: { section: s(d.tds_section) || null, rate: n(d.tds_rate), whose: "theirs" },
         extra: s(d.reference) ? `ref ${s(d.reference)}` : null,
       }),
       rate: n(d.amount),

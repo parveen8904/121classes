@@ -1,0 +1,82 @@
+// MATCHING A BILL TO A TDS RATE IN ZOHO.
+//
+// Split out of lib/zohoTds.ts and deliberately IMPORT-FREE, so it can be run
+// by tests/tdsSectionAndPartyCurrency.test.ts. The rest of that file talks to
+// Zoho and to Supabase; this half is arithmetic on strings and is where the
+// CMG & COMPANY bill went wrong, so it is the half worth pinning.
+
+export type TdsTax = { tax_id: string; tax_name: string; tax_percentage: number };
+
+export type RawTax = TdsTax & {
+  tax_type?: string; tax_specific_type?: string; status?: string; is_active?: boolean;
+  // Zoho validates a rate's WINDOW, not just a status flag, and says so in as
+  // many words when it refuses: "either expired or is applicable for a future
+  // date". Reading only status/is_active is how an expired rate got attached.
+  start_date?: string; end_date?: string; is_inactive?: boolean;
+};
+
+/** The numbers in a section label, in order: "393(2) Sl.17" → ["393","2","17"]. */
+const sectionDigits = (v: string) => String(v ?? "").match(/\d+/g) ?? [];
+
+/**
+ * Which of Zoho's TDS rates this bill should carry.
+ *
+ * CMG & COMPANY, 3 September 2026, is what this is written against. Its bill
+ * was right in every other way — professional fees, section 393(2) Sl.17,
+ * ₹7,500 on ₹75,000 — and Zoho threw it out:
+ *
+ *   "The tax Dividend associated on the transaction is either expired or is
+ *    applicable for a future date"
+ *
+ * DIVIDEND. The posting path was not using this function at all. It had its
+ * own line, an `||`, that took the section OR THE RATE — so when the section
+ * name did not match verbatim it attached the first rate at 10%, which in his
+ * master is dividend withholding under 194, and expired besides. Zoho caught
+ * it. Nothing of ours would have.
+ *
+ * That is a wrong challan and a wrong 26AS entry, not a near miss, so:
+ *
+ *   · A SECTION GIVEN IS A SECTION REQUIRED. Where the proposal names a
+ *     section and no live rate answers to it, this returns null and the bill
+ *     says the withholding must be applied by hand. Nothing at the same
+ *     percentage is a substitute for it — 10% is 194 dividend, 194J
+ *     professional fees and 393(1) alike.
+ *
+ *   · MATCHED ON THE SECTION'S NUMBERS, NOT ITS PUNCTUATION. Zoho writes
+ *     "393(2) - Sl.No.17" where the desk holds "393(2) Sl.17"; the digits are
+ *     the stable half, the spacing is not.
+ *
+ *   · NEVER OUTSIDE THE RATE'S OWN WINDOW. Checked against the BILL's date,
+ *     which is the date Zoho judges it on — not today.
+ *
+ *   · THE RATE ALONE ONLY WHERE NO SECTION WAS NAMED, and even then only if
+ *     exactly one live rate carries it. Two candidates is a question.
+ */
+export function matchTds(taxes: TdsTax[], section: string, rate: number, onISO?: string): TdsTax | null {
+  const on = /^\d{4}-\d{2}-\d{2}$/.test(String(onISO ?? "")) ? String(onISO) : null;
+  const within = (t: RawTax) => {
+    const from = String(t.start_date ?? "").slice(0, 10);
+    const till = String(t.end_date ?? "").slice(0, 10);
+    if (!on) return true;
+    if (from && from > on) return false;   // not in force yet on the bill's date
+    if (till && till < on) return false;   // already lapsed by it
+    return true;
+  };
+  const pool = (taxes as RawTax[]).filter(
+    (t) => !/expired/i.test(String(t.status ?? "")) && t.is_active !== false && t.is_inactive !== true && within(t));
+
+  const want = sectionDigits(section);
+  if (want.length) {
+    const hit = pool.find((t) => {
+      const got = sectionDigits(`${t.tax_name} ${t.tax_type ?? ""} ${t.tax_specific_type ?? ""}`);
+      // Every number of the section, in order, somewhere in the name.
+      let i = 0;
+      for (const g of got) if (g === want[i]) i++;
+      return i === want.length;
+    });
+    return hit ?? null;   // a named section is never swapped for another
+  }
+
+  const byRate = pool.filter((t) => Number(t.tax_percentage) === Number(rate));
+  return byRate.length === 1 ? byRate[0] : null;
+}

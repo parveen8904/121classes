@@ -32,6 +32,8 @@ export default function VaultClassify(props: {
   docId: string;
   banks: string[];
   parties: string[];
+  /** The suppliers we actually buy from — see the page, and listKnownSuppliers. */
+  suppliers?: string[];
   initial: {
     kind: string;
     accountName: string;
@@ -50,9 +52,17 @@ export default function VaultClassify(props: {
 
   const isBank = kind === "bank_statement" || kind === "credit_card";
   const choices = useMemo(() => {
-    const list = isBank ? props.banks : kind === "invoice" ? props.parties : [...props.banks, ...props.parties];
+    // A supplier invoice is offered SUPPLIERS. It used to be offered Zoho's
+    // contact list, which is thousands of students and, because Zoho ignores
+    // contact_type and sorts by name, arrives as the letter A — with no
+    // supplier anywhere in it.
+    const list = isBank
+      ? props.banks
+      : kind === "invoice"
+        ? (props.suppliers?.length ? props.suppliers : props.parties)
+        : [...props.banks, ...props.parties];
     return [...new Set(list.filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  }, [isBank, kind, props.banks, props.parties]);
+  }, [isBank, kind, props.banks, props.parties, props.suppliers]);
 
   const known = useMemo(() => new Set(choices), [choices]);
   // A name the reader proposed, or one answered earlier, that Zoho does not

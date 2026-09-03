@@ -17,7 +17,12 @@ import { zohoFetch } from "@/lib/zohoApi";
 // and nothing more, and inventing the rest from a bank narration would be
 // making it up.
 
-type ZContact = { contact_id: string; contact_name: string; contact_type?: string };
+type ZContact = {
+  contact_id: string; contact_name: string; contact_type?: string;
+  // A contact carries its OWN currency, and Zoho reads a payment's amount in
+  // that currency — not in rupees. See the guard in lib/bankStatements.ts.
+  currency_code?: string;
+};
 
 /**
  * Find the contact by name, or create one.
@@ -29,7 +34,7 @@ type ZContact = { contact_id: string; contact_name: string; contact_type?: strin
 export async function findOrCreateParty(
   name: string,
   type: "vendor" | "customer",
-): Promise<{ id: string; created: boolean }> {
+): Promise<{ id: string; created: boolean; currency: string }> {
   const clean = String(name ?? "").trim();
   if (!clean) throw new Error(`name the ${type === "vendor" ? "supplier" : "customer"} first`);
 
@@ -40,7 +45,7 @@ export async function findOrCreateParty(
   const hit = (r?.contacts ?? []).find(
     (c) => String(c.contact_name ?? "").trim().toLowerCase() === clean.toLowerCase(),
   );
-  if (hit) return { id: hit.contact_id, created: false };
+  if (hit) return { id: hit.contact_id, created: false, currency: String(hit.currency_code ?? "").toUpperCase() };
 
   // NOT FOUND UNDER THAT TYPE IS NOT THE SAME AS NOT THERE.
   //
@@ -62,7 +67,7 @@ export async function findOrCreateParty(
         body: { contact_type: "customer_and_vendor" },
       });
     } catch { /* if Zoho will not widen it, the payment can still be attempted */ }
-    return { id: other.contact_id, created: false };
+    return { id: other.contact_id, created: false, currency: String(other.currency_code ?? "").toUpperCase() };
   }
 
   const made = await zohoFetch<{ contact?: { contact_id: string } }>("/contacts", {
@@ -70,7 +75,9 @@ export async function findOrCreateParty(
     body: { contact_name: clean, contact_type: type },
   });
   if (!made.contact?.contact_id) throw new Error(`Zoho would not create the contact "${clean}"`);
-  return { id: made.contact.contact_id, created: true };
+  // A contact we create ourselves is a rupee one; nothing here makes a
+  // foreign-currency vendor, and one that exists already reports its own.
+  return { id: made.contact.contact_id, created: true, currency: "INR" };
 }
 
 /**
@@ -147,12 +154,28 @@ export async function listZohoParties(): Promise<PartyRow[]> {
   if (partyList && Date.now() - partyList.at < 10 * 60_000) return partyList.rows;
   const rows: PartyRow[] = [];
   const seen = new Set<string>();
-  // Pages are read until one comes back empty — has_more_page is not trusted,
-  // for the same reason listZohoAccounts does not trust it.
+  // THIS LIST CANNOT REACH A SUPPLIER, AND THAT IS NOT FIXABLE HERE.
+  //
+  // "supplier invoice onlt list with A but not others" — 3 September 2026.
+  //
+  // Zoho's /contacts IGNORES contact_type. Asked for vendors only, it answers
+  // with 200 contacts of which 196 are students, and echoes back
+  // applied_filter: Status.All — the parameter is simply dropped. Contacts sort
+  // by name ascending, he has thousands of students in the books, so eight
+  // pages of two hundred is the letter A and a little of B. Every real supplier
+  // — CMG, First Fly, Supabase, Vercel, Warehouse Pitam pura — sits past the
+  // cut and could not be picked at all.
+  //
+  // Raising the page cap does not fix it either: a datalist of several thousand
+  // students is not a way to choose a supplier. So the supplier box is fed from
+  // listKnownSuppliers below, out of our own books, and this stays what it is —
+  // a best-effort list of contacts for the cases where any party will do.
+  let short = false;
   for (let page = 1; page <= 8; page++) {
     const r = await zohoFetch<{ contacts?: { contact_id: string; contact_name: string; contact_type?: string }[] }>(
       "/contacts", { query: { per_page: "200", page: String(page) } },
-    ).catch(() => null);
+    ).catch(() => { short = true; return null; });
+    if (short) break;
     const batch = r?.contacts ?? [];
     if (!batch.length) break;
     for (const c of batch) {
@@ -161,10 +184,45 @@ export async function listZohoParties(): Promise<PartyRow[]> {
       seen.add(name);
       rows.push({ id: c.contact_id, name, type: String(c.contact_type ?? "") });
     }
+    if (page === 8) short = true;   // there is more and we stopped asking
   }
   rows.sort((a, b) => a.name.localeCompare(b.name));
-  partyList = { rows, at: Date.now() };
+  // A truncated read is not cached: ten minutes of a half list is worse than
+  // asking again.
+  if (!short) partyList = { rows, at: Date.now() };
   return rows;
+}
+
+/**
+ * The suppliers, out of our own books.
+ *
+ * Every name here is one this desk has already raised a bill under, and it is
+ * the same string findOrCreateParty used to make the Zoho vendor — so picking
+ * it lands on the right contact rather than making a second one.
+ *
+ * Short, complete, and it costs no Zoho call. Where a supplier is genuinely
+ * new, the box still takes a typed name; that is what the "not in this list"
+ * option is for.
+ */
+export async function listKnownSuppliers(): Promise<string[]> {
+  const svc = (await import("@/lib/supabase/service")).createServiceClient();
+  const [bills, rules] = await Promise.all([
+    svc.from("provider_bills").select("institution"),
+    svc.from("provider_bill_rules").select("institution"),
+  ]);
+  // A rule's spelling wins, exactly as scanVaultForBills has it: however an
+  // upload was typed, one supplier converges on one string.
+  const key = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const byKey = new Map<string, string>();
+  for (const r of rules.data ?? []) {
+    const n = String((r as { institution: string }).institution ?? "").trim();
+    if (n) byKey.set(key(n), n);
+  }
+  for (const b of bills.data ?? []) {
+    const n = String((b as { institution: string }).institution ?? "").trim();
+    if (n && !byKey.has(key(n))) byKey.set(key(n), n);
+  }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b));
 }
 
 // ---- a GSTIN, answered out of his own books ---------------------------------

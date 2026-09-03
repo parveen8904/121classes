@@ -1301,10 +1301,22 @@ export async function postProviderBill(id: string): Promise<void> {
           `${p.tds_rate}% withholding — ${e instanceof Error ? e.message : "unknown"}. Approve it again in a minute.`,
         );
       }
-      // The section wording changes between years; the RATE is the stable half,
-      // so either identifies the rate to apply.
-      const match = taxes.find(
-        (t) => t.tax_name.includes(String(p.tds_section)) || Number(t.tax_percentage) === Number(p.tds_rate));
+      // THIS USED TO GUESS, AND THE GUESS REACHED ZOHO.
+      //
+      // The line here was `t.tax_name.includes(section) || rate === rate` — an
+      // OR — so a section that did not match verbatim fell through to the first
+      // rate at the same percentage. On CMG & COMPANY that was Dividend under
+      // 194, on a bill for professional fees, and expired as well; Zoho refused
+      // it: "The tax Dividend associated ... is either expired or is applicable
+      // for a future date". A right rate under the wrong section is a wrong
+      // challan, and only Zoho's own validation stood between it and the books.
+      //
+      // matchTds has been in lib/zohoTds.ts all along, with a comment saying
+      // exactly this must not be done. Use it. It is section-strict, judges the
+      // rate's window against THIS BILL's date, and answers null rather than
+      // substituting — which lands in the note below, where a person sees it.
+      const { matchTds } = await import("@/lib/zohoTds");
+      const match = matchTds(taxes, String(p.tds_section ?? ""), Number(p.tds_rate), String(b.bill_date ?? "").slice(0, 10));
       if (match) body.tds_tax_id = match.tax_id;
       else tdsNote = ` — TDS ${p.tds_section} @ ${p.tds_rate}% must be applied by hand (Zoho holds ${taxes.length ? `only: ${taxes.map((t) => `${t.tax_name} ${t.tax_percentage}%`).join(", ")}` : "no TDS rates at all"})`;
     }

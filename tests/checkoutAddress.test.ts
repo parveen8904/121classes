@@ -116,8 +116,22 @@ check("empty parts leave no double commas",
 //
 // So the choice has THREE states and the third is not an error. This replaces
 // the earlier "billing same as shipping" tick box, which had to pick a side.
-const cart = readFileSync(join(import.meta.dirname, "..", "app/books/cartActions.ts"), "utf8");
-const book = readFileSync(join(import.meta.dirname, "..", "app/books/[id]/payActions.ts"), "utf8");
+//
+// WHERE THE ORDER IS WRITTEN MOVED, AND THIS FILE DID NOT FOLLOW IT.
+//
+// On 3 September 2026 a payment landed with no order behind it, because the
+// row was only ever written in the browser's callback — so a closed tab lost
+// the sale. Finishing it moved into lib/bookOrderFinish.ts, shared by both
+// checkouts and by the recovery sweep, and every assertion below about
+// freezing the addresses onto the order went on reading cartActions.ts, found
+// nothing, and reported twelve failures against working code.
+//
+// A test that scrapes source has to be told when the source moves. Both halves
+// are read together now: the checkout that validates, and the finisher that
+// writes.
+const finish = readFileSync(join(import.meta.dirname, "..", "lib/bookOrderFinish.ts"), "utf8");
+const cart = readFileSync(join(import.meta.dirname, "..", "app/books/cartActions.ts"), "utf8") + finish;
+const book = readFileSync(join(import.meta.dirname, "..", "app/books/[id]/payActions.ts"), "utf8") + finish;
 for (const [name, src] of [["cart", cart], ["single book", book]] as [string, string][]) {
   check(`${name}: shipping is derived from billing on the SERVER`,
     /d\?\.shipTo === "different" \? toAddress\(d\?\.shipping\) : \{ \.\.\.billing \}/.test(src),

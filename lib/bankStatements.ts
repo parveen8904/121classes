@@ -814,10 +814,40 @@ export async function postBankLine(
       const { findOrCreateParty, unappliedPayment } = await import("@/lib/zohoParty");
       const side = kind === "vendor_payment" ? "vendor" : "customer";
       let partyId = "";
+      let partyCurrency = "INR";
       try {
-        ({ id: partyId } = await findOrCreateParty(partyName, side));
+        ({ id: partyId, currency: partyCurrency } = await findOrCreateParty(partyName, side));
       } catch (e) {
         return fail(e instanceof Error ? e.message : `could not find or create the ${side}`);
+      }
+
+      // ₹28,500 WOULD HAVE BEEN POSTED AS $28,500.
+      //
+      // "in case of supabase you are mixing inr with dollor supplier" —
+      // 3 September 2026, and it is the worst of the four.
+      //
+      // Zoho reads a payment's amount IN THE CONTACT'S OWN CURRENCY. Supabase
+      // Inc. is a USD vendor in his books — gst_treatment overseas, payable
+      // 341.13 USD — and unappliedPayment sends a bare `amount` with no
+      // currency and no exchange rate. So a rupee bank line answered as a
+      // payment to Supabase does not post ₹28,500 against them. It posts
+      // 28,500 DOLLARS: about ₹27 lakh of payable wiped out by a card charge
+      // of twenty-eight thousand rupees.
+      //
+      // Booking it properly needs two figures this desk does not hold: what
+      // the invoice was in dollars, and the rate the bank actually gave — the
+      // card statement's rate, not Rule 115. ₹27,505.64 for $300 is 91.685,
+      // while the bills for those dollars sit at 95.00, and that ₹994 belongs
+      // in exchange difference, named, not buried in the payable.
+      //
+      // No figures, no entry. It refuses and says what to do instead.
+      if (partyCurrency && partyCurrency !== "INR") {
+        return fail(
+          `${partyName} is a ${partyCurrency} party in Zoho, and this line is ₹${amount.toLocaleString("en-IN")} out of a rupee account. ` +
+          `Zoho reads a payment's amount in the party's own currency, so this would post as ${partyCurrency} ${amount.toLocaleString("en-IN")}, not as rupees. ` +
+          `Book it as a Journal instead: their payable for the ${partyCurrency} amount on the invoice, the bank for what actually left it, ` +
+          `and the difference to Exchange Difference.`,
+        );
       }
       const payId = await unappliedPayment({
         kind: side, partyId, amount, date: String(l.line_date),

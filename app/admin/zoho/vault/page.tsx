@@ -67,8 +67,15 @@ export default async function VaultPage(props: { searchParams: Promise<{ scan?: 
   // A CHART OF ACCOUNTS HAS NO SUPPLIERS IN IT. The party box offered bank
   // accounts whatever the document was, so filing an invoice had nothing to
   // pick from — see VaultClassify.
-  const { listZohoParties } = await import("@/lib/zohoParty");
+  const { listZohoParties, listKnownSuppliers } = await import("@/lib/zohoParty");
   const partyChoices = hubConnected ? (await listZohoParties().catch(() => [])).map((p) => p.name) : [];
+  // AND ZOHO'S CONTACT LIST HAS NO SUPPLIERS IN REACH.
+  //
+  // "supplier invoice onlt list with A but not others". Zoho's /contacts drops
+  // contact_type on the floor, so the list above is the first sixteen hundred
+  // contacts by name — students, all of them A. The suppliers are in our own
+  // books, few, and spelled the way the Zoho vendor was created.
+  const supplierChoices = await listKnownSuppliers().catch(() => [] as string[]);
 
   // The one just uploaded, or the newest still waiting to be named.
   const focus = sp.doc ? docs.find((d) => d.id === sp.doc) : docs.find((d) => !d.kind);
@@ -217,6 +224,7 @@ export default async function VaultPage(props: { searchParams: Promise<{ scan?: 
           {/* The question, asked with the reading on the screen — which is the
               whole point of doing it in two steps. */}
           <VaultClassify
+            suppliers={supplierChoices}
             docId={focus.id}
             banks={bankChoices}
             parties={partyChoices}

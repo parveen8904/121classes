@@ -301,7 +301,7 @@ async function fileStatementLines(
     svc.from("zoho_settlements").select("utr, settlement_id, status, settled_on, net_inr").in("status", ["posted", "matched"]),
     svc.from("merchant_rules").select("id, pattern, account_name, sub_account").then((r) => r.data ?? []),
     fetchZohoExpensesFor(accountName, first.date, last.date),
-    fetchZohoBankTxnsFor(accountName, first.date, last.date),
+    fetchZohoBankTxnsFor(accountName, first.date, last.date).then((r) => r.map),
   ]);
   const utrs = new Map((settleRows ?? []).filter((s) => s.utr).map((s) => [String(s.utr), String(s.settlement_id)]));
   // A SETTLEMENT IS RECOGNISABLE WITHOUT ITS UTR.
@@ -453,8 +453,25 @@ type ZTxn = { id: string; type: string; note: string };
 const IN_TYPES = new Set(["deposit", "customer_payment", "invoice_payment", "sales_without_invoices", "interest_income", "other_income", "transfer_fund_to"]);
 const OUT_TYPES = new Set(["withdrawal", "vendor_payment", "bill_payment", "expense", "card_payment", "expense_refund", "owner_drawings", "transfer_fund_from"]);
 
-async function fetchZohoBankTxnsFor(accountName: string, from: string, to: string): Promise<Map<string, ZTxn[]>> {
+/**
+ * The bank's own register in Zoho for a period.
+ *
+ * RETURNS WHETHER IT COULD LOOK, NOT ONLY WHAT IT FOUND.
+ *
+ * This used to swallow every error and hand back an empty map, so "Zoho has no
+ * such entry" and "Zoho could not be reached" were the same answer. That is a
+ * dangerous pair to conflate: repostLineAction asks this whether an entry it
+ * already posted is still there, and reopens the line when the answer is no.
+ * Its own comment says "reopening on a failed lookup is exactly how a payment
+ * gets made twice" — and the guard could never fire, because the failure never
+ * reached it. A throttled minute or a refreshed token was enough to reopen a
+ * posted line and book it a second time.
+ */
+async function fetchZohoBankTxnsFor(
+  accountName: string, from: string, to: string,
+): Promise<{ map: Map<string, ZTxn[]>; ok: boolean }> {
   const map = new Map<string, ZTxn[]>();
+  let ok = true;
   try {
     const acct = await zohoAccountId(accountName);
     for (let page = 1; page <= 10; page++) {
@@ -500,8 +517,13 @@ async function fetchZohoBankTxnsFor(accountName: string, from: string, to: strin
       }
       if (!r.page_context?.has_more_page) break;
     }
-  } catch { /* matching is best-effort; unmatched lines simply ask */ }
-  return map;
+  } catch {
+    // Matching stays best-effort — an unmatched line simply asks — but the
+    // caller is told the difference between "nothing there" and "could not
+    // look", and decides for itself what that means.
+    ok = false;
+  }
+  return { map, ok };
 }
 
 async function fetchZohoExpensesFor(accountName: string, from: string, to: string): Promise<Map<string, ZExp[]>> {
@@ -1016,7 +1038,7 @@ export async function rematchWaitingLines(): Promise<string> {
   const claimed = new Set<string>();
   for (const [account, list] of byAccount) {
     const dates = list.map((r) => String(r.line_date)).sort();
-    const txns = await fetchZohoBankTxnsFor(account, dates[0], dates[dates.length - 1]);
+    const { map: txns } = await fetchZohoBankTxnsFor(account, dates[0], dates[dates.length - 1]);
     for (const l of list) {
       const debit = Number(l.debit) || 0, credit = Number(l.credit) || 0;
       const date = String(l.line_date);
@@ -1153,7 +1175,11 @@ export type Recon = {
  * whether the entry is there right now.
  */
 export async function zohoHasEntryFor(accountName: string, date: string, amount: number, dir: "in" | "out"): Promise<boolean> {
-  const map = await fetchZohoBankTxnsFor(accountName, date, date);
+  const { map, ok } = await fetchZohoBankTxnsFor(accountName, date, date);
+  // THROWS when Zoho could not be read, and that is the whole point: the
+  // caller reopens a POSTED line when this returns false, so "no" has to mean
+  // no and never "I could not tell".
+  if (!ok) throw new Error("Zoho could not be read just now");
   return (map.get(`${date}|${amount.toFixed(2)}|${dir}`) ?? []).length > 0;
 }
 
@@ -1181,7 +1207,7 @@ export async function reconcileAccount(accountName: string, from: string, to: st
   // fetchZohoBankTxnsFor already keys the register date|amount|direction, which
   // is the same key the pairing uses — so it is unpacked back into entries and
   // paired, rather than the pairing being written twice.
-  const zohoMap = await fetchZohoBankTxnsFor(accountName, from, to);
+  const { map: zohoMap, ok: zohoOk } = await fetchZohoBankTxnsFor(accountName, from, to);
   const zoho: ZohoSide[] = [];
   for (const [k, txns] of zohoMap) {
     const [date, amt, dir] = k.split("|");
@@ -1190,7 +1216,12 @@ export async function reconcileAccount(accountName: string, from: string, to: st
 
   return {
     account: accountName, from, to,
-    problem: zoho.length ? undefined : "Zoho returned no entries for this account and period — check the hub is connected.",
+    // "No entries" and "could not ask" are different things. A reconciliation
+    // that reports every line as missing because the hub was throttled for a
+    // minute is worse than one that admits it could not look.
+    problem: !zohoOk
+      ? "Zoho could not be read for this account and period — nothing below is a difference, only an unanswered question. Try again."
+      : zoho.length ? undefined : "Zoho returned no entries for this account and period — check the hub is connected.",
     ...pairLines(statement, zoho),
   };
 }

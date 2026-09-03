@@ -87,8 +87,16 @@ check("a scan that fails says so and names what to press instead",
 // desk uploaded the same PDF twice — the screenshot shows it — and two
 // documents would have raised two bills for one supplier invoice.
 check("a second copy of the same supplier invoice does not raise a second bill",
-  /\.eq\("institution", institution\)\.eq\("bill_no", billNo\)/.test(scanBody),
+  /\.eq\("bill_no", billNo\)/.test(scanBody) && /instKey\(String\(b\.institution\)\) === instKey\(institution\)/.test(scanBody),
   "approve both and the cost is booked twice and the input credit claimed twice");
+
+check("…matched on the normalised supplier name, not the exact string",
+  /instKey\(institution\)/.test(scanBody),
+  "\"FIRST FLY EXPRESS\" and \"First Fly Express\" are both in the table for invoice 480/2026");
+
+check("a bill deliberately skipped does not block its own re-upload",
+  /\.not\("status", "in", "\(skipped,rejected\)"\)/.test(scanBody),
+  "FIRST FLY 480/2026 sat skipped waiting to be uploaded again — blocking on it would refuse the re-upload");
 
 check("the guard only fires on an invoice number actually read",
   /const billNo = str\(facts\.invoice_no\);\s*\n\s*if \(billNo\) \{/.test(scanBody),

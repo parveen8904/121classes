@@ -1344,12 +1344,22 @@ export async function repostLineAction(formData: FormData) {
   if (!id) return;
   const svc = createServiceClient();
   const { data: l } = await svc.from("bank_lines")
-    .select("id, account_name, line_date, debit, credit, status, proposal").eq("id", id).maybeSingle();
+    .select("id, account_name, line_date, debit, credit, status, proposal, direction").eq("id", id).maybeSingle();
   if (!l || (l.status !== "posted" && l.status !== "matched")) return;
 
+  // LOOK FOR THE ENTRY THAT WAS ACTUALLY POSTED, NOT THE ONE THE COLUMNS SAY.
+  //
+  // The direction can be corrected by hand since 3 September — the two ₹6,900
+  // receipts were — and the posting follows that correction. This looked it up
+  // from the debit/credit columns alone, so a corrected line would be searched
+  // for on the wrong side of the register, found to be absent, and reopened
+  // for posting. A second entry for money that is already in the books.
   const debit = Number(l.debit) || 0, credit = Number(l.credit) || 0;
-  const amount = debit > 0 ? debit : credit;
-  const dir: "in" | "out" = debit > 0 ? "out" : "in";
+  const amount = Math.abs(debit) || Math.abs(credit);
+  const chosen = String(l.direction ?? "");
+  const dir: "in" | "out" = chosen === "in" || chosen === "out"
+    ? chosen
+    : (debit > 0 ? "out" : "in");
 
   const { zohoHasEntryFor } = await import("@/lib/bankStatements");
   let present = false;
@@ -1357,7 +1367,12 @@ export async function repostLineAction(formData: FormData) {
   catch {
     // Zoho could not be read. Refusing is the safe answer: reopening on a
     // failed lookup is exactly how a payment gets made twice.
-    await svc.from("bank_lines").update({ error: "could not check Zoho just now — not reopened", updated_at: new Date().toISOString() }).eq("id", id);
+    //
+    // Until 3 September this branch was unreachable. zohoHasEntryFor swallowed
+    // its own errors and returned an empty register, so a throttled minute
+    // looked exactly like "the entry is gone" and the line was reopened. It
+    // throws now, which is what makes this guard real.
+    await svc.from("bank_lines").update({ error: "could not check Zoho just now — not reopened, nothing has changed", updated_at: new Date().toISOString() }).eq("id", id);
     revalidateDesk();
     return;
   }

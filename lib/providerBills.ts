@@ -318,9 +318,25 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
     // vendor into a single "duplicate".
     const billNo = str(facts.invoice_no);
     if (billNo) {
-      const { data: twin } = await svc.from("provider_bills")
-        .select("id, status, vault_doc_id")
-        .eq("institution", institution).eq("bill_no", billNo).limit(1).maybeSingle();
+      // A SKIPPED BILL IS NOT A DUPLICATE — IT IS ONE DELIBERATELY NOT BOOKED.
+      //
+      // FIRST FLY EXPRESS 480/2026 sits skipped with the note "the Zoho bill
+      // this pointed at was deleted on 26 Aug — the invoice is being uploaded
+      // again". Blocking on it would refuse the very re-upload it is waiting
+      // for, and file the new copy as a duplicate of a bill that no longer
+      // exists in Zoho. Same for anything the desk removed by hand and later
+      // changed its mind about.
+      // Matched on the NORMALISED supplier name, not the exact string. This
+      // office writes one supplier three ways — "FIRST FLY EXPRESS" and
+      // "First Fly Express" are both in the table for invoice 480/2026 — and
+      // an exact comparison would have called them different vendors and let
+      // the same invoice through twice. instKey is what the rest of this file
+      // already uses for the same reason.
+      const { data: sameNo } = await svc.from("provider_bills")
+        .select("id, status, institution, vault_doc_id")
+        .eq("bill_no", billNo)
+        .not("status", "in", "(skipped,rejected)");
+      const twin = (sameNo ?? []).find((b) => instKey(String(b.institution)) === instKey(institution));
       if (twin) {
         // Filed, not raised. The document stays in the vault as the second copy
         // of a paper we already have, and the desk is told which bill it is —

@@ -7,7 +7,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import DeleteButton from "../../_components/DeleteButton";
 import DeskShell from "../_shell";
 import VaultClassify from "../VaultClassify";
-import { deleteVaultDoc, vaultUploadAction, vaultRereadAction, vaultClassifyAction } from "../actions";
+import { deleteVaultDoc, vaultUploadAction, vaultRereadAction, vaultClassifyAction, scanBillsAction } from "../actions";
 
 // THE VAULT — ONE DOOR FOR EVERY DOCUMENT, IN TWO STEPS.
 //
@@ -73,6 +73,24 @@ export default async function VaultPage(props: { searchParams: Promise<{ scan?: 
   // The one just uploaded, or the newest still waiting to be named.
   const focus = sp.doc ? docs.find((d) => d.id === sp.doc) : docs.find((d) => !d.kind);
 
+  // INVOICES FILED HERE THAT HAVE NOT BECOME A BILL.
+  //
+  // "Read the vault is still not available" — 3 September. The button was on
+  // the INVOICES page, which is a reasonable place for it and a poor place to
+  // look for it: a person thinking about a vault document is on the vault. It
+  // is on both pages now, and it is the same action either way.
+  const raisedIds = new Set<string>();
+  if (hubConnected) {
+    const { data: raised } = await createServiceClient().from("provider_bills").select("vault_doc_id");
+    for (const r of raised ?? []) {
+      const v = (r as { vault_doc_id: string | null }).vault_doc_id;
+      if (v) raisedIds.add(String(v));
+    }
+  }
+  const invoicesWaiting = docs.filter(
+    (d) => (d.kind === "invoice" || d.doc_type === "Invoice / bill") && !raisedIds.has(d.id),
+  );
+
   // Grouped index: year → institution → files.
   const docGroups = new Map<string, Map<string, VaultDoc[]>>();
   for (const d of docs) {
@@ -91,6 +109,20 @@ export default async function VaultPage(props: { searchParams: Promise<{ scan?: 
       current="/admin/zoho/vault"
       message={sp.scan}
     >
+      {invoicesWaiting.length > 0 && (
+        <form action={scanBillsAction} className="card"
+              style={{ marginTop: 14, borderLeft: "4px solid #b45309", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <SubmitButton className="btn small" savedLabel="✓ Read">
+            🔄 Raise the bills ({invoicesWaiting.length} waiting)
+          </SubmitButton>
+          <span className="muted" style={{ fontSize: ".8rem", flex: 1, minWidth: 260 }}>
+            {invoicesWaiting.length} document{invoicesWaiting.length === 1 ? "" : "s"} here {invoicesWaiting.length === 1 ? "is" : "are"} filed
+            as an invoice with no bill behind {invoicesWaiting.length === 1 ? "it" : "them"} — so there is nothing on the Invoices page to
+            send for approval. This reads {invoicesWaiting.length === 1 ? "it" : "them"} and raises the bill. Filing a new one does this by itself.
+          </span>
+        </form>
+      )}
+
       {/* ── STEP ONE ─────────────────────────────────────────────────── */}
       <form action={vaultUploadAction} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
         <div style={{ flex: 1, minWidth: 260 }}>

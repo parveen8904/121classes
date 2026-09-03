@@ -74,8 +74,20 @@ export function bankEntry(p: {
   if (kind === "customer_payment" && !party) caveats.push("Name the customer — a receipt has to be from somebody.");
   if (kind === "expense" && !isOut) caveats.push("An expense is money going out. This line is money coming in — book it as income, or turn the direction round.");
   if (kind === "income" && isOut) caveats.push("Income is money coming in. This line is money going out — book it as an expense, or turn the direction round.");
-  if (kind === "vendor_payment" && !isOut) caveats.push("A vendor payment is money going out. If this is a refund from the supplier, keep it as money in and it books against the same head.");
-  if (kind === "customer_payment" && isOut) caveats.push("A customer receipt is money coming in. If this is a refund to the customer, keep it as money out and it books against the same head.");
+  // A PREVIEW MUST NOT PROMISE AN ENTRY THE POSTING WILL NOT MAKE.
+  //
+  // These two used to read as reassurance — "it books against the same head" —
+  // and it does not. A vendor payment given money coming IN would have posted a
+  // payment TO the supplier, the opposite entry, however this table drew it.
+  // postBankLine refuses the combination now, and this says so in the same
+  // words, so nothing is approved on the strength of a picture that will not
+  // happen.
+  if (kind === "vendor_payment" && !isOut) {
+    caveats.push("This will not post. A vendor payment is money going OUT; this line is money coming IN, which looks like a refund from them — Zoho would record it as a payment TO them. Set this to Journal and pick the head the original cost went to.");
+  }
+  if (kind === "customer_payment" && isOut) {
+    caveats.push("This will not post. A customer receipt is money coming IN; this line is money going OUT, which looks like a refund to them. Set this to Journal and pick the head it should come off.");
+  }
 
   const outNote =
     kind === "vendor_payment" ? "clears what was owed to them"

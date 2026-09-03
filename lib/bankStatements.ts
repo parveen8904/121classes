@@ -760,6 +760,35 @@ export async function postBankLine(
     // derives from the contact — there is no ledger to pick, and resolving one
     // here would create a head named after the supplier that nothing needs.
     if (kind === "vendor_payment" || kind === "customer_payment") {
+      // THE PREVIEW AND THE POSTING MUST NOT DISAGREE.
+      //
+      // A vendor payment is money going OUT and a customer receipt is money
+      // coming IN — that is what the Zoho documents mean. Given the opposite
+      // direction this would have posted the document anyway: answering
+      // "vendor payment · money in" for the ₹27,505.64 Supabase refund of 24
+      // August would have recorded that we PAID Supabase ₹27,505.64, with the
+      // bank credited instead of debited. The exact opposite entry, for real
+      // money, on a line whose own preview drew it correctly the other way.
+      //
+      // A preview that promises one entry while the posting makes another is
+      // worse than no preview, so this refuses and names the way to book it.
+      // A refund is not a payment run backwards; it belongs against the head
+      // the original cost went to.
+      if (kind === "vendor_payment" && !isOut) {
+        return fail(
+          `A vendor payment is money going OUT, and this line is ₹${amount.toLocaleString("en-IN")} coming IN — it looks like ${partyName || "the supplier"} refunding us. ` +
+          `Zoho would record it as a payment TO them, which is the opposite entry. ` +
+          `Set "Treat it as" to Journal and pick the head the original cost went to, and it books Bank Dr / that head Cr.`,
+        );
+      }
+      if (kind === "customer_payment" && isOut) {
+        return fail(
+          `A customer receipt is money coming IN, and this line is ₹${amount.toLocaleString("en-IN")} going OUT — it looks like a refund to ${partyName || "the customer"}. ` +
+          `Zoho would record it as money received from them, which is the opposite entry. ` +
+          `Set "Treat it as" to Journal and pick the head it should come off.`,
+        );
+      }
+
       const { findOrCreateParty, unappliedPayment } = await import("@/lib/zohoParty");
       const side = kind === "vendor_payment" ? "vendor" : "customer";
       let partyId = "";

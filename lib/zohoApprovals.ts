@@ -63,6 +63,10 @@ export type ApprovalRow = {
   summary: string; details: Record<string, unknown> | null;
   status: string; requested_at: string; note: string | null;
   result?: { error?: string } | null; decided_at?: string | null;
+  /** Who asked. The founder needs to see it: it is half of the two-hands rule,
+   *  and "who wants this" is the first thing anybody asks of a request. */
+  requested_by?: string | null;
+  requested_by_name?: string | null;
 };
 
 /**
@@ -134,9 +138,23 @@ export async function retryApproval(approvalId: string): Promise<void> {
 export async function listPending(limit = 100): Promise<ApprovalRow[]> {
   const svc = createServiceClient();
   const { data } = await svc.from("zoho_approvals")
-    .select("id, kind, ref_table, ref_id, summary, details, status, requested_at, note")
+    .select("id, kind, ref_table, ref_id, summary, details, status, requested_at, note, requested_by")
     .eq("status", "pending").order("requested_at").limit(limit);
-  return (data ?? []) as unknown as ApprovalRow[];
+  const rows = (data ?? []) as unknown as ApprovalRow[];
+  return withRequesterNames(rows);
+}
+
+/** Put a name to requested_by, in one query rather than one per row. */
+async function withRequesterNames(rows: ApprovalRow[]): Promise<ApprovalRow[]> {
+  const ids = [...new Set(rows.map((r) => r.requested_by).filter(Boolean))] as string[];
+  if (!ids.length) return rows;
+  const svc = createServiceClient();
+  const { data } = await svc.from("profiles").select("id, full_name, email").in("id", ids);
+  const by = new Map((data ?? []).map((p) => [
+    String(p.id),
+    String((p as { full_name?: string; email?: string }).full_name || (p as { email?: string }).email || "somebody"),
+  ]));
+  return rows.map((r) => ({ ...r, requested_by_name: r.requested_by ? by.get(String(r.requested_by)) ?? null : null }));
 }
 
 /**
@@ -149,6 +167,35 @@ export async function releaseApproval(approvalId: string, decidedBy: string | nu
   const { data: row } = await svc.from("zoho_approvals")
     .select("*").eq("id", approvalId).eq("status", "pending").maybeSingle();
   if (!row) return "That request is no longer waiting — it was already decided.";
+
+  // TWO HANDS. THE ONE THAT ASKS IS NOT THE ONE THAT RELEASES.
+  //
+  // His report, 3 September 2026: "it gets approved automatically when it is
+  // clicked in petty cash tile, but we want that it should go to the waiting
+  // for approval section, and then only it should go to Zoho."
+  //
+  // It was not automatic — but it might as well have been. The accounts desk
+  // holds both `zoho` and `zoho_approve`, so pressing ✅ Approve on a petty
+  // bill filed a request AND landed on the gate, where the very same login
+  // could release it. Five postings went into the books that way, requested
+  // and released by one person seconds apart; the founder never saw them.
+  //
+  // A gate that the requester can open is not a gate. So the rule is now the
+  // ordinary one from any accounts department: you may release anything except
+  // what you yourself asked for.
+  //
+  // THE FOUNDER IS EXEMPT, and must be — he is the final authority and there is
+  // nobody above him to countersign. When he answers a bank line and releases
+  // it, that IS one person deciding, by right. Everybody else needs a second.
+  //
+  // Where requested_by is null nothing is blocked: the request came from a
+  // cron or a webhook, so there is no hand to be the same as.
+  if (decidedBy && row.requested_by && String(row.requested_by) === String(decidedBy)) {
+    const { data: me } = await svc.from("profiles").select("role").eq("id", decidedBy).maybeSingle();
+    if (String(me?.role ?? "") !== "admin") {
+      return SELF_REQUEST_NOTE;
+    }
+  }
 
   const run = EXECUTORS[row.kind as ApprovalKind];
   if (!run) return `Nothing here knows how to carry out "${row.kind}".`;
@@ -168,6 +215,12 @@ export async function releaseApproval(approvalId: string, decidedBy: string | nu
     return `Approved, but it did not post: ${why}`;
   }
 }
+
+/** Refused because the same hand asked for it — see releaseApproval. Nothing
+ *  is wrong with the item; it is simply not this person's to release. */
+export const SELF_REQUEST_NOTE =
+  "You asked for this one, so you cannot also release it — it needs the founder, or somebody else who holds the approve grant. It stays on the gate.";
+export const isSelfRequest = (msg: string) => msg === SELF_REQUEST_NOTE;
 
 /** Is this failure Zoho refusing to talk to us for a minute, rather than
  *  refusing the document itself? */
@@ -340,5 +393,21 @@ export async function requestApprovalFor(
   extra?: Record<string, unknown>, requestedBy?: string | null,
 ): Promise<void> {
   const { summary, details } = await describe(kind, refId);
-  await requestApproval({ kind, refTable, refId, summary, details: { ...details, ...(extra ?? {}) }, requestedBy });
+  // WHO ASKED, RECORDED WHETHER OR NOT THE CALLER REMEMBERED TO SAY.
+  //
+  // Two of fifteen call sites passed it. The rest left requested_by null — and
+  // the two-hands rule above is only as good as knowing whose hand it was, so
+  // the busiest path of all (a bank line) would have had no control on it at
+  // all. Defaulting here means a call site added later cannot forget.
+  //
+  // A cron or a webhook has no logged-in user and lands as null, which is
+  // right: nobody asked, so nobody is barred from releasing it.
+  let who = requestedBy ?? null;
+  if (!who) {
+    try {
+      const { currentStaff } = await import("@/lib/adminAccess");
+      who = (await currentStaff())?.id ?? null;
+    } catch { who = null; }
+  }
+  await requestApproval({ kind, refTable, refId, summary, details: { ...details, ...(extra ?? {}) }, requestedBy: who });
 }

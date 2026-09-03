@@ -819,6 +819,11 @@ export async function decideBillAction(formData: FormData) {
     ? null : Number(formData.get("tds_rate"));
   const tds_mode = str(formData.get("tds_mode")) || (tds_rate ? "deduct" : "none");
   const tds_section = str(formData.get("tds_section")) || (tds_rate ? "393(2) Sl.17" : null);
+  // WHICH of Zoho's TDS rates, as he picked it off their real master. Zoho
+  // names them by nature of payment and holds nothing called "393(2) Sl.17",
+  // so this is the only thing that reliably identifies the rate — see
+  // lib/tdsMatch.ts and the picker in EntryEditor.
+  const tds_tax_id = str(formData.get("tds_tax_id")) || null;
   const billDate = str(formData.get("bill_date")) || bill.bill_date;
   const amount = Number(formData.get("amount")) || Number(bill.amount);
   const rate = Number(formData.get("rate")) || Number(bill.rate) || null;
@@ -888,6 +893,7 @@ export async function decideBillAction(formData: FormData) {
     ...(bill.proposal as Record<string, unknown> ?? {}),
     vendor_name, expense_account, gst_treatment, gst_tax_name, gst_rate,
     tds_section, tds_rate, tds_mode, nature, operating, sub_account, supplier_kind,
+    tds_tax_id,
   };
 
   await svc.from("provider_bills").update({
@@ -906,7 +912,7 @@ export async function decideBillAction(formData: FormData) {
       await saveBillRule({
         institution: String(bill.institution), vendor_name, expense_account,
         gst_treatment, gst_rate, tds_section, tds_rate, gst_tax_name,
-        nature, operating, sub_account, tds_mode, supplier_kind,
+        nature, operating, sub_account, tds_mode, supplier_kind, tds_tax_id,
       });
     } catch { /* the entry still stands even if the rule could not be kept */ }
   }

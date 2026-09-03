@@ -44,6 +44,10 @@ export type BillRule = {
   /** Zoho tax to apply — "GST18" for an intra-state supplier, "IGST18" for
    *  inter-state or an import. Blank falls back to IGST<rate>. */
   gst_tax_name?: string | null;
+  /** WHICH of Zoho's TDS rates, chosen from its real master. Zoho names them by
+   *  the nature of the payment and the desk names sections, so this cannot be
+   *  worked out — it is picked once and kept. See lib/tdsMatch.ts. */
+  tds_tax_id?: string | null; tds_tax_name?: string | null;
 };
 
 async function fetchText(fileUrl: string): Promise<string | null> {
@@ -1315,10 +1319,36 @@ export async function postProviderBill(id: string): Promise<void> {
       // exactly this must not be done. Use it. It is section-strict, judges the
       // rate's window against THIS BILL's date, and answers null rather than
       // substituting — which lands in the note below, where a person sees it.
-      const { matchTds } = await import("@/lib/zohoTds");
-      const match = matchTds(taxes, String(p.tds_section ?? ""), Number(p.tds_rate), String(b.bill_date ?? "").slice(0, 10));
+      const { matchTds, tdsChoicesAt } = await import("@/lib/zohoTds");
+      const onISO = String(b.bill_date ?? "").slice(0, 10);
+      const match = matchTds(
+        taxes, String(p.tds_section ?? ""), Number(p.tds_rate), onISO, str(p.tds_tax_id) || null);
       if (match) body.tds_tax_id = match.tax_id;
-      else tdsNote = ` — TDS ${p.tds_section} @ ${p.tds_rate}% must be applied by hand (Zoho holds ${taxes.length ? `only: ${taxes.map((t) => `${t.tax_name} ${t.tax_percentage}%`).join(", ")}` : "no TDS rates at all"})`;
+      else {
+        // A WITHHOLDING THAT COULD NOT BE ATTACHED STOPS THE BILL.
+        //
+        // It used to post anyway with this as a note, and on 3 September that
+        // is exactly what happened: CMG & COMPANY went into the books at
+        // ₹88,500 with its ₹7,500 of TDS detached, because Zoho holds no rate
+        // called "393(2) Sl.17" — it names its master by nature, not section.
+        // FIRST FLY did the same on 26 August. A note nobody reads is not a
+        // control, and TDS is money owed to the government with a due date on
+        // it; a bill can wait a minute, a short-deducted return cannot be
+        // quietly undone.
+        //
+        // So it refuses, and names the live rates at this very percentage so
+        // the choice is one click rather than a hunt through twenty-odd.
+        const choices = tdsChoicesAt(taxes, Number(p.tds_rate), onISO);
+        return fail(
+          `this bill withholds ${p.tds_rate}% under ${p.tds_section}, and Zoho has no rate of that name — it names its ` +
+          `TDS master by the nature of the payment, not by section. Nothing was posted, because a bill booked with the ` +
+          `withholding detached is a return that will not tie. ` +
+          (choices.length
+            ? `Pick the right one on the invoice and it will be remembered for ${b.institution}: ` +
+              `${choices.map((t) => t.tax_name).join(", ")}.`
+            : `Zoho holds no live rate at ${p.tds_rate}% on ${onISO} — add one under Settings → Taxes → TDS first.`),
+        );
+      }
     }
 
     const r = await zohoFetch<{ bill?: ZohoBill }>("/bills", { method: "POST", body });

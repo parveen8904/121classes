@@ -23,6 +23,9 @@ export default function EntryEditor(props: {
   accountList: string;
   /** Every Zoho ledger with its type, so the picker can show the right shelf. */
   accounts: { name: string; type: string }[];
+  /** Zoho's real TDS master, so the withholding is picked from it rather than
+   *  matched to it. See the block below, and lib/tdsMatch.ts. */
+  zohoTds?: { tax_id: string; tax_name: string; tax_percentage: number }[];
   /** A foreign supplier's two answers, editable here rather than on a card of
    *  their own — they are what decides the withholding, and they change. */
   foreign?: { country: string; category: string; countries: string[] } | null;
@@ -37,6 +40,8 @@ export default function EntryEditor(props: {
   initial: {
     nature: string; operating: string; account: string; subAccount: string;
     gstTreatment: string; gstRate: number; tdsMode: string; tdsRate: string; tdsSection: string;
+    /** Zoho tax_id already chosen for this supplier, if any. */
+    tdsTaxId?: string | null;
     /** What the invoice itself prints. Blank on bills raised before this existed. */
     taxable?: string; cgst?: string; sgst?: string; igst?: string;
   };
@@ -69,6 +74,7 @@ export default function EntryEditor(props: {
   // The same thing again as debits and credits, because that is what he checks.
   // Recomputed on every keystroke from the answers above, like the sentence.
   const [tdsSection, setTdsSection] = useState(i.tdsSection);
+  const [tdsTaxId, setTdsTaxId] = useState(i.tdsTaxId ?? "");
   const stated = {
     taxable: taxable === "" ? null : Number(taxable),
     cgst: cgst === "" ? null : Number(cgst),
@@ -204,6 +210,43 @@ export default function EntryEditor(props: {
           <input name="tds_section" value={tdsSection} onChange={(e) => setTdsSection(e.target.value)} placeholder="393(2) Sl.17" style={{ marginBottom: 0 }} />
         </div>
       </div>
+
+      {/* WHICH OF ZOHO'S OWN TDS RATES.
+          Zoho names its master by the NATURE of the payment — "Professional
+          Fees 10%", "Payment of contractors HUF/Indiv 1%" — and holds nothing
+          called "393(2) Sl.17". The desk names sections, and the same section
+          string covers CMG's professional fees at 10% and FIRST FLY's courier
+          work at 1%. Neither can be worked out from the other, so it is chosen
+          here, once, and kept on the supplier's rule.
+
+          Guessing across that gap is what put "Dividend" on CMG's bill. */}
+      {tdsMode !== "none" && (props.zohoTds?.length ?? 0) > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <label style={label}>Which TDS rate in Zoho?</label>
+          <select name="tds_tax_id" value={tdsTaxId} onChange={(e) => setTdsTaxId(e.target.value)}
+                  style={{ marginBottom: 0 }}>
+            <option value="">— pick the one this supplier's withholding uses —</option>
+            {(props.zohoTds ?? [])
+              .filter((t) => !tdsRate || Number(t.tax_percentage) === Number(tdsRate))
+              .map((t) => (
+                <option key={t.tax_id} value={t.tax_id}>{t.tax_name} — {t.tax_percentage}%</option>
+              ))}
+            {(props.zohoTds ?? []).some((t) => tdsRate && Number(t.tax_percentage) !== Number(tdsRate)) && (
+              <optgroup label={`at another rate than ${tdsRate}%`}>
+                {(props.zohoTds ?? [])
+                  .filter((t) => tdsRate && Number(t.tax_percentage) !== Number(tdsRate))
+                  .map((t) => (
+                    <option key={t.tax_id} value={t.tax_id}>{t.tax_name} — {t.tax_percentage}%</option>
+                  ))}
+              </optgroup>
+            )}
+          </select>
+          <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>
+            Zoho lists these by what the payment is for, not by section. Without one the bill will not post —
+            a bill booked with the withholding detached is a return that will not tie.
+          </p>
+        </div>
+      )}
 
       {/* THE TAX AS THE INVOICE PRINTS IT.
           These are typed off the document, never derived from the total: a

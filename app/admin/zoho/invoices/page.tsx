@@ -35,7 +35,8 @@ export default async function InvoicesPage(props: { searchParams: Promise<{ scan
       tds_section?: string | null; tds_rate?: number | null;
       // What the document is, and how the withholding is met — remembered per supplier.
       nature?: string | null; operating?: string | null; sub_account?: string | null;
-      tds_mode?: string | null; supplier_kind?: string | null } | null; error: string | null;
+      tds_mode?: string | null; supplier_kind?: string | null;
+      tds_tax_id?: string | null; tds_tax_name?: string | null } | null; error: string | null;
     determination: { tdsLabel?: string; tdsRate?: number | null; confidence?: string; form145Part?: string | null; form146Required?: boolean; warnings?: string[]; certAdvice?: { why: string; points: string[] } | null; grossedUp?: number | null } | null;
     taxable_value: number | null; cgst_amount: number | null; sgst_amount: number | null; igst_amount: number | null;
     tax_read: { taxable_value: number | null; cgst: number | null; sgst: number | null; igst: number | null; total: number | null; note: string | null; vendor_name?: string | null; vendor_gstin?: string | null; vendor_state?: string | null; vendor_udyam?: string | null; vendor_msme_type?: string | null } | null;
@@ -111,7 +112,8 @@ export default async function InvoicesPage(props: { searchParams: Promise<{ scan
     .sort((a, b) => String(a.bill_date ?? "").localeCompare(String(b.bill_date ?? "")));
   const allRules = (ruleRows ?? []) as unknown as (ForeignRule & {
     vendor_name?: string; expense_account?: string; gst_treatment?: string;
-    gst_rate?: number; tds_section?: string | null; tds_rate?: number | null; gst_tax_name?: string | null })[];
+    gst_rate?: number; tds_section?: string | null; tds_rate?: number | null; gst_tax_name?: string | null;
+    tds_tax_id?: string | null; tds_tax_name?: string | null })[];
   // Case-insensitive: "First Fly Express" must find the rule saved as
   // "FIRST FLY EXPRESS" — exact matching is how one courier got two rules.
   const instK = (v: string) => v.toLowerCase().replace(/\s+/g, " ").trim();
@@ -483,6 +485,7 @@ export default async function InvoicesPage(props: { searchParams: Promise<{ scan
               </div>
 
               <EntryEditor
+                zohoTds={zohoTds}
                 inr={inr}
                 who={p.vendor_name ?? b.institution}
                 currency={b.currency}
@@ -504,6 +507,7 @@ export default async function InvoicesPage(props: { searchParams: Promise<{ scan
                   tdsMode: p.tds_mode ?? (tdsRate ? "deduct" : "none"),
                   tdsRate: tdsRate === null || tdsRate === undefined ? "" : String(tdsRate),
                   tdsSection: p.tds_section ?? "",
+                  tdsTaxId: p.tds_tax_id ?? null,
                   // What the invoice printed, where somebody has keyed it.
                   taxable: b.taxable_value == null ? "" : String(b.taxable_value),
                   cgst: b.cgst_amount == null ? "" : String(b.cgst_amount),

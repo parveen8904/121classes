@@ -36,7 +36,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { matchTds, type RawTax } from "../lib/tdsMatch.ts";
+import { matchTds, tdsChoicesAt, type RawTax } from "../lib/tdsMatch.ts";
 
 let fails = 0;
 const check = (name: string, ok: boolean, why = "") => {
@@ -91,6 +91,61 @@ check("with no section named and two candidates, it asks instead of guessing",
   matchTds([{ tax_id: "x", tax_name: "A", tax_percentage: 10 },
             { tax_id: "y", tax_name: "B", tax_percentage: 10 }], "", 10) === null);
 
+/* ── and what his master ACTUALLY looks like ─────────────────────────────── */
+
+// Read off the note Zoho's own refusal left on the CMG bill. Not one of these
+// names carries a section number: Zoho names TDS by the NATURE of the payment.
+// So "393(2) Sl.17" can never match, and both his rules use that same string —
+// CMG at 10% for professional fees, FIRST FLY at 1% for courier work.
+const his: RawTax[] = [
+  { tax_id: "1", tax_name: "Commission or Brokerage", tax_percentage: 5 },
+  { tax_id: "2", tax_name: "Dividend", tax_percentage: 10 },
+  { tax_id: "3", tax_name: "Other Interest than securities", tax_percentage: 10 },
+  { tax_id: "4", tax_name: "Payment of contractors HUF/Indiv", tax_percentage: 1 },
+  { tax_id: "5", tax_name: "Professional Fees", tax_percentage: 10 },
+  { tax_id: "6", tax_name: "Rent on land or furniture etc", tax_percentage: 10 },
+  { tax_id: "7", tax_name: "TDS on Professional Fee", tax_percentage: 10 },
+  { tax_id: "8", tax_name: "Professional Fees (Reduced)", tax_percentage: 7.5 },
+];
+
+check("his real master answers to no section at all",
+  matchTds(his, "393(2) Sl.17", 10, "2026-08-31") === null,
+  "which is why the bill must ask rather than match — and why it must not post detached");
+
+check("the rate he picks himself is the one attached",
+  matchTds(his, "393(2) Sl.17", 10, "2026-08-31", "5")?.tax_name === "Professional Fees",
+  "the choice is kept on the supplier's rule; nothing is derived from the section");
+
+check("a chosen rate that has since expired is still not attached",
+  matchTds([{ ...his[4], end_date: "2026-03-31" }], "393(2) Sl.17", 10, "2026-08-31", "5") === null,
+  "chosen in March is not the same as valid in August");
+
+check("a chosen id that is not in the master answers nothing, not the next best",
+  matchTds(his, "393(2) Sl.17", 10, "2026-08-31", "999") === null);
+
+check("the short list offered is the live rates at the bill's own percentage",
+  tdsChoicesAt(his, 10, "2026-08-31").map((t) => t.tax_id).join(",") === "2,3,5,6,7",
+  "twenty-odd rates is a hunt; the ones at 10% are a choice");
+
+check("…and it leaves out the reduced rate at another percentage",
+  !tdsChoicesAt(his, 10, "2026-08-31").some((t) => /Reduced/.test(t.tax_name)));
+
+check("the same section at FIRST FLY's rate offers the contractor rate, not professional fees",
+  tdsChoicesAt(his, 1, "2026-08-31").map((t) => t.tax_name).join() === "Payment of contractors HUF/Indiv",
+  "one section string, two natures — no rule of thumb spans that");
+
+/* ── a withholding that cannot be attached stops the bill ────────────────── */
+
+check("the bill refuses rather than posting with the withholding detached",
+  /Zoho has no rate of that name[\s\S]{0,400}return fail|return fail\([\s\S]{0,200}no rate of that name/.test(bills),
+  "CMG posted at ₹88,500 with its ₹7,500 of TDS detached — a return that will not tie");
+
+check("…and the refusal names the live rates to choose between",
+  /tdsChoicesAt\(taxes, Number\(p\.tds_rate\), onISO\)/.test(bills));
+
+check("the chosen rate reaches the matcher from the proposal",
+  /str\(p\.tds_tax_id\) \|\| null/.test(bills));
+
 check("a GST rate is never returned for a TDS section",
   matchTds([{ tax_id: "g", tax_name: "GST5", tax_percentage: 5 },
             { tax_id: "i", tax_name: "IGST5", tax_percentage: 5 }], "393(1)", 5) === null,
@@ -106,7 +161,7 @@ check("the sale path uses the shared TDS reader and matcher",
   /listZohoTds, matchTds/.test(outgoing));
 
 check("the bill path uses matchTds rather than its own find",
-  /matchTds\(taxes, String\(p\.tds_section/.test(bills));
+  /const match = matchTds\(\s*\n?\s*taxes, String\(p\.tds_section/.test(bills));
 
 check("…judged on the bill's own date",
   /String\(b\.bill_date \?\? ""\)\.slice\(0, 10\)/.test(bills));

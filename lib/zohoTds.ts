@@ -83,7 +83,7 @@ export async function tdsSectionsNeeded(): Promise<{ section: string; rate: numb
   return [...byKey.values()];
 }
 
-export { matchTds } from "@/lib/tdsMatch";
+export { matchTds, tdsChoicesAt } from "@/lib/tdsMatch";
 import { matchTds } from "@/lib/tdsMatch";
 
 /**

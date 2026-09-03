@@ -167,9 +167,33 @@ export async function redetermineWaiting(institution: string): Promise<number> {
  */
 export async function scanVaultForBills(limit = 3): Promise<string> {
   const svc = createServiceClient();
-  const { data: docs } = await svc.from("zoho_vault_docs")
-    .select("id, title, institution, file_url, created_at")
-    .eq("doc_type", "Invoice / bill").order("created_at");
+
+  // WHICH VAULT DOCUMENTS ARE INVOICES — BOTH WAYS OF SAYING SO.
+  //
+  // This asked for doc_type = "Invoice / bill", which is the exact string the
+  // OLD upload form on the Invoices page writes. The vault's two-step flow
+  // (2 September) records the answer as kind = "invoice" instead, and sets
+  // doc_type from the free-text "if something else, what?" box. The two
+  // vocabularies never met.
+  //
+  // So from 2 September every invoice filed through the vault was invisible
+  // here: it sat in the list with an INVOICE badge, no bill was ever raised
+  // from it, and there was nothing to send for approval. The desk's report of
+  // 3 September — "there is no option to send for approval, so that's why we
+  // are unable to post in zoho" — is exactly this, and the screenshot shows
+  // three of them stranded.
+  //
+  // Asked as two queries rather than one `or`, because the old value contains
+  // a space and a slash and PostgREST filter quoting is a poor thing to stake
+  // a supplier's bill on.
+  const [byKind, byType] = await Promise.all([
+    svc.from("zoho_vault_docs").select("id, title, institution, file_url, created_at").eq("kind", "invoice"),
+    svc.from("zoho_vault_docs").select("id, title, institution, file_url, created_at").eq("doc_type", "Invoice / bill"),
+  ]);
+  const seenDoc = new Set<string>();
+  const docs = [...(byKind.data ?? []), ...(byType.data ?? [])]
+    .filter((d) => (seenDoc.has(String(d.id)) ? false : (seenDoc.add(String(d.id)), true)))
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
   const { data: queued } = await svc.from("provider_bills").select("vault_doc_id");
   const have = new Set((queued ?? []).map((q) => String(q.vault_doc_id)));
   const { data: ruleRows } = await svc.from("provider_bill_rules").select("*");
@@ -185,10 +209,10 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
   // which is exactly what happened on the first press. So it takes a batch,
   // reports the remainder, and is pressed again. The batch is SMALL because
   // every invoice is now genuinely read rather than guessed from its title.
-  const pending = (docs ?? []).filter((d) => !have.has(String(d.id)));
+  const pending = docs.filter((d) => !have.has(String(d.id)));
   const batch = pending.slice(0, limit);
 
-  let added = 0, asked = 0;
+  let added = 0, asked = 0, dupes = 0;
   for (const d of batch) {
     // Where a rule already exists for this supplier, its spelling WINS: the
     // bill is stored under the rule's name, so however the upload was typed,
@@ -277,6 +301,39 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
     // unknown currency waits for a human rather than being assumed either way.
     const isForeign = !!currency && currency !== "INR";
     const needsForeignAnswers = isForeign && !foreignAnswered(rule);
+
+    // THE SAME INVOICE, UPLOADED TWICE, IS STILL ONE INVOICE.
+    //
+    // provider_bills.vault_doc_id is unique, so one DOCUMENT can only raise one
+    // bill. That is not the same thing: the desk uploads the same PDF twice —
+    // the screenshot of 3 September shows exactly that, "20260826 BANSAL
+    // BUSINESS CORPORATION.pdf" filed twice under Unfiled — and two documents
+    // then raise two bills for one supplier invoice. Approve both and the cost
+    // is in the books twice, the input credit is claimed twice, and the
+    // supplier's ledger says we owe double.
+    //
+    // A supplier's invoice number is unique within that supplier by law, so it
+    // is the right key. Only checked where the number was actually READ: a
+    // blank one would otherwise gather every unreadable invoice from that
+    // vendor into a single "duplicate".
+    const billNo = str(facts.invoice_no);
+    if (billNo) {
+      const { data: twin } = await svc.from("provider_bills")
+        .select("id, status, vault_doc_id")
+        .eq("institution", institution).eq("bill_no", billNo).limit(1).maybeSingle();
+      if (twin) {
+        // Filed, not raised. The document stays in the vault as the second copy
+        // of a paper we already have, and the desk is told which bill it is —
+        // rather than the row silently going missing.
+        await svc.from("zoho_vault_docs").update({
+          is_processed: true,
+          note: `Duplicate of ${institution} invoice ${billNo}, already on the Invoices page — no second bill raised.`,
+        }).eq("id", d.id);
+        dupes++;
+        continue;
+      }
+    }
+
     const { data: madeRow } = await svc.from("provider_bills").insert({
       vault_doc_id: d.id, institution,
       bill_no: str(facts.invoice_no) || null, bill_date: billDate,
@@ -349,7 +406,11 @@ export async function scanVaultForBills(limit = 3): Promise<string> {
     if (rule && dated && total && !mismatch && !needsForeignAnswers) added++; else asked++;
   }
   const left = pending.length - batch.length;
-  return `${added + asked} invoice(s) read — ${added} proposed from a remembered rule, ${asked} waiting for a treatment.` +
+  return `${added + asked + dupes} invoice(s) read — ${added} proposed from a remembered rule, ${asked} waiting for a treatment.` +
+    // Not "waiting for a treatment": nothing is waiting. The paper is a second
+    // copy of one we already hold, and saying so is what stops somebody
+    // hunting the Invoices page for a bill that was never meant to appear.
+    (dupes > 0 ? ` ${dupes} was a second copy of an invoice already on the list — filed, not raised again.` : "") +
     (left > 0 ? ` ${left} still to read — press again.` : " Vault fully read.");
 }
 

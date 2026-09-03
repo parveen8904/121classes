@@ -1950,11 +1950,31 @@ export async function vaultClassifyAction(formData: FormData) {
     redirect(`/admin/zoho/statements?scan=${encodeURIComponent(note)}`);
   }
 
+  // AN INVOICE FILED HERE IS READ FOR ITS BILL, HERE AND NOW.
+  //
+  // This used to say "raise the bill from the Invoices page" and stop. There
+  // is no button on that page that raises a bill from one document — the
+  // Invoices page runs the scan when IT uploads something, and the desk had no
+  // way to reach it. Their report, 3 September: "after this, there is no
+  // option to send for approval, so that's why we are unable to post in zoho."
+  //
+  // The upload form on the Invoices page has always scanned on the same press.
+  // This is the same thing, so the two doors behave alike and the desk is
+  // never sent looking for a control that does not exist.
+  if (kind === "invoice") {
+    let note = "Filed as an invoice.";
+    try {
+      const { scanVaultForBills } = await import("@/lib/providerBills");
+      note = await scanVaultForBills(3);
+    } catch (e) {
+      note = `Filed as an invoice, but reading it for the bill failed: ${e instanceof Error ? e.message : "unknown"}. Press 🔄 Read the vault for bills on the Invoices page.`;
+    }
+    revalidateDesk();
+    redirect(`/admin/zoho/invoices?scan=${encodeURIComponent(note)}`);
+  }
+
   revalidateDesk();
-  redirect(`/admin/zoho/vault?scan=${encodeURIComponent(
-    kind === "invoice"
-      ? "Filed as an invoice. Its rows are on the document below — raise the bill from the Invoices page."
-      : "Filed.")}&doc=${id}`);
+  redirect(`/admin/zoho/vault?scan=${encodeURIComponent("Filed.")}&doc=${id}`);
 }
 
 export async function addVaultDoc(formData: FormData) {

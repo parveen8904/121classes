@@ -14,7 +14,7 @@ import DeskShell from "../_shell";
 import {
   uploadBillAction, decideBillAction, removeBillAction, attachPaperAction, raiseDocumentAction,
   retryDocumentAction, saveForeignAnswersAction, markFormFiledAction, readInvoiceTaxAction,
-  createTdsTaxAction, fetchProviderInvoicesAction, addVaultDoc,
+  createTdsTaxAction, fetchProviderInvoicesAction, addVaultDoc, scanBillsAction,
 } from "../actions";
 
 // SUPPLIER INVOICES AND DOCUMENTS, on their own page.
@@ -46,6 +46,26 @@ export default async function InvoicesPage(props: { searchParams: Promise<{ scan
         .in("status", ["needs_info", "draft", "failed"]).order("bill_date")
     : { data: [] as never[] };
   const bills = (billData ?? []) as unknown as ProviderBillRow[];
+
+  // HOW MANY INVOICES ARE SITTING IN THE VAULT WITH NO BILL BEHIND THEM.
+  //
+  // A count on the button, because "press this if something is stuck" asks the
+  // desk to know what is stuck. Three were, unseen, from 2 September until it
+  // was reported — the scanner and the vault had two different words for "this
+  // is an invoice" and nothing said so. Counted the same two ways the scanner
+  // reads them (see scanVaultForBills).
+  let waitingInVault = 0;
+  if (hubConnected) {
+    const svcCount = createServiceClient();
+    const [byKind, byType, raised] = await Promise.all([
+      svcCount.from("zoho_vault_docs").select("id").eq("kind", "invoice"),
+      svcCount.from("zoho_vault_docs").select("id").eq("doc_type", "Invoice / bill"),
+      svcCount.from("provider_bills").select("vault_doc_id"),
+    ]);
+    const have = new Set((raised.data ?? []).map((r) => String((r as { vault_doc_id: string }).vault_doc_id)));
+    const ids = new Set([...(byKind.data ?? []), ...(byType.data ?? [])].map((d) => String(d.id)));
+    for (const id of ids) if (!have.has(id)) waitingInVault++;
+  }
   // What withholding Zoho can actually apply, against what our vendor rules
   // will ask for. A bill that posts with its TDS unattached is a return that
   // will not tie, and until now that only showed up after the fact.
@@ -171,6 +191,25 @@ export default async function InvoicesPage(props: { searchParams: Promise<{ scan
 <span className="muted" style={{ fontSize: ".78rem", marginLeft: 10 }}>
   Bunny and Razorpay hand theirs over directly. Anthropic and Mailgun have no invoice API — theirs arrive by email.
 </span>
+      </form>
+
+      {/* READ THE VAULT FOR BILLS — the button that was missing.
+          scanBillsAction has existed since the desk was split into pages and
+          no page ever rendered it, so the only way a vault document became a
+          bill was the upload form below, which scans on its own press. An
+          invoice filed through the vault therefore sat with an INVOICE badge
+          and nothing behind it, and there was nothing anybody could press.
+          Filing now scans by itself; this is for the ones already sitting
+          there, and for a re-read after a rule changes. */}
+      <form action={scanBillsAction} style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <SubmitButton className="btn small secondary" savedLabel="✓ Read">
+          🔄 Read the vault for bills{waitingInVault > 0 ? ` (${waitingInVault} waiting)` : ""}
+        </SubmitButton>
+        <span className="muted" style={{ fontSize: ".78rem", flex: 1, minWidth: 260 }}>
+          {waitingInVault > 0
+            ? `${waitingInVault} document${waitingInVault === 1 ? "" : "s"} filed as an invoice ${waitingInVault === 1 ? "has" : "have"} no bill yet. Reads a few at a time — press again if it says there are more.`
+            : "Every invoice in the vault already has its bill. Filing one now raises it on the same press; this is here for a re-read."}
+        </span>
       </form>
 
       <form action={addVaultDoc} className="card" style={{ marginTop: 10 }}>

@@ -97,9 +97,14 @@ export default function CheckoutAddressStep({
           pincode: r.party!.pincode || b.pincode,
           country: "India",
         }));
+        // Say where it came from — see ProfileAddressBlock. With no GST lookup
+        // service connected these details come out of Zoho Books.
         setGstNote({
           tone: "ok",
-          text: `Verified — ${r.party.tradeName || r.party.legalName}${r.party.status ? ` (${r.party.status})` : ""}. The billing address has been filled in from the GST records.`,
+          text: `Verified — ${r.party.tradeName || r.party.legalName}${r.party.status ? ` (${r.party.status})` : ""}. `
+            + (r.note === "from your Zoho Books contact record"
+              ? "The billing address has been filled in from your Zoho Books record — please check it."
+              : "The billing address has been filled in from the GST records."),
         });
       } else if (!r.configured) {
         // The number IS verified — checksum, PAN and state all check out
@@ -109,7 +114,7 @@ export default function CheckoutAddressStep({
         setGstNote({
           tone: "ok",
           text: `Valid GST number — PAN ${r.pan}, registered in ${r.state}. `
-            + "The trade name and address are not fetched automatically here, so please fill them in yourself.",
+            + "We have no record of this number yet, so please fill in the name and address yourself.",
         });
       } else {
         setGstNote({

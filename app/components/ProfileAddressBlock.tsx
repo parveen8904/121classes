@@ -70,7 +70,17 @@ export default function ProfileAddressBlock({
         if (r.party.city) setCity(r.party.city);
         if (r.party.state) setState(r.party.state);
         if (r.party.pincode) setPincode(r.party.pincode);
-        setNote({ tone: "ok", text: `Verified — ${r.party.tradeName || r.party.legalName}${r.party.status ? ` (${r.party.status})` : ""}. Address filled in from the GST records.` });
+        // SAY WHERE IT CAME FROM. With no GST lookup service connected the
+        // details now come out of Zoho Books, and calling that "the GST
+        // records" would be a small lie about the authority behind a name
+        // that goes onto a tax invoice.
+        setNote({
+          tone: "ok",
+          text: `Verified — ${r.party.tradeName || r.party.legalName}${r.party.status ? ` (${r.party.status})` : ""}. `
+            + (r.note === "from your Zoho Books contact record"
+              ? "Details filled in from your Zoho Books contact record — check them against the certificate."
+              : "Address filled in from the GST records."),
+        });
       } else if (!r.configured) {
         // THE NUMBER *IS* VERIFIED. Everything that can be checked without
         // asking anybody has been: the checksum, the PAN inside it and the
@@ -81,7 +91,7 @@ export default function ProfileAddressBlock({
         setNote({
           tone: "ok",
           text: `Valid GST number — PAN ${r.pan}, registered in ${r.state}. `
-            + "The trade name is not fetched automatically here, so type it below exactly as it appears on the certificate.",
+            + "Nobody with this number is in Zoho Books yet, so type the trade name below exactly as it appears on the certificate.",
         });
       } else {
         setNote({ tone: "warn", text: `${r.note ?? "The trade name could not be fetched."} Registered in ${r.state}.` });

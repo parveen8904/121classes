@@ -166,3 +166,83 @@ export async function listZohoParties(): Promise<PartyRow[]> {
   partyList = { rows, at: Date.now() };
   return rows;
 }
+
+// ---- a GSTIN, answered out of his own books ---------------------------------
+
+export type GstFromZoho = {
+  contactId: string;
+  tradeName: string | null;
+  legalName: string | null;
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  state: string | null;
+  pincode: string | null;
+};
+
+/**
+ * WHO IS THIS GSTIN, ACCORDING TO ZOHO BOOKS?
+ *
+ * His instruction, 3 September 2026: "Get it done from Zoho."
+ *
+ * The GSTN has no free public API, and the commercial ones want a subscription
+ * — so the trade-name box sat empty and the screen said so in a way that read
+ * as a fault. But a GSTIN we care about is almost always a party we already
+ * trade with, and Zoho Books holds their registered name and address already,
+ * keyed by exactly this number. Zoho's contact search accepts a GSTIN as its
+ * search text; lib/providerBills.ts has matched vendors that way since August.
+ *
+ * So this asks the books instead of buying a lookup. It answers for anybody
+ * already in them, which is every supplier and every supporter after their
+ * first document, and costs nothing because the subscription is already paid.
+ *
+ * WHAT IT IS NOT: a government lookup. A GSTIN belonging to somebody we have
+ * never dealt with is not in the books and cannot be, and this returns null
+ * rather than inventing a name — the caller then asks a person to type it.
+ * Zoho's own taxpayer lookup, which does hit the GSTN, exists only inside
+ * their web and mobile forms; there is no documented API for it.
+ */
+export async function findPartyByGstin(gstin: string): Promise<GstFromZoho | null> {
+  const want = String(gstin ?? "").trim().toUpperCase();
+  if (want.length !== 15) return null;
+
+  type Row = { contact_id: string; contact_name?: string; company_name?: string; gst_no?: string };
+  const r = await zohoFetch<{ contacts?: Row[] }>(
+    "/contacts", { query: { search_text: want } },
+  ).catch(() => null);
+
+  // The search is a CONTAINS match across several fields, so the GSTIN has to
+  // be confirmed on the row itself — otherwise a number appearing in somebody's
+  // notes would hand back the wrong party, and their address would be written
+  // onto an invoice.
+  const hit = (r?.contacts ?? []).find(
+    (c) => String(c.gst_no ?? "").trim().toUpperCase() === want,
+  );
+  if (!hit) return null;
+
+  // The list endpoint does not carry the address; the contact itself does.
+  type Full = {
+    contact_id: string; contact_name?: string; company_name?: string;
+    billing_address?: { address?: string; street2?: string; city?: string; state?: string; zip?: string };
+  };
+  const one = await zohoFetch<{ contact?: Full }>(`/contacts/${hit.contact_id}`).catch(() => null);
+  const c = one?.contact;
+  const b = c?.billing_address ?? {};
+  const s = (v: unknown): string | null => {
+    const t = String(v ?? "").trim();
+    return t.length ? t : null;
+  };
+
+  return {
+    contactId: String(hit.contact_id),
+    // Exactly as the books spell it — the same rule as lib/gstin.ts, and for
+    // the same reason: a name on a tax invoice is not ours to tidy.
+    tradeName: s(c?.company_name) ?? s(hit.company_name),
+    legalName: s(c?.contact_name) ?? s(hit.contact_name),
+    line1: s(b.address),
+    line2: s(b.street2),
+    city: s(b.city),
+    state: s(b.state),
+    pincode: s(b.zip),
+  };
+}

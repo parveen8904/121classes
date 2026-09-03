@@ -106,6 +106,29 @@ export async function verifyGstin(raw: string): Promise<{
       },
     };
   }
+  // NO OUTSIDE LOOKUP? ASK HIS OWN BOOKS. "Get it done from Zoho" — 3 Sep.
+  //
+  // A GSTIN we care about is almost always a party already in Zoho Books, and
+  // Zoho holds their registered name and billing address keyed by that number.
+  // It answers for every supplier and supporter after their first document,
+  // and costs nothing, because that subscription is already paid for.
+  try {
+    const { findPartyByGstin } = await import("@/lib/zohoParty");
+    const z = await findPartyByGstin(c.gstin);
+    if (z && (z.tradeName || z.legalName)) {
+      return {
+        valid: true, problem: null, state: c.state, pan: c.pan, fetched: true,
+        note: "from your Zoho Books contact record", configured: true,
+        party: {
+          tradeName: z.tradeName, legalName: z.legalName,
+          line1: z.line1, line2: z.line2,
+          city: z.city, state: z.state ?? c.state, pincode: z.pincode,
+          status: null,
+        },
+      };
+    }
+  } catch { /* the number is still verified; only the name went unanswered */ }
+
   return {
     valid: true, problem: null, state: c.state, pan: c.pan, fetched: false,
     note: look.reason, configured: look.configured, party: null,

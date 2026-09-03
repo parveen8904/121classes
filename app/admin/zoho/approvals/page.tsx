@@ -22,12 +22,9 @@ export default async function ApprovalsPage(props: { searchParams: Promise<{ sca
   // lib/adminAccess.ts. The approval UI renders for either.
   const staff = await currentStaff();
   const canApprove = staff?.role === "admin" || !!staff?.permissions.includes("zoho_approve");
-  // TWO HANDS. Nobody but the founder may release what they themselves asked
-  // for — see releaseApproval. The gate refuses it there whatever this says;
-  // this is so the button is not offered in the first place, because a button
-  // that exists only to tell you off is a worse answer than no button.
-  const mayRelease = (requestedBy?: string | null) =>
-    canApprove && (staff?.role === "admin" || !requestedBy || String(requestedBy) !== String(staff?.id ?? ""));
+  // Holding the grant is the whole answer to "may I release this", including
+  // one's own requests — the founder's ruling, 3 September. Who ASKED is still
+  // shown on every row, because the record should answer that afterwards.
 
   const { listPending, listFailed } = await import("@/lib/zohoApprovals");
   const pendingApprovals = hubConnected ? await listPending() : [];
@@ -112,22 +109,11 @@ export default async function ApprovalsPage(props: { searchParams: Promise<{ sca
   ) : (
     <>
       <form action={approveAllZohoAction} className="card" style={{ marginBottom: 8, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        {pendingApprovals.filter((a) => mayRelease(a.requested_by)).map((a) => <input key={a.id} type="hidden" name="ids" value={a.id} />)}
-        {(() => {
-          const mine = pendingApprovals.filter((a) => !mayRelease(a.requested_by)).length;
-          const n = pendingApprovals.length - mine;
-          return (
-            <>
-              <SubmitButton className="btn small" savedLabel="Posted" disabled={n === 0}>
-                {n === 1 ? "✅ Approve and post" : `✅ Approve all ${n} and post`}
-              </SubmitButton>
-              <span className="muted" style={{ fontSize: ".8rem" }}>
-                Or go through them one at a time below.
-                {mine > 0 && ` ${mine} of these ${mine === 1 ? "was" : "were"} asked for by you, so ${mine === 1 ? "it is" : "they are"} not included — somebody else releases those.`}
-              </span>
-            </>
-          );
-        })()}
+        {pendingApprovals.map((a) => <input key={a.id} type="hidden" name="ids" value={a.id} />)}
+        <SubmitButton className="btn small" savedLabel="Posted">
+          {pendingApprovals.length === 1 ? "✅ Approve and post" : `✅ Approve all ${pendingApprovals.length} and post`}
+        </SubmitButton>
+        <span className="muted" style={{ fontSize: ".8rem" }}>Or go through them one at a time below.</span>
       </form>
 
       {pendingApprovals.map((a) => (
@@ -137,9 +123,9 @@ export default async function ApprovalsPage(props: { searchParams: Promise<{ sca
               <span className="muted" style={{ fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em" }}>
                 {a.kind.replace(/_/g, " ")}
                 {/* WHO WANTS THIS. The gate showed what was being asked for and
-                    never by whom — and since 3 September whose request it is
-                    also decides whether YOU may release it: nobody but the
-                    founder may release their own. */}
+                    never by whom. It does not decide anything — the grant does
+                    that — but a record that cannot say who asked is a poor
+                    record. */}
                 {a.requested_by_name && (
                   <span style={{ textTransform: "none", letterSpacing: 0 }}> · asked by {a.requested_by_name}</span>
                 )}
@@ -162,17 +148,10 @@ export default async function ApprovalsPage(props: { searchParams: Promise<{ sca
               })()}
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-              {mayRelease(a.requested_by) ? (
-                <form action={approveZohoAction} style={{ margin: 0 }}>
-                  <input type="hidden" name="id" value={a.id} />
-                  <SubmitButton className="btn small" savedLabel="Posted">✅ Approve</SubmitButton>
-                </form>
-              ) : (
-                <span className="muted" style={{ fontSize: ".76rem", maxWidth: 190, lineHeight: 1.5, display: "block" }}>
-                  🖐 You asked for this one, so it needs a second pair of hands — the founder, or anyone else
-                  holding the approve grant.
-                </span>
-              )}
+              <form action={approveZohoAction} style={{ margin: 0 }}>
+                <input type="hidden" name="id" value={a.id} />
+                <SubmitButton className="btn small" savedLabel="Posted">✅ Approve</SubmitButton>
+              </form>
               <form action={rejectZohoAction} style={{ margin: 0 }}>
                 <input type="hidden" name="id" value={a.id} />
                 <SubmitButton className="btn small secondary" savedLabel="Rejected">✕ No</SubmitButton>

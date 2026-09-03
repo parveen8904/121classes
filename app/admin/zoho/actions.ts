@@ -339,8 +339,8 @@ export async function approveAllZohoAction(formData: FormData) {
   //
   // A throttle is the ONE reason to stop early. Any other failure is that
   // item's own problem, gets recorded against it, and the rest carry on.
-  const { queueApproval, isThrottle, isSelfRequest } = await import("@/lib/zohoApprovals");
-  let done = 0, failed = 0, queued = 0, mine = 0;
+  const { queueApproval, isThrottle } = await import("@/lib/zohoApprovals");
+  let done = 0, failed = 0, queued = 0;
   let throttled = false;
   for (const id of ids) {
     // Once the minute is spent there is no point asking Zoho again — the rest
@@ -349,15 +349,11 @@ export async function approveAllZohoAction(formData: FormData) {
     const r = await releaseApproval(id, me?.id ?? null);
     if (r.startsWith("Approved and posted")) done++;
     else if (isThrottle(r)) { throttled = true; await queueApproval(id, me?.id ?? null); queued++; }
-    // NOT A FAILURE. Counting "you asked for this yourself" among the things
-    // that "did not go through" would send somebody hunting for a fault in a
-    // request that is perfectly good and simply not theirs to release.
-    else if (isSelfRequest(r)) mine++;
     else failed++;
   }
 
   const note = `${done} posted`
-    + (mine ? `. ${mine} ${mine === 1 ? "was" : "were"} asked for by you and ${mine === 1 ? "stays" : "stay"} on the gate for somebody else to release` : "")
+
     + (failed ? `, ${failed} did not go through — see the reasons above` : "")
     + (queued
         ? `. ${queued} more are approved and queued: Zoho takes 100 calls a minute, so they post by themselves `
@@ -1542,8 +1538,8 @@ export async function recordAdvanceAction(formData: FormData) {
   // and the row waits as `pending` rather than being born `failed`.
   await requestApprovalFor("petty_advance", "petty_advances", String(row.id), undefined, staff?.id ?? null);
   revalidateDesk();
-  redirect("/admin/zoho/petty?scan=" + encodeURIComponent(
-    "Advance recorded and sent to the founder's gate. It posts to Zoho when he releases it — not before.") + "");
+  redirect("/admin/zoho/approvals?scan=" + encodeURIComponent(
+    "Advance recorded and sent to the gate — it posts to Zoho when it is released there.") + "");
 }
 
 export async function approveBillAction(formData: FormData) {
@@ -1575,14 +1571,12 @@ export async function approveBillAction(formData: FormData) {
   await requestApprovalFor("petty_bill", "petty_bills", id, { expenseAccount }, staff?.id ?? null);
   revalidateDesk();
   revalidatePath("/admin/petty");
-  // BACK TO PETTY CASH, NOT ONTO THE GATE.
-  //
-  // This landed the desk on /admin/zoho/approvals with the bill it had just
-  // sent sitting at the top and a release button beside it — two separate
-  // decisions collapsed into one screen and one motion. The desk's job ends
-  // here; the release is somebody else's.
-  redirect("/admin/zoho/petty?scan=" + encodeURIComponent(
-    "Approved by the desk and sent to the founder's gate. It posts to Zoho when he releases it — not before."));
+  // Straight to the gate with it, which is where the release happens and who
+  // does that is settled by the zoho_approve grant. (For a few hours today
+  // this went back to petty cash instead, on the assumption that the desk
+  // could not release its own request. It can — the founder said so.)
+  redirect("/admin/zoho/approvals?scan=" + encodeURIComponent(
+    "Bill approved by the desk and sent to the gate — it posts to Zoho when it is released there."));
 }
 
 export async function rejectBillAction(formData: FormData) {

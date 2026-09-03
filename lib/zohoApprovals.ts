@@ -168,34 +168,25 @@ export async function releaseApproval(approvalId: string, decidedBy: string | nu
     .select("*").eq("id", approvalId).eq("status", "pending").maybeSingle();
   if (!row) return "That request is no longer waiting — it was already decided.";
 
-  // TWO HANDS. THE ONE THAT ASKS IS NOT THE ONE THAT RELEASES.
+  // WHO MAY RELEASE: ANYONE HOLDING THE GRANT, THEIR OWN REQUESTS INCLUDED.
   //
-  // His report, 3 September 2026: "it gets approved automatically when it is
-  // clicked in petty cash tile, but we want that it should go to the waiting
-  // for approval section, and then only it should go to Zoho."
+  // For a few hours on 3 September this refused a release by the same person
+  // who asked for it — segregation of duties, which is the ordinary control in
+  // an accounts department. The founder overruled it the same day: "the
+  // approval can be done by Pradeep… I blocked it, there is some problem in
+  // that right now."
   //
-  // It was not automatic — but it might as well have been. The accounts desk
-  // holds both `zoho` and `zoho_approve`, so pressing ✅ Approve on a petty
-  // bill filed a request AND landed on the gate, where the very same login
-  // could release it. Five postings went into the books that way, requested
-  // and released by one person seconds apart; the founder never saw them.
+  // He is right that it was the wrong control for this office. The grant is
+  // handed out by name, to one person, deliberately (zoho_approve in
+  // lib/adminAccess.ts) — it already IS the decision about who may open the
+  // gate, and a second rule quietly narrowing it made his own grant mean less
+  // than he had said it meant. A control the owner did not ask for, that stops
+  // work on a Tuesday morning, is not prudence.
   //
-  // A gate that the requester can open is not a gate. So the rule is now the
-  // ordinary one from any accounts department: you may release anything except
-  // what you yourself asked for.
-  //
-  // THE FOUNDER IS EXEMPT, and must be — he is the final authority and there is
-  // nobody above him to countersign. When he answers a bank line and releases
-  // it, that IS one person deciding, by right. Everybody else needs a second.
-  //
-  // Where requested_by is null nothing is blocked: the request came from a
-  // cron or a webhook, so there is no hand to be the same as.
-  if (decidedBy && row.requested_by && String(row.requested_by) === String(decidedBy)) {
-    const { data: me } = await svc.from("profiles").select("role").eq("id", decidedBy).maybeSingle();
-    if (String(me?.role ?? "") !== "admin") {
-      return SELF_REQUEST_NOTE;
-    }
-  }
+  // What survives is the part that costs nobody anything: requested_by is
+  // recorded on every request (see requestApprovalFor) and the gate shows who
+  // asked. The record answers the question afterwards, which is what a record
+  // is for.
 
   const run = EXECUTORS[row.kind as ApprovalKind];
   if (!run) return `Nothing here knows how to carry out "${row.kind}".`;
@@ -215,12 +206,6 @@ export async function releaseApproval(approvalId: string, decidedBy: string | nu
     return `Approved, but it did not post: ${why}`;
   }
 }
-
-/** Refused because the same hand asked for it — see releaseApproval. Nothing
- *  is wrong with the item; it is simply not this person's to release. */
-export const SELF_REQUEST_NOTE =
-  "You asked for this one, so you cannot also release it — it needs the founder, or somebody else who holds the approve grant. It stays on the gate.";
-export const isSelfRequest = (msg: string) => msg === SELF_REQUEST_NOTE;
 
 /** Is this failure Zoho refusing to talk to us for a minute, rather than
  *  refusing the document itself? */

@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
+import { toE164Digits } from "@/lib/phoneNumber";
 import { getSecret } from "@/lib/secrets";
 
 // Messaging. All SERVER-ONLY. Everything degrades gracefully: if a provider
@@ -269,12 +270,10 @@ async function waSend(
   }
 }
 
-function waNumber(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  // 10-digit Indian numbers get the country code; anything longer is
-  // assumed to already carry one.
-  return digits.length === 10 ? `91${digits}` : digits;
-}
+// One rule for every number this system dials or messages — see
+// lib/phoneNumber.ts. This used to say "ten digits gain 91, anything longer
+// already has a country code", which sent 09876543210 to country code ZERO.
+const waNumber = (phone: string): string => toE164Digits(phone);
 
 export async function sendWhatsApp(
   phone: string,

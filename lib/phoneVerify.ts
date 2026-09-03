@@ -1,6 +1,7 @@
 import { createHash, randomInt } from "crypto";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendWhatsApp } from "@/lib/notify";
+import { toE164Digits } from "@/lib/phoneNumber";
 
 // Student phone verification over WhatsApp.
 //
@@ -18,13 +19,15 @@ const TTL_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_SECONDS = 60;
 
-/** 10-digit Indian numbers gain 91; longer input is assumed to carry a code. */
-export function toE164(phone: string): string {
-  const digits = (phone ?? "").replace(/\D/g, "");
-  if (digits.length === 10) return `91${digits}`;
-  if (digits.length > 10 && digits.length <= 15) return digits;
-  return "";
-}
+/**
+ * The number an OTP is sent to.
+ *
+ * One rule for the whole system now — see lib/phoneNumber.ts. This copy had
+ * the same fault as the other two: a student who typed 09876543210, which is
+ * how an Indian mobile is written at home, was sent a code addressed to
+ * country code zero, and told the code had been sent.
+ */
+export const toE164 = (phone: string): string => toE164Digits(phone);
 
 function hash(code: string, phone: string): string {
   return createHash("sha256").update(`${phone}:${code}`).digest("hex");

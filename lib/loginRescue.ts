@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendTemplate } from "@/lib/emailTemplates";
 import { sendWhatsAppText } from "@/lib/notify";
+import { toE164Digits } from "@/lib/phoneNumber";
 
 const SITE_URL = "https://caparveensharma.com";
 
@@ -21,10 +22,8 @@ export type RescueOutcome =
   | { handled: true; kind: "reset_sent" | "other_email_hint"; note: string }
   | { handled: false; note: string };
 
-function e164(phone: string): string {
-  const d = (phone ?? "").replace(/\D/g, "");
-  return d.length === 10 ? `91${d}` : d;
-}
+// Same one rule as everywhere else — see lib/phoneNumber.ts.
+const e164 = (phone: string): string => toE164Digits(phone);
 
 /**
  * Send whoever owns this address the link that gets them in.

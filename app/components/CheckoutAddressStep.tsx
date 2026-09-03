@@ -46,6 +46,9 @@ export default function CheckoutAddressStep({
   const [legalName, setLegalName] = useState("");
   const [gstNote, setGstNote] = useState<{ tone: "ok" | "warn" | "bad"; text: string } | null>(null);
   const [checking, setChecking] = useState(false);
+  // Set once a check has shown there is no lookup service — the box then asks
+  // for the name instead of promising to fill it in by itself.
+  const [typeTheName, setTypeTheName] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
   const [onFile, setOnFile] = useState<{ billing: Address; shipping: Address; signedIn: boolean; hadGstin: boolean } | null>(null);
 
@@ -97,6 +100,16 @@ export default function CheckoutAddressStep({
         setGstNote({
           tone: "ok",
           text: `Verified — ${r.party.tradeName || r.party.legalName}${r.party.status ? ` (${r.party.status})` : ""}. The billing address has been filled in from the GST records.`,
+        });
+      } else if (!r.configured) {
+        // The number IS verified — checksum, PAN and state all check out
+        // without asking anybody. Only the name and address need an outside
+        // service, and none is connected. See ProfileAddressBlock.
+        setTypeTheName(true);
+        setGstNote({
+          tone: "ok",
+          text: `Valid GST number — PAN ${r.pan}, registered in ${r.state}. `
+            + "The trade name and address are not fetched automatically here, so please fill them in yourself.",
         });
       } else {
         setGstNote({
@@ -205,7 +218,7 @@ export default function CheckoutAddressStep({
           <label style={{ margin: "8px 0 0" }}>
             Trade / legal name <span className="muted" style={{ fontWeight: 400 }}>(as registered under GST)</span>
             <input value={tradeName} onChange={(e) => setTradeName(e.target.value)}
-              placeholder="Filled in automatically once the GST number is verified" />
+              placeholder={typeTheName ? "Type it exactly as printed on the GST certificate" : "Filled in automatically once the GST number is verified"} />
           </label>
         )}
       </div>

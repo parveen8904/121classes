@@ -77,6 +77,13 @@ export async function myAddressBook(): Promise<{
 export async function verifyGstin(raw: string): Promise<{
   valid: boolean; problem: string | null; state: string | null; pan: string | null;
   fetched: boolean; note: string | null;
+  /** Whether a lookup service is connected at all.
+   *
+   *  Without this the screen could not tell "the provider refused" from "there
+   *  is no provider", and said the same discouraging thing either way — which
+   *  is why a perfectly good verification was reported to the founder as
+   *  "verify GST not working". */
+  configured: boolean;
   party: { tradeName: string | null; legalName: string | null; line1: string | null; line2: string | null;
            city: string | null; state: string | null; pincode: string | null; status: string | null } | null;
 }> {
@@ -84,13 +91,13 @@ export async function verifyGstin(raw: string): Promise<{
   const { getSecret } = await import("@/lib/secrets");
   const c = checkGstin(raw);
   if (!c.ok) {
-    return { valid: false, problem: c.problem, state: null, pan: null, fetched: false, note: null, party: null };
+    return { valid: false, problem: c.problem, state: null, pan: null, fetched: false, note: null, configured: true, party: null };
   }
   const [baseUrl, key] = await Promise.all([getSecret("GST_LOOKUP_URL"), getSecret("GST_LOOKUP_KEY")]);
   const look = await fetchGstParty(c.gstin, { baseUrl, key });
   if (look.ok) {
     return {
-      valid: true, problem: null, state: c.state, pan: c.pan, fetched: true, note: null,
+      valid: true, problem: null, state: c.state, pan: c.pan, fetched: true, note: null, configured: true,
       party: {
         tradeName: look.party.tradeName, legalName: look.party.legalName,
         line1: look.party.line1, line2: look.party.line2,
@@ -99,7 +106,10 @@ export async function verifyGstin(raw: string): Promise<{
       },
     };
   }
-  return { valid: true, problem: null, state: c.state, pan: c.pan, fetched: false, note: look.reason, party: null };
+  return {
+    valid: true, problem: null, state: c.state, pan: c.pan, fetched: false,
+    note: look.reason, configured: look.configured, party: null,
+  };
 }
 
 /**

@@ -14,7 +14,7 @@ import DeskShell from "../_shell";
 import {
   uploadBillAction, decideBillAction, removeBillAction, attachPaperAction, raiseDocumentAction,
   retryDocumentAction, saveForeignAnswersAction, markFormFiledAction, readInvoiceTaxAction,
-  createTdsTaxAction, fetchProviderInvoicesAction, addVaultDoc, scanBillsAction,
+  setTdsTaxForVendorsAction, fetchProviderInvoicesAction, addVaultDoc, scanBillsAction,
 } from "../actions";
 
 // SUPPLIER INVOICES AND DOCUMENTS, on their own page.
@@ -301,8 +301,8 @@ export default async function InvoicesPage(props: { searchParams: Promise<{ scan
   <p className="muted" style={{ fontSize: ".78rem", marginTop: 8, lineHeight: 1.7 }}>
     <strong>TDS rates in Zoho:</strong>{" "}
     {zohoTds.length
-      ? `${zohoTds.map((t) => `${t.tax_name} (${t.tax_percentage}%)`).join(" · ")}. A bill matches on either the section wording or the rate, so a renamed section still finds its rate.`
-      : `none came back${allTaxNames.length ? `, though Zoho does hold: ${allTaxNames.join(" · ")}` : ""}. Those are all GST rates, so TDS is either not switched on in Zoho (Settings → Taxes → Tax Settings → Enable TDS) or is not exposed on this endpoint. A bill still posts; its withholding is noted on the row for you to apply.`}
+      ? `${zohoTds.map((t) => `${t.tax_name} (${t.tax_percentage}%)`).join(" · ")}. Zoho names these by what the payment is FOR, never by section, so each supplier's rule says which one to use.`
+      : `none came back${allTaxNames.length ? `, though Zoho does hold: ${allTaxNames.join(" · ")}` : ""} — and those are GST rates, not TDS. This is a read that failed, not a master that is empty: TDS is on in this organisation. Nothing withholding will post until the list can be read.`}
     <br />
     <strong>Sections our vendor rules withhold under:</strong>{" "}
     {tdsNeeded.length
@@ -312,26 +312,40 @@ export default async function InvoicesPage(props: { searchParams: Promise<{ scan
 
   {tdsGaps.length > 0 && (
     <div className="card" style={{ marginTop: 8, borderLeft: "3px solid #b45309" }}>
-      <strong>⚠️ Zoho has no TDS rate for {tdsGaps.length === 1 ? "one section" : `${tdsGaps.length} sections`} we withhold under</strong>
+      <strong>⚠️ {tdsGaps.length === 1 ? "One section has" : `${tdsGaps.length} sections have`} no Zoho rate chosen yet</strong>
       <p className="muted" style={{ fontSize: ".8rem", margin: "4px 0 8px", lineHeight: 1.7 }}>
-        A bill still posts, but the withholding does not attach to it — that is why FIRST FLY went in
-        with its GST right and its ₹60 sitting outside the entry.
+        Nothing is missing from Zoho. Its master holds Professional Fees, Payment of contractors,
+        Commission or Brokerage and the rest — all named by <em>what the payment is for</em>, none by
+        section. Your rules name sections, and the same &ldquo;393(2) Sl.17&rdquo; covers CMG&apos;s
+        professional fees at 10% and FIRST FLY&apos;s courier work at 1%. So pick which one each
+        supplier&apos;s withholding uses; it is remembered on their rule.
       </p>
       <p className="muted" style={{ fontSize: ".78rem", margin: "0 0 8px", lineHeight: 1.7 }}>
-        Zoho&apos;s published API creates GST-type taxes only, so the button below <em>asks</em> and reports
-        Zoho&apos;s own answer — it may well refuse. The reliable route is to switch TDS on in Zoho
-        (<strong>Settings → Taxes → Tax Settings → Enable TDS</strong>) and add the rate there; once it
-        exists, bills find it on their own, by the section wording <em>or</em> the rate.
+        Until one is chosen, a bill that withholds under it <strong>will not post</strong> — it used to
+        post with the withholding detached, which is how CMG went into the books at ₹88,500 with its
+        ₹7,500 outside the entry, and FIRST FLY before it.
       </p>
-      {tdsGaps.map((g) => (
-        <form action={createTdsTaxAction} key={`${g.section}|${g.rate}`} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
-          <input type="hidden" name="section" value={g.section} />
-          <input type="hidden" name="rate" value={g.rate} />
-          <span style={{ minWidth: 200, fontSize: ".85rem" }}><strong>{g.section}</strong> @ {g.rate}%</span>
-          <span className="muted" style={{ fontSize: ".78rem", minWidth: 160 }}>{g.vendors.join(", ")}</span>
-          <SubmitButton className="btn small secondary" savedLabel="✓ Asked">➕ Ask Zoho to create it</SubmitButton>
-        </form>
-      ))}
+      {tdsGaps.map((g) => {
+        const at = zohoTds.filter((t) => Number(t.tax_percentage) === Number(g.rate));
+        const others = zohoTds.filter((t) => Number(t.tax_percentage) !== Number(g.rate));
+        return (
+          <form action={setTdsTaxForVendorsAction} key={`${g.section}|${g.rate}`} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
+            <input type="hidden" name="vendors" value={g.vendors.join("|")} />
+            <span style={{ minWidth: 170, fontSize: ".85rem" }}><strong>{g.section}</strong> @ {g.rate}%</span>
+            <span className="muted" style={{ fontSize: ".78rem", minWidth: 150 }}>{g.vendors.join(", ")}</span>
+            <select name="tds_tax_id" required defaultValue="" style={{ marginBottom: 0, minWidth: 240 }}>
+              <option value="" disabled>— which rate in Zoho? —</option>
+              {at.map((t) => <option key={t.tax_id} value={t.tax_id}>{t.tax_name} — {t.tax_percentage}%</option>)}
+              {others.length > 0 && (
+                <optgroup label={`at another rate than ${g.rate}%`}>
+                  {others.map((t) => <option key={t.tax_id} value={t.tax_id}>{t.tax_name} — {t.tax_percentage}%</option>)}
+                </optgroup>
+              )}
+            </select>
+            <SubmitButton className="btn small secondary" savedLabel="✓ Saved">Use this one</SubmitButton>
+          </form>
+        );
+      })}
     </div>
   )}
 

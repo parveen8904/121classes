@@ -53,6 +53,15 @@ const DELIBERATE: Record<string, string> = {
   skipSettlementAction: "retired 2 Sep — as above",
   retrySettlementAction: "retired 2 Sep — as above",
 
+  // Retired 3 September 2026. It offered to ask Zoho to CREATE a missing TDS
+  // rate, on the belief that his master lacked one. It does not: it holds
+  // twenty-odd rates, named by the nature of the payment — Professional Fees,
+  // Payment of contractors HUF/Indiv, Commission or Brokerage — and none by
+  // section. Nothing was missing; what was missing was a way to say which rate
+  // a supplier's withholding uses. setTdsTaxForVendorsAction does that, and
+  // Zoho's published API cannot create a TDS-type tax in any case.
+  createTdsTaxAction: "retired 3 Sep — nothing was missing from his master; the rate is now CHOSEN, see setTdsTaxForVendorsAction",
+
   // decideBillAction already saves the vendor's treatment as a rule — "when
   // asked, that becomes a rule" — so this is a second way to do one thing.
   saveBillRuleAction: "redundant — decideBillAction saves the rule on the same press",

@@ -790,6 +790,41 @@ export async function removeBillAction(formData: FormData) {
   revalidateDesk();
 }
 
+/**
+ * Point a section's vendors at one of Zoho's real TDS rates.
+ *
+ * The gap banner used to offer only "ask Zoho to create the rate", which was
+ * the wrong remedy: nothing is missing from his master. It holds twenty-odd
+ * rates — Professional Fees, Payment of contractors HUF/Indiv, Commission or
+ * Brokerage — all named by the NATURE of the payment, none by section. What
+ * was missing was a way to say which one a supplier's withholding uses.
+ *
+ * It writes only to the rule, never to a bill and never to Zoho.
+ */
+export async function setTdsTaxForVendorsAction(formData: FormData) {
+  await assertArea("zoho");
+  const taxId = str(formData.get("tds_tax_id"));
+  const vendors = str(formData.get("vendors")).split("|").map((v) => v.trim()).filter(Boolean);
+  if (!taxId || !vendors.length) return;
+
+  const { listZohoTds } = await import("@/lib/zohoTds");
+  const taxes = await listZohoTds().catch(() => []);
+  const pick = taxes.find((t) => String(t.tax_id) === taxId);
+  if (!pick) {
+    redirect("/admin/zoho/invoices?scan=" + encodeURIComponent("That rate is no longer in Zoho's list — reload and pick again."));
+  }
+
+  const svc = createServiceClient();
+  for (const v of vendors) {
+    await svc.from("provider_bill_rules")
+      .update({ tds_tax_id: pick.tax_id, tds_tax_name: pick.tax_name, updated_at: new Date().toISOString() })
+      .eq("institution", v);
+  }
+  revalidateDesk();
+  redirect("/admin/zoho/invoices?scan=" + encodeURIComponent(
+    `${pick.tax_name} (${pick.tax_percentage}%) will now be attached for ${vendors.join(", ")}.`));
+}
+
 export async function decideBillAction(formData: FormData) {
   // ONE BUTTON FOR THE WHOLE INVOICE.
   //

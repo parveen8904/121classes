@@ -1,5 +1,6 @@
 import "server-only";
 import { getSecret } from "@/lib/secrets";
+import { unstable_cache } from "next/cache";
 
 // YouTube channel + video statistics via the Data API (public data — needs the
 // same free YOUTUBE_API_KEY already used for video durations, plus the channel
@@ -90,3 +91,29 @@ export async function getRecentVideos(uploadsPlaylist: string, count = 12): Prom
     return [];
   }
 }
+
+// THE HOME PAGE'S YOUTUBE STRIP, READ ONCE A DAY.
+//
+// The two calls above were made straight from the home page render, one after
+// the other, and its own tripwire measured them: `youtube=11662ms` in the
+// Vercel build and `youtube=7564ms` locally, against 549ms for every database
+// query on the page combined. Three round trips to Google, each with a four
+// second ceiling, on a page whose whole purpose is to be fast.
+//
+// They also dragged the page's cache life down. Both call getSecret(), and the
+// secrets read renews every thirty seconds, so the page inherited thirty
+// seconds and regenerated ten times more often than the five minutes it asks
+// for. Behind this box the route no longer sees that clock — the strip is one
+// cached value, refreshed daily, which is how often a channel listing actually
+// changes.
+export const getHomeChannelStrip = unstable_cache(
+  async (): Promise<{ overview: ChannelOverview | null; videos: VideoStat[] }> => {
+    const overview = await getChannelOverview().catch(() => null);
+    const videos = overview?.uploadsPlaylist
+      ? await getRecentVideos(overview.uploadsPlaylist, 8).catch(() => [])
+      : [];
+    return { overview, videos };
+  },
+  ["home-youtube-strip"],
+  { revalidate: 86400 },
+);

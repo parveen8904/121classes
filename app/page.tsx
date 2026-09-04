@@ -9,7 +9,7 @@ import { tryServiceClient } from "@/lib/supabase/service";
 import { summarizeSchedule } from "@/lib/schedule";
 import { studentsTaught } from "@/lib/studentsTaught";
 import { saleFromSettings } from "@/lib/sale";
-import { getChannelOverview, getRecentVideos } from "@/lib/youtubeStats";
+import { getHomeChannelStrip } from "@/lib/youtubeStats";
 
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
@@ -206,10 +206,9 @@ export default async function Home() {
   ]);
   // YouTube channel (@caparveensharmaofficial) — latest uploads for the homepage.
   mark("counts");
-  const ytOverview = await getChannelOverview().catch(() => null);
-  const ytVideos = ytOverview?.uploadsPlaylist
-    ? await getRecentVideos(ytOverview.uploadsPlaylist, 8).catch(() => [])
-    : [];
+  // One cached value, refreshed daily — see getHomeChannelStrip. Called
+  // directly, these two were seven of this page's eleven seconds.
+  const { overview: ytOverview, videos: ytVideos } = await getHomeChannelStrip();
   mark("youtube");
   if (Date.now() - t0 > 3000) console.warn("[home] slow render:", marks.join(" "));
 

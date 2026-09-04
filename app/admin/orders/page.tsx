@@ -2,7 +2,7 @@ import { formatDate } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
-import { formatINR } from "@/lib/pricing";
+import { formatINR, parseSlabs, termFromAmount } from "@/lib/pricing";
 import { viaProxy } from "@/lib/fileProxy";
 import AdminHero from "../_components/AdminHero";
 import { setOrderStatus, sendDispatchEmail, sendDispatchTestToMe, generateInvoice, reissueInvoice, reissueBookInvoice, adminConfirmPayment } from "./actions";
@@ -319,6 +319,25 @@ export default async function AdminOrdersPage(
     .filter((p) => !vendorOnly || (p as { source?: string }).source === "vendor")
     .filter((p) => match([p.profiles?.full_name, p.profiles?.email, p.profiles?.phone, p.invoice_no, p.razorpay_order_id, p.subjects?.title, p.order_no != null ? String(p.order_no) : null, (p as { viaSupporter?: string }).viaSupporter]));
 
+  // WHAT AN AMOUNT BOUGHT, READ OFF THE PRICE LIST.
+  //
+  // "But how 2700 for one month" — it was not one month, and `orders` records
+  // no term at all, only a figure. The ladder the price came from is the honest
+  // source: ₹2,700 is Gold for three months on Financial Reporting. See
+  // termFromAmount, which returns nothing rather than guess when an amount
+  // matches both tiers.
+  const subjSlabs = new Map<string, { gold: ReturnType<typeof parseSlabs>; silver: ReturnType<typeof parseSlabs> }>();
+  {
+    const subjIds = [...new Set(payments.map((x) => x.subject_id).filter(Boolean) as string[])];
+    if (subjIds.length) {
+      const { data: sj } = await svc.from("subjects").select("id, gold_slabs, silver_slabs").in("id", subjIds);
+      for (const r of (sj ?? []) as { id: string; gold_slabs: unknown; silver_slabs: unknown }[]) {
+        subjSlabs.set(String(r.id), { gold: parseSlabs(r.gold_slabs), silver: parseSlabs(r.silver_slabs) });
+      }
+    }
+  }
+
+
   return (
     <section className="container" style={{ paddingTop: 30, paddingBottom: 60 }}>
       <FilterReset />
@@ -478,8 +497,15 @@ export default async function AdminOrdersPage(
                         // A vendor sale has no subscription row until it is
                         // provisioned, so the plan comes from the gift order
                         // itself — the office could not tell Gold from Silver.
-                        const tier = dates?.tier ?? (p as { tier?: string | null }).tier ?? null;
-                        const months = dates?.months ?? (p as { months?: number | null }).months ?? null;
+                        // From the subscription where one was granted; otherwise
+                        // worked out from what was paid. Never borrowed from a
+                        // different order, which is what printed "1 month"
+                        // beside ₹2,700.
+                        const priced = !dates && p.subject_id
+                          ? termFromAmount(Number(p.amount_inr), subjSlabs.get(p.subject_id)?.gold ?? null, subjSlabs.get(p.subject_id)?.silver ?? null)
+                          : null;
+                        const tier = dates?.tier ?? (p as { tier?: string | null }).tier ?? priced?.tier ?? null;
+                        const months = dates?.months ?? (p as { months?: number | null }).months ?? priced?.months ?? null;
                         return <>
                           {tier ? `${TIER_ICON[tier] ?? ""} ${cap(tier)}` : ""}
                           {months ? ` · ${months} month${months === 1 ? "" : "s"}` : ""}

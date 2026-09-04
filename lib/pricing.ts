@@ -75,3 +75,40 @@ export function slabMonthOptions(slabs: Slab[]): number[] {
   for (const s of slabs) set.add(s.upto);
   return [...set].sort((a, b) => a - b);
 }
+
+/**
+ * WHAT AN ORDER'S AMOUNT BOUGHT, READ BACK OFF THE PRICE LIST.
+ *
+ * "But how 2700 for one month" — 4 September 2026. It was not one month. The
+ * register printed "Gold · 1 month" beside a ₹2,700 order because the tier and
+ * the term were being read from the buyer's SUBSCRIPTION, and the only
+ * subscription she had was the ₹1,000 one month she went on to pay for. An
+ * unpaid order borrowed the term of a paid one, exactly as it borrowed the
+ * dates.
+ *
+ * `orders` records the amount and nothing else about the shape of the sale, so
+ * the honest source is the ladder the price came from: ₹2,700 is Gold for three
+ * months on Financial Reporting, and no other term on either ladder comes to
+ * that figure.
+ *
+ * Returns null rather than guessing when the amount matches nothing, or matches
+ * BOTH tiers — a register that says "3 months" when it means "either 3 months
+ * Gold or 5 months Silver" is back to inventing facts.
+ */
+export function termFromAmount(
+  amountInr: number,
+  gold: Slab[] | null,
+  silver: Slab[] | null,
+  maxMonths = 36,
+): { tier: "gold" | "silver"; months: number } | null {
+  const want = Math.round(Number(amountInr) || 0);
+  if (want <= 0) return null;
+  const hits: { tier: "gold" | "silver"; months: number }[] = [];
+  for (const [tier, slabs] of [["gold", gold], ["silver", silver]] as const) {
+    if (!slabs?.length) continue;
+    for (let m = 1; m <= maxMonths; m++) {
+      if (slabTotal(slabs, m) === want) { hits.push({ tier, months: m }); break; }
+    }
+  }
+  return hits.length === 1 ? hits[0] : null;
+}

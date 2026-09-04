@@ -18,8 +18,8 @@ import { pairLines, type Pairing, type StatementSide, type ZohoSide } from "@/li
 // The row parser lives on its own so it can be run by a test — see
 // lib/bankStatementRows.ts. Re-exported here because callers and the existing
 // tests know these names at this address.
-export { parseIndianDate, rowsToLines, type StmtLine } from "@/lib/bankStatementRows";
-import { str, num, parseIndianDate, rowsToLines, csvToRows, correctByBalance, asMagnitudes, type StmtLine } from "@/lib/bankStatementRows";
+export { parseIndianDate, rowsToLines, detectDateStyle, type StmtLine, type DateStyle } from "@/lib/bankStatementRows";
+import { str, num, parseIndianDate, rowsToLines, detectDateStyle, csvToRows, correctByBalance, asMagnitudes, type StmtLine, type DateStyle } from "@/lib/bankStatementRows";
 
 // ---- ingestion --------------------------------------------------------------
 
@@ -47,6 +47,11 @@ function aiToLines(rows: { date: string; narration?: string; ref?: string; debit
     ...asMagnitudes(Number(l.debit) || 0, Number(l.credit) || 0),
     balance: l.balance !== undefined && l.balance !== null ? Number(l.balance) : null,
   })).filter((l) => /^\d{4}-\d{2}-\d{2}$/.test(l.date) && (l.debit || l.credit));
+}
+
+/** The statement's own billing period, wherever it sits in the rebuilt table. */
+function detectDateStyleFrom(rows: string[][]): DateStyle | null {
+  return detectDateStyle(rows.map((r) => (r ?? []).join(" ")).join(" \n "));
 }
 
 export async function ingestStatement(
@@ -98,9 +103,17 @@ export async function ingestStatement(
     const { parseBankStatementText, parseBankStatementFile, aiConfigured, aiFeatureDisabled } = await import("@/lib/ai");
     const why: string[] = [];
 
+    // The account's own type, and whatever the statement says about its dates,
+    // travel with the rebuilt table — a US card dates its rows "04/20" and
+    // prints a purchase positive, and neither can be worked out from the rows.
+    // See detectDateStyle and the credit-card branch in bankStatementRows.
+    const accountKind = (await listZohoAccounts().catch(() => []))
+      .find((a) => a.name === accountName)?.type ?? null;
+
     const table = await readPdfRows(fileUrl, { password: opts?.pdfPassword });
     if (table.ok) {
-      const r = rowsToLines(table.rows);
+      const style = detectDateStyleFrom(table.rows) ?? null;
+      const r = rowsToLines(table.rows, { style, accountKind });
       lines = r.lines;
       if (!lines.length) why.push(`the table could not be rebuilt from the page (${r.note || "no header row found"})`);
     } else {
@@ -217,8 +230,9 @@ export async function ingestStatement(
  */
 export async function ingestRows(
   accountName: string, rows: string[][], fileUrl: string, fileName: string,
+  opts?: { style?: DateStyle | null; accountKind?: string | null },
 ): Promise<{ note: string; statementId: string | null }> {
-  const { lines: parsed, note } = rowsToLines(rows);
+  const { lines: parsed, note } = rowsToLines(rows, opts);
   return fileStatementLines(accountName, parsed, fileUrl, fileName, note);
 }
 

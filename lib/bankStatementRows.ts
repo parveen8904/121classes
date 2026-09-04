@@ -41,6 +41,80 @@ export const num = (v: unknown) => {
 
 const MONTHS: Record<string, string> = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
 
+/**
+ * WHAT A STATEMENT SAYS ABOUT ITS OWN DATES.
+ *
+ * A US card prints "04/20" — month and day, and no year at all. Two things
+ * have to be settled before that is a date, and neither may be assumed:
+ *
+ *   · WHICH YEAR. Guessing one on a financial record is how a transaction
+ *     lands in the wrong books.
+ *   · WHICH ORDER. "04/02" is 2 April on his Citi Costco card and 4 February
+ *     to a parser built for Indian statements. A silently wrong date is worse
+ *     than a refusal, because nothing downstream can tell.
+ *
+ * Both are printed on the statement. Citi's April file carries
+ * "Billing Period: 03/28/26-04/28/26", and that settles it twice over: 28
+ * cannot be a month, so the order is month-first; and the period gives the
+ * years the rows must fall in.
+ *
+ * Returns null when the document does not say. The caller then refuses — see
+ * the credit-card branch of the vault filing action.
+ */
+export type DateStyle = { order: "dmy" | "mdy"; fromISO: string; toISO: string };
+
+export function detectDateStyle(text: string): DateStyle | null {
+  const t = String(text ?? "");
+  // A period written as two dates: "03/28/26-04/28/26", "03/28/26 to 04/28/26".
+  const m = t.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s*(?:-|–|—|to)\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (!m) return null;
+  const a1 = Number(m[1]), a2 = Number(m[2]), b1 = Number(m[4]), b2 = Number(m[5]);
+
+  // A component above twelve cannot be a month, so it names the order outright.
+  let order: "dmy" | "mdy" | null = null;
+  if (a1 > 12 || b1 > 12) order = "dmy";
+  else if (a2 > 12 || b2 > 12) order = "mdy";
+  if (!order) return null; // genuinely ambiguous — say nothing rather than pick
+
+  const yr = (v: string) => (v.length === 2 ? `20${v}` : v);
+  const iso = (d1: number, d2: number, y: string) =>
+    order === "mdy"
+      ? `${yr(y)}-${String(d1).padStart(2, "0")}-${String(d2).padStart(2, "0")}`
+      : `${yr(y)}-${String(d2).padStart(2, "0")}-${String(d1).padStart(2, "0")}`;
+  const fromISO = iso(a1, a2, m[3]);
+  const toISO = iso(b1, b2, m[6]);
+  if (fromISO > toISO) return null; // not a period; do not trust it
+  return { order, fromISO, toISO };
+}
+
+/**
+ * A date with no year, placed inside the period the statement covers.
+ *
+ * The year is not guessed — it is whichever of the period's years puts the day
+ * inside the period. That is exact across a year boundary too: on a statement
+ * running 12/28/25-01/28/26, "12/30" is 2025 and "01/05" is 2026.
+ */
+export function parsePartialDate(raw: string, style: DateStyle | null | undefined): string {
+  if (!style) return "";
+  const m = str(raw).match(/^(\d{1,2})[\/-](\d{1,2})$/);
+  if (!m) return "";
+  const a = Number(m[1]), b = Number(m[2]);
+  const mm = style.order === "mdy" ? a : b;
+  const dd = style.order === "mdy" ? b : a;
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return "";
+  const y0 = Number(style.fromISO.slice(0, 4)), y1 = Number(style.toISO.slice(0, 4));
+  const pad = `${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+  for (const y of y0 === y1 ? [y0] : [y0, y1]) {
+    const iso = `${y}-${pad}`;
+    if (iso >= style.fromISO && iso <= style.toISO) return iso;
+  }
+  // Outside the stated period — a card lists a few days either side of it, so
+  // fall back to the year that sits nearest rather than dropping the line.
+  const cand = [`${y0}-${pad}`, `${y1}-${pad}`];
+  return cand.sort((x, y) =>
+    Math.abs(Date.parse(x) - Date.parse(style.fromISO)) - Math.abs(Date.parse(y) - Date.parse(style.fromISO)))[0];
+}
+
 /** dd/mm/yyyy · dd-mm-yy · dd MMM yyyy · yyyy-mm-dd → YYYY-MM-DD ("" if unparseable). */
 export function parseIndianDate(raw: string): string {
   const s = str(raw).replace(/,/g, " ").replace(/\s+/g, " ");
@@ -201,7 +275,20 @@ export const REF_TIERS: RegExp[] = [
   /^(chq\.?\/?ref\.? ?(no\.?)?|cheque ?(no\.?|number)|chqno)$/i,
 ];
 
-export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string } {
+export type RowsOpts = {
+  /** What the statement says about its own dates — see detectDateStyle. Needed
+   *  only by files whose rows carry no year, such as a US card. */
+  style?: DateStyle | null;
+  /** A credit card lists a purchase as a POSITIVE figure and a payment as a
+   *  negative one — the opposite of a bank export, where a minus is money
+   *  leaving. Set from the Zoho account's own type, never inferred here. */
+  accountKind?: string | null;
+};
+
+export function rowsToLines(rows: string[][], opts?: RowsOpts): { lines: StmtLine[]; note: string } {
+  // One reading of a date cell, used both to prove the header and to file the
+  // line, so a row can never pass one test and fail the other.
+  const readDate = (v: string) => parseIndianDate(v) || parsePartialDate(v, opts?.style);
   // FINDING THE HEADER ROW, AND SAYING WHAT WENT WRONG WHEN IT IS NOT FOUND.
   //
   // Three Axis statements uploaded on 25 Aug 2026 all failed with "could not
@@ -233,7 +320,7 @@ export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string
   const dateRowsUnder = (start: number, dateCol: number) => {
     let hits = 0;
     for (let j = start + 1; j < Math.min(rows.length, start + 40); j++) {
-      if (parseIndianDate(str((rows[j] ?? [])[dateCol]))) hits++;
+      if (readDate(str((rows[j] ?? [])[dateCol]))) hits++;
       if (hits >= 2) break;
     }
     return hits;
@@ -330,7 +417,7 @@ export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string
 
   for (const raw of rows.slice(hi + 1)) {
     const cell = (k: string) => (cols[k] !== undefined ? str(raw[cols[k]]) : "");
-    const date = parseIndianDate(cell("date"));
+    const date = readDate(cell("date"));
     if (!date) continue; // totals/footers
     let debit = num(cell("debit")), credit = num(cell("credit"));
     if (!cols.debit && !cols.credit && cols.amount !== undefined) {
@@ -354,7 +441,17 @@ export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string
       if (saysCr || saysDr) {
         if (saysCr) credit = Math.abs(amt); else debit = Math.abs(amt);
       } else if (amountIsSigned) {
-        if (amt < 0) debit = -amt; else credit = amt;
+        // A CARD COUNTS THE OTHER WAY ROUND.
+        //
+        // On a bank export a minus is money leaving. On a credit-card
+        // statement the balance is what you OWE, so a purchase is printed
+        // positive and a payment negative: his Citi Costco April file shows
+        // "$37.32" for Mailgun and "-$190.32" for the autopay. Reading that
+        // with the bank rule would file every purchase as a receipt and the
+        // payment as a spend — the whole card backwards.
+        const card = String(opts?.accountKind ?? "") === "credit_card";
+        if (card) { if (amt < 0) credit = -amt; else debit = amt; }
+        else if (amt < 0) debit = -amt; else credit = amt;
       } else {
         debit = Math.abs(amt);
       }

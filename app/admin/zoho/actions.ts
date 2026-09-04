@@ -1990,15 +1990,39 @@ export async function vaultClassifyAction(formData: FormData) {
     if (!account) {
       redirect(`/admin/zoho/vault?scan=${encodeURIComponent("Choose which bank or card it belongs to.")}&doc=${id}`);
     }
-    const { data: d } = await svc.from("zoho_vault_docs").select("rows_json, title, file_url").eq("id", id).maybeSingle();
+    const { data: d } = await svc.from("zoho_vault_docs").select("rows_json, title, file_url, doc_text").eq("id", id).maybeSingle();
     const rows = (d?.rows_json ?? null) as string[][] | null;
     if (!rows?.length) {
       redirect(`/admin/zoho/vault?scan=${encodeURIComponent("Nothing was read from this document, so there are no lines to file. Re-read it first.")}&doc=${id}`);
     }
-    const { ingestRows } = await import("@/lib/bankStatements");
+    const { ingestRows, detectDateStyle, listZohoAccounts } = await import("@/lib/bankStatements");
+
+    // A US CARD DATES ITS ROWS "04/20" — NO YEAR, AND MONTH FIRST.
+    //
+    // Neither may be assumed: a guessed year files a transaction into the
+    // wrong books, and reading 04/02 as 4 February instead of 2 April is a
+    // silently wrong date, which is worse than a refusal because nothing
+    // downstream can tell. Both are printed on the statement — Citi's April
+    // file carries "Billing Period: 03/28/26-04/28/26" — so they are READ, and
+    // when the document does not say, this stops.
+    const style = detectDateStyle(String(d?.doc_text ?? ""));
+    const needsStyle = rows!.slice(1).some((r) => (r ?? []).some((c) => /^\d{1,2}[\/-]\d{1,2}$/.test(String(c ?? "").trim())));
+    if (needsStyle && !style) {
+      redirect(`/admin/zoho/vault?scan=${encodeURIComponent(
+        "This statement dates its rows without a year (like \"04/20\"), and the billing period it would be read from is not in the text we have. " +
+        "Nothing was filed rather than guessing a year — a guessed year puts the entries in the wrong books. Re-read the document so its billing period is captured, or upload a version that dates each row in full.",
+      )}&doc=${id}`);
+    }
+
+    // A purchase is positive on a card and negative on a bank export, so the
+    // direction comes from what Zoho says this account IS, never from a guess
+    // about the file.
+    const accountKind = (await listZohoAccounts().catch(() => []))
+      .find((a) => a.name === account)?.type ?? null;
+
     let note: string;
     try {
-      const r = await ingestRows(account, rows!, String(d!.file_url), String(d!.title ?? "document"));
+      const r = await ingestRows(account, rows!, String(d!.file_url), String(d!.title ?? "document"), { style, accountKind });
       note = r.note;
       if (r.statementId) await svc.from("zoho_vault_docs").update({ used_table: "bank_statements", used_id: r.statementId, is_processed: true }).eq("id", id);
     } catch (e) { note = `Could not file the lines: ${e instanceof Error ? e.message : "unknown"}`; }

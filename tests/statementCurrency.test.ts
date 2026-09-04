@@ -62,5 +62,32 @@ check("no rate means no posting",
 check("the currency id comes off the account, with a lookup as fallback",
   /bankAcc\?\.currencyId \|\| \(await currencyIdForCode\(bankCur\)\)/.test(bank));
 
-console.log(fails ? `${fails} failed` : "ok — a statement is shown, and posted, in its own money");
+/* ── one screen, one currency ────────────────────────────────────────────── */
+
+// "your entry was showing dollars at one place and INR at others" — the same
+// money named two ways on one screen, which is worse than being wrong once.
+const entryLines = readFileSync("app/admin/zoho/EntryLines.tsx", "utf8");
+const panel = readFileSync("app/admin/zoho/BankAnswerPanel.tsx", "utf8");
+
+check("the entry's column heads are not hard-coded to the rupee",
+  !/>DEBIT ₹</.test(entryLines) && /DEBIT \{sym\.trim\(\)\}/.test(entryLines));
+check("its out-of-balance line uses the same symbol",
+  !/does not balance — ₹/.test(entryLines) && /does not balance — \{sym\}/.test(entryLines));
+check("its grouping follows the currency too",
+  /cur === "INR" \? "en-IN" : "en-US"/.test(entryLines),
+  "1,23,456.78 is right for ₹ and wrong for $");
+check("it still defaults to the rupee",
+  /currency = "INR",/.test(entryLines), "every existing preview must be untouched");
+
+check("the answer panel's figure is not hard-coded either",
+  !/₹\{amount\.toLocaleString/.test(panel) && /currencySymbol\(cur\)\}\{amount\.toLocaleString/.test(panel));
+check("the panel hands the same currency to the entry beneath it",
+  /<EntryLines entry=\{entry\}[^/]*currency=\{cur\}/.test(panel),
+  "the figure and the entry under it must agree");
+
+check("every panel and preview on the statements page is given one",
+  (stmts.match(/currency=\{cur\(/g) ?? []).length >= 5,
+  "one missed call is the inconsistency all over again");
+
+console.log(fails ? `${fails} failed` : "ok — one screen, one currency");
 process.exit(fails ? 1 : 0);

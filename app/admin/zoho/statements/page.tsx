@@ -481,6 +481,7 @@ export default async function StatementsPage(props: {
                           <BankAnswerPanel
                             lineId={row!.id}
                             bankName={row!.account_name}
+                            currency={cur(row!.account_name)}
                             debit={Number(row!.debit)}
                             credit={Number(row!.credit)}
                             accounts={zohoAccounts}
@@ -554,10 +555,11 @@ export default async function StatementsPage(props: {
             <>
               <EntryLines
                 entry={bankEntry({ bank: l.account_name, account: l.proposal?.account ?? "", debit: Number(l.debit), credit: Number(l.credit), direction: l.direction, kind: (l.entry_kind ?? "auto") as Parameters<typeof bankEntry>[0]["kind"], party: l.party_name })}
-                title="What the rule proposes" compact />
+                title="What the rule proposes" compact currency={cur(l.account_name)} />
               <BankAnswerPanel
                 lineId={l.id}
                 bankName={l.account_name}
+                currency={cur(l.account_name)}
                 debit={Number(l.debit)}
                 credit={Number(l.credit)}
                 accounts={zohoAccounts}
@@ -602,6 +604,7 @@ export default async function StatementsPage(props: {
           <BankAnswerPanel
             lineId={l.id}
             bankName={l.account_name}
+            currency={cur(l.account_name)}
             debit={Number(l.debit)}
             credit={Number(l.credit)}
             accounts={zohoAccounts}

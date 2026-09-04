@@ -1,4 +1,5 @@
 import type { Entry } from "@/lib/entryPreview";
+import { currencySymbol } from "@/lib/money";
 
 // ONE WAY OF SHOWING AN ENTRY, WHEREVER IT IS BEING APPROVED.
 //
@@ -16,11 +17,18 @@ export default function EntryLines({
   title = "The entry this makes",
   intro,
   compact = false,
+  currency = "INR",
 }: {
   entry: Entry;
   title?: string;
   intro?: string;
   compact?: boolean;
+  /** WHAT MONEY THIS ENTRY IS IN. The column heads said "DEBIT ₹" whatever the
+   *  account, so a dollar card showed $ on the statement row and ₹ over the
+   *  entry beneath it — the same money named two ways on one screen, which is
+   *  worse than being wrong once. Defaults to the rupee, so every existing
+   *  preview is untouched. */
+  currency?: string;
 }) {
   // NO LINES BUT SOMETHING TO SAY IS NOT NOTHING.
   //
@@ -39,7 +47,9 @@ export default function EntryLines({
       </div>
     );
   }
-  const money = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const cur = String(currency || "INR").toUpperCase();
+  const money = (n: number) => n.toLocaleString(cur === "INR" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sym = currencySymbol(cur);
   const cell = { padding: compact ? "3px 6px" : "5px 8px" } as const;
   const num: React.CSSProperties = {
     ...cell,
@@ -60,8 +70,8 @@ export default function EntryLines({
           <thead>
             <tr>
               <th style={{ ...cell, textAlign: "left", fontSize: ".68rem", color: "#666" }}>LEDGER</th>
-              <th style={{ ...num, fontSize: ".68rem", color: "#666" }}>DEBIT ₹</th>
-              <th style={{ ...num, fontSize: ".68rem", color: "#666" }}>CREDIT ₹</th>
+              <th style={{ ...num, fontSize: ".68rem", color: "#666" }}>DEBIT {sym.trim()}</th>
+              <th style={{ ...num, fontSize: ".68rem", color: "#666" }}>CREDIT {sym.trim()}</th>
             </tr>
           </thead>
           <tbody>
@@ -85,7 +95,7 @@ export default function EntryLines({
       </div>
       {!entry.balanced && (
         <p style={{ fontSize: ".76rem", color: "#b91c1c", margin: "4px 0 0" }}>
-          ⚠ It does not balance — ₹{money(entry.dr)} against ₹{money(entry.cr)}. Something above is not yet answered.
+          ⚠ It does not balance — {sym}{money(entry.dr)} against {sym}{money(entry.cr)}. Something above is not yet answered.
         </p>
       )}
       {entry.caveats.map((c) => (

@@ -5,6 +5,7 @@ import SubmitButton from "@/app/components/SubmitButton";
 import EntryLines from "./EntryLines";
 import { bankEntry, type BankEntryKind } from "@/lib/entryPreview";
 import { answerLineAction } from "./actions";
+import { currencySymbol } from "@/lib/money";
 import LedgerPicker, { type Acct } from "./LedgerPicker";
 
 // THE INVOICE PANEL'S MANNERS, ON A BANK LINE — AND AN ARGUMENT WITH IT.
@@ -41,6 +42,9 @@ export default function BankAnswerPanel(props: {
   bankName: string;
   debit: number;
   credit: number;
+  /** What money this bank or card is kept in — the figure and the entry
+   *  beneath it must agree. Defaults to the rupee. */
+  currency?: string;
   /** Every Zoho ledger, so both dropdowns are the chart itself and not a guess. */
   accounts: Acct[];
   suggestedPattern: string;
@@ -57,6 +61,7 @@ export default function BankAnswerPanel(props: {
   const i = props.initial ?? {};
   const parsedOut = Math.abs(Number(props.debit)) > 0;
   const amount = Math.abs(Number(props.debit)) || Math.abs(Number(props.credit));
+  const cur = String(props.currency || "INR").toUpperCase();
 
   const [direction, setDirection] = useState<"in" | "out">(i.direction ?? (parsedOut ? "out" : "in"));
   const [kind, setKind] = useState<BankEntryKind>(((i.kind as BankEntryKind) || "auto"));
@@ -131,7 +136,7 @@ export default function BankAnswerPanel(props: {
           went out ↑
         </button>
         <strong style={{ fontVariantNumeric: "tabular-nums" }}>
-          ₹{amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          {currencySymbol(cur)}{amount.toLocaleString(cur === "INR" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </strong>
         {turned && (
           <span style={{ fontSize: ".74rem", color: "#b45309" }}>
@@ -243,7 +248,7 @@ export default function BankAnswerPanel(props: {
 
       {/* The entry, live — the whole point of the invoice panel. */}
       <div style={{ marginTop: 8 }}>
-        <EntryLines entry={entry} title="The entry this makes" compact />
+        <EntryLines entry={entry} title="The entry this makes" compact currency={cur} />
         <p className="muted" style={{ fontSize: ".74rem", margin: "4px 0 0" }}>
           {docNote}
           {!isPayment && !creatingLedger && " Both dropdowns are the Zoho chart itself — pick the last option in the ledger list to make a head that is not there yet."}

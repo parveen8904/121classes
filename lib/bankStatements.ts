@@ -998,6 +998,39 @@ export async function postBankLine(
     }
     const asExpense = kind === "expense" || (kind === "auto" && isOut && EXPENSE_TYPES.has(other.type));
 
+    // THE MONEY THE ACCOUNT IS KEPT IN HAS TO TRAVEL WITH THE ENTRY.
+    //
+    // Neither document below sent a currency, so Zoho fell back to the
+    // organisation's rupee and refused every line on his Citi Costco card —
+    // "correct currency" — because that account is held in USD. Nothing was
+    // wrong with the figures; the entry simply never said what they were.
+    //
+    // Zoho itself is asked what the account is denominated in, so this cannot
+    // drift from the books, and the rate is the one the rest of this codebase
+    // already uses for dollars: Rule 115, the SBI TT buying rate of the last
+    // day of the month before the transaction (see lib/forexRates.ts and the
+    // brokerage journals, which post exactly this shape).
+    //
+    // If the rate cannot be had, it REFUSES. An entry posted at a silently
+    // wrong rate is a wrong figure in the books that nothing downstream can
+    // catch, and a line can wait a minute.
+    const bankAcc = (await listZohoAccounts().catch(() => [])).find((a) => a.name === String(l.account_name));
+    const bankCur = bankAcc?.currency || "INR";
+    let fx: { currency_id: string; exchange_rate: number } | undefined;
+    if (bankCur !== "INR") {
+      const cid = bankAcc?.currencyId || (await currencyIdForCode(bankCur));
+      if (!cid) return fail(`Zoho would not say which currency "${bankCur}" is, so this was not posted. Try again in a moment.`);
+      const { rule115Rate } = await import("@/lib/forexRates");
+      const r = await rule115Rate(String(l.line_date), bankCur).catch(() => null);
+      if (!r) {
+        return fail(
+          `this line is in ${bankCur}, and the Rule 115 rate for ${l.line_date} (the SBI TT buying rate of the last day of the previous month) is not on file. ` +
+          `Nothing was posted rather than booking it at a guessed rate. Add the rate and post again.`,
+        );
+      }
+      fx = { currency_id: cid, exchange_rate: r.rate };
+    }
+
     let zohoId = "";
     if (asExpense) {
       const r = await zohoFetch<{ expense?: { expense_id: string } }>("/expenses", {
@@ -1009,6 +1042,7 @@ export async function postBankLine(
           amount,
           description: bankNarration,
           ...(refNo ? { reference_number: refNo } : {}),
+          ...(fx ?? {}),
         },
       });
       if (!r.expense?.expense_id) return fail("Zoho did not return the created expense");
@@ -1032,6 +1066,7 @@ export async function postBankLine(
           reference_number: refNo || undefined,
           notes: bankNarration,
           line_items: lines,
+          ...(fx ?? {}),
         },
       });
       if (!r.journal?.journal_id) return fail("Zoho did not return the created journal");
@@ -1150,7 +1185,15 @@ export async function saveMerchantRule(pattern: string, accountName: string, sub
 
 // ---- account lists for the UI (cached — 3 Zoho calls per 10 minutes max) ----
 /** A Zoho ledger, and — for a child account — the ledger it hangs under. */
-export type ZohoAccountRow = { name: string; type: string; currency: string; parent: string | null };
+/** Zoho's own id for a currency code — needed on any entry that is not INR. */
+async function currencyIdForCode(code: string): Promise<string | null> {
+  try {
+    const r = await zohoFetch<{ currencies?: { currency_id: string; currency_code: string }[] }>("/settings/currencies");
+    return (r.currencies ?? []).find((c) => c.currency_code === code)?.currency_id ?? null;
+  } catch { return null; }
+}
+
+export type ZohoAccountRow = { name: string; type: string; currency: string; currencyId: string | null; parent: string | null };
 
 let acctList: { names: ZohoAccountRow[]; at: number } | null = null;
 export async function listZohoAccounts(): Promise<ZohoAccountRow[]> {
@@ -1175,14 +1218,14 @@ export async function listZohoAccounts(): Promise<ZohoAccountRow[]> {
     // parent_account_name comes back on every CHILD account, and it is what
     // lets the desk offer a sub-ledger DROPDOWN instead of a free-text box —
     // "give the ledger drop down as well as subledger drop-down", 3 Sep 2026.
-    const r = await zohoFetch<{ chartofaccounts?: { account_name: string; account_type: string; currency_code?: string; parent_account_name?: string }[] }>(
+    const r = await zohoFetch<{ chartofaccounts?: { account_name: string; account_type: string; currency_code?: string; currency_id?: string; parent_account_name?: string }[] }>(
       "/chartofaccounts", { query: { filter_by: "AccountType.All", per_page: "200", page: String(page) } });
     const batch = r.chartofaccounts ?? [];
     if (batch.length === 0) break;
     for (const a of batch) {
       if (seen.has(a.account_name)) continue;
       seen.add(a.account_name);
-      names.push({ name: a.account_name, type: a.account_type, currency: a.currency_code || "INR", parent: (a.parent_account_name ?? "").trim() || null });
+      names.push({ name: a.account_name, type: a.account_type, currency: a.currency_code || "INR", currencyId: a.currency_id || null, parent: (a.parent_account_name ?? "").trim() || null });
     }
   }
   acctList = { names, at: Date.now() };

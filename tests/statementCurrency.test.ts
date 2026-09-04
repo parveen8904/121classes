@@ -41,5 +41,26 @@ check("the page no longer hard-codes a rupee on the queue figures",
 check("the remove button is still there",
   /🗑 Remove/.test(stmts), "he asked for remove everywhere — it must not be lost to this change");
 
-console.log(fails ? `${fails} failed` : "ok — a statement is shown in its own money");
+/* ── and the ENTRY has to carry it, or Zoho refuses ─────────────────────── */
+
+// "zoho does not post entry. it says correct currency." — 4 September 2026.
+// Neither document sent a currency, so Zoho fell back to the org's rupee and
+// refused every line on a USD account.
+check("the posting asks Zoho what the bank account is held in",
+  /const bankAcc = \(await listZohoAccounts\(\)[\s\S]{0,120}a\.name === String\(l\.account_name\)\)/.test(bank),
+  "so it cannot drift from the books");
+check("an expense carries the currency", /\.\.\.\(fx \?\? \{\}\),\n {8}\},\n {6}\}\);\n {6}if \(!r\.expense/.test(bank));
+check("a journal carries it too", /line_items: lines,\n {10}\.\.\.\(fx \?\? \{\}\),/.test(bank));
+check("a rupee entry is unchanged",
+  /if \(bankCur !== "INR"\)/.test(bank),
+  "fx stays undefined for INR, so every existing posting sends exactly what it did");
+check("the rate is Rule 115, the same one the brokerage journals use",
+  /rule115Rate\(String\(l\.line_date\), bankCur\)/.test(bank));
+check("no rate means no posting",
+  /Nothing was posted rather than booking it at a guessed rate/.test(bank),
+  "a wrong rate is a wrong figure in the books that nothing downstream can catch");
+check("the currency id comes off the account, with a lookup as fallback",
+  /bankAcc\?\.currencyId \|\| \(await currencyIdForCode\(bankCur\)\)/.test(bank));
+
+console.log(fails ? `${fails} failed` : "ok — a statement is shown, and posted, in its own money");
 process.exit(fails ? 1 : 0);

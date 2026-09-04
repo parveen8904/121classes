@@ -1170,6 +1170,30 @@ export async function rematchBankAction() {
 // and its unanswered lines so it can be uploaded afresh — but NEVER a
 // statement with posted or matched lines, because those are in the books and
 // their statement is the paper behind them.
+/**
+ * Correct the currency a statement's figures are in.
+ *
+ * Zoho is the authority on what an ACCOUNT is denominated in, and that is
+ * where the value comes from at ingest. He is the authority on the DOCUMENT —
+ * a card can be re-issued, an account re-based, a file uploaded against the
+ * wrong account and moved — so the recorded answer has to be correctable
+ * without deleting the statement and starting again.
+ *
+ * It changes what the figures MEAN, not the figures. Nothing is converted:
+ * a statement that is really in dollars was always in dollars, and this is
+ * saying so.
+ */
+export async function setStatementCurrencyAction(formData: FormData) {
+  await assertArea("zoho");
+  const id = str(formData.get("id"));
+  const code = str(formData.get("currency")).toUpperCase();
+  if (!id || !/^[A-Z]{3}$/.test(code)) return;
+  await createServiceClient().from("bank_statements")
+    .update({ currency: code }).eq("id", id);
+  revalidateDesk();
+  redirect(`/admin/zoho/statements?scan=${encodeURIComponent(`Read as ${code}. No figure was changed — only what they are counted in.`)}`);
+}
+
 export async function removeStatementAction(formData: FormData) {
   await assertArea("zoho");
   const id = str(formData.get("id"));

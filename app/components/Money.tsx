@@ -13,6 +13,8 @@
 // Amounts written into a sentence do not use this — a number mid-sentence has
 // no column to line up with, and a fixed-width box in running text looks broken.
 
+import { currencySymbol } from "@/lib/money";
+
 const FIXED = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const;
 
 /** The figure alone, two decimals, Indian grouping — for prose and exports. */
@@ -26,6 +28,7 @@ export default function Money({
   width = 104,
   bold = false,
   sign = false,
+  currency = "INR",
   className,
 }: {
   n: number | null | undefined;
@@ -35,6 +38,12 @@ export default function Money({
   /** Also show a leading + on positives — for a column where direction matters.
       A MINUS IS NEVER OPTIONAL and is shown whether or not this is set. */
   sign?: boolean;
+  /** WHAT MONEY THIS IS. Defaults to the rupee, which is what every column on
+   *  this site was until his Citi Costco card arrived — a USD account whose
+   *  figures were being printed with a ₹ in front of them. Indian grouping
+   *  belongs to the rupee alone: 1,23,456.78 is right for ₹ and wrong for $,
+   *  so the grouping follows the currency, not the other way round. */
+  currency?: string;
   className?: string;
 }) {
   const v = Number(n);
@@ -60,8 +69,8 @@ export default function Money({
   const lead = v < 0 ? "−" : sign && v > 0 ? "+" : "";
   return (
     <span className={className} style={shell}>
-      <span aria-hidden>{lead}₹</span>
-      <span>{Math.abs(v).toLocaleString("en-IN", FIXED)}</span>
+      <span aria-hidden>{lead}{currencySymbol(currency)}</span>
+      <span>{Math.abs(v).toLocaleString(String(currency).toUpperCase() === "INR" ? "en-IN" : "en-US", FIXED)}</span>
     </span>
   );
 }

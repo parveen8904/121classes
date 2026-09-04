@@ -1,17 +1,18 @@
 import { assertArea } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
 import { zohoConfigured } from "@/lib/zohoApi";
-import { formatINR } from "@/lib/pricing";
 import { listZohoAccounts, reconcileAccount } from "@/lib/bankStatements";
 import { bankEntry } from "@/lib/entryPreview";
 import SubmitButton from "@/app/components/SubmitButton";
 import Money from "@/app/components/Money";
+import { CURRENCIES, money } from "@/lib/money";
 import EntryLines from "../EntryLines";
 import BankAnswerPanel from "../BankAnswerPanel";
 import QueuePicker from "../QueuePicker";
 import DeskShell from "../_shell";
 import {
   matchBankAction, chooseMatchAction, rematchBankAction, reparseStatementAction, removeStatementAction,
+  setStatementCurrencyAction,
   repostLineAction, answerLineAction, approveAutoLineAction, approveAllAutoAction, skipLineAction,
   retryLineAction, approveSelectedLinesAction, skipSelectedLinesAction,
 } from "../actions";
@@ -33,7 +34,7 @@ export default async function StatementsPage(props: {
   const sp = await props.searchParams;
   const hubConnected = await zohoConfigured();
 
-  type StmtRow = { id: string; account_name: string; file_name: string | null; period_start: string | null; period_end: string | null; opening_balance: number | null; closing_balance: number | null; note: string | null; status: string; lines_total: number };
+  type StmtRow = { id: string; account_name: string; file_name: string | null; period_start: string | null; period_end: string | null; opening_balance: number | null; closing_balance: number | null; note: string | null; status: string; lines_total: number; currency: string | null };
   type LineRow = { id: string; account_name: string; line_date: string; narration: string; ref: string | null; debit: number; credit: number; status: string; proposal: { account?: string } | null; matched_note: string | null; error: string | null;
     sub_account: string | null; direction: "in" | "out" | null; entry_kind: string | null; party_name: string | null; own_narration: string | null };
 
@@ -50,7 +51,7 @@ export default async function StatementsPage(props: {
     l.direction ? l.direction === "out" : Math.abs(Number(l.debit)) > 0;
   const [{ data: stmtData }, { data: lineData }] = hubConnected
     ? await Promise.all([
-        createServiceClient().from("bank_statements").select("id, account_name, file_name, period_start, period_end, opening_balance, closing_balance, note, status, lines_total").order("created_at", { ascending: false }).limit(20),
+        createServiceClient().from("bank_statements").select("id, account_name, file_name, period_start, period_end, opening_balance, closing_balance, note, status, lines_total, currency").order("created_at", { ascending: false }).limit(20),
         createServiceClient().from("bank_lines").select("id, account_name, line_date, narration, ref, debit, credit, status, proposal, matched_note, error, sub_account, direction, entry_kind, party_name, own_narration").in("status", ["ask", "auto", "failed"]).order("line_date").limit(200),
       ])
     : [{ data: [] as StmtRow[] }, { data: [] as LineRow[] }];
@@ -99,12 +100,12 @@ export default async function StatementsPage(props: {
   const autoLines = bankLines.filter((l) => l.status === "auto");
   const failedLines = bankLines.filter((l) => l.status === "failed");
 
-  type MatchedLine = { id: string; line_date: string; narration: string; debit: number; credit: number;
+  type MatchedLine = { id: string; account_name: string; line_date: string; narration: string; debit: number; credit: number;
     match_kind: string | null; match_label: string | null; match_confidence: string | null;
-    match_candidates: { id: string; kind: string; number: string; party: string; balance: number; why: string[] }[] | null };
+    match_candidates: { id: string; kind: string; number: string; party: string; balance: number; why: string[]; currency?: string }[] | null };
   const { data: matchedData } = hubConnected
     ? await createServiceClient().from("bank_lines")
-        .select("id, line_date, narration, debit, credit, match_kind, match_label, match_confidence, match_candidates")
+        .select("id, account_name, line_date, narration, debit, credit, match_kind, match_label, match_confidence, match_candidates")
         .in("status", ["ask", "auto"]).not("match_confidence", "is", null)
         .order("line_date", { ascending: false }).limit(40)
     : { data: [] as never[] };
@@ -115,6 +116,17 @@ export default async function StatementsPage(props: {
     : { count: 0 };
 
   const zohoAccounts = hubConnected ? await listZohoAccounts().catch(() => []) : [];
+
+  // WHAT EACH ACCOUNT IS COUNTED IN.
+  //
+  // Every figure on this page carried a ₹, because rupees were the only money
+  // the desk had ever been shown. His Citi Costco card is a USD account in
+  // Zoho, so its April statement read "₹163.73" — the right number wearing the
+  // wrong sign, which survives a review precisely because nothing looks broken.
+  // A statement's own recorded currency wins (he can correct it on the row);
+  // otherwise the account's, as Zoho holds it.
+  const curOfAccount = new Map(zohoAccounts.map((a) => [a.name, a.currency || "INR"]));
+  const cur = (accountName?: string | null) => curOfAccount.get(String(accountName ?? "")) ?? "INR";
 
   /** A sensible rule-pattern suggestion: the narration's most merchant-ish token. */
   const suggestPattern = (narration: string) => {
@@ -189,7 +201,7 @@ export default async function StatementsPage(props: {
           <div key={m.id} style={{ padding: "6px 0", borderTop: "1px solid rgba(0,0,0,.06)", fontSize: ".83rem" }}>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
               <span style={{ minWidth: 88 }}>{m.line_date}</span>
-              <Money n={Number(m.debit) > 0 ? -Number(m.debit) : Number(m.credit)} width={116} sign bold />
+              <Money n={Number(m.debit) > 0 ? -Number(m.debit) : Number(m.credit)} width={116} sign bold currency={cur(m.account_name)} />
               <span className="muted" style={{ flex: "1 1 220px" }}>{String(m.narration).slice(0, 70)}</span>
               {m.match_confidence === "choose" ? (
                 <form action={chooseMatchAction} style={{ margin: 0, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
@@ -198,7 +210,7 @@ export default async function StatementsPage(props: {
                     <option value="">— which one does this settle? —</option>
                     {(m.match_candidates ?? []).map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.number || c.kind} · {c.party} · ₹{Number(c.balance).toLocaleString("en-IN")}
+                        {c.number || c.kind} · {c.party} · {money(Number(c.balance), c.currency ?? cur(m.account_name), 2)}
                       </option>
                     ))}
                     <option value="__none">None of these — treat it normally</option>
@@ -298,6 +310,21 @@ export default async function StatementsPage(props: {
               <a className="btn small secondary" href={`/admin/zoho/statements?rec=${encodeURIComponent(s.account_name)}&rf=${s.period_start}&rt=${s.period_end}#reconcile`}
                 title="Line-by-line against Zoho's own register for these dates">⚖️ Reconcile</a>
             )}
+            {/* WHAT MONEY THESE FIGURES ARE IN.
+                Taken from the Zoho account at upload — his Citi Costco card is
+                a USD account there — and correctable here, because a file can
+                be uploaded against the wrong account and a card can be
+                re-issued. Changing it converts nothing: a statement that was
+                always in dollars is only being SAID to be. */}
+            <form action={setStatementCurrencyAction} style={{ margin: 0, display: "flex", gap: 4, alignItems: "center" }}>
+              <input type="hidden" name="id" value={s.id} />
+              <select name="currency" defaultValue={s.currency ?? "INR"}
+                      style={{ marginBottom: 0, padding: "2px 6px", fontSize: ".76rem", width: 82 }}
+                      title="What currency this statement's figures are in">
+                {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <SubmitButton className="btn small secondary" savedLabel="✓">Set</SubmitButton>
+            </form>
             {(settledByStmt.get(s.id) ?? 0) > 0 ? (
               <span className="muted" style={{ fontSize: ".76rem" }}>
                 🔒 {settledByStmt.get(s.id)} line(s) already in Zoho — cannot be removed
@@ -357,8 +384,8 @@ export default async function StatementsPage(props: {
             </span>
           </div>
           <div className="muted" style={{ fontSize: ".78rem" }}>
-            Statement · in ₹{recon.statementTotalIn.toLocaleString("en-IN")} · out ₹{recon.statementTotalOut.toLocaleString("en-IN")}
-            {" — "}Zoho · in ₹{recon.zohoTotalIn.toLocaleString("en-IN")} · out ₹{recon.zohoTotalOut.toLocaleString("en-IN")}
+            Statement · in {money(recon.statementTotalIn, cur(recon.account))} · out {money(recon.statementTotalOut, cur(recon.account))}
+            {" — "}Zoho · in {money(recon.zohoTotalIn, cur(recon.account))} · out {money(recon.zohoTotalOut, cur(recon.account))}
           </div>
           {recon.problem && <p style={{ color: "#b45309", fontSize: ".82rem", margin: 0 }}>{recon.problem}</p>}
 
@@ -380,7 +407,7 @@ export default async function StatementsPage(props: {
                       <span style={{ fontSize: ".8rem", whiteSpace: "nowrap" }}>{l.date}</span>
                       <span style={{ flex: 1, minWidth: 220, fontSize: ".84rem" }}>{l.narration}</span>
                       <strong style={{ whiteSpace: "nowrap", color: l.dir === "in" ? "#15803d" : "#b91c1c" }}>
-                        {l.dir === "in" ? "+ " : "− "}{formatINR(l.amount)}
+                        {l.dir === "in" ? "+ " : "− "}{money(l.amount, cur(recon.account), 2)}
                       </strong>
                     </div>
 
@@ -478,7 +505,7 @@ export default async function StatementsPage(props: {
                     <span style={{ minWidth: 88 }}>{l.date}</span>
                     <span style={{ flex: 1, minWidth: 200 }}>{(l.zohoNote || l.narration || l.zohoType || "").slice(0, 90)}</span>
                     <span style={{ fontWeight: 700, color: l.dir === "in" ? "#15803d" : "#b91c1c" }}>
-                      {l.dir === "in" ? "+" : "−"}₹{l.amount.toLocaleString("en-IN")}
+                      {l.dir === "in" ? "+" : "−"}{money(l.amount, cur(recon.account), 2)}
                     </span>
                     <span className="muted" style={{ fontSize: ".74rem" }}>{l.zohoType}</span>
                   </div>
@@ -562,7 +589,7 @@ export default async function StatementsPage(props: {
             <span style={{ fontSize: ".8rem", whiteSpace: "nowrap" }}>{l.line_date}</span>
             <span style={{ flex: 1, minWidth: 220, fontSize: ".84rem" }}>{l.narration}</span>
             <strong style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-              {formatINR(magnitude(l))}
+              {money(magnitude(l), cur(l.account_name), 2)}
               <span className="muted" style={{ fontWeight: 400, fontSize: ".76rem", marginLeft: 6 }}>
                 {wentOut(l) ? "out" : "in"}
               </span>

@@ -294,8 +294,19 @@ async function fileStatementLines(
     .eq("period_start", first.date).eq("period_end", last.date).limit(1);
   const isReupload = (samePeriod ?? []).length > 0;
 
+  // WHAT MONEY THIS IS IN, TAKEN FROM THE ACCOUNT IT BELONGS TO.
+  //
+  // Zoho holds the currency on the account — Credit Card Citi Costco 8145 is a
+  // USD account — so the statement need not be asked and cannot disagree with
+  // the books. It is recorded on the row rather than looked up at render time
+  // so the figures cannot change meaning later if the hub is unreachable, and
+  // so he can correct it: see setStatementCurrencyAction.
+  const currency = (await listZohoAccounts().catch(() => []))
+    .find((a) => a.name === accountName)?.currency || "INR";
+
   const { data: stmt } = await svc.from("bank_statements").insert({
     account_name: accountName, file_url: fileUrl, file_name: fileName,
+    currency,
     period_start: first.date, period_end: last.date,
     opening_balance: opening, closing_balance: closing,
     lines_total: lines.length,

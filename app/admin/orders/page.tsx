@@ -416,7 +416,27 @@ export default async function AdminOrdersPage(
         )}
         {payments.map((p) => {
           const pr = p.profiles;
-          const dates = pr && p.subject_id ? subDates.get(`${pr.id}:${p.subject_id}`) : undefined;
+          // DATES BELONG TO THE ORDER THAT BOUGHT THEM.
+          //
+          // "Why start date and end date is not mentioned for Rohit?" —
+          // 4 September 2026. For Rohit the answer is simply that his order was
+          // never paid, so no subscription exists and there is nothing to show;
+          // the dash is honest.
+          //
+          // But the same lookup was quietly WRONG the other way. It is keyed on
+          // student + subject, not on the order, so Shubhangi's unpaid ₹2,700
+          // order #10262 printed "4 Sep → 4 Oct" — the validity her separate,
+          // PAID ₹1,000 order #10263 had bought an hour earlier. A register
+          // that shows an unpaid order carrying a period somebody else's money
+          // paid for is worse than one that shows nothing: it reads as access
+          // already granted, and nobody would think to check.
+          //
+          // So a period is shown only against an order that actually granted
+          // one. An unpaid order says so instead.
+          const orderGrantedAccess = ["paid", "provisioned", "dispatched", "delivered"].includes(String(p.status));
+          const dates = orderGrantedAccess && pr && p.subject_id
+            ? subDates.get(`${pr.id}:${p.subject_id}`)
+            : undefined;
           const address = pr
             ? [pr.address_line1, pr.address_line2, [pr.city, pr.state, pr.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ")
             : "";
@@ -466,7 +486,11 @@ export default async function AdminOrdersPage(
                           {tier || months ? " · " : ""}
                         </>;
                       })()}
-                      🗓️ {dates?.starts_at ? fmt(dates.starts_at) : "—"} → {dates?.ends_at ? fmt(dates.ends_at) : "—"}
+                      {orderGrantedAccess
+                        ? <>🗓️ {dates?.starts_at ? fmt(dates.starts_at) : "—"} → {dates?.ends_at ? fmt(dates.ends_at) : "—"}</>
+                        : <span title="No payment has been received against this order, so no access period has been granted by it">
+                            🗓️ not paid — no access granted by this order
+                          </span>}
                       {" · "}✉️ {pr?.email ?? "—"}{pr?.phone ? ` · 📞 ${pr.phone}` : ""}
                     </p>
                     {address && <p className="muted" style={{ fontSize: ".82rem", margin: "3px 0 0" }}>📍 {address}</p>}

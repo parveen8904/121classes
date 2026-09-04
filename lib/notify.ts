@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { toE164Digits } from "@/lib/phoneNumber";
 import { getSecret } from "@/lib/secrets";
+import { unsubscribeUrl, unsubscribePostUrl } from "@/lib/unsubscribe";
 
 // Messaging. All SERVER-ONLY. Everything degrades gracefully: if a provider
 // isn't configured the send is a no-op. Keys come from Vercel env OR the
@@ -166,9 +167,43 @@ export async function sendEmail(to: string, subject: string, html: string, opts:
   if (replyTo) body.set("h:Reply-To", replyTo);
   if (opts.bcc) body.set("bcc", opts.bcc);
   if (opts.important) body.set("h:Importance", "high");
-  if (opts.bulk) {
-    const unsubTo = replyTo || `contact@${domain}`;
-    body.set("h:List-Unsubscribe", `<mailto:${unsubTo}?subject=unsubscribe>`);
+
+  // A WAY OUT, ON EVERY MESSAGE, PUT HERE SO NOBODY CAN FORGET IT.
+  //
+  // "Where is the unsubscribe option?" — the founder, 4 September 2026, after a
+  // student had received nine emails he never asked for and could do nothing
+  // about it but reply angrily.
+  //
+  // There WAS a List-Unsubscribe header, but only when a caller remembered to
+  // pass `bulk: true`, and the job that pestered him did not. A rule that has
+  // to be remembered is a rule that will be missed by whoever writes the next
+  // sender. So it lives at the one place every message already passes — the
+  // same place the blocklist is checked, two lines above — and applies to all
+  // of them.
+  //
+  // Both forms, because they are read by different things: the HEADER is what
+  // Gmail and Outlook turn into their own one-click "Unsubscribe" beside the
+  // sender's name, and the LINK in the footer is what a person looks for when
+  // the client shows no such button. mailto stays alongside the URL as the
+  // fallback for clients that only understand that.
+  const unsubTo = replyTo || `contact@${domain}`;
+  const unsubLink = await unsubscribeUrl(to).catch(() => "");
+  const unsubPost = await unsubscribePostUrl(to).catch(() => "");
+  body.set(
+    "h:List-Unsubscribe",
+    unsubPost ? `<${unsubPost}>, <mailto:${unsubTo}?subject=unsubscribe>` : `<mailto:${unsubTo}?subject=unsubscribe>`,
+  );
+  if (unsubLink) {
+    // One-click, as the header spec requires: providers POST to the URL rather
+    // than making the reader open a page. Our page treats a POST as the press.
+    body.set("h:List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+    body.set(
+      "html",
+      `${html}<div style="margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:12px;line-height:1.6;color:#6b7280">`
+        + `You are receiving this because you have an account with CA Parveen Sharma. `
+        + `<a href="${unsubLink}" style="color:#6b7280">Unsubscribe</a> and we will stop emailing this address.`
+        + `</div>`,
+    );
   }
   try {
     const res = await fetch(`${apiBase}/v3/${domain}/messages`, {

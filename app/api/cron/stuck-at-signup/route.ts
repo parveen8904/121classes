@@ -5,6 +5,37 @@ import { createServiceClient } from "@/lib/supabase/service";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+// ═══ THIS JOB NO LONGER SENDS. ══════════════════════════════════════════════
+//
+// Switched off 4 September 2026 on the founder's instruction, after a student
+// replied to the ninth one: "Why sending unwanted mails Every day?"
+//
+//   "Why are you sending unnecessary this kind of mails when nobody asked for
+//    the reset of password? ... Students are leaving bad reviews ... Do not go
+//    into this kind of emailing."
+//
+// He is right twice over, and the second reason is a defect in this file.
+//
+// THE CAP NEVER COUNTED. Below, `sentBefore` is built by asking the
+// notifications table who has already had one, with `.in("student_id", ids)`
+// over roughly a thousand ids. That URL is too long for PostgREST, which
+// refuses it and returns NO DATA RATHER THAN AN ERROR — the same trap this
+// codebase already documents on the registered-users page. So the map came
+// back empty every run, `already` was 0 for everybody, every stuck account
+// qualified as "attempt 1", and the job ran three times a day. 1,701 emails
+// went to 1,188 people; 33 of them received NINE, all logged as attempt 1.
+// "One the day after, one more three days later, then never again" was the
+// intention and none of it happened.
+//
+// The counting is fixed below so the record is honest about what went wrong,
+// but the schedule is removed from vercel.json and this route will not send
+// unless somebody passes send=1 by hand. It reports who is stuck; a person
+// decides whether anybody is written to.
+//
+// Nothing here should be re-enabled without an unsubscribe link in the mail
+// and a cap that is proven, not assumed.
+// ════════════════════════════════════════════════════════════════════════════
+//
 // EVERYONE WHO HAS AN ACCOUNT AND HAS NEVER ONCE BEEN INSIDE IT.
 //
 // There turned out to be two ways to end up here and they were being handled
@@ -65,13 +96,25 @@ export async function GET(req: NextRequest) {
   // Who has already had one, and how many.
   const ids = stuck.map((u) => u.id);
   const sentBefore = new Map<string, number>();
+  let countedOk = true;
   if (ids.length) {
-    const { data: log } = await svc
-      .from("notifications").select("student_id")
-      .eq("template", "stuck_at_signup").in("student_id", ids).limit(5000);
-    for (const r of (log ?? []) as { student_id: string }[]) {
-      sentBefore.set(r.student_id, (sentBefore.get(r.student_id) ?? 0) + 1);
-    }
+    // IN CHUNKS, AND A FAILED READ STOPS THE JOB.
+    //
+    // One .in() over a thousand ids builds a URL PostgREST refuses, and it
+    // answers with nothing rather than an error — so the cap read "nobody has
+    // had one" and the job sent to everybody, three times a day, for three
+    // weeks. Small batches keep the URL legal; and if any batch still fails,
+    // countedOk goes false and NOTHING is sent, because not knowing who has
+    // already been written to is precisely when you must not write to anyone.
+    const { inChunks } = await import("@/lib/pageAll");
+    try {
+      const log = await inChunks(ids, (batch) =>
+        svc.from("notifications").select("student_id")
+          .eq("template", "stuck_at_signup").in("student_id", batch), 100);
+      for (const r of (log ?? []) as { student_id: string }[]) {
+        sentBefore.set(r.student_id, (sentBefore.get(r.student_id) ?? 0) + 1);
+      }
+    } catch { countedOk = false; }
   }
 
   const due = stuck.filter((u) => {
@@ -82,9 +125,15 @@ export async function GET(req: NextRequest) {
     return age > 3 * 86400_000;                           // and once more at three days
   }).slice(0, MAX_PER_RUN);
 
-  if (params.get("dry") === "1") {
+  // SENDING IS OFF. It happens only when a person asks for it in the URL, and
+  // never on a schedule — see the note at the top of this file.
+  if (params.get("send") !== "1" || !countedOk) {
     return NextResponse.json({
-      ok: true, stuck: stuck.length, due: due.length,
+      ok: true, sent: 0, stuck: stuck.length, due: due.length,
+      counted: countedOk,
+      note: countedOk
+        ? "Nothing was sent. This job no longer mails anybody on a schedule — add &send=1 to send by hand."
+        : "Nothing was sent, and nothing will be: the record of who has already been written to could not be read, and sending without it is how 33 students received nine emails each.",
       sample: due.slice(0, 20).map((u) => ({ email: u.email, created: u.created_at, already: sentBefore.get(u.id) ?? 0 })),
     });
   }

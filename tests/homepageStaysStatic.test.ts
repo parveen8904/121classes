@@ -49,5 +49,21 @@ check("the tripwire is still armed",
   /\[home\] slow render/.test(home),
   "it is what caught this; it must outlive the fix");
 
-console.log(fails ? `${fails} failed` : "ok — the home page can be prerendered");
+/* ── /ask, the page the marketing points at ─────────────────────────────── */
+
+const ask = readFileSync("app/ask/page.tsx", "utf8");
+check("/ask is prerendered, not force-dynamic",
+  /export const revalidate = 300;/.test(ask) && !/export const dynamic = "force-dynamic"/.test(ask),
+  "it reported x-vercel-cache: MISS on every request");
+check("…and can build without a service key",
+  /const svc = tryServiceClient\(\);/.test(ask) && !/const svc = createServiceClient\(\);/.test(ask),
+  "createServiceClient throws at build time — that is why it was dynamic");
+check("its two reads run at once",
+  /await Promise\.all\(\[[\s\S]{0,200}telegramBotName\(\),/.test(ask),
+  "two round trips to Mumbai, one after the other, before anything showed");
+check("the bot name has its own clock",
+  /\["ask-telegram-bot-name"\],\s*\n\s*\{ revalidate: 300 \}/.test(ask),
+  "read directly, getSecret's 30s became the whole page's 30s");
+
+console.log(fails ? `${fails} failed` : "ok — the home page and /ask can be prerendered");
 process.exit(fails ? 1 : 0);

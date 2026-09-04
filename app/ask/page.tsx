@@ -1,11 +1,35 @@
 import Link from "next/link";
-import { createServiceClient } from "@/lib/supabase/service";
+import { tryServiceClient } from "@/lib/supabase/service";
 import { getSecret } from "@/lib/secrets";
+import { unstable_cache } from "next/cache";
 
-// Rendered per request: it reads the contact settings with the service client,
-// which has no key at build time, and the numbers must be able to change
-// without a deploy anyway.
-export const dynamic = "force-dynamic";
+// SERVED FROM THE EDGE, REFRESHED EVERY FIVE MINUTES.
+//
+// This used to be force-dynamic, for two reasons that no longer hold. The
+// first — createServiceClient() has no key at build time — is answered by
+// tryServiceClient() below, which is how /courses and /articles prerender.
+// The second, that the numbers must be changeable without a deploy, is exactly
+// what ISR gives: edit them in Admin and they appear within five minutes, no
+// deploy involved.
+//
+// It mattered because this is the page the marketing points at. It reported
+// x-vercel-cache: MISS on every request and cost two round trips to Mumbai to
+// print three phone numbers that change perhaps twice a year.
+export const revalidate = 300;
+
+// The bot's @name, boxed so its clock is not the page's clock.
+//
+// getSecret renews every thirty seconds — right for an API key, wrong as the
+// heartbeat of a page whose contents change twice a year. Next takes the
+// SHORTEST cache life in a route, so reading it directly pulled this page's
+// five minutes down to thirty seconds. Behind this box the route no longer
+// sees that, and a name changed in Admin still lands at once: clearSecretCache
+// purges the shared entry underneath.
+const telegramBotName = unstable_cache(
+  async () => (await getSecret("TELEGRAM_BOT_USERNAME")).trim().replace(/^@/, ""),
+  ["ask-telegram-bot-name"],
+  { revalidate: 300 },
+);
 export const metadata = {
   // Its own address, so it is not read as a copy of the home page.
   alternates: { canonical: "/ask" },
@@ -24,17 +48,23 @@ export const metadata = {
 // So: one page, one tap per channel, every link direct. Nothing here asks
 // anybody to search for anything or to join a group first.
 export default async function AskPage() {
-  const svc = createServiceClient();
-  const { data } = await svc
-    .from("site_settings")
-    .select("key, value")
-    .in("key", ["support_whatsapp", "support_telegram", "support_phone"]);
+  const svc = tryServiceClient();
+  if (!svc) return null; // local build without env — Vercel always has it
+
+  // Both reads at once. They were sequential, and neither needs the other's
+  // answer: two round trips to Mumbai, one after the other, before a visitor
+  // saw anything.
+  const [{ data }, botRaw] = await Promise.all([
+    svc.from("site_settings").select("key, value")
+      .in("key", ["support_whatsapp", "support_telegram", "support_phone"]),
+    telegramBotName(),
+  ]);
   const m = new Map((data ?? []).map((r) => [String(r.key), String(r.value ?? "")]));
 
   const waDigits = (m.get("support_whatsapp") ?? "").replace(/\D/g, "");
   const wa = waDigits ? (waDigits.length === 10 ? `91${waDigits}` : waDigits) : "";
   const phone = (m.get("support_phone") ?? "").replace(/\D/g, "");
-  const bot = (await getSecret("TELEGRAM_BOT_USERNAME")).trim().replace(/^@/, "");
+  const bot = botRaw;
 
   const channels = [
     wa && {

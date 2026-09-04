@@ -44,7 +44,17 @@ export function parseIndianDate(raw: string): string {
     const y = m[3].length === 2 ? `20${m[3]}` : m[3];
     return `${y}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   }
-  m = s.match(/^(\d{1,2}) ?([A-Za-z]{3})[A-Za-z]* ?(\d{2,4})/);
+  // A CARD WRITES THE YEAR WITH AN APOSTROPHE: "18 Jul '26".
+  //
+  // Without the quote here the match stopped at the month and returned "", and
+  // an empty date is how a statement dies quietly: rowsToLines proves a header
+  // by finding two parseable dates beneath it, so the Axis card statement of
+  // 2 September was rejected with "could not find the header row" while its
+  // header — Date | Transaction Details | Amount (INR) | Debit/Credit — sat in
+  // the error message being printed back at the reader.
+  //
+  // Both quotes, because a PDF usually carries the typographic one.
+  m = s.match(/^(\d{1,2}) ?([A-Za-z]{3})[A-Za-z]* ?['\u2019]?(\d{2,4})/);
   if (m) {
     const mo = MONTHS[m[2].toLowerCase()];
     if (mo) return `${m[3].length === 2 ? `20${m[3]}` : m[3]}-${mo}-${m[1].padStart(2, "0")}`;
@@ -160,8 +170,9 @@ export const HEAD = {
   balance: /^(closing ?balance|balance|bal|running ?balance|balance ?(\(?inr\)?)?)$/i,
   // Card statements write the unit into the header: "Amount (in Rs.)".
   amount: /^(amount|amount ?\(?(in )?(inr|rs\.?)\)?|txn ?amount|transaction ?amount)$/i,
-  // "Transaction Type" is what Axis calls the CR/DR column.
-  drcr: /^(dr\/?cr|type|cr\/?dr|transaction ?type|txn ?type|type ?of ?transaction)$/i,
+  // "Transaction Type" is what Axis calls the CR/DR column on a bank statement;
+  // on its CARD statement the same column is spelled out, "Debit/Credit".
+  drcr: /^(dr\/?cr|type|cr\/?dr|debit ?\/ ?credit|credit ?\/ ?debit|transaction ?type|txn ?type|type ?of ?transaction)$/i,
 };
 
 // WHICH REFERENCE COLUMN WINS, WHEN A STATEMENT CARRIES FOUR OF THEM.
@@ -239,6 +250,23 @@ export function rowsToLines(rows: string[][]): { lines: StmtLine[]; note: string
           const idx = find(re);
           if (idx >= 0) cols[k] = idx;
         }
+        // ONE COLUMN CANNOT BE BOTH AMOUNT COLUMNS.
+        //
+        // The loose pass matches on any WORD in a header, so "Debit / Credit"
+        // — one column holding the word "Debit" or "Credit" per row — answered
+        // to the debit pattern and the credit pattern alike and was recorded
+        // as both. num("Debit") is 0, so every row came out as nothing on
+        // either side and was dropped, and a statement whose figures were sat
+        // in plain sight reported "no transaction rows parsed under it".
+        //
+        // A column that answers to both is naming a DIRECTION, not carrying an
+        // amount. The single-amount branch below already knows what to do with
+        // one; it just has to be told this is one.
+        if (cols.debit !== undefined && cols.debit === cols.credit) {
+          if (cols.drcr === undefined) cols.drcr = cols.debit;
+          delete cols.debit; delete cols.credit;
+        }
+
         // The reference column is chosen by priority, not by position — see
         // REF_TIERS. Without this, "Cheque Number" beats "Internal Reference
         // Number" simply by sitting further left, and it is always empty.

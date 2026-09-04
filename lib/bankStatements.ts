@@ -725,6 +725,10 @@ export async function postBankLine(
 
   try {
     const bankId = await zohoAccountId(String(l.account_name));
+    // Asked once, used twice: the guard below needs to know a card from a bank
+    // to give the right advice, and the posting needs its currency.
+    const bankAcc = (await listZohoAccounts().catch(() => [])).find((a) => a.name === String(l.account_name));
+    const bankAccountKind = bankAcc?.type ?? null;
     const debit = Number(l.debit) || 0, credit = Number(l.credit) || 0;
     const { lineNarration } = await import("@/lib/zohoNarration");
 
@@ -867,11 +871,27 @@ export async function postBankLine(
       //
       // No figures, no entry. It refuses and says what to do instead.
       if (partyCurrency && partyCurrency !== "INR") {
+        // AND SAY WHICH CONTROL TO USE, not merely what is wrong.
+        //
+        // "I am still not able to post my credit card statements" — 4 September
+        // 2026. The refusal was right and the advice was too abstract to act
+        // on, so the same line was tried, refused, and tried again.
+        //
+        // A card charge to Supabase is a PURCHASE, not the settling of a bill:
+        // Zoho's own feed books the identical Citi charges as expenses against
+        // "Web Maintainence Expenses". Vendor payment is for money sent to
+        // clear what is already owed on their account, and that is the only
+        // case where the currency trap below applies.
+        const cardish = String(bankAccountKind ?? "") === "credit_card";
         return fail(
           `${partyName} is a ${partyCurrency} party in Zoho, and this line is ₹${amount.toLocaleString("en-IN")} out of a rupee account. ` +
-          `Zoho reads a payment's amount in the party's own currency, so this would post as ${partyCurrency} ${amount.toLocaleString("en-IN")}, not as rupees. ` +
-          `Book it as a Journal instead: their payable for the ${partyCurrency} amount on the invoice, the bank for what actually left it, ` +
-          `and the difference to Exchange Difference.`,
+          `Zoho reads a PAYMENT's amount in the party's own currency, so this would post as ${partyCurrency} ${amount.toLocaleString("en-IN")} — ` +
+          `about ₹${Math.round(amount * 90).toLocaleString("en-IN")} of their payable wiped out by a charge of ₹${amount.toLocaleString("en-IN")}. ` +
+          `\n\nWhat to do: set "Treat it as" to **Expense** and pick the head the cost belongs to` +
+          (cardish ? ` — a card charge is a purchase, not the settling of a bill, which is how Zoho's own feed books these` : "") +
+          `. Vendor payment is only for money sent to clear what is already owed on their account; ` +
+          `if that is genuinely what this is, use Journal — their payable for the ${partyCurrency} amount on the invoice, ` +
+          `the bank for what actually left it, and the difference to Exchange Difference.`,
         );
       }
       const payId = await unappliedPayment({
@@ -1014,7 +1034,6 @@ export async function postBankLine(
     // If the rate cannot be had, it REFUSES. An entry posted at a silently
     // wrong rate is a wrong figure in the books that nothing downstream can
     // catch, and a line can wait a minute.
-    const bankAcc = (await listZohoAccounts().catch(() => [])).find((a) => a.name === String(l.account_name));
     const bankCur = bankAcc?.currency || "INR";
     let fx: { currency_id: string; exchange_rate: number } | undefined;
     if (bankCur !== "INR") {

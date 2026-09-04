@@ -22,10 +22,18 @@ export type DeskTab = {
   count?: number; warn?: boolean;
 };
 
+// SETTLEMENTS IS NOT A ROOM ON THIS DESK — removed 4 September 2026 on his
+// instruction. Razorpay settlements are a cross-check, not a place work gets
+// done, and a tile that is never opened is a tile that hides the ones that are.
+//
+// Only the door is gone. /admin/zoho/settlements still answers, the 115 rows
+// stay (6 of them already posted to Zoho), and settlement still exists as an
+// approval kind so anything mid-flight can finish. Nothing creates a NEW one
+// unattended either: the scan runs only from the button on that page, never
+// from a cron — so with the tile gone the queue simply stops filling.
 export const DESK_TABS: DeskTab[] = [
   { href: "/admin/zoho/approvals", label: "Waiting on you", icon: "✋", group: "Approve", warn: true },
   { href: "/admin/zoho/sales", label: "Sales", icon: "📮", group: "Work" },
-  { href: "/admin/zoho/settlements", label: "Settlements", icon: "🏦", group: "Work" },
   { href: "/admin/zoho/statements", label: "Statements", icon: "🏧", group: "Work" },
   { href: "/admin/zoho/petty", label: "Petty cash", icon: "👛", group: "Work" },
   { href: "/admin/zoho/investments", label: "Investments", icon: "📈", group: "Work" },

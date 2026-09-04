@@ -19,12 +19,19 @@ export const num = (v: unknown) => {
   // 0, which made every row look like a zero-value line and be skipped. The
   // whole statement came back as "no transaction lines found" while its figures
   // sat there in plain sight.
+  // A US CARD PRINTS "$37.32", AND "-$190.32" FOR A PAYMENT.
+  //
+  // The sign sits OUTSIDE the symbol, so the minus has to survive the strip —
+  // taking "$" off "-$190.32" must leave "-190.32", not "190.32". His Citi
+  // Costco statement of April 2026 came through as six rows of zero because
+  // "$" was not in this list at all: Number("$37.32") is NaN, NaN became 0,
+  // and every row was dropped as a nil line.
   const cleaned = String(v ?? "")
-    .replace(/^\s*(INR|RS\.?|₹)\s*/i, "")
+    .replace(/^\s*(-)?\s*(INR|RS\.?|USD|EUR|GBP|AED|[₹$€£])\s*/i, "$1")
     // "12,340.00 Cr" — a card statement's direction marker, which is read
     // where the amount is read and must not turn the figure into NaN here.
     .replace(/\s*(cr|dr)\.?\s*$/i, "")
-    .replace(/[₹,\s]/g, "")
+    .replace(/[₹$€£,\s]/g, "")
     .replace(/^\((.*)\)$/, "-$1");
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;

@@ -33,7 +33,7 @@ export default async function StatementsPage(props: {
   const sp = await props.searchParams;
   const hubConnected = await zohoConfigured();
 
-  type StmtRow = { id: string; account_name: string; file_name: string | null; period_start: string | null; period_end: string | null; opening_balance: number | null; closing_balance: number | null; note: string | null; status: string; lines_total: number; recon_missing: number | null; recon_extra: number | null };
+  type StmtRow = { id: string; account_name: string; file_name: string | null; period_start: string | null; period_end: string | null; opening_balance: number | null; closing_balance: number | null; note: string | null; status: string; lines_total: number };
   type LineRow = { id: string; account_name: string; line_date: string; narration: string; ref: string | null; debit: number; credit: number; status: string; proposal: { account?: string } | null; matched_note: string | null; error: string | null;
     sub_account: string | null; direction: "in" | "out" | null; entry_kind: string | null; party_name: string | null; own_narration: string | null };
 
@@ -50,11 +50,36 @@ export default async function StatementsPage(props: {
     l.direction ? l.direction === "out" : Math.abs(Number(l.debit)) > 0;
   const [{ data: stmtData }, { data: lineData }] = hubConnected
     ? await Promise.all([
-        createServiceClient().from("bank_statements").select("id, account_name, file_name, period_start, period_end, opening_balance, closing_balance, note, status, lines_total, recon_missing, recon_extra").order("created_at", { ascending: false }).limit(20),
+        createServiceClient().from("bank_statements").select("id, account_name, file_name, period_start, period_end, opening_balance, closing_balance, note, status, lines_total").order("created_at", { ascending: false }).limit(20),
         createServiceClient().from("bank_lines").select("id, account_name, line_date, narration, ref, debit, credit, status, proposal, matched_note, error, sub_account, direction, entry_kind, party_name, own_narration").in("status", ["ask", "auto", "failed"]).order("line_date").limit(200),
       ])
     : [{ data: [] as StmtRow[] }, { data: [] as LineRow[] }];
   const stmts = (stmtData ?? []) as StmtRow[];
+
+  // WHAT IS STILL OUTSTANDING ON EACH STATEMENT, ASKED NOW.
+  //
+  // The row used to print recon_missing, a number computed once when the file
+  // was uploaded and never touched again. Every one of them was stale: the
+  // 3 September Axis file said "7 not yet in Zoho" while all seven of its lines
+  // were posted, and the two 2 September files said 9 and 3 with 9 and 3
+  // posted. Pressing Reconcile recomputed against Zoho live, found nothing, and
+  // the desk was left hunting for entries that had been filed hours earlier.
+  //
+  // A statement's own lines already know. ask/auto/failed is exactly what the
+  // desk counts as work outstanding (lib/zohoDesk.ts); matched, posted and
+  // skipped are all finished. One grouped read, always current, and no call to
+  // Zoho to produce a number that goes stale the moment somebody acts on it.
+  const stmtIds = stmts.map((x) => x.id);
+  const openByStmt = new Map<string, number>();
+  if (stmtIds.length) {
+    const { data: openRows } = await createServiceClient()
+      .from("bank_lines").select("statement_id")
+      .in("statement_id", stmtIds).in("status", ["ask", "auto", "failed"]);
+    for (const r of (openRows ?? []) as { statement_id: string }[]) {
+      const k = String(r.statement_id);
+      openByStmt.set(k, (openByStmt.get(k) ?? 0) + 1);
+    }
+  }
 
   // Whether a statement can be removed has to be known BEFORE the button is
   // pressed: the action refuses one whose lines are already in Zoho.
@@ -236,23 +261,16 @@ export default async function StatementsPage(props: {
             <span style={{ fontWeight: 700, minWidth: 180 }}>{s.account_name}</span>
             <span>{s.period_start} → {s.period_end}</span>
             <span className="muted">{s.lines_total} lines</span>
-            {/* WHAT THIS STATEMENT MEANS FOR THE BOOKS, NOT WHETHER IT ABUTS
-                THE LAST ONE. Continuity is gone (2 Sep) — statements
-                arrive in any order, from any start date, and the
-                opening-vs-previous-closing test flagged perfectly good
-                files while naming nothing. These two counts are the
-                reconciliation against Zoho for this statement's own
-                dates, computed on upload. */}
+            {/* HOW MUCH OF THIS STATEMENT IS STILL TO DO, AS OF NOW.
+                Not the frozen upload-time comparison against Zoho — see
+                openByStmt above for why that had to go. A line that is
+                matched, posted or skipped is finished; only ask, auto and
+                failed are work, and they are the rows listed below. */}
             <span>
               {s.status === "failed" ? "❌ failed"
-                : s.recon_missing === null ? "· uploaded"
-                : (s.recon_missing || s.recon_extra) ? (
-                  <>
-                    {!!s.recon_missing && <span style={{ color: "#b45309" }}>{s.recon_missing} not yet in Zoho</span>}
-                    {!!s.recon_missing && !!s.recon_extra && " · "}
-                    {!!s.recon_extra && <span style={{ color: "#b91c1c" }}>{s.recon_extra} in Zoho with no line here</span>}
-                  </>
-                ) : <span style={{ color: "#15803d" }}>✓ agrees with Zoho</span>}
+                : (openByStmt.get(s.id) ?? 0) > 0
+                  ? <span style={{ color: "#b45309" }}>{openByStmt.get(s.id)} line{openByStmt.get(s.id) === 1 ? "" : "s"} still to answer</span>
+                  : <span style={{ color: "#15803d" }}>✓ all lines filed</span>}
             </span>
             {s.note && <span style={{ color: "#b45309", fontSize: ".78rem" }}>{s.note}</span>}
             {/* A failed statement can be re-read from the file already

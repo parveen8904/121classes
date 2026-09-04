@@ -58,7 +58,7 @@ export default async function AdminSupporters(props: {
       .select("id, ref, raised_by, against_url, against_id, what_happened, evidence_url, status, reviewed_at, outcome_note, created_at")
       .order("created_at", { ascending: false }).limit(200),
     svc.from("profiles")
-      .select("id, full_name, business_name, designation, email, phone, supporter_site, supporter_site_ok_at, supporter_site_proof, supporter_allclear_sent_at, supporter_blocked_at, supporter_block_reason, supporter_hold_auto, supporter_hold_evidence")
+      .select("id, full_name, business_name, trade_name, gstin, designation, email, phone, supporter_site, supporter_site_ok_at, supporter_site_proof, supporter_allclear_sent_at, supporter_blocked_at, supporter_block_reason, supporter_hold_auto, supporter_hold_evidence")
       .eq("is_supporter", true).limit(1000),
     svc.from("supporter_site_checks")
       .select("id, supporter_id, url, checked_at, ok, problem, detail, evidence")
@@ -442,10 +442,10 @@ export default async function AdminSupporters(props: {
         {/* ── Everyone, and where their site stands ──────────────────────── */}
         <h2 style={{ fontSize: "1.1rem", marginTop: 30 }}>Every supporter&apos;s website</h2>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ minWidth: 720, width: "100%", borderCollapse: "collapse", fontSize: ".88rem" }}>
+          <table style={{ minWidth: 1020, width: "100%", borderCollapse: "collapse", fontSize: ".88rem" }}>
             <thead>
               <tr>
-                <th style={TH}>Supporter</th><th style={TH}>Email</th><th style={TH}>Website</th><th style={TH}>Verified</th><th style={TH}>Last read</th><th style={TH}></th>
+                <th style={TH}>Supporter</th><th style={TH}>Email</th><th style={TH}>GST number</th><th style={TH}>Trade name</th><th style={TH}>Website</th><th style={TH}>Verified</th><th style={TH}>Last read</th><th style={TH}></th>
               </tr>
             </thead>
             <tbody>
@@ -467,6 +467,33 @@ export default async function AdminSupporters(props: {
                         ? <a href={`mailto:${s(x.email)}`}>{s(x.email)}</a>
                         : <span className="muted">no email</span>}
                       {x.phone ? <><br /><span className="muted">{s(x.phone)}</span></> : null}
+                    </td>
+                    {/* GST NUMBER AND TRADE NAME, SO NOBODY OPENS 107 PROFILES.
+                        Asked for on 4 September 2026 to check a vendor's
+                        registration against this list directly. Both are shown
+                        whole and unaltered — a GSTIN read off a shortened
+                        column is a GSTIN checked against the wrong party — and
+                        an absent one says "No" rather than going quietly
+                        blank, because an empty cell reads as a rendering fault
+                        and "No" is an answer. */}
+                    <td style={{ ...TD, fontSize: ".82rem", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", whiteSpace: "nowrap" }}>
+                      {s(x.gstin).trim() || <span className="muted">No</span>}
+                    </td>
+                    <td style={{ ...TD, fontSize: ".82rem", maxWidth: 200 }}>
+                      {/* The vendor types one box; it is saved to trade_name AND
+                          business_name (ProfileAddressBlock), so a profile filled
+                          in before trade_name existed holds it only in the
+                          latter. Reading just one column would answer "No" for
+                          most of the register while the name sits in the other. */}
+                      {s(x.trade_name).trim() || s(x.business_name).trim() || <span className="muted">No</span>}
+                      {/* When the two DISAGREE, both are shown. That is the case
+                          worth seeing: it means the name was changed in one
+                          place and not the other, and hiding either would defeat
+                          the checking this column is for. */}
+                      {s(x.trade_name).trim() && s(x.business_name).trim()
+                        && s(x.trade_name).trim() !== s(x.business_name).trim()
+                        ? <><br /><span className="muted" style={{ fontSize: ".76rem" }}>profile name: {s(x.business_name)}</span></>
+                        : null}
                     </td>
                     <td style={{ ...TD, wordBreak: "break-all", maxWidth: 260 }}>
                       {x.supporter_site

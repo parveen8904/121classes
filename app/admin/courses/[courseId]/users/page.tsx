@@ -27,8 +27,26 @@ type Row = {
 const fmtDate = (v: string | null) =>
   v ? formatDate(v) : "—";
 
-export default async function CourseUsersPage(props: { params: Promise<{ courseId: string }> }) {
+// A PAGE AT A TIME. His ask, 4 September 2026: "pages with a large amount of
+// data take more time to load because everything is being loaded on a single
+// page ... Registered Users in Course can become very lengthy."
+//
+// It was reading every subscription on the course — 2,637 of them on FR — then
+// every watch row for every one of those students, then printing all of it into
+// one HTML document. Three costs, each paid in full before the first row
+// appeared.
+//
+// Now: the table is one page of a hundred, the watch data is fetched only for
+// the hundred on it, and the four headline figures are counted in the database
+// rather than by loading rows in order to length them.
+const PER_PAGE = 100;
+
+export default async function CourseUsersPage(props: {
+  params: Promise<{ courseId: string }>;
+  searchParams: Promise<{ p?: string }>;
+}) {
   const { courseId } = await props.params;
+  const page = Math.max(1, Math.round(Number((await props.searchParams).p) || 1));
   const svc = createServiceClient();
 
   const [{ data: course }, { data: subjects }] = await Promise.all([
@@ -52,19 +70,33 @@ export default async function CourseUsersPage(props: { params: Promise<{ courseI
     plans: { tier?: string } | null; subjects: { title?: string } | null;
     profiles: { full_name?: string; email?: string; phone?: string } | null;
   };
-  const subs: SubRow[] = [];
-  for (let from = 0; ; from += 1000) {
-    const { data: pageRows } = await svc
-      .from("subscriptions")
-      .select("student_id, subject_id, status, ends_at, channel, created_at, plans(tier), subjects(title), profiles:student_id(full_name, email, phone)")
-      .eq("course_id", courseId)
-      .in("status", ["active", "blocked"])
-      .order("created_at", { ascending: false })
-      .range(from, from + 999);
-    const page = (pageRows ?? []) as unknown as SubRow[];
-    subs.push(...page);
-    if (page.length < 1000) break;
-  }
+  // THE HEADLINES ARE COUNTED, NOT LENGTHED.
+  //
+  // These were `rows.filter(...).length` over every subscription on the course,
+  // which is the only reason all of them had to be in memory at all. Postgres
+  // can count without sending anything back.
+  const [{ count: activeCount }, { count: blockedCount }, { count: totalCount }] = await Promise.all([
+    svc.from("subscriptions").select("id", { count: "exact", head: true })
+      .eq("course_id", courseId).eq("status", "active"),
+    svc.from("subscriptions").select("id", { count: "exact", head: true })
+      .eq("course_id", courseId).eq("status", "blocked"),
+    svc.from("subscriptions").select("id", { count: "exact", head: true })
+      .eq("course_id", courseId).in("status", ["active", "blocked"]),
+  ]);
+
+  const total = totalCount ?? 0;
+  const pages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const current = Math.min(page, pages);
+  const from = (current - 1) * PER_PAGE;
+
+  const { data: pageRows } = await svc
+    .from("subscriptions")
+    .select("student_id, subject_id, status, ends_at, channel, created_at, plans(tier), subjects(title), profiles:student_id(full_name, email, phone)")
+    .eq("course_id", courseId)
+    .in("status", ["active", "blocked"])
+    .order("created_at", { ascending: false })
+    .range(from, from + PER_PAGE - 1);
+  const subs = (pageRows ?? []) as unknown as SubRow[];
 
   const subjectIds = (subjects ?? []).map((s) => s.id as string);
 
@@ -121,6 +153,24 @@ export default async function CourseUsersPage(props: { params: Promise<{ courseI
     };
   });
 
+  // WHO HAS NEVER OPENED A CLASS — asked across the whole course, not this page.
+  //
+  // "Someone at 0 of N has paid and never started" is the most useful call on
+  // this screen, so it must not quietly become "0 of N on page 3". It is the
+  // one figure that cannot be a plain count, so it is the difference between
+  // the students who hold access and the students who appear even once against
+  // a class of this course.
+  let neverOpened = activeCount ?? 0;
+  if (courseSectionIds.size) {
+    const watchers = new Set<string>();
+    const secIds = [...courseSectionIds];
+    const { inChunks } = await import("@/lib/pageAll");
+    const rowsSeen = await inChunks(secIds, (batch) =>
+      svc.from("class_watch").select("student_id").in("section_id", batch), 200);
+    for (const w of rowsSeen ?? []) watchers.add(String((w as { student_id: string }).student_id));
+    neverOpened = Math.max(0, (activeCount ?? 0) - watchers.size);
+  }
+
   const active = rows.filter((r) => r.status === "active");
 
   return (
@@ -133,15 +183,15 @@ export default async function CourseUsersPage(props: { params: Promise<{ courseI
       />
 
       <div className="card" style={{ marginTop: 16, display: "flex", gap: 24, flexWrap: "wrap" }}>
-        <div><div className="muted" style={{ fontSize: ".76rem" }}>Paid students</div><div style={{ fontSize: "1.5rem", fontWeight: 700 }}>{active.length}</div></div>
+        <div><div className="muted" style={{ fontSize: ".76rem" }}>Paid students</div><div style={{ fontSize: "1.5rem", fontWeight: 700 }}>{activeCount ?? 0}</div></div>
         <div><div className="muted" style={{ fontSize: ".76rem" }}>Classes in the course</div><div style={{ fontSize: "1.5rem", fontWeight: 700 }}>{courseSectionIds.size}</div></div>
         <div>
           <div className="muted" style={{ fontSize: ".76rem" }}>Never opened a class</div>
-          <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>{active.filter((r) => r.classesWatched === 0).length}</div>
+          <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>{neverOpened}</div>
         </div>
         <div>
           <div className="muted" style={{ fontSize: ".76rem" }}>Blocked</div>
-          <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>{rows.filter((r) => r.status === "blocked").length}</div>
+          <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>{blockedCount ?? 0}</div>
         </div>
       </div>
 
@@ -189,6 +239,22 @@ export default async function CourseUsersPage(props: { params: Promise<{ courseI
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* THE PAGER. Shown only when there is more than one page, so a small
+          course still reads as one list with nothing to click. */}
+      {pages > 1 && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
+          {current > 1 && (
+            <Link className="btn small secondary" href={`/admin/courses/${courseId}/users?p=${current - 1}`}>← Previous</Link>
+          )}
+          <span className="muted" style={{ fontSize: ".8rem" }}>
+            Showing {from + 1}–{Math.min(from + PER_PAGE, total)} of {total} · page {current} of {pages}
+          </span>
+          {current < pages && (
+            <Link className="btn small secondary" href={`/admin/courses/${courseId}/users?p=${current + 1}`}>Next →</Link>
+          )}
         </div>
       )}
 

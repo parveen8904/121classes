@@ -74,17 +74,22 @@ check("a subscribed GST lookup still wins when there is one",
 check("a failure asking Zoho leaves the number verified rather than erroring",
   /catch \{ \/\* the number is still verified; only the name went unanswered \*\/ \}/.test(cart));
 
-/* ── and the screen says where the details came from ─────────────────────── */
+/* ── THE SCREENS NO LONGER VERIFY ANYTHING ───────────────────────────────── */
 
+// "Please remove the Verify button for GST number verification wherever it has
+// been added. We do not require the GST verification functionality" — the team,
+// 4 September 2026. The checks above still guard lib/gstin.ts, which is used by
+// the accounts desk to read a GSTIN off a supplier invoice; what was removed is
+// the BUTTON a customer saw and the message under it.
 for (const [name, src] of [["the profile block", profile], ["the checkout step", checkout]] as const) {
-  check(`${name} does not call a Zoho record "the GST records"`,
-    /from your Zoho Books/.test(src),
-    "claiming government authority for a name copied out of our own books is a small lie on a tax invoice");
-  check(`${name} asks for the name typed when nobody matches`,
-    /typeTheName/.test(src) && /exactly as it appears on the certificate|fill in the name and address yourself/.test(src));
-  check(`${name} reports a valid-but-unknown number in green, not amber`,
-    /!r\.configured[\s\S]{0,900}tone: "ok"/.test(src),
-    "reporting a successful check as a warning is what got this passed on as 'not working'");
+  check(`${name} has no Verify button`, !/>\s*\{?\s*(checking|gstBusy)[^]*?Verify/.test(src) && !/"Verify"/.test(src),
+    "removed on the team's instruction — the number is typed and taken as given");
+  check(`${name} does not call the verification action`, !/verifyGstin/.test(src));
+  check(`${name} keeps no verification message`, !/gstNote|setNote\(/.test(src),
+    "the message had to go with the button, or the screen explains a control that is not there");
+  check(`${name} still takes the number and the trade name`,
+    /name="gstin"|setGstin\(/.test(src) && /trade|tradeName|setBName/i.test(src),
+    "removing the check must not remove the fields the invoice needs");
 }
 
 console.log(fails === 0 ? "ok — GSTIN from Zoho" : `${fails} failed`);

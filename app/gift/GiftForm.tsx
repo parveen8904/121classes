@@ -6,7 +6,6 @@ import Script from "next/script";
 import AttemptPicker from "@/app/components/AttemptPicker";
 import AddressFields from "@/app/components/AddressFields";
 import { createGiftOrder, verifyGiftPayment, } from "./actions";
-import { verifyGstin } from "@/app/books/cartActions";
 import { EMPTY_ADDRESS, addressProblems, type Address } from "@/lib/address";
 
 type Subject = { id: string; title: string; course: string; gold: number | null; validityMonths: number; goldSlabs: unknown; batchMonths?: number | null; batchPriceInr?: number | null };
@@ -26,8 +25,6 @@ export default function GiftForm({ configured, subjects, plans }: { configured: 
   const [rAddr, setRAddr] = useState<Address>(EMPTY_ADDRESS);
   const [bAddr, setBAddr] = useState<Address>(EMPTY_ADDRESS);
   const [bName, setBName] = useState(""); const [bGstin, setBGstin] = useState("");
-  const [gstNote, setGstNote] = useState<{ tone: "ok" | "warn" | "bad"; text: string } | null>(null);
-  const [gstBusy, setGstBusy] = useState(false);
   const [coupon, setCoupon] = useState("");
   const [busy, setBusy] = useState(false); const [done, setDone] = useState(false); const [err, setErr] = useState<string | null>(null);
 
@@ -163,42 +160,11 @@ export default function GiftForm({ configured, subjects, plans }: { configured: 
           <div><label>Your name / company</label><input value={bName} onChange={(e) => setBName(e.target.value)} placeholder="as it should appear on the invoice" /></div>
           <div>
             <label>Your GST number (optional)</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input value={bGstin} style={{ fontFamily: "ui-monospace, monospace", letterSpacing: ".04em" }}
-                onChange={(e) => { setBGstin(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15)); setGstNote(null); }}
-                placeholder="15 characters" />
-              <button className="btn small secondary" type="button" disabled={gstBusy || bGstin.length !== 15}
-                style={{ whiteSpace: "nowrap" }}
-                onClick={async () => {
-                  setGstBusy(true);
-                  try {
-                    const r = await verifyGstin(bGstin);
-                    if (!r.valid) { setGstNote({ tone: "bad", text: r.problem ?? "That GST number is not valid." }); return; }
-                    if (r.fetched && r.party) {
-                      // Exactly as the register spells it — see lib/gstin.ts.
-                      setBName(r.party.tradeName ?? r.party.legalName ?? bName);
-                      setBAddr((a) => ({
-                        ...a,
-                        name: r.party!.tradeName || r.party!.legalName || a.name,
-                        line1: r.party!.line1 || a.line1, line2: r.party!.line2 || a.line2,
-                        city: r.party!.city || a.city, state: r.party!.state || a.state,
-                        pincode: r.party!.pincode || a.pincode, country: "India",
-                      }));
-                      setGstNote({ tone: "ok", text: `Verified — ${r.party.tradeName || r.party.legalName}. Billing address filled in from the GST records.` });
-                    } else {
-                      setGstNote({ tone: "warn", text: `${r.note ?? "The trade name could not be fetched."} Registered in ${r.state}.` });
-                    }
-                  } catch { setGstNote({ tone: "warn", text: "Could not reach the GST service just now." }); }
-                  finally { setGstBusy(false); }
-                }}>
-                {gstBusy ? "Checking…" : "Verify"}
-              </button>
-            </div>
-            {gstNote && (
-              <p style={{ fontSize: ".8rem", margin: "4px 0 0", color: gstNote.tone === "ok" ? "#15803d" : gstNote.tone === "warn" ? "#b45309" : "#b91c1c" }}>
-                {gstNote.text}
-              </p>
-            )}
+            {/* NO VERIFY BUTTON — removed 4 September 2026, "we do not require
+                the GST verification functionality". Typed and taken as given. */}
+            <input value={bGstin} style={{ fontFamily: "ui-monospace, monospace", letterSpacing: ".04em" }}
+              onChange={(e) => setBGstin(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15))}
+              placeholder="15 characters" />
           </div>
         </div>
         {/* The state here is what decides CGST+SGST against IGST on YOUR

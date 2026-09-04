@@ -75,7 +75,11 @@ export async function grantSubscription(formData: FormData) {
     redirect("/admin/enrolment?error=missing");
   }
 
-  const supabase = createClient();
+  // Service client — see extendSubscription. Every write in this file is
+  // authorised by assertArea("enrolment") in our own code; the RLS policy on
+  // `subscriptions` admits only role = 'admin', so on the cookie client an
+  // operator's grant matched no rows and reported success anyway.
+  const supabase = createServiceClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -191,7 +195,11 @@ export async function bulkGrant(formData: FormData) {
     redirect("/admin/enrolment?error=missing");
   }
 
-  const supabase = createClient();
+  // Service client — see extendSubscription. Every write in this file is
+  // authorised by assertArea("enrolment") in our own code; the RLS policy on
+  // `subscriptions` admits only role = 'admin', so on the cookie client an
+  // operator's grant matched no rows and reported success anyway.
+  const supabase = createServiceClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -297,8 +305,10 @@ export async function bulkGrant(formData: FormData) {
 export async function revokeSubscription(formData: FormData) {
   await assertArea("enrolment");
   const id = str(formData.get("id"));
-  const supabase = createClient();
-  await supabase.from("subscriptions").update({ status: "cancelled", auto_renew: false }).eq("id", id);
+  // Service client for the same reason as extendSubscription above: the RLS
+  // policy admits only role = 'admin', so an operator's revoke matched no rows
+  // and reported nothing. assertArea("enrolment") is the authority.
+  await createServiceClient().from("subscriptions").update({ status: "cancelled", auto_renew: false }).eq("id", id);
   revalidatePath("/admin/enrolment");
 }
 
@@ -341,19 +351,43 @@ export async function extendSubscription(formData: FormData) {
   // Clamped to the same 1-36 the box allows, so a hand-posted 9999 cannot set
   // a subscription running to the next century.
   const months = Math.min(36, Math.max(1, Math.round(num(formData.get("months"), 1))));
-  const supabase = createClient();
+
+  // AN OPERATOR'S EXTENSION USED TO DO NOTHING, AND SAY IT HAD.
+  //
+  // "Hema has already been given access to Enrolment. Please also provide her
+  // with the functionality to extend a student's subscription validity" — the
+  // team, 4 September 2026. She already had the button; it silently did
+  // nothing.
+  //
+  // This ran on the COOKIE client, so the update went through RLS, and the
+  // only policy on `subscriptions` that permits a write is is_admin() —
+  // `role = 'admin'`. Hemlata is an operator. Her UPDATE matched no rows,
+  // Postgres reported no error because matching nothing is not an error, and
+  // the page redirected to "extended to 4 November" over a subscription that
+  // had not moved.
+  //
+  // The authority for this action is assertArea("enrolment") above, checked in
+  // our own code, which is exactly how blockSubscription has always worked.
+  // The service client is what carries that decision out.
+  const supabase = createServiceClient();
   const { data: sub } = await supabase
     .from("subscriptions")
     .select("ends_at")
     .eq("id", id)
     .maybeSingle();
   // Runs on from the existing expiry where there is one left to run on from,
-  // and from today where access has already lapsed — see extendedEndsAt.
+  // and from today where access has already lapsed — see extendedEndsAt. This
+  // is the "extension starts only after the current validity expires" the team
+  // asked for, and it has always behaved that way.
   const ends = extendedEndsAt((sub?.ends_at as string | null) ?? null, months);
-  await supabase
+  const { error } = await supabase
     .from("subscriptions")
     .update({ ends_at: ends, status: "active" })
     .eq("id", id);
+  // A refusal must not be reported as success — that is the whole fault above.
+  if (error) {
+    redirect(`/admin/enrolment?error=${encodeURIComponent(`The extension was not saved: ${error.message}`)}`);
+  }
   revalidatePath("/admin/enrolment");
   redirect(`/admin/enrolment?extended_to=${encodeURIComponent(formatDate(ends))}`);
 }
@@ -364,6 +398,46 @@ export async function extendSubscription(formData: FormData) {
 
 // Past students in bulk, ANY size: upload the Excel template (or paste), rows
 // queue, and a cron drips the emails slowly so the batch never looks like spam.
+/**
+ * SET THE EXPIRY OUTRIGHT — the correction for an extension added wrongly.
+ *
+ * "if we accidentally extend a student's validity by 2 months instead of
+ * 1 month, we should be able to reverse/correct it" — the team, 4 September
+ * 2026. Extend only ever adds, so a slip could be made larger and never
+ * smaller, and the only remedy was to revoke the subscription and grant it
+ * again — which loses the row, its channel and its history.
+ *
+ * A date rather than "minus one month", because that is the thing anybody can
+ * check: the box shows the expiry the student has now, and whatever is typed
+ * is the expiry they will have. No arithmetic to get wrong in either
+ * direction, and it corrects a wrong grant just as well as a wrong extension.
+ */
+export async function setSubscriptionEnd(formData: FormData) {
+  await assertArea("enrolment");
+  const id = str(formData.get("id"));
+  const ends = str(formData.get("ends_at"));
+  if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(ends)) {
+    redirect(`/admin/enrolment?error=${encodeURIComponent("Pick a date for the new expiry.")}`);
+  }
+
+  const svc = createServiceClient();
+  const { data: sub } = await svc.from("subscriptions").select("ends_at, status").eq("id", id).maybeSingle();
+  const was = (sub?.ends_at as string | null) ?? null;
+
+  // Stored as the end of that day, so a subscription set to expire on the 4th
+  // is usable ALL of the 4th. Extend has always worked that way; a date typed
+  // here must mean the same thing or the two controls would disagree by a day.
+  const { error } = await svc.from("subscriptions")
+    .update({ ends_at: `${ends}T23:59:59+05:30` }).eq("id", id);
+  if (error) {
+    redirect(`/admin/enrolment?error=${encodeURIComponent(`The expiry was not changed: ${error.message}`)}`);
+  }
+  revalidatePath("/admin/enrolment");
+  redirect(`/admin/enrolment?expiry_set=${encodeURIComponent(
+    `${formatDate(ends)}${was ? ` (was ${formatDate(was)})` : ""}`,
+  )}`);
+}
+
 export async function queuePastStudents(formData: FormData) {
   await assertArea("enrolment");
   const courseId = str(formData.get("course_id"));

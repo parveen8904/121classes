@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AddressFields from "./AddressFields";
-import { myAddressBook, verifyGstin, type CheckoutDetails, type ShipChoice } from "@/app/books/cartActions";
+import { myAddressBook, type CheckoutDetails, type ShipChoice } from "@/app/books/cartActions";
 import { EMPTY_ADDRESS, addressDifferences, addressProblems, addressLines, type Address } from "@/lib/address";
 
 // THE ADDRESS STEP, AND NOBODY REACHES A PAYMENT GATEWAY WITHOUT IT.
@@ -44,8 +44,6 @@ export default function CheckoutAddressStep({
   const [gstin, setGstin] = useState("");
   const [tradeName, setTradeName] = useState("");
   const [legalName, setLegalName] = useState("");
-  const [gstNote, setGstNote] = useState<{ tone: "ok" | "warn" | "bad"; text: string } | null>(null);
-  const [checking, setChecking] = useState(false);
   // Set once a check has shown there is no lookup service — the box then asks
   // for the name instead of promising to fill it in by itself.
   const [typeTheName, setTypeTheName] = useState(false);
@@ -73,59 +71,6 @@ export default function CheckoutAddressStep({
   }, [email, billing, shipping, shipTo, gstin, tradeName]);
 
   const effectiveShipping = shipTo === "different" ? shipping : billing;
-
-  async function checkGst() {
-    if (!gstin.trim()) { setGstNote(null); return; }
-    setChecking(true);
-    try {
-      const r = await verifyGstin(gstin);
-      if (!r.valid) { setGstNote({ tone: "bad", text: r.problem ?? "That GST number is not valid." }); return; }
-      if (r.fetched && r.party) {
-        // EXACTLY AS REGISTERED — no title-casing, no trimming of inner
-        // spacing. "M/s. RAVI ENTERPRISES" and "M/s Ravi Enterprises" are not
-        // the same legal name, and an invoice that tidies one disagrees with
-        // the register it is quoting.
-        setTradeName(r.party.tradeName ?? r.party.legalName ?? "");
-        setLegalName(r.party.legalName ?? "");
-        setBilling((b) => ({
-          ...b,
-          name: r.party!.tradeName || r.party!.legalName || b.name,
-          line1: r.party!.line1 || b.line1,
-          line2: r.party!.line2 || b.line2,
-          city: r.party!.city || b.city,
-          state: r.party!.state || b.state,
-          pincode: r.party!.pincode || b.pincode,
-          country: "India",
-        }));
-        // Say where it came from — see ProfileAddressBlock. With no GST lookup
-        // service connected these details come out of Zoho Books.
-        setGstNote({
-          tone: "ok",
-          text: `Verified — ${r.party.tradeName || r.party.legalName}${r.party.status ? ` (${r.party.status})` : ""}. `
-            + (r.note === "from your Zoho Books contact record"
-              ? "The billing address has been filled in from your Zoho Books record — please check it."
-              : "The billing address has been filled in from the GST records."),
-        });
-      } else if (!r.configured) {
-        // The number IS verified — checksum, PAN and state all check out
-        // without asking anybody. Only the name and address need an outside
-        // service, and none is connected. See ProfileAddressBlock.
-        setTypeTheName(true);
-        setGstNote({
-          tone: "ok",
-          text: `Valid GST number — PAN ${r.pan}, registered in ${r.state}. `
-            + "We have no record of this number yet, so please fill in the name and address yourself.",
-        });
-      } else {
-        setGstNote({
-          tone: "warn",
-          text: `${r.note ?? "The trade name could not be fetched."} Registered in ${r.state}. Please fill the billing address yourself.`,
-        });
-      }
-    } catch {
-      setGstNote({ tone: "warn", text: "Could not reach the GST service just now — the number itself looks right." });
-    } finally { setChecking(false); }
-  }
 
   function toReview() {
     const found = [
@@ -200,25 +145,15 @@ export default function CheckoutAddressStep({
         </p>
       )}
 
-      {/* GST — optional, verified, and it fills the rest in when it can. */}
+      {/* GST — optional, and typed. NO VERIFY BUTTON: removed 4 September 2026,
+          "we do not require the GST verification functionality". */}
       <div style={{ margin: "6px 0 4px" }}>
         <label style={{ margin: 0 }}>
           GST number <span className="muted" style={{ fontWeight: 400 }}>(optional — only if the invoice should be in a business name)</span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input value={gstin} style={{ fontFamily: "ui-monospace, monospace", letterSpacing: ".04em" }}
-              onChange={(e) => { setGstin(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15)); setGstNote(null); }}
-              placeholder="15 characters, e.g. 07AAYPS3155J1ZY" />
-            <button className="btn small secondary" type="button" onClick={checkGst} disabled={checking || gstin.length !== 15}
-              style={{ whiteSpace: "nowrap" }}>
-              {checking ? "Checking…" : "Verify"}
-            </button>
-          </div>
+          <input value={gstin} style={{ fontFamily: "ui-monospace, monospace", letterSpacing: ".04em" }}
+            onChange={(e) => setGstin(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15))}
+            placeholder="15 characters, e.g. 07AAYPS3155J1ZY" />
         </label>
-        {gstNote && (
-          <p style={{ fontSize: ".8rem", margin: "4px 0 0", color: gstNote.tone === "ok" ? "#15803d" : gstNote.tone === "warn" ? "#b45309" : "#b91c1c" }}>
-            {gstNote.text}
-          </p>
-        )}
         {(tradeName || gstin) && (
           <label style={{ margin: "8px 0 0" }}>
             Trade / legal name <span className="muted" style={{ fontWeight: 400 }}>(as registered under GST)</span>

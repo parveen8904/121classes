@@ -200,11 +200,13 @@ check("neither shipping option is selected by default",
   /useState<ShipChoice>\("unset"\)/.test(step));
 check("and leaving it alone is explained, not scolded",
   /we will send it to the billing address above/.test(step));
-check("the GST number is verified on demand, and can fill the address in",
-  /const r = await verifyGstin\(gstin\)/.test(step) && /filled in from the GST records/.test(step));
-check("the registered name is taken exactly as it arrives",
-  /setTradeName\(r\.party\.tradeName \?\? r\.party\.legalName \?\? ""\)/.test(step),
-  "‘M/s. RAVI ENTERPRISES’ and ‘M/s Ravi Enterprises’ are not the same legal name");
+// GST verification was removed on 4 September 2026 at the team's request. The
+// BOXES stay — the invoice still needs the number and the trade name — but
+// nothing is checked against an outside service any more.
+check("the checkout step takes a GST number without verifying it",
+  /setGstin\(/.test(step) && !/verifyGstin/.test(step));
+check("the trade name is still asked for and kept",
+  /setTradeName\(/.test(step), "the invoice is made out in it");
 
 for (const page of ["app/books/cart/CartCheckout.tsx", "app/books/[id]/BookCheckout.tsx"]) {
   const src = readFileSync(join(import.meta.dirname, "..", page), "utf8");
@@ -246,7 +248,8 @@ check("choosing elsewhere frees the state and postcode",
 check("it still posts the same field names, so the save actions are untouched",
   /name="address_line1"/.test(block) && /name="city"/.test(block) && /name="pincode"/.test(block) && /name="gstin"/.test(block),
   "Ravi: the existing vendor flow must keep working, with GST verification added");
-check("the GST number can be verified from a profile too", /const r = await verifyGstin\(gstin\)/.test(block));
+check("the profile takes a GST number without verifying it",
+  /name="gstin"/.test(block) && !/verifyGstin/.test(block));
 
 const studentProfile = readFileSync(join(import.meta.dirname, "..", "app/dashboard/profile/page.tsx"), "utf8");
 check("the student profile uses it", /<ProfileAddressBlock/.test(studentProfile));
@@ -282,7 +285,8 @@ check("both are stored in parts as well as in words",
 const giftForm = readFileSync(join(import.meta.dirname, "..", "app/gift/GiftForm.tsx"), "utf8");
 check("the gift form asks each in separate fields",
   /<AddressFields idPrefix="gr"/.test(giftForm) && /<AddressFields idPrefix="gb"/.test(giftForm));
-check("the sponsor's GST can be verified there too", /await verifyGstin\(bGstin\)/.test(giftForm));
+check("the sponsor's GST is taken as given too",
+  /setBGstin\(/.test(giftForm) && !/verifyGstin/.test(giftForm));
 check("no textarea is left pretending to be an address",
   !/<textarea rows=\{2\} value=\{rAddr\}/.test(giftForm) && !/<textarea rows=\{2\} value=\{bAddr\}/.test(giftForm));
 

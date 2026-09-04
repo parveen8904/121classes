@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { INDIA_STATES } from "@/lib/indiaStates";
-import { verifyGstin } from "@/app/books/cartActions";
 
 // THE ADDRESS ON A PROFILE PAGE, AS A PLAIN FORM.
 //
@@ -46,60 +45,8 @@ export default function ProfileAddressBlock({
   const [pincode, setPincode] = useState(initial.pincode ?? "");
   const [gstin, setGstin] = useState(initial.gstin ?? "");
   const [tradeName, setTradeName] = useState(initial.trade_name || initial.business_name || "");
-  const [note, setNote] = useState<{ tone: "ok" | "warn" | "bad"; text: string } | null>(null);
-  const [checking, setChecking] = useState(false);
-  // Set once a check has shown there is no lookup service — the box then
-  // asks for the name instead of promising to fill it in by itself.
-  const [typeTheName, setTypeTheName] = useState(false);
-
   const inIndia = country.trim().toLowerCase() === "india";
   const star = required ? <span style={{ color: "#b91c1c" }}> *</span> : null;
-
-  async function check() {
-    if (gstin.trim().length !== 15) return;
-    setChecking(true);
-    try {
-      const r = await verifyGstin(gstin);
-      if (!r.valid) { setNote({ tone: "bad", text: r.problem ?? "That GST number is not valid." }); return; }
-      if (r.fetched && r.party) {
-        // Exactly as the register spells it — see lib/gstin.ts.
-        setTradeName(r.party.tradeName ?? r.party.legalName ?? tradeName);
-        setCountry("India");
-        if (r.party.line1) setLine1(r.party.line1);
-        if (r.party.line2) setLine2(r.party.line2);
-        if (r.party.city) setCity(r.party.city);
-        if (r.party.state) setState(r.party.state);
-        if (r.party.pincode) setPincode(r.party.pincode);
-        // SAY WHERE IT CAME FROM. With no GST lookup service connected the
-        // details now come out of Zoho Books, and calling that "the GST
-        // records" would be a small lie about the authority behind a name
-        // that goes onto a tax invoice.
-        setNote({
-          tone: "ok",
-          text: `Verified — ${r.party.tradeName || r.party.legalName}${r.party.status ? ` (${r.party.status})` : ""}. `
-            + (r.note === "from your Zoho Books contact record"
-              ? "Details filled in from your Zoho Books contact record — check them against the certificate."
-              : "Address filled in from the GST records."),
-        });
-      } else if (!r.configured) {
-        // THE NUMBER *IS* VERIFIED. Everything that can be checked without
-        // asking anybody has been: the checksum, the PAN inside it and the
-        // state it encodes. Only the name and address need an outside service,
-        // and none is connected. Reporting that in amber as though the button
-        // had failed is what got this passed on as "verify GST not working".
-        setTypeTheName(true);
-        setNote({
-          tone: "ok",
-          text: `Valid GST number — PAN ${r.pan}, registered in ${r.state}. `
-            + "Nobody with this number is in Zoho Books yet, so type the trade name below exactly as it appears on the certificate.",
-        });
-      } else {
-        setNote({ tone: "warn", text: `${r.note ?? "The trade name could not be fetched."} Registered in ${r.state}.` });
-      }
-    } catch {
-      setNote({ tone: "warn", text: "Could not reach the GST service just now — the number itself looks right." });
-    } finally { setChecking(false); }
-  }
 
   return (
     <>
@@ -160,27 +107,20 @@ export default function ProfileAddressBlock({
       {showGst && (
         <div style={{ marginTop: 12 }}>
           <label htmlFor={`${idPrefix}-gstin`}>GST number <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input id={`${idPrefix}-gstin`} name="gstin" value={gstin}
-              style={{ fontFamily: "ui-monospace, monospace", letterSpacing: ".04em" }}
-              onChange={(e) => { setGstin(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15)); setNote(null); }}
-              placeholder="15 characters, e.g. 07AAYPS3155J1ZY" />
-            <button className="btn small secondary" type="button" onClick={check}
-              disabled={checking || gstin.trim().length !== 15} style={{ whiteSpace: "nowrap" }}>
-              {checking ? "Checking…" : "Verify"}
-            </button>
-          </div>
-          {note && (
-            <p style={{ fontSize: ".8rem", margin: "4px 0 0", color: note.tone === "ok" ? "#15803d" : note.tone === "warn" ? "#b45309" : "#b91c1c" }}>
-              {note.text}
-            </p>
-          )}
+          {/* NO VERIFY BUTTON. Removed 4 September 2026 on the team's
+              instruction — "we do not require the GST verification
+              functionality". The number is typed and taken as given; the trade
+              name is typed beside it rather than fetched. */}
+          <input id={`${idPrefix}-gstin`} name="gstin" value={gstin}
+            style={{ fontFamily: "ui-monospace, monospace", letterSpacing: ".04em" }}
+            onChange={(e) => setGstin(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15))}
+            placeholder="15 characters, e.g. 07AAYPS3155J1ZY" />
           <label htmlFor={`${idPrefix}-trade`} style={{ marginTop: 8 }}>
             Trade / legal name <span className="muted" style={{ fontWeight: 400 }}>(as registered under GST)</span>
           </label>
           <input id={`${idPrefix}-trade`} name="business_name" value={tradeName}
             onChange={(e) => setTradeName(e.target.value)}
-            placeholder={typeTheName ? "Type it exactly as printed on the GST certificate" : "Filled in automatically once the GST number is verified"} />
+            placeholder="Type it exactly as printed on the GST certificate" />
           <input type="hidden" name="trade_name" value={tradeName} />
         </div>
       )}

@@ -5,7 +5,7 @@ import { DURATIONS, durationLabel } from "@/lib/pricing";
 import AdminHero from "../_components/AdminHero";
 import EnrolForm from "./EnrolForm";
 import SpreadsheetPicker from "./SpreadsheetPicker";
-import { grantSubscription, bulkGrant, revokeSubscription, extendSubscription, blockSubscription, restoreSubscription, queuePastStudents } from "./actions";
+import { grantSubscription, bulkGrant, revokeSubscription, extendSubscription, blockSubscription, restoreSubscription, setSubscriptionEnd, queuePastStudents } from "./actions";
 import { createServiceClient } from "@/lib/supabase/service";
 
 function fmtDate(s: string | null): string {
@@ -29,7 +29,7 @@ type CourseRow = { id: string; title: string; subjects: { id: string; title: str
 
 export default async function EnrolmentPage(
   props: {
-    searchParams: Promise<{ granted?: string; missing?: string; error?: string; dupe?: string; until?: string; dupe_id?: string; dupe_name?: string; extended?: string; extended_to?: string; q?: string; tier?: string; months?: string; course?: string; blocked?: string; restored?: string; queued?: string; requeued?: string; badlines?: string }>;
+    searchParams: Promise<{ granted?: string; missing?: string; error?: string; dupe?: string; until?: string; dupe_id?: string; dupe_name?: string; extended?: string; extended_to?: string; q?: string; tier?: string; months?: string; course?: string; blocked?: string; restored?: string; expiry_set?: string; queued?: string; requeued?: string; badlines?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -172,6 +172,11 @@ export default async function EnrolmentPage(
         <div className="notice ok" style={{ marginTop: 16 }}>
           ✅ Extended — access now runs until <strong>{searchParams.extended_to}</strong>.
         </div>
+      )}
+      {searchParams.expiry_set && (
+        <p className="notice ok" style={{ marginTop: 8 }}>
+          ✅ Expiry corrected — access now runs until <strong>{searchParams.expiry_set}</strong>.
+        </p>
       )}
       {searchParams.blocked && (
         <div className="notice ok" style={{ marginTop: 16 }}>
@@ -344,6 +349,21 @@ export default async function EnrolmentPage(
                       ? `from ${fmtDate(s.ends_at)}`
                       : "from today"}
                   </span>
+                </form>
+                {/* CORRECTING AN EXTENSION THAT WENT IN WRONG.
+                    Extend only ever adds, so a slip could be made bigger and
+                    never smaller — two months where one was meant left no way
+                    back but revoking the subscription and granting it again,
+                    which loses the row and its history. The box shows the
+                    expiry the student has now; whatever is typed is the expiry
+                    they will have. No arithmetic to get wrong either way. */}
+                <form action={setSubscriptionEnd} style={{ display: "flex", gap: 4, alignItems: "center", margin: 0 }}>
+                  <input type="hidden" name="id" value={s.id} />
+                  <input name="ends_at" type="date"
+                         defaultValue={s.ends_at ? String(s.ends_at).slice(0, 10) : ""}
+                         aria-label="Correct the expiry date"
+                         style={{ marginBottom: 0, width: 148, fontSize: ".78rem" }} />
+                  <SubmitButton className="btn small secondary" savedLabel="✓ Set">Correct expiry</SubmitButton>
                 </form>
                 {s.status === "blocked" && (
                   <form action={restoreSubscription} style={{ display: "inline", margin: 0 }}>

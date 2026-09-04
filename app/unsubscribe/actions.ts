@@ -14,8 +14,8 @@ export async function confirmUnsubscribe(formData: FormData) {
     redirect("/unsubscribe?bad=1");
   }
   await createServiceClient().from("email_blocklist").upsert(
-    { email, reason: "Unsubscribed from an email link" },
-    { onConflict: "email" },
+    { channel: "email", email, reason: "Unsubscribed from an email link" },
+    { onConflict: "channel,email" },
   );
   redirect(`/unsubscribe?done=1&e=${encodeURIComponent(email)}`);
 }
@@ -29,6 +29,7 @@ export async function resubscribe(formData: FormData) {
   if (!email || !(await unsubscribeTokenValid(email, token))) {
     redirect("/unsubscribe?bad=1");
   }
-  await createServiceClient().from("email_blocklist").delete().eq("email", email);
+  await createServiceClient().from("email_blocklist")
+    .delete().eq("channel", "email").eq("email", email);
   redirect(`/unsubscribe?back=1&e=${encodeURIComponent(email)}`);
 }

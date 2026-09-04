@@ -89,8 +89,16 @@ export async function GET(req: NextRequest) {
     for (const p of profs ?? []) names.set(String(p.id), `${p.full_name ?? "—"} <${p.email ?? "no email"}>`);
   }
 
-  const { count: blocked } = await svc
-    .from("email_blocklist").select("email", { count: "exact", head: true });
+  // Who has asked us to stop, per channel. A number that climbs is the earliest
+  // honest signal that something is sending too much — people vote with it long
+  // before anybody writes in, and only one of them ever writes in.
+  const { data: stops } = await svc.from("email_blocklist").select("channel");
+  const stopsBy = new Map<string, number>();
+  for (const r of (stops ?? []) as { channel: string | null }[]) {
+    const c = r.channel ?? "email";
+    stopsBy.set(c, (stopsBy.get(c) ?? 0) + 1);
+  }
+  const blocked = (stops ?? []).length;
 
   const summary = {
     ok: true,
@@ -104,7 +112,8 @@ export async function GET(req: NextRequest) {
       const [channel, template, sid] = k.split("|");
       return { channel, template, who: names.get(sid) ?? sid, times: n };
     }),
-    unsubscribed_total: blocked ?? 0,
+    unsubscribed_total: blocked,
+    unsubscribed_by_channel: Object.fromEntries(stopsBy),
   };
 
   if (params.get("dry") === "1") return NextResponse.json(summary);
@@ -128,7 +137,8 @@ export async function GET(req: NextRequest) {
     `<p>Everything this site sent in the last 24 hours, by channel and template.</p>`
       + repeatHtml
       + `<table style="border-collapse:collapse;font-size:14px"><tr><th align="left" style="padding:3px 8px">Channel</th><th align="left" style="padding:3px 8px">Template</th><th align="right" style="padding:3px 8px">Sent</th><th align="right" style="padding:3px 8px">People</th></tr>${rowsHtml}</table>`
-      + `<p style="font-size:13px;color:#6b7280">${summary.unsubscribed_total} address(es) have unsubscribed in total. `
+      + `<p style="font-size:13px;color:#6b7280">${summary.unsubscribed_total} have asked us to stop in total`
+      + `${stopsBy.size ? ` (${[...stopsBy].map(([c, n]) => `${c}: ${n}`).join(", ")})` : ""}. `
       + `This review exists because 33 students once received the same email nine times and nobody noticed until one of them complained.</p>`,
     { important: worry },
   );

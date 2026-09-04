@@ -20,8 +20,8 @@ async function stop(email: string, token: string): Promise<boolean> {
   const addr = String(email ?? "").trim().toLowerCase();
   if (!addr || !(await unsubscribeTokenValid(addr, token))) return false;
   await createServiceClient().from("email_blocklist").upsert(
-    { email: addr, reason: "One-click unsubscribe from the mail client" },
-    { onConflict: "email" },
+    { channel: "email", email: addr, reason: "One-click unsubscribe from the mail client" },
+    { onConflict: "channel,email" },
   );
   return true;
 }

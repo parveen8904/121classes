@@ -509,6 +509,39 @@ export async function POST(req: NextRequest) {
 
   if (!chatId || !text) return NextResponse.json({ ok: true });
 
+  // STOP, BEFORE ANYTHING ELSE IS DONE WITH THE MESSAGE.
+  //
+  // A person who has asked to be left alone must not first be logged as an
+  // audience member, answered, or greeted. It is checked here — above the
+  // subscriber upsert and above every command — so nothing can act on the
+  // message on its way past.
+  //
+  // The confirmation goes out BEFORE the block is written, because a moment
+  // afterwards our own guard would refuse to send it. Saying nothing is worse
+  // than not offering at all: they cannot tell whether it worked, so they ask
+  // again, or write the review.
+  {
+    const { isStopWord, isStartWord, honourStop, undoStop, STOP_CONFIRMATION, START_CONFIRMATION } =
+      await import("@/lib/stopWords");
+    if (isStopWord(text)) {
+      await sendTelegramMessage(chatId, STOP_CONFIRMATION).catch(() => false);
+      await honourStop(chatId, "telegram", "Replied STOP on Telegram");
+      return NextResponse.json({ ok: true, stopped: true });
+    }
+    // "start" only means RESUME for somebody who actually stopped. Telegram
+    // sends a bare /start when anyone opens the bot for the first time, so
+    // acting on it unconditionally would greet every new student with "you are
+    // back on" — and swallow the message before the linking code below sees it.
+    if (isStartWord(text)) {
+      const { isBlocked } = await import("@/lib/notify");
+      if (await isBlocked(chatId, "telegram")) {
+        await undoStop(chatId, "telegram");
+        await sendTelegramMessage(chatId, START_CONFIRMATION).catch(() => false);
+        return NextResponse.json({ ok: true, resumed: true });
+      }
+    }
+  }
+
   // Remember every private chat that ever talks to the bot — Telegram only
   // lets bots DM people who started them, so this table IS the direct-message
   // audience (portal students and group members alike).

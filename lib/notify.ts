@@ -43,6 +43,14 @@ export function telegramChatId(raw: string | null | undefined): string {
   return v;                                                 // leave it; the API will say
 }
 
+// HOW TO MAKE IT STOP, ON THE MESSAGE ITSELF.
+//
+// An unsubscribe nobody can find is not an unsubscribe. Email carries a link
+// and a header; on Telegram and WhatsApp there is no header to carry, so the
+// instruction rides on the message — one short line, the same words on both,
+// and both webhooks act on it.
+const STOP_LINE = "Reply STOP to stop these messages.";
+
 export async function sendTelegramChannel(text: string, linkUrl?: string): Promise<boolean> {
   const token = await getSecret("TELEGRAM_BOT_TOKEN");
   if (!token) return false;
@@ -80,7 +88,13 @@ export async function sendTelegramMessage(
 ): Promise<boolean> {
   const token = await getSecret("TELEGRAM_BOT_TOKEN");
   if (!token || !chatId) return false;
-  const body = linkUrl ? `${text}\n\n${linkUrl}` : text;
+  // The same guard email has, at the one place a PERSON is messaged on
+  // Telegram. sendTelegramChannel below is the public channel, which nobody is
+  // subscribed to individually and which /stop cannot mean.
+  if (await isBlocked(String(chatId), "telegram")) return false;
+  const body = linkUrl
+    ? `${text}\n\n${linkUrl}\n\n${STOP_LINE}`
+    : `${text}\n\n${STOP_LINE}`;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
@@ -127,24 +141,35 @@ export async function aiReplyBcc(): Promise<string> {
 // ladder, the auto-reply, the digests, the crons, and from anything written
 // next year by somebody who never read this comment.
 //
-// Add an address with:  insert into email_blocklist (email, reason) values (…)
-async function isBlocked(to: string): Promise<boolean> {
+// EVERY CHANNEL, ONE LIST. Widened 4 September 2026 — "Do it for telegram and
+// WhatsApp also". A second list would have been the same mistake in a new
+// shape: the day somebody writes a sender that checks the wrong one, a student
+// who asked us to stop gets messaged.
+//
+// Add one with:
+//   insert into email_blocklist (channel, email, reason) values ('telegram', …)
+export type Channel = "email" | "whatsapp" | "telegram";
+
+export async function isBlocked(to: string, channel: Channel = "email"): Promise<boolean> {
   try {
     const { createServiceClient } = await import("@/lib/supabase/service");
     const svc = createServiceClient();
+    // Addresses are compared lowercased; a phone number or chat id is digits
+    // and unaffected by it, so one rule serves all three.
     const addr = to.trim().toLowerCase();
-    const { data } = await svc.from("email_blocklist").select("email").eq("email", addr).maybeSingle();
+    const { data } = await svc.from("email_blocklist").select("email")
+      .eq("channel", channel).eq("email", addr).maybeSingle();
     if (!data) return false;
     // Counted, so the size of a problem is visible rather than guessed at.
     await svc.rpc("note_email_blocked", { p_email: addr }).then(() => null, () => null);
-    console.error(`[email] BLOCKED — ${addr} is on the do-not-email list. Subject was suppressed.`);
+    console.error(`[${channel}] BLOCKED — ${addr} asked us to stop. The message was suppressed.`);
     return true;
   } catch {
     // A database wobble must not become a licence to send. Anything we cannot
     // verify as safe is treated as safe to send ONLY because the alternative —
     // silently dropping every email in the system — is worse; but the error is
     // loud so it cannot pass unnoticed.
-    console.error("[email] could not read the blocklist; proceeding");
+    console.error("[notify] could not read the blocklist; proceeding");
     return false;
   }
 }
@@ -279,6 +304,12 @@ async function waSend(
   const token = await getSecret("WHATSAPP_CLOUD_TOKEN");
   const phoneId = await getSecret("WHATSAPP_PHONE_NUMBER_ID");
   const to = String(payload.to ?? "");
+  // Every WhatsApp message in this codebase goes through here — text, template
+  // and image alike — which is why the check is here and not in each caller.
+  if (await isBlocked(to, "whatsapp")) {
+    await record(null, "whatsapp", kind, { to, error: "recipient asked us to stop" }, false);
+    return false;
+  }
   if (!token || !phoneId) {
     await record(null, "whatsapp", kind, { ...payload, error: "WhatsApp is not configured" }, false);
     return false;

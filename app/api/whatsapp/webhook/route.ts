@@ -59,6 +59,33 @@ export async function POST(req: NextRequest) {
           status: "received",
         });
 
+        // STOP, BEFORE ANY REPLY IS CONSIDERED.
+        //
+        // Above the auto-reply and above the AI, so a person asking to be left
+        // alone is not answered, greeted or acknowledged on their way out. The
+        // confirmation is sent FIRST, because a moment later our own guard in
+        // waSend would refuse to send it — and hearing nothing back is how
+        // somebody concludes we do not listen and writes the review instead.
+        {
+          const body = String((m.text as { body?: string } | undefined)?.body ?? "");
+          const { isStopWord, isStartWord, honourStop, undoStop, STOP_CONFIRMATION, START_CONFIRMATION } =
+            await import("@/lib/stopWords");
+          if (isStopWord(body)) {
+            const { sendWhatsAppText } = await import("@/lib/notify");
+            await sendWhatsAppText(from, STOP_CONFIRMATION).catch(() => false);
+            await honourStop(from, "whatsapp", "Replied STOP on WhatsApp");
+            continue;
+          }
+          if (isStartWord(body)) {
+            const { isBlocked, sendWhatsAppText } = await import("@/lib/notify");
+            if (await isBlocked(from, "whatsapp")) {
+              await undoStop(from, "whatsapp");
+              await sendWhatsAppText(from, START_CONFIRMATION).catch(() => false);
+              continue;
+            }
+          }
+        }
+
         // Nobody should message us and hear nothing back. One acknowledgement
         // per sender — autoReplyTo also holds a 12h window of its own, so a
         // long conversation never gets a robot between every line.

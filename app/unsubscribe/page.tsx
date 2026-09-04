@@ -70,7 +70,7 @@ export default async function UnsubscribePage(props: {
   }
 
   const { data: already } = await createServiceClient()
-    .from("email_blocklist").select("email").eq("email", email).maybeSingle();
+    .from("email_blocklist").select("email").eq("channel", "email").eq("email", email).maybeSingle();
 
   return shell(
     <>

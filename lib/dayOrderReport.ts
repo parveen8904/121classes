@@ -149,19 +149,25 @@ export async function ordersForDay(day: string): Promise<DayOrderRow[]> {
   const svc = createServiceClient();
   const { from, to } = istDayBounds(day);
 
-  const [subs, books, gifts] = await Promise.all([
+  // THE TITLES, BECAUSE A book_id IS NOT A BOOK.
+  //
+  // book_orders.items holds only {book_id, qty, price_inr} — the name lives in
+  // `books`. Without this read the sheet could say nothing better than "1 book
+  // line(s)", which is what Pawan was packing from. Two rows; read every night.
+  const [subs, books, gifts, titles] = await Promise.all([
     svc.from("orders").select(SUBS_COLS)
       .gte("created_at", from).lte("created_at", to).order("created_at"),
     svc.from("book_orders").select(BOOKS_COLS)
       .gte("created_at", from).lte("created_at", to).order("created_at"),
     svc.from("gift_orders").select(GIFTS_COLS)
       .gte("created_at", from).lte("created_at", to).order("created_at"),
+    svc.from("books").select("id, title"),
   ]);
-  return buildRows(subs, books, gifts);
+  return buildRows(subs, books, gifts, titles);
 }
 
 type Res = { data: unknown; error: { message: string } | null };
-function buildRows(subs: Res, books: Res, gifts: Res): DayOrderRow[] {
+function buildRows(subs: Res, books: Res, gifts: Res, titles: Res): DayOrderRow[] {
 
   // A REFUSED QUERY IS NOT A QUIET DAY.
   //
@@ -175,6 +181,17 @@ function buildRows(subs: Res, books: Res, gifts: Res): DayOrderRow[] {
     if (res.error) {
       throw new Error(`the day report could not read ${what}: ${res.error.message}. Nothing was sent rather than sending an incomplete list.`);
     }
+  }
+
+  // The same rule for the titles, but only when it would matter. A refused read
+  // here means every book line would go out as an unnamed id — the very fault
+  // this column was fixed for — so on a night with book orders it stops. On a
+  // night with none, a failed title read costs nothing and must not hold up the
+  // parcels that ARE due.
+  if (titles.error && ((books.data ?? []) as unknown[]).length) {
+    throw new Error(
+      `the day report could not read the book titles: ${titles.error.message}. There are book orders tonight and ` +
+      `naming them is the point of the sheet, so nothing was sent rather than sending "book line(s)" again.`);
   }
 
   const out: DayOrderRow[] = [];
@@ -205,10 +222,32 @@ function buildRows(subs: Res, books: Res, gifts: Res): DayOrderRow[] {
     });
   }
 
+  // A PARCEL IS PACKED FROM A TITLE, NOT A COUNT.
+  //
+  // "book ka name nahi aa raha hai ki inter hai ya final" — the team,
+  // 4 September 2026. This column said "1 book line(s)", so the one thing the
+  // packer actually needs — Inter or Final — was the one thing missing, and
+  // both books cost ₹2,500 so even the amount could not settle it. The titles
+  // say it plainly: "CA Inter - Advanced Accounting (Book Set)" and "CA Final -
+  // Financial Reporting (Book Set, New Updated)".
+  const bookTitles = new Map<string, string>(
+    ((titles.data ?? []) as { id: string; title: string }[]).map((b) => [String(b.id), String(b.title)]));
+  const nameBooks = (items: { book_id?: string; qty?: number }[]): string => {
+    if (!items.length) return "no book lines";
+    return items.map((it) => {
+      const id = String(it.book_id ?? "");
+      const qty = Number(it.qty) || 1;
+      // An id we cannot name is shown AS an unnamed id. Dropping it would hand
+      // the warehouse a shorter parcel with nothing to say a line went missing.
+      const name = bookTitles.get(id) || `UNKNOWN BOOK ${id.slice(0, 8)} — check the order`;
+      return qty > 1 ? `${name} × ${qty}` : name;
+    }).join(" · ");
+  };
+
   for (const r of (books.data ?? []) as unknown as Record<string, never>[]) {
     const s = (r.ship_to ?? {}) as Record<string, string | undefined>;
     const g = (r.guest_contact ?? {}) as Record<string, string | undefined>;
-    const items = (r.items ?? []) as unknown as { qty?: number }[];
+    const items = (r.items ?? []) as unknown as { book_id?: string; qty?: number }[];
     out.push({
       table: "book_orders", id: String(r.id),
       orderNo: r.order_no ? `#${r.order_no}` : "—",
@@ -216,7 +255,7 @@ function buildRows(subs: Res, books: Res, gifts: Res): DayOrderRow[] {
       student: s.name ?? g.name ?? "",
       email: s.email ?? g.email ?? "",
       phone: s.phone ?? g.phone ?? "",
-      course: `${items.length} book line(s)`,
+      course: nameBooks(items),
       months: "",
       amount: Number(r.amount_inr) || 0,
       status: String(r.status ?? ""),
@@ -352,7 +391,7 @@ export async function dispatchWorkbook(rows: DayOrderRow[], label: string): Prom
   // "Ship to", not "Address" — the column now carries the address the buyer
   // asked us to deliver to, and "Address is" says so on the row. See
   // shipOrBill: a subscription used to be labelled from the BILLING address.
-  const head = ["Order no", "Type", "Student", "Email", "Phone", "Course", "Term", "Amount", "Status", "Books to send",
+  const head = ["Order no", "Type", "Student", "Email", "Phone", "Course / book", "Term", "Amount", "Status", "Books to send",
                 "Ship to", "City", "State", "PIN code", "Address is", "Placed at", "Reported"];
   const aoa: unknown[][] = [head];
   for (const r of rows) {
@@ -379,7 +418,7 @@ export async function dispatchWorkbook(rows: DayOrderRow[], label: string): Prom
     }
   }
   ws["!cols"] = [
-    { wch: 10 }, { wch: 26 }, { wch: 22 }, { wch: 28 }, { wch: 14 }, { wch: 26 }, { wch: 10 },
+    { wch: 10 }, { wch: 26 }, { wch: 22 }, { wch: 28 }, { wch: 14 }, { wch: 46 }, { wch: 10 },
     { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 42 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 26 },
   ];
   ws["!freeze"] = { xSplit: "0", ySplit: "1", topLeftCell: "A2", activePane: "bottomLeft", state: "frozen" };
@@ -397,7 +436,7 @@ export async function dispatchWorkbook(rows: DayOrderRow[], label: string): Prom
 
 export function dayReportCsv(rows: DayOrderRow[]): string {
   const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
-  const head = ["Order no", "Type", "Student", "Email", "Phone", "Course", "Term", "Amount", "Status", "Books to send",
+  const head = ["Order no", "Type", "Student", "Email", "Phone", "Course / book", "Term", "Amount", "Status", "Books to send",
                 "Address", "City", "State", "PIN code", "Placed at"];
   const lines = [head.join(",")];
   for (const r of rows) {
@@ -463,7 +502,7 @@ export function dayReportHtml(day: string, rows: DayOrderRow[]): string {
         <th style="${cell};text-align:left">Order</th>
         <th style="${cell};text-align:left">Type</th>
         <th style="${cell};text-align:left">Student</th>
-        <th style="${cell};text-align:left">Course</th>
+        <th style="${cell};text-align:left">Course / book</th>
         <th style="${cell};text-align:right">Amount</th>
         <th style="${cell};text-align:left">Status</th>
         <th style="${cell};text-align:left">Ship to</th>

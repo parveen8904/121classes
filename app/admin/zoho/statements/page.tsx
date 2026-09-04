@@ -72,13 +72,29 @@ export default async function StatementsPage(props: {
   // Zoho to produce a number that goes stale the moment somebody acts on it.
   const stmtIds = stmts.map((x) => x.id);
   const openByStmt = new Map<string, number>();
+  // WHAT BECAME OF EVERY LINE, NOT ONLY HOW MANY ARE LEFT.
+  //
+  // "Make match line show clearly as done." A line whose money is already in
+  // Zoho is marked `matched` and then appears in NO list on this page — the
+  // only trace was a single aggregate at the top. So a statement that is
+  // entirely finished looked identical to one nothing had happened to, and the
+  // four Citi card charges that Zoho's own feed had already booked read as
+  // missing rather than as done.
+  const doneByStmt = new Map<string, { matched: number; posted: number; skipped: number }>();
   if (stmtIds.length) {
-    const { data: openRows } = await createServiceClient()
-      .from("bank_lines").select("statement_id")
-      .in("statement_id", stmtIds).in("status", ["ask", "auto", "failed"]);
-    for (const r of (openRows ?? []) as { statement_id: string }[]) {
+    const { data: lineRows } = await createServiceClient()
+      .from("bank_lines").select("statement_id, status").in("statement_id", stmtIds);
+    for (const r of (lineRows ?? []) as { statement_id: string; status: string }[]) {
       const k = String(r.statement_id);
-      openByStmt.set(k, (openByStmt.get(k) ?? 0) + 1);
+      if (["ask", "auto", "failed"].includes(r.status)) {
+        openByStmt.set(k, (openByStmt.get(k) ?? 0) + 1);
+        continue;
+      }
+      const d = doneByStmt.get(k) ?? { matched: 0, posted: 0, skipped: 0 };
+      if (r.status === "matched") d.matched++;
+      else if (r.status === "posted") d.posted++;
+      else if (r.status === "skipped") d.skipped++;
+      doneByStmt.set(k, d);
     }
   }
 
@@ -111,9 +127,19 @@ export default async function StatementsPage(props: {
     : { data: [] as never[] };
   const matchedLines = (matchedData ?? []) as unknown as MatchedLine[];
 
-  const { count: postedLineCount } = hubConnected
-    ? await createServiceClient().from("bank_lines").select("id", { count: "exact", head: true }).in("status", ["posted", "matched"])
-    : { count: 0 };
+  // TWO NUMBERS, BECAUSE THEY ARE TWO DIFFERENT FACTS.
+  //
+  // Both are finished, and lumping them under one "posted/matched" total hid
+  // the distinction that matters: what we posted is in our audit trail, what
+  // was matched was put there by somebody else — usually Zoho's own bank feed —
+  // and looking for OUR entry against it is a hunt for something that was never
+  // ours to write.
+  const [{ count: postedLineCount }, { count: matchedLineCount }] = hubConnected
+    ? await Promise.all([
+        createServiceClient().from("bank_lines").select("id", { count: "exact", head: true }).eq("status", "posted"),
+        createServiceClient().from("bank_lines").select("id", { count: "exact", head: true }).eq("status", "matched"),
+      ])
+    : [{ count: 0 }, { count: 0 }];
 
   const zohoAccounts = hubConnected ? await listZohoAccounts().catch(() => []) : [];
 
@@ -174,10 +200,10 @@ export default async function StatementsPage(props: {
 
   <p className="muted" style={{ fontSize: ".82rem", margin: "4px 0 10px" }}>
     Upload each account&apos;s statement (CSV, Excel or PDF). Every line ends in one of three places:
-    <strong> matched</strong> (already in Zoho — left alone), <strong>auto</strong> (a taught rule proposes
+    <strong> matched</strong> (✓ done — the money is already in Zoho, usually put there by the bank&nbsp;feed, so there is nothing for us to post), <strong>auto</strong> (a taught rule proposes
     the account; one tick posts it), or <strong>ask</strong> (name the account once — the answer becomes a
     rule and that merchant never asks again). Openings must tie to the previous closing, so a missing
-    statement cannot hide. ✅ posted/matched so far: {postedLineCount ?? 0}
+    statement cannot hide. ✅ <strong>{postedLineCount ?? 0}</strong> posted from here · ✓ <strong>{matchedLineCount ?? 0}</strong> already in Zoho
   </p>
 
   <div className="card" style={{ marginBottom: 10 }}>
@@ -191,11 +217,18 @@ export default async function StatementsPage(props: {
     </div>
     {matchedLines.length > 0 && (
       <div style={{ marginTop: 10 }}>
-        <strong style={{ fontSize: ".85rem" }}>Settlements found ({matchedLines.length})</strong>
+        {/* NOT "found", and not done. These are PROPOSALS.
+            The page already uses "matched" for a line whose money is genuinely
+            already in Zoho and needs nothing — and a heading that said
+            "Settlements found" beside it read as the same thing finished. It is
+            the opposite: every one of these is still waiting to be approved. */}
+        <strong style={{ fontSize: ".85rem", color: "#b45309" }}>
+          ⏳ Settlements to approve ({matchedLines.length}) — not posted yet
+        </strong>
         <p className="muted" style={{ fontSize: ".78rem", margin: "4px 0 8px" }}>
           A payment to a supplier is <strong>not</strong> an expense — the expense came with their bill. These
           post as a payment against the bill, or a receipt against the invoice, so the document is actually
-          cleared. Approve them in the list below as usual.
+          cleared. Nothing here has been booked: approve them in the list below as usual.
         </p>
         {matchedLines.map((m) => (
           <div key={m.id} style={{ padding: "6px 0", borderTop: "1px solid rgba(0,0,0,.06)", fontSize: ".83rem" }}>
@@ -278,11 +311,27 @@ export default async function StatementsPage(props: {
                 openByStmt above for why that had to go. A line that is
                 matched, posted or skipped is finished; only ask, auto and
                 failed are work, and they are the rows listed below. */}
-            <span>
+            <span style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
               {s.status === "failed" ? "❌ failed"
                 : (openByStmt.get(s.id) ?? 0) > 0
                   ? <span style={{ color: "#b45309" }}>{openByStmt.get(s.id)} line{openByStmt.get(s.id) === 1 ? "" : "s"} still to answer</span>
-                  : <span style={{ color: "#15803d" }}>✓ all lines filed</span>}
+                  : <span style={{ color: "#15803d", fontWeight: 700 }}>✓ done — nothing left to post</span>}
+              {/* AND WHAT "DONE" WAS MADE OF. Posted BY US and already in Zoho
+                  are both finished, and they are not the same fact: the second
+                  means somebody — usually Zoho's own bank feed — got there
+                  first, and looking for those entries in our audit trail is a
+                  hunt for something that was never ours to write. */}
+              {(() => {
+                const d = doneByStmt.get(s.id);
+                if (!d) return null;
+                const bits: string[] = [];
+                if (d.posted) bits.push(`${d.posted} posted from here`);
+                if (d.matched) bits.push(`${d.matched} already in Zoho`);
+                if (d.skipped) bits.push(`${d.skipped} skipped`);
+                return bits.length
+                  ? <span className="muted" style={{ fontSize: ".76rem" }}>({bits.join(" · ")})</span>
+                  : null;
+              })()}
             </span>
             {s.note && <span style={{ color: "#b45309", fontSize: ".78rem" }}>{s.note}</span>}
             {/* A failed statement can be re-read from the file already

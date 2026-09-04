@@ -37,5 +37,27 @@ check("a rupee account still sends no currency block",
   /if \(bankCur !== "INR"\) \{/.test(bank),
   "every existing INR posting must be byte-for-byte what it was");
 
-console.log(fails ? `${fails} failed` : "ok — a card charge can be posted");
+/* ── a matched line has to READ as done ─────────────────────────────────── */
+
+const stmts = readFileSync("app/admin/zoho/statements/page.tsx", "utf8");
+
+check("a finished statement says so plainly",
+  /✓ done — nothing left to post/.test(stmts),
+  "'all lines filed' did not tell him the four Citi charges were already in Zoho");
+check("and says what the done was made of",
+  /already in Zoho/.test(stmts) && /posted from here/.test(stmts),
+  "posted BY US and already in Zoho are both finished and are not the same fact");
+check("the two totals are counted separately",
+  /\.eq\("status", "posted"\)/.test(stmts) && /\.eq\("status", "matched"\)/.test(stmts),
+  "one 'posted/matched' number hid which entries were ever ours to write");
+check("the legend explains what matched means",
+  /the money is already in Zoho, usually put there by the bank/.test(stmts));
+
+check("the proposals block cannot be read as done",
+  /Settlements to approve/.test(stmts) && !/>\s*Settlements found/.test(stmts),
+  "'found' beside a status literally called matched read as the same thing finished");
+check("…and it says outright that nothing there is booked",
+  /not posted yet/.test(stmts) && /Nothing here has been booked/.test(stmts));
+
+console.log(fails ? `${fails} failed` : "ok — a card charge can be posted, and a done line says so");
 process.exit(fails ? 1 : 0);

@@ -68,7 +68,13 @@ async function searchesLeft(key: string): Promise<number | null> {
 async function fromSerpApi(): Promise<Raw[]> {
   const key = await getSecret("SERPAPI_KEY");
   if (!key) return [];
-  const queries = (await queryList()).slice(0, 6);
+  // EVERY QUERY HE CONFIGURED, NOT THE FIRST SIX.
+  //
+  // He has eight in JOB_QUERIES; this took six, so "statutory audit CA" and
+  // "semi qualified CA" were never searched at all. Capped high only so a
+  // runaway paste cannot spend the month in one run — the budget below is the
+  // real limit.
+  const queries = (await queryList()).slice(0, 20);
   const locRaw = (await getSecret("JOB_LOCATION")) || "India";
   const locations = locRaw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
   if (!locations.length) locations.push("India");
@@ -113,8 +119,34 @@ async function fromSerpApi(): Promise<Raw[]> {
   const perRun = Math.max(2, Math.floor(cap / 31) * 2);
   const budget = left === null ? perRun : Math.min(perRun, left);
 
+  // ROTATE. THE SAME SIXTEEN SEARCHES WERE RUN EVERY TIME.
+  //
+  // "We had planned for alternate day so that we can get all the openings, but
+  // it is not working" — 4 September 2026. The alternate-day rest was working
+  // exactly as designed; this was the fault underneath it.
+  //
+  // combos.slice(0, budget) always took the FRONT of the list. With eight
+  // queries across five cities there are forty combinations and a budget of
+  // sixteen, so the feed asked the same sixteen questions on every run and
+  // twenty-four were never asked once — CA Final outside Delhi, every "CA
+  // fresher", every "articleship trainee", every "statutory audit CA". And
+  // because the same sixteen searches return much the same top results, almost
+  // everything they found was already in the table: 89 new openings on 19
+  // August, then 41, 39, and 7 by 4 September. Not a quota problem — 32 of 250
+  // searches used this month.
+  //
+  // Each run now starts where the last one stopped and wraps around, so the
+  // whole list is covered every two or three runs and each pull looks somewhere
+  // the previous one did not.
+  const runNo = Math.floor(istDay / 2);
+  const start = combos.length ? (runNo * budget) % combos.length : 0;
+  const window = combos.length
+    ? Array.from({ length: Math.min(budget, combos.length) }, (_, i) => combos[(start + i) % combos.length])
+    : [];
+  console.log(`[jobs] SerpAPI sweep: ${window.length} of ${combos.length} combinations, from #${start + 1}`);
+
   const out: Raw[] = [];
-  for (const { q, loc } of combos.slice(0, budget)) {
+  for (const { q, loc } of window) {
     // Counted before it is spent, so the meter on /admin/placement is honest
     // even when SerpAPI is unreachable.
     try { await svc.rpc("serp_take", { p_cap: cap }); } catch { /* the meter must never block the feed */ }
@@ -148,7 +180,13 @@ async function fromSerpApi(): Promise<Raw[]> {
 async function fromJooble(): Promise<Raw[]> {
   const key = await getSecret("JOOBLE_API_KEY");
   if (!key) return [];
-  const queries = (await queryList()).slice(0, 6);
+  // EVERY QUERY HE CONFIGURED, NOT THE FIRST SIX.
+  //
+  // He has eight in JOB_QUERIES; this took six, so "statutory audit CA" and
+  // "semi qualified CA" were never searched at all. Capped high only so a
+  // runaway paste cannot spend the month in one run — the budget below is the
+  // real limit.
+  const queries = (await queryList()).slice(0, 20);
   const locRaw = (await getSecret("JOB_LOCATION")) || "India";
   const locations = locRaw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
   if (!locations.length) locations.push("India");

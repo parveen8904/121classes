@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { assertArea, currentStaff } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
 import { buildReturn, loadYear, EMPTY_INPUTS, type YearInputs } from "@/lib/itrReturn";
@@ -21,7 +22,22 @@ export async function buildYearAction(fd: FormData) {
   await guard();
   const fy = String(fd.get("fy") || "").trim();
   if (!/^\d{4}-\d{2}$/.test(fy)) throw new Error("Pick a financial year like 2025-26.");
-  const pack = await buildReturn(fy);
+
+  // A BUILD THAT FAILS MUST SAY WHY, ON THE PAGE.
+  //
+  // "return builder is not working" — 5 September 2026. It reads two Zoho
+  // reports for the year, and when either refuses this threw: a server action
+  // that throws gives back an unexplained error and the page comes back looking
+  // exactly as it did, with 2025-26 still unbuilt. Nothing on screen said which
+  // year, which report, or what Zoho answered — so "not working" was all there
+  // was to report.
+  let pack: Awaited<ReturnType<typeof buildReturn>> | null = null;
+  try {
+    pack = await buildReturn(fy);
+  } catch (e) {
+    const why = e instanceof Error ? e.message : "Zoho did not answer.";
+    redirect(`/admin/zoho/itr?fy=${encodeURIComponent(fy)}&err=${encodeURIComponent(`${fy} could not be built: ${why}`)}`);
+  }
   const staff = await currentStaff();
   const svc = createServiceClient();
   await svc.from("itr_years").upsert(
@@ -29,6 +45,7 @@ export async function buildYearAction(fd: FormData) {
     { onConflict: "fy" },
   );
   revalidatePath("/admin/zoho/itr");
+  redirect(`/admin/zoho/itr?fy=${encodeURIComponent(fy)}&built=1`);
 }
 
 /** Move one ledger to a different destination. All three outputs follow. */

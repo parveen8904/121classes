@@ -1,6 +1,7 @@
 import Link from "next/link";
 import AdminHero from "../../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
+import { createServiceClient } from "@/lib/supabase/service";
 import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import Money from "@/app/components/Money";
@@ -48,7 +49,7 @@ function Row({ label, value, bold, indent }: { label: string; value: number | nu
 export default async function ItrBuilderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ fy?: string; tab?: string }>;
+  searchParams: Promise<{ fy?: string; tab?: string; err?: string; built?: string }>;
 }) {
   await assertArea("zoho");
   const sp = await searchParams;
@@ -57,6 +58,10 @@ export default async function ItrBuilderPage({
 
   const connected = await zohoConfigured();
   const [{ inputs, snapshot, builtAt }, map] = await Promise.all([loadYear(fy), loadMap()]);
+  // Which years actually hold a snapshot, so an empty page can point at one.
+  const { data: builtRows } = await createServiceClient()
+    .from("itr_years").select("fy").not("built_at", "is", null);
+  const builtYears = ((builtRows ?? []) as { fy: string }[]).map((r) => String(r.fy)).filter((y) => y !== fy).sort().reverse();
   const pack: ReturnPack | null = snapshot;
   const { from, to } = fyDates(fy);
 
@@ -87,6 +92,14 @@ export default async function ItrBuilderPage({
         subtitle="Zoho in, three outputs out: the financials, the computation of income, and Schedule AL."
         back={{ href: "/admin/zoho", label: "Zoho accounting hub" }}
       />
+      {sp.built && <p className="notice ok" style={{ marginTop: 12 }}>✅ {fy} built from the books.</p>}
+      {/* WHY IT DID NOT BUILD, ON THE PAGE.
+          The action used to throw, which gave back an unexplained error and a
+          page that looked untouched — "return builder is not working" was all
+          anybody could say about it. */}
+      {sp.err && (
+        <p className="notice err" style={{ marginTop: 12, lineHeight: 1.7 }}>{sp.err}</p>
+      )}
 
       {!connected && (
         <div className="card" style={{ borderColor: "#EF4444" }}>
@@ -136,9 +149,27 @@ export default async function ItrBuilderPage({
         )}
       </div>
 
+      {/* AND SAY WHICH YEARS DO HAVE ONE.
+          The page opens on 2025-26 — the year being filed now — and that year
+          had never been built, while 2026-27 had. So it opened empty, every
+          time, and looked broken rather than unbuilt. */}
       {!pack && (
         <div className="card">
-          <p>Nothing built for {fy} yet. Press <strong>Read the books and build</strong> above.</p>
+          <p style={{ margin: 0 }}>
+            <strong>Nothing has been built for {fy}.</strong> Press <strong>Read the books and build</strong> above —
+            it reads Zoho&apos;s profit &amp; loss and balance sheet for {from} to {to}.
+          </p>
+          {builtYears.length > 0 && (
+            <p className="muted" style={{ fontSize: ".84rem", margin: "8px 0 0" }}>
+              Already built:{" "}
+              {builtYears.map((y, i) => (
+                <span key={y}>
+                  {i > 0 ? " · " : ""}
+                  <Link href={`/admin/zoho/itr?fy=${y}&tab=${tab}`}>{y}</Link>
+                </span>
+              ))}
+            </p>
+          )}
         </div>
       )}
 

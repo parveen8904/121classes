@@ -117,6 +117,29 @@ export async function runReengagement(): Promise<ReengageResult> {
     )).map((w) => w.student_id),
   );
 
+  // AND ANYONE WHO IS ALREADY ENROLLED. THIS IS NOT FOR THEM.
+  //
+  // "are you sending mails that your first class is waiting? pl check to whom
+  // you are sending." — 5 September 2026. 619 of the 1,872 people who had
+  // received this held an ACTIVE SUBSCRIPTION. Akriti Negi has access until
+  // September 2028 and was sent it three times; Paresh Nayak, access to 2028,
+  // twice — and he had filed a login-help request, so a student who could not
+  // get IN was being told his first class was waiting.
+  //
+  // The letter says "the first five classes of every subject are free to watch.
+  // No payment, no card." To somebody holding a paid or granted subscription
+  // that reads as though we do not know who they are. The ladder is for people
+  // who signed up and never enrolled; an enrolled student who has not started
+  // needs help, not marketing, and that is a different letter written by a
+  // person.
+  const enrolled = new Set(
+    (await inChunks<{ student_id: string }>(
+      students.map((p) => p.id),
+      (b) => svc.from("subscriptions").select("student_id").in("student_id", b)
+        .in("status", ["active", "blocked"]),
+    )).map((r) => r.student_id),
+  );
+
   // What each student has already been sent. The ladder must never repeat a
   // rung, and must never go past the second.
   const already = await inChunks<{ student_id: string; kind: string }>(
@@ -126,12 +149,12 @@ export async function runReengagement(): Promise<ReengageResult> {
   const sent = new Set(already.map((r) => `${r.student_id}:${r.kind}`));
 
   const due3 = students.filter(
-    (p) => p.created_at < d3 && !watched.has(p.id)
+    (p) => p.created_at < d3 && !watched.has(p.id) && !enrolled.has(p.id)
       && !sent.has(`${p.id}:never_started_d3`) && !sent.has(`${p.id}:never_started_d7`),
   ).slice(0, CAP_PER_RUN);
 
   const due7 = students.filter(
-    (p) => p.created_at < d7 && !watched.has(p.id)
+    (p) => p.created_at < d7 && !watched.has(p.id) && !enrolled.has(p.id)
       && sent.has(`${p.id}:never_started_d3`) && !sent.has(`${p.id}:never_started_d7`),
   ).slice(0, CAP_PER_RUN);
 

@@ -48,6 +48,18 @@ check("TOTAL TAX — line 24", near(r.totalTax, 171261.39), `got ${r.totalTax}, 
 check("TOTAL PAYMENTS — line 33", near(r.totalPayments, 176772.88), `got ${r.totalPayments}`);
 check("OVERPAID — line 34", near(r.balance, 5511.49), `got ${r.balance}, his 5,511.49`);
 
+/* ── TO THE CENT, not to the dollar ──────────────────────────────────────
+ * The checks above allow a dollar, and a dollar was enough room to hide a
+ * rounded foreign tax credit: the credit was rounded to cents for display and
+ * that rounded figure then carried on through the return, so the amount
+ * overpaid came out a cent under his workbook's. "In my excel overpaid is not
+ * this amount" — 5 September 2026. Round for the eye, never for the sum. */
+const cent = (a: number, b: number) => Math.abs(a - b) < 0.005;
+check("the credit that continues the chain is exact, not the rounded one",
+  cent(r.foreignTaxCredit, 333890.99675446824), `got ${r.foreignTaxCredit}`);
+check("TOTAL TAX agrees to the cent", cent(r.totalTax, 171261.39), `got ${r.totalTax}`);
+check("OVERPAID agrees to the cent", cent(r.balance, 5511.49), `got ${r.balance}, his 5,511.49`);
+
 /* ── the bands, as his Tax computation sheet lays them out ───────────────── */
 
 const { bands } = bandedTax(1370864.4323028477, BRACKETS_2025_MFJ);

@@ -117,7 +117,10 @@ export function compute1040(f: Us1040Figures, brackets = BRACKETS_2025_MFJ): Us1
     totalTaxableIncome: taxableIncome,
     taxBeforeCredits: tax,
   });
-  const foreignTaxCredit = f1116.totalCredit;
+  // The EXACT credit continues the chain; f1116.totalCredit is the same figure
+  // rounded for display. Subtracting the rounded one here and rounding again at
+  // the end costs a cent on the amount overpaid.
+  const foreignTaxCredit = f1116.totalCreditExact;
   const taxAfterCredit = Math.max(0, tax - foreignTaxCredit);
 
   const additionalMedicare =

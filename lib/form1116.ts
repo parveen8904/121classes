@@ -58,6 +58,12 @@ export type Form1116 = {
   totalForeignTaxable: number;
   totalLimit: number;
   totalCredit: number;
+  /** The same credit WITHOUT the rounding to cents. The 1040 subtracts the
+   *  credit and then goes on computing, so the figure that continues the chain
+   *  must be the exact one — rounding here and again at the end moves the
+   *  amount overpaid by a cent, which is how a return stops agreeing with the
+   *  workbook it was checked against. Round for the eye, never for the sum. */
+  totalCreditExact: number;
   totalCarried: number;
   notes: string[];
 };
@@ -67,7 +73,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export function computeForm1116(f: Form1116Input): Form1116 {
   const notes: string[] = [];
 
-  const one = (label: string, b: BasketInput): BasketResult => {
+  const one = (label: string, b: BasketInput, exact: number[]): BasketResult => {
     // APPORTIONED ON GROSS INCOME FROM ALL SOURCES, not on the foreign total.
     // The standard deduction and the IRA are not attributable to any basket, so
     // each takes the share its gross income bears to the whole return — which
@@ -84,6 +90,7 @@ export function computeForm1116(f: Form1116Input): Form1116 {
     // actually paid, and never more than the US tax on that foreign income.
     const creditAllowed = Math.max(0, Math.min(limit, b.foreignTaxPaid));
     const carriedForward = Math.max(0, b.foreignTaxPaid - creditAllowed);
+    exact.push(creditAllowed);
 
     return {
       ...b, label,
@@ -96,7 +103,8 @@ export function computeForm1116(f: Form1116Input): Form1116 {
     };
   };
 
-  const baskets = [one("General — the practice", f.general), one("Passive — rent, interest, royalty", f.passive)];
+  const exact: number[] = [];
+  const baskets = [one("General — the practice", f.general, exact), one("Passive — rent, interest, royalty", f.passive, exact)];
   const totalCarried = baskets.reduce((a, b) => a + b.carriedForward, 0);
 
   if (totalCarried > 0) {
@@ -120,6 +128,7 @@ export function computeForm1116(f: Form1116Input): Form1116 {
     totalForeignTaxable: r2(baskets.reduce((a, b) => a + b.foreignTaxableIncome, 0)),
     totalLimit: r2(baskets.reduce((a, b) => a + b.limit, 0)),
     totalCredit: r2(baskets.reduce((a, b) => a + b.creditAllowed, 0)),
+    totalCreditExact: exact.reduce((a, b) => a + b, 0),
     totalCarried: r2(totalCarried),
     notes,
   };

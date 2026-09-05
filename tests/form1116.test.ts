@@ -78,7 +78,7 @@ const engine = readFileSync("lib/us1040.ts", "utf8");
 const itr = readFileSync("lib/itrReturn.ts", "utf8");
 
 check("the 1040's credit is computed from 1116, never typed",
-  /const foreignTaxCredit = f1116\.totalCredit;/.test(engine)
+  /const foreignTaxCredit = f1116\.totalCreditExact;/.test(engine)
     && !/key: "foreignTaxCredit"/.test(engine),
   "a typed number could put a credit on the return the statute does not permit");
 check("the self-employment half is charged to the general basket only",

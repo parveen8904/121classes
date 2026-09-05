@@ -21,12 +21,42 @@ const num = (v: unknown) => Number(v) || 0;
 /** Live FY-to-date P&L + tax credits, read from the Zoho chart balances. */
 export async function fySnapshot(): Promise<FyPnl> {
   type Acct = { account_name: string; account_type: string; current_balance?: number };
+  // "IT SAYS ZERO EXPENSE. IT IS WRONG." — 5 September 2026. He is right, and
+  // this page walked into BOTH of the traps lib/bankStatements.ts already has
+  // written down beside the same endpoint. They compound.
+  //
+  //   1. "AccountType.Active" sounds like active accounts and is not. Under it
+  //      Zoho returns not one expense head — no expense, no other_expense, no
+  //      cost of goods sold. Checked against his books today: it hands back
+  //      assets, income, liabilities and equity, and nothing else.
+  //
+  //   2. has_more_page LIES. Under AccountType.All page 2 reports
+  //      has_more_page: false, and page 3 then hands over 119 more accounts —
+  //      which happen to be EVERY expense head in the chart, 108 of them
+  //      totalling ₹46,74,879.78. So the loop must read until a page comes
+  //      back EMPTY, never until the flag says stop.
+  //
+  // With expenses reading zero the profit was the whole turnover, and the
+  // advance-tax instalment suggested for 15 September came out ₹13,98,454
+  // higher than the figures support. A tax page that is confidently wrong is
+  // worse than no tax page.
   const accts: Acct[] = [];
-  for (let page = 1; page <= 3; page++) {
-    const r = await zohoFetch<{ chartofaccounts?: Acct[]; page_context?: { has_more_page?: boolean } }>(
-      "/chartofaccounts", { query: { filter_by: "AccountType.Active", per_page: "200", page: String(page), showbalance: "true" } });
-    accts.push(...(r.chartofaccounts ?? []));
-    if (!r.page_context?.has_more_page) break;
+  for (let page = 1; page <= 12; page++) {
+    const r = await zohoFetch<{ chartofaccounts?: Acct[] }>(
+      "/chartofaccounts", { query: { filter_by: "AccountType.All", per_page: "200", page: String(page), showbalance: "true" } });
+    const batch = r.chartofaccounts ?? [];
+    if (!batch.length) break;
+    accts.push(...batch);
+  }
+  // A chart with no expense head at all is not a business with no costs — it is
+  // this bug coming back. Refuse rather than publish a profit that is really a
+  // turnover; the page shows the reason instead of a number.
+  const expenseHeads = accts.filter((a) => ["expense", "cost_of_goods_sold", "other_expense"].includes(a.account_type)).length;
+  if (accts.length && expenseHeads === 0) {
+    throw new Error(
+      "Zoho returned a chart of accounts with no expense head at all, which cannot be right — "
+      + "the profit below would be the whole turnover. Nothing is shown rather than a figure that would overstate the tax.",
+    );
   }
   const sum = (types: string[]) => accts.filter((a) => types.includes(a.account_type)).reduce((s, a) => s + num(a.current_balance), 0);
   const income = sum(["income", "other_income"]);

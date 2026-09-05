@@ -21,13 +21,20 @@ export default async function TaxPage(props: { searchParams: Promise<{ scan?: st
   const staff = await currentStaff();
   const isFounder = staff?.role === "admin";
 
+  let taxError: string | null = null;
   let taxData: { snap: Awaited<ReturnType<typeof fySnapshot>>; india: ReturnType<typeof indiaAdvanceTax>; us: ReturnType<typeof usEstimatedTax>; assume: Awaited<ReturnType<typeof taxAssumptions>> } | null = null;
   if (isFounder && hubConnected) {
     try {
       const assume = await taxAssumptions();
       const snap = await fySnapshot();
       taxData = { snap, india: indiaAdvanceTax(snap, assume.effRatePct), us: usEstimatedTax(assume.usPriorYearTaxUsd), assume };
-    } catch { /* the worksheet hides on a hiccup rather than half-drawing */ }
+    } catch (e) {
+      // WHY it could not be built, not merely that it could not.
+      // A worksheet that vanishes silently is how "expenses ₹0" survived: a
+      // figure nobody could question is worse than a sentence saying what went
+      // wrong. See the expense-head guard in lib/taxEngine.ts.
+      taxError = e instanceof Error ? e.message : "The live books could not be read.";
+    }
   }
 
   // The rate that applies today, and the five month-ends behind it.
@@ -62,7 +69,10 @@ export default async function TaxPage(props: { searchParams: Promise<{ scan?: st
       {!isFounder ? (
         <p className="muted" style={{ marginTop: 16 }}>The worksheets are the founder&apos;s own. The Rule 115 rates below are for everybody.</p>
       ) : !taxData ? (
-        <p className="muted" style={{ marginTop: 16 }}>The worksheet could not be built just now — it reads the live books, so it hides rather than half-drawing.</p>
+        <p className="notice err" style={{ marginTop: 16, lineHeight: 1.7 }}>
+          <strong>The worksheet is not shown.</strong> It reads the live books, and it hides rather than
+          half-drawing.{taxError ? <> <br />{taxError}</> : null}
+        </p>
       ) : (
         <>
 

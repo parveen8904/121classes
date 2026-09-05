@@ -299,8 +299,8 @@ export default async function Us1040Page({ searchParams }: {
       </div>
 
       <p className="muted" style={{ fontSize: ".78rem", marginTop: 12, lineHeight: 1.7 }}>
-        A projection for your judgment, not a filed return. The foreign tax
-        credit is entered from it — and the capital gain must come from the 1099-Bs, not the rupee scrip
+        A projection for your judgment, not a filed return. The foreign tax credit above is computed from
+        Form 1116, not typed. The capital gain must come from the 1099-Bs and not from the rupee scrip
         ledgers: for 2025 those held $511,788 against roughly $55,000 the books implied.
       </p>
     </main>

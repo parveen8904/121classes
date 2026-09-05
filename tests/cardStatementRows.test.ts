@@ -136,5 +136,44 @@ check("a signed BANK column still reads a minus as money out",
   bankSigned.lines[0]?.debit === 500 && bankSigned.lines[1]?.credit === 250,
   "the card rule must fire only for a credit-card account");
 
+/* ── a statement with ONE transaction on it ─────────────────────────────── */
+
+// His Axis 4812 statement, exactly as the vault read it: a header and one line.
+const single = rowsToLines([
+  ["Date", "Transaction Details", "Amount (INR)", "Debit/Credit"],
+  ["07 Apr '26", "Payment Received", "₹ 3,540.00", "Credit"],
+], { accountKind: "credit_card" });
+
+check("a one-line statement is read", single.lines.length === 1,
+  `got ${single.lines.length}: ${single.note.slice(0, 90)}`);
+check("…and the payment is money IN",
+  single.lines[0]?.credit === 3540 && single.lines[0]?.debit === 0,
+  "a payment on a card reduces what is owed");
+check("the date with an apostrophe still parses here", single.lines[0]?.date === "2026-04-07");
+check("a rupee sign with a SPACE after it is read through",
+  single.lines[0]?.credit === 3540, '"₹ 3,540.00" — the space is real in his file');
+
+check("the header still has to prove itself where there ARE rows to ask", (() => {
+  // Five rows beneath, none of them dated: this is a preamble, not a table.
+  const decoy = rowsToLines([
+    ["Date", "Particulars", "Amount"],
+    ["Account holder", "PARVEEN SHARMA", ""],
+    ["Address", "B-173 Nirman Vihar", ""],
+    ["Branch", "Nirman Vihar", ""],
+    ["IFSC", "UTIB0000234", ""],
+    ["Customer ID", "912345678", ""],
+  ]);
+  return decoy.lines.length === 0;
+})(), "the two-date rule earns its keep and must not be lost to this");
+
+check("blank spacing rows do not count against 'all of them parsed'", (() => {
+  const spaced = rowsToLines([
+    ["Date", "Transaction Details", "Amount (INR)", "Debit/Credit"],
+    ["", "", "", ""],
+    ["07 Apr '26", "Payment Received", "₹ 3,540.00", "Credit"],
+  ], { accountKind: "credit_card" });
+  return spaced.lines.length === 1;
+})());
+
 console.log(fails ? `${fails} failed` : "ok — a credit-card statement files");
 process.exit(fails ? 1 : 0);

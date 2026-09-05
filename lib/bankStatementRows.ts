@@ -317,13 +317,33 @@ export function rowsToLines(rows: string[][], opts?: RowsOpts): { lines: StmtLin
   // So a candidate now has to PROVE itself: at least two of the rows beneath it
   // must parse as a date in the column it claims. If none do, the search
   // carries on looking.
+  // TWO DATES PROVE A HEADER — UNLESS THERE ARE NOT TWO ROWS TO ASK.
+  //
+  // "The credit card is not working ... It could not find the header row ...
+  // Payment received is missing." — 5 September 2026, of the Axis 4812
+  // statement. It holds exactly two rows: the header, and one line, a payment
+  // received of ₹3,540 on 07 Apr '26.
+  //
+  // The two-date rule is there to stop an account-summary block at the top of a
+  // bank export being taken for the transaction table, and it earns its keep.
+  // But it asked for two dates from a statement that has one transaction, so a
+  // single-line statement could never be read at all — and a card that was paid
+  // once in the month is an ordinary thing, not a malformed file.
+  //
+  // So it asks for two where two exist, and for all of them where fewer do. The
+  // header must still name a date column AND a narration column, which is what
+  // keeps a preamble from passing on the strength of one stray date.
   const dateRowsUnder = (start: number, dateCol: number) => {
-    let hits = 0;
+    let hits = 0, looked = 0;
     for (let j = start + 1; j < Math.min(rows.length, start + 40); j++) {
+      // A wholly blank row is spacing, not a candidate — counting it would make
+      // "all of them parsed" impossible to satisfy.
+      if (!(rows[j] ?? []).some((c) => str(c) !== "")) continue;
+      looked++;
       if (readDate(str((rows[j] ?? [])[dateCol]))) hits++;
       if (hits >= 2) break;
     }
-    return hits;
+    return { hits, need: Math.min(2, looked) };
   };
 
   const locate = (loose: boolean) => {
@@ -338,7 +358,8 @@ export function rowsToLines(rows: string[][], opts?: RowsOpts): { lines: StmtLin
         return bare.split(" ").some((w) => re.test(w)) || re.test(bare);
       });
       const dIdx = find(HEAD.date);
-      if (dIdx >= 0 && find(HEAD.narration) >= 0 && dateRowsUnder(i, dIdx) >= 2) {
+      const under = dIdx >= 0 ? dateRowsUnder(i, dIdx) : { hits: 0, need: 2 };
+      if (dIdx >= 0 && find(HEAD.narration) >= 0 && under.need > 0 && under.hits >= under.need) {
         hi = i;
         for (const [k, re] of Object.entries(HEAD)) {
           const idx = find(re);

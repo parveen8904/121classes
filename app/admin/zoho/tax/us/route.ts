@@ -47,17 +47,24 @@ export async function GET(req: NextRequest) {
   const calendarYear = pack.from.slice(0, 4) === pack.to.slice(0, 4) ? Number(pack.from.slice(0, 4)) : null;
   if (calendarYear) {
     const { createServiceClient } = await import("@/lib/supabase/service");
-    const { compute1040, INPUT_KEYS } = await import("@/lib/us1040");
+    const { compute1040, INPUT_KEYS, statuteFor, statutoryFigures } = await import("@/lib/us1040");
     const { data: inputRows } = await createServiceClient()
       .from("us1040_inputs").select("key, value").eq("year", calendarYear);
-    if ((inputRows ?? []).length) {
+    // THE YEAR'S OWN BRACKETS. compute1040 defaults to 2025's, which is right
+    // for 2025 and silently wrong for every other year — the file would carry a
+    // 2024 heading over a 2025 computation with nothing on it to say so.
+    const statute = statuteFor(calendarYear);
+    const lawful = (statutoryFigures(calendarYear) ?? {}) as Record<string, number>;
+    if ((inputRows ?? []).length && statute) {
       const held = new Map((inputRows ?? []).map((x) => [String(x.key), Number(x.value)]));
-      const f = Object.fromEntries(INPUT_KEYS.map((k) => [k.key, held.get(k.key) ?? 0])) as Parameters<typeof compute1040>[0];
-      const c = compute1040(f);
+      const f = Object.fromEntries(
+        INPUT_KEYS.map((k) => [k.key, held.get(k.key) ?? lawful[k.key] ?? 0]),
+      ) as Parameters<typeof compute1040>[0];
+      const c = compute1040(f, statute.brackets);
       const L = (label: string, v: number | null) => [label, v === null ? "" : v];
       const sheet: unknown[][] = [
         [`Form 1040, calendar ${calendarYear}`],
-        ["Married filing jointly. The income is from the books; every other figure is one you set on the 1040 page."],
+        [`Married filing jointly, on ${calendarYear}'s own statute — ${statute.citation}. The income is from the books; every other figure is one you set on the 1040 page.`],
         [],
         L("INCOME", null),
         L("      Taxable interest — line 2b", f.interest),
@@ -118,7 +125,9 @@ export async function GET(req: NextRequest) {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
         [`Form 1040, calendar ${calendarYear} — not drawn`],
         [],
-        [`Nothing is set for ${calendarYear} on the 1040 page, so the return is not in this file.`],
+        [statute
+          ? `Nothing is set for ${calendarYear} on the 1040 page, so the return is not in this file.`
+          : `The 1040 does not hold the statute for ${calendarYear}, and another year's brackets would give a wrong return that looks right.`],
         ["A 1040 of zeros is an empty sheet that looks like an answer, and this one would be filed."],
         [],
         ["Open /admin/zoho/tax/us1040, set the year's figures, and build this file again."],

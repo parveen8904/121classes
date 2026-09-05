@@ -13,16 +13,99 @@ import { computeForm1116, type Form1116 } from "./form1116.ts";
 
 export type Bracket = { from: number; to: number | null; rate: number };
 
-/** Married filing jointly, 2025 — Rev. Proc. 2024-40, as his workbook cites. */
-export const BRACKETS_2025_MFJ: Bracket[] = [
-  { from: 0, to: 23850, rate: 0.10 },
-  { from: 23850, to: 96950, rate: 0.12 },
-  { from: 96950, to: 206700, rate: 0.22 },
-  { from: 206700, to: 394600, rate: 0.24 },
-  { from: 394600, to: 501050, rate: 0.32 },
-  { from: 501050, to: 751600, rate: 0.35 },
-  { from: 751600, to: null, rate: 0.37 },
-];
+/**
+ * THE STATUTE, YEAR BY YEAR.
+ *
+ * "2026 us tax 1040 not working, similarly 2024 not working" — 5 September
+ * 2026. They were not broken so much as lying: every year computed on the 2025
+ * brackets and the 2025 deduction, because those were the only ones written
+ * down. Picking 2024 gave you a 2024 heading over a 2025 return.
+ *
+ * A year the table does not hold is REFUSED. Falling back to the nearest year
+ * is the one thing this must never do: a return computed on the wrong year's
+ * law looks exactly like a return computed on the right one.
+ *
+ * Every figure below is off the year's own Revenue Procedure, checked against
+ * the source in tests/us1040Years.test.ts.
+ */
+export type YearStatute = {
+  citation: string;
+  brackets: Bracket[];
+  /** Held as the 1040 holds it — a negative, because it comes off income. */
+  standardDeduction: number;
+  socialSecurityWageBase: number;
+  /** s.1401(b)(2)(A) — $250,000 on a joint return, and NOT indexed. */
+  additionalMedicareThreshold: number;
+  qualifiedDividendRate: number;
+  qbiDeduction: number;
+};
+
+const mfj = (t: number[]): Bracket[] => {
+  const rates = [0.10, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37];
+  return rates.map((rate, i) => ({ from: t[i], to: i + 1 < t.length ? t[i + 1] : null, rate }));
+};
+
+export const STATUTE_BY_YEAR: Record<number, YearStatute> = {
+  2023: {
+    citation: "Rev. Proc. 2022-38",
+    brackets: mfj([0, 22000, 89450, 190750, 364200, 462500, 693750]),
+    standardDeduction: -27700,
+    socialSecurityWageBase: 160200,
+    additionalMedicareThreshold: 250000,
+    qualifiedDividendRate: 0.20,
+    qbiDeduction: 0,
+  },
+  2024: {
+    citation: "Rev. Proc. 2023-34",
+    brackets: mfj([0, 23200, 94300, 201050, 383900, 487450, 731200]),
+    standardDeduction: -29200,
+    socialSecurityWageBase: 168600,
+    additionalMedicareThreshold: 250000,
+    qualifiedDividendRate: 0.20,
+    qbiDeduction: 0,
+  },
+  2025: {
+    // The deduction is NOT the 30,000 of the Rev. Proc.: the July 2025 Act
+    // raised it to 31,500, which is what his workbook uses and what was filed.
+    citation: "Rev. Proc. 2024-40, deduction as raised by the July 2025 Act",
+    brackets: mfj([0, 23850, 96950, 206700, 394600, 501050, 751600]),
+    standardDeduction: -31500,
+    socialSecurityWageBase: 176100,
+    additionalMedicareThreshold: 250000,
+    qualifiedDividendRate: 0.20,
+    qbiDeduction: 0,
+  },
+  2026: {
+    citation: "Rev. Proc. 2025-32",
+    brackets: mfj([0, 24800, 100800, 211400, 403550, 512450, 768700]),
+    standardDeduction: -32200,
+    socialSecurityWageBase: 184500,
+    additionalMedicareThreshold: 250000,
+    qualifiedDividendRate: 0.20,
+    qbiDeduction: 0,
+  },
+};
+
+/** The year's law, or null. Null means REFUSE — never substitute another year. */
+export function statuteFor(year: number): YearStatute | null {
+  return STATUTE_BY_YEAR[year] ?? null;
+}
+
+/** The statutory figures as the 1040 holds them, for seeding and for defaults. */
+export function statutoryFigures(year: number): Partial<Us1040Figures> | null {
+  const st = statuteFor(year);
+  if (!st) return null;
+  return {
+    standardDeduction: st.standardDeduction,
+    qbiDeduction: st.qbiDeduction,
+    qualifiedDividendRate: st.qualifiedDividendRate,
+    socialSecurityWageBase: st.socialSecurityWageBase,
+    additionalMedicareThreshold: st.additionalMedicareThreshold,
+  };
+}
+
+/** Married filing jointly, 2025 — the year his workbook computes. */
+export const BRACKETS_2025_MFJ: Bracket[] = STATUTE_BY_YEAR[2025].brackets;
 
 export type Band = { label: string; from: number; to: number | null; rate: number; inBand: number; tax: number };
 
@@ -176,10 +259,4 @@ export const INPUT_KEYS: { key: keyof Us1040Figures; label: string; source: stri
 ];
 
 /** 2025 statute, so a fresh year opens with the law rather than with zeros. */
-export const STATUTORY_2025: Partial<Us1040Figures> = {
-  standardDeduction: -31500,
-  qbiDeduction: 0,
-  qualifiedDividendRate: 0.20,
-  socialSecurityWageBase: 176100,
-  additionalMedicareThreshold: 250000,
-};
+export const STATUTORY_2025: Partial<Us1040Figures> = statutoryFigures(2025)!;

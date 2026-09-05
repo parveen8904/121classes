@@ -3,7 +3,7 @@ import AdminHero from "../../../_components/AdminHero";
 import { assertArea } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
 import SubmitButton from "@/app/components/SubmitButton";
-import { compute1040, INPUT_KEYS, BRACKETS_2025_MFJ, type Us1040Figures } from "@/lib/us1040";
+import { compute1040, INPUT_KEYS, statuteFor, statutoryFigures, STATUTE_BY_YEAR, type Us1040Figures } from "@/lib/us1040";
 import { setUs1040Input, seedUs1040Year } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -54,8 +54,21 @@ export default async function Us1040Page({ searchParams }: {
   const held = new Map((rows ?? []).map((r) => [String(r.key), Number(r.value)]));
   const notes = new Map((rows ?? []).map((r) => [String(r.key), (r.note as string | null) ?? null]));
 
-  const f = Object.fromEntries(INPUT_KEYS.map((k) => [k.key, held.get(k.key) ?? 0])) as Us1040Figures;
-  const r = compute1040(f, BRACKETS_2025_MFJ);
+  // THE YEAR'S OWN LAW, OR NONE AT ALL.
+  //
+  // "2026 us tax 1040 not working, similarly 2024 not working" — 5 September
+  // 2026. Every year was computed on the 2025 brackets and the 2025 deduction,
+  // and a 2024 heading over a 2025 return is worse than no return: it is wrong
+  // in a way nothing on the page would show. A year whose statute is not held
+  // is refused outright rather than borrowing the nearest one.
+  const statute = statuteFor(year);
+  const lawful = statutoryFigures(year) ?? {};
+  // A figure he has set wins; otherwise the year's statute stands in, so
+  // picking 2024 gives 2024's law with only the income left to fill.
+  const f = Object.fromEntries(
+    INPUT_KEYS.map((k) => [k.key, held.get(k.key) ?? (lawful as Record<string, number>)[k.key] ?? 0]),
+  ) as Us1040Figures;
+  const r = compute1040(f, statute?.brackets ?? []);
   // A SEEDED YEAR IS NOT A STARTED ONE.
   //
   // "It shows zero." — 5 September 2026. He had pressed "open with the statute",
@@ -96,7 +109,21 @@ export default async function Us1040Page({ searchParams }: {
         </Link>
       </div>
 
-      {!started && (
+      {!statute && (
+        <div className="card" style={{ marginTop: 10, borderLeft: "3px solid #b91c1c" }}>
+          <p style={{ margin: 0, lineHeight: 1.7 }}>
+            <strong>The 1040 does not hold the statute for {year}.</strong> The brackets, the standard
+            deduction and the wage base change every year, and computing {year} on another year&apos;s law
+            would produce a return that looks right and is not. Nothing is shown below until{" "}
+            {year}&apos;s Revenue Procedure is added to <code>STATUTE_BY_YEAR</code>.
+          </p>
+          <p className="muted" style={{ margin: "6px 0 0", fontSize: ".78rem" }}>
+            Held so far: {Object.keys(STATUTE_BY_YEAR).join(", ")}.
+          </p>
+        </div>
+      )}
+
+      {statute && !started && (
         <div className="card" style={{ marginTop: 10, borderLeft: "3px solid #b45309" }}>
           <p style={{ margin: 0, lineHeight: 1.7 }}>
             {seededOnly ? (
@@ -117,12 +144,13 @@ export default async function Us1040Page({ searchParams }: {
           {!seededOnly && (
             <form action={seedUs1040Year} style={{ marginTop: 8 }}>
               <input type="hidden" name="year" value={year} />
-              <SubmitButton className="btn small">Open {year} with the 2025 statute</SubmitButton>
+              <SubmitButton className="btn small">Write {year}&apos;s statute in — {statute?.citation}</SubmitButton>
             </form>
           )}
         </div>
       )}
 
+      {statute && (<>
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(360px,1fr))", marginTop: 10 }}>
         {/* ─────────────────────────────────── the return itself */}
         <div className="card">
@@ -172,7 +200,7 @@ export default async function Us1040Page({ searchParams }: {
           <strong>How the tax on line 16 is made</strong>
           <p className="muted" style={{ fontSize: ".78rem", margin: "4px 0 6px", lineHeight: 1.6 }}>
             Qualified dividends come out of the slab base and are taxed at their own rate, so they are not
-            taxed twice. 2025 married-filing-jointly bands, Rev. Proc. 2024-40.
+            taxed twice. {year} married-filing-jointly bands, {statute?.citation}.
           </p>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".8rem" }}>
             <thead>
@@ -263,6 +291,7 @@ export default async function Us1040Page({ searchParams }: {
           proportion to their gross income, which is what line 3a means.
         </p>
       </div>
+      </>)}
 
       {/* ─────────────────────────────────── the figures he sets */}
       <div className="card" style={{ marginTop: 10 }}>

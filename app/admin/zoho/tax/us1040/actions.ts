@@ -2,7 +2,7 @@
 
 import { assertArea, currentStaff } from "@/lib/adminAccess";
 import { createServiceClient } from "@/lib/supabase/service";
-import { INPUT_KEYS, STATUTORY_2025 } from "@/lib/us1040";
+import { INPUT_KEYS, statuteFor, statutoryFigures } from "@/lib/us1040";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -39,10 +39,20 @@ export async function seedUs1040Year(fd: FormData) {
   await assertArea("zoho");
   const year = Math.round(Number(fd.get("year")));
   if (!Number.isFinite(year)) return;
+  // THAT YEAR'S LAW, OR NOTHING. Seeding 2024 with the 2025 statute was how
+  // "2024 not working" came about: the rows arrived, the banner went quiet, and
+  // the return was computed on the wrong year's deduction and wage base.
+  const statute = statuteFor(year);
+  const figures = statutoryFigures(year);
+  if (!statute || !figures) {
+    redirect(`/admin/zoho/tax/us1040?year=${year}&err=${encodeURIComponent(
+      `The 1040 does not hold the statute for ${year}, and another year's law would give a wrong return that looks right.`,
+    )}`);
+  }
   const staff = await currentStaff();
-  const rows = Object.entries(STATUTORY_2025).map(([key, value]) => ({
+  const rows = Object.entries(figures).map(([key, value]) => ({
     year, key, value: Number(value),
-    note: year === 2025 ? "2025 statute" : "copied from 2025 — CHECK against this year's Rev. Proc.",
+    note: `${year} statute — ${statute.citation}`,
     updated_at: new Date().toISOString(), updated_by: staff?.id ?? null,
   }));
   await createServiceClient().from("us1040_inputs").upsert(rows, { onConflict: "year,key" });

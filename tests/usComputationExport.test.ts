@@ -63,7 +63,7 @@ check("every rate used is written into the file so a figure can be retraced",
 /* ── each month at its own rate, proved against his own workbook ─────────── */
 
 check("the books are read a MONTH at a time",
-  /for \(const m of months\) \{[\s\S]{0,400}plFor\(e\.slug, w\.from, w\.to\)/.test(lib),
+  /plFor\(e\.slug, w\.from, w\.to\)/.test(lib) && /const w = monthWindow\(m\);/.test(lib),
   "a period average assumes the money arrived evenly through the year; it did not");
 check("no half is converted at a mean of its months",
   !/rateFor\(/.test(lib) && !/const r1 = /.test(lib));
@@ -72,8 +72,9 @@ check("a month is placed in the right half of the US year",
 check("a partial first or last month is clipped to the period",
   /first < from \? from : first/.test(lib) && /last > to \? to : last/.test(lib),
   "asking for 15 Jan to 3 Feb must not pull the whole of January");
-check("a failed entity's part-built rows are discarded, not left half-there",
-  /if \(k\.startsWith\(`\$\{e\.slug\}\|`\)\) byKey\.delete\(k\);/.test(lib));
+check("nothing of a failed entity is ever accumulated in the first place",
+  lib.indexOf("if (failure) { notes.push(failure); continue; }") < lib.indexOf("for (const { m, rows } of perMonth)"),
+  "every month is fetched before any is counted, so a half-read year cannot reach the file");
 
 // His 2025 workbook: Sales-Parveen Sharma, Jan–Mar ₹2,27,14,643 → $265,134.54.
 // A simple mean of Jan/Feb/Mar (86.20, 86.95, 85.10) is 86.0833 and gives
@@ -82,6 +83,20 @@ const mean = (86.2 + 86.95 + 85.1) / 3;
 check("the mean of the three months is NOT the rate his figures imply",
   Math.abs(22714643 / mean - 265134.54) > 1000,
   "which is exactly why the period-average version disagreed with his workbook");
+
+/* ── and it must not take so long the browser gives up ───────────────────── */
+
+check("the months are fetched in parallel, bounded",
+  /runBounded\(months, 4, async \(m\)/.test(lib),
+  "twelve reports per person one after another is ninety seconds of a blank tab");
+check("the bound is a real worker pool, not a fire-and-hope",
+  /const i = next\+\+;\s*\n\s*if \(i >= items\.length\) return;/.test(lib));
+check("a month that fails still fails the whole entity",
+  /failure \?\?= /.test(lib) && /if \(failure\) \{ notes\.push\(failure\); continue; \}/.test(lib),
+  "half a person's year is worse than none of it");
+check("the page warns that it takes a moment",
+  /takes around half a minute/.test(readFileSync("app/admin/zoho/tax/page.tsx", "utf8")),
+  "a form that downloads gives no feedback, so a slow one looks broken");
 
 console.log(fails ? `${fails} failed` : "ok — the US income sheet builds for any period");
 process.exit(fails ? 1 : 0);

@@ -169,20 +169,47 @@ export async function buildUsPack(from: string, to: string): Promise<UsPack> {
   const byKey = new Map<string, UsLedgerRow>();
   const entities: UsPack["entities"] = [];
 
+  // FOUR AT A TIME, NOT ONE AFTER ANOTHER.
+  //
+  // A month per person is twelve Zoho reports each, and run one behind the
+  // other that is a minute and a half of a browser showing nothing. The
+  // function returned 200 the whole time — the Vercel log has the request
+  // succeeding server-side at 03:46:37 while the client-side row for the same
+  // second reads status 0, which is the browser having given up first. "Not
+  // working" was a download nobody waited for.
+  //
+  // Four at a time, because the pacer allows eighty calls a minute and this
+  // needs twenty-four; there is no reason to crowd it and every reason not to
+  // make somebody watch a blank tab.
+  const runBounded = async <T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Promise<R[]> => {
+    const out: R[] = new Array(items.length);
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+      for (;;) {
+        const i = next++;
+        if (i >= items.length) return;
+        out[i] = await fn(items[i]);
+      }
+    }));
+    return out;
+  };
+
   for (const e of ents) {
-    let failed = false;
-    for (const m of months) {
+    let failure: string | null = null;
+    const perMonth = await runBounded(months, 4, async (m) => {
       const w = monthWindow(m);
-      const rate = rateOf.get(m) ?? rates[rates.length - 1].rate;
-      let rows: Awaited<ReturnType<typeof plFor>> = [];
       try {
-        rows = await plFor(e.slug, w.from, w.to);
+        return { m, rows: await plFor(e.slug, w.from, w.to) };
       } catch (err) {
         // ONE ENTITY REFUSING MUST NOT PASS AS THAT ENTITY EARNING NOTHING.
-        notes.push(`${e.name}'s books could not be read for ${m}: ${err instanceof Error ? err.message : "Zoho refused"}. Nothing of theirs is in this file.`);
-        failed = true;
-        break;
+        failure ??= `${e.name}'s books could not be read for ${m}: ${err instanceof Error ? err.message : "Zoho refused"}. Nothing of theirs is in this file.`;
+        return { m, rows: [] as Awaited<ReturnType<typeof plFor>> };
       }
+    });
+    if (failure) { notes.push(failure); continue; }
+
+    for (const { m, rows } of perMonth) {
+      const rate = rateOf.get(m) ?? rates[rates.length - 1].rate;
       // Which half of the US year this month falls in.
       const second = splitOn !== null && `${m}-01` >= splitOn;
       for (const r of rows) {
@@ -196,10 +223,6 @@ export async function buildUsPack(from: string, to: string): Promise<UsPack> {
         else { cur.rs1 += r.amount; cur.usd1 += r.amount / rate; }
         byKey.set(key, cur);
       }
-    }
-    if (failed) {
-      for (const k of [...byKey.keys()]) if (k.startsWith(`${e.slug}|`)) byKey.delete(k);
-      continue;
     }
     entities.push({ slug: e.slug, name: e.name, ledgers: 0, rsTotal: 0, usdTotal: 0 });
   }

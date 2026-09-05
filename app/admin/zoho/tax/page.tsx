@@ -103,6 +103,14 @@ export default async function TaxPage(props: { searchParams: Promise<{ scan?: st
         </label>
         <button className="btn small secondary" type="submit">⬇ Build the Excel</button>
       </form>
+      {/* SAY THAT IT TAKES A MOMENT. A form that downloads gives no feedback at
+          all, so a slow one looks broken — which is exactly how this was first
+          reported, while the server was returning the file perfectly. */}
+      <p className="muted" style={{ fontSize: ".76rem", margin: "6px 0 0", lineHeight: 1.6 }}>
+        It reads a separate profit &amp; loss for every month of the period, for each person, so a full
+        year takes around half a minute. The file downloads when it is ready — nothing appears on this
+        page. If your browser shows no download, look in your Downloads folder before pressing again.
+      </p>
     </div>
 
     <div className="card">

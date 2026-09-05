@@ -106,7 +106,7 @@ check("having income, not having rows, is the test",
 check("the bands are shown, so line 16 can be checked by hand",
   /How the tax on line 16 is made/.test(page));
 check("the capital-gains trap is on the page, not just in my head",
-  /1099-Bs, not the rupee scrip/.test(page));
+  /1099-Bs/.test(page) && /rupee scrip/.test(page) && /511,788/.test(page));
 
 check("the US safe harbour is gone from the engine",
   !/export function usEstimatedTax/.test(engine) && !/safeHarbourUsd/.test(engine),

@@ -98,5 +98,23 @@ check("the page warns that it takes a moment",
   /takes around half a minute/.test(readFileSync("app/admin/zoho/tax/page.tsx", "utf8")),
   "a form that downloads gives no feedback, so a slow one looks broken");
 
+/* ── the file opens on the return, as his workbook does ─────────────────── */
+
+check("there is a Computation 1040 sheet",
+  /"Computation 1040"/.test(route), '"my excel has a sheet 1040"');
+check("it is added FIRST, before the ledgers",
+  route.indexOf('"Computation 1040"') < route.indexOf('"Income Details"'),
+  "his workbook opens on the answer and the workings follow it");
+check("it uses the same computation as the screen",
+  /compute1040, INPUT_KEYS/.test(route),
+  "two implementations of one tax return is two answers");
+check("only a calendar year gets one",
+  /pack\.from\.slice\(0, 4\) === pack\.to\.slice\(0, 4\)/.test(route),
+  "a 1040 for March-to-August is not a thing");
+check("a year with no figures says so instead of printing zeros",
+  /not drawn/.test(route) && /would be filed/.test(route));
+check("the bands are in the file too, so line 16 is checkable on paper",
+  /HOW THE TAX ON LINE 16 IS MADE/.test(route));
+
 console.log(fails ? `${fails} failed` : "ok — the US income sheet builds for any period");
 process.exit(fails ? 1 : 0);

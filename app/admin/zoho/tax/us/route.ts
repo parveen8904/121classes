@@ -35,6 +35,90 @@ export async function GET(req: NextRequest) {
 
   const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
+
+  // ---- Computation 1040 — FIRST, because it is the answer.
+  //
+  // "my excel has a sheet 1040." His workbook opens on the return and the
+  // supporting figures follow it; a file that opened on a thousand ledgers and
+  // never reached the 1040 was the workings without the conclusion. It is the
+  // same computation the screen shows, and it is only drawn when the year's
+  // inputs exist — a 1040 of zeros is an empty sheet that looks like an answer,
+  // and this one would be filed.
+  const calendarYear = pack.from.slice(0, 4) === pack.to.slice(0, 4) ? Number(pack.from.slice(0, 4)) : null;
+  if (calendarYear) {
+    const { createServiceClient } = await import("@/lib/supabase/service");
+    const { compute1040, INPUT_KEYS } = await import("@/lib/us1040");
+    const { data: inputRows } = await createServiceClient()
+      .from("us1040_inputs").select("key, value").eq("year", calendarYear);
+    if ((inputRows ?? []).length) {
+      const held = new Map((inputRows ?? []).map((x) => [String(x.key), Number(x.value)]));
+      const f = Object.fromEntries(INPUT_KEYS.map((k) => [k.key, held.get(k.key) ?? 0])) as Parameters<typeof compute1040>[0];
+      const c = compute1040(f);
+      const L = (label: string, v: number | null) => [label, v === null ? "" : v];
+      const sheet: unknown[][] = [
+        [`Form 1040, calendar ${calendarYear}`],
+        ["Married filing jointly. The income is from the books; every other figure is one you set on the 1040 page."],
+        [],
+        L("INCOME", null),
+        L("      Taxable interest — line 2b", f.interest),
+        L("      Ordinary dividends — line 3b", f.dividends),
+        L("      Business income — Schedule C, line 8a", f.businessIncome),
+        L("      Capital gain — Schedule D, line 7", f.capitalGain),
+        L("      Rents and royalties — Schedule E, line 8", f.rentsRoyalties),
+        L("      Less: rental depreciation", f.rentalDepreciation),
+        L("TOTAL INCOME — line 9", c.totalIncome),
+        [],
+        L("ADJUSTMENTS AND DEDUCTIONS", null),
+        L("      Deductible half of self-employment tax", -c.deductibleHalfOfSeTax),
+        L("      Traditional IRA", f.traditionalIra),
+        L("ADJUSTED GROSS INCOME — line 11", c.adjustedGrossIncome),
+        L("      Standard deduction — line 12", f.standardDeduction),
+        L("      Qualified business income — line 13", f.qbiDeduction),
+        L("TAXABLE INCOME — line 15", c.taxableIncome),
+        [],
+        L("TAX AND CREDITS", null),
+        L("      Tax — line 16", c.tax),
+        L("      Foreign tax credit — Schedule 3, line 1", -Math.abs(f.foreignTaxCredit)),
+        L("Tax after the credit", c.taxAfterCredit),
+        [],
+        L("OTHER TAXES — beyond the credit's reach", null),
+        L("      Self-employment tax — Schedule 2", c.selfEmploymentTax),
+        L("      Additional Medicare — Form 8959", c.additionalMedicare),
+        L("      Net investment income tax — Form 8960", f.netInvestmentIncomeTax),
+        L("TOTAL TAX — line 24", c.totalTax),
+        [],
+        L("PAYMENTS", null),
+        L("      Estimated tax paid", f.estimatedTaxPaid),
+        L("      Credit applied from the prior year", f.creditAppliedFromPriorYear),
+        L("      Balance payment", f.balancePayment),
+        L("TOTAL PAYMENTS — line 33", c.totalPayments),
+        L(c.balance >= 0 ? "OVERPAID — line 34" : "YOU OWE — line 37", Math.abs(c.balance)),
+        [],
+        ["HOW THE TAX ON LINE 16 IS MADE"],
+        ["Band", "From $", "To $", "Rate", "In band $", "Tax $"],
+        ...c.bands.map((b) => [b.label, b.from, b.to ?? "no ceiling", b.rate, b.inBand, b.tax]),
+        ["Tax on ordinary income", "", "", "", c.ordinaryIncome, c.taxOnOrdinary],
+        [`Qualified dividends at ${Math.round(f.qualifiedDividendRate * 100)}%`, "", "", f.qualifiedDividendRate, f.qualifiedDividends, c.taxOnQualifiedDividends],
+        ["TAX — line 16", "", "", "", "", c.tax],
+        [],
+        ["Not computed here: Form 1116 — the credit above is entered from it. And the capital gain must come"],
+        ["from the 1099-Bs, not the rupee scrip ledgers: for 2025 those held $511,788 against roughly $55,000"],
+        ["the books implied."],
+      ];
+      const ws1040 = XLSX.utils.aoa_to_sheet(sheet);
+      ws1040["!cols"] = [{ wch: 46 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 16 }];
+      XLSX.utils.book_append_sheet(wb, ws1040, "Computation 1040");
+    } else {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+        [`Form 1040, calendar ${calendarYear} — not drawn`],
+        [],
+        [`Nothing is set for ${calendarYear} on the 1040 page, so the return is not in this file.`],
+        ["A 1040 of zeros is an empty sheet that looks like an answer, and this one would be filed."],
+        [],
+        ["Open /admin/zoho/tax/us1040, set the year's figures, and build this file again."],
+      ]), "Computation 1040");
+    }
+  }
   const half1 = pack.splitOn ? "Jan–Mar" : "Period";
   const half2 = pack.splitOn ? "Apr–Dec" : "";
 

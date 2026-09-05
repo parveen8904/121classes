@@ -113,6 +113,11 @@ export type ReturnPack = {
     liabilities: { label: string; amount: number }[];
     totalAssets: number; totalLiabilities: number;
     closingCapital: number; drawings: number;
+    /** The part of `drawings` the books actually name — every PERSONAL ledger. */
+    personalDrawings: number;
+    /** The rest. NOT drawings: the amount by which the capital account does not
+     *  close on the figures held. Zero is the only comfortable value. */
+    unexplained: number;
   };
   computation: {
     houseProperty: { property: string; annualValue: number; municipalTax: number; share: number; netAfterShare: number; standardDeduction: number; income: number }[];
@@ -291,8 +296,34 @@ export function buildPack(p: {
   const totalAssets = assets.reduce((a, x) => a + x.amount, 0);
   const totalLiabilities = liabilities.reduce((a, x) => a + x.amount, 0);
   const closingCapital = totalAssets - totalLiabilities;
-  // Drawings is what has to have gone out for the capital account to close.
+
+  // DRAWINGS, BROKEN INTO WHAT THE BOOKS SAY AND WHAT THEY DO NOT.
+  //
+  // "fix the drawings balancing figure" — 5 September 2026. It was a single
+  // plug: whatever number made the capital account close. A plug always
+  // balances, which is exactly why it hides things — the page's own warning
+  // about ₹73 lakh of exchange difference and ₹1.96 crore of assets is about
+  // this very habit, and then the capital account did it too.
+  //
+  // Part of it is knowable and this year's. Every ledger sent to PERSONAL is a
+  // personal cost met out of the business and kept out of the P&L on purpose —
+  // groceries, home care, the tax provision — so it IS drawings, by name, for
+  // this year. It is now shown as itself.
+  //
+  // What is left over is NOT called drawings. It is the amount by which the
+  // capital account does not close on the figures we hold, and it is labelled
+  // that way so somebody asks why rather than reading it as money he spent.
+  // NOT Math.abs. Some PERSONAL ledgers are on the income side — "Foreign
+  // Exchange Difference" is ₹78,39,560.88 of Non Operating INCOME kept out of
+  // the return — and taking its magnitude would count a gain as if he had
+  // spent it. signed() already carries the direction, so negating it turns an
+  // expense into drawings taken and an income into drawings reduced, which is
+  // what each of them actually is.
+  const personalDrawings = pl
+    .filter((r) => r.bucket === "PERSONAL")
+    .reduce((a, r) => a - signed(r), 0);
   const drawings = inputs.openingCapital + inputs.capitalIntroduced + profit - closingCapital;
+  const unexplained = drawings - personalDrawings;
 
   // ---- house property
   // The books usually hold only his share of a co-owned property, so the annual
@@ -367,6 +398,7 @@ export function buildPack(p: {
       revenue, otherIncome, totalIncome, cogs, employee, finance, depreciation,
       otherExpenses, totalExpenses, profit,
       assets, liabilities, totalAssets, totalLiabilities, closingCapital, drawings,
+      personalDrawings, unexplained,
     },
     computation: {
       houseProperty, housePropertyTotal, businessIncome,

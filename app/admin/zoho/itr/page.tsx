@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { zohoConfigured } from "@/lib/zohoApi";
 import SubmitButton from "@/app/components/SubmitButton";
 import Money from "@/app/components/Money";
+import { formatINR } from "@/lib/pricing";
 import {
   loadYear, loadMap, fyDates,
   PL_BUCKETS, BS_BUCKETS, signed, bsAmount,
@@ -205,12 +206,36 @@ export default async function ItrBuilderPage({
               <Row label="Opening balance" value={inputs.openingCapital} indent />
               <Row label="Capital introduced" value={inputs.capitalIntroduced} indent />
               <Row label="Profit for the year" value={pack.business.profit} indent />
-              <Row label="Less: drawings (balancing figure)" value={-pack.business.drawings} indent />
+              {/* NOT ONE PLUG. What the books name, then what they do not.
+                  A single "balancing figure" always balances, which is exactly
+                  why it hides — the warning at the top of this page about ₹73
+                  lakh of exchange difference is about this habit, and the
+                  capital account was doing it too. */}
+              <Row label="Less: personal expenses met from the business" value={-pack.business.personalDrawings} indent />
+              {Math.abs(pack.business.unexplained) >= 1 && (
+                <Row
+                  label={pack.business.unexplained > 0
+                    ? "Less: not explained by the books"
+                    : "Add: not explained by the books"}
+                  value={-pack.business.unexplained}
+                  indent
+                />
+              )}
               <Row label="Closing capital" value={pack.business.closingCapital} bold />
             </tbody></table>
+            {Math.abs(pack.business.unexplained) >= 1 && (
+              <p className="notice err" style={{ fontSize: ".82rem", lineHeight: 1.7, marginTop: 8 }}>
+                <strong>{formatINR(Math.abs(pack.business.unexplained))} does not come from the books.</strong>{" "}
+                It is the amount by which the capital account does not close on the figures held — opening capital,
+                capital introduced, the profit, and the personal spending above. It is shown rather than folded into
+                drawings, because a balancing figure that absorbs it would look correct and tell nobody. Usually it
+                means opening capital or capital introduced on the <strong>Year figures</strong> tab is not yet the
+                audited number.
+              </p>
+            )}
             {inputs.openingCapital === 0 && (
               <p className="muted" style={{ fontSize: ".82rem" }}>
-                Opening capital is still zero, so drawings above is not yet meaningful. Set it on the <strong>Year figures</strong> tab.
+                Opening capital is still zero, so the capital account above cannot close. Set it on the <strong>Year figures</strong> tab.
               </p>
             )}
           </div>

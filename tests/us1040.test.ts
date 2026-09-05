@@ -16,7 +16,10 @@ const f: Us1040Figures = {
   rentalDepreciation: -29305.924755669545,
   traditionalIra: -8000,
   qualifiedDividends: 4524.71,
-  foreignTaxCredit: -333890.99675446824,
+  generalGrossForeign: 410981.10999999969,
+  generalForeignTax: 157986.73890858109,
+  passiveGrossForeign: 698634.69524433033,
+  passiveForeignTax: 275717.43523907143,
   netInvestmentIncomeTax: 38955.55,
   estimatedTaxPaid: 155000,
   creditAppliedFromPriorYear: 1772.88,
@@ -35,7 +38,11 @@ check("ordinary income, taxed at the slabs", near(r.ordinaryIncome, 1370864.43),
 check("tax on ordinary income", near(r.taxOnOrdinary, 431282.34), `got ${r.taxOnOrdinary}, his 431,282.34`);
 check("qualified dividends at 20%", near(r.taxOnQualifiedDividends, 904.94), `got ${r.taxOnQualifiedDividends}`);
 check("TAX — line 16", near(r.tax, 432187.28), `got ${r.tax}, his 432,187.28`);
+check("the foreign tax credit is COMPUTED from Form 1116, not typed",
+  near(r.foreignTaxCredit, 333890.997), `got ${r.foreignTaxCredit}, his 333,890.997`);
 check("tax after the foreign tax credit", near(r.taxAfterCredit, 98296.29), `got ${r.taxAfterCredit}, his 98,296.29`);
+check("and the carry comes with it",
+  near(r.f1116.totalCarried, 99813.18), `got ${r.f1116.totalCarried}, his 99,813.18`);
 check("ADDITIONAL MEDICARE — Form 8959", near(r.additionalMedicare, 1166.01), `got ${r.additionalMedicare}, his 1,166.01`);
 check("TOTAL TAX — line 24", near(r.totalTax, 171261.39), `got ${r.totalTax}, his 171,261.39`);
 check("TOTAL PAYMENTS — line 33", near(r.totalPayments, 176772.88), `got ${r.totalPayments}`);
@@ -59,9 +66,13 @@ check("social security stops at the wage base, Medicare does not", (() => {
   return near(big.selfEmploymentTax, 176100 * 0.124 + ne * 0.029, 2);
 })(), "s.1401 caps one and not the other");
 
-check("a credit larger than the tax does not make a refund", (() => {
-  const over = compute1040({ ...f, foreignTaxCredit: -9_000_000 });
-  return over.taxAfterCredit === 0;
+check("an enormous foreign tax is capped by the 1116 limit, not by the tax", (() => {
+  const over = compute1040({ ...f, generalForeignTax: 9_000_000, passiveForeignTax: 9_000_000 });
+  // The ceiling is the US tax on the FOREIGN share of taxable income, so it is
+  // below the whole tax whenever any income is US-source — and the rest carries.
+  return over.foreignTaxCredit <= over.tax
+    && over.taxAfterCredit >= 0
+    && over.f1116.totalCarried > 0;
 })(), "an unlimited credit would understate what is owed");
 
 check("net earnings are 92.35% of the business income, not 100%", (() => {

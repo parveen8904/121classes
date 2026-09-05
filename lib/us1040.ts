@@ -9,6 +9,8 @@
 // taxable income is a fact about the law, and a fact about the law should be
 // provable in a test without a connection to anything.
 
+import { computeForm1116, type Form1116 } from "./form1116.ts";
+
 export type Bracket = { from: number; to: number | null; rate: number };
 
 /** Married filing jointly, 2025 — Rev. Proc. 2024-40, as his workbook cites. */
@@ -47,8 +49,12 @@ export type Us1040Figures = {
   /** Rates and thresholds — statute for the year. */
   qualifiedDividends: number; qualifiedDividendRate: number;
   socialSecurityWageBase: number; additionalMedicareThreshold: number;
-  /** Credits and the other taxes. */
-  foreignTaxCredit: number; netInvestmentIncomeTax: number;
+  /** Form 1116. The credit is COMPUTED from these, not typed: it is the lesser
+   *  of the foreign tax paid and the US tax on that foreign income, per basket,
+   *  and s.904(d) forbids pooling the two. See lib/form1116.ts. */
+  generalGrossForeign: number; generalForeignTax: number;
+  passiveGrossForeign: number; passiveForeignTax: number;
+  netInvestmentIncomeTax: number;
   /** Payments. */
   estimatedTaxPaid: number; creditAppliedFromPriorYear: number; balancePayment: number;
 };
@@ -59,6 +65,9 @@ export type Us1040 = {
   adjustedGrossIncome: number; taxableIncome: number;
   ordinaryIncome: number; bands: Band[];
   taxOnOrdinary: number; taxOnQualifiedDividends: number; tax: number;
+  /** Straight from Form 1116 — see f1116 for the two baskets and the carry. */
+  foreignTaxCredit: number;
+  f1116: Form1116;
   taxAfterCredit: number;
   additionalMedicare: number;
   totalTax: number; totalPayments: number; balance: number;
@@ -92,11 +101,24 @@ export function compute1040(f: Us1040Figures, brackets = BRACKETS_2025_MFJ): Us1
   const taxOnQualifiedDividends = f.qualifiedDividends * f.qualifiedDividendRate;
   const tax = taxOnOrdinary + taxOnQualifiedDividends;
 
-  // THE CREDIT CANNOT REACH PAST THE TAX IT OFFSETS.
-  // A foreign tax credit bigger than the tax does not make a refund; it is
-  // limited, and the rest is carried. Letting it go negative here would
-  // understate what is owed.
-  const taxAfterCredit = Math.max(0, tax - Math.abs(f.foreignTaxCredit));
+  // THE CREDIT IS COMPUTED, NOT TYPED.
+  //
+  // Form 1116 limits it to the US tax on the foreign income, basket by basket,
+  // and s.904(d) forbids pooling them. Typing a single number here would let a
+  // figure onto the return that the statute may not permit — and the ceiling
+  // depends on this very computation's taxable income and tax, so the two
+  // belong together.
+  const f1116 = computeForm1116({
+    general: { grossForeign: f.generalGrossForeign, foreignTaxPaid: f.generalForeignTax, definitelyRelated: -deductibleHalfOfSeTax },
+    passive: { grossForeign: f.passiveGrossForeign, foreignTaxPaid: f.passiveForeignTax, definitelyRelated: 0 },
+    grossIncomeAllSources: totalIncome,
+    standardDeduction: f.standardDeduction,
+    traditionalIra: f.traditionalIra,
+    totalTaxableIncome: taxableIncome,
+    taxBeforeCredits: tax,
+  });
+  const foreignTaxCredit = f1116.totalCredit;
+  const taxAfterCredit = Math.max(0, tax - foreignTaxCredit);
 
   const additionalMedicare =
     Math.max(0, netEarnings - f.additionalMedicareThreshold) * 0.009;
@@ -115,6 +137,8 @@ export function compute1040(f: Us1040Figures, brackets = BRACKETS_2025_MFJ): Us1
     taxOnOrdinary: r2(taxOnOrdinary),
     taxOnQualifiedDividends: r2(taxOnQualifiedDividends),
     tax: r2(tax),
+    foreignTaxCredit: r2(foreignTaxCredit),
+    f1116,
     taxAfterCredit: r2(taxAfterCredit),
     additionalMedicare: r2(additionalMedicare),
     totalTax: r2(totalTax),
@@ -138,7 +162,10 @@ export const INPUT_KEYS: { key: keyof Us1040Figures; label: string; source: stri
   { key: "qualifiedDividendRate", label: "Qualified dividend rate", source: "statute", statutory: true },
   { key: "socialSecurityWageBase", label: "Social security wage base", source: "statute", statutory: true },
   { key: "additionalMedicareThreshold", label: "Additional Medicare threshold", source: "statute", statutory: true },
-  { key: "foreignTaxCredit", label: "Foreign tax credit — Schedule 3 line 1", source: "Form 1116" },
+  { key: "generalGrossForeign", label: "1116 · General basket — gross foreign income", source: "Schedule C, the practice" },
+  { key: "generalForeignTax", label: "1116 · General basket — Indian tax on it", source: "the Indian computation" },
+  { key: "passiveGrossForeign", label: "1116 · Passive basket — gross foreign income", source: "foreign rent, interest, royalty" },
+  { key: "passiveForeignTax", label: "1116 · Passive basket — Indian tax on it", source: "the Indian computation" },
   { key: "netInvestmentIncomeTax", label: "Net investment income tax — Form 8960", source: "3.8% on investment income" },
   { key: "estimatedTaxPaid", label: "Estimated tax paid", source: "the account transcript" },
   { key: "creditAppliedFromPriorYear", label: "Credit applied from the prior year", source: "transaction code 716" },

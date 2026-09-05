@@ -264,8 +264,8 @@ export function buildPack(p: {
   inputs: YearInputs;
 }): ReturnPack {
   const { fy, from, to, inputs } = p;
-  const pl = p.plRows.map((r) => ({ ...r, bucket: p.map.pl[r.ledger] ?? null }));
-  const bs = p.bsRows.map((r) => ({ ...r, bucket: p.map.bs[r.ledger] ?? null }));
+  const pl = p.plRows.map((r) => ({ ...r, bucket: p.map.pl[r.ledger] ?? familyBucket(r.ledger, "pl") }));
+  const bs = p.bsRows.map((r) => ({ ...r, bucket: p.map.bs[r.ledger] ?? familyBucket(r.ledger, "bs") }));
 
   const T: Record<string, number> = {};
   for (const r of pl) if (r.bucket) T[r.bucket] = (T[r.bucket] ?? 0) + signed(r);
@@ -417,6 +417,48 @@ export async function buildReturn(fy: string): Promise<ReturnPack> {
     fetchZohoLedgers(from, to), loadMap(), loadYear(fy),
   ]);
   return buildPack({ fy, from, to, plRows, bsRows, map, inputs: year.inputs });
+}
+
+// A NEW MEMBER OF A KNOWN FAMILY, PLACED WITHOUT ASKING AGAIN.
+//
+// "why these were not auto mapped" — 5 September 2026, of twenty-seven ledgers
+// in FY 2026-27. The answer is that the map below is a dictionary of exact
+// NAMES, and every one of them is a name that did not exist when it was
+// written:
+//
+//   Advance Tax A.Y 2026-27  is mapped · Advance Tax A.Y 2027-28  is the new year
+//   TDS Receivables AY 26-27 is mapped · TDS Receivables TY 26-27 says TY, not AY
+//   Credit Card Axis-4812    is mapped · Axis-8882 and -9997 are newer cards
+//   NRO FD-925040061267899   is mapped · seven more FDs have since been renewed
+//   Sales-Amit Popli         is mapped · Sales - CA Amit Popli is the same man
+//   Interest on RBI Bond     is mapped · …-TBUTI552202192 carries the folio
+//
+// So the families are recognised by shape as well as by name. DELIBERATELY
+// NARROW: only where every member of the family has one obvious home and the
+// existing map already says so. A wrong destination is worse than none — the
+// warning at the top of the page is about ₹73 lakh that went missing inside
+// figures that looked right — so anything that needs a judgment stays red and
+// waits for him. Prepaid Expenses, Staff Loan Account, Salary Payable, an air
+// conditioner and a person's name are not guessed here.
+const PL_FAMILIES: [RegExp, PlBucket][] = [
+  [/^Sales\b/i, "BUS_REV"],
+  [/^Cost of Goods Sold\b/i, "BUS_COGS"],
+  [/^Interest on RBI Bond\b/i, "OS_INT_BOND"],
+];
+const BS_FAMILIES: [RegExp, BsBucket][] = [
+  [/^NRO FD[\s-]/i, "AL_BANK"],
+  [/^Advance Tax\b/i, "BIZ_OCA"],
+  [/^TDS Receivables?\b/i, "BIZ_OCA"],
+  // Indian cards are a business liability; the US ones are named for their
+  // American issuers and are already mapped to Schedule AL by name above.
+  [/^Credit Card Axis\b/i, "BIZ_OCL"],
+];
+
+export function familyBucket(ledger: string, kind: "pl" | "bs"): string | null {
+  const name = String(ledger ?? "").trim();
+  const families = kind === "pl" ? PL_FAMILIES : BS_FAMILIES;
+  for (const [re, bucket] of families) if (re.test(name)) return bucket;
+  return null;
 }
 
 // THE SUGGESTED MAPPING, as reconciled against the accountant's own FY 2025-26

@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
         [],
         L("TAX AND CREDITS", null),
         L("      Tax — line 16", c.tax),
-        L("      Foreign tax credit — Schedule 3, line 1", -Math.abs(f.foreignTaxCredit)),
+        L("      Foreign tax credit — Schedule 3, line 1", -c.foreignTaxCredit),
         L("Tax after the credit", c.taxAfterCredit),
         [],
         L("OTHER TAXES — beyond the credit's reach", null),
@@ -101,9 +101,15 @@ export async function GET(req: NextRequest) {
         [`Qualified dividends at ${Math.round(f.qualifiedDividendRate * 100)}%`, "", "", f.qualifiedDividendRate, f.qualifiedDividends, c.taxOnQualifiedDividends],
         ["TAX — line 16", "", "", "", "", c.tax],
         [],
-        ["Not computed here: Form 1116 — the credit above is entered from it. And the capital gain must come"],
-        ["from the 1099-Bs, not the rupee scrip ledgers: for 2025 those held $511,788 against roughly $55,000"],
-        ["the books implied."],
+        ["FORM 1116 — the two baskets, the limit, and what is carried"],
+        ["s.904(d) tests each basket on its own and forbids pooling: room to spare in one cannot rescue the other."],
+        ["Basket", "Gross foreign $", "Foreign taxable $", "Limit $", "Indian tax $", "Credit $", "Carried $"],
+        ...c.f1116.baskets.map((b) => [b.label, b.grossForeign, b.foreignTaxableIncome, b.limit, b.foreignTaxPaid, b.creditAllowed, b.carriedForward]),
+        ["Total — Schedule 3 line 1", "", c.f1116.totalForeignTaxable, c.f1116.totalLimit, "", c.f1116.totalCredit, c.f1116.totalCarried],
+        ...c.f1116.notes.map((n) => [n]),
+        [],
+        ["The capital gain must come from the 1099-Bs, not the rupee scrip ledgers: for 2025 those held"],
+        ["$511,788 against roughly $55,000 the books implied."],
       ];
       const ws1040 = XLSX.utils.aoa_to_sheet(sheet);
       ws1040["!cols"] = [{ wch: 46 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 16 }];

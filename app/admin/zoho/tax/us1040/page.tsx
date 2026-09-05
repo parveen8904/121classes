@@ -123,7 +123,7 @@ export default async function Us1040Page({ searchParams }: {
 
               <Row label="TAX AND CREDITS" value={null} bold />
               <Row label="Tax — line 16" value={r.tax} indent />
-              <Row label="Foreign tax credit — Sch. 3 line 1" value={-Math.abs(f.foreignTaxCredit)} indent />
+              <Row label="Foreign tax credit — Sch. 3 line 1" value={-r.foreignTaxCredit} indent />
               <Row label="Tax after the credit" value={r.taxAfterCredit} bold />
 
               <Row label="OTHER TAXES — beyond the credit's reach" value={null} bold />
@@ -184,6 +184,61 @@ export default async function Us1040Page({ searchParams }: {
         </div>
       </div>
 
+      {/* ─────────────────────────────────── Form 1116 */}
+      <div className="card" style={{ marginTop: 10 }}>
+        <strong>Form 1116 — the two baskets, the limit, and what is carried</strong>
+        <p className="muted" style={{ fontSize: ".78rem", margin: "4px 0 8px", lineHeight: 1.6 }}>
+          The credit shelters the US tax on foreign income and not a cent more. The ceiling is the tax ×
+          foreign-source taxable income ÷ total taxable income, and s.904(d) applies it to each basket on its
+          own — room going spare in one cannot rescue a shortfall in the other.
+        </p>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".82rem", minWidth: 640 }}>
+            <thead>
+              <tr style={{ textAlign: "right", color: "var(--muted)", fontSize: ".72rem" }}>
+                <th style={{ padding: "4px 8px", textAlign: "left" }}>Basket</th>
+                <th style={{ padding: "4px 8px" }}>Gross foreign</th>
+                <th style={{ padding: "4px 8px" }}>Foreign taxable</th>
+                <th style={{ padding: "4px 8px" }}>Limit</th>
+                <th style={{ padding: "4px 8px" }}>Indian tax</th>
+                <th style={{ padding: "4px 8px" }}>Credit</th>
+                <th style={{ padding: "4px 8px" }}>Carried</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.f1116.baskets.map((b) => (
+                <tr key={b.label} style={{ borderTop: "1px solid rgba(0,0,0,.06)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                  <td style={{ padding: "5px 8px", textAlign: "left" }}>{b.label}</td>
+                  <td style={{ padding: "5px 8px" }}>{usd(b.grossForeign)}</td>
+                  <td style={{ padding: "5px 8px" }}>{usd(b.foreignTaxableIncome)}</td>
+                  <td style={{ padding: "5px 8px" }}>{usd(b.limit)}</td>
+                  <td style={{ padding: "5px 8px" }}>{usd(b.foreignTaxPaid)}</td>
+                  <td style={{ padding: "5px 8px", fontWeight: 700 }}>{usd(b.creditAllowed)}</td>
+                  <td style={{ padding: "5px 8px", color: b.carriedForward > 0 ? "#b45309" : undefined }}>{usd(b.carriedForward)}</td>
+                </tr>
+              ))}
+              <tr style={{ borderTop: "2px solid rgba(0,0,0,.2)", textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                <td style={{ padding: "5px 8px", textAlign: "left" }}>Total — Schedule 3 line 1</td>
+                <td style={{ padding: "5px 8px" }} />
+                <td style={{ padding: "5px 8px" }}>{usd(r.f1116.totalForeignTaxable)}</td>
+                <td style={{ padding: "5px 8px" }}>{usd(r.f1116.totalLimit)}</td>
+                <td style={{ padding: "5px 8px" }} />
+                <td style={{ padding: "5px 8px" }}>{usd(r.f1116.totalCredit)}</td>
+                <td style={{ padding: "5px 8px" }}>{usd(r.f1116.totalCarried)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        {r.f1116.notes.map((n) => (
+          <p key={n} className="muted" style={{ fontSize: ".78rem", margin: "6px 0 0", lineHeight: 1.6 }}>{n}</p>
+        ))}
+        <p className="muted" style={{ fontSize: ".74rem", margin: "6px 0 0", lineHeight: 1.6 }}>
+          The deductible half of the self-employment tax comes off the GENERAL basket alone — it is definitely
+          related to the practice. The standard deduction and the IRA are shared across the baskets in
+          proportion to their gross income, which is what line 3a means.
+        </p>
+      </div>
+
       {/* ─────────────────────────────────── the figures he sets */}
       <div className="card" style={{ marginTop: 10 }}>
         <strong>What you set</strong>
@@ -219,7 +274,7 @@ export default async function Us1040Page({ searchParams }: {
       </div>
 
       <p className="muted" style={{ fontSize: ".78rem", marginTop: 12, lineHeight: 1.7 }}>
-        A projection for your judgment, not a filed return. It does not compute Form 1116 — the foreign tax
+        A projection for your judgment, not a filed return. The foreign tax
         credit is entered from it — and the capital gain must come from the 1099-Bs, not the rupee scrip
         ledgers: for 2025 those held $511,788 against roughly $55,000 the books implied.
       </p>

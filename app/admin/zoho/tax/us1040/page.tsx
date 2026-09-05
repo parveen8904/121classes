@@ -56,7 +56,19 @@ export default async function Us1040Page({ searchParams }: {
 
   const f = Object.fromEntries(INPUT_KEYS.map((k) => [k.key, held.get(k.key) ?? 0])) as Us1040Figures;
   const r = compute1040(f, BRACKETS_2025_MFJ);
-  const started = (rows ?? []).length > 0;
+  // A SEEDED YEAR IS NOT A STARTED ONE.
+  //
+  // "It shows zero." — 5 September 2026. He had pressed "open with the statute",
+  // which wrote the standard deduction and the bracket figures, and my banner
+  // then went quiet because rows existed. What was on screen was a return with
+  // −$31,500 of deduction against nothing at all: precisely the empty sheet
+  // that looks like an answer, which the banner exists to prevent.
+  //
+  // Having any row is not the test. Having any INCOME is.
+  const incomeKeys = ["interest", "dividends", "businessIncome", "capitalGain", "rentsRoyalties"] as const;
+  const hasIncome = incomeKeys.some((k) => Number(held.get(k) ?? 0) !== 0);
+  const started = hasIncome;
+  const seededOnly = (rows ?? []).length > 0 && !hasIncome;
   const years = [thisYear, thisYear - 1, thisYear - 2, thisYear - 3];
 
   return (
@@ -87,14 +99,27 @@ export default async function Us1040Page({ searchParams }: {
       {!started && (
         <div className="card" style={{ marginTop: 10, borderLeft: "3px solid #b45309" }}>
           <p style={{ margin: 0, lineHeight: 1.7 }}>
-            <strong>Nothing is set for {year}.</strong> Every line below is zero, and a zero return is not an
-            answer — it is an empty sheet that looks like one. Open the year with the statutory figures, then
-            fill in the income from the Excel above and the documents.
+            {seededOnly ? (
+              <>
+                <strong>{year} has the statute but no income.</strong> The deduction and the thresholds are
+                set; every income line is still zero, so the return below is arithmetic on nothing. Fill in
+                the income from the Excel above and from the 1099s — the figures you set are at the bottom
+                of this page.
+              </>
+            ) : (
+              <>
+                <strong>Nothing is set for {year}.</strong> Every line below is zero, and a zero return is not
+                an answer — it is an empty sheet that looks like one. Open the year with the statutory
+                figures, then fill in the income from the Excel above and the documents.
+              </>
+            )}
           </p>
-          <form action={seedUs1040Year} style={{ marginTop: 8 }}>
-            <input type="hidden" name="year" value={year} />
-            <SubmitButton className="btn small">Open {year} with the 2025 statute</SubmitButton>
-          </form>
+          {!seededOnly && (
+            <form action={seedUs1040Year} style={{ marginTop: 8 }}>
+              <input type="hidden" name="year" value={year} />
+              <SubmitButton className="btn small">Open {year} with the 2025 statute</SubmitButton>
+            </form>
+          )}
         </div>
       )}
 

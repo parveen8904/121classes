@@ -98,6 +98,11 @@ check("every figure he sets is editable on the row",
   "the standing rule: an editor wherever a record is shown");
 check("a year with nothing set says so instead of showing a zero return",
   /Nothing is set for \{year\}/.test(page) && /a zero return is not an/.test(page));
+check("a year with the STATUTE but no income also says so",
+  /has the statute but no income/.test(page) && /const seededOnly =/.test(page),
+  "seeding wrote rows, and 'has any row' then went quiet over a return of arithmetic on nothing");
+check("having income, not having rows, is the test",
+  /const hasIncome = incomeKeys\.some/.test(page) && /const started = hasIncome;/.test(page));
 check("the bands are shown, so line 16 can be checked by hand",
   /How the tax on line 16 is made/.test(page));
 check("the capital-gains trap is on the page, not just in my head",

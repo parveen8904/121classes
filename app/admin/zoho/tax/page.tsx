@@ -77,6 +77,34 @@ export default async function TaxPage(props: { searchParams: Promise<{ scan?: st
         <>
 
   <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))" }}>
+    {/* THE US RETURN'S INCOME SHEET, FOR ANY PERIOD.
+        His workbook's ~1,000 Income Details figures are pasted by hand and go
+        stale the moment a bill is posted. This writes them from the books, for
+        both people, split at 1 April and converted month by month. It does not
+        write the 1040 — see the About sheet in the file for what it refuses to
+        invent. */}
+    <div className="card">
+      <strong>🇺🇸 US return — income from the books</strong>
+      <p className="muted" style={{ fontSize: ".8rem", lineHeight: 1.7, margin: "6px 0 8px" }}>
+        Every ledger for both people, in rupees and dollars, split at 1 April because a US calendar year
+        cuts the Indian year in half — and converted at each month&apos;s SBI TT buying rate rather than one
+        average, which over a year the rupee moved 86 to 89 would be wrong by lakhs. The 1040 itself is not
+        computed: the credit, the depreciation and every 1099 figure are yours to set, as your workbook
+        already says.
+      </p>
+      <form method="GET" action="/admin/zoho/tax/us" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <label style={{ margin: 0, fontSize: ".78rem" }}>
+          From <input type="date" name="from" defaultValue={`${new Date().getUTCFullYear() - 1}-01-01`}
+                      style={{ marginBottom: 0, fontSize: ".8rem" }} />
+        </label>
+        <label style={{ margin: 0, fontSize: ".78rem" }}>
+          To <input type="date" name="to" defaultValue={`${new Date().getUTCFullYear() - 1}-12-31`}
+                    style={{ marginBottom: 0, fontSize: ".8rem" }} />
+        </label>
+        <button className="btn small secondary" type="submit">⬇ Build the Excel</button>
+      </form>
+    </div>
+
     <div className="card">
       <strong>🇮🇳 Advance tax — FY 2026-27 (A.Y. 2027-28)</strong>
       <div style={{ fontSize: ".84rem", lineHeight: 1.9, marginTop: 8 }}>

@@ -60,6 +60,12 @@ check("the credit that continues the chain is exact, not the rounded one",
 check("TOTAL TAX agrees to the cent", cent(r.totalTax, 171261.39), `got ${r.totalTax}`);
 check("OVERPAID agrees to the cent", cent(r.balance, 5511.49), `got ${r.balance}, his 5,511.49`);
 
+check("taxable income is floored at nil — line 15's \"if zero or less, enter -0-\"", (() => {
+  const empty = compute1040({ ...f, interest: 0, dividends: 0, businessIncome: 0,
+    capitalGain: 0, rentsRoyalties: 0, rentalDepreciation: 0, qualifiedDividends: 0 });
+  return empty.taxableIncome === 0 && empty.tax === 0;
+})(), "an empty 2024 showed a taxable income of −$29,200 — the deduction against nothing");
+
 /* ── the bands, as his Tax computation sheet lays them out ───────────────── */
 
 const { bands } = bandedTax(1370864.4323028477, BRACKETS_2025_MFJ);

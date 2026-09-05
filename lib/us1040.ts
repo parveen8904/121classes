@@ -175,7 +175,10 @@ export function compute1040(f: Us1040Figures, brackets = BRACKETS_2025_MFJ): Us1
   const deductibleHalfOfSeTax = selfEmploymentTax / 2;
 
   const adjustedGrossIncome = totalIncome - deductibleHalfOfSeTax + f.traditionalIra;
-  const taxableIncome = adjustedGrossIncome + f.standardDeduction + f.qbiDeduction;
+  // Line 15 says "if zero or less, enter -0-". AGI may go negative; taxable
+  // income may not. An empty 2024 was showing a taxable income of −$29,200 —
+  // the deduction against nothing at all, presented as a figure on the return.
+  const taxableIncome = Math.max(0, adjustedGrossIncome + f.standardDeduction + f.qbiDeduction);
 
   // Qualified dividends are taxed at their own rate, so they come OUT of the
   // slab base rather than being taxed twice.

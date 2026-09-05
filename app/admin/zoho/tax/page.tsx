@@ -2,7 +2,7 @@ import { assertArea, currentStaff } from "@/lib/adminAccess";
 import { zohoConfigured } from "@/lib/zohoApi";
 import { formatINR } from "@/lib/pricing";
 import { rule115Rate, ttBuyRate } from "@/lib/forexRates";
-import { fySnapshot, indiaAdvanceTax, usEstimatedTax, taxAssumptions } from "@/lib/taxEngine";
+import { fySnapshot, indiaAdvanceTax, taxAssumptions } from "@/lib/taxEngine";
 import SubmitButton from "@/app/components/SubmitButton";
 import DeskShell from "../_shell";
 import { saveTaxAssumptionsAction } from "../actions";
@@ -22,12 +22,12 @@ export default async function TaxPage(props: { searchParams: Promise<{ scan?: st
   const isFounder = staff?.role === "admin";
 
   let taxError: string | null = null;
-  let taxData: { snap: Awaited<ReturnType<typeof fySnapshot>>; india: ReturnType<typeof indiaAdvanceTax>; us: ReturnType<typeof usEstimatedTax>; assume: Awaited<ReturnType<typeof taxAssumptions>> } | null = null;
+  let taxData: { snap: Awaited<ReturnType<typeof fySnapshot>>; india: ReturnType<typeof indiaAdvanceTax>; assume: Awaited<ReturnType<typeof taxAssumptions>> } | null = null;
   if (isFounder && hubConnected) {
     try {
       const assume = await taxAssumptions();
       const snap = await fySnapshot();
-      taxData = { snap, india: indiaAdvanceTax(snap, assume.effRatePct), us: usEstimatedTax(assume.usPriorYearTaxUsd), assume };
+      taxData = { snap, india: indiaAdvanceTax(snap, assume.effRatePct), assume };
     } catch (e) {
       // WHY it could not be built, not merely that it could not.
       // A worksheet that vanishes silently is how "expenses ₹0" survived: a
@@ -92,6 +92,14 @@ export default async function TaxPage(props: { searchParams: Promise<{ scan?: st
         computed: the credit, the depreciation and every 1099 figure are yours to set, as your workbook
         already says.
       </p>
+      <p style={{ margin: "0 0 8px" }}>
+        <a className="btn small" href="/admin/zoho/tax/us1040" style={{ textDecoration: "none" }}>
+          🧾 Open Form 1040
+        </a>
+        <span className="muted" style={{ fontSize: ".76rem", marginLeft: 8 }}>
+          the return itself — income, the seven bands, the credit, self-employment tax and what is owed
+        </span>
+      </p>
       <form method="GET" action="/admin/zoho/tax/us" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <label style={{ margin: 0, fontSize: ".78rem" }}>
           From <input type="date" name="from" defaultValue={`${new Date().getUTCFullYear() - 1}-01-01`}
@@ -133,36 +141,12 @@ export default async function TaxPage(props: { searchParams: Promise<{ scan?: st
       </div>
     </div>
 
-    <div className="card">
-      <strong>🇺🇸 US estimated tax (1040-ES) — safe harbour</strong>
-      <div style={{ fontSize: ".84rem", lineHeight: 1.9, marginTop: 8 }}>
-        {taxData.assume.usPriorYearTaxUsd > 0 ? (
-          <>
-            <div>Prior-year total tax: <strong>${taxData.us.priorYearTaxUsd.toLocaleString()}</strong> × 110% = <strong>${taxData.us.safeHarbourUsd.toLocaleString()}</strong></div>
-            <div>Per quarter: <strong>${Math.round(taxData.us.quarterlyUsd).toLocaleString()}</strong></div>
-            <div style={{ marginTop: 6 }}>
-              {taxData.us.quarters.map((q) => (
-                <span key={q.due} style={{ display: "inline-block", background: "var(--bg-soft)", borderRadius: 6, padding: "2px 8px", margin: "2px 6px 2px 0", fontSize: ".78rem" }}>{q.label}: {q.due}</span>
-              ))}
-            </div>
-            <div style={{ marginTop: 6, fontWeight: 800 }}>Next due: {taxData.us.nextDue}</div>
-            <p className="muted" style={{ fontSize: ".74rem", margin: "6px 0 0" }}>Paying 110% of last year&apos;s tax in equal quarters avoids penalty regardless of this year&apos;s income. Your CPA files; this is the calendar and the arithmetic.</p>
-          </>
-        ) : (
-          <p className="muted" style={{ fontSize: ".82rem" }}>Enter last year&apos;s total US tax below and the safe-harbour schedule appears.</p>
-        )}
-      </div>
-    </div>
   </div>
 
   <form action={saveTaxAssumptionsAction} className="card" style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
     <div>
       <label style={{ fontSize: ".75rem" }}>Assumed effective Indian tax rate (%)</label>
       <input name="eff_rate" type="number" step="0.1" min="1" max="60" defaultValue={taxData.assume.effRatePct} style={{ marginBottom: 0, width: 130 }} />
-    </div>
-    <div>
-      <label style={{ fontSize: ".75rem" }}>Prior-year US total tax (USD)</label>
-      <input name="us_py_tax" type="number" step="1" min="0" defaultValue={taxData.assume.usPriorYearTaxUsd || ""} style={{ marginBottom: 0, width: 150 }} />
     </div>
     <SubmitButton className="btn small" savedLabel="✓ Saved">💾 Save assumptions</SubmitButton>
     <span className="muted" style={{ fontSize: ".76rem" }}>Only you see this section.</span>

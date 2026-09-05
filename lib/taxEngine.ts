@@ -6,9 +6,11 @@ import { zohoFetch } from "@/lib/zohoApi";
 // India: FY-to-date profit straight from the live Zoho chart balances,
 // annualised, taxed at the founder's own assumed effective rate, less TDS
 // suffered and advance tax already paid — against the 15/45/75/100 ladder.
-// US (green-card holder): the 110%-of-prior-year safe harbour split over the
-// 1040-ES quarters, less what's already paid. He is the CA; the engine does
-// the arithmetic and shows every input it used.
+// The US side is NOT here. The safe harbour was removed 5 September 2026 —
+// "US safe harbor does not applies to me" — and the real 1040 computation
+// lives at /admin/zoho/tax/us1040, which reads the books rather than last
+// year's tax. He is the CA; the engine does the arithmetic and shows every
+// input it used.
 
 export type FyPnl = {
   income: number; expenses: number; pbt: number;
@@ -103,31 +105,19 @@ export function indiaAdvanceTax(s: FyPnl, effRatePct: number): IndiaAdvTax {
   };
 }
 
-export type UsEstTax = {
-  priorYearTaxUsd: number; safeHarbourUsd: number; quarterlyUsd: number;
-  quarters: { due: string; label: string }[]; nextDue: string;
-};
-
-export function usEstimatedTax(priorYearTaxUsd: number): UsEstTax {
-  const safeHarbourUsd = priorYearTaxUsd * 1.1;
-  const quarters = [
-    { due: "2026-04-15", label: "Q1 2026" },
-    { due: "2026-06-15", label: "Q2 2026" },
-    { due: "2026-09-15", label: "Q3 2026" },
-    { due: "2027-01-15", label: "Q4 2026" },
-  ];
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
-  const next = quarters.find((q) => q.due >= today) ?? quarters[quarters.length - 1];
-  return { priorYearTaxUsd, safeHarbourUsd, quarterlyUsd: safeHarbourUsd / 4, quarters, nextDue: next.due };
-}
+// THE US SAFE HARBOUR IS GONE. Removed 5 September 2026 on his instruction —
+// "US safe harbor does not applies to me remove it." It computed 110% of the
+// prior year's US tax in four equal quarters, which is the rule for somebody
+// whose liability is broadly steady. His is not, and a schedule that does not
+// apply is worse on the page than absent: it invites a payment on a date that
+// means nothing. The real US computation is at /admin/zoho/tax/us1040.
 
 // Assumptions live in site_settings so the founder can tune them on the hub.
-export async function taxAssumptions(): Promise<{ effRatePct: number; usPriorYearTaxUsd: number }> {
+export async function taxAssumptions(): Promise<{ effRatePct: number }> {
   const svc = createServiceClient();
-  const { data } = await svc.from("site_settings").select("key, value").in("key", ["adv_tax_eff_rate", "us_py_tax_usd"]);
+  const { data } = await svc.from("site_settings").select("key, value").eq("key", "adv_tax_eff_rate");
   const m = new Map((data ?? []).map((r) => [r.key, r.value]));
   return {
     effRatePct: Number(m.get("adv_tax_eff_rate")) || 31.2,
-    usPriorYearTaxUsd: Number(m.get("us_py_tax_usd")) || 0,
   };
 }

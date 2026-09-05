@@ -1786,10 +1786,8 @@ export async function retryBrokerageLineAction(formData: FormData) {
 export async function saveTaxAssumptionsAction(formData: FormData) {
   await assertArea(null); // the tax worksheets are the founder's alone
   const rate = Number(formData.get("eff_rate"));
-  const usTax = Number(formData.get("us_py_tax"));
   const svc = createServiceClient();
   if (rate > 0 && rate <= 60) await svc.from("site_settings").upsert({ key: "adv_tax_eff_rate", value: String(rate) }, { onConflict: "key" });
-  if (usTax >= 0) await svc.from("site_settings").upsert({ key: "us_py_tax_usd", value: String(usTax) }, { onConflict: "key" });
   revalidateDesk();
 }
 

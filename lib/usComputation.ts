@@ -122,11 +122,6 @@ export function fySplitInside(from: string, to: string): string | null {
   return null;
 }
 
-const dayBefore = (iso: string) => {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
-};
 
 export async function buildUsPack(from: string, to: string): Promise<UsPack> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
@@ -134,10 +129,9 @@ export async function buildUsPack(from: string, to: string): Promise<UsPack> {
   }
   const notes: string[] = [];
   const splitOn = fySplitInside(from, to);
-  const p1 = splitOn ? { from, to: dayBefore(splitOn) } : { from, to };
-  const p2 = splitOn ? { from: splitOn, to } : null;
 
-  const { rates, missing } = await monthlyRates(monthsBetween(from, to));
+  const months = monthsBetween(from, to);
+  const { rates, missing } = await monthlyRates(months);
   if (missing.length) {
     notes.push(
       `No SBI TT buying rate is on file for ${missing.join(", ")}, so those months are converted at the nearest earlier published rate. `
@@ -145,17 +139,29 @@ export async function buildUsPack(from: string, to: string): Promise<UsPack> {
     );
   }
   if (!rates.length) throw new Error("No exchange rate could be read for any month in the period, so nothing was converted.");
+  const rateOf = new Map(rates.map((r) => [r.month, r.rate]));
 
-  // The rate for a PERIOD is the mean of its months' rates — the workbook
-  // converts each half at its own average, which is why the two halves exist.
-  const rateFor = (a: string, b: string) => {
-    const want = new Set(monthsBetween(a, b));
-    const use = rates.filter((r) => want.has(r.month));
-    const list = use.length ? use : rates;
-    return list.reduce((s, r) => s + r.rate, 0) / list.length;
+  // EACH MONTH AT ITS OWN RATE, NOT EACH HALF AT AN AVERAGE.
+  //
+  // The first version read one P&L per half and converted it at the mean of
+  // that half's rates. Checked against his own 2025 workbook, that was wrong:
+  // Sales-Parveen Sharma came to $619,320 against his $621,537. The rupees
+  // agreed to the paisa and the twelve rates agreed exactly — what differed was
+  // the arithmetic. His Jan–Mar works out at ₹85.673 to the dollar against a
+  // simple mean of ₹86.083, because more of the income arose in March, when the
+  // rupee was at 85.10.
+  //
+  // A mean assumes the money arrived evenly through the period. It did not. So
+  // the books are read a MONTH at a time and each month converted at its own
+  // rate, which is both what his workbook does and what Rule 115 practice
+  // expects. It costs a Zoho report per month per person; that is the price of
+  // the figure being right.
+  const monthWindow = (m: string) => {
+    const [y, mo] = m.split("-").map(Number);
+    const first = `${m}-01`;
+    const last = new Date(Date.UTC(y, mo, 0)).toISOString().slice(0, 10);
+    return { from: first < from ? from : first, to: last > to ? to : last };
   };
-  const r1 = rateFor(p1.from, p1.to);
-  const r2 = p2 ? rateFor(p2.from, p2.to) : 0;
 
   const { listEntities } = await import("@/lib/zohoEntities");
   const ents = (await listEntities()).filter((e) => e.isActive);
@@ -164,42 +170,42 @@ export async function buildUsPack(from: string, to: string): Promise<UsPack> {
   const entities: UsPack["entities"] = [];
 
   for (const e of ents) {
-    const slug = e.slug;
-    let rows1: Awaited<ReturnType<typeof plFor>> = [];
-    let rows2: Awaited<ReturnType<typeof plFor>> = [];
-    try {
-      rows1 = await plFor(slug, p1.from, p1.to);
-      if (p2) rows2 = await plFor(slug, p2.from, p2.to);
-    } catch (err) {
-      // ONE ENTITY REFUSING MUST NOT PASS AS THAT ENTITY EARNING NOTHING.
-      notes.push(`${e.name}'s books could not be read: ${err instanceof Error ? err.message : "Zoho refused"}. Nothing of theirs is in this file.`);
-      continue;
-    }
-    const add = (rs: typeof rows1, which: 1 | 2) => {
-      for (const r of rs) {
-        const key = `${slug}|${r.ledger}`;
+    let failed = false;
+    for (const m of months) {
+      const w = monthWindow(m);
+      const rate = rateOf.get(m) ?? rates[rates.length - 1].rate;
+      let rows: Awaited<ReturnType<typeof plFor>> = [];
+      try {
+        rows = await plFor(e.slug, w.from, w.to);
+      } catch (err) {
+        // ONE ENTITY REFUSING MUST NOT PASS AS THAT ENTITY EARNING NOTHING.
+        notes.push(`${e.name}'s books could not be read for ${m}: ${err instanceof Error ? err.message : "Zoho refused"}. Nothing of theirs is in this file.`);
+        failed = true;
+        break;
+      }
+      // Which half of the US year this month falls in.
+      const second = splitOn !== null && `${m}-01` >= splitOn;
+      for (const r of rows) {
+        const key = `${e.slug}|${r.ledger}`;
         const cur = byKey.get(key) ?? {
           ledger: r.ledger, who: e.name, rs1: 0, rs2: 0, rsTotal: 0,
           usd1: 0, usd2: 0, usdTotal: 0, path: r.path,
         };
-        if (which === 1) cur.rs1 += r.amount; else cur.rs2 += r.amount;
+        // Divide, never multiply: the rate is rupees per dollar.
+        if (second) { cur.rs2 += r.amount; cur.usd2 += r.amount / rate; }
+        else { cur.rs1 += r.amount; cur.usd1 += r.amount / rate; }
         byKey.set(key, cur);
       }
-    };
-    add(rows1, 1);
-    add(rows2, 2);
-    const mine = [...byKey.values()].filter((x) => x.who === e.name);
-    entities.push({
-      slug, name: e.name, ledgers: mine.length,
-      rsTotal: 0, usdTotal: 0, // filled below once conversion has run
-    });
+    }
+    if (failed) {
+      for (const k of [...byKey.keys()]) if (k.startsWith(`${e.slug}|`)) byKey.delete(k);
+      continue;
+    }
+    entities.push({ slug: e.slug, name: e.name, ledgers: 0, rsTotal: 0, usdTotal: 0 });
   }
 
   const rows = [...byKey.values()].map((r) => {
     r.rsTotal = r.rs1 + r.rs2;
-    // Divide, never multiply: the rate is rupees per dollar.
-    r.usd1 = r1 ? r.rs1 / r1 : 0;
-    r.usd2 = r2 ? r.rs2 / r2 : 0;
     r.usdTotal = r.usd1 + r.usd2;
     return r;
   }).sort((a, b) => Math.abs(b.rsTotal) - Math.abs(a.rsTotal));
@@ -213,8 +219,8 @@ export async function buildUsPack(from: string, to: string): Promise<UsPack> {
 
   notes.push(
     splitOn
-      ? `The period crosses 1 April, so it is split: ${p1.from} to ${p1.to} at ₹${r1.toFixed(4)} to the dollar, and ${p2!.from} to ${p2!.to} at ₹${r2.toFixed(4)}.`
-      : `The period does not cross 1 April, so there is one column, converted at ₹${r1.toFixed(4)} to the dollar.`,
+      ? `The period crosses 1 April on ${splitOn}, so it is shown in two columns. Every month is converted at its own rate — see the Exchange rates sheet — never at an average of them.`
+      : "The period does not cross 1 April, so there is one column. Every month is still converted at its own rate.",
   );
   notes.push(
     "These are the INCOME AND EXPENSE ledgers as Zoho reports them. The 1040 itself — the brackets, the foreign tax credit, "

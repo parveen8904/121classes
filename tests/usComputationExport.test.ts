@@ -34,7 +34,7 @@ check("it is the same SBI TT source the rest of the codebase uses",
   /await import\("@\/lib\/forexRates"\)/.test(lib),
   "so a figure here cannot disagree with the brokerage journals");
 check("rupees are DIVIDED by the rate",
-  /r\.rs1 \/ r1/.test(lib), "the rate is rupees per dollar; multiplying would be out by 7,900×");
+  /r\.amount \/ rate/.test(lib), "the rate is rupees per dollar; multiplying would be out by 7,900×");
 check("a month with no rate is reported, not silently averaged over",
   /No SBI TT buying rate is on file for/.test(lib));
 check("no rate at all refuses outright",
@@ -44,7 +44,7 @@ check("no rate at all refuses outright",
 
 check("it reads every active entity", /listEntities\(\)/.test(lib));
 check("an entity Zoho refuses is NAMED, not counted as earning nothing",
-  /could not be read: \$\{err instanceof Error/.test(lib) && /Nothing of theirs is in this file/.test(lib),
+  /could not be read for \$\{m\}/.test(lib) && /Nothing of theirs is in this file/.test(lib),
   "a silent omission of one person's books is a wrong return");
 check("the file separates the two people", /"By person"/.test(route));
 
@@ -59,6 +59,29 @@ check("a failure returns an error, never a spreadsheet of zeros",
   /status: 502/.test(route) && /A spreadsheet of zeros would be filed/.test(route));
 check("every rate used is written into the file so a figure can be retraced",
   /"Exchange rates"/.test(route));
+
+/* ── each month at its own rate, proved against his own workbook ─────────── */
+
+check("the books are read a MONTH at a time",
+  /for \(const m of months\) \{[\s\S]{0,400}plFor\(e\.slug, w\.from, w\.to\)/.test(lib),
+  "a period average assumes the money arrived evenly through the year; it did not");
+check("no half is converted at a mean of its months",
+  !/rateFor\(/.test(lib) && !/const r1 = /.test(lib));
+check("a month is placed in the right half of the US year",
+  /const second = splitOn !== null && `\$\{m\}-01` >= splitOn;/.test(lib));
+check("a partial first or last month is clipped to the period",
+  /first < from \? from : first/.test(lib) && /last > to \? to : last/.test(lib),
+  "asking for 15 Jan to 3 Feb must not pull the whole of January");
+check("a failed entity's part-built rows are discarded, not left half-there",
+  /if \(k\.startsWith\(`\$\{e\.slug\}\|`\)\) byKey\.delete\(k\);/.test(lib));
+
+// His 2025 workbook: Sales-Parveen Sharma, Jan–Mar ₹2,27,14,643 → $265,134.54.
+// A simple mean of Jan/Feb/Mar (86.20, 86.95, 85.10) is 86.0833 and gives
+// $263,868 — $1,266 adrift on ONE ledger. Month-by-month is what closes it.
+const mean = (86.2 + 86.95 + 85.1) / 3;
+check("the mean of the three months is NOT the rate his figures imply",
+  Math.abs(22714643 / mean - 265134.54) > 1000,
+  "which is exactly why the period-average version disagreed with his workbook");
 
 console.log(fails ? `${fails} failed` : "ok — the US income sheet builds for any period");
 process.exit(fails ? 1 : 0);
